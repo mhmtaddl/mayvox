@@ -10,7 +10,7 @@ import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
 import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, deleteUser, supabase } from './lib/supabase';
 import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
-import { Room, RoomEvent, Track, ConnectionQuality, type AudioCaptureOptions } from 'livekit-client';
+import { Room, RoomEvent, Track, ConnectionQuality, DisconnectReason, type AudioCaptureOptions } from 'livekit-client';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -838,9 +838,10 @@ export default function App() {
           : 0;
         setConnectionLevel(level);
       });
-      room.on(RoomEvent.Disconnected, () => {
+      room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         setConnectionLevel(4);
         livekitRoomRef.current = null;
+        setActiveChannel(null);
         setChannels(prev => {
           const updated = prev.map(c => {
             if (c.id !== channelId) return c;
@@ -857,6 +858,10 @@ export default function App() {
           }
           return updated;
         });
+        if (reason !== DisconnectReason.CLIENT_INITIATED) {
+          setToastMsg('Bağlantı kesildi. Tekrar bağlanmak için bir odaya tıklayın.');
+          setTimeout(() => setToastMsg(null), 5000);
+        }
       });
 
       await room.connect(LIVEKIT_URL, token);
