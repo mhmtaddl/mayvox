@@ -64,6 +64,8 @@ export default function SettingsView() {
     setIsLowDataMode,
     isNoiseSuppressionEnabled,
     setIsNoiseSuppressionEnabled,
+    noiseThreshold,
+    setNoiseThreshold,
     pttKey,
   } = useSettings();
 
@@ -555,6 +557,32 @@ export default function SettingsView() {
                     </button>
                   </div>
                 </div>
+
+                {isNoiseSuppressionEnabled && (
+                  <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="font-bold text-[var(--theme-text)]">Gürültü Eşiği</h4>
+                        <p className="text-xs text-[var(--theme-secondary-text)] mt-1">
+                          Mikrofonun arka plan sesini ne kadar filtreleceğini belirler. Yüksek değer daha agresif filtreler.
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[2rem] text-right">{noiseThreshold}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={2}
+                      max={50}
+                      value={noiseThreshold}
+                      onChange={e => setNoiseThreshold(Number(e.target.value))}
+                      className="w-full accent-[var(--theme-accent)]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+                      <span>Hafif</span>
+                      <span>Agresif</span>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {currentUser.isAdmin && (
