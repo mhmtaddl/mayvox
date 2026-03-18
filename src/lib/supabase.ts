@@ -126,9 +126,24 @@ export const updateChannel = async (id: string, updates: {
   max_users?: number;
   is_invite_only?: boolean;
   is_hidden?: boolean;
-  password?: string | null;
 }) => {
   return await supabase.from('channels').update(updates).eq('id', id);
+};
+
+// VERIFY CHANNEL PASSWORD (server-side bcrypt karşılaştırma)
+export const verifyChannelPassword = async (channelId: string, password: string) => {
+  return await supabase.rpc('verify_channel_password', {
+    p_channel_id: channelId,
+    p_plain_password: password,
+  });
+};
+
+// SET CHANNEL PASSWORD (server-side bcrypt hashleme)
+export const setChannelPassword = async (channelId: string, password: string | null) => {
+  return await supabase.rpc('set_channel_password', {
+    p_channel_id: channelId,
+    p_plain_password: password ?? '',
+  });
 };
 
 // DELETE CHANNEL

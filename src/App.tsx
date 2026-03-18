@@ -8,7 +8,7 @@ import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
-import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, supabase } from './lib/supabase';
+import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, supabase } from './lib/supabase';
 import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
 import { Room, RoomEvent, Track } from 'livekit-client';
 
@@ -635,20 +635,20 @@ export default function App() {
   const handleSetPassword = async (id: string, password: string, repeat: string) => {
     if (password.length !== 4 || isNaN(Number(password))) { setPasswordError(true); return; }
     if (password !== repeat) { setPasswordError(true); return; }
-    setChannels(channels.map(c => c.id === id ? { ...c, password } : c));
-    await updateChannel(id, { password });
+    await setChannelPassword(id, password);
+    setChannels(channels.map(c => c.id === id ? { ...c, password: 'SET' } : c));
     setPasswordModal(null);
     setPasswordInput('');
     setPasswordRepeatInput('');
     setPasswordError(false);
     setContextMenu(null);
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password } } });
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: 'SET' } } });
   };
 
   const handleRemovePassword = async (id: string) => {
+    await setChannelPassword(id, null);
     setChannels(channels.map(c => c.id === id ? { ...c, password: undefined } : c));
     setContextMenu(null);
-    await updateChannel(id, { password: null });
     presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: undefined } } });
   };
 
@@ -971,7 +971,9 @@ export default function App() {
   const handleVerifyPassword = async () => {
     if (!passwordModal) return;
     const channel = channels.find(c => c.id === passwordModal.channelId);
-    if (channel?.password === passwordInput) {
+    if (!channel) return;
+    const { data: isValid } = await verifyChannelPassword(passwordModal.channelId, passwordInput);
+    if (isValid) {
       setActiveChannel(passwordModal.channelId);
       setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
       setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
