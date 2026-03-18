@@ -544,6 +544,9 @@ export default function SettingsView() {
                       </p>
                     </div>
                     <button
+                      role="switch"
+                      aria-checked={isLowDataMode}
+                      aria-label="Düşük veri kullanım modunu aç/kapat"
                       onClick={() => setIsLowDataMode(!isLowDataMode)}
                       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
                         isLowDataMode ? 'bg-emerald-500' : 'bg-red-500'
@@ -827,6 +830,9 @@ export default function SettingsView() {
           <div className="flex items-center gap-4 bg-[var(--theme-surface)]/80 px-4 py-2 rounded-xl border border-[var(--theme-border)] shadow-sm">
             <div className="flex items-center gap-2 text-[var(--theme-text)] font-bold text-[10px] uppercase tracking-widest shrink-0">
               <button
+                role="switch"
+                aria-checked={isNoiseSuppressionEnabled}
+                aria-label={isNoiseSuppressionEnabled ? 'Gürültü susturmayı kapat' : 'Gürültü susturmayı aç'}
                 onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
                 className={`p-1 rounded-md transition-all ${
                   isNoiseSuppressionEnabled

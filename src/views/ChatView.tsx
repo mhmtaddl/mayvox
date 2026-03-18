@@ -1084,6 +1084,8 @@ export default function ChatView() {
                   setIsDeafened(!isDeafened);
                 }
               }}
+              aria-label={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
+              aria-pressed={isDeafened}
               className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
                 isDeafened
                   ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
@@ -1155,6 +1157,8 @@ export default function ChatView() {
                   setIsMuted(!isMuted);
                 }
               }}
+              aria-label={isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
+              aria-pressed={isMuted}
               className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
                 isMuted
                   ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'

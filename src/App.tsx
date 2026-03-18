@@ -434,7 +434,7 @@ export default function App() {
       noiseSuppression: isNoiseSuppressionEnabled,
       autoGainControl: isNoiseSuppressionEnabled,
       deviceId: selectedInput || undefined,
-    } satisfies AudioCaptureOptions).catch(() => {});
+    } satisfies AudioCaptureOptions).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
   }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput]);
 
   // ── Deafen: mute all remote audio elements ────────────────────────────────
@@ -597,8 +597,7 @@ export default function App() {
         isHidden: roomModal.isHidden,
         ownerId: currentUser.id,
       };
-      setChannels([...channels, newRoom]);
-      await createChannel({
+      const { error: createErr } = await createChannel({
         id: newRoom.id,
         name: newRoom.name,
         owner_id: currentUser.id,
@@ -606,6 +605,12 @@ export default function App() {
         is_invite_only: newRoom.isInviteOnly || false,
         is_hidden: newRoom.isHidden || false,
       });
+      if (createErr) {
+        setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.');
+        setTimeout(() => setToastMsg(null), 4000);
+        return;
+      }
+      setChannels([...channels, newRoom]);
       presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
       const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden };
@@ -867,6 +872,8 @@ export default function App() {
       return true;
     } catch (err) {
       console.error('LiveKit bağlantı hatası:', err);
+      setToastMsg('Odaya bağlanılamadı. Lütfen tekrar deneyin.');
+      setTimeout(() => setToastMsg(null), 4000);
       return false;
     }
   };

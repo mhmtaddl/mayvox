@@ -34,6 +34,7 @@ export default function LoginPasswordView({
       >
         <button
           onClick={handleLogout}
+          aria-label="Geri dön"
           className="absolute left-6 top-6 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors flex items-center gap-1 text-xs font-bold uppercase tracking-widest"
         >
           <ArrowLeft size={16} />
@@ -66,6 +67,8 @@ export default function LoginPasswordView({
                 placeholder="Kullanıcı Adını Giriniz"
                 value={loginNick}
                 onChange={(e) => setLoginNick(e.target.value)}
+                aria-label="Kullanıcı adı"
+                autoComplete="username"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -81,11 +84,14 @@ export default function LoginPasswordView({
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                aria-label="Parola"
+                autoComplete="current-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Parolayı gizle' : 'Parolayı göster'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
