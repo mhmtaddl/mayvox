@@ -922,7 +922,12 @@ export default function App() {
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
         livekitRoomRef.current = null;
-        setActiveChannel(null);
+        setIsConnecting(false);
+        // CLIENT_INITIATED: ya manuel ayrılma (caller sıfırlar) ya da kanal geçişi
+        // Kanal geçişinde activeChannel zaten yeni kanalı gösteriyor — sıfırlama
+        if (reason !== DisconnectReason.CLIENT_INITIATED) {
+          setActiveChannel(null);
+        }
         setChannels(prev => {
           const updated = prev.map(c => {
             if (c.id !== channelId) return c;
@@ -964,6 +969,7 @@ export default function App() {
   };
 
   const disconnectFromLiveKit = async () => {
+    setIsConnecting(false);
     if (livekitRoomRef.current) {
       await livekitRoomRef.current.disconnect();
       livekitRoomRef.current = null;
