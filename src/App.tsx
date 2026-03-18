@@ -737,7 +737,7 @@ export default function App() {
   };
 
   // ── LiveKit ───────────────────────────────────────────────────────────────
-  const connectToLiveKit = async (channelId: string, channelName: string) => {
+  const connectToLiveKit = async (channelId: string, channelName: string): Promise<boolean> => {
     try {
       if (livekitRoomRef.current) {
         await livekitRoomRef.current.disconnect();
@@ -848,8 +848,10 @@ export default function App() {
       if (!currentUser.isVoiceBanned) {
         await room.localParticipant.setMicrophoneEnabled(false);
       }
+      return true;
     } catch (err) {
       console.error('LiveKit bağlantı hatası:', err);
+      return false;
     }
   };
 
@@ -958,10 +960,12 @@ export default function App() {
       setPasswordInput('');
       setPasswordError(false);
     } else {
-      setActiveChannel(id);
-      setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
-      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
-      await connectToLiveKit(id, channel.name);
+      const connected = await connectToLiveKit(id, channel.name);
+      if (connected) {
+        setActiveChannel(id);
+        setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
+        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
+      }
     }
   };
 
@@ -971,13 +975,15 @@ export default function App() {
     if (!channel) return;
     const { data: isValid } = await verifyChannelPassword(passwordModal.channelId, passwordInput);
     if (isValid) {
-      setActiveChannel(passwordModal.channelId);
-      setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
-      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
       setPasswordModal(null);
       setPasswordInput('');
       setPasswordError(false);
-      await connectToLiveKit(passwordModal.channelId, channel.name);
+      const connected = await connectToLiveKit(passwordModal.channelId, channel.name);
+      if (connected) {
+        setActiveChannel(passwordModal.channelId);
+        setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
+        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
+      }
     } else {
       setPasswordError(true);
     }
