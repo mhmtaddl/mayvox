@@ -1032,7 +1032,14 @@ export default function App() {
     const { data, error } = await signIn(loginEmail, loginPassword);
 
     if (error) {
-      setLoginError(error.message);
+      const authErrors: Record<string, string> = {
+        'Invalid login credentials': 'Kullanıcı adı veya parola hatalı!',
+        'Email not confirmed': 'E-posta adresiniz onaylanmamış.',
+        'Too many requests': 'Çok fazla deneme yaptınız. Lütfen bekleyin.',
+        'User not found': 'Kullanıcı bulunamadı!',
+        'Invalid email or password': 'Kullanıcı adı veya parola hatalı!',
+      };
+      setLoginError(authErrors[error.message] ?? 'Giriş yapılamadı. Lütfen tekrar deneyin.');
       return;
     }
 
