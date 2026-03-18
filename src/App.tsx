@@ -647,7 +647,13 @@ export default function App() {
   const handleSetPassword = async (id: string, password: string, repeat: string) => {
     if (password.length !== 4 || isNaN(Number(password))) { setPasswordError(true); return; }
     if (password !== repeat) { setPasswordError(true); return; }
-    await setChannelPassword(id, password);
+    const { error } = await setChannelPassword(id, password);
+    if (error) {
+      console.error('Şifre kaydetme hatası:', error);
+      setToastMsg('Şifre kaydedilemedi: ' + error.message);
+      setTimeout(() => setToastMsg(null), 4000);
+      return;
+    }
     setChannels(channels.map(c => c.id === id ? { ...c, password: 'SET' } : c));
     setPasswordModal(null);
     setPasswordInput('');
