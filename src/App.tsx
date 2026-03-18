@@ -249,6 +249,18 @@ export default function App() {
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
+
+  // Kanalsız kalınca (her nedenden dolayı) kullanıcıyı tüm channel members'dan temizle
+  useEffect(() => {
+    if (activeChannel !== null) return;
+    const name = currentUserRef.current.name;
+    if (!name) return;
+    setChannels(prev => prev.map(c => {
+      if (!c.members?.includes(name)) return c;
+      const members = c.members.filter(m => m !== name);
+      return { ...c, members, userCount: members.length };
+    }));
+  }, [activeChannel]);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
 
