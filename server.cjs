@@ -1,10 +1,20 @@
 const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 const { createClient } = require('@supabase/supabase-js');
+const { rateLimit } = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+
+// Rate limiting — IP başına 1 dakikada max 20 token isteği
+const tokenLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
+});
 
 // CORS — sadece local Electron/dev origins
 const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
@@ -20,7 +30,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.post('/livekit-token', async (req, res) => {
+app.post('/livekit-token', tokenLimiter, async (req, res) => {
   // 1. Authorization header kontrolü
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
