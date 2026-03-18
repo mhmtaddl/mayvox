@@ -109,14 +109,18 @@ export default function App() {
     };
 
     const onOffline = () => {
+      connectionLostRef.current = true;
       setConnectionLevel(0);
       setToastMsg('İnternet bağlantısı kesildi.');
     };
     const onOnline = () => {
       if (livekitRoomRef.current) return; // Kanaldayken LiveKit Reconnected event'i yönetir
       setConnectionLevel(getQualityLevel());
-      setToastMsg('İnternet bağlantısı yeniden kuruldu.');
-      setTimeout(() => setToastMsg(null), 3000);
+      if (connectionLostRef.current) {
+        connectionLostRef.current = false;
+        setToastMsg('İnternet bağlantısı yeniden kuruldu.');
+        setTimeout(() => setToastMsg(null), 3000);
+      }
     };
     const onConnectionChange = () => {
       if (livekitRoomRef.current) return;
@@ -136,6 +140,10 @@ export default function App() {
         await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store' });
         const rtt = Date.now() - start;
         setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
+        if (connectionLostRef.current) {
+          connectionLostRef.current = false;
+          setToastMsg(null);
+        }
       } catch {
         setConnectionLevel(0);
       }
@@ -236,6 +244,7 @@ export default function App() {
   // ── Refs ─────────────────────────────────────────────────────────────────
   const livekitRoomRef = useRef<Room | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const connectionLostRef = useRef(false);
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const activeChannelRef = useRef(activeChannel);
@@ -915,12 +924,14 @@ export default function App() {
       });
       room.on(RoomEvent.Reconnected, () => {
         if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
+        connectionLostRef.current = false;
         setConnectionLevel(4);
         setToastMsg('Bağlantı yeniden kuruldu.');
         setTimeout(() => setToastMsg(null), 3000);
       });
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
+        const identity = room.localParticipant?.identity || currentUserRef.current.name;
         livekitRoomRef.current = null;
         setIsConnecting(false);
         // CLIENT_INITIATED: ya manuel ayrılma (caller sıfırlar) ya da kanal geçişi
@@ -931,7 +942,7 @@ export default function App() {
         setChannels(prev => {
           const updated = prev.map(c => {
             if (c.id !== channelId) return c;
-            const members = c.members?.filter(m => m !== currentUser.name) || [];
+            const members = c.members?.filter(m => m !== identity) || [];
             return { ...c, members, userCount: members.length };
           });
           const ch = updated.find(c => c.id === channelId);
@@ -945,6 +956,7 @@ export default function App() {
           return updated;
         });
         if (reason !== DisconnectReason.CLIENT_INITIATED) {
+          connectionLostRef.current = true;
           setConnectionLevel(0);
           setToastMsg('Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.');
         } else {
@@ -1036,7 +1048,16 @@ export default function App() {
         setChannels(prev => prev.filter(c => c.id !== payload.channelId));
         setActiveChannel(prev => prev === payload.channelId ? null : prev);
       } else if (payload.action === 'update') {
-        setChannels(prev => prev.map(c => c.id === payload.channelId ? { ...c, ...payload.updates } : c));
+        setChannels(prev => prev.map(c => {
+          if (c.id !== payload.channelId) return c;
+          const updates = { ...payload.updates };
+          // LiveKit'e bağlı değilsek gelen members listesinde kendimizi gösterme
+          if (Array.isArray(updates.members) && !livekitRoomRef.current) {
+            updates.members = (updates.members as string[]).filter(m => m !== currentUserRef.current.name);
+            updates.userCount = updates.members.length;
+          }
+          return { ...c, ...updates };
+        }));
       }
     });
 
