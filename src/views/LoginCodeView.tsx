@@ -1,42 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Mic, Key, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface LoginCodeViewProps {
-  loginCode: string;
-  setLoginCode: (v: string) => void;
-  loginNick: string;
-  setLoginNick: (v: string) => void;
-  loginPassword: string;
-  setLoginPassword: (v: string) => void;
-  loginRepeatPassword: string;
-  setLoginRepeatPassword: (v: string) => void;
   loginError: string | null;
-  showPassword: boolean;
-  setShowPassword: (v: boolean) => void;
-  showRepeatPassword: boolean;
-  setShowRepeatPassword: (v: boolean) => void;
-  handleRegister: () => void;
+  handleRegister: (code: string, nick: string, password: string, repeatPwd: string) => void;
   handleLogout: () => Promise<void>;
 }
 
-export default function LoginCodeView({
-  loginCode,
-  setLoginCode,
-  loginNick,
-  setLoginNick,
-  loginPassword,
-  setLoginPassword,
-  loginRepeatPassword,
-  setLoginRepeatPassword,
-  loginError,
-  showPassword,
-  setShowPassword,
-  showRepeatPassword,
-  setShowRepeatPassword,
-  handleRegister,
-  handleLogout,
-}: LoginCodeViewProps) {
+export default function LoginCodeView({ loginError, handleRegister, handleLogout }: LoginCodeViewProps) {
+  const [code, setCode] = useState('');
+  const [nick, setNick] = useState('');
+  const [password, setPassword] = useState('');
+  const [repeatPwd, setRepeatPwd] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [showRepeatPwd, setShowRepeatPwd] = useState(false);
+
+  const onSubmit = () => handleRegister(code, nick, password, repeatPwd);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
       <motion.div
@@ -46,6 +27,7 @@ export default function LoginCodeView({
       >
         <button
           onClick={handleLogout}
+          aria-label="Geri dön"
           className="absolute left-6 top-6 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors flex items-center gap-1 text-xs font-bold uppercase tracking-widest"
         >
           <ArrowLeft size={16} />
@@ -77,9 +59,10 @@ export default function LoginCodeView({
               <input
                 type="text"
                 placeholder="Admin'den aldığınız kodu girin"
-                value={loginCode}
-                onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                aria-label="Davet kodu"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all tracking-widest font-mono"
               />
             </div>
@@ -92,9 +75,11 @@ export default function LoginCodeView({
               <input
                 type="email"
                 placeholder="E-posta adresinizi giriniz"
-                value={loginNick}
-                onChange={(e) => setLoginNick(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                value={nick}
+                onChange={(e) => setNick(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                aria-label="E-posta"
+                autoComplete="email"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -105,19 +90,17 @@ export default function LoginCodeView({
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPwd ? 'text' : 'password'}
                 placeholder="Parolanızı oluşturun"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                aria-label="Parola"
+                autoComplete="new-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
+                {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
@@ -127,25 +110,23 @@ export default function LoginCodeView({
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
-                type={showRepeatPassword ? 'text' : 'password'}
+                type={showRepeatPwd ? 'text' : 'password'}
                 placeholder="Parolanızı tekrar girin"
-                value={loginRepeatPassword}
-                onChange={(e) => setLoginRepeatPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                value={repeatPwd}
+                onChange={(e) => setRepeatPwd(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                aria-label="Parolayı tekrar gir"
+                autoComplete="new-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button
-                type="button"
-                onClick={() => setShowRepeatPassword(!showRepeatPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
-              >
-                {showRepeatPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              <button type="button" onClick={() => setShowRepeatPwd(!showRepeatPwd)} aria-label={showRepeatPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
+                {showRepeatPwd ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
 
           <button
-            onClick={handleRegister}
+            onClick={onSubmit}
             className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
           >
             <span>Devam Et</span>

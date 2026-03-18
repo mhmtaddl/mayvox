@@ -1,30 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Mic, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface LoginPasswordViewProps {
-  loginNick: string;
-  setLoginNick: (v: string) => void;
-  loginPassword: string;
-  setLoginPassword: (v: string) => void;
   loginError: string | null;
-  showPassword: boolean;
-  setShowPassword: (v: boolean) => void;
-  handleLogin: () => Promise<void>;
+  handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
 }
 
-export default function LoginPasswordView({
-  loginNick,
-  setLoginNick,
-  loginPassword,
-  setLoginPassword,
-  loginError,
-  showPassword,
-  setShowPassword,
-  handleLogin,
-  handleLogout,
-}: LoginPasswordViewProps) {
+export default function LoginPasswordView({ loginError, handleLogin, handleLogout }: LoginPasswordViewProps) {
+  const [nick, setNick] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
       <motion.div
@@ -58,6 +46,7 @@ export default function LoginPasswordView({
               {loginError}
             </div>
           )}
+
           <div className="space-y-2">
             <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
             <div className="relative">
@@ -65,8 +54,9 @@ export default function LoginPasswordView({
               <input
                 type="text"
                 placeholder="Kullanıcı Adını Giriniz"
-                value={loginNick}
-                onChange={(e) => setLoginNick(e.target.value)}
+                value={nick}
+                onChange={(e) => setNick(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin(nick, password)}
                 aria-label="Kullanıcı adı"
                 autoComplete="username"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
@@ -79,28 +69,28 @@ export default function LoginPasswordView({
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPwd ? 'text' : 'password'}
                 placeholder="Parolanızı giriniz"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin(nick, password)}
                 aria-label="Parola"
                 autoComplete="current-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Parolayı gizle' : 'Parolayı göster'}
+                onClick={() => setShowPwd(!showPwd)}
+                aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
 
           <button
-            onClick={handleLogin}
+            onClick={() => handleLogin(nick, password)}
             className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
           >
             <span>Giriş Yap</span>

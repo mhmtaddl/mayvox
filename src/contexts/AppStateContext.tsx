@@ -30,10 +30,6 @@ export interface AppStateContextType {
   setLoginPassword: (v: string) => void;
   loginError: string | null;
   setLoginError: (v: string | null) => void;
-  showPassword: boolean;
-  setShowPassword: (v: boolean) => void;
-  showRepeatPassword: boolean;
-  setShowRepeatPassword: (v: boolean) => void;
   firstName: string;
   setFirstName: (v: string) => void;
   lastName: string;
@@ -70,9 +66,9 @@ export interface AppStateContextType {
   handleDeleteUser: (userId: string) => void;
   handleToggleAdmin: (userId: string) => void;
   handleGenerateCode: () => void;
-  handleLogin: () => Promise<void>;
+  handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
-  handleRegister: () => void;
+  handleRegister: (code: string, nick: string, password: string, repeatPwd: string) => void;
   handleCompleteRegistration: () => Promise<void>;
   disconnectFromLiveKit: () => Promise<void>;
   formatTime: (seconds: number) => string;

@@ -166,13 +166,10 @@ export default function App() {
   const [statusTimer, setStatusTimer] = useState<number | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
+  // Sadece çok adımlı kayıt akışı için (LoginCodeView → RegisterDetailsView)
   const [loginNick, setLoginNick] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginRepeatPassword, setLoginRepeatPassword] = useState('');
-  const [loginCode, setLoginCode] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showRepeatPassword, setShowRepeatPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [age, setAge] = useState('');
@@ -1013,23 +1010,24 @@ export default function App() {
   };
 
   // ── Auth handlers ─────────────────────────────────────────────────────────
-  const handleLogin = async () => {
-    if (!loginNick || !loginPassword) {
+  const handleLogin = async (nick: string, password: string) => {
+    setLoginError(null);
+    if (!nick || !password) {
       setLoginError('Kullanıcı adı ve parola giriniz!');
       return;
     }
 
-    let loginEmail = loginNick;
-    if (!loginNick.includes('@')) {
-      const { data: profileByName } = await getProfileByUsername(loginNick);
+    let loginEmail = nick;
+    if (!nick.includes('@')) {
+      const { data: profileByName } = await getProfileByUsername(nick);
       if (!profileByName) {
         setLoginError('Kullanıcı bulunamadı!');
         return;
       }
-      loginEmail = profileByName.email || loginNick;
+      loginEmail = profileByName.email || nick;
     }
 
-    const { data, error } = await signIn(loginEmail, loginPassword);
+    const { data, error } = await signIn(loginEmail, password);
 
     if (error) {
       const authErrors: Record<string, string> = {
@@ -1044,7 +1042,7 @@ export default function App() {
     }
 
     const userId = data.user?.id || '';
-    const email = data.user?.email || loginNick;
+    const email = data.user?.email || nick;
     const { data: profile } = await getProfile(userId);
 
     const loggedInUser: User = profile ? {
@@ -1117,25 +1115,16 @@ export default function App() {
     setActiveChannel(null);
   };
 
-  const handleRegister = () => {
-    if (!loginCode.trim()) {
-      setLoginError('Davet kodunu giriniz!');
-      return;
-    }
-    if (loginCode.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) {
-      setLoginError('Geçersiz veya süresi dolmuş davet kodu!');
-      return;
-    }
-    if (!loginNick || !loginPassword) {
-      setLoginError('E-posta ve parola giriniz!');
-      return;
-    }
-    if (loginPassword !== loginRepeatPassword) {
-      setLoginError('Parolalar eşleşmiyor!');
-      return;
-    }
-    setView('register-details');
+  const handleRegister = (code: string, nick: string, password: string, repeatPwd: string) => {
     setLoginError(null);
+    if (!code.trim()) { setLoginError('Davet kodunu giriniz!'); return; }
+    if (code.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) { setLoginError('Geçersiz veya süresi dolmuş davet kodu!'); return; }
+    if (!nick || !password) { setLoginError('E-posta ve parola giriniz!'); return; }
+    if (password !== repeatPwd) { setLoginError('Parolalar eşleşmiyor!'); return; }
+    // Kayıt adımı için sakla
+    setLoginNick(nick);
+    setLoginPassword(password);
+    setView('register-details');
   };
 
   const handleCompleteRegistration = async () => {
@@ -1305,10 +1294,6 @@ export default function App() {
     setLoginPassword,
     loginError,
     setLoginError,
-    showPassword,
-    setShowPassword,
-    showRepeatPassword,
-    setShowRepeatPassword,
     firstName,
     setFirstName,
     lastName,
@@ -1448,32 +1433,14 @@ export default function App() {
                       )}
                       {view === 'login-code' && (
                         <LoginCodeView
-                          loginCode={loginCode}
-                          setLoginCode={setLoginCode}
-                          loginNick={loginNick}
-                          setLoginNick={setLoginNick}
-                          loginPassword={loginPassword}
-                          setLoginPassword={setLoginPassword}
-                          loginRepeatPassword={loginRepeatPassword}
-                          setLoginRepeatPassword={setLoginRepeatPassword}
                           loginError={loginError}
-                          showPassword={showPassword}
-                          setShowPassword={setShowPassword}
-                          showRepeatPassword={showRepeatPassword}
-                          setShowRepeatPassword={setShowRepeatPassword}
                           handleRegister={handleRegister}
                           handleLogout={handleLogout}
                         />
                       )}
                       {view === 'login-password' && (
                         <LoginPasswordView
-                          loginNick={loginNick}
-                          setLoginNick={setLoginNick}
-                          loginPassword={loginPassword}
-                          setLoginPassword={setLoginPassword}
                           loginError={loginError}
-                          showPassword={showPassword}
-                          setShowPassword={setShowPassword}
                           handleLogin={handleLogin}
                           handleLogout={handleLogout}
                         />
