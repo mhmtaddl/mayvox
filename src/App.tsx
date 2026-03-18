@@ -1011,19 +1011,12 @@ export default function App() {
 
   // ── Auth handlers ─────────────────────────────────────────────────────────
   const handleLogin = async (nick: string, password: string) => {
-    setLoginError(null);
-    if (!nick || !password) {
-      setLoginError('Kullanıcı adı ve parola giriniz!');
-      return;
-    }
+    if (!nick || !password) throw new Error('Kullanıcı adı ve parola giriniz!');
 
     let loginEmail = nick;
     if (!nick.includes('@')) {
       const { data: profileByName } = await getProfileByUsername(nick);
-      if (!profileByName) {
-        setLoginError('Kullanıcı bulunamadı!');
-        return;
-      }
+      if (!profileByName) throw new Error('Kullanıcı bulunamadı!');
       loginEmail = profileByName.email || nick;
     }
 
@@ -1037,8 +1030,7 @@ export default function App() {
         'User not found': 'Kullanıcı bulunamadı!',
         'Invalid email or password': 'Kullanıcı adı veya parola hatalı!',
       };
-      setLoginError(authErrors[error.message] ?? 'Giriş yapılamadı. Lütfen tekrar deneyin.');
-      return;
+      throw new Error(authErrors[error.message] ?? 'Giriş yapılamadı. Lütfen tekrar deneyin.');
     }
 
     const userId = data.user?.id || '';
@@ -1116,11 +1108,10 @@ export default function App() {
   };
 
   const handleRegister = (code: string, nick: string, password: string, repeatPwd: string) => {
-    setLoginError(null);
-    if (!code.trim()) { setLoginError('Davet kodunu giriniz!'); return; }
-    if (code.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) { setLoginError('Geçersiz veya süresi dolmuş davet kodu!'); return; }
-    if (!nick || !password) { setLoginError('E-posta ve parola giriniz!'); return; }
-    if (password !== repeatPwd) { setLoginError('Parolalar eşleşmiyor!'); return; }
+    if (!code.trim()) throw new Error('Davet kodunu giriniz!');
+    if (code.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) throw new Error('Geçersiz veya süresi dolmuş davet kodu!');
+    if (!nick || !password) throw new Error('E-posta ve parola giriniz!');
+    if (password !== repeatPwd) throw new Error('Parolalar eşleşmiyor!');
     // Kayıt adımı için sakla
     setLoginNick(nick);
     setLoginPassword(password);
@@ -1433,14 +1424,12 @@ export default function App() {
                       )}
                       {view === 'login-code' && (
                         <LoginCodeView
-                          loginError={loginError}
                           handleRegister={handleRegister}
                           handleLogout={handleLogout}
                         />
                       )}
                       {view === 'login-password' && (
                         <LoginPasswordView
-                          loginError={loginError}
                           handleLogin={handleLogin}
                           handleLogout={handleLogout}
                         />

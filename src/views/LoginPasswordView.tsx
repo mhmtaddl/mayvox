@@ -3,15 +3,24 @@ import { Mic, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 
 import { motion } from 'motion/react';
 
 interface LoginPasswordViewProps {
-  loginError: string | null;
   handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
 }
 
-export default function LoginPasswordView({ loginError, handleLogin, handleLogout }: LoginPasswordViewProps) {
+export default function LoginPasswordView({ handleLogin, handleLogout }: LoginPasswordViewProps) {
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = async () => {
+    setError(null);
+    try {
+      await handleLogin(nick, password);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Giriş yapılamadı.');
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
@@ -41,9 +50,9 @@ export default function LoginPasswordView({ loginError, handleLogin, handleLogou
         </div>
 
         <div className="space-y-6">
-          {loginError && (
+          {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-bold text-center animate-pulse">
-              {loginError}
+              {error}
             </div>
           )}
 
@@ -56,7 +65,7 @@ export default function LoginPasswordView({ loginError, handleLogin, handleLogou
                 placeholder="Kullanıcı Adını Giriniz"
                 value={nick}
                 onChange={(e) => setNick(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin(nick, password)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
                 aria-label="Kullanıcı adı"
                 autoComplete="username"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
@@ -73,7 +82,7 @@ export default function LoginPasswordView({ loginError, handleLogin, handleLogou
                 placeholder="Parolanızı giriniz"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin(nick, password)}
+                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
                 aria-label="Parola"
                 autoComplete="current-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
@@ -90,7 +99,7 @@ export default function LoginPasswordView({ loginError, handleLogin, handleLogou
           </div>
 
           <button
-            onClick={() => handleLogin(nick, password)}
+            onClick={onSubmit}
             className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
           >
             <span>Giriş Yap</span>

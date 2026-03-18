@@ -3,20 +3,27 @@ import { Mic, Key, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } 
 import { motion } from 'motion/react';
 
 interface LoginCodeViewProps {
-  loginError: string | null;
   handleRegister: (code: string, nick: string, password: string, repeatPwd: string) => void;
   handleLogout: () => Promise<void>;
 }
 
-export default function LoginCodeView({ loginError, handleRegister, handleLogout }: LoginCodeViewProps) {
+export default function LoginCodeView({ handleRegister, handleLogout }: LoginCodeViewProps) {
   const [code, setCode] = useState('');
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [repeatPwd, setRepeatPwd] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [showRepeatPwd, setShowRepeatPwd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = () => handleRegister(code, nick, password, repeatPwd);
+  const onSubmit = () => {
+    setError(null);
+    try {
+      handleRegister(code, nick, password, repeatPwd);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kayıt tamamlanamadı.');
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
@@ -46,9 +53,9 @@ export default function LoginCodeView({ loginError, handleRegister, handleLogout
         </div>
 
         <div className="space-y-6">
-          {loginError && (
+          {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-bold text-center animate-pulse">
-              {loginError}
+              {error}
             </div>
           )}
 
