@@ -844,6 +844,15 @@ export default function App() {
           : 0;
         setConnectionLevel(level);
       });
+      room.on(RoomEvent.Reconnecting, () => {
+        setConnectionLevel(1);
+        setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
+      });
+      room.on(RoomEvent.Reconnected, () => {
+        setConnectionLevel(4);
+        setToastMsg('Bağlantı yeniden kuruldu.');
+        setTimeout(() => setToastMsg(null), 3000);
+      });
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         setConnectionLevel(4);
         livekitRoomRef.current = null;
