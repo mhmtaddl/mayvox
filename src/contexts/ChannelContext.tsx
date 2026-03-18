@@ -6,6 +6,7 @@ export interface ChannelContextType {
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
   activeChannel: string | null;
   setActiveChannel: React.Dispatch<React.SetStateAction<string | null>>;
+  isConnecting: boolean;
   currentChannel: VoiceChannel | undefined;
   channelMembers: User[];
 }

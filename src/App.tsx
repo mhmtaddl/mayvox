@@ -184,6 +184,7 @@ export default function App() {
   // ── Channel state ────────────────────────────────────────────────────────
   const [channels, setChannels] = useState<VoiceChannel[]>(CHANNELS);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const currentChannel = useMemo(
     () => channels.find(c => c.id === activeChannel),
@@ -1067,11 +1068,17 @@ export default function App() {
       setPasswordInput('');
       setPasswordError(false);
     } else {
+      const now = Date.now();
+      setActiveChannel(id);
+      setIsConnecting(true);
+      setCurrentUser(prev => ({ ...prev, joinedAt: now }));
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
       const connected = await connectToLiveKit(id, channel.name);
-      if (connected) {
-        setActiveChannel(id);
-        setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
-        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
+      setIsConnecting(false);
+      if (!connected) {
+        setActiveChannel(null);
+        setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
+        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
       }
     }
   };
@@ -1085,11 +1092,18 @@ export default function App() {
       setPasswordModal(null);
       setPasswordInput('');
       setPasswordError(false);
-      const connected = await connectToLiveKit(passwordModal.channelId, channel.name);
-      if (connected) {
-        setActiveChannel(passwordModal.channelId);
-        setCurrentUser(prev => ({ ...prev, joinedAt: Date.now() }));
-        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: Date.now() } : u));
+      const channelId = passwordModal.channelId;
+      const now = Date.now();
+      setActiveChannel(channelId);
+      setIsConnecting(true);
+      setCurrentUser(prev => ({ ...prev, joinedAt: now }));
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
+      const connected = await connectToLiveKit(channelId, channel.name);
+      setIsConnecting(false);
+      if (!connected) {
+        setActiveChannel(null);
+        setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
+        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
       }
     } else {
       setPasswordError(true);
@@ -1307,6 +1321,7 @@ export default function App() {
     setChannels,
     activeChannel,
     setActiveChannel,
+    isConnecting,
     currentChannel,
     channelMembers,
   };

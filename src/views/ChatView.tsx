@@ -41,6 +41,7 @@ export default function ChatView() {
     channels,
     activeChannel,
     setActiveChannel,
+    isConnecting,
     currentChannel,
     channelMembers,
   } = useChannel();
@@ -313,7 +314,7 @@ export default function ChatView() {
                     onDrop={(e) => handleDrop(e, channel.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
                       activeChannel === channel.id
-                        ? 'bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20'
+                        ? `bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
                         : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)]'
                     }`}
                   >
