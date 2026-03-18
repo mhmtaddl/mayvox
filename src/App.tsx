@@ -796,12 +796,10 @@ export default function App() {
             return [...prev, newUser];
           });
         });
-        setAllUsers(prev => prev.map(u => {
-          if (u.id.startsWith('lk-') && !remoteIdentities.includes(u.name)) {
-            return { ...u, status: 'offline' as const };
-          }
-          return u;
-        }));
+        // lk-* kullanıcıları geçici LiveKit katılımcıları — ayrılınca listeden çıkar
+        setAllUsers(prev => prev.filter(u =>
+          !u.id.startsWith('lk-') || remoteIdentities.includes(u.name)
+        ));
       };
 
       room.on(RoomEvent.TrackSubscribed, (track) => {
