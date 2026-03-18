@@ -10,7 +10,18 @@ import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
 import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, deleteUser, supabase } from './lib/supabase';
 import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
-import { Room, RoomEvent, Track, ConnectionQuality } from 'livekit-client';
+import { Room, RoomEvent, Track, ConnectionQuality, type AudioCaptureOptions } from 'livekit-client';
+
+// Supabase DB satır tipleri
+type DbProfile = {
+  id: string; name: string; email?: string; first_name?: string; last_name?: string;
+  age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
+  is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
+};
+type DbChannel = {
+  id: string; name: string; owner_id?: string; max_users?: number;
+  is_invite_only?: boolean; is_hidden?: boolean; password?: string;
+};
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
@@ -243,7 +254,7 @@ export default function App() {
 
       const { data: savedChannels } = await getChannels();
       if (savedChannels && savedChannels.length > 0) {
-        const userChannels: VoiceChannel[] = savedChannels.map((c: any) => ({
+        const userChannels: VoiceChannel[] = savedChannels.map((c: DbChannel) => ({
           id: c.id,
           name: c.name,
           userCount: 0,
@@ -268,8 +279,8 @@ export default function App() {
         setAllUsers((prev) => {
           const onlineIds = new Set(prev.map((u) => u.id));
           const offlineUsers: User[] = allProfiles
-            .filter((p: any) => !onlineIds.has(p.id))
-            .map((p: any) => ({
+            .filter((p: DbProfile) => !onlineIds.has(p.id))
+            .map((p: DbProfile) => ({
               id: p.id,
               email: p.email || '',
               name: p.name || '',
@@ -423,7 +434,7 @@ export default function App() {
       noiseSuppression: isNoiseSuppressionEnabled,
       autoGainControl: isNoiseSuppressionEnabled,
       deviceId: selectedInput || undefined,
-    } as any).catch(() => {});
+    } satisfies AudioCaptureOptions).catch(() => {});
   }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput]);
 
   // ── Deafen: mute all remote audio elements ────────────────────────────────
@@ -878,7 +889,7 @@ export default function App() {
 
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState<{ userId: string }>();
-      const onlineIds = new Set(Object.values(state).flatMap(s => s.map((p: any) => p.userId)));
+      const onlineIds = new Set(Object.values(state).flatMap(s => s.map(p => p.userId)));
       setAllUsers(prev => prev.map(u => ({
         ...u,
         status: u.id === user.id ? 'online' : onlineIds.has(u.id) ? 'online' : 'offline',
@@ -1059,8 +1070,8 @@ export default function App() {
     const { data: allProfiles } = await getAllProfiles();
     const offlineUsers: User[] = allProfiles
       ? allProfiles
-          .filter((p: any) => p.id !== userId)
-          .map((p: any) => ({
+          .filter((p: DbProfile) => p.id !== userId)
+          .map((p: DbProfile) => ({
             id: p.id,
             email: p.email || '',
             name: p.name || '',
@@ -1169,8 +1180,8 @@ export default function App() {
     const { data: regAllProfiles } = await getAllProfiles();
     const regOfflineUsers: User[] = regAllProfiles
       ? regAllProfiles
-          .filter((p: any) => p.id !== newUser.id)
-          .map((p: any) => ({
+          .filter((p: DbProfile) => p.id !== newUser.id)
+          .map((p: DbProfile) => ({
             id: p.id,
             email: p.email || '',
             name: p.name || '',
