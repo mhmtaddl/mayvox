@@ -4,7 +4,8 @@ export const getLiveKitToken = async (roomName: string, participantName: string)
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Oturum bulunamadı, lütfen tekrar giriş yapın');
 
-  const res = await fetch('http://localhost:3001/livekit-token', {
+  const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
+  const res = await fetch(`${tokenServerUrl}/livekit-token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
