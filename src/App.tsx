@@ -844,6 +844,16 @@ export default function App() {
           : 0;
         setConnectionLevel(level);
       });
+      const onOffline = () => {
+        setConnectionLevel(1);
+        setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
+      };
+      const onOnline = () => {
+        // LiveKit Reconnected event'i sinyal seviyesini günceller
+      };
+      window.addEventListener('offline', onOffline);
+      window.addEventListener('online', onOnline);
+
       room.on(RoomEvent.Reconnecting, () => {
         setConnectionLevel(1);
         setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
@@ -854,7 +864,8 @@ export default function App() {
         setTimeout(() => setToastMsg(null), 3000);
       });
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
-        setConnectionLevel(4);
+        window.removeEventListener('offline', onOffline);
+        window.removeEventListener('online', onOnline);
         livekitRoomRef.current = null;
         setActiveChannel(null);
         setChannels(prev => {
@@ -874,8 +885,10 @@ export default function App() {
           return updated;
         });
         if (reason !== DisconnectReason.CLIENT_INITIATED) {
-          setToastMsg('Bağlantı kesildi. Tekrar bağlanmak için bir odaya tıklayın.');
-          setTimeout(() => setToastMsg(null), 5000);
+          setConnectionLevel(0);
+          setToastMsg('Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.');
+        } else {
+          setConnectionLevel(4);
         }
       });
 
