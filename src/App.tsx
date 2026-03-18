@@ -8,7 +8,7 @@ import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
-import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, supabase } from './lib/supabase';
+import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, deleteUser, supabase } from './lib/supabase';
 import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
 import { Room, RoomEvent, Track } from 'livekit-client';
 
@@ -697,25 +697,22 @@ export default function App() {
     broadcastModeration(userId, updates);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const userToDelete = allUsers.find(u => u.id === userId);
-    if (!userToDelete) return;
-
-    if (userToDelete.isPrimaryAdmin) {
-      alert("Birinci admin silinemez!");
-      return;
-    }
-
-    if (userToDelete.isAdmin && !currentUser.isPrimaryAdmin) {
-      alert("Diğer adminleri sadece birinci admin silebilir!");
-      return;
-    }
-
+  const handleDeleteUser = async (userId: string) => {
     if (userId === currentUser.id) {
+      await signOut();
       setView('login-selection');
       return;
     }
-    setAllUsers(allUsers.filter(u => u.id !== userId));
+
+    const { data, error } = await deleteUser(userId);
+
+    if (error || data?.error) {
+      alert(data?.error || 'Kullanıcı silinemedi.');
+      return;
+    }
+
+    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    broadcastModeration(userId, { status: 'offline' });
   };
 
   const handleToggleAdmin = (userId: string) => {

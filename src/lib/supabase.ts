@@ -130,6 +130,11 @@ export const updateChannel = async (id: string, updates: {
   return await supabase.from('channels').update(updates).eq('id', id);
 };
 
+// DELETE USER (server-side admin kontrolü + auth.users silme)
+export const deleteUser = async (userId: string) => {
+  return await supabase.rpc('delete_user', { p_target_user_id: userId });
+};
+
 // VERIFY CHANNEL PASSWORD (server-side bcrypt karşılaştırma)
 export const verifyChannelPassword = async (channelId: string, password: string) => {
   return await supabase.rpc('verify_channel_password', {
