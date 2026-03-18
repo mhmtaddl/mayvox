@@ -109,12 +109,11 @@ export default function App() {
     };
 
     const onOffline = () => {
-      if (livekitRoomRef.current) return; // LiveKit kendi yönetir
       setConnectionLevel(0);
       setToastMsg('İnternet bağlantısı kesildi.');
     };
     const onOnline = () => {
-      if (livekitRoomRef.current) return;
+      if (livekitRoomRef.current) return; // Kanaldayken LiveKit Reconnected event'i yönetir
       setConnectionLevel(getQualityLevel());
       setToastMsg('İnternet bağlantısı yeniden kuruldu.');
       setTimeout(() => setToastMsg(null), 3000);
@@ -902,16 +901,25 @@ export default function App() {
           : 0;
         setConnectionLevel(level);
       });
+      let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
       room.on(RoomEvent.Reconnecting, () => {
         setConnectionLevel(1);
         setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
+        reconnectTimeout = setTimeout(async () => {
+          await room.disconnect();
+          setConnectionLevel(0);
+          setToastMsg('Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.');
+        }, 15000);
       });
       room.on(RoomEvent.Reconnected, () => {
+        if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
         setConnectionLevel(4);
         setToastMsg('Bağlantı yeniden kuruldu.');
         setTimeout(() => setToastMsg(null), 3000);
       });
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+        if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
         livekitRoomRef.current = null;
         setActiveChannel(null);
         setChannels(prev => {
