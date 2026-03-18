@@ -95,6 +95,64 @@ export default function App() {
   const [isDeafened, setIsDeafened] = useState(false);
   const [connectionLevel, setConnectionLevel] = useState(4);
 
+  // ── Global network quality monitoring ────────────────────────────────────
+  useEffect(() => {
+    const getQualityLevel = (): number => {
+      if (!navigator.onLine) return 0;
+      const conn = (navigator as any).connection;
+      if (!conn) return 4;
+      const type: string = conn.effectiveType || '4g';
+      if (type === 'slow-2g') return 1;
+      if (type === '2g') return 2;
+      if (type === '3g') return 3;
+      return 4;
+    };
+
+    const onOffline = () => {
+      if (livekitRoomRef.current) return; // LiveKit kendi yönetir
+      setConnectionLevel(0);
+      setToastMsg('İnternet bağlantısı kesildi.');
+    };
+    const onOnline = () => {
+      if (livekitRoomRef.current) return;
+      setConnectionLevel(getQualityLevel());
+      setToastMsg('İnternet bağlantısı yeniden kuruldu.');
+      setTimeout(() => setToastMsg(null), 3000);
+    };
+    const onConnectionChange = () => {
+      if (livekitRoomRef.current) return;
+      setConnectionLevel(getQualityLevel());
+    };
+
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    const conn = (navigator as any).connection;
+    if (conn) conn.addEventListener('change', onConnectionChange);
+
+    // Periyodik ping (10sn) — kanaldayken atla
+    const pingInterval = setInterval(async () => {
+      if (livekitRoomRef.current || !navigator.onLine) return;
+      const start = Date.now();
+      try {
+        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store' });
+        const rtt = Date.now() - start;
+        setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
+      } catch {
+        setConnectionLevel(0);
+      }
+    }, 10000);
+
+    // Başlangıç seviyesi
+    setConnectionLevel(getQualityLevel());
+
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+      if (conn) conn.removeEventListener('change', onConnectionChange);
+      clearInterval(pingInterval);
+    };
+  }, []);
+
   // ── Device hook ─────────────────────────────────────────────────────────
   const {
     inputDevices,
@@ -844,16 +902,6 @@ export default function App() {
           : 0;
         setConnectionLevel(level);
       });
-      const onOffline = () => {
-        setConnectionLevel(1);
-        setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
-      };
-      const onOnline = () => {
-        // LiveKit Reconnected event'i sinyal seviyesini günceller
-      };
-      window.addEventListener('offline', onOffline);
-      window.addEventListener('online', onOnline);
-
       room.on(RoomEvent.Reconnecting, () => {
         setConnectionLevel(1);
         setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
@@ -864,8 +912,6 @@ export default function App() {
         setTimeout(() => setToastMsg(null), 3000);
       });
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
-        window.removeEventListener('offline', onOffline);
-        window.removeEventListener('online', onOnline);
         livekitRoomRef.current = null;
         setActiveChannel(null);
         setChannels(prev => {
