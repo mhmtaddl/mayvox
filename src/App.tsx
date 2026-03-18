@@ -10,7 +10,7 @@ import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
 import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, deleteUser, supabase } from './lib/supabase';
 import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent, Track, ConnectionQuality } from 'livekit-client';
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
@@ -296,9 +296,6 @@ export default function App() {
   const slowTickRef = useRef(0);
   useEffect(() => {
     const interval = setInterval(() => {
-      const rand = Math.random();
-      if (rand > 0.95) setConnectionLevel(Math.floor(Math.random() * 5));
-
       slowTickRef.current += 1;
       const shouldCheck = !isLowDataModeRef.current || slowTickRef.current % 3 === 0;
       if (shouldCheck) {
@@ -819,7 +816,15 @@ export default function App() {
 
       room.on(RoomEvent.ParticipantConnected, () => { updateMembers(); syncUsers(); });
       room.on(RoomEvent.ParticipantDisconnected, () => { updateMembers(); syncUsers(); });
+      room.on(RoomEvent.ConnectionQualityChanged, (quality) => {
+        const level = quality === ConnectionQuality.Excellent ? 4
+          : quality === ConnectionQuality.Good ? 3
+          : quality === ConnectionQuality.Poor ? 1
+          : 0;
+        setConnectionLevel(level);
+      });
       room.on(RoomEvent.Disconnected, () => {
+        setConnectionLevel(4);
         livekitRoomRef.current = null;
         setChannels(prev => {
           const updated = prev.map(c => {
@@ -1119,7 +1124,7 @@ export default function App() {
     }
 
     const newUser: User = {
-      id: data.user?.id || Math.random().toString(36).substr(2, 9),
+      id: data.user?.id || Math.random().toString(36).slice(2, 11),
       name: displayName,
       email: loginNick,
       firstName,
