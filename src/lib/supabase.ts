@@ -77,7 +77,7 @@ export const getAllProfiles = async () => {
   return await supabase.from('profiles').select('*').order('name');
 };
 
-// UPDATE USER MODERATION (admin/mute/ban)
+// UPDATE USER MODERATION (admin/mute/ban) — server-side admin kontrolü ile
 export const updateUserModeration = async (id: string, updates: {
   is_admin?: boolean;
   is_primary_admin?: boolean;
@@ -86,7 +86,10 @@ export const updateUserModeration = async (id: string, updates: {
   is_voice_banned?: boolean;
   ban_expires?: number | null;
 }) => {
-  return await supabase.from('profiles').update(updates).eq('id', id);
+  return await supabase.rpc('moderate_user', {
+    target_user_id: id,
+    updates: updates,
+  });
 };
 
 // UPDATE AUTH EMAIL
