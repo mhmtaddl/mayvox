@@ -157,6 +157,8 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginNick, setLoginNick] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginRepeatPassword, setLoginRepeatPassword] = useState('');
+  const [loginCode, setLoginCode] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
@@ -1091,8 +1093,20 @@ export default function App() {
   };
 
   const handleRegister = () => {
+    if (!loginCode.trim()) {
+      setLoginError('Davet kodunu giriniz!');
+      return;
+    }
+    if (loginCode.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) {
+      setLoginError('Geçersiz veya süresi dolmuş davet kodu!');
+      return;
+    }
     if (!loginNick || !loginPassword) {
       setLoginError('E-posta ve parola giriniz!');
+      return;
+    }
+    if (loginPassword !== loginRepeatPassword) {
+      setLoginError('Parolalar eşleşmiyor!');
       return;
     }
     setView('register-details');
@@ -1409,10 +1423,14 @@ export default function App() {
                       )}
                       {view === 'login-code' && (
                         <LoginCodeView
+                          loginCode={loginCode}
+                          setLoginCode={setLoginCode}
                           loginNick={loginNick}
                           setLoginNick={setLoginNick}
                           loginPassword={loginPassword}
                           setLoginPassword={setLoginPassword}
+                          loginRepeatPassword={loginRepeatPassword}
+                          setLoginRepeatPassword={setLoginRepeatPassword}
                           loginError={loginError}
                           showPassword={showPassword}
                           setShowPassword={setShowPassword}

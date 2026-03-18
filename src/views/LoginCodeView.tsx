@@ -3,10 +3,14 @@ import { Mic, Key, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } 
 import { motion } from 'motion/react';
 
 interface LoginCodeViewProps {
+  loginCode: string;
+  setLoginCode: (v: string) => void;
   loginNick: string;
   setLoginNick: (v: string) => void;
   loginPassword: string;
   setLoginPassword: (v: string) => void;
+  loginRepeatPassword: string;
+  setLoginRepeatPassword: (v: string) => void;
   loginError: string | null;
   showPassword: boolean;
   setShowPassword: (v: boolean) => void;
@@ -17,10 +21,14 @@ interface LoginCodeViewProps {
 }
 
 export default function LoginCodeView({
+  loginCode,
+  setLoginCode,
   loginNick,
   setLoginNick,
   loginPassword,
   setLoginPassword,
+  loginRepeatPassword,
+  setLoginRepeatPassword,
   loginError,
   showPassword,
   setShowPassword,
@@ -61,27 +69,32 @@ export default function LoginCodeView({
               {loginError}
             </div>
           )}
+
           <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">KODU GİRİNİZ</label>
+            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">DAVET KODU</label>
             <div className="relative">
               <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
                 type="text"
-                placeholder="••••••••••"
-                className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                placeholder="Admin'den aldığınız kodu girin"
+                value={loginCode}
+                onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all tracking-widest font-mono"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
+            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">E-POSTA</label>
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
-                type="text"
+                type="email"
                 placeholder="E-posta adresinizi giriniz"
                 value={loginNick}
                 onChange={(e) => setLoginNick(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -116,6 +129,8 @@ export default function LoginCodeView({
               <input
                 type={showRepeatPassword ? 'text' : 'password'}
                 placeholder="Parolanızı tekrar girin"
+                value={loginRepeatPassword}
+                onChange={(e) => setLoginRepeatPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
@@ -133,7 +148,7 @@ export default function LoginCodeView({
             onClick={handleRegister}
             className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
           >
-            <span>Giriş Yap</span>
+            <span>Devam Et</span>
             <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
