@@ -1,0 +1,5 @@
+{
+  "name": "Caylaklar Sesli Sohbet",
+  "description": "Modern ve profesyonel sesli sohbet platformu.",
+  "requestFramePermissions": ["microphone"]
+}

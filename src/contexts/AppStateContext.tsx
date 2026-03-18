@@ -1,0 +1,90 @@
+import React, { createContext, useContext } from 'react';
+import { AppView, User, VoiceChannel } from '../types';
+import { supabase } from '../lib/supabase';
+
+export interface AppStateContextType {
+  // View
+  view: AppView;
+  setView: (v: AppView) => void;
+
+  // Audio control
+  isMuted: boolean;
+  setIsMuted: (v: boolean) => void;
+  isDeafened: boolean;
+  setIsDeafened: (v: boolean) => void;
+
+  // Status timer
+  statusTimer: number | null;
+  setStatusTimer: React.Dispatch<React.SetStateAction<number | null>>;
+
+  // Generated code
+  generatedCode: string | null;
+  setGeneratedCode: (v: string | null) => void;
+  timeLeft: number;
+  setTimeLeft: (v: number) => void;
+
+  // Login flow state
+  loginNick: string;
+  setLoginNick: (v: string) => void;
+  loginPassword: string;
+  setLoginPassword: (v: string) => void;
+  loginError: string | null;
+  setLoginError: (v: string | null) => void;
+  showPassword: boolean;
+  setShowPassword: (v: boolean) => void;
+  showRepeatPassword: boolean;
+  setShowRepeatPassword: (v: boolean) => void;
+  firstName: string;
+  setFirstName: (v: string) => void;
+  lastName: string;
+  setLastName: (v: string) => void;
+  age: string;
+  setAge: (v: string) => void;
+  displayName: string;
+  setDisplayName: (v: string) => void;
+
+  // Refs
+  livekitRoomRef: React.MutableRefObject<import('livekit-client').Room | null>;
+  presenceChannelRef: React.MutableRefObject<ReturnType<typeof supabase.channel> | null>;
+
+  // Handlers
+  handleSetStatus: (text: string, minutes?: number) => void;
+  handleCopyCode: () => void;
+  handleUpdateUserVolume: (userId: string, volume: number) => void;
+  handleUserActionClick: (e: React.MouseEvent, userId: string) => void;
+  handleInviteUser: (userId: string) => void;
+  handleKickUser: (userId: string) => void;
+  handleMoveUser: (userName: string, targetChannelId: string) => void;
+  handleSaveRoom: () => Promise<void>;
+  handleDeleteRoom: (id: string) => Promise<void>;
+  handleRenameRoom: (id: string, newName: string) => Promise<void>;
+  handleSetPassword: (id: string, password: string, repeat: string) => Promise<void>;
+  handleRemovePassword: (id: string) => Promise<void>;
+  handleJoinChannel: (id: string, isInvited?: boolean) => Promise<void>;
+  handleVerifyPassword: () => Promise<void>;
+  handleContextMenu: (e: React.MouseEvent, channelId: string) => void;
+  handleMuteUser: (userId: string, durationMinutes: number) => void;
+  handleBanUser: (userId: string, durationMinutes: number) => void;
+  handleUnmuteUser: (userId: string) => void;
+  handleUnbanUser: (userId: string) => void;
+  handleDeleteUser: (userId: string) => void;
+  handleToggleAdmin: (userId: string) => void;
+  handleGenerateCode: () => void;
+  handleLogin: () => Promise<void>;
+  handleLogout: () => Promise<void>;
+  handleRegister: () => void;
+  handleCompleteRegistration: () => Promise<void>;
+  disconnectFromLiveKit: () => Promise<void>;
+  formatTime: (seconds: number) => string;
+  broadcastModeration: (userId: string, updates: Partial<User>) => void;
+}
+
+export const AppStateContext = createContext<AppStateContextType | null>(null);
+
+export const useAppState = (): AppStateContextType => {
+  const ctx = useContext(AppStateContext);
+  if (!ctx) {
+    throw new Error('useAppState must be used within AppStateContext.Provider');
+  }
+  return ctx;
+};

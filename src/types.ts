@@ -1,0 +1,51 @@
+export type UserStatus = 'online' | 'busy' | 'away' | 'offline';
+
+export interface User {
+  id: string;
+  name: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  age?: number;
+  status: UserStatus;
+  statusText?: string;
+  avatar: string;
+  isMuted?: boolean;
+  isSpeaking?: boolean;
+  lastSeen?: string;
+  isAdmin?: boolean;
+  isPrimaryAdmin?: boolean;
+  isVoiceBanned?: boolean;
+  muteExpires?: number;
+  banExpires?: number;
+  joinedAt?: number;
+  password?: string;
+}
+
+export interface VoiceChannel {
+  id: string;
+  name: string;
+  userCount: number;
+  members?: string[]; // Array of user names
+  isSystemChannel?: boolean; // If true, it won't be auto-deleted
+  password?: string; // 4-digit numeric password
+  deletionTimer?: number; // Seconds remaining until deletion
+  maxUsers?: number;
+  isInviteOnly?: boolean;
+  isHidden?: boolean;
+  ownerId?: string;
+}
+
+export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-password' | 'register-details' | 'chat' | 'settings';
+
+export interface Theme {
+  id: string;
+  name: string;
+  bg: string;
+  surface: string;
+  sidebar: string;
+  text: string;
+  secondaryText: string;
+  accent: string;
+  border: string;
+}

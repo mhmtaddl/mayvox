@@ -1,0 +1,1331 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Mic,
+  Settings,
+  Trash2,
+  LogOut,
+  Headphones,
+  PlusCircle,
+  Check,
+  Volume2,
+  Volume1,
+  PhoneCall,
+  Clock,
+  AlertCircle,
+  X,
+  Lock,
+  Shield,
+  ShieldOff,
+  Users,
+  Timer,
+  ShieldCheck,
+  Recycle,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useAppState } from '../contexts/AppStateContext';
+import { useAudio } from '../contexts/AudioContext';
+import { useUser } from '../contexts/UserContext';
+import { useChannel } from '../contexts/ChannelContext';
+import { useUI } from '../contexts/UIContext';
+import { useSettings } from '../contexts/SettingsCtx';
+
+export default function ChatView() {
+  const {
+    currentUser,
+    allUsers,
+    getStatusColor,
+    getEffectiveStatus,
+  } = useUser();
+
+  const {
+    channels,
+    activeChannel,
+    setActiveChannel,
+    currentChannel,
+    channelMembers,
+  } = useChannel();
+
+  const {
+    toastMsg,
+    invitationModal,
+    setInvitationModal,
+    userActionMenu,
+    setUserActionMenu,
+    roomModal,
+    setRoomModal,
+    passwordModal,
+    setPasswordModal,
+    passwordInput,
+    setPasswordInput,
+    passwordRepeatInput,
+    setPasswordRepeatInput,
+    passwordError,
+    setPasswordError,
+    contextMenu,
+    setContextMenu,
+    isStatusMenuOpen,
+    setIsStatusMenuOpen,
+    statusTimerInput,
+    setStatusTimerInput,
+    userVolumes,
+  } = useUI();
+
+  const {
+    pttKey,
+    isListeningForKey,
+    setIsListeningForKey,
+    isNoiseSuppressionEnabled,
+    setIsNoiseSuppressionEnabled,
+    noiseThreshold,
+    setNoiseThreshold,
+  } = useSettings();
+
+  const {
+    isMuted,
+    setIsMuted,
+    isDeafened,
+    setIsDeafened,
+    statusTimer,
+    handleSetStatus,
+    handleUpdateUserVolume,
+    handleUserActionClick,
+    handleInviteUser,
+    handleKickUser,
+    handleMoveUser,
+    handleSaveRoom,
+    handleDeleteRoom,
+    handleSetPassword,
+    handleRemovePassword,
+    handleJoinChannel,
+    handleVerifyPassword,
+    handleContextMenu,
+    handleLogout,
+    disconnectFromLiveKit,
+    presenceChannelRef,
+    setView,
+  } = useAppState();
+
+  const {
+    volumeLevel,
+    isPttPressed,
+    connectionLevel,
+    selectedInput,
+    setSelectedInput,
+    selectedOutput,
+    setSelectedOutput,
+    inputDevices,
+    outputDevices,
+    showInputSettings,
+    setShowInputSettings,
+    showOutputSettings,
+    setShowOutputSettings,
+  } = useAudio();
+
+  // Local state: draggedUser is only used inside ChatView
+  const [draggedUser, setDraggedUser] = useState<string | null>(null);
+
+  // Memoized derived lists — allUsers.filter() 60fps çalışmasın
+  const visibleChannels = useMemo(
+    () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
+    [channels, currentUser.id, currentUser.isAdmin, activeChannel]
+  );
+  const onlineUsers = useMemo(
+    () => allUsers.filter(u => u.status === 'online' || (u.status === 'away' && u.statusText === 'Telefondayım')),
+    [allUsers]
+  );
+  const busyUsers = useMemo(
+    () => allUsers.filter(u => u.status === 'busy' || (u.status === 'away' && u.statusText === '10 dk sonra')),
+    [allUsers]
+  );
+  const offlineUsers = useMemo(
+    () => allUsers.filter(u => u.status === 'offline'),
+    [allUsers]
+  );
+  const sortedChannelMembers = useMemo(
+    () => [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)),
+    [channelMembers]
+  );
+
+  const handleDragStart = (e: React.DragEvent, userName: string) => {
+    if (!currentUser.isAdmin) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedUser(userName);
+    e.dataTransfer.setData('userName', userName);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, channelId: string) => {
+    e.preventDefault();
+    const userName = e.dataTransfer.getData('userName') || draggedUser;
+    if (userName) {
+      handleMoveUser(userName, channelId);
+    }
+    setDraggedUser(null);
+  };
+
+  // renderConnectionQuality (inline copy)
+  const renderConnectionQuality = () => {
+    const getColor = (level: number) => {
+      if (level >= 4) return 'bg-emerald-500';
+      if (level === 3) return 'bg-yellow-500';
+      if (level === 2) return 'bg-orange-500';
+      if (level === 1) return 'bg-red-500';
+      return 'text-red-500';
+    };
+
+    if (connectionLevel === 0) {
+      return (
+        <div className="flex items-center justify-center">
+          <X size={14} className="text-red-500" />
+        </div>
+      );
+    }
+
+    return (
+      <motion.div
+        animate={connectionLevel <= 2 ? { opacity: [1, 0.5, 1] } : {}}
+        transition={{ duration: 1, repeat: Infinity }}
+        className="flex items-center justify-center"
+      >
+        <div className="flex items-end gap-0.5 h-3">
+          {[1, 2, 3, 4].map((i) => (
+            <motion.div
+              key={i}
+              animate={connectionLevel <= 1 ? { height: [`${i * 25}%`, `${i * 15}%`, `${i * 25}%`] } : {}}
+              transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+              className={`w-1 rounded-full transition-all ${i <= connectionLevel ? getColor(connectionLevel) : 'bg-[var(--theme-border)]'}`}
+              style={{ height: `${i * 25}%` }}
+            />
+          ))}
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
+      {/* Header */}
+      <header className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16 bg-[var(--theme-bg)] z-10 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="bg-[var(--theme-accent)] p-1.5 rounded-lg flex items-center justify-center">
+            <Mic className="text-white" size={20} />
+          </div>
+          <h1 className="text-lg font-bold tracking-tight">CAYLAKLAR İLE SOHBET</h1>
+        </div>
+
+        <div className="flex items-center h-full">
+          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+            <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
+              <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-blue-500/20 border-2 border-blue-600 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0">
+              {currentUser.avatar}
+            </div>
+
+            {/* Status Menu */}
+            <AnimatePresence>
+              {isStatusMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full right-0 mt-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 z-[100] backdrop-blur-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => handleSetStatus('Aktif')}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                  >
+                    Aktif
+                  </button>
+                  <button
+                    onClick={() => handleSetStatus('Telefonda')}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                  >
+                    Telefonda
+                  </button>
+                  <button
+                    onClick={() => handleSetStatus('Hemen Geleceğim')}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                  >
+                    Hemen Geleceğim
+                  </button>
+                  <div className="border-t border-[var(--theme-border)] my-1"></div>
+                  <div className="px-3 py-2">
+                    <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest block mb-2">Süre Sonra Geleceğim (Dk)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="99"
+                        className="flex-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all"
+                        value={statusTimerInput}
+                        onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && statusTimerInput) {
+                            handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput));
+                            setStatusTimerInput('');
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          if (statusTimerInput) {
+                            handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput));
+                            setStatusTimerInput('');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-[var(--theme-accent)] text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all"
+                      >
+                        Kur
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <aside className="w-72 bg-[var(--theme-sidebar)]/30 flex flex-col">
+          <div className="p-6 flex flex-col h-full">
+            <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold mb-6">
+              <Volume2 size={16} />
+              <span className="uppercase text-xs tracking-widest">Ses Kanalları</span>
+            </div>
+
+            <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
+              {visibleChannels.map(channel => (
+                <div key={channel.id} className="space-y-1">
+                  <button
+                    onClick={() => handleJoinChannel(channel.id)}
+                    onContextMenu={(e) => handleContextMenu(e, channel.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, channel.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
+                      activeChannel === channel.id
+                        ? 'bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20'
+                        : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)]'
+                    }`}
+                  >
+                    <div className="relative">
+                      <Volume2 size={18} />
+                      {channel.password && (
+                        <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
+                          <Lock size={8} className="text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between flex-1 min-w-0">
+                      <span className="text-sm font-medium truncate">{channel.name}</span>
+                      {channel.deletionTimer !== undefined && !channel.userCount && (
+                        <div className="flex items-center gap-1 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
+                          <Timer size={10} className="text-red-500 animate-pulse" />
+                          <span className="text-[9px] font-mono font-bold text-red-500">
+                            {channel.deletionTimer}s
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {channel.userCount > 0 && (
+                      <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full ${
+                        activeChannel === channel.id ? 'bg-white/20' : 'bg-[var(--theme-sidebar)]'
+                      }`}>
+                        {channel.userCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Members List */}
+                  {channel.members && channel.members.length > 0 && (
+                    <div className="pl-10 space-y-1 pb-2">
+                      {channel.members.map((member, idx) => {
+                        const user = allUsers.find(u => u.name === member);
+                        const memberDisplayName = user ? `${user.firstName} ${user.lastName} (${user.age})` : member;
+                        return (
+                          <div
+                            key={idx}
+                            draggable={currentUser.isAdmin}
+                            onDragStart={(e) => handleDragStart(e, member)}
+                            onClick={(e) => user && handleUserActionClick(e, user.id)}
+                            className="flex items-center gap-2 text-[11px] font-medium transition-all group/member cursor-pointer hover:text-[var(--theme-accent)]"
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="truncate flex-1">{memberDisplayName}</span>
+                            {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
+                              <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </nav>
+
+            <div className="mt-auto pt-6">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const userRooms = channels.filter(c => c.ownerId === currentUser.id);
+                  if (userRooms.length >= 2) {
+                    alert('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
+                    return;
+                  }
+                  setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+                }}
+                className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${
+                  channels.filter(c => c.ownerId === currentUser.id).length >= 2
+                    ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                    : 'bg-[var(--theme-accent)] hover:opacity-90'
+                }`}
+              >
+                <PlusCircle size={18} />
+                Oda Oluştur
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* User Action Menu Popover */}
+        <AnimatePresence>
+          {userActionMenu && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{
+                position: 'fixed',
+                top: Math.min(window.innerHeight - 120, userActionMenu.y),
+                left: userActionMenu.x + 10,
+                zIndex: 100
+              }}
+              className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 w-48 flex flex-col gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {currentUser.isAdmin && (
+                <div className={`flex flex-col gap-2 p-2 ${activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userActionMenu.userId)?.name || '') && userActionMenu.userId !== currentUser.id ? 'border-b border-[var(--theme-border)]' : ''}`}>
+                  <span className="text-[10px] uppercase font-bold text-[var(--theme-secondary-text)]">Ses Ayarı</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="99"
+                      value={userVolumes[userActionMenu.userId] ?? 50}
+                      onChange={(e) => handleUpdateUserVolume(userActionMenu.userId, parseInt(e.target.value))}
+                      className="flex-1 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                    />
+                    <span className="text-xs font-bold text-white w-8 text-right">%{userVolumes[userActionMenu.userId] ?? 50}</span>
+                  </div>
+                </div>
+              )}
+
+              {activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userActionMenu.userId)?.name || '') && userActionMenu.userId !== currentUser.id && (
+                <button
+                  onClick={() => {
+                    handleInviteUser(userActionMenu.userId);
+                    setUserActionMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                >
+                  Davet Et
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Invitation Modal */}
+        <AnimatePresence>
+          {invitationModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className="bg-[var(--theme-bg)] rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-[var(--theme-border)]"
+              >
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-accent)] mx-auto mb-4">
+                    <Volume2 size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold text-[var(--theme-text)] mb-2">Oda Daveti</h3>
+                  <p className="text-[var(--theme-secondary-text)] text-sm mb-6">
+                    <span className="font-bold text-[var(--theme-text)]">{invitationModal.inviterName}</span> kullanıcısı sizi <span className="font-bold text-[var(--theme-text)]">{invitationModal.roomName}</span> sohbet odasına davet ediyor.
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        if (presenceChannelRef.current && invitationModal) {
+                          presenceChannelRef.current.send({
+                            type: 'broadcast',
+                            event: 'invite-rejected',
+                            payload: {
+                              inviterId: invitationModal.inviterId,
+                              inviteeName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
+                            },
+                          });
+                        }
+                        setInvitationModal(null);
+                      }}
+                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--theme-surface)] text-[var(--theme-secondary-text)] hover:bg-red-500/20 hover:text-red-500 font-bold transition-colors"
+                    >
+                      Ret
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleJoinChannel(invitationModal.roomId, true);
+                        setInvitationModal(null);
+                      }}
+                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--theme-accent)] text-white font-bold hover:bg-emerald-500 transition-colors shadow-lg"
+                    >
+                      Kabul
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Context Menu */}
+        <AnimatePresence>
+          {contextMenu && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ top: contextMenu.y, left: contextMenu.x }}
+              className="fixed z-[100] w-48 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-1.5 backdrop-blur-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  const channel = channels.find(c => c.id === contextMenu.channelId);
+                  if (channel) {
+                    setRoomModal({
+                      isOpen: true,
+                      type: 'edit',
+                      channelId: channel.id,
+                      name: channel.name,
+                      maxUsers: channel.maxUsers || 0,
+                      isInviteOnly: channel.isInviteOnly || false,
+                      isHidden: channel.isHidden || false,
+                    });
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+              >
+                <Settings size={14} />
+                Oda Ayarları
+              </button>
+              {channels.find(c => c.id === contextMenu.channelId)?.password ? (
+                <button
+                  onClick={() => handleRemovePassword(contextMenu.channelId)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                >
+                  <Lock size={14} />
+                  Oda Şifresini Kaldır
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setPasswordModal({ type: 'set', channelId: contextMenu.channelId });
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                >
+                  <Lock size={14} />
+                  Odayı Şifrele
+                </button>
+              )}
+              <button
+                onClick={() => handleDeleteRoom(contextMenu.channelId)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-colors"
+              >
+                <Trash2 size={14} />
+                Odayı Sil
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Room Modal */}
+        <AnimatePresence>
+          {roomModal.isOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              onClick={() => setRoomModal({ ...roomModal, isOpen: false })}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-8 flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-[var(--theme-accent)]/20 rounded-2xl flex items-center justify-center mb-6">
+                    <Settings className="text-[var(--theme-accent)]" size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold text-[var(--theme-text)] mb-6">
+                    {roomModal.type === 'create' ? 'Yeni Oda Oluştur' : 'Oda Ayarları'}
+                  </h3>
+
+                  <div className="w-full space-y-4 text-left">
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">
+                        Oda İsmi
+                      </label>
+                      <input
+                        autoFocus
+                        type="text"
+                        className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm font-bold text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+                        value={roomModal.name}
+                        onChange={(e) => setRoomModal({ ...roomModal, name: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRoom();
+                          if (e.key === 'Escape') setRoomModal({ ...roomModal, isOpen: false });
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">
+                        Maksimum Kullanıcı (0 = Sınırsız)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm font-bold text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+                        value={roomModal.maxUsers}
+                        onChange={(e) => setRoomModal({ ...roomModal, maxUsers: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        onClick={() => {
+                          const newIsHidden = !roomModal.isHidden;
+                          setRoomModal({
+                            ...roomModal,
+                            isHidden: newIsHidden,
+                            isInviteOnly: newIsHidden ? true : roomModal.isInviteOnly
+                          });
+                        }}
+                        className={`w-10 h-6 rounded-full transition-colors relative ${
+                          roomModal.isHidden ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                          roomModal.isHidden ? 'left-5' : 'left-1'
+                        }`} />
+                      </button>
+                      <span className="text-sm font-bold text-[var(--theme-text)]">Odayı Gizle</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        onClick={() => {
+                          if (!roomModal.isHidden) {
+                            setRoomModal({ ...roomModal, isInviteOnly: !roomModal.isInviteOnly });
+                          }
+                        }}
+                        className={`w-10 h-6 rounded-full transition-colors relative ${
+                          roomModal.isInviteOnly ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
+                        } ${roomModal.isHidden ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                          roomModal.isInviteOnly ? 'left-5' : 'left-1'
+                        }`} />
+                      </button>
+                      <span className="text-sm font-bold text-[var(--theme-text)]">Davetle Girilebilir</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 w-full mt-8">
+                    <button
+                      onClick={() => setRoomModal({ ...roomModal, isOpen: false })}
+                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-surface)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] font-bold transition-colors"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={handleSaveRoom}
+                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white font-bold shadow-lg transition-all"
+                    >
+                      Kaydet
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Password Modal */}
+        <AnimatePresence>
+          {passwordModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              onClick={() => setPasswordModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-sm bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-3xl p-8 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex flex-col items-center text-center gap-6">
+                  <div className="w-16 h-16 bg-[var(--theme-accent)]/20 rounded-2xl flex items-center justify-center">
+                    <Lock className="text-[var(--theme-accent)]" size={32} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-[var(--theme-text)] mb-2">
+                      {passwordModal.type === 'set' ? 'Oda Şifrele' : 'Oda Şifreli'}
+                    </h3>
+                    <p className="text-[var(--theme-secondary-text)] text-sm">
+                      {passwordModal.type === 'set'
+                        ? 'Lütfen 4 haneli sayısal bir şifre belirleyin.'
+                        : 'Bu odaya girmek için 4 haneli şifreyi giriniz.'}
+                    </p>
+                  </div>
+
+                  <div className="w-full space-y-4">
+                    <div className="w-full flex flex-col gap-4">
+                      <input
+                        autoFocus
+                        type="password"
+                        maxLength={4}
+                        placeholder="• • • •"
+                        className={`w-full bg-[var(--theme-sidebar)] border ${
+                          passwordError ? 'border-red-500' : 'border-[var(--theme-border)]'
+                        } rounded-2xl px-6 py-4 text-center text-2xl tracking-[1em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
+                        value={passwordInput}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setPasswordInput(val);
+                          setPasswordError(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (passwordModal.type === 'set') {
+                              if (passwordInput.length === 4 && passwordInput === passwordRepeatInput) {
+                                handleSetPassword(passwordModal.channelId, passwordInput, passwordRepeatInput);
+                              } else {
+                                setPasswordError(true);
+                              }
+                            } else {
+                              handleVerifyPassword();
+                            }
+                          }
+                          if (e.key === 'Escape') setPasswordModal(null);
+                        }}
+                      />
+                      {passwordModal.type === 'set' && (
+                        <input
+                          type="password"
+                          maxLength={4}
+                          placeholder="• • • •"
+                          className={`w-full bg-[var(--theme-sidebar)] border ${
+                            passwordError ? 'border-red-500' : 'border-[var(--theme-border)]'
+                          } rounded-2xl px-6 py-4 text-center text-2xl tracking-[1em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
+                          value={passwordRepeatInput}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setPasswordRepeatInput(val);
+                            setPasswordError(false);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (passwordInput.length === 4 && passwordInput === passwordRepeatInput) {
+                                handleSetPassword(passwordModal.channelId, passwordInput, passwordRepeatInput);
+                              } else {
+                                setPasswordError(true);
+                              }
+                            }
+                            if (e.key === 'Escape') setPasswordModal(null);
+                          }}
+                        />
+                      )}
+                    </div>
+                    {passwordError && (
+                      <p className="text-red-500 text-xs font-medium animate-bounce">
+                        {passwordModal.type === 'set' ? (passwordInput !== passwordRepeatInput ? 'Şifreler eşleşmiyor!' : 'Lütfen 4 haneli bir sayı giriniz!') : 'Hatalı şifre!'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 w-full">
+                    <button
+                      onClick={() => setPasswordModal(null)}
+                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-sidebar)] text-[var(--theme-secondary-text)] font-bold hover:opacity-80 transition-all"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={() => {
+                        passwordModal.type === 'set'
+                          ? handleSetPassword(passwordModal.channelId, passwordInput, passwordRepeatInput)
+                          : handleVerifyPassword();
+                      }}
+                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white font-bold shadow-lg transition-all"
+                    >
+                      {passwordModal.type === 'set' ? 'Şifrele' : 'Giriş Yap'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col bg-[var(--theme-surface)] p-8 overflow-y-auto custom-scrollbar">
+          {activeChannel ? (
+            <>
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20">
+                    <Volume2 size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold tracking-tight text-[var(--theme-text)]">
+                      {channels.find(c => c.id === activeChannel)?.name || 'Sohbet Odası'}
+                    </h2>
+                    <p className="text-[var(--theme-secondary-text)] text-sm font-medium">
+                      {channels.find(c => c.id === activeChannel)?.userCount || 0} Caylak Aktif
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
+                    className="p-3 rounded-xl bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
+                    title="Odadan Ayrıl"
+                  >
+                    <PhoneCall size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className={`grid gap-4 ${
+                sortedChannelMembers.length <= 1 ? 'grid-cols-1' :
+                sortedChannelMembers.length <= 4 ? 'grid-cols-1 sm:grid-cols-2' :
+                sortedChannelMembers.length <= 9 ? 'grid-cols-2 lg:grid-cols-3' :
+                'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              }`}>
+                {sortedChannelMembers.map((user, index) => {
+                  const isMe = user.id === currentUser.id;
+                  const memberCount = channelMembers.length;
+
+                  const boxPadding = memberCount <= 4 ? 'p-4' : memberCount <= 9 ? 'p-3' : 'p-2';
+                  const avatarSize = memberCount <= 4 ? 'w-14 h-14' : memberCount <= 9 ? 'w-12 h-12' : 'w-10 h-10';
+                  const nameSize = memberCount <= 4 ? 'text-base' : memberCount <= 9 ? 'text-sm' : 'text-xs';
+                  const statusSize = memberCount <= 4 ? 'text-xs' : 'text-[10px]';
+                  const iconSize = memberCount <= 4 ? 16 : memberCount <= 9 ? 14 : 12;
+                  const badgeSize = memberCount <= 4 ? 12 : memberCount <= 9 ? 10 : 8;
+
+                  let roleLabel = (index + 1).toString();
+                  if (currentChannel?.ownerId === user.id) {
+                    roleLabel = 'M';
+                  } else if (!currentChannel?.ownerId && user.isAdmin) {
+                    roleLabel = 'A';
+                  }
+
+                  return (
+                    <div
+                      key={user.id}
+                      onDoubleClick={() => !isMe && currentUser.isAdmin && handleKickUser(user.id)}
+                      className={`${
+                        isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]' : 'bg-[var(--theme-sidebar)]/40 border-[var(--theme-border)]'
+                      } border-2 rounded-2xl ${boxPadding} flex items-center gap-3 relative group cursor-pointer transition-all duration-200 ${
+                        isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned
+                          ? 'border-[var(--theme-accent)] shadow-[0_0_15px_rgba(var(--theme-accent-rgb),0.5)] scale-[1.02]'
+                          : ''
+                      }`}
+                    >
+                      <div className="relative shrink-0">
+                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden`}>
+                          {user.avatar && user.avatar.startsWith('http') ? (
+                            <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            user.avatar
+                          )}
+                        </div>
+                        <div className={`absolute -bottom-1 -right-1 ${memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded flex items-center justify-center font-bold text-white`}>
+                          {roleLabel}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className={`font-bold truncate ${nameSize} text-[var(--theme-text)]`}>
+                            {user.firstName} {user.lastName} ({user.age}){isMe && ' (Siz)'}
+                          </span>
+                        </div>
+                        <div className="mt-0.5">
+                          {isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned ? (
+                            <div className="flex items-center gap-2">
+                              <p className="text-[var(--theme-accent)] text-[10px] font-bold animate-pulse">Konuşuyor...</p>
+                              <div className="flex items-end gap-0.5 h-3 w-12">
+                                {[1, 2, 3, 4, 5, 6].map((i) => {
+                                  const isActive = volumeLevel > (i * 15);
+                                  return (
+                                    <div
+                                      key={i}
+                                      className={`w-1 rounded-full transition-all duration-75 ${isActive ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'}`}
+                                      style={{
+                                        height: isActive ? `${Math.max(20, Math.min(100, volumeLevel - (i * 5)))}%` : '20%'
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className={`${statusSize} font-bold truncate ${getStatusColor(user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif'))}`}>
+                              {user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <div className="flex gap-2">
+                          <Headphones size={iconSize} className={(isMe ? isDeafened : user.status === 'offline') ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
+                          <Mic size={iconSize} className={(isMe ? isMuted : user.status === 'busy') ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
+                        </div>
+                        <div className="flex gap-2 h-4 items-center justify-center">
+                          {user.statusText === 'Telefonda' && (
+                            <div className="flex items-center gap-0.5 text-red-500 font-black" style={{ fontSize: `${badgeSize - 2}px` }}>
+                              <PhoneCall size={badgeSize} />
+                              <span>TEL</span>
+                            </div>
+                          )}
+                          {user.statusText === 'Hemen Geleceğim' && (
+                            <div className="flex items-center gap-0.5 text-orange-500 font-black" style={{ fontSize: `${badgeSize - 2}px` }}>
+                              <Recycle size={badgeSize} />
+                              <span>HG</span>
+                            </div>
+                          )}
+                          {isMe && statusTimer !== null && statusTimer > 0 && (
+                            <div className="text-yellow-500 font-black" style={{ fontSize: `${badgeSize}px` }}>
+                              {Math.floor(statusTimer / 60)}:{(statusTimer % 60).toString().padStart(2, '0')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <div className="w-24 h-24 rounded-full bg-[var(--theme-sidebar)] flex items-center justify-center text-[var(--theme-secondary-text)] mb-6 border border-[var(--theme-border)]">
+                <Volume2 size={48} />
+              </div>
+              <h2 className="text-2xl font-bold text-[var(--theme-text)] mb-2">Henüz Bir Odada Değilsiniz</h2>
+              <p className="text-[var(--theme-secondary-text)] max-w-xs">
+                Sohbete başlamak için sol taraftaki kanallardan birine katılın.
+              </p>
+            </div>
+          )}
+        </main>
+
+        {/* Right Sidebar */}
+        <aside className="w-64 bg-[var(--theme-sidebar)]/30 flex flex-col hidden lg:flex">
+          <div className="p-6 flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Kullanıcılar</h3>
+            <span className="text-[10px] bg-[var(--theme-sidebar)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{allUsers.length}</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+            {/* Online */}
+            <div>
+              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Çevrimiçi — {onlineUsers.length}</p>
+              <div className="space-y-1">
+                {onlineUsers.map(user => {
+                  const isMe = user.id === currentUser.id;
+                  const alreadyInChannel = activeChannel && channels.find(c => c.id === activeChannel)?.members?.includes(user.name);
+                  const canInvite = !isMe && activeChannel && !alreadyInChannel;
+                  return (
+                    <div
+                      key={user.id}
+                      className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)]"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                          {user.avatar}
+                        </div>
+                        <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
+                          user.status === 'online' ? 'bg-emerald-500' : 'bg-orange-500'
+                        }`}></div>
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{user.firstName} {user.lastName} ({user.age})</span>
+                          {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
+                          {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
+                          <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                        </div>
+                      </div>
+                      {canInvite && (
+                        <button
+                          onClick={() => handleInviteUser(user.id)}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white border border-[var(--theme-accent)]/30"
+                        >
+                          Davet
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Busy */}
+            <div>
+              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Meşgul — {busyUsers.length}</p>
+              <div className="space-y-1">
+                {busyUsers.map(user => (
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group opacity-80 hover:bg-[var(--theme-sidebar)]"
+                  >
+                    <div className="relative">
+                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                        {user.avatar}
+                      </div>
+                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
+                        user.status === 'busy' ? 'bg-red-500' : 'bg-orange-500'
+                      }`}></div>
+                    </div>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-[var(--theme-text)] group-hover:text-[var(--theme-accent)] transition-colors leading-none">{user.firstName} {user.lastName} ({user.age})</span>
+                        {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" />}
+                      </div>
+                      <div className="flex items-center gap-1 mt-1">
+                        {user.status === 'busy' ? <AlertCircle size={8} className="text-red-500" /> : <Clock size={8} className="text-[var(--theme-accent)]" />}
+                        <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Offline */}
+            <div>
+              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-60 uppercase mb-3 px-2">Çevrimdışı — {offlineUsers.length}</p>
+              <div className="space-y-1">
+                {offlineUsers.map(user => (
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:grayscale-0"
+                  >
+                    <div className="relative">
+                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                        {user.avatar}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--theme-sidebar)] border-2 border-[var(--theme-sidebar)] rounded-full"></div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{user.firstName} {user.lastName} ({user.age})</span>
+                      {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* Footer Controls */}
+      <footer className="h-16 bg-[var(--theme-sidebar)] flex items-center relative">
+        <div className="w-72 px-4 flex gap-2 h-full items-center">
+          <div className="relative flex-1">
+            <button
+              onClick={() => {
+                const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
+                                        currentUser.statusText === 'Hemen Geleceğim' ||
+                                        currentUser.statusText?.includes('Sonra Geleceğim');
+                if (isSpecialStatus) {
+                  setIsDeafened(false);
+                } else {
+                  setIsDeafened(!isDeafened);
+                }
+              }}
+              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                isDeafened
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                  : 'text-white shadow-lg'
+              }`}
+              style={!isDeafened ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
+            >
+              <Headphones size={14} />
+              <span className="truncate">Hoparlör</span>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOutputSettings(!showOutputSettings);
+                  setShowInputSettings(false);
+                }}
+                className="p-0.5 hover:bg-black/20 rounded transition-colors"
+              >
+                <Settings size={10} />
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {showOutputSettings && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl p-3 shadow-2xl z-50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Çıkış Cihazı Seçin</h4>
+                  <div className="space-y-1">
+                    {outputDevices.map(device => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() => {
+                          setSelectedOutput(device.deviceId);
+                          setShowOutputSettings(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
+                          selectedOutput === device.deviceId
+                            ? 'bg-[var(--theme-accent)] text-white'
+                            : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] hover:text-[var(--theme-text)]'
+                        }`}
+                      >
+                        <span className="truncate">{device.label || `Hoparlör ${device.deviceId.slice(0, 5)}`}</span>
+                        {selectedOutput === device.deviceId && <Check size={12} className="shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="relative flex-1">
+            <button
+              onClick={() => {
+                const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
+                                        currentUser.statusText === 'Hemen Geleceğim' ||
+                                        currentUser.statusText?.includes('Sonra Geleceğim');
+                if (isSpecialStatus) {
+                  handleSetStatus('Aktif');
+                } else {
+                  const willBeActive = isMuted;
+                  if (willBeActive && isDeafened) {
+                    setIsDeafened(false);
+                  }
+                  setIsMuted(!isMuted);
+                }
+              }}
+              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                isMuted
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                  : 'text-white shadow-lg'
+              }`}
+              style={!isMuted ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
+            >
+              <Mic size={14} />
+              <span className="truncate">Mikrofon</span>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowInputSettings(!showInputSettings);
+                  setShowOutputSettings(false);
+                }}
+                className="p-0.5 hover:bg-black/20 rounded transition-colors"
+              >
+                <Settings size={10} />
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {showInputSettings && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl p-3 shadow-2xl z-50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Giriş Cihazı Seçin</h4>
+                  <div className="space-y-1">
+                    {inputDevices.map(device => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() => {
+                          setSelectedInput(device.deviceId);
+                          setShowInputSettings(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
+                          selectedInput === device.deviceId
+                            ? 'bg-[var(--theme-accent)] text-white'
+                            : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] hover:text-[var(--theme-text)]'
+                        }`}
+                      >
+                        <span className="truncate">{device.label || `Mikrofon ${device.deviceId.slice(0, 5)}`}</span>
+                        {selectedInput === device.deviceId && <Check size={12} className="shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={`mt-4 pt-4 border-t border-[var(--theme-border)] ${!isNoiseSuppressionEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Shield size={12} className="text-[var(--theme-accent)]" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-secondary-text)]">Gürültü Eşiği</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-[var(--theme-accent)]">{noiseThreshold}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="1"
+                      value={noiseThreshold}
+                      disabled={!isNoiseSuppressionEnabled}
+                      onChange={(e) => setNoiseThreshold(parseInt(e.target.value))}
+                      className="w-full h-1 bg-[var(--theme-sidebar)] rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)] disabled:cursor-not-allowed"
+                    />
+                    <p className="text-[9px] text-[var(--theme-secondary-text)] mt-2 leading-tight">
+                      {isNoiseSuppressionEnabled
+                        ? 'Daha yüksek değerler arka plan gürültüsünü daha fazla keser ancak sesinizin de kesilmesine neden olabilir.'
+                        : 'Gürültü susturma kapalıyken eşik ayarı devre dışıdır.'}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Middle Section - PTT Indicator */}
+        <div className="flex-1 h-full flex items-center justify-center px-4">
+          <div className="flex items-center gap-4 bg-[var(--theme-surface)]/80 px-4 py-2 rounded-xl border border-[var(--theme-border)] shadow-sm">
+            <div className="flex items-center gap-2 text-[var(--theme-text)] font-bold text-[10px] uppercase tracking-widest shrink-0">
+              <button
+                onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
+                className={`p-1 rounded-md transition-all ${
+                  isNoiseSuppressionEnabled
+                    ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]'
+                    : 'bg-[var(--theme-border)] text-[var(--theme-secondary-text)]'
+                }`}
+                title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}
+              >
+                {isNoiseSuppressionEnabled ? <Shield size={12} /> : <ShieldOff size={12} />}
+              </button>
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-0.5 h-2.5">
+                  {[...Array(3)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ height: ['30%', '100%', '30%'] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
+                      className="w-0.5 bg-[var(--theme-accent)] rounded-full"
+                    />
+                  ))}
+                </div>
+                Bas-Konuş
+              </div>
+            </div>
+            <div className="flex items-end gap-0.5 h-4">
+              {[...Array(6)].map((_, i) => {
+                let isActive = false;
+                if (volumeLevel > 0) {
+                  if (volumeLevel < 20) isActive = i < 1;
+                  else if (volumeLevel < 50) isActive = i < 3;
+                  else if (volumeLevel < 85) isActive = i < 5;
+                  else isActive = i < 6;
+                }
+
+                return (
+                  <div
+                    key={i}
+                    className={`w-1 rounded-full transition-all duration-150 ${
+                      isActive
+                        ? 'bg-[var(--theme-accent)] shadow-[0_0_8px_var(--theme-accent)]'
+                        : 'bg-[var(--theme-border)]'
+                    }`}
+                    style={{
+                      height: isActive ? `${(i + 1) * 16.6}%` : '4px',
+                      minHeight: '4px'
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsListeningForKey(true)}
+                className={`px-2 py-0.5 rounded text-[10px] font-black transition-all ${
+                  isListeningForKey
+                    ? 'bg-[var(--theme-accent)] text-white animate-pulse'
+                    : 'bg-[var(--theme-border)] text-[var(--theme-secondary-text)] hover:bg-[var(--theme-accent)]/10'
+                }`}
+              >
+                {isListeningForKey ? '...' : pttKey}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-64 px-4 flex items-center justify-evenly h-full">
+          {renderConnectionQuality()}
+          <button
+            onClick={() => setView('settings')}
+            className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-all font-bold text-[10px] uppercase tracking-widest group"
+          >
+            <Settings size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+            Ayarlar
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-red-500 transition-all font-bold text-[10px] uppercase tracking-widest group"
+          >
+            <button onClick={() => handleLogout()}>
+              <LogOut size={18} />
+            </button>
+            Çıkış
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}
