@@ -1,6 +1,5 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
-const { fork } = require("child_process");
 
 const isDev = !app.isPackaged;
 
@@ -63,35 +62,7 @@ function createWindow() {
   }
 }
 
-let tokenServer = null;
-
-function startTokenServer() {
-  // Dev modda zaten electron:dev scripti server.cjs'i başlatıyor
-  // Production (packaged) modda buradan başlatıyoruz
-  if (isDev) return;
-
-  // Packaged build'de .env, extraFiles ile resourcesPath'e kopyalanır.
-  // Burada process.env'e yüklüyoruz ki fork'a aktarılabilsin.
-  const dotenv = require("dotenv");
-  dotenv.config({ path: path.join(process.resourcesPath, ".env") });
-
-  const serverPath = path.join(__dirname, "../server.cjs");
-  tokenServer = fork(serverPath, [], {
-    env: {
-      ...process.env,
-      PORT: "3001",
-      ELECTRON_IS_PACKAGED: "true",
-    },
-    stdio: "pipe",
-  });
-
-  tokenServer.stdout?.on("data", (d) => console.log("[TokenServer]", d.toString().trim()));
-  tokenServer.stderr?.on("data", (d) => console.error("[TokenServer ERROR]", d.toString().trim()));
-  tokenServer.on("exit", (code) => console.log("[TokenServer] Çıkış kodu:", code));
-}
-
 app.whenReady().then(() => {
-  startTokenServer();
   createWindow();
 
   app.on("activate", () => {
@@ -102,10 +73,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (tokenServer) {
-    tokenServer.kill();
-    tokenServer = null;
-  }
   if (process.platform !== "darwin") {
     app.quit();
   }

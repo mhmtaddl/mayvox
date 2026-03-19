@@ -53,14 +53,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "server.cjs",
       "package.json"
-    ],
-    "extraFiles": [
-      {
-        "from": ".env",
-        "to": ".env"
-      }
     ],
     "win": {
       "target": "nsis"

@@ -20,8 +20,12 @@ const tokenLimiter = rateLimit({
   message: { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
 });
 
-// CORS — sadece local Electron/dev origins
-// Packaged Electron'da file:// origin "null" string olarak gelir
+// CORS
+// Kabul edilen origin'ler:
+//   - http://localhost:3000 / 127.0.0.1:3000 → Vite dev server
+//   - "null" → packaged Electron app (file:// origin tarayıcı tarafından "null" gönderir)
+// Not: token endpoint zaten Supabase JWT doğrulaması yapıyor;
+//      CORS bypass edense bile geçerli oturumu olmadan token alamaz.
 const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'null'];
 
 app.use((req, res, next) => {
@@ -30,9 +34,14 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin || '*');
   }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
+});
+
+// Health check — Render'ın liveness probe'u ve uptime monitor'lar için
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', ts: Date.now() });
 });
 
 app.post('/livekit-token', tokenLimiter, async (req, res) => {
