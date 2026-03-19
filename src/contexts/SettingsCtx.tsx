@@ -14,6 +14,18 @@ export interface SettingsContextType {
   setPttKey: (v: string) => void;
   isListeningForKey: boolean;
   setIsListeningForKey: (v: boolean) => void;
+  soundJoinLeave: boolean;
+  setSoundJoinLeave: (v: boolean) => void;
+  soundJoinLeaveVariant: 1 | 2 | 3;
+  setSoundJoinLeaveVariant: (v: 1 | 2 | 3) => void;
+  soundMuteDeafen: boolean;
+  setSoundMuteDeafen: (v: boolean) => void;
+  soundMuteDeafenVariant: 1 | 2 | 3;
+  setSoundMuteDeafenVariant: (v: 1 | 2 | 3) => void;
+  soundPtt: boolean;
+  setSoundPtt: (v: boolean) => void;
+  soundPttVariant: 1 | 2 | 3;
+  setSoundPttVariant: (v: 1 | 2 | 3) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

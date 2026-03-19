@@ -16,10 +16,10 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
   const [showRepeatPwd, setShowRepeatPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
     setError(null);
     try {
-      handleRegister(code, nick, password, repeatPwd);
+      await handleRegister(code, nick, password, repeatPwd);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kayıt tamamlanamadı.');
     }

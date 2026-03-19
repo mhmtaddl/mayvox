@@ -155,3 +155,27 @@ export const setChannelPassword = async (channelId: string, password: string | n
 export const deleteChannel = async (id: string) => {
   return await supabase.from('channels').delete().eq('id', id);
 };
+
+// SAVE INVITE CODE (eski tüm kodları siler, yeni kodu kaydeder)
+export const saveInviteCode = async (code: string, expiresAt: number) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  await supabase.from('invite_codes').delete().neq('code', '');
+  return await supabase.from('invite_codes').insert({
+    code: code.toUpperCase(),
+    created_by: session?.user?.id,
+    expires_at: expiresAt,
+    used: false,
+  });
+};
+
+// VERIFY INVITE CODE (kayıt öncesi anonim doğrulama)
+export const verifyInviteCode = async (code: string): Promise<boolean> => {
+  const { data } = await supabase.rpc('verify_invite_code', { p_code: code.toUpperCase() });
+  return !!data;
+};
+
+// USE INVITE CODE (kayıt sonrası kodu geçersiz kıl)
+export const useInviteCode = async (code: string): Promise<boolean> => {
+  const { data } = await supabase.rpc('use_invite_code', { p_code: code.toUpperCase() });
+  return !!data;
+};

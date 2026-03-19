@@ -11,7 +11,6 @@ import {
   Volume1,
   PhoneCall,
   Clock,
-  AlertCircle,
   X,
   Lock,
   Shield,
@@ -28,6 +27,7 @@ import { useUser } from '../contexts/UserContext';
 import { useChannel } from '../contexts/ChannelContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
+import SettingsView from './SettingsView';
 
 export default function ChatView() {
   const {
@@ -103,6 +103,7 @@ export default function ChatView() {
     handleLogout,
     disconnectFromLiveKit,
     presenceChannelRef,
+    view,
     setView,
   } = useAppState();
 
@@ -132,10 +133,6 @@ export default function ChatView() {
   );
   const onlineUsers = useMemo(
     () => allUsers.filter(u => u.status === 'online' || (u.status === 'away' && u.statusText === 'Telefondayım')),
-    [allUsers]
-  );
-  const busyUsers = useMemo(
-    () => allUsers.filter(u => u.status === 'busy' || (u.status === 'away' && u.statusText === '10 dk sonra')),
     [allUsers]
   );
   const offlineUsers = useMemo(
@@ -312,7 +309,8 @@ export default function ChatView() {
                     onContextMenu={(e) => handleContextMenu(e, channel.id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, channel.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
+                    disabled={isConnecting}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group disabled:cursor-not-allowed ${
                       activeChannel === channel.id
                         ? `bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
                         : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)]'
@@ -805,8 +803,8 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col bg-[var(--theme-surface)] p-8 overflow-y-auto custom-scrollbar">
-          {activeChannel ? (
+        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar ${view !== 'settings' ? 'p-8' : ''}`}>
+          {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <>
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -907,6 +905,8 @@ export default function ChatView() {
                                 })}
                               </div>
                             </div>
+                          ) : user.isSpeaking ? (
+                            <p className="text-[var(--theme-accent)] text-[10px] font-bold animate-pulse">Konuşuyor...</p>
                           ) : (
                             <p className={`${statusSize} font-bold truncate ${getStatusColor(user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif'))}`}>
                               {user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')}
@@ -1008,38 +1008,6 @@ export default function ChatView() {
                     </div>
                   );
                 })}
-              </div>
-            </div>
-
-            {/* Busy */}
-            <div>
-              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Meşgul — {busyUsers.length}</p>
-              <div className="space-y-1">
-                {busyUsers.map(user => (
-                  <div
-                    key={user.id}
-                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group opacity-80 hover:bg-[var(--theme-sidebar)]"
-                  >
-                    <div className="relative">
-                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
-                        {user.avatar}
-                      </div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
-                        user.status === 'busy' ? 'bg-red-500' : 'bg-orange-500'
-                      }`}></div>
-                    </div>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-[var(--theme-text)] group-hover:text-[var(--theme-accent)] transition-colors leading-none">{user.firstName} {user.lastName} ({user.age})</span>
-                        {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" />}
-                      </div>
-                      <div className="flex items-center gap-1 mt-1">
-                        {user.status === 'busy' ? <AlertCircle size={8} className="text-red-500" /> : <Clock size={8} className="text-[var(--theme-accent)]" />}
-                        <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -1314,10 +1282,10 @@ export default function ChatView() {
         <div className="w-64 px-4 flex items-center justify-evenly h-full">
           {renderConnectionQuality()}
           <button
-            onClick={() => setView('settings')}
-            className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-all font-bold text-[10px] uppercase tracking-widest group"
+            onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+            className={`flex items-center gap-1.5 transition-all font-bold text-[10px] uppercase tracking-widest group ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'}`}
           >
-            <Settings size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+            <Settings size={14} className={`transition-transform duration-300 ${view === 'settings' ? 'rotate-90' : 'group-hover:rotate-90'}`} />
             Ayarlar
           </button>
           <button

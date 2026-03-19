@@ -2,7 +2,11 @@ const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const { rateLimit } = require('express-rate-limit');
-require('dotenv').config();
+// In packaged Electron builds, env vars are loaded by main.cjs before fork.
+// In dev, load from the project root .env file.
+if (!process.env.ELECTRON_IS_PACKAGED) {
+  require('dotenv').config();
+}
 
 const app = express();
 app.use(express.json());
@@ -17,12 +21,13 @@ const tokenLimiter = rateLimit({
 });
 
 // CORS — sadece local Electron/dev origins
-const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+// Packaged Electron'da file:// origin "null" string olarak gelir
+const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'null'];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin || allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin || 'null');
+    res.header('Access-Control-Allow-Origin', origin || '*');
   }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');

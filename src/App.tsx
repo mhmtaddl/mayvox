@@ -8,9 +8,28 @@ import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView, User, VoiceChannel, Theme } from './types';
 import { CHANNELS, THEMES } from './constants';
-import { signIn, signOut, signUp, getSession, saveProfile, getProfile, getProfileByUsername, getAllProfiles, getChannels, createChannel, updateChannel, deleteChannel, updateUserModeration, verifyChannelPassword, setChannelPassword, deleteUser, supabase } from './lib/supabase';
-import { getLiveKitToken, LIVEKIT_URL } from './lib/livekit';
-import { Room, RoomEvent, Track, ConnectionQuality, DisconnectReason, type AudioCaptureOptions } from 'livekit-client';
+import {
+  signIn,
+  signOut,
+  signUp,
+  getSession,
+  saveProfile,
+  getProfile,
+  getProfileByUsername,
+  getAllProfiles,
+  getChannels,
+  createChannel,
+  updateChannel,
+  deleteChannel,
+  updateUserModeration,
+  verifyChannelPassword,
+  setChannelPassword,
+  saveInviteCode,
+  verifyInviteCode,
+  useInviteCode,
+} from './lib/supabase';
+import { playSound } from './lib/sounds';
+import { type AudioCaptureOptions } from 'livekit-client';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -32,13 +51,17 @@ import { SettingsCtx, SettingsContextType } from './contexts/SettingsCtx';
 
 import { useDevices } from './hooks/useDevices';
 import { usePttAudio } from './hooks/usePttAudio';
+import { useLiveKitConnection } from './hooks/useLiveKitConnection';
+import { usePresence } from './hooks/usePresence';
+import { useModeration } from './hooks/useModeration';
 
 import LoginSelectionView from './views/LoginSelectionView';
 import LoginCodeView from './views/LoginCodeView';
 import LoginPasswordView from './views/LoginPasswordView';
 import RegisterDetailsView from './views/RegisterDetailsView';
 import ChatView from './views/ChatView';
-import SettingsView from './views/SettingsView';
+
+const isSupabaseUser = (userId: string) => userId.includes('-');
 
 export default function App() {
   const [view, setView] = useState<AppView>('loading');
@@ -90,89 +113,25 @@ export default function App() {
 
   const [isListeningForKey, setIsListeningForKey] = useState(false);
 
+  const [soundJoinLeave, setSoundJoinLeaveState] = useState(() => localStorage.getItem('soundJoinLeave') !== 'false');
+  const setSoundJoinLeave = (v: boolean) => { localStorage.setItem('soundJoinLeave', String(v)); setSoundJoinLeaveState(v); };
+  const [soundJoinLeaveVariant, setSoundJoinLeaveVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundJoinLeaveVariant') || '1') || 1) as 1|2|3);
+  const setSoundJoinLeaveVariant = (v: 1|2|3) => { localStorage.setItem('soundJoinLeaveVariant', String(v)); setSoundJoinLeaveVariantState(v); };
+
+  const [soundMuteDeafen, setSoundMuteDeafenState] = useState(() => localStorage.getItem('soundMuteDeafen') !== 'false');
+  const setSoundMuteDeafen = (v: boolean) => { localStorage.setItem('soundMuteDeafen', String(v)); setSoundMuteDeafenState(v); };
+  const [soundMuteDeafenVariant, setSoundMuteDeafenVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundMuteDeafenVariant') || '1') || 1) as 1|2|3);
+  const setSoundMuteDeafenVariant = (v: 1|2|3) => { localStorage.setItem('soundMuteDeafenVariant', String(v)); setSoundMuteDeafenVariantState(v); };
+
+  const [soundPtt, setSoundPttState] = useState(() => localStorage.getItem('soundPtt') !== 'false');
+  const setSoundPtt = (v: boolean) => { localStorage.setItem('soundPtt', String(v)); setSoundPttState(v); };
+  const [soundPttVariant, setSoundPttVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundPttVariant') || '1') || 1) as 1|2|3);
+  const setSoundPttVariant = (v: 1|2|3) => { localStorage.setItem('soundPttVariant', String(v)); setSoundPttVariantState(v); };
+
   // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [connectionLevel, setConnectionLevel] = useState(4);
-
-  // ── Global network quality monitoring ────────────────────────────────────
-  useEffect(() => {
-    const getQualityLevel = (): number => {
-      if (!navigator.onLine) return 0;
-      const conn = (navigator as any).connection;
-      if (!conn) return 4;
-      const type: string = conn.effectiveType || '4g';
-      if (type === 'slow-2g') return 1;
-      if (type === '2g') return 2;
-      if (type === '3g') return 3;
-      return 4;
-    };
-
-    const onOffline = () => {
-      connectionLostRef.current = true;
-      setConnectionLevel(0);
-      setToastMsg('İnternet bağlantısı kesildi.');
-    };
-    const onOnline = () => {
-      if (livekitRoomRef.current) return; // Kanaldayken LiveKit Reconnected event'i yönetir
-      setConnectionLevel(getQualityLevel());
-      if (connectionLostRef.current) {
-        connectionLostRef.current = false;
-        setToastMsg('İnternet bağlantısı yeniden kuruldu.');
-        setTimeout(() => setToastMsg(null), 3000);
-      }
-    };
-    const onConnectionChange = () => {
-      if (livekitRoomRef.current) return;
-      setConnectionLevel(getQualityLevel());
-    };
-
-    window.addEventListener('offline', onOffline);
-    window.addEventListener('online', onOnline);
-    const conn = (navigator as any).connection;
-    if (conn) conn.addEventListener('change', onConnectionChange);
-
-    // Periyodik ping (10sn) — kanaldayken atla
-    const pingInterval = setInterval(async () => {
-      if (livekitRoomRef.current || !navigator.onLine) return;
-      const start = Date.now();
-      try {
-        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store' });
-        const rtt = Date.now() - start;
-        setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
-        if (connectionLostRef.current) {
-          connectionLostRef.current = false;
-          setToastMsg(null);
-        }
-      } catch {
-        setConnectionLevel(0);
-      }
-    }, 10000);
-
-    // Başlangıç seviyesi
-    setConnectionLevel(getQualityLevel());
-
-    return () => {
-      window.removeEventListener('offline', onOffline);
-      window.removeEventListener('online', onOnline);
-      if (conn) conn.removeEventListener('change', onConnectionChange);
-      clearInterval(pingInterval);
-    };
-  }, []);
-
-  // ── Device hook ─────────────────────────────────────────────────────────
-  const {
-    inputDevices,
-    outputDevices,
-    selectedInput,
-    setSelectedInput,
-    selectedOutput,
-    setSelectedOutput,
-    showInputSettings,
-    setShowInputSettings,
-    showOutputSettings,
-    setShowOutputSettings,
-  } = useDevices();
 
   // ── User state ───────────────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState<User>({
@@ -232,7 +191,6 @@ export default function App() {
   const [statusTimer, setStatusTimer] = useState<number | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  // Sadece çok adımlı kayıt akışı için (LoginCodeView → RegisterDetailsView)
   const [loginNick, setLoginNick] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -242,27 +200,32 @@ export default function App() {
   const [displayName, setDisplayName] = useState('');
 
   // ── Refs ─────────────────────────────────────────────────────────────────
-  const livekitRoomRef = useRef<Room | null>(null);
-  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const connectionLostRef = useRef(false);
+  const pendingInviteCodeRef = useRef<string | null>(null);
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
-
-  // Kanalsız kalınca (her nedenden dolayı) kullanıcıyı tüm channel members'dan temizle
-  useEffect(() => {
-    if (activeChannel !== null) return;
-    const name = currentUserRef.current.name;
-    if (!name) return;
-    setChannels(prev => prev.map(c => {
-      if (!c.members?.includes(name)) return c;
-      const members = c.members.filter(m => m !== name);
-      return { ...c, members, userCount: members.length };
-    }));
-  }, [activeChannel]);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
+
+  // Forward ref to break circular dependency: usePresence needs disconnectFromLiveKit,
+  // but useLiveKitConnection needs presenceChannelRef (which comes from usePresence).
+  const disconnectLKRef = useRef<() => Promise<void>>(async () => {});
+
+  // ── Device hook ─────────────────────────────────────────────────────────
+  const {
+    inputDevices,
+    outputDevices,
+    selectedInput,
+    setSelectedInput,
+    selectedOutput,
+    setSelectedOutput,
+    showInputSettings,
+    setShowInputSettings,
+    showOutputSettings,
+    setShowOutputSettings,
+  } = useDevices();
 
   // ── PTT Audio hook ───────────────────────────────────────────────────────
   const { isPttPressed, volumeLevel } = usePttAudio({
@@ -277,6 +240,120 @@ export default function App() {
     noiseThreshold,
     isLowDataMode,
   });
+
+  // ── Presence hook ────────────────────────────────────────────────────────
+  const { presenceChannelRef, startPresence, stopPresence } = usePresence({
+    currentUserRef,
+    activeChannelRef,
+    disconnectFromLiveKit: () => disconnectLKRef.current(),
+    setAllUsers,
+    setCurrentUser,
+    setChannels,
+    setActiveChannel,
+    setToastMsg,
+    setInvitationModal,
+  });
+
+  // ── LiveKit hook ─────────────────────────────────────────────────────────
+  const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit } = useLiveKitConnection({
+    presenceChannelRef,
+    currentUserRef,
+    activeChannelRef,
+    connectionLostRef,
+    isNoiseSuppressionEnabled,
+    selectedInput,
+    selectedOutput,
+    setConnectionLevel,
+    setToastMsg,
+    setActiveChannel,
+    setIsConnecting,
+    setChannels,
+    setAllUsers,
+  });
+
+  // Keep forward ref current so usePresence always calls the real function
+  disconnectLKRef.current = disconnectFromLiveKit;
+
+  // ── Moderation hook ──────────────────────────────────────────────────────
+  const {
+    broadcastModeration,
+    handleMuteUser,
+    handleBanUser,
+    handleUnmuteUser,
+    handleUnbanUser,
+    handleDeleteUser,
+    handleToggleAdmin,
+  } = useModeration({
+    currentUser,
+    allUsers,
+    presenceChannelRef,
+    setAllUsers,
+    setToastMsg,
+    onSelfDelete: () => setView('login-selection'),
+  });
+
+  // ── Global network quality monitoring ────────────────────────────────────
+  useEffect(() => {
+    const getQualityLevel = (): number => {
+      if (!navigator.onLine) return 0;
+      const conn = (navigator as any).connection;
+      if (!conn) return 4;
+      const type: string = conn.effectiveType || '4g';
+      if (type === 'slow-2g') return 1;
+      if (type === '2g') return 2;
+      if (type === '3g') return 3;
+      return 4;
+    };
+
+    const onOffline = () => {
+      connectionLostRef.current = true;
+      setConnectionLevel(0);
+      setToastMsg('İnternet bağlantısı kesildi.');
+    };
+    const onOnline = () => {
+      if (livekitRoomRef.current) return;
+      setConnectionLevel(getQualityLevel());
+      if (connectionLostRef.current) {
+        connectionLostRef.current = false;
+        setToastMsg('İnternet bağlantısı yeniden kuruldu.');
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    };
+    const onConnectionChange = () => {
+      if (livekitRoomRef.current) return;
+      setConnectionLevel(getQualityLevel());
+    };
+
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    const conn = (navigator as any).connection;
+    if (conn) conn.addEventListener('change', onConnectionChange);
+
+    const pingInterval = setInterval(async () => {
+      if (livekitRoomRef.current || !navigator.onLine) return;
+      const start = Date.now();
+      try {
+        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store' });
+        const rtt = Date.now() - start;
+        setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
+        if (connectionLostRef.current) {
+          connectionLostRef.current = false;
+          setToastMsg(null);
+        }
+      } catch {
+        setConnectionLevel(0);
+      }
+    }, 10000);
+
+    setConnectionLevel(getQualityLevel());
+
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+      if (conn) conn.removeEventListener('change', onConnectionChange);
+      clearInterval(pingInterval);
+    };
+  }, []);
 
   // ── Session restore on page load ─────────────────────────────────────────
   useEffect(() => {
@@ -381,7 +458,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── TEK 5000ms INTERVAL — bağlantı kalitesi + mute/ban süresi kontrolü ──
+  // ── TEK 5000ms INTERVAL — mute/ban süresi kontrolü ───────────────────────
   const slowTickRef = useRef(0);
   useEffect(() => {
     const interval = setInterval(() => {
@@ -427,11 +504,16 @@ export default function App() {
   // ── Status timer: side effects when timer reaches 0 ──────────────────────
   useEffect(() => {
     if (statusTimer === null) return;
+    const user = currentUserRef.current;
     if (statusTimer <= 0) {
-      const user = currentUserRef.current;
       const updatedUser = { ...user, statusText: 'Aktif' };
       setCurrentUser(updatedUser);
       setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'moderation',
+        payload: { userId: user.id, updates: { statusText: 'Aktif' } },
+      });
       setStatusTimer(null);
       setIsMuted(false);
       setIsDeafened(false);
@@ -440,11 +522,15 @@ export default function App() {
     const minutes = Math.floor(statusTimer / 60);
     const seconds = statusTimer % 60;
     const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')} Sonra Geleceğim`;
-    const user = currentUserRef.current;
     if (user.statusText !== timeStr) {
       const updatedUser = { ...user, statusText: timeStr };
       setCurrentUser(updatedUser);
       setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'moderation',
+        payload: { userId: user.id, updates: { statusText: timeStr } },
+      });
     }
   }, [statusTimer]);
 
@@ -492,6 +578,14 @@ export default function App() {
           if (activeChannelRef.current && channelsToDelete.includes(activeChannelRef.current)) {
             setActiveChannel(null);
           }
+          channelsToDelete.forEach(id => {
+            deleteChannel(id).catch(err => console.warn('Oda silinemedi:', err));
+            presenceChannelRef.current?.send({
+              type: 'broadcast',
+              event: 'channel-update',
+              payload: { action: 'delete', channelId: id },
+            });
+          });
         }
 
         return hasChanges ? nextChannels : prevChannels;
@@ -500,6 +594,35 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // ── PTT speaking broadcast ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeChannel) return;
+    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned;
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'speaking',
+      payload: { userId: currentUser.id, isSpeaking: canSpeak },
+    });
+  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, activeChannel]);
+
+  // ── Ses bildirimleri ──────────────────────────────────────────────────────
+  const soundMountedRef = useRef(false);
+  useEffect(() => {
+    if (!soundMountedRef.current) { soundMountedRef.current = true; return; }
+    playSound(isMuted ? 'mute' : 'unmute');
+  }, [isMuted]);
+
+  const deafenMountedRef = useRef(false);
+  useEffect(() => {
+    if (!deafenMountedRef.current) { deafenMountedRef.current = true; return; }
+    playSound(isDeafened ? 'deafen' : 'undeafen');
+  }, [isDeafened]);
+
+  useEffect(() => {
+    if (!activeChannel) return;
+    playSound(isPttPressed ? 'ptt-on' : 'ptt-off');
+  }, [isPttPressed]);
 
   // ── LiveKit PTT: enable/disable mic based on PTT state ───────────────────
   useEffect(() => {
@@ -520,16 +643,19 @@ export default function App() {
     });
   }, [isDeafened]);
 
-  // ── Update channel membership when active channel changes ─────────────────
+  // ── Kanaldan çıkılınca (activeChannel null) kullanıcıyı tüm kanallardan temizle ──
+  // NOT: Kanala GİRİŞ için optimistic ekleme handleJoinChannel içinde yapılır;
+  //      gerçek liste updateMembers() tarafından yazılır. Bu effect sadece çıkışı işler.
   useEffect(() => {
-    if (!currentUser.name) return;
+    if (activeChannel !== null) return;
+    const name = currentUserRef.current.name;
+    if (!name) return;
     setChannels(prev => prev.map(c => {
-      const isUserInThisChannel = activeChannel === c.id;
-      const otherMembers = c.members?.filter(m => m !== currentUser.name) || [];
-      const newMembers = isUserInThisChannel ? [...otherMembers, currentUser.name] : otherMembers;
-      return { ...c, members: newMembers, userCount: newMembers.length };
+      if (!c.members?.includes(name)) return c;
+      const members = c.members.filter(m => m !== name);
+      return { ...c, members, userCount: members.length };
     }));
-  }, [activeChannel, currentUser.name]);
+  }, [activeChannel]);
 
   // ── Helper functions ──────────────────────────────────────────────────────
   const getAvatarText = (user: User) => {
@@ -560,13 +686,16 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isSupabaseUser = (userId: string) => userId.includes('-');
-
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSetStatus = (text: string, minutes?: number) => {
     const updatedUser = { ...currentUser, statusText: text };
     setCurrentUser(updatedUser);
     setAllUsers(allUsers.map(u => u.id === currentUser.id ? updatedUser : u));
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'moderation',
+      payload: { userId: currentUser.id, updates: { statusText: text } },
+    });
 
     if (text !== 'Aktif') {
       setIsMuted(true);
@@ -729,7 +858,7 @@ export default function App() {
     const { error } = await setChannelPassword(id, password);
     if (error) {
       console.error('Şifre kaydetme hatası:', error);
-      setToastMsg('Şifre kaydedilemedi: ' + error.message);
+      setToastMsg('Şifre kaydedilemedi. Lütfen tekrar deneyin.');
       setTimeout(() => setToastMsg(null), 4000);
       return;
     }
@@ -756,341 +885,47 @@ export default function App() {
     setContextMenu({ x: e.clientX, y: e.clientY, channelId });
   };
 
-  const broadcastModeration = (userId: string, updates: Partial<User>) => {
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'moderation',
-      payload: { userId, updates },
-    });
-  };
-
-  const handleMuteUser = (userId: string, durationMinutes: number) => {
-    const expires = Date.now() + durationMinutes * 60 * 1000;
-    const updates = { isMuted: true, muteExpires: expires };
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    if (isSupabaseUser(userId)) updateUserModeration(userId, { is_muted: true, mute_expires: expires });
-    broadcastModeration(userId, updates);
-  };
-
-  const handleBanUser = (userId: string, durationMinutes: number) => {
-    const expires = Date.now() + durationMinutes * 60 * 1000;
-    const updates = { isVoiceBanned: true, banExpires: expires };
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    if (isSupabaseUser(userId)) updateUserModeration(userId, { is_voice_banned: true, ban_expires: expires });
-    broadcastModeration(userId, updates);
-  };
-
-  const handleUnmuteUser = (userId: string) => {
-    const updates = { isMuted: false, muteExpires: undefined };
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    if (isSupabaseUser(userId)) updateUserModeration(userId, { is_muted: false, mute_expires: null });
-    broadcastModeration(userId, updates);
-  };
-
-  const handleUnbanUser = (userId: string) => {
-    const updates = { isVoiceBanned: false, banExpires: undefined };
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    if (isSupabaseUser(userId)) updateUserModeration(userId, { is_voice_banned: false, ban_expires: null });
-    broadcastModeration(userId, updates);
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (userId === currentUser.id) {
-      await signOut();
-      setView('login-selection');
-      return;
-    }
-
-    const { data, error } = await deleteUser(userId);
-
-    if (error || data?.error) {
-      alert(data?.error || 'Kullanıcı silinemedi.');
-      return;
-    }
-
-    setAllUsers(prev => prev.filter(u => u.id !== userId));
-    broadcastModeration(userId, { status: 'offline' });
-  };
-
-  const handleToggleAdmin = (userId: string) => {
-    if (!currentUser.isPrimaryAdmin) return;
-    const targetUser = allUsers.find(u => u.id === userId);
-    if (!targetUser) return;
-    const newIsAdmin = !targetUser.isAdmin;
-    const updates = { isAdmin: newIsAdmin };
-    setAllUsers(allUsers.map(u => u.id === userId ? { ...u, ...updates } : u));
-    if (isSupabaseUser(userId)) updateUserModeration(userId, { is_admin: newIsAdmin });
-    broadcastModeration(userId, updates);
-  };
-
-  const handleGenerateCode = () => {
+  const handleGenerateCode = async () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
     for (let i = 0; i < 10; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    const expiresAt = Date.now() + 180 * 1000;
+    await saveInviteCode(code, expiresAt);
     setGeneratedCode(code);
     setTimeLeft(180);
   };
 
-  // ── LiveKit ───────────────────────────────────────────────────────────────
-  const connectToLiveKit = async (channelId: string, channelName: string): Promise<boolean> => {
-    try {
-      if (livekitRoomRef.current) {
-        await livekitRoomRef.current.disconnect();
-        livekitRoomRef.current = null;
-      }
+  // ── Join helpers ──────────────────────────────────────────────────────────
+  // Extracted to avoid duplicating the optimistic join + connect + rollback logic
+  const performJoin = async (channelId: string, channelName: string) => {
+    const now = Date.now();
+    const myName = currentUser.name;
+    setActiveChannel(channelId);
+    setIsConnecting(true);
+    setChannels(prev => prev.map(c => {
+      const members = (c.members || []).filter(m => m !== myName);
+      return c.id === channelId
+        ? { ...c, members: [...members, myName], userCount: members.length + 1 }
+        : { ...c, members, userCount: members.length };
+    }));
+    setCurrentUser(prev => ({ ...prev, joinedAt: now }));
+    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
 
-      const token = await getLiveKitToken(channelId, currentUser.name);
-      const room = new Room({
-        audioCaptureDefaults: {
-          echoCancellation: true,
-          noiseSuppression: isNoiseSuppressionEnabled,
-          autoGainControl: isNoiseSuppressionEnabled,
-          deviceId: selectedInput || undefined,
-        },
-        audioOutput: {
-          deviceId: selectedOutput || undefined,
-        },
-      });
-      livekitRoomRef.current = room;
-
-      const updateMembers = () => {
-        const participants = [
-          room.localParticipant.identity,
-          ...Array.from(room.remoteParticipants.values()).map(p => p.identity),
-        ].filter(Boolean);
-
-        setChannels(prev => prev.map(c =>
-          c.id === channelId
-            ? { ...c, members: participants, userCount: participants.length }
-            : c
-        ));
-        presenceChannelRef.current?.send({
-          type: 'broadcast',
-          event: 'channel-update',
-          payload: { action: 'update', channelId, updates: { members: participants, userCount: participants.length } },
-        });
-      };
-
-      const syncUsers = () => {
-        const remoteIdentities = Array.from(room.remoteParticipants.values()).map(p => p.identity);
-        remoteIdentities.forEach(identity => {
-          setAllUsers(prev => {
-            if (prev.find(u => u.name === identity)) return prev;
-            const newUser: User = {
-              id: `lk-${identity}`,
-              name: identity,
-              firstName: identity,
-              lastName: '',
-              age: 0,
-              avatar: (identity[0] || '?').toUpperCase(),
-              status: 'online',
-              statusText: 'Aktif',
-              isAdmin: false,
-              isPrimaryAdmin: false,
-            };
-            return [...prev, newUser];
-          });
-        });
-        // lk-* kullanıcıları geçici LiveKit katılımcıları — ayrılınca listeden çıkar
-        setAllUsers(prev => prev.filter(u =>
-          !u.id.startsWith('lk-') || remoteIdentities.includes(u.name)
-        ));
-      };
-
-      room.on(RoomEvent.TrackSubscribed, (track) => {
-        if (track.kind === Track.Kind.Audio) {
-          const audioEl = track.attach() as HTMLAudioElement;
-          audioEl.setAttribute('data-livekit-audio', 'true');
-          audioEl.muted = isDeafened;
-          document.body.appendChild(audioEl);
-        }
-      });
-
-      room.on(RoomEvent.TrackUnsubscribed, (track) => {
-        if (track.kind === Track.Kind.Audio) {
-          track.detach().forEach(el => el.remove());
-        }
-      });
-
-      room.on(RoomEvent.ParticipantConnected, () => { updateMembers(); syncUsers(); });
-      room.on(RoomEvent.ParticipantDisconnected, () => { updateMembers(); syncUsers(); });
-      room.on(RoomEvent.ConnectionQualityChanged, (quality) => {
-        const level = quality === ConnectionQuality.Excellent ? 4
-          : quality === ConnectionQuality.Good ? 3
-          : quality === ConnectionQuality.Poor ? 1
-          : 0;
-        setConnectionLevel(level);
-      });
-      let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-
-      room.on(RoomEvent.Reconnecting, () => {
-        setConnectionLevel(1);
-        setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
-        reconnectTimeout = setTimeout(async () => {
-          await room.disconnect();
-          setConnectionLevel(0);
-          setToastMsg('Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.');
-        }, 15000);
-      });
-      room.on(RoomEvent.Reconnected, () => {
-        if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
-        connectionLostRef.current = false;
-        setConnectionLevel(4);
-        setToastMsg('Bağlantı yeniden kuruldu.');
-        setTimeout(() => setToastMsg(null), 3000);
-      });
-      room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
-        if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
-        const identity = room.localParticipant?.identity || currentUserRef.current.name;
-        livekitRoomRef.current = null;
-        setIsConnecting(false);
-        // CLIENT_INITIATED: ya manuel ayrılma (caller sıfırlar) ya da kanal geçişi
-        // Kanal geçişinde activeChannel zaten yeni kanalı gösteriyor — sıfırlama
-        if (reason !== DisconnectReason.CLIENT_INITIATED) {
-          setActiveChannel(null);
-        }
-        setChannels(prev => {
-          const updated = prev.map(c => {
-            if (c.id !== channelId) return c;
-            const members = c.members?.filter(m => m !== identity) || [];
-            return { ...c, members, userCount: members.length };
-          });
-          const ch = updated.find(c => c.id === channelId);
-          if (ch) {
-            presenceChannelRef.current?.send({
-              type: 'broadcast',
-              event: 'channel-update',
-              payload: { action: 'update', channelId, updates: { members: ch.members, userCount: ch.userCount } },
-            });
-          }
-          return updated;
-        });
-        if (reason !== DisconnectReason.CLIENT_INITIATED) {
-          connectionLostRef.current = true;
-          setConnectionLevel(0);
-          setToastMsg('Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.');
-        } else {
-          setConnectionLevel(4);
-        }
-      });
-
-      await room.connect(LIVEKIT_URL, token);
-      updateMembers();
-      syncUsers();
-
-      if (!currentUser.isVoiceBanned) {
-        await room.localParticipant.setMicrophoneEnabled(false);
-      }
-      return true;
-    } catch (err) {
-      console.error('LiveKit bağlantı hatası:', err);
-      setToastMsg('Odaya bağlanılamadı. Lütfen tekrar deneyin.');
-      setTimeout(() => setToastMsg(null), 4000);
-      return false;
-    }
-  };
-
-  const disconnectFromLiveKit = async () => {
+    const connected = await connectToLiveKit(channelId, channelName);
     setIsConnecting(false);
-    if (livekitRoomRef.current) {
-      await livekitRoomRef.current.disconnect();
-      livekitRoomRef.current = null;
-    }
-    document.querySelectorAll('[data-livekit-audio]').forEach(el => el.remove());
-  };
-
-  // ── Presence ──────────────────────────────────────────────────────────────
-  const startPresence = (user: User) => {
-    if (presenceChannelRef.current) {
-      presenceChannelRef.current.unsubscribe();
-    }
-    const channel = supabase.channel('app-presence', { config: { presence: { key: user.id } } });
-    presenceChannelRef.current = channel;
-
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState<{ userId: string }>();
-      const onlineIds = new Set(Object.values(state).flatMap(s => s.map(p => p.userId)));
-      setAllUsers(prev => prev.map(u => ({
-        ...u,
-        status: u.id === user.id ? 'online' : onlineIds.has(u.id) ? 'online' : 'offline',
-        statusText: u.id === user.id ? u.statusText : onlineIds.has(u.id) ? (u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText) : 'Çevrimdışı',
-      } as User)));
-    });
-
-    channel.on('broadcast', { event: 'invite' }, ({ payload }) => {
-      if (payload.inviteeId === user.id) {
-        setInvitationModal({
-          inviterId: payload.inviterId,
-          inviterName: payload.inviterName,
-          roomName: payload.roomName,
-          roomId: payload.roomId,
-        });
-      }
-    });
-
-    channel.on('broadcast', { event: 'invite-rejected' }, ({ payload }) => {
-      if (payload.inviterId === user.id) {
-        setToastMsg(`${payload.inviteeName} davetinize icabet etmedi.`);
-        setTimeout(() => setToastMsg(null), 4000);
-      }
-    });
-
-    channel.on('broadcast', { event: 'kick' }, ({ payload }) => {
-      if (payload.userId === user.id) {
-        setActiveChannel(null);
-        disconnectFromLiveKit();
-        setToastMsg('Odadan çıkarıldınız.');
-        setTimeout(() => setToastMsg(null), 4000);
-      }
-    });
-
-    channel.on('broadcast', { event: 'moderation' }, ({ payload }) => {
-      if (payload.userId === user.id) {
-        setCurrentUser((prev: User) => ({ ...prev, ...payload.updates }));
-      }
-      setAllUsers(prev => prev.map(u => u.id === payload.userId ? { ...u, ...payload.updates } : u));
-    });
-
-    channel.on('broadcast', { event: 'channel-update' }, ({ payload }) => {
-      if (payload.action === 'create') {
-        setChannels(prev => prev.find(c => c.id === payload.channel.id) ? prev : [...prev, payload.channel]);
-      } else if (payload.action === 'delete') {
-        setChannels(prev => prev.filter(c => c.id !== payload.channelId));
-        setActiveChannel(prev => prev === payload.channelId ? null : prev);
-      } else if (payload.action === 'update') {
-        setChannels(prev => prev.map(c => {
-          if (c.id !== payload.channelId) return c;
-          const updates = { ...payload.updates };
-          // LiveKit'e bağlı değilsek gelen members listesinde kendimizi gösterme
-          if (Array.isArray(updates.members) && !livekitRoomRef.current) {
-            updates.members = (updates.members as string[]).filter(m => m !== currentUserRef.current.name);
-            updates.userCount = updates.members.length;
-          }
-          return { ...c, ...updates };
-        }));
-      }
-    });
-
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id });
-      }
-    });
-  };
-
-  const stopPresence = () => {
-    if (presenceChannelRef.current) {
-      presenceChannelRef.current.unsubscribe();
-      presenceChannelRef.current = null;
+    if (!connected) {
+      setActiveChannel(null);
+      setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
     }
   };
 
-  // ── Join / verify password ────────────────────────────────────────────────
   const handleJoinChannel = async (id: string, isInvited: boolean = false) => {
+    console.log('[JOIN] handleJoinChannel çağrıldı', { id, isInvited, currentActiveChannel: activeChannel, currentUserName: currentUser.name });
     const channel = channels.find(c => c.id === id);
-    if (!channel) return;
+    if (!channel) { console.warn('[JOIN] Kanal bulunamadı:', id); return; }
 
     if (!isInvited && channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
       alert("Bu odaya sadece davetle girilebilir.");
@@ -1107,18 +942,8 @@ export default function App() {
       setPasswordInput('');
       setPasswordError(false);
     } else {
-      const now = Date.now();
-      setActiveChannel(id);
-      setIsConnecting(true);
-      setCurrentUser(prev => ({ ...prev, joinedAt: now }));
-      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
-      const connected = await connectToLiveKit(id, channel.name);
-      setIsConnecting(false);
-      if (!connected) {
-        setActiveChannel(null);
-        setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
-        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
-      }
+      console.log('[JOIN] connectToLiveKit çağrılıyor...');
+      await performJoin(id, channel.name);
     }
   };
 
@@ -1131,19 +956,7 @@ export default function App() {
       setPasswordModal(null);
       setPasswordInput('');
       setPasswordError(false);
-      const channelId = passwordModal.channelId;
-      const now = Date.now();
-      setActiveChannel(channelId);
-      setIsConnecting(true);
-      setCurrentUser(prev => ({ ...prev, joinedAt: now }));
-      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
-      const connected = await connectToLiveKit(channelId, channel.name);
-      setIsConnecting(false);
-      if (!connected) {
-        setActiveChannel(null);
-        setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
-        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
-      }
+      await performJoin(passwordModal.channelId, channel.name);
     } else {
       setPasswordError(true);
     }
@@ -1247,12 +1060,13 @@ export default function App() {
     setActiveChannel(null);
   };
 
-  const handleRegister = (code: string, nick: string, password: string, repeatPwd: string) => {
+  const handleRegister = async (code: string, nick: string, password: string, repeatPwd: string) => {
     if (!code.trim()) throw new Error('Davet kodunu giriniz!');
-    if (code.trim().toUpperCase() !== (generatedCode || '').toUpperCase()) throw new Error('Geçersiz veya süresi dolmuş davet kodu!');
     if (!nick || !password) throw new Error('E-posta ve parola giriniz!');
     if (password !== repeatPwd) throw new Error('Parolalar eşleşmiyor!');
-    // Kayıt adımı için sakla
+    const isValid = await verifyInviteCode(code.trim());
+    if (!isValid) throw new Error('Geçersiz veya süresi dolmuş davet kodu!');
+    pendingInviteCodeRef.current = code.trim().toUpperCase();
     setLoginNick(nick);
     setLoginPassword(password);
     setView('register-details');
@@ -1278,8 +1092,20 @@ export default function App() {
     const { data, error } = await signUp(loginNick, loginPassword);
 
     if (error) {
-      setLoginError(error.message);
+      const signUpErrors: Record<string, string> = {
+        'User already registered': 'Bu e-posta zaten kayıtlı!',
+        'Email rate limit exceeded': 'Çok fazla deneme. Lütfen bekleyin.',
+        'Invalid email': 'Geçersiz e-posta adresi.',
+        'Password should be at least 6 characters': 'Parola en az 6 karakter olmalıdır.',
+        'Signup requires a valid password': 'Geçerli bir parola giriniz.',
+      };
+      setLoginError(signUpErrors[error.message] ?? 'Kayıt tamamlanamadı. Lütfen tekrar deneyin.');
       return;
+    }
+
+    if (pendingInviteCodeRef.current) {
+      await useInviteCode(pendingInviteCodeRef.current);
+      pendingInviteCodeRef.current = null;
     }
 
     const newUser: User = {
@@ -1405,6 +1231,18 @@ export default function App() {
     setPttKey,
     isListeningForKey,
     setIsListeningForKey,
+    soundJoinLeave,
+    setSoundJoinLeave,
+    soundJoinLeaveVariant,
+    setSoundJoinLeaveVariant,
+    soundMuteDeafen,
+    setSoundMuteDeafen,
+    soundMuteDeafenVariant,
+    setSoundMuteDeafenVariant,
+    soundPtt,
+    setSoundPtt,
+    soundPttVariant,
+    setSoundPttVariant,
   };
 
   const appStateValue: AppStateContextType = {
@@ -1469,9 +1307,9 @@ export default function App() {
 
   const audioValue: AudioContextType = {
     volumeLevel,
-    setVolumeLevel: () => {},  // managed internally by usePttAudio
+    setVolumeLevel: () => {},
     isPttPressed,
-    setIsPttPressed: () => {},  // managed internally by usePttAudio
+    setIsPttPressed: () => {},
     connectionLevel,
     setConnectionLevel,
     selectedInput,
@@ -1479,9 +1317,9 @@ export default function App() {
     selectedOutput,
     setSelectedOutput,
     inputDevices,
-    setInputDevices: () => {},  // managed internally by useDevices
+    setInputDevices: () => {},
     outputDevices,
-    setOutputDevices: () => {},  // managed internally by useDevices
+    setOutputDevices: () => {},
     showInputSettings,
     setShowInputSettings,
     showOutputSettings,
@@ -1590,8 +1428,7 @@ export default function App() {
                           onGoBack={() => setView('login-code')}
                         />
                       )}
-                      {view === 'chat' && <ChatView />}
-                      {view === 'settings' && <SettingsView />}
+                      {(view === 'chat' || view === 'settings') && <ChatView />}
                     </AnimatePresence>
                   </div>
 
