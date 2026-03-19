@@ -1,5 +1,6 @@
 import React from 'react';
-import { Mic, Key, User as UserIcon, ArrowRight } from 'lucide-react';
+import { Key, User as UserIcon, ArrowRight } from 'lucide-react';
+import appLogo from '../assets/app-logo.png';
 import { motion } from 'motion/react';
 
 interface LoginSelectionViewProps {
@@ -16,11 +17,8 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
         className="w-full max-w-[420px] bg-[var(--theme-sidebar)]/50 p-10 rounded-2xl border border-[var(--theme-border)] shadow-2xl backdrop-blur-sm"
       >
         <div className="flex justify-center mb-8">
-          <div className="relative">
-            <div className="absolute inset-0 bg-[var(--theme-accent)]/20 blur-2xl rounded-full"></div>
-            <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 text-[var(--theme-accent)]">
-              <Mic size={48} />
-            </div>
+          <div className="w-24 h-24 overflow-hidden rounded-[20%]">
+            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
           </div>
         </div>
 

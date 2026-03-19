@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import appLogo from '../assets/app-logo.png';
 import {
   Mic,
   Settings,
@@ -126,6 +127,25 @@ export default function ChatView() {
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
 
+  // Admin mute geri sayımı
+  const isAdminMuted = currentUser.isMuted === true;
+  const [muteRemaining, setMuteRemaining] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isAdminMuted || !currentUser.muteExpires) {
+      setMuteRemaining(null);
+      return;
+    }
+    const tick = () => {
+      const secs = Math.max(0, Math.ceil((currentUser.muteExpires! - Date.now()) / 1000));
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      setMuteRemaining(m > 0 ? `${m}d ${s}s` : `${s}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isAdminMuted, currentUser.muteExpires]);
+
   // Memoized derived lists — allUsers.filter() 60fps çalışmasın
   const visibleChannels = useMemo(
     () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
@@ -210,8 +230,8 @@ export default function ChatView() {
       {/* Header */}
       <header className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16 bg-[var(--theme-bg)] z-10 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-[var(--theme-accent)] p-1.5 rounded-lg flex items-center justify-center">
-            <Mic className="text-white" size={20} />
+          <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0">
+            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">CAYLAKLAR İLE SOHBET</h1>
         </div>
@@ -1113,6 +1133,7 @@ export default function ChatView() {
           <div className="relative flex-1">
             <button
               onClick={() => {
+                if (isAdminMuted) return; // Admin susturması devredeyken açılamaz
                 const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
                                         currentUser.statusText === 'Hemen Geleceğim' ||
                                         currentUser.statusText?.includes('Sonra Geleceğim');
@@ -1126,17 +1147,21 @@ export default function ChatView() {
                   setIsMuted(!isMuted);
                 }
               }}
-              aria-label={isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
+              aria-label={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
               aria-pressed={isMuted}
               className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
-                isMuted
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
-                  : 'text-white shadow-lg'
+                isAdminMuted
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 cursor-not-allowed'
+                  : isMuted
+                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                    : 'text-white shadow-lg'
               }`}
-              style={!isMuted ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
+              style={!isAdminMuted && !isMuted ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
             >
               <Mic size={14} />
-              <span className="truncate">Mikrofon</span>
+              <span className="truncate">
+                {isAdminMuted ? (muteRemaining ?? 'Susturuldu') : 'Mikrofon'}
+              </span>
               <div
                 onClick={(e) => {
                   e.stopPropagation();

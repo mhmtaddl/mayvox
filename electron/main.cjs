@@ -1,6 +1,135 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
+
+// ── Global PTT Hook (uiohook-napi) ────────────────────────────────────────────
+let uIOhook = null;
+try {
+  uIOhook = require("uiohook-napi").uIOhook;
+} catch (e) {
+  // uiohook-napi yüklenemezse PTT sadece pencere odaklıyken çalışır
+}
+
+// uiohook scan code → görüntü adı eşlemesi
+const keycodeToName = {
+  1: "ESCAPE", 2: "1", 3: "2", 4: "3", 5: "4", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9", 11: "0",
+  12: "-", 13: "=", 14: "BACKSPACE", 15: "TAB",
+  16: "Q", 17: "W", 18: "E", 19: "R", 20: "T", 21: "Y", 22: "U", 23: "I", 24: "O", 25: "P",
+  26: "[", 27: "]", 28: "ENTER",
+  29: "CTRL", 30: "A", 31: "S", 32: "D", 33: "F", 34: "G", 35: "H",
+  36: "J", 37: "K", 38: "L", 39: ";", 40: "'",
+  41: "`", 42: "SHIFT", 43: "\\",
+  44: "Z", 45: "X", 46: "C", 47: "V", 48: "B", 49: "N", 50: "M",
+  51: ",", 52: ".", 53: "/", 54: "SHIFT", 55: "NUM *",
+  56: "ALT", 57: "SPACE", 58: "CAPS LOCK",
+  59: "F1", 60: "F2", 61: "F3", 62: "F4", 63: "F5", 64: "F6",
+  65: "F7", 66: "F8", 67: "F9", 68: "F10", 87: "F11", 88: "F12",
+  71: "NUM 7", 72: "NUM 8", 73: "NUM 9", 74: "NUM -",
+  75: "NUM 4", 76: "NUM 5", 77: "NUM 6", 78: "NUM +",
+  79: "NUM 1", 80: "NUM 2", 81: "NUM 3", 82: "NUM 0", 83: "NUM .",
+  3613: "CTRL", 3640: "ALT GR",
+  3675: "WIN", 3676: "WIN",
+  57416: "UP", 57419: "LEFT", 57421: "RIGHT", 57424: "DOWN",
+  57373: "PAGE UP", 57369: "PAGE DOWN",
+  57375: "END", 57362: "HOME",
+  57426: "INSERT", 57427: "DELETE",
+};
+
+// Ad → keycode ters eşlemesi (ilk eşleşen alınır)
+const nameToKeycode = {};
+for (const [code, name] of Object.entries(keycodeToName)) {
+  if (!nameToKeycode[name]) nameToKeycode[name] = parseInt(code);
+}
+// Eski format uyumluluğu
+nameToKeycode["CONTROL"] = 29;
+nameToKeycode["ALT GR"] = 3640;
+
+// uiohook mouse button → görüntü adı (uiohook: 1=sol, 2=sağ, 3=orta)
+const mouseButtonToName = { 1: "MOUSE 0", 2: "MOUSE 2", 3: "MOUSE 1" };
+
+// Global PTT durumu
+let pttKeycode = null;       // uiohook keycode (klavye)
+let pttMouseButton = null;   // uiohook button (fare)
+let isListeningForPtt = false;
+let pttWindow = null;
+
+function parseSavedPttKey(keyStr) {
+  if (!keyStr) return;
+  const upper = keyStr.trim().toUpperCase();
+  if (upper.startsWith("MOUSE ")) {
+    const browserBtn = parseInt(upper.replace("MOUSE ", ""));
+    // Browser 0→uiohook 1 (sol), 1→uiohook 3 (orta), 2→uiohook 2 (sağ)
+    pttMouseButton = browserBtn === 0 ? 1 : browserBtn === 2 ? 2 : 3;
+    pttKeycode = null;
+  } else {
+    pttKeycode = nameToKeycode[upper] ?? null;
+    pttMouseButton = null;
+  }
+}
+
+function setupGlobalPtt(win) {
+  if (!uIOhook) return;
+  pttWindow = win;
+
+  uIOhook.on("keydown", (e) => {
+    if (isListeningForPtt) {
+      isListeningForPtt = false;
+      pttKeycode = e.keycode;
+      pttMouseButton = null;
+      const displayName = keycodeToName[e.keycode] || `KEY${e.keycode}`;
+      win.webContents.send("ptt:keyAssigned", { displayName });
+      return;
+    }
+    if (pttKeycode !== null && e.keycode === pttKeycode) {
+      win.webContents.send("ptt:down");
+    }
+  });
+
+  uIOhook.on("keyup", (e) => {
+    if (pttKeycode !== null && e.keycode === pttKeycode) {
+      win.webContents.send("ptt:up");
+    }
+  });
+
+  uIOhook.on("mousedown", (e) => {
+    if (isListeningForPtt) {
+      isListeningForPtt = false;
+      pttMouseButton = e.button;
+      pttKeycode = null;
+      const displayName = mouseButtonToName[e.button] || `MOUSE ${e.button}`;
+      win.webContents.send("ptt:keyAssigned", { displayName });
+      return;
+    }
+    if (pttMouseButton !== null && e.button === pttMouseButton) {
+      win.webContents.send("ptt:down");
+    }
+  });
+
+  uIOhook.on("mouseup", (e) => {
+    if (pttMouseButton !== null && e.button === pttMouseButton) {
+      win.webContents.send("ptt:up");
+    }
+  });
+
+  try {
+    uIOhook.start();
+  } catch (err) {
+    logger.error("uiohook başlatılamadı", { message: err?.message });
+  }
+}
+
+ipcMain.on("ptt:init", (_event, keyStr) => {
+  parseSavedPttKey(keyStr);
+});
+
+ipcMain.on("ptt:startListening", () => {
+  isListeningForPtt = true;
+});
+
+ipcMain.on("ptt:stopListening", () => {
+  isListeningForPtt = false;
+});
 
 const isDev = !app.isPackaged;
 
@@ -112,9 +241,68 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
   logger[level]?.(message, data);
 });
 
+// ── Auto-updater ───────────────────────────────────────────────────────────
+function setupAutoUpdater(win) {
+  if (isDev) return; // Güncelleme kontrolü sadece production'da
+
+  autoUpdater.logger = {
+    info:  (msg) => logger.info("[updater] " + msg),
+    warn:  (msg) => logger.warn("[updater] " + msg),
+    error: (msg) => logger.error("[updater] " + msg),
+    debug: () => {},
+  };
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    logger.info("Yeni sürüm mevcut", info);
+    win.webContents.send("updater:update-available", { version: info.version });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    logger.info("Güncelleme indirildi", info);
+    win.webContents.send("updater:update-downloaded", { version: info.version });
+  });
+
+  autoUpdater.on("error", (err) => {
+    logger.error("Güncelleme hatası", { message: err?.message });
+  });
+
+  // İlk kontrolü 10 saniye sonra yap (uygulama tam yüklendikten sonra)
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+  // Sonraki kontroller her 6 saatte bir
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+}
+
+ipcMain.on("updater:install-now", () => {
+  autoUpdater.quitAndInstall();
+});
+
+// ── Main process crash handling ────────────────────────────────────────────
+// uncaughtException: logger zaten init edilmiş olabilir ya da olmayabilir.
+// Güvenli tarafta kalmak için her iki durumu da handle ediyoruz.
+process.on("uncaughtException", (err) => {
+  logger.error("Main process uncaught exception", {
+    message: err?.message,
+    stack: err?.stack,
+  });
+  // Uygulama burada çökmez; Electron kendi crash raporlamasını devam ettirir.
+});
+
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : null;
+  logger.error("Main process unhandled rejection", {
+    message: err?.message ?? String(reason),
+    stack: err?.stack,
+  });
+});
+
 app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
   createWindow();
+  const win = BrowserWindow.getAllWindows()[0];
+  setupAutoUpdater(win);
+  setupGlobalPtt(win);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -127,4 +315,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("will-quit", () => {
+  try { uIOhook?.stop(); } catch {}
 });

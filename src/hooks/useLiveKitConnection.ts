@@ -7,7 +7,6 @@ import {
   Track,
   ConnectionQuality,
   DisconnectReason,
-  type AudioCaptureOptions,
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
@@ -60,11 +59,9 @@ export function useLiveKitConnection({
 
   const connectToLiveKit = async (
     channelId: string,
-    channelName: string,
   ): Promise<boolean> => {
     console.log('[LK] connectToLiveKit BAŞLADI', {
       channelId,
-      channelName,
       currentUserName: currentUserRef.current.name,
       hasExistingRoom: !!livekitRoomRef.current,
     });
@@ -90,7 +87,12 @@ export function useLiveKitConnection({
         channelId,
         participantName: currentUserRef.current.name,
       });
-      const token = await getLiveKitToken(channelId, currentUserRef.current.name);
+      const token = await getLiveKitToken(
+        channelId,
+        currentUserRef.current.name,
+        () => setToastMsg('Ses sunucusuna bağlanılıyor…'),
+      );
+      setToastMsg(null);
       console.log('[LK] Token alındı ✓', { tokenLength: token?.length });
 
       const room = new Room({
@@ -205,7 +207,7 @@ export function useLiveKitConnection({
       let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
       room.on(RoomEvent.Reconnecting, () => {
-        console.log('[LK] RoomEvent.Reconnecting');
+        logger.warn('LiveKit reconnecting', { channelId });
         setConnectionLevel(1);
         setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
         reconnectTimeout = setTimeout(async () => {
@@ -219,7 +221,7 @@ export function useLiveKitConnection({
       });
 
       room.on(RoomEvent.Reconnected, () => {
-        console.log('[LK] RoomEvent.Reconnected');
+        logger.info('LiveKit reconnected', { channelId });
         if (reconnectTimeout) {
           clearTimeout(reconnectTimeout);
           reconnectTimeout = null;
@@ -231,11 +233,10 @@ export function useLiveKitConnection({
       });
 
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
-        console.log('[LK] RoomEvent.Disconnected', {
-          reason,
-          isActiveRoom: livekitRoomRef.current === room,
+        logger.info('LiveKit disconnected', {
           channelId,
-          activeChannel: activeChannelRef.current,
+          reason,
+          clientInitiated: reason === DisconnectReason.CLIENT_INITIATED,
         });
         if (reconnectTimeout) {
           clearTimeout(reconnectTimeout);
@@ -278,11 +279,9 @@ export function useLiveKitConnection({
         }
       });
 
-      console.log('[LK] room.connect() başlıyor...', { LIVEKIT_URL });
+      logger.info('LiveKit connecting', { channelId, url: LIVEKIT_URL });
       await room.connect(LIVEKIT_URL, token);
-      console.log('[LK] room.connect() BAŞARILI ✓', {
-        localIdentity: room.localParticipant.identity,
-      });
+      logger.info('LiveKit connected', { channelId, identity: room.localParticipant.identity });
 
       // Set ref only after successful connect
       livekitRoomRef.current = room;
@@ -291,21 +290,24 @@ export function useLiveKitConnection({
       syncUsers();
       playSound('join');
 
-      if (!currentUserRef.current.isVoiceBanned) {
-        await room.localParticipant.setMicrophoneEnabled(false);
-      }
+      // Odaya girerken mikrofon her zaman kapalı başlar.
+      // isVoiceBanned olsun ya da olmasın: PTT effect konuşmayı kontrol eder,
+      // ban durumu değiştiğinde App.tsx'teki effect mic'i tekrar kapatır.
+      await room.localParticipant.setMicrophoneEnabled(false);
 
       console.log('[LK] connectToLiveKit TAMAMLANDI ✓');
       isConnectingRef.current = false;
       return true;
     } catch (err) {
+      const msg = (err as Error)?.message ?? 'Odaya bağlanılamadı.';
       logger.error('LiveKit bağlantı hatası', {
         channelId,
-        message: (err as Error)?.message,
+        message: msg,
         stack: (err as Error)?.stack,
       });
       isConnectingRef.current = false;
-      setToastMsg('Odaya bağlanılamadı. Lütfen tekrar deneyin.');
+      setIsConnecting(false); // UI'ın "bağlanılıyor" state'inde kalmasını önle
+      setToastMsg(msg);
       setTimeout(() => setToastMsg(null), 6000);
       return false;
     }

@@ -5,6 +5,7 @@ import {
   deleteUser,
   signOut,
 } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import type { User } from '../types';
 
 interface Props {
@@ -13,10 +14,16 @@ interface Props {
   presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setToastMsg: (v: string | null) => void;
-  onSelfDelete: () => void; // called when admin deletes own account
+  onSelfDelete: () => void;
 }
 
+// supabase.rpc dönüş tipi generic kısıtlaması nedeniyle unknown olur;
+// RPC uygulama hataları data.error alanında gelir.
+type RpcData = { error?: string } | null;
+
 const isSupabaseUser = (userId: string) => userId.includes('-');
+const rpcError = (data: unknown): string | undefined =>
+  (data as RpcData)?.error;
 
 export function useModeration({
   currentUser,
@@ -50,8 +57,10 @@ export function useModeration({
         is_muted: true,
         mute_expires: expires,
       });
-      if (error || (data as any)?.error) { showError(); return; }
+      // RPC uygulama hatası: data içinde error alanı gelebilir
+      if (error || rpcError(data)) { showError(); return; }
     }
+    logger.info('Moderation: mute', { by: currentUser.id, target: userId, durationMinutes });
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
     );
@@ -69,8 +78,9 @@ export function useModeration({
         is_voice_banned: true,
         ban_expires: expires,
       });
-      if (error || (data as any)?.error) { showError(); return; }
+      if (error || rpcError(data)) { showError(); return; }
     }
+    logger.info('Moderation: ban', { by: currentUser.id, target: userId, durationMinutes });
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
     );
@@ -84,8 +94,9 @@ export function useModeration({
         is_muted: false,
         mute_expires: null,
       });
-      if (error || (data as any)?.error) { showError(); return; }
+      if (error || rpcError(data)) { showError(); return; }
     }
+    logger.info('Moderation: unmute', { by: currentUser.id, target: userId });
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
     );
@@ -99,8 +110,9 @@ export function useModeration({
         is_voice_banned: false,
         ban_expires: null,
       });
-      if (error || (data as any)?.error) { showError(); return; }
+      if (error || rpcError(data)) { showError(); return; }
     }
+    logger.info('Moderation: unban', { by: currentUser.id, target: userId });
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
     );
@@ -109,15 +121,18 @@ export function useModeration({
 
   const handleDeleteUser = async (userId: string): Promise<void> => {
     if (userId === currentUser.id) {
+      logger.info('Moderation: self-delete', { userId });
       await signOut();
       onSelfDelete();
       return;
     }
     const { data, error } = await deleteUser(userId);
-    if (error || data?.error) {
-      alert(data?.error || 'Kullanıcı silinemedi.');
+    if (error || rpcError(data)) {
+      logger.warn('Moderation: delete failed', { by: currentUser.id, target: userId, error: rpcError(data) });
+      showError(rpcError(data) ?? 'Kullanıcı silinemedi.');
       return;
     }
+    logger.info('Moderation: delete', { by: currentUser.id, target: userId });
     setAllUsers(prev => prev.filter(u => u.id !== userId));
     broadcastModeration(userId, { status: 'offline' });
   };
@@ -132,8 +147,9 @@ export function useModeration({
       const { data, error } = await updateUserModeration(userId, {
         is_admin: newIsAdmin,
       });
-      if (error || (data as any)?.error) { showError(); return; }
+      if (error || rpcError(data)) { showError(); return; }
     }
+    logger.info('Moderation: toggle-admin', { by: currentUser.id, target: userId, newIsAdmin });
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
     );

@@ -29,6 +29,7 @@ import {
   useInviteCode,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
+import { logger } from './lib/logger';
 import { type AudioCaptureOptions } from 'livekit-client';
 
 // Supabase DB satır tipleri
@@ -161,6 +162,16 @@ export default function App() {
     () => allUsers.filter(u => currentChannel?.members?.includes(u.name)),
     [allUsers, currentChannel]
   );
+
+  // ── Auto-update state ─────────────────────────────────────────────────────
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; downloaded: boolean } | null>(null);
+
+  useEffect(() => {
+    const updater = (window as Window & { electronUpdater?: { onUpdateAvailable: (cb: (info: { version: string }) => void) => void; onUpdateDownloaded: (cb: (info: { version: string }) => void) => void; installNow: () => void } }).electronUpdater;
+    if (!updater) return;
+    updater.onUpdateAvailable((info) => setUpdateInfo({ version: info.version, downloaded: false }));
+    updater.onUpdateDownloaded((info) => setUpdateInfo({ version: info.version, downloaded: true }));
+  }, []);
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -403,6 +414,7 @@ export default function App() {
 
       setAllUsers((prev) => [...prev.filter((u) => u.id !== session.user.id), restoredUser]);
       setCurrentUser(restoredUser);
+      setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
       startPresence(restoredUser);
 
       const { data: savedChannels } = await getChannels();
@@ -474,6 +486,11 @@ export default function App() {
             newUser.muteExpires = undefined;
             updated = true;
             if (isSupabaseUser(u.id)) updateUserModeration(u.id, { is_muted: false, mute_expires: null });
+            // Eğer süre dolan kullanıcı mevcut kullanıcıysa UI state'ini de sıfırla
+            if (u.id === currentUserRef.current.id) {
+              setCurrentUser(prev => ({ ...prev, isMuted: false, muteExpires: undefined }));
+              setIsMuted(false);
+            }
           }
           if (newUser.banExpires && newUser.banExpires < now) {
             newUser.isVoiceBanned = false;
@@ -913,7 +930,7 @@ export default function App() {
     setCurrentUser(prev => ({ ...prev, joinedAt: now }));
     setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
 
-    const connected = await connectToLiveKit(channelId, channelName);
+    const connected = await connectToLiveKit(channelId);
     setIsConnecting(false);
     if (!connected) {
       setActiveChannel(null);
@@ -983,6 +1000,7 @@ export default function App() {
         'User not found': 'Kullanıcı bulunamadı!',
         'Invalid email or password': 'Kullanıcı adı veya parola hatalı!',
       };
+      logger.warn('Login failed', { nick, reason: error.message });
       throw new Error(authErrors[error.message] ?? 'Giriş yapılamadı. Lütfen tekrar deneyin.');
     }
 
@@ -1022,6 +1040,7 @@ export default function App() {
     if (!loggedInUser.avatar) loggedInUser.avatar = getAvatarText(loggedInUser);
 
     setCurrentUser(loggedInUser);
+    setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
     startPresence(loggedInUser);
 
     const { data: allProfiles } = await getAllProfiles();
@@ -1046,6 +1065,7 @@ export default function App() {
       : [];
 
     setAllUsers([loggedInUser, ...offlineUsers]);
+    logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
     setLoginNick('');
     setLoginPassword('');
@@ -1053,6 +1073,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    logger.info('Logout', { userId: currentUser.id, name: currentUser.name });
     stopPresence();
     await disconnectFromLiveKit();
     await signOut();
@@ -1448,6 +1469,41 @@ export default function App() {
                       opacity: 0.8;
                     }
                   `}</style>
+
+                  {/* Güncelleme bildirimi */}
+                  <AnimatePresence>
+                    {updateInfo && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -40 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -40 }}
+                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-xl bg-[var(--theme-accent)] text-white text-sm font-bold shadow-2xl"
+                      >
+                        <span>
+                          {updateInfo.downloaded
+                            ? `v${updateInfo.version} indirildi — şimdi yükle?`
+                            : `v${updateInfo.version} indiriliyor…`}
+                        </span>
+                        {updateInfo.downloaded && (
+                          <button
+                            onClick={() => {
+                              (window as Window & { electronUpdater?: { installNow: () => void } }).electronUpdater?.installNow();
+                            }}
+                            className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                          >
+                            Yükle ve Yeniden Başlat
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setUpdateInfo(null)}
+                          className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                          aria-label="Kapat"
+                        >
+                          ✕
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Toast bildirimi */}
                   <AnimatePresence>

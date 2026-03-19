@@ -13,6 +13,23 @@ interface UsePttAudioParams {
   isLowDataMode: boolean;
 }
 
+// Electron preload tarafından enjekte edilen global PTT API
+declare global {
+  interface Window {
+    electronPtt?: {
+      init: (keyStr: string) => void;
+      startListening: () => void;
+      stopListening: () => void;
+      onKeyAssigned: (cb: (data: { displayName: string }) => void) => void;
+      offKeyAssigned: () => void;
+      onDown: (cb: () => void) => void;
+      offDown: () => void;
+      onUp: (cb: () => void) => void;
+      offUp: () => void;
+    };
+  }
+}
+
 export function usePttAudio(params: UsePttAudioParams) {
   const {
     pttKey,
@@ -35,89 +52,108 @@ export function usePttAudio(params: UsePttAudioParams) {
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  // PTT key assignment listener
+  // Başlangıçta mevcut pttKey'i main process'e bildir
   useEffect(() => {
-    if (!isListeningForKey) return;
+    window.electronPtt?.init(pttKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // PTT tuşu atama
+  useEffect(() => {
+    if (!isListeningForKey) {
+      window.electronPtt?.stopListening();
+      return;
+    }
+
+    const ep = window.electronPtt;
+
+    if (ep) {
+      // Electron ortamı: global hook üzerinden yakala (uygulama odaklanmamış olsa da çalışır)
+      ep.startListening();
+      ep.onKeyAssigned((data) => {
+        setPttKey(data.displayName);
+        setIsListeningForKey(false);
+      });
+      return () => {
+        ep.offKeyAssigned();
+        ep.stopListening();
+      };
+    }
+
+    // Electron dışı (web dev) — pencere listener'ı fallback
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       let keyName = e.key;
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
       if (keyName === 'AltGraph') keyName = 'Alt Gr';
-
       setPttKey(keyName.toUpperCase());
       setIsListeningForKey(false);
     };
-
     const handleMouseDown = (e: MouseEvent) => {
       e.preventDefault();
-      const mouseButton = `MOUSE ${e.button}`;
-      setPttKey(mouseButton);
+      setPttKey(`MOUSE ${e.button}`);
       setIsListeningForKey(false);
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mousedown', handleMouseDown);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('mousedown', handleMouseDown);
     };
   }, [isListeningForKey, setPttKey, setIsListeningForKey]);
 
-  // PTT key detection
+  // PTT basma/bırakma algılama
   useEffect(() => {
     if (isListeningForKey) return;
 
+    const ep = window.electronPtt;
+
+    if (ep) {
+      // Electron ortamı: main process global hook'tan IPC ile gelir
+      ep.onDown(() => setIsPttPressed(true));
+      ep.onUp(() => setIsPttPressed(false));
+      return () => {
+        ep.offDown();
+        ep.offUp();
+        setIsPttPressed(false);
+      };
+    }
+
+    // Electron dışı fallback — pencere event listener
     const handleKeyDown = (e: KeyboardEvent) => {
       let keyName = e.key;
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
       if (keyName === 'AltGraph') keyName = 'Alt Gr';
-
-      if (keyName.toUpperCase() === pttKey) {
-        setIsPttPressed(true);
-      }
+      if (keyName.toUpperCase() === pttKey) setIsPttPressed(true);
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
       let keyName = e.key;
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
       if (keyName === 'AltGraph') keyName = 'Alt Gr';
-
-      if (keyName.toUpperCase() === pttKey) {
-        setIsPttPressed(false);
-      }
+      if (keyName.toUpperCase() === pttKey) setIsPttPressed(false);
     };
-
     const handleMouseDown = (e: MouseEvent) => {
-      if (`MOUSE ${e.button}` === pttKey) {
-        setIsPttPressed(true);
-      }
+      if (`MOUSE ${e.button}` === pttKey) setIsPttPressed(true);
     };
-
     const handleMouseUp = (e: MouseEvent) => {
-      if (`MOUSE ${e.button}` === pttKey) {
-        setIsPttPressed(false);
-      }
+      if (`MOUSE ${e.button}` === pttKey) setIsPttPressed(false);
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [pttKey, isListeningForKey]);
+  }, [isListeningForKey, pttKey]);
 
-  // Audio analysis (requestAnimationFrame based)
+  // Ses analizi (requestAnimationFrame tabanlı)
   useEffect(() => {
     const startAudioAnalysis = async () => {
       if (isPttPressed && !isMuted && !isVoiceBanned) {
