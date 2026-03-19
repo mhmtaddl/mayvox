@@ -9,6 +9,7 @@ if (!process.env.ELECTRON_IS_PACKAGED) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Render reverse proxy için gerekli
 app.use(express.json());
 
 // Rate limiting — IP başına 1 dakikada max 20 token isteği
