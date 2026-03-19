@@ -11,7 +11,8 @@
     "clean": "node --eval \"require('fs').rmSync('./dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently \"npm run dev\" \"node server.cjs\" \"wait-on http://127.0.0.1:3000 && electron .\"",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "server:start": "node server.cjs"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.20",

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: caylaklar-token-server
+    env: node
+    buildCommand: npm install --omit=dev
+    startCommand: node server.cjs
+    envVars:
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
