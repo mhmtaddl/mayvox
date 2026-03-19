@@ -5,23 +5,29 @@ const fs = require("fs");
 const isDev = !app.isPackaged;
 
 // ── File logger ───────────────────────────────────────────────────────────────
+// logsDir lazy init: app.getPath() ancak app ready olduktan sonra güvenli çalışır.
 const logger = (() => {
-  const logsDir = path.join(app.getPath("userData"), "logs");
-  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+  let logsDir = null;
 
-  // Eski log dosyalarını temizle (7 günden eski)
-  try {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    fs.readdirSync(logsDir).forEach((f) => {
-      const fullPath = path.join(logsDir, f);
-      if (fs.statSync(fullPath).mtimeMs < cutoff) fs.unlinkSync(fullPath);
-    });
-  } catch {}
+  const getLogsDir = () => {
+    if (logsDir) return logsDir;
+    logsDir = path.join(app.getPath("userData"), "logs");
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+    // Eski log dosyalarını temizle (7 günden eski)
+    try {
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      fs.readdirSync(logsDir).forEach((f) => {
+        const fullPath = path.join(logsDir, f);
+        if (fs.statSync(fullPath).mtimeMs < cutoff) fs.unlinkSync(fullPath);
+      });
+    } catch {}
+    return logsDir;
+  };
 
   const getLogPath = () => {
     const d = new Date();
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    return path.join(logsDir, `app-${dateStr}.log`);
+    return path.join(getLogsDir(), `app-${dateStr}.log`);
   };
 
   const write = (level, message, data) => {
@@ -32,7 +38,6 @@ const logger = (() => {
     }
     line += "\n";
     try { fs.appendFileSync(getLogPath(), line, "utf8"); } catch {}
-    // Dev modda terminale de yaz
     if (isDev) process.stdout.write(`[LOG] ${line}`);
   };
 
@@ -51,7 +56,6 @@ app.commandLine.appendSwitch("enable-features", "EnableBFCache");
 // Pencere boyutu ve konumunu localStorage'a benzer şekilde kaydet
 const Store = (() => {
   const storeFile = path.join(app.getPath("userData"), "window-state.json");
-  const fs = require("fs");
   const defaults = { width: 1400, height: 900, x: undefined, y: undefined };
   let data = defaults;
   try { data = { ...defaults, ...JSON.parse(fs.readFileSync(storeFile, "utf8")) }; } catch {}
