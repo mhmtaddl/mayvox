@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 export const getLiveKitToken = async (roomName: string, participantName: string): Promise<string> => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -21,7 +22,7 @@ export const getLiveKitToken = async (roomName: string, participantName: string)
   console.log('[TOKEN] Sunucu yanıtı:', { status: res.status, ok: res.ok, statusText: res.statusText });
   if (!res.ok) {
     const body = await res.text().catch(() => '(body okunamadı)');
-    console.error('[TOKEN] Hata body:', body);
+    logger.error('Token isteği başarısız', { url, status: res.status, body, roomName, participantName });
     throw new Error(`Token alınamadı (HTTP ${res.status}): ${body}`);
   }
   const json = await res.json();

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type React from 'react';
+import { logger } from '../lib/logger';
 import {
   Room,
   RoomEvent,
@@ -298,9 +299,10 @@ export function useLiveKitConnection({
       isConnectingRef.current = false;
       return true;
     } catch (err) {
-      console.error('[LK] connectToLiveKit HATASI:', err);
-      console.error('[LK] Hata detayı:', {
+      logger.error('LiveKit bağlantı hatası', {
+        channelId,
         message: (err as Error)?.message,
+        stack: (err as Error)?.stack,
       });
       isConnectingRef.current = false;
       setToastMsg('Odaya bağlanılamadı. Lütfen tekrar deneyin.');
