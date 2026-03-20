@@ -7,9 +7,24 @@ contextBridge.exposeInMainWorld('electronLogger', {
 });
 
 contextBridge.exposeInMainWorld('electronUpdater', {
-  onUpdateAvailable: (cb) => ipcRenderer.on('updater:update-available', (_e, info) => cb(info)),
-  onUpdateDownloaded: (cb) => ipcRenderer.on('updater:update-downloaded', (_e, info) => cb(info)),
+  onUpdateAvailable: (cb) => {
+    ipcRenderer.removeAllListeners('updater:update-available');
+    ipcRenderer.on('updater:update-available', (_e, info) => cb(info));
+  },
+  onDownloadProgress: (cb) => {
+    ipcRenderer.removeAllListeners('updater:download-progress');
+    ipcRenderer.on('updater:download-progress', (_e, info) => cb(info));
+  },
+  onUpdateDownloaded: (cb) => {
+    ipcRenderer.removeAllListeners('updater:update-downloaded');
+    ipcRenderer.on('updater:update-downloaded', (_e, info) => cb(info));
+  },
+  startDownload: () => ipcRenderer.send('updater:start-download'),
   installNow: () => ipcRenderer.send('updater:install-now'),
+});
+
+contextBridge.exposeInMainWorld('electronApp', {
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
 });
 
 // Global PTT (bas-konuş) API — main process uiohook-napi kullanır,
@@ -17,6 +32,8 @@ contextBridge.exposeInMainWorld('electronUpdater', {
 contextBridge.exposeInMainWorld('electronPtt', {
   /** Başlangıçta localStorage'dan gelen mevcut tuşu main process'e bildir */
   init: (keyStr) => ipcRenderer.send('ptt:init', keyStr),
+  /** Ham keycode ile init — isim çakışmalarını önler (örn. sol/sağ CTRL) */
+  initRaw: (rawCode) => ipcRenderer.send('ptt:initRaw', rawCode),
   /** PTT tuşu atama modunu başlat — main bir sonraki tuşu/tıklamayı yakalar */
   startListening: () => ipcRenderer.send('ptt:startListening'),
   /** PTT tuşu atama modunu iptal et */

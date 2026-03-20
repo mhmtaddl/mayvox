@@ -55,9 +55,10 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
   const jwt = authHeader.split(' ')[1];
 
   // 2. Supabase ile oturumu doğrula
+  // SUPABASE_URL tercih edilir; VITE_SUPABASE_URL eski Render deploy'ları için fallback.
   const supabase = createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
   );
 
   const { data: { user }, error } = await supabase.auth.getUser(jwt);
@@ -91,6 +92,17 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// Startup: kritik env var kontrolü
+const missingVars = [];
+if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) missingVars.push('SUPABASE_URL');
+if (!process.env.SUPABASE_ANON_KEY && !process.env.VITE_SUPABASE_ANON_KEY) missingVars.push('SUPABASE_ANON_KEY');
+if (!process.env.LIVEKIT_API_KEY) missingVars.push('LIVEKIT_API_KEY');
+if (!process.env.LIVEKIT_API_SECRET) missingVars.push('LIVEKIT_API_SECRET');
+if (missingVars.length > 0) {
+  console.warn(`[token-server] UYARI: Eksik env var(lar): ${missingVars.join(', ')}`);
+}
+
 app.listen(PORT, () => {
-  console.log(`LiveKit token server: http://localhost:${PORT}`);
+  console.log(`[token-server] http://localhost:${PORT} — Hazır`);
 });

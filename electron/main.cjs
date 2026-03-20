@@ -78,7 +78,7 @@ function setupGlobalPtt(win) {
       pttKeycode = e.keycode;
       pttMouseButton = null;
       const displayName = keycodeToName[e.keycode] || `KEY${e.keycode}`;
-      win.webContents.send("ptt:keyAssigned", { displayName });
+      win.webContents.send("ptt:keyAssigned", { displayName, rawCode: `k${e.keycode}` });
       return;
     }
     if (pttKeycode !== null && e.keycode === pttKeycode) {
@@ -98,7 +98,7 @@ function setupGlobalPtt(win) {
       pttMouseButton = e.button;
       pttKeycode = null;
       const displayName = mouseButtonToName[e.button] || `MOUSE ${e.button}`;
-      win.webContents.send("ptt:keyAssigned", { displayName });
+      win.webContents.send("ptt:keyAssigned", { displayName, rawCode: `m${e.button}` });
       return;
     }
     if (pttMouseButton !== null && e.button === pttMouseButton) {
@@ -121,6 +121,18 @@ function setupGlobalPtt(win) {
 
 ipcMain.on("ptt:init", (_event, keyStr) => {
   parseSavedPttKey(keyStr);
+});
+
+// Raw keycode tabanlı init — isim çakışmalarını (sol/sağ CTRL gibi) önler
+ipcMain.on("ptt:initRaw", (_event, rawCode) => {
+  if (!rawCode) return;
+  if (rawCode.startsWith("k")) {
+    pttKeycode = parseInt(rawCode.slice(1));
+    pttMouseButton = null;
+  } else if (rawCode.startsWith("m")) {
+    pttMouseButton = parseInt(rawCode.slice(1));
+    pttKeycode = null;
+  }
 });
 
 ipcMain.on("ptt:startListening", () => {
@@ -251,12 +263,19 @@ function setupAutoUpdater(win) {
     error: (msg) => logger.error("[updater] " + msg),
     debug: () => {},
   };
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("update-available", (info) => {
     logger.info("Yeni sürüm mevcut", info);
-    win.webContents.send("updater:update-available", { version: info.version });
+    const sizeMB = info.files?.[0]?.size
+      ? Math.round(info.files[0].size / 1024 / 1024 * 10) / 10
+      : null;
+    win.webContents.send("updater:update-available", { version: info.version, sizeMB });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    win.webContents.send("updater:download-progress", { percent: Math.round(progress.percent) });
   });
 
   autoUpdater.on("update-downloaded", (info) => {
@@ -274,9 +293,15 @@ function setupAutoUpdater(win) {
   setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
 }
 
+ipcMain.on("updater:start-download", () => {
+  autoUpdater.downloadUpdate().catch(() => {});
+});
+
 ipcMain.on("updater:install-now", () => {
   autoUpdater.quitAndInstall();
 });
+
+ipcMain.handle("app:getVersion", () => app.getVersion());
 
 // ── Main process crash handling ────────────────────────────────────────────
 // uncaughtException: logger zaten init edilmiş olabilir ya da olmayabilir.

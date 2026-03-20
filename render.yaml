@@ -9,9 +9,9 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
-      - key: LIVEKIT_URL
+      # SUPABASE_URL ve SUPABASE_ANON_KEY tercih edilir.
+      # Eski deploy'larda VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY da çalışır (fallback var).
+      - key: SUPABASE_URL
         sync: false
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
+      - key: SUPABASE_ANON_KEY
         sync: false
