@@ -7,6 +7,7 @@ import {
   Track,
   ConnectionQuality,
   DisconnectReason,
+  RemoteAudioTrack,
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
@@ -27,6 +28,8 @@ interface Props {
   setIsConnecting: (v: boolean) => void;
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  allUsersRef: React.MutableRefObject<User[]>;
+  userVolumesRef: React.MutableRefObject<Record<string, number>>;
 }
 
 export function useLiveKitConnection({
@@ -43,6 +46,8 @@ export function useLiveKitConnection({
   setIsConnecting,
   setChannels,
   setAllUsers,
+  allUsersRef,
+  userVolumesRef,
 }: Props) {
   const livekitRoomRef = useRef<Room | null>(null);
   const isConnectingRef = useRef(false);
@@ -166,12 +171,21 @@ export function useLiveKitConnection({
         );
       };
 
-      room.on(RoomEvent.TrackSubscribed, track => {
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (track.kind === Track.Kind.Audio) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.setAttribute('data-livekit-audio', 'true');
           // isDeafened is applied separately via the deafen useEffect in App.tsx
           document.body.appendChild(audioEl);
+
+          // Kaydedilmiş ses seviyesini uygula
+          const user = allUsersRef.current.find(u => u.name === participant.identity);
+          if (user) {
+            const savedVolume = userVolumesRef.current[user.id];
+            if (savedVolume !== undefined && publication.track instanceof RemoteAudioTrack) {
+              publication.track.setVolume(savedVolume / 100);
+            }
+          }
         }
       });
 

@@ -30,7 +30,7 @@ import {
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
 import { logger } from './lib/logger';
-import { type AudioCaptureOptions } from 'livekit-client';
+import { type AudioCaptureOptions, type RemoteParticipant, RemoteAudioTrack } from 'livekit-client';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -219,6 +219,10 @@ export default function App() {
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
+  const allUsersRef = useRef(allUsers);
+  useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
+  const userVolumesRef = useRef(userVolumes);
+  useEffect(() => { userVolumesRef.current = userVolumes; }, [userVolumes]);
 
   // Forward ref to break circular dependency: usePresence needs disconnectFromLiveKit,
   // but useLiveKitConnection needs presenceChannelRef (which comes from usePresence).
@@ -280,6 +284,8 @@ export default function App() {
     setIsConnecting,
     setChannels,
     setAllUsers,
+    allUsersRef,
+    userVolumesRef,
   });
 
   // Keep forward ref current so usePresence always calls the real function
@@ -740,6 +746,20 @@ export default function App() {
     const newVolumes = { ...userVolumes, [userId]: volume };
     setUserVolumes(newVolumes);
     localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
+
+    // LiveKit katılımcısının ses seviyesini gerçek zamanlı uygula
+    const user = allUsers.find(u => u.id === userId);
+    if (user && livekitRoomRef.current) {
+        const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
+      const participant = participants.find(p => p.identity === user.name);
+      if (participant) {
+        participant.audioTrackPublications.forEach(pub => {
+          if (pub.track instanceof RemoteAudioTrack) {
+            pub.track.setVolume(volume / 100);
+          }
+        });
+      }
+    }
   };
 
   const handleUserActionClick = (e: React.MouseEvent, userId: string) => {
