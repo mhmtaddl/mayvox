@@ -179,3 +179,14 @@ export const useInviteCode = async (code: string): Promise<boolean> => {
   const { data } = await supabase.rpc('use_invite_code', { p_code: code.toUpperCase() });
   return !!data;
 };
+
+// UPLOAD AVATAR — Supabase Storage "avatars" bucket'ına yükler, public URL döner
+export const uploadAvatar = async (userId: string, file: File): Promise<string> => {
+  const path = `${userId}/avatar`;
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return data.publicUrl;
+};

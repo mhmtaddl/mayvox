@@ -18,9 +18,10 @@ declare global {
   interface Window {
     electronPtt?: {
       init: (keyStr: string) => void;
+      initRaw: (rawCode: string) => void;
       startListening: () => void;
       stopListening: () => void;
-      onKeyAssigned: (cb: (data: { displayName: string }) => void) => void;
+      onKeyAssigned: (cb: (data: { displayName: string; rawCode?: string }) => void) => void;
       offKeyAssigned: () => void;
       onDown: (cb: () => void) => void;
       offDown: () => void;
@@ -52,9 +53,15 @@ export function usePttAudio(params: UsePttAudioParams) {
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  // Başlangıçta mevcut pttKey'i main process'e bildir
+  // Başlangıçta mevcut pttKey'i main process'e bildir.
+  // Önce raw keycode dene (sağ/sol CTRL gibi çakışmaları önler), yoksa isim tabanlı fallback.
   useEffect(() => {
-    window.electronPtt?.init(pttKey);
+    const rawCode = localStorage.getItem('pttRawCode');
+    if (rawCode && window.electronPtt?.initRaw) {
+      window.electronPtt.initRaw(rawCode);
+    } else {
+      window.electronPtt?.init(pttKey);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -72,6 +79,9 @@ export function usePttAudio(params: UsePttAudioParams) {
       ep.startListening();
       ep.onKeyAssigned((data) => {
         setPttKey(data.displayName);
+        if (data.rawCode) {
+          localStorage.setItem('pttRawCode', data.rawCode);
+        }
         setIsListeningForKey(false);
       });
       return () => {

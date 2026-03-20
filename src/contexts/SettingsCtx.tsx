@@ -26,6 +26,8 @@ export interface SettingsContextType {
   setSoundPtt: (v: boolean) => void;
   soundPttVariant: 1 | 2 | 3;
   setSoundPttVariant: (v: 1 | 2 | 3) => void;
+  avatarBorderColor: string;
+  setAvatarBorderColor: (v: string) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

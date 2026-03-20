@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Key, User as UserIcon, ArrowRight } from 'lucide-react';
 import appLogo from '../assets/app-logo.png';
 import { motion } from 'motion/react';
@@ -9,6 +9,11 @@ interface LoginSelectionViewProps {
 }
 
 export default function LoginSelectionView({ onGoToCode, onGoToPassword }: LoginSelectionViewProps) {
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
+    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
+  }, []);
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
       <motion.div
@@ -53,7 +58,7 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
           Sunucu Durumu: Aktif
         </div>
-        <div>Versiyon 1.0.4</div>
+        {appVersion && <div>v{appVersion}</div>}
       </div>
     </div>
   );

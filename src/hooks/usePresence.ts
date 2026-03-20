@@ -50,7 +50,7 @@ export function usePresence({
     });
     presenceChannelRef.current = channel;
 
-    channel.on('presence', { event: 'sync' }, () => {
+    const applyPresenceState = () => {
       const state = channel.presenceState<{ userId: string }>();
       const onlineIds = new Set(
         Object.values(state).flatMap(s => s.map(p => p.userId)),
@@ -77,7 +77,11 @@ export function usePresence({
             }) as User,
         ),
       );
-    });
+    };
+
+    channel.on('presence', { event: 'sync' }, applyPresenceState);
+    channel.on('presence', { event: 'join' }, applyPresenceState);
+    channel.on('presence', { event: 'leave' }, applyPresenceState);
 
     channel.on('broadcast', { event: 'invite' }, ({ payload }) => {
       if (payload.inviteeId === user.id) {
@@ -178,5 +182,27 @@ export function usePresence({
     }
   };
 
-  return { presenceChannelRef, startPresence, stopPresence };
+  const resyncPresence = () => {
+    const channel = presenceChannelRef.current;
+    if (!channel) return;
+    const state = channel.presenceState<{ userId: string }>();
+    const onlineIds = new Set(
+      Object.values(state).flatMap(s => (s as { userId: string }[]).map(p => p.userId)),
+    );
+    if (onlineIds.size === 0) return;
+    setAllUsers(prev =>
+      prev.map(u => {
+        if (onlineIds.has(u.id)) {
+          return {
+            ...u,
+            status: 'online' as const,
+            statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
+          };
+        }
+        return u;
+      }),
+    );
+  };
+
+  return { presenceChannelRef, startPresence, stopPresence, resyncPresence };
 }

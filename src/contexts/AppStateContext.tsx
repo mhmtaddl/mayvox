@@ -73,6 +73,11 @@ export interface AppStateContextType {
   disconnectFromLiveKit: () => Promise<void>;
   formatTime: (seconds: number) => string;
   broadcastModeration: (userId: string, updates: Partial<User>) => void;
+  appVersion: string;
+  updateInfo: { version: string; sizeMB: number | null; state: 'available' | 'downloading' | 'downloaded' | 'dismissed'; progress: number } | null;
+  onUpdateDownload: () => void;
+  onUpdateInstall: () => void;
+  onUpdateDismiss: () => void;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

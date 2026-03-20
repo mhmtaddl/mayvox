@@ -80,6 +80,7 @@ export default function ChatView() {
     setIsNoiseSuppressionEnabled,
     noiseThreshold,
     setNoiseThreshold,
+    avatarBorderColor,
   } = useSettings();
 
   const {
@@ -106,6 +107,11 @@ export default function ChatView() {
     presenceChannelRef,
     view,
     setView,
+    appVersion,
+    updateInfo,
+    onUpdateDownload,
+    onUpdateInstall,
+    onUpdateDismiss,
   } = useAppState();
 
   const {
@@ -228,22 +234,25 @@ export default function ChatView() {
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16 bg-[var(--theme-bg)] z-10 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0">
-            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
+      <header className="flex flex-col bg-[var(--theme-bg)] z-10 shrink-0">
+        <div className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0">
+              <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-lg font-bold tracking-tight">CAYLAKLAR İLE SOHBET</h1>
           </div>
-          <h1 className="text-lg font-bold tracking-tight">CAYLAKLAR İLE SOHBET</h1>
-        </div>
 
-        <div className="flex items-center h-full">
+          <div className="flex items-center h-full">
           <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-blue-500/20 border-2 border-blue-600 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0">
-              {currentUser.avatar}
+            <div className="h-10 w-10 rounded-full bg-blue-500/20 border-2 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
+              {currentUser.avatar?.startsWith('http')
+                ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                : currentUser.avatar}
             </div>
 
             {/* Status Menu */}
@@ -309,7 +318,60 @@ export default function ChatView() {
               )}
             </AnimatePresence>
           </div>
+          </div>
         </div>
+
+        {/* Güncelleme bildirimi — header alt bandı */}
+        <AnimatePresence>
+          {updateInfo && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              {updateInfo.state === 'available' && (
+                <div className="flex items-center justify-between px-6 py-2 bg-blue-600/20 border-t border-blue-500/30 text-sm">
+                  <span className="text-blue-300 font-medium">
+                    Yeni sürüm: <span className="font-bold text-white">v{updateInfo.version}</span>
+                    {updateInfo.sizeMB && <span className="text-blue-400 ml-1">({updateInfo.sizeMB} MB)</span>}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={onUpdateDownload} className="px-3 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold transition-colors">
+                      İndir
+                    </button>
+                    <button onClick={onUpdateDismiss} className="px-2 py-1 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-red-300 text-xs font-bold transition-colors">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+              {updateInfo.state === 'downloading' && (
+                <div className="flex items-center gap-3 px-6 py-2 bg-amber-600/20 border-t border-amber-500/30">
+                  <span className="text-amber-300 text-xs font-medium shrink-0">v{updateInfo.version} indiriliyor…</span>
+                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${updateInfo.progress}%` }} />
+                  </div>
+                  <span className="text-amber-300 text-xs font-bold shrink-0">%{updateInfo.progress}</span>
+                </div>
+              )}
+              {updateInfo.state === 'downloaded' && (
+                <div className="flex items-center justify-between px-6 py-2 bg-emerald-600/20 border-t border-emerald-500/30 text-sm">
+                  <span className="text-emerald-300 font-medium">v{updateInfo.version} indirildi ve hazır</span>
+                  <button onClick={onUpdateInstall} className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors">
+                    Yükle ve Yeniden Başlat
+                  </button>
+                </div>
+              )}
+              {updateInfo.state === 'dismissed' && (
+                <div className="flex items-center justify-between px-6 py-2 bg-red-600/10 border-t border-red-500/20 text-xs">
+                  <span className="text-red-400">Yeni versiyonu indirmediğiniz için uygulamayı kullanırken hatalarla karşılaşabilirsiniz.</span>
+                  <button onClick={onUpdateDismiss} className="ml-3 text-red-400 hover:text-red-300 font-bold transition-colors shrink-0">✕</button>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -432,7 +494,7 @@ export default function ChatView() {
               className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 w-48 flex flex-col gap-1"
               onClick={(e) => e.stopPropagation()}
             >
-              {currentUser.isAdmin && (
+              {userActionMenu.userId !== currentUser.id && (
                 <div className={`flex flex-col gap-2 p-2 ${activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userActionMenu.userId)?.name || '') && userActionMenu.userId !== currentUser.id ? 'border-b border-[var(--theme-border)]' : ''}`}>
                   <span className="text-[10px] uppercase font-bold text-[var(--theme-secondary-text)]">Ses Ayarı</span>
                   <div className="flex items-center gap-3">
@@ -999,8 +1061,10 @@ export default function ChatView() {
                       className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)]"
                     >
                       <div className="relative shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
-                          {user.avatar}
+                        <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                          {user.avatar?.startsWith('http')
+                            ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            : user.avatar}
                         </div>
                         <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
                           user.status === 'online' ? 'bg-emerald-500' : 'bg-orange-500'
@@ -1041,8 +1105,10 @@ export default function ChatView() {
                     className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:grayscale-0"
                   >
                     <div className="relative">
-                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
-                        {user.avatar}
+                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                        {user.avatar?.startsWith('http')
+                          ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          : user.avatar}
                       </div>
                       <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--theme-sidebar)] border-2 border-[var(--theme-sidebar)] rounded-full"></div>
                     </div>
@@ -1236,7 +1302,7 @@ export default function ChatView() {
 
         {/* Middle Section - PTT Indicator */}
         <div className="flex-1 h-full flex items-center justify-center px-4">
-          <div className="flex items-center gap-4 bg-[var(--theme-surface)]/80 px-4 py-2 rounded-xl border border-[var(--theme-border)] shadow-sm">
+          <div className="flex items-center gap-4 bg-[var(--theme-surface)]/80 px-5 py-2 rounded-xl border border-[var(--theme-border)] shadow-sm">
             <div className="flex items-center gap-2 text-[var(--theme-text)] font-bold text-[10px] uppercase tracking-widest shrink-0">
               <button
                 onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
@@ -1301,6 +1367,9 @@ export default function ChatView() {
                 {isListeningForKey ? '...' : pttKey}
               </button>
             </div>
+            {appVersion && (
+              <span className="text-[9px] text-[var(--theme-secondary-text)]/50 font-medium border-l border-[var(--theme-border)] pl-3 ml-1">v{appVersion}</span>
+            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Settings,
   Trash2,
@@ -16,11 +16,12 @@ import {
   Eye,
   EyeOff,
   Volume2,
+  Camera,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 import { THEMES } from '../constants';
-import { saveProfile, updateUserEmail, updateUserPassword } from '../lib/supabase';
+import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../lib/supabase';
 import { previewSound, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
@@ -55,6 +56,8 @@ export default function SettingsView() {
     setSoundPtt,
     soundPttVariant,
     setSoundPttVariant,
+    avatarBorderColor,
+    setAvatarBorderColor,
   } = useSettings();
 
   const {
@@ -90,6 +93,11 @@ export default function SettingsView() {
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
   const [muteInputs, setMuteInputs] = useState<Record<string, string>>({});
   const [banInputs, setBanInputs] = useState<Record<string, string>>({});
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(
+    currentUser.avatar?.startsWith('http') ? currentUser.avatar : null
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize form from currentUser on mount
   useEffect(() => {
@@ -102,6 +110,7 @@ export default function SettingsView() {
     setSettingsPasswordRepeat('');
     setSettingsPasswordError('');
     setUpdateSuccessMessage('');
+    setCustomAvatarUrl(currentUser.avatar?.startsWith('http') ? currentUser.avatar : null);
   }, [currentUser.id]);
 
   const validatePassword = (password: string) => {
@@ -134,6 +143,8 @@ export default function SettingsView() {
 
     const ageNum = parseInt(settingsAge) || 0;
     const avatarText = getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: ageNum });
+    // Profil fotoğrafı varsa koru; yoksa baş harf + yaş kullan
+    const finalAvatar = customAvatarUrl ?? avatarText;
     const updatedUser = {
       ...currentUser,
       name: settingsDisplayName,
@@ -141,7 +152,7 @@ export default function SettingsView() {
       firstName: settingsFirstName,
       lastName: settingsLastName,
       age: ageNum,
-      avatar: avatarText,
+      avatar: finalAvatar,
     };
 
     await saveProfile({
@@ -178,6 +189,36 @@ export default function SettingsView() {
     setTimeout(() => setUpdateSuccessMessage(''), 3000);
   };
 
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setSettingsPasswordError('');
+    try {
+      const url = await uploadAvatar(currentUser.id, file);
+      setCustomAvatarUrl(url);
+      await saveProfile({
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        first_name: currentUser.firstName || '',
+        last_name: currentUser.lastName || '',
+        age: currentUser.age || 18,
+        avatar: url,
+      });
+      const updated = { ...currentUser, avatar: url };
+      setCurrentUser(updated);
+      setAllUsers(allUsers.map(u => u.id === currentUser.id ? updated : u));
+      setUpdateSuccessMessage('Profil fotoğrafı güncellendi!');
+      setTimeout(() => setUpdateSuccessMessage(''), 3000);
+    } catch {
+      setSettingsPasswordError('Fotoğraf yüklenemedi. Bucket ayarlarını kontrol edin.');
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = '';
+    }
+  };
+
   return (
     <div className="w-full max-w-3xl mx-auto">
       <div className="p-8 border-b border-[var(--theme-border)]">
@@ -194,6 +235,56 @@ export default function SettingsView() {
           <div className="flex items-center gap-2 mb-6">
             <UserIcon className="text-[var(--theme-accent)]" size={20} />
             <h3 className="text-lg font-bold text-[var(--theme-text)]">Kullanıcı Bilgileri</h3>
+          </div>
+
+          {/* Avatar Upload */}
+          <div className="flex flex-col items-center mb-6 gap-4">
+            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+              <div
+                className="h-20 w-20 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-lg"
+                style={{ borderColor: avatarBorderColor }}
+              >
+                {customAvatarUrl ? (
+                  <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
+                )}
+              </div>
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                {avatarUploading
+                  ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Camera size={18} className="text-white" />
+                }
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
+            </div>
+
+            {/* Border Color Swatches */}
+            <div className="flex items-center gap-2">
+              {[
+                '#3B82F6', // Mavi
+                '#8B5CF6', // Mor
+                '#10B981', // Yeşil
+                '#EF4444', // Kırmızı
+                '#F59E0B', // Altın
+                '#EC4899', // Pembe
+                '#06B6D4', // Cyan
+                '#F97316', // Turuncu
+                '#6B7280', // Gri
+              ].map(color => (
+                <button
+                  key={color}
+                  onClick={() => setAvatarBorderColor(color)}
+                  className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                  style={{
+                    backgroundColor: color,
+                    borderColor: avatarBorderColor === color ? 'white' : 'transparent',
+                    boxShadow: avatarBorderColor === color ? `0 0 0 1px ${color}` : 'none',
+                  }}
+                  title={color}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -559,8 +650,10 @@ export default function SettingsView() {
                       {otherUsers.map(user => (
                         <div key={user.id} className="flex items-center justify-between p-3 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)]">
                           <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-xs">
-                              {user.avatar}
+                            <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs">
+                              {user.avatar?.startsWith('http')
+                                ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                : user.avatar}
                             </div>
                             <div>
                               <div className="text-sm font-bold text-[var(--theme-text)]">{user.firstName} {user.lastName}</div>

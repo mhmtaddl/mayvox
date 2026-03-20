@@ -129,6 +129,9 @@ export default function App() {
   const [soundPttVariant, setSoundPttVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundPttVariant') || '1') || 1) as 1|2|3);
   const setSoundPttVariant = (v: 1|2|3) => { localStorage.setItem('soundPttVariant', String(v)); setSoundPttVariantState(v); };
 
+  const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
+  const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
+
   // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
@@ -164,13 +167,27 @@ export default function App() {
   );
 
   // ── Auto-update state ─────────────────────────────────────────────────────
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; downloaded: boolean } | null>(null);
+  type UpdateState = 'available' | 'downloading' | 'downloaded' | 'dismissed';
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
-    const updater = (window as Window & { electronUpdater?: { onUpdateAvailable: (cb: (info: { version: string }) => void) => void; onUpdateDownloaded: (cb: (info: { version: string }) => void) => void; installNow: () => void } }).electronUpdater;
+    const w = window as Window & {
+      electronUpdater?: {
+        onUpdateAvailable: (cb: (info: { version: string; sizeMB: number | null }) => void) => void;
+        onDownloadProgress: (cb: (info: { percent: number }) => void) => void;
+        onUpdateDownloaded: (cb: (info: { version: string }) => void) => void;
+        startDownload: () => void;
+        installNow: () => void;
+      };
+      electronApp?: { getVersion: () => Promise<string> };
+    };
+    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
+    const updater = w.electronUpdater;
     if (!updater) return;
-    updater.onUpdateAvailable((info) => setUpdateInfo({ version: info.version, downloaded: false }));
-    updater.onUpdateDownloaded((info) => setUpdateInfo({ version: info.version, downloaded: true }));
+    updater.onUpdateAvailable((info) => setUpdateInfo({ version: info.version, sizeMB: info.sizeMB, state: 'available', progress: 0 }));
+    updater.onDownloadProgress((info) => setUpdateInfo(prev => prev ? { ...prev, state: 'downloading', progress: info.percent } : prev));
+    updater.onUpdateDownloaded((info) => setUpdateInfo(prev => prev ? { ...prev, version: info.version, state: 'downloaded', progress: 100 } : prev));
   }, []);
 
   // ── UI state ─────────────────────────────────────────────────────────────
@@ -257,7 +274,7 @@ export default function App() {
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
-  const { presenceChannelRef, startPresence, stopPresence } = usePresence({
+  const { presenceChannelRef, startPresence, stopPresence, resyncPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
@@ -468,6 +485,7 @@ export default function App() {
             }));
           return [...prev, ...offlineUsers];
         });
+        resyncPresence();
       }
 
       setView('chat');
@@ -1085,6 +1103,7 @@ export default function App() {
       : [];
 
     setAllUsers([loggedInUser, ...offlineUsers]);
+    resyncPresence();
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
     setLoginNick('');
@@ -1200,6 +1219,7 @@ export default function App() {
       : [];
 
     setAllUsers([newUser, ...regOfflineUsers]);
+    resyncPresence();
     setView('chat');
     setLoginNick('');
     setLoginPassword('');
@@ -1284,6 +1304,8 @@ export default function App() {
     setSoundPtt,
     soundPttVariant,
     setSoundPttVariant,
+    avatarBorderColor,
+    setAvatarBorderColor,
   };
 
   const appStateValue: AppStateContextType = {
@@ -1344,6 +1366,24 @@ export default function App() {
     disconnectFromLiveKit,
     formatTime,
     broadcastModeration,
+    appVersion,
+    updateInfo,
+    onUpdateDownload: () => {
+      const w = window as Window & { electronUpdater?: { startDownload: () => void } };
+      w.electronUpdater?.startDownload();
+      setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
+    },
+    onUpdateInstall: () => {
+      const w = window as Window & { electronUpdater?: { installNow: () => void } };
+      w.electronUpdater?.installNow();
+    },
+    onUpdateDismiss: () => {
+      setUpdateInfo(prev => {
+        if (!prev) return prev;
+        if (prev.state === 'dismissed') return null;
+        return { ...prev, state: 'dismissed' };
+      });
+    },
   };
 
   const audioValue: AudioContextType = {
@@ -1490,40 +1530,6 @@ export default function App() {
                     }
                   `}</style>
 
-                  {/* Güncelleme bildirimi */}
-                  <AnimatePresence>
-                    {updateInfo && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -40 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -40 }}
-                        className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-xl bg-[var(--theme-accent)] text-white text-sm font-bold shadow-2xl"
-                      >
-                        <span>
-                          {updateInfo.downloaded
-                            ? `v${updateInfo.version} indirildi — şimdi yükle?`
-                            : `v${updateInfo.version} indiriliyor…`}
-                        </span>
-                        {updateInfo.downloaded && (
-                          <button
-                            onClick={() => {
-                              (window as Window & { electronUpdater?: { installNow: () => void } }).electronUpdater?.installNow();
-                            }}
-                            className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
-                          >
-                            Yükle ve Yeniden Başlat
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setUpdateInfo(null)}
-                          className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
-                          aria-label="Kapat"
-                        >
-                          ✕
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
 
                   {/* Toast bildirimi */}
                   <AnimatePresence>
