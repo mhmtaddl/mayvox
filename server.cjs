@@ -125,21 +125,22 @@ function generateTempPassword() {
 }
 
 // Kullanıcı adı veya e-posta ile kullanıcı kontrolü (kimlik doğrulama gerektirmez)
+// profiles tablosu public SELECT policy'e sahip — anon key yeterli
 app.post('/api/check-user', resetLimiter, async (req, res) => {
   const { identifier } = req.body;
   if (!identifier || typeof identifier !== 'string') {
     return res.status(400).json({ error: 'identifier gerekli' });
   }
 
-  const supabaseAdmin = createClient(
+  const supabaseAnon = createClient(
     process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
   );
 
   const isEmail = identifier.includes('@');
   const { data } = isEmail
-    ? await supabaseAdmin.from('profiles').select('id, name').eq('email', identifier.toLowerCase()).single()
-    : await supabaseAdmin.from('profiles').select('id, name').eq('name', identifier).single();
+    ? await supabaseAnon.from('profiles').select('id, name').eq('email', identifier.toLowerCase()).single()
+    : await supabaseAnon.from('profiles').select('id, name').eq('name', identifier).single();
 
   if (!data) return res.json({ exists: false });
   res.json({ exists: true, userId: data.id, name: data.name });
