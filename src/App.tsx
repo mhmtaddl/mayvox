@@ -1730,7 +1730,6 @@ export default function App() {
                   {/* Geçici parola ile giriş — parola değiştirme modalı */}
                   {showForcePasswordChange && (
                     <ForcePasswordChangeModal
-                      userId={currentUser.id}
                       onDone={() => setShowForcePasswordChange(false)}
                     />
                   )}

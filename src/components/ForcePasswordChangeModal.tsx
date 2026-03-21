@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
-import { updateUserPassword } from '../lib/supabase';
+import { updateUserPassword, supabase } from '../lib/supabase';
+
+const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
 
 interface Props {
-  userId: string;
   onDone: () => void;
 }
 
-export default function ForcePasswordChangeModal({ userId, onDone }: Props) {
+export default function ForcePasswordChangeModal({ onDone }: Props) {
   const [newPwd, setNewPwd] = useState('');
   const [repeatPwd, setRepeatPwd] = useState('');
   const [showNew, setShowNew] = useState(false);
@@ -27,12 +28,17 @@ export default function ForcePasswordChangeModal({ userId, onDone }: Props) {
       const { error: pwdError } = await updateUserPassword(newPwd);
       if (pwdError) { setError('Parola güncellenemedi: ' + pwdError.message); return; }
 
-      // must_change_password flagını temizle
-      const { supabase } = await import('../lib/supabase');
-      await (supabase as any).from('profiles').update({ must_change_password: false }).eq('id', userId);
+      // must_change_password flagını server üzerinden temizle (service role — RLS'ye bağlı değil)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await fetch(`${SERVER_URL}/api/clear-must-change-password`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
+      }
 
       onDone();
-    } catch (e) {
+    } catch {
       setError('Bir hata oluştu, tekrar deneyin.');
     } finally {
       setLoading(false);
