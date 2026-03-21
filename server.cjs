@@ -68,12 +68,25 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
   }
 
   // 3. Body doğrulama
-  const { roomName, participantName } = req.body;
-  if (!roomName || !participantName) {
-    return res.status(400).json({ error: 'roomName ve participantName gerekli' });
+  const { roomName } = req.body;
+  if (!roomName) {
+    return res.status(400).json({ error: 'roomName gerekli' });
   }
 
-  // 4. LiveKit token üret
+  // 4. Canonical kullanıcı adını JWT'den türet — body'deki participantName güvenilmez
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('name')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile?.name) {
+    return res.status(403).json({ error: 'Profil bulunamadı' });
+  }
+
+  const participantName = profile.name;
+
+  // 5. LiveKit token üret
   const at = new AccessToken(
     process.env.LIVEKIT_API_KEY,
     process.env.LIVEKIT_API_SECRET,
@@ -87,6 +100,7 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
     canSubscribe: true,
   });
 
+  // 6. Token döndür
   const token = await at.toJwt();
   res.json({ token });
 });
