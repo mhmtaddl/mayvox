@@ -11,6 +11,7 @@ interface UsePttAudioParams {
   isNoiseSuppressionEnabled: boolean;
   noiseThreshold: number;
   isLowDataMode: boolean;
+  pttReleaseDelay: number;
 }
 
 // Electron preload tarafından enjekte edilen global PTT API
@@ -43,6 +44,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     isNoiseSuppressionEnabled,
     noiseThreshold,
     isLowDataMode,
+    pttReleaseDelay,
   } = params;
 
   const [isPttPressed, setIsPttPressed] = useState(false);
@@ -52,6 +54,9 @@ export function usePttAudio(params: UsePttAudioParams) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pttReleaseDelayRef = useRef(pttReleaseDelay);
+  useEffect(() => { pttReleaseDelayRef.current = pttReleaseDelay; }, [pttReleaseDelay]);
 
   // Başlangıçta mevcut pttKey'i main process'e bildir.
   // Önce raw keycode dene (sağ/sol CTRL gibi çakışmaları önler), yoksa isim tabanlı fallback.
@@ -121,11 +126,23 @@ export function usePttAudio(params: UsePttAudioParams) {
 
     if (ep) {
       // Electron ortamı: main process global hook'tan IPC ile gelir
-      ep.onDown(() => setIsPttPressed(true));
-      ep.onUp(() => setIsPttPressed(false));
+      ep.onDown(() => {
+        if (releaseTimerRef.current) {
+          clearTimeout(releaseTimerRef.current);
+          releaseTimerRef.current = null;
+        }
+        setIsPttPressed(true);
+      });
+      ep.onUp(() => {
+        releaseTimerRef.current = setTimeout(() => {
+          setIsPttPressed(false);
+          releaseTimerRef.current = null;
+        }, pttReleaseDelayRef.current);
+      });
       return () => {
         ep.offDown();
         ep.offUp();
+        if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
         setIsPttPressed(false);
       };
     }
@@ -136,20 +153,32 @@ export function usePttAudio(params: UsePttAudioParams) {
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
       if (keyName === 'AltGraph') keyName = 'Alt Gr';
-      if (keyName.toUpperCase() === pttKey) setIsPttPressed(true);
+      if (keyName.toUpperCase() === pttKey) { cancelRelease(); setIsPttPressed(true); }
+    };
+    const scheduleRelease = () => {
+      releaseTimerRef.current = setTimeout(() => {
+        setIsPttPressed(false);
+        releaseTimerRef.current = null;
+      }, pttReleaseDelayRef.current);
+    };
+    const cancelRelease = () => {
+      if (releaseTimerRef.current) {
+        clearTimeout(releaseTimerRef.current);
+        releaseTimerRef.current = null;
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       let keyName = e.key;
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
       if (keyName === 'AltGraph') keyName = 'Alt Gr';
-      if (keyName.toUpperCase() === pttKey) setIsPttPressed(false);
+      if (keyName.toUpperCase() === pttKey) scheduleRelease();
     };
     const handleMouseDown = (e: MouseEvent) => {
-      if (`MOUSE ${e.button}` === pttKey) setIsPttPressed(true);
+      if (`MOUSE ${e.button}` === pttKey) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {
-      if (`MOUSE ${e.button}` === pttKey) setIsPttPressed(false);
+      if (`MOUSE ${e.button}` === pttKey) scheduleRelease();
     };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);

@@ -29,6 +29,8 @@ import { useChannel } from '../contexts/ChannelContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
 import SettingsView from './SettingsView';
+import ReleaseNotesPopover from '../components/ReleaseNotesModal';
+import { getReleaseNotes } from '../lib/releaseNotes';
 
 export default function ChatView() {
   const {
@@ -112,6 +114,8 @@ export default function ChatView() {
     onUpdateDownload,
     onUpdateInstall,
     onUpdateDismiss,
+    showReleaseNotes,
+    setShowReleaseNotes,
   } = useAppState();
 
   const {
@@ -1061,7 +1065,10 @@ export default function ChatView() {
                       className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)]"
                     >
                       <div className="relative shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                        <div
+                          className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                          style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
+                        >
                           {user.avatar?.startsWith('http')
                             ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             : user.avatar}
@@ -1105,7 +1112,10 @@ export default function ChatView() {
                     className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:grayscale-0"
                   >
                     <div className="relative">
-                      <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]">
+                      <div
+                        className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                        style={{ borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' }}
+                      >
                         {user.avatar?.startsWith('http')
                           ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           : user.avatar}
@@ -1368,7 +1378,22 @@ export default function ChatView() {
               </button>
             </div>
             {appVersion && (
-              <span className="text-[9px] text-[var(--theme-secondary-text)]/50 font-medium border-l border-[var(--theme-border)] pl-3 ml-1">v{appVersion}</span>
+              <div className="relative border-l border-[var(--theme-border)] pl-3 ml-1">
+                <button
+                  onClick={() => getReleaseNotes(appVersion) && setShowReleaseNotes(!showReleaseNotes)}
+                  className={`text-[9px] font-medium transition-colors ${getReleaseNotes(appVersion) ? 'text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] cursor-pointer' : 'text-[var(--theme-secondary-text)]/50 cursor-default'}`}
+                >
+                  v{appVersion}
+                </button>
+                {showReleaseNotes && getReleaseNotes(appVersion) && (
+                  <ReleaseNotesPopover
+                    version={appVersion}
+                    notes={getReleaseNotes(appVersion)!}
+                    onClose={() => setShowReleaseNotes(false)}
+                    isAdmin={currentUser.isAdmin}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>

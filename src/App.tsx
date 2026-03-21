@@ -61,6 +61,8 @@ import LoginCodeView from './views/LoginCodeView';
 import LoginPasswordView from './views/LoginPasswordView';
 import RegisterDetailsView from './views/RegisterDetailsView';
 import ChatView from './views/ChatView';
+import BanScreen from './components/BanScreen';
+import { getReleaseNotes } from './lib/releaseNotes';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -132,6 +134,12 @@ export default function App() {
   const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
   const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
 
+  const [pttReleaseDelay, setPttReleaseDelayState] = useState<number>(() => {
+    const saved = localStorage.getItem('pttReleaseDelay');
+    return saved !== null ? parseInt(saved) : 250;
+  });
+  const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
+
   // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
@@ -170,6 +178,7 @@ export default function App() {
   type UpdateState = 'available' | 'downloading' | 'downloaded' | 'dismissed';
   const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
   const [appVersion, setAppVersion] = useState<string>('');
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
 
   useEffect(() => {
     const w = window as Window & {
@@ -182,7 +191,14 @@ export default function App() {
       };
       electronApp?: { getVersion: () => Promise<string> };
     };
-    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
+    w.electronApp?.getVersion().then(v => {
+      setAppVersion(v);
+      const lastSeen = localStorage.getItem('cylk-last-version');
+      if (lastSeen && lastSeen !== v && getReleaseNotes(v)) {
+        setShowReleaseNotes(true);
+      }
+      localStorage.setItem('cylk-last-version', v);
+    }).catch(() => {});
     const updater = w.electronUpdater;
     if (!updater) return;
     updater.onUpdateAvailable((info) => setUpdateInfo({ version: info.version, sizeMB: info.sizeMB, state: 'available', progress: 0 }));
@@ -271,6 +287,7 @@ export default function App() {
     isNoiseSuppressionEnabled,
     noiseThreshold,
     isLowDataMode,
+    pttReleaseDelay,
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
@@ -521,6 +538,9 @@ export default function App() {
             newUser.banExpires = undefined;
             updated = true;
             if (isSupabaseUser(u.id)) updateUserModeration(u.id, { is_voice_banned: false, ban_expires: null });
+            if (u.id === currentUserRef.current.id) {
+              setCurrentUser(prev => ({ ...prev, isVoiceBanned: false, banExpires: undefined }));
+            }
           }
           return updated ? newUser : u;
         }));
@@ -659,6 +679,12 @@ export default function App() {
     if (!deafenMountedRef.current) { deafenMountedRef.current = true; return; }
     playSound(isDeafened ? 'deafen' : 'undeafen');
   }, [isDeafened]);
+
+  // Admin-driven mute/unmute: currentUser.isMuted (DB) → isMuted (audio state) senkronizasyonu.
+  // Self-mute currentUser.isMuted'i değiştirmez, bu effect yalnızca admin işlemlerinde tetiklenir.
+  useEffect(() => {
+    setIsMuted(currentUser.isMuted ?? false);
+  }, [currentUser.isMuted]);
 
   useEffect(() => {
     if (!activeChannel) return;
@@ -1306,6 +1332,8 @@ export default function App() {
     setSoundPttVariant,
     avatarBorderColor,
     setAvatarBorderColor,
+    pttReleaseDelay,
+    setPttReleaseDelay,
   };
 
   const appStateValue: AppStateContextType = {
@@ -1384,6 +1412,8 @@ export default function App() {
         return { ...prev, state: 'dismissed' };
       });
     },
+    showReleaseNotes,
+    setShowReleaseNotes,
   };
 
   const audioValue: AudioContextType = {
@@ -1530,6 +1560,11 @@ export default function App() {
                     }
                   `}</style>
 
+
+                  {/* Ban ekranı — chat/settings görünümündeyken erişimi engeller */}
+                  {(view === 'chat' || view === 'settings') && currentUser.isVoiceBanned && (
+                    <BanScreen banExpires={currentUser.banExpires} />
+                  )}
 
                   {/* Toast bildirimi */}
                   <AnimatePresence>

@@ -78,6 +78,8 @@ export interface AppStateContextType {
   onUpdateDownload: () => void;
   onUpdateInstall: () => void;
   onUpdateDismiss: () => void;
+  showReleaseNotes: boolean;
+  setShowReleaseNotes: (v: boolean) => void;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

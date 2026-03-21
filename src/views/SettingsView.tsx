@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 import { THEMES } from '../constants';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../lib/supabase';
+import AvatarCropModal from '../components/AvatarCropModal';
 import { previewSound, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
@@ -58,6 +59,8 @@ export default function SettingsView() {
     setSoundPttVariant,
     avatarBorderColor,
     setAvatarBorderColor,
+    pttReleaseDelay,
+    setPttReleaseDelay,
   } = useSettings();
 
   const {
@@ -97,7 +100,52 @@ export default function SettingsView() {
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(
     currentUser.avatar?.startsWith('http') ? currentUser.avatar : null
   );
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Gürültü eşiği canlı meter
+  const [micAverage, setMicAverage] = useState(0);
+  const meterStreamRef = useRef<MediaStream | null>(null);
+  const meterAnimRef = useRef<number | null>(null);
+  const meterCtxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    if (!isNoiseSuppressionEnabled) {
+      setMicAverage(0);
+      return;
+    }
+    let stopped = false;
+    const start = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+        meterStreamRef.current = stream;
+        const ctx = new AudioContext();
+        meterCtxRef.current = ctx;
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          if (stopped) return;
+          analyser.getByteFrequencyData(data);
+          const avg = data.reduce((a, b) => a + b, 0) / data.length;
+          setMicAverage(avg);
+          meterAnimRef.current = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch { /* mikrofon izni yok, sessizce geç */ }
+    };
+    start();
+    return () => {
+      stopped = true;
+      if (meterAnimRef.current) cancelAnimationFrame(meterAnimRef.current);
+      meterStreamRef.current?.getTracks().forEach(t => t.stop());
+      meterCtxRef.current?.close();
+      setMicAverage(0);
+    };
+  }, [isNoiseSuppressionEnabled]);
 
   // Initialize form from currentUser on mount
   useEffect(() => {
@@ -189,12 +237,25 @@ export default function SettingsView() {
     setTimeout(() => setUpdateSuccessMessage(''), 3000);
   };
 
-  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    if (file.size > 5 * 1024 * 1024) {
+      setSettingsPasswordError('Dosya boyutu 5 MB\'ı geçemez.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setCropSrc(null);
     setAvatarUploading(true);
     setSettingsPasswordError('');
     try {
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
       const url = await uploadAvatar(currentUser.id, file);
       setCustomAvatarUrl(url);
       await saveProfile({
@@ -215,11 +276,18 @@ export default function SettingsView() {
       setSettingsPasswordError('Fotoğraf yüklenemedi. Bucket ayarlarını kontrol edin.');
     } finally {
       setAvatarUploading(false);
-      e.target.value = '';
     }
   };
 
   return (
+    <>
+    {cropSrc && (
+      <AvatarCropModal
+        imageSrc={cropSrc}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setCropSrc(null)}
+      />
+    )}
     <div className="w-full max-w-3xl mx-auto">
       <div className="p-8 border-b border-[var(--theme-border)]">
         <div className="flex items-center gap-3 mb-1">
@@ -256,7 +324,7 @@ export default function SettingsView() {
                   : <Camera size={18} className="text-white" />
                 }
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFileChange} />
             </div>
 
             {/* Border Color Swatches */}
@@ -285,6 +353,9 @@ export default function SettingsView() {
                 />
               ))}
             </div>
+            <p className="text-xs text-[var(--theme-secondary-text)] text-center">
+              JPG veya PNG · En fazla 5 MB · 512×512 önerilir
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -468,6 +539,34 @@ export default function SettingsView() {
             </div>
           </div>
 
+          {/* PTT Bırakma Gecikmesi */}
+          <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="font-bold text-[var(--theme-text)]">Bas-Konuş Bırakma Gecikmesi</h4>
+                <p className="text-xs text-[var(--theme-secondary-text)] mt-1">
+                  Tuşu bıraktıktan sonra mikrofonun kapanmadan önce beklediği süre. Kelime sonlarının kesilmesini önler.
+                </p>
+              </div>
+              <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[3rem] text-right">
+                {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={500}
+              step={50}
+              value={pttReleaseDelay}
+              onChange={e => setPttReleaseDelay(Number(e.target.value))}
+              className="w-full accent-[var(--theme-accent)]"
+            />
+            <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+              <span>Kapalı</span>
+              <span>500 ms</span>
+            </div>
+          </div>
+
           {isNoiseSuppressionEnabled && (
             <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 mt-4">
               <div className="flex items-center justify-between mb-3">
@@ -479,6 +578,33 @@ export default function SettingsView() {
                 </div>
                 <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[2rem] text-right">{noiseThreshold}</span>
               </div>
+              {/* Canlı mikrofon seviyesi */}
+              {(() => {
+                const thresholdPct = ((noiseThreshold - 2) / (50 - 2)) * 100;
+                const micPct = Math.min(100, (micAverage / 50) * 100);
+                const belowWidth = Math.min(micPct, thresholdPct);
+                const aboveLeft = thresholdPct;
+                const aboveWidth = Math.max(0, micPct - thresholdPct);
+                return (
+                  <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-3">
+                    {/* Eşiğin altındaki kısım — gri */}
+                    <div
+                      className="absolute left-0 top-0 h-full transition-none"
+                      style={{ width: `${belowWidth}%`, backgroundColor: 'var(--theme-secondary-text)', opacity: 0.5 }}
+                    />
+                    {/* Eşiği geçen kısım — accent */}
+                    <div
+                      className="absolute top-0 h-full transition-none"
+                      style={{ left: `${aboveLeft}%`, width: `${aboveWidth}%`, backgroundColor: 'var(--theme-accent)', opacity: 0.85 }}
+                    />
+                    {/* Eşik çizgisi */}
+                    <div
+                      className="absolute top-0 h-full w-px bg-red-400"
+                      style={{ left: `${thresholdPct}%` }}
+                    />
+                  </div>
+                );
+              })()}
               <input
                 type="range"
                 min={2}
@@ -771,5 +897,6 @@ export default function SettingsView() {
         )}
       </div>
     </div>
+    </>
   );
 }

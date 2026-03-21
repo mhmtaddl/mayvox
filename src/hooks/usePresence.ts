@@ -124,6 +124,11 @@ export function usePresence({
     channel.on('broadcast', { event: 'moderation' }, ({ payload }) => {
       if (payload.userId === user.id) {
         setCurrentUser(prev => ({ ...prev, ...payload.updates }));
+        // Ban geldiğinde aktif sesli kanaldan çıkar
+        if (payload.updates.isVoiceBanned === true) {
+          setActiveChannel(null);
+          disconnectRef.current();
+        }
       }
       setAllUsers(prev =>
         prev.map(u =>

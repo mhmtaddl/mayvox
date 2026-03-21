@@ -188,5 +188,5 @@ export const uploadAvatar = async (userId: string, file: File): Promise<string> 
     .upload(path, file, { upsert: true, contentType: file.type });
   if (error) throw error;
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-  return data.publicUrl;
+  return `${data.publicUrl}?t=${Date.now()}`;
 };

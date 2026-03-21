@@ -28,6 +28,8 @@ export interface SettingsContextType {
   setSoundPttVariant: (v: 1 | 2 | 3) => void;
   avatarBorderColor: string;
   setAvatarBorderColor: (v: string) => void;
+  pttReleaseDelay: number;
+  setPttReleaseDelay: (v: number) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);
