@@ -66,7 +66,7 @@ import ChatView from './views/ChatView';
 import BanScreen from './components/BanScreen';
 import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
-import PasswordResetPanel, { type ResetRequest } from './components/PasswordResetPanel';
+import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
@@ -1734,14 +1734,6 @@ export default function App() {
                     />
                   )}
 
-                  {/* Admin: şifre sıfırlama bildirimleri */}
-                  {(currentUser.isAdmin || currentUser.isPrimaryAdmin) && (view === 'chat' || view === 'settings') && (
-                    <PasswordResetPanel
-                      requests={passwordResetRequests}
-                      onApprove={handleApproveReset}
-                      onDismiss={handleDismissReset}
-                    />
-                  )}
 
                   {/* Şifremi unuttum modalı */}
                   <AnimatePresence>

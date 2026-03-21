@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import appLogo from '../assets/app-logo.png';
 import {
   Mic,
@@ -20,6 +20,7 @@ import {
   Timer,
   ShieldCheck,
   Recycle,
+  KeyRound,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppState } from '../contexts/AppStateContext';
@@ -116,6 +117,9 @@ export default function ChatView() {
     onUpdateDismiss,
     showReleaseNotes,
     setShowReleaseNotes,
+    passwordResetRequests,
+    handleApproveReset,
+    handleDismissReset,
   } = useAppState();
 
   const {
@@ -136,6 +140,32 @@ export default function ChatView() {
 
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
+
+  // Şifre sıfırlama bildirim baloncuğu
+  const [showResetPanel, setShowResetPanel] = useState(false);
+  const resetPanelRef = useRef<HTMLDivElement>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Yeni istek gelince baloncuğu aç ve 15sn timer başlat
+  useEffect(() => {
+    if (passwordResetRequests.length === 0) { setShowResetPanel(false); return; }
+    setShowResetPanel(true);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => setShowResetPanel(false), 15000);
+    return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
+  }, [passwordResetRequests.length]);
+
+  // Dışarı tıklayınca kapat
+  useEffect(() => {
+    if (!showResetPanel) return;
+    const handler = (e: MouseEvent) => {
+      if (resetPanelRef.current && !resetPanelRef.current.contains(e.target as Node)) {
+        setShowResetPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showResetPanel]);
 
   // Admin mute geri sayımı
   const isAdminMuted = currentUser.isMuted === true;
@@ -1400,13 +1430,63 @@ export default function ChatView() {
 
         <div className="w-64 px-4 flex items-center justify-evenly h-full">
           {renderConnectionQuality()}
-          <button
-            onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
-            className={`flex items-center gap-1.5 transition-all font-bold text-[10px] uppercase tracking-widest group ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'}`}
-          >
-            <Settings size={14} className={`transition-transform duration-300 ${view === 'settings' ? 'rotate-90' : 'group-hover:rotate-90'}`} />
-            Ayarlar
-          </button>
+          <div className="relative" ref={resetPanelRef}>
+            {/* Şifre sıfırlama bildirim baloncuğu */}
+            <AnimatePresence>
+              {showResetPanel && passwordResetRequests.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  className="absolute bottom-full mb-3 right-0 w-72 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-50 overflow-hidden"
+                >
+                  {/* Ok işareti */}
+                  <div className="absolute -bottom-[7px] right-6 w-3.5 h-3.5 bg-[var(--theme-bg)] border-r border-b border-[var(--theme-border)] rotate-45" />
+                  <div className="px-3 py-2 border-b border-[var(--theme-border)] flex items-center gap-1.5">
+                    <KeyRound size={12} className="text-amber-500" />
+                    <span className="text-[10px] font-bold text-[var(--theme-text)] uppercase tracking-wide">Şifre Sıfırlama İstekleri</span>
+                    <span className="ml-auto text-[9px] bg-amber-500/15 text-amber-500 font-bold px-1.5 py-0.5 rounded-full">{passwordResetRequests.length}</span>
+                  </div>
+                  <div className="divide-y divide-[var(--theme-border)]">
+                    {passwordResetRequests.map(req => (
+                      <div key={req.userId} className="px-3 py-2.5">
+                        <p className="text-[11px] text-[var(--theme-text)] leading-snug mb-2">
+                          <span className="font-bold text-[var(--theme-accent)]">{req.userName}</span> kullanıcısı parolasını sıfırlamak istiyor.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { handleApproveReset(req); setShowResetPanel(false); }}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"
+                          >
+                            <Check size={11} /> Onayla
+                          </button>
+                          <button
+                            onClick={() => { handleDismissReset(req.userId); }}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                          >
+                            <X size={11} /> Reddet
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button
+              onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+              className={`relative flex items-center gap-1.5 transition-all font-bold text-[10px] uppercase tracking-widest group ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'}`}
+            >
+              <span className="relative">
+                <Settings size={14} className={`transition-transform duration-300 ${view === 'settings' ? 'rotate-90' : 'group-hover:rotate-90'}`} />
+                {passwordResetRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+                )}
+              </span>
+              Ayarlar
+            </button>
+          </div>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-red-500 transition-all font-bold text-[10px] uppercase tracking-widest group"
