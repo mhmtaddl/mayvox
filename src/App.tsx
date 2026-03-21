@@ -1224,7 +1224,7 @@ export default function App() {
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
   useEffect(() => {
-    if (!currentUser.isAdmin && !currentUser.isPrimaryAdmin) return;
+    if (!currentUser.id || (!currentUser.isAdmin && !currentUser.isPrimaryAdmin)) return;
     if (view !== 'chat' && view !== 'settings') return;
 
     const poll = async () => {
