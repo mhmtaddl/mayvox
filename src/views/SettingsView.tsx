@@ -17,6 +17,8 @@ import {
   EyeOff,
   Volume2,
   Camera,
+  KeyRound,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
@@ -75,6 +77,8 @@ export default function SettingsView() {
     generatedCode,
     timeLeft,
     formatTime,
+    passwordResetRequests,
+    handleAdminManualReset,
   } = useAppState();
 
   // Memoized admin user list
@@ -96,6 +100,7 @@ export default function SettingsView() {
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
   const [muteInputs, setMuteInputs] = useState<Record<string, string>>({});
   const [banInputs, setBanInputs] = useState<Record<string, string>>({});
+  const [keyResetConfirm, setKeyResetConfirm] = useState<string | null>(null); // userId
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(
     currentUser.avatar?.startsWith('http') ? currentUser.avatar : null
@@ -873,6 +878,46 @@ export default function SettingsView() {
                                 >
                                   <ShieldCheck size={12} />
                                   {user.isAdmin ? 'Admin Yetkisi Al' : 'Admin Yetkisi Ver'}
+                                </button>
+                              )}
+                              {/* Şifre sıfırlama butonu */}
+                              {keyResetConfirm === user.id ? (
+                                <div className="flex flex-col gap-1.5 p-2 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
+                                  <p className="text-[9px] text-[var(--theme-secondary-text)] leading-tight">
+                                    <span className="font-bold text-[var(--theme-text)]">{user.firstName}</span> kullanıcının şifresini sıfırlamak istediğinizden emin misiniz?
+                                  </p>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={async () => {
+                                        await handleAdminManualReset(user.id, user.name, user.email || '');
+                                        setKeyResetConfirm(null);
+                                      }}
+                                      className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded hover:bg-emerald-500 hover:text-white transition-all"
+                                    >
+                                      <Check size={10} />
+                                      Evet
+                                    </button>
+                                    <button
+                                      onClick={() => setKeyResetConfirm(null)}
+                                      className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
+                                    >
+                                      <X size={10} />
+                                      İptal
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setKeyResetConfirm(user.id)}
+                                  className={`flex items-center justify-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded transition-all ${
+                                    passwordResetRequests.some(r => r.userId === user.id)
+                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white'
+                                      : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                                  }`}
+                                  title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var' : 'Şifre sıfırla'}
+                                >
+                                  <KeyRound size={12} />
+                                  Şifre Sıfırla
                                 </button>
                               )}
                               {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (

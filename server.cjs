@@ -105,6 +105,181 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
   res.json({ token });
 });
 
+// Rate limiting — şifre sıfırlama endpointleri için
+const resetLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Çok fazla istek. Lütfen 10 dakika bekleyin.' },
+});
+
+// Yardımcı: 10 karakterlik geçici şifre üretir
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let result = '';
+  for (let i = 0; i < 10; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+}
+
+// Kullanıcı adı veya e-posta ile kullanıcı kontrolü (kimlik doğrulama gerektirmez)
+app.post('/api/check-user', resetLimiter, async (req, res) => {
+  const { identifier } = req.body;
+  if (!identifier || typeof identifier !== 'string') {
+    return res.status(400).json({ error: 'identifier gerekli' });
+  }
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const isEmail = identifier.includes('@');
+  const { data } = isEmail
+    ? await supabaseAdmin.from('profiles').select('id, name').eq('email', identifier.toLowerCase()).single()
+    : await supabaseAdmin.from('profiles').select('id, name').eq('name', identifier).single();
+
+  if (!data) return res.json({ exists: false });
+  res.json({ exists: true, userId: data.id, name: data.name });
+});
+
+// Şifre sıfırlama isteği oluştur (kimlik doğrulama gerektirmez)
+app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId gerekli' });
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ password_reset_requested: true })
+    .eq('id', userId);
+
+  if (error) return res.status(500).json({ error: 'İstek kaydedilemedi' });
+  res.json({ success: true });
+});
+
+// Admin: şifreyi sıfırla, e-posta gönder (admin yetkisi gerektirir)
+app.post('/api/admin-reset-password', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Yetkisiz istek' });
+  }
+  const jwt = authHeader.split(' ')[1];
+
+  const supabaseAnon = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  );
+  const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(jwt);
+  if (authError || !user) return res.status(401).json({ error: 'Geçersiz oturum' });
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  // Çağıranın admin olup olmadığını kontrol et
+  const { data: callerProfile } = await supabaseAdmin
+    .from('profiles').select('is_admin, is_primary_admin').eq('id', user.id).single();
+  if (!callerProfile?.is_admin && !callerProfile?.is_primary_admin) {
+    return res.status(403).json({ error: 'Admin yetkisi gerekli' });
+  }
+
+  const { targetUserId } = req.body;
+  if (!targetUserId) return res.status(400).json({ error: 'targetUserId gerekli' });
+
+  // Hedef kullanıcının profilini al
+  const { data: targetProfile } = await supabaseAdmin
+    .from('profiles').select('name, email').eq('id', targetUserId).single();
+  if (!targetProfile?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+  // Geçici şifre üret ve auth şifresini güncelle
+  const tempPassword = generateTempPassword();
+  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+    password: tempPassword,
+  });
+  if (updateError) return res.status(500).json({ error: 'Şifre güncellenemedi' });
+
+  // Profil flaglerini güncelle
+  await supabaseAdmin.from('profiles').update({
+    must_change_password: true,
+    password_reset_requested: false,
+  }).eq('id', targetUserId);
+
+  // E-posta gönder
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'CylkSohbet <onboarding@resend.dev>';
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [targetProfile.email],
+      subject: 'CylkSohbet — Geçici Parolanız',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;">
+          <h2 style="color:#7c3aed;margin-bottom:8px;">CylkSohbet</h2>
+          <p>Merhaba <strong>${targetProfile.name}</strong>,</p>
+          <p>Parolanız bir yönetici tarafından sıfırlandı. Aşağıdaki geçici parola ile giriş yapabilirsiniz:</p>
+          <div style="background:#2d2d44;border-radius:8px;padding:16px;text-align:center;margin:24px 0;">
+            <span style="font-size:24px;font-weight:bold;letter-spacing:4px;color:#a78bfa;">${tempPassword}</span>
+          </div>
+          <p style="color:#94a3b8;font-size:13px;">Giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p>
+        </div>
+      `,
+    }),
+  });
+
+  if (!emailRes.ok) {
+    console.error('[reset] E-posta gönderilemedi:', await emailRes.text());
+    // Şifre güncellendi ama mail gönderilemediyse hata dön
+    return res.status(500).json({ error: 'Şifre güncellendi fakat e-posta gönderilemedi' });
+  }
+
+  res.json({ success: true });
+});
+
+// Admin: sıfırlama isteğini reddet / kapat
+app.post('/api/dismiss-password-reset', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Yetkisiz istek' });
+  }
+  const jwt = authHeader.split(' ')[1];
+
+  const supabaseAnon = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  );
+  const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(jwt);
+  if (authError || !user) return res.status(401).json({ error: 'Geçersiz oturum' });
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const { data: callerProfile } = await supabaseAdmin
+    .from('profiles').select('is_admin, is_primary_admin').eq('id', user.id).single();
+  if (!callerProfile?.is_admin && !callerProfile?.is_primary_admin) {
+    return res.status(403).json({ error: 'Admin yetkisi gerekli' });
+  }
+
+  const { targetUserId } = req.body;
+  if (!targetUserId) return res.status(400).json({ error: 'targetUserId gerekli' });
+
+  await supabaseAdmin.from('profiles').update({ password_reset_requested: false }).eq('id', targetUserId);
+  res.json({ success: true });
+});
+
 const PORT = process.env.PORT || 3001;
 
 // Startup: kritik env var kontrolü
@@ -113,6 +288,8 @@ if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) missingVars.pus
 if (!process.env.SUPABASE_ANON_KEY && !process.env.VITE_SUPABASE_ANON_KEY) missingVars.push('SUPABASE_ANON_KEY');
 if (!process.env.LIVEKIT_API_KEY) missingVars.push('LIVEKIT_API_KEY');
 if (!process.env.LIVEKIT_API_SECRET) missingVars.push('LIVEKIT_API_SECRET');
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missingVars.push('SUPABASE_SERVICE_ROLE_KEY');
+if (!process.env.RESEND_API_KEY) missingVars.push('RESEND_API_KEY');
 if (missingVars.length > 0) {
   console.warn(`[token-server] UYARI: Eksik env var(lar): ${missingVars.join(', ')}`);
 }

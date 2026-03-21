@@ -1,6 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { AppView, User, VoiceChannel } from '../types';
 import { supabase } from '../lib/supabase';
+import type { ResetRequest } from '../components/PasswordResetPanel';
 
 export interface AppStateContextType {
   // View
@@ -80,6 +81,12 @@ export interface AppStateContextType {
   onUpdateDismiss: () => void;
   showReleaseNotes: boolean;
   setShowReleaseNotes: (v: boolean) => void;
+
+  // Şifre sıfırlama
+  passwordResetRequests: ResetRequest[];
+  handleApproveReset: (req: ResetRequest) => Promise<void>;
+  handleDismissReset: (userId: string) => Promise<void>;
+  handleAdminManualReset: (userId: string, userName: string, userEmail: string) => Promise<void>;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

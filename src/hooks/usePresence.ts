@@ -21,6 +21,8 @@ interface Props {
       roomId: string;
     } | null,
   ) => void;
+  onMoved: (targetChannelId: string) => void;
+  onPasswordResetUpdate?: (userId: string) => void;
 }
 
 export function usePresence({
@@ -33,12 +35,20 @@ export function usePresence({
   setActiveChannel,
   setToastMsg,
   setInvitationModal,
+  onMoved,
+  onPasswordResetUpdate,
 }: Props) {
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
 
   // Use a ref so the kick handler always calls the latest disconnectFromLiveKit
   const disconnectRef = useRef(disconnectFromLiveKit);
   disconnectRef.current = disconnectFromLiveKit;
+
+  const onMovedRef = useRef(onMoved);
+  onMovedRef.current = onMoved;
+
+  const onPasswordResetUpdateRef = useRef(onPasswordResetUpdate);
+  onPasswordResetUpdateRef.current = onPasswordResetUpdate;
 
   const startPresence = (user: User) => {
     if (presenceChannelRef.current) {
@@ -135,6 +145,18 @@ export function usePresence({
           u.id === payload.userId ? { ...u, ...payload.updates } : u,
         ),
       );
+    });
+
+    channel.on('broadcast', { event: 'password-reset-update' }, ({ payload }) => {
+      onPasswordResetUpdateRef.current?.(payload.userId);
+    });
+
+    channel.on('broadcast', { event: 'move' }, ({ payload }) => {
+      if (payload.userId !== user.id) return;
+      setActiveChannel(null);
+      disconnectRef.current().then(() => {
+        onMovedRef.current(payload.targetChannelId);
+      });
     });
 
     channel.on('broadcast', { event: 'channel-update' }, ({ payload }) => {

@@ -151,6 +151,22 @@ export const setChannelPassword = async (channelId: string, password: string | n
   });
 };
 
+// GET PROFILES WITH PENDING PASSWORD RESET REQUEST
+export const getPendingPasswordResets = async () => {
+  return await supabase
+    .from('profiles')
+    .select('id, name, email')
+    .eq('password_reset_requested', true);
+};
+
+// CLEAR MUST CHANGE PASSWORD FLAG (current user clears their own)
+export const clearMustChangePassword = async (userId: string) => {
+  return await supabase
+    .from('profiles')
+    .update({ must_change_password: false })
+    .eq('id', userId);
+};
+
 // DELETE CHANNEL
 export const deleteChannel = async (id: string) => {
   return await supabase.from('channels').delete().eq('id', id);

@@ -5,9 +5,10 @@ import { motion } from 'motion/react';
 interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
+  onForgotPassword: () => void;
 }
 
-export default function LoginPasswordView({ handleLogin, handleLogout }: LoginPasswordViewProps) {
+export default function LoginPasswordView({ handleLogin, handleLogout, onForgotPassword }: LoginPasswordViewProps) {
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -105,6 +106,16 @@ export default function LoginPasswordView({ handleLogin, handleLogout }: LoginPa
             <span>Giriş Yap</span>
             <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-xs text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors underline underline-offset-2"
+            >
+              Şifremi Unuttum
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

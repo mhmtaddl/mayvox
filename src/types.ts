@@ -20,6 +20,8 @@ export interface User {
   banExpires?: number;
   joinedAt?: number;
   password?: string;
+  mustChangePassword?: boolean;
+  passwordResetRequested?: boolean;
 }
 
 export interface VoiceChannel {

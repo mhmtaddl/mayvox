@@ -27,6 +27,8 @@ import {
   saveInviteCode,
   verifyInviteCode,
   useInviteCode,
+  getPendingPasswordResets,
+  supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
 import { logger } from './lib/logger';
@@ -62,6 +64,9 @@ import LoginPasswordView from './views/LoginPasswordView';
 import RegisterDetailsView from './views/RegisterDetailsView';
 import ChatView from './views/ChatView';
 import BanScreen from './components/BanScreen';
+import ForgotPasswordModal from './components/ForgotPasswordModal';
+import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
+import PasswordResetPanel, { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
@@ -179,6 +184,9 @@ export default function App() {
   const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
   const [appVersion, setAppVersion] = useState<string>('');
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
+  const [passwordResetRequests, setPasswordResetRequests] = useState<ResetRequest[]>([]);
 
   useEffect(() => {
     const w = window as Window & {
@@ -260,6 +268,7 @@ export default function App() {
   // Forward ref to break circular dependency: usePresence needs disconnectFromLiveKit,
   // but useLiveKitConnection needs presenceChannelRef (which comes from usePresence).
   const disconnectLKRef = useRef<() => Promise<void>>(async () => {});
+  const handleJoinChannelRef = useRef<(id: string, isInvited?: boolean) => Promise<void>>(async () => {});
 
   // ── Device hook ─────────────────────────────────────────────────────────
   const {
@@ -301,6 +310,10 @@ export default function App() {
     setActiveChannel,
     setToastMsg,
     setInvitationModal,
+    onMoved: (targetChannelId) => handleJoinChannelRef.current(targetChannelId, true),
+    onPasswordResetUpdate: (userId) => {
+      setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
+    },
   });
 
   // ── LiveKit hook ─────────────────────────────────────────────────────────
@@ -808,6 +821,7 @@ export default function App() {
 
   const handleUserActionClick = (e: React.MouseEvent, userId: string) => {
     e.stopPropagation();
+    if (userId === currentUser.id) return;
 
     const isAdmin = currentUser.isAdmin;
     const canInvite = activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userId)?.name || '') && userId !== currentUser.id;
@@ -855,12 +869,52 @@ export default function App() {
   const handleMoveUser = (userName: string, targetChannelId: string) => {
     if (!currentUser.isAdmin) return;
 
+    const movedUser = allUsers.find(u => u.name === userName);
+    const sourceChannel = channels.find(c => c.members?.includes(userName));
+
     setChannels(prev => prev.map(c => {
       const otherMembers = c.members?.filter(m => m !== userName) || [];
       const isTarget = c.id === targetChannelId;
       const newMembers = isTarget ? [...otherMembers, userName] : otherMembers;
       return { ...c, members: newMembers, userCount: newMembers.length };
     }));
+
+    if (!presenceChannelRef.current) return;
+
+    if (sourceChannel && sourceChannel.id !== targetChannelId) {
+      const newSourceMembers = (sourceChannel.members || []).filter(m => m !== userName);
+      presenceChannelRef.current.send({
+        type: 'broadcast',
+        event: 'channel-update',
+        payload: {
+          action: 'update',
+          channelId: sourceChannel.id,
+          updates: { members: newSourceMembers, userCount: newSourceMembers.length },
+        },
+      });
+    }
+
+    const targetChannel = channels.find(c => c.id === targetChannelId);
+    if (targetChannel) {
+      const newTargetMembers = [...(targetChannel.members || []).filter(m => m !== userName), userName];
+      presenceChannelRef.current.send({
+        type: 'broadcast',
+        event: 'channel-update',
+        payload: {
+          action: 'update',
+          channelId: targetChannelId,
+          updates: { members: newTargetMembers, userCount: newTargetMembers.length },
+        },
+      });
+    }
+
+    if (movedUser) {
+      presenceChannelRef.current.send({
+        type: 'broadcast',
+        event: 'move',
+        payload: { userId: movedUser.id, targetChannelId },
+      });
+    }
   };
 
   const handleSaveRoom = async () => {
@@ -1028,6 +1082,9 @@ export default function App() {
     }
   };
 
+  // Keep forward ref current so usePresence.onMoved always calls the real function
+  handleJoinChannelRef.current = handleJoinChannel;
+
   const handleVerifyPassword = async () => {
     if (!passwordModal) return;
     const channel = channels.find(c => c.id === passwordModal.channelId);
@@ -1088,6 +1145,7 @@ export default function App() {
       muteExpires: profile.mute_expires || undefined,
       isVoiceBanned: profile.is_voice_banned || false,
       banExpires: profile.ban_expires || undefined,
+      mustChangePassword: profile.must_change_password || false,
     } : {
       id: userId,
       name: email,
@@ -1135,6 +1193,23 @@ export default function App() {
     setLoginNick('');
     setLoginPassword('');
     setLoginError(null);
+
+    // Geçici parola ile giriş yapıldıysa parola değiştirme ekranını göster
+    if (loggedInUser.mustChangePassword) {
+      setShowForcePasswordChange(true);
+    }
+
+    // Admin ise bekleyen şifre sıfırlama isteklerini yükle
+    if (loggedInUser.isAdmin || loggedInUser.isPrimaryAdmin) {
+      const { data: pending } = await getPendingPasswordResets();
+      if (pending) {
+        setPasswordResetRequests(pending.map((p: { id: string; name: string; email: string }) => ({
+          userId: p.id,
+          userName: p.name,
+          userEmail: p.email,
+        })));
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -1144,6 +1219,87 @@ export default function App() {
     await signOut();
     setView('login-selection');
     setActiveChannel(null);
+    setPasswordResetRequests([]);
+  };
+
+  // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
+  useEffect(() => {
+    if (!currentUser.isAdmin && !currentUser.isPrimaryAdmin) return;
+    if (view !== 'chat' && view !== 'settings') return;
+
+    const poll = async () => {
+      const { data } = await getPendingPasswordResets();
+      if (data) {
+        setPasswordResetRequests(data.map((p: { id: string; name: string; email: string }) => ({
+          userId: p.id,
+          userName: p.name,
+          userEmail: p.email,
+        })));
+      }
+    };
+
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
+
+  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
+
+  const handleApproveReset = async (req: ResetRequest) => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session?.access_token) return;
+
+    const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ targetUserId: req.userId }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setToastMsg(data.error ?? 'Şifre sıfırlanamadı');
+      setTimeout(() => setToastMsg(null), 4000);
+      return;
+    }
+
+    setPasswordResetRequests(prev => prev.filter(r => r.userId !== req.userId));
+    setToastMsg(`${req.userName} kullanıcısına yeni parola e-posta ile gönderildi.`);
+    setTimeout(() => setToastMsg(null), 4000);
+
+    // Diğer adminleri bilgilendir
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'password-reset-update',
+      payload: { userId: req.userId },
+    });
+  };
+
+  const handleDismissReset = async (userId: string) => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session?.access_token) return;
+
+    await fetch(`${SERVER_URL}/api/dismiss-password-reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ targetUserId: userId }),
+    });
+
+    setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
+
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'password-reset-update',
+      payload: { userId },
+    });
+  };
+
+  const handleAdminManualReset = async (userId: string, userName: string, userEmail: string) => {
+    await handleApproveReset({ userId, userName, userEmail });
   };
 
   const handleRegister = async (code: string, nick: string, password: string, repeatPwd: string) => {
@@ -1414,6 +1570,10 @@ export default function App() {
     },
     showReleaseNotes,
     setShowReleaseNotes,
+    passwordResetRequests,
+    handleApproveReset,
+    handleDismissReset,
+    handleAdminManualReset,
   };
 
   const audioValue: AudioContextType = {
@@ -1522,6 +1682,7 @@ export default function App() {
                         <LoginPasswordView
                           handleLogin={handleLogin}
                           handleLogout={handleLogout}
+                          onForgotPassword={() => setShowForgotPassword(true)}
                         />
                       )}
                       {view === 'register-details' && (
@@ -1565,6 +1726,30 @@ export default function App() {
                   {(view === 'chat' || view === 'settings') && currentUser.isVoiceBanned && (
                     <BanScreen banExpires={currentUser.banExpires} />
                   )}
+
+                  {/* Geçici parola ile giriş — parola değiştirme modalı */}
+                  {showForcePasswordChange && (
+                    <ForcePasswordChangeModal
+                      userId={currentUser.id}
+                      onDone={() => setShowForcePasswordChange(false)}
+                    />
+                  )}
+
+                  {/* Admin: şifre sıfırlama bildirimleri */}
+                  {(currentUser.isAdmin || currentUser.isPrimaryAdmin) && (view === 'chat' || view === 'settings') && (
+                    <PasswordResetPanel
+                      requests={passwordResetRequests}
+                      onApprove={handleApproveReset}
+                      onDismiss={handleDismissReset}
+                    />
+                  )}
+
+                  {/* Şifremi unuttum modalı */}
+                  <AnimatePresence>
+                    {showForgotPassword && (
+                      <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+                    )}
+                  </AnimatePresence>
 
                   {/* Toast bildirimi */}
                   <AnimatePresence>
