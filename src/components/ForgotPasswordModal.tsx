@@ -15,6 +15,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
   const [notFound, setNotFound] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pressing, setPressing] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -46,6 +47,13 @@ export default function ForgotPasswordModal({ onClose }: Props) {
       }
     }, 600);
   }, [identifier]);
+
+  const triggerSubmit = () => {
+    if (!foundUser) return;
+    setPressing(true);
+    setTimeout(() => setPressing(false), 150);
+    handleSubmit();
+  };
 
   const handleSubmit = async () => {
     if (!foundUser) return;
@@ -123,6 +131,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                       type="text"
                       value={identifier}
                       onChange={e => setIdentifier(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && triggerSubmit()}
                       placeholder="kullaniciadi veya mail@ornek.com"
                       className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-3 pl-9 pr-4 text-sm text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
                     />
@@ -153,7 +162,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <button
                   onClick={handleSubmit}
                   disabled={!foundUser}
-                  className="w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98]"
+                  className={`w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
                 >
                   Şifremi Sıfırla
                 </button>

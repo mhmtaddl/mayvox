@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Mic, Key, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -15,6 +15,8 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
   const [showPwd, setShowPwd] = useState(false);
   const [showRepeatPwd, setShowRepeatPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pressing, setPressing] = useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const onSubmit = async () => {
     setError(null);
@@ -23,6 +25,12 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kayıt tamamlanamadı.');
     }
+  };
+
+  const triggerSubmit = () => {
+    setPressing(true);
+    setTimeout(() => setPressing(false), 150);
+    onSubmit();
   };
 
   return (
@@ -68,7 +76,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                 placeholder="Admin'den aldığınız kodu girin"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="Davet kodu"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all tracking-widest font-mono"
               />
@@ -84,7 +92,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                 placeholder="E-posta adresinizi giriniz"
                 value={nick}
                 onChange={(e) => setNick(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="E-posta"
                 autoComplete="email"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
@@ -101,12 +109,12 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                 placeholder="Parolanızı oluşturun"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="Parola"
                 autoComplete="new-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
+              <button type="button" tabIndex={-1} onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
                 {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
@@ -121,23 +129,24 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                 placeholder="Parolanızı tekrar girin"
                 value={repeatPwd}
                 onChange={(e) => setRepeatPwd(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="Parolayı tekrar gir"
                 autoComplete="new-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button type="button" onClick={() => setShowRepeatPwd(!showRepeatPwd)} aria-label={showRepeatPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
+              <button type="button" tabIndex={-1} onClick={() => setShowRepeatPwd(!showRepeatPwd)} aria-label={showRepeatPwd ? 'Parolayı gizle' : 'Parolayı göster'} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
                 {showRepeatPwd ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
 
           <button
+            ref={submitBtnRef}
             onClick={onSubmit}
-            className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
+            className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'bg-[var(--theme-accent)] text-white scale-[0.97]' : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white'}`}
           >
             <span>Devam Et</span>
-            <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
         </div>
       </motion.div>

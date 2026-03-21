@@ -107,6 +107,8 @@ export default function SettingsView() {
   );
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveProfileBtnRef = useRef<HTMLButtonElement>(null);
+  const [pressingProfile, setPressingProfile] = useState(false);
 
   // Gürültü eşiği canlı meter
   const [micAverage, setMicAverage] = useState(0);
@@ -179,6 +181,12 @@ export default function SettingsView() {
   const getAvatarText = (user: Partial<User> & { firstName?: string; lastName?: string; age?: number }) => {
     const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
     return `${initials}${user.age || ''}`;
+  };
+
+  const triggerSaveProfile = () => {
+    setPressingProfile(true);
+    setTimeout(() => setPressingProfile(false), 150);
+    handleUpdateProfile();
   };
 
   const handleUpdateProfile = async () => {
@@ -432,11 +440,12 @@ export default function SettingsView() {
                   placeholder="••••••••"
                   value={settingsPassword}
                   onChange={(e) => setSettingsPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateProfile(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') triggerSaveProfile(); }}
                   className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
                 />
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setShowSettingsPassword(!showSettingsPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
                 >
@@ -452,7 +461,7 @@ export default function SettingsView() {
                   placeholder="••••••••"
                   value={settingsPasswordRepeat}
                   onChange={(e) => setSettingsPasswordRepeat(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateProfile(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') triggerSaveProfile(); }}
                   className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
                 />
               </div>
@@ -470,8 +479,9 @@ export default function SettingsView() {
 
           <div className="mt-6 flex justify-end">
             <button
+              ref={saveProfileBtnRef}
               onClick={handleUpdateProfile}
-              className="px-6 py-2.5 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-black/20"
+              className={`px-6 py-2.5 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-black/20 active:scale-[0.97] ${pressingProfile ? 'opacity-90 scale-[0.97]' : 'hover:opacity-90'}`}
             >
               Bilgileri Güncelle
             </button>

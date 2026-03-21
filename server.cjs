@@ -105,7 +105,16 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
   res.json({ token });
 });
 
-// Rate limiting — şifre sıfırlama endpointleri için
+// Rate limiting — kullanıcı arama (debounce ile sık çağrılır, gevşek limit)
+const checkUserLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Çok fazla istek. Lütfen bekleyin.' },
+});
+
+// Rate limiting — şifre sıfırlama isteği (hassas işlem, sıkı limit)
 const resetLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 5,
@@ -126,7 +135,7 @@ function generateTempPassword() {
 
 // Kullanıcı adı veya e-posta ile kullanıcı kontrolü (kimlik doğrulama gerektirmez)
 // profiles tablosu public SELECT policy'e sahip — anon key yeterli
-app.post('/api/check-user', resetLimiter, async (req, res) => {
+app.post('/api/check-user', checkUserLimiter, async (req, res) => {
   const { identifier } = req.body;
   if (!identifier || typeof identifier !== 'string') {
     return res.status(400).json({ error: 'identifier gerekli' });

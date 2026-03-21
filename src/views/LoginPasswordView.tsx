@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Mic, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -13,6 +13,8 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pressing, setPressing] = useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const onSubmit = async () => {
     setError(null);
@@ -21,6 +23,12 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Giriş yapılamadı.');
     }
+  };
+
+  const triggerSubmit = () => {
+    setPressing(true);
+    setTimeout(() => setPressing(false), 150);
+    onSubmit();
   };
 
   return (
@@ -66,7 +74,7 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
                 placeholder="Kullanıcı Adını Giriniz"
                 value={nick}
                 onChange={(e) => setNick(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="Kullanıcı adı"
                 autoComplete="username"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
@@ -83,13 +91,14 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
                 placeholder="Parolanızı giriniz"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 aria-label="Parola"
                 autoComplete="current-password"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => setShowPwd(!showPwd)}
                 aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
@@ -100,11 +109,12 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
           </div>
 
           <button
+            ref={submitBtnRef}
             onClick={onSubmit}
-            className="w-full h-14 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group"
+            className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'bg-[var(--theme-accent)] text-white scale-[0.97]' : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white'}`}
           >
             <span>Giriş Yap</span>
-            <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
 
           <div className="text-center">

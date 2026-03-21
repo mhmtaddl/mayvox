@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Mic, User as UserIcon, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -29,6 +29,15 @@ export default function RegisterDetailsView({
   handleCompleteRegistration,
   onGoBack,
 }: RegisterDetailsViewProps) {
+  const [pressing, setPressing] = React.useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+
+  const triggerSubmit = () => {
+    setPressing(true);
+    setTimeout(() => setPressing(false), 150);
+    handleCompleteRegistration();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
       <motion.div
@@ -70,7 +79,7 @@ export default function RegisterDetailsView({
                 placeholder="Görünen adınızı giriniz"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -85,7 +94,7 @@ export default function RegisterDetailsView({
                 placeholder="Adınızı giriniz"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -100,7 +109,7 @@ export default function RegisterDetailsView({
                 placeholder="Soyadınızı giriniz"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -115,18 +124,19 @@ export default function RegisterDetailsView({
                 placeholder="Yaşınızı giriniz"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCompleteRegistration()}
+                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
           <button
+            ref={submitBtnRef}
             onClick={handleCompleteRegistration}
-            className="w-full h-14 bg-[var(--theme-accent)] hover:opacity-90 text-white rounded-xl font-bold text-lg shadow-lg shadow-black/20 transition-all flex items-center justify-center group"
+            className={`w-full h-14 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-lg shadow-lg shadow-black/20 transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'opacity-90 scale-[0.97]' : 'hover:opacity-90'}`}
           >
             <span>CAYLAK Kaydını Tamamla</span>
-            <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
         </div>
       </motion.div>

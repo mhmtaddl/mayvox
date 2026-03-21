@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { updateUserPassword, supabase } from '../lib/supabase';
@@ -16,6 +16,14 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
   const [showRepeat, setShowRepeat] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pressing, setPressing] = useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+
+  const triggerSubmit = () => {
+    setPressing(true);
+    setTimeout(() => setPressing(false), 150);
+    handleSubmit();
+  };
 
   const handleSubmit = async () => {
     if (!newPwd || !repeatPwd) { setError('Her iki alanı da doldurun.'); return; }
@@ -83,7 +91,7 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
                 placeholder="En az 6 karakter"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-3 pl-9 pr-10 text-sm text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button type="button" onClick={() => setShowNew(v => !v)}
+              <button type="button" tabIndex={-1} onClick={() => setShowNew(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]">
                 {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -98,11 +106,11 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
                 type={showRepeat ? 'text' : 'password'}
                 value={repeatPwd}
                 onChange={e => setRepeatPwd(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                onKeyDown={e => e.key === 'Enter' && triggerSubmit()}
                 placeholder="Parolayı tekrar girin"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-3 pl-9 pr-10 text-sm text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
-              <button type="button" onClick={() => setShowRepeat(v => !v)}
+              <button type="button" tabIndex={-1} onClick={() => setShowRepeat(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]">
                 {showRepeat ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -110,9 +118,10 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
           </div>
 
           <button
+            ref={submitBtnRef}
             onClick={handleSubmit}
             disabled={loading}
-            className="w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 hover:opacity-90 active:scale-[0.98]"
+            className={`w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
           >
             {loading ? 'Kaydediliyor...' : 'Parolayı Kaydet'}
           </button>
