@@ -299,6 +299,75 @@ app.post('/api/dismiss-password-reset', async (req, res) => {
   res.json({ success: true });
 });
 
+// Admin: davet kodu e-posta gönder
+app.post('/api/send-invite-email', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Yetkisiz istek' });
+  }
+  const jwt = authHeader.split(' ')[1];
+
+  const supabaseAnon = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  );
+  const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(jwt);
+  if (authError || !user) return res.status(401).json({ error: 'Geçersiz oturum' });
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  const { data: callerProfile } = await supabaseAdmin
+    .from('profiles').select('is_admin, is_primary_admin').eq('id', user.id).single();
+  if (!callerProfile?.is_admin && !callerProfile?.is_primary_admin) {
+    return res.status(403).json({ error: 'Admin yetkisi gerekli' });
+  }
+
+  const { email, code, expiresAt } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'email ve code gerekli' });
+
+  const expDate = expiresAt ? new Date(expiresAt).toLocaleString('tr-TR') : '';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'CylkSohbet <onboarding@resend.dev>';
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [email],
+      subject: 'Caylaklar — Davet Kodunuz',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;">
+          <h2 style="color:#7c3aed;margin-bottom:4px;">Caylaklar</h2>
+          <p style="color:#94a3b8;font-size:13px;margin-top:0;">cylksohbet.org</p>
+          <p>Merhaba,</p>
+          <p>Davet kodunuz hazır! Aşağıdaki kodu kullanarak kayıt olabilirsiniz:</p>
+          <div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
+            <p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Davet Kodu</p>
+            <span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${code}</span>
+            ${expDate ? `<p style="margin:12px 0 0;font-size:12px;color:#64748b;">Son geçerlilik: ${expDate}</p>` : ''}
+          </div>
+          <p style="color:#94a3b8;font-size:13px;">Bu kodu yalnızca siz kullanabilirsiniz. Başkasıyla paylaşmayın.</p>
+          <hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;" />
+          <p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p>
+        </div>
+      `,
+    }),
+  });
+
+  if (!emailRes.ok) {
+    const emailErr = await emailRes.text().catch(() => '');
+    console.error('[invite-email] E-posta gönderilemedi:', emailErr);
+    return res.status(500).json({ error: 'E-posta gönderilemedi' });
+  }
+
+  res.json({ success: true });
+});
+
 // Kullanıcı yeni parolasını belirledi — must_change_password flag'ini kapat
 app.post('/api/clear-must-change-password', async (req, res) => {
   const authHeader = req.headers.authorization;

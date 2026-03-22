@@ -403,7 +403,7 @@ export default function App() {
       if (livekitRoomRef.current || !navigator.onLine) return;
       const start = Date.now();
       try {
-        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store' });
+        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store', headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY } });
         const rtt = Date.now() - start;
         setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
         if (connectionLostRef.current) {
@@ -474,7 +474,7 @@ export default function App() {
       setAllUsers((prev) => [...prev.filter((u) => u.id !== session.user.id), restoredUser]);
       setCurrentUser(restoredUser);
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
-      startPresence(restoredUser);
+      startPresence(restoredUser, appVersion);
 
       const { data: savedChannels } = await getChannels();
       if (savedChannels && savedChannels.length > 0) {
@@ -1169,7 +1169,7 @@ export default function App() {
 
     setCurrentUser(loggedInUser);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
-    startPresence(loggedInUser);
+    startPresence(loggedInUser, appVersion);
 
     const { data: allProfiles } = await getAllProfiles();
     const offlineUsers: User[] = allProfiles
@@ -1216,8 +1216,9 @@ export default function App() {
         })));
       }
       const pendingInvites = await getPendingInviteRequests();
-      if (pendingInvites.length > 0) {
-        setInviteRequests(pendingInvites.map(r => ({
+      const actionable = pendingInvites.filter(r => r.status === 'pending');
+      if (actionable.length > 0) {
+        setInviteRequests(actionable.map(r => ({
           id: r.id,
           email: r.email,
           status: r.status as InviteRequest['status'],
@@ -1241,6 +1242,12 @@ export default function App() {
     setPasswordResetRequests([]);
     setInviteRequests([]);
   };
+
+  // ── appVersion IPC async geldikten sonra presence'ı güncelle
+  useEffect(() => {
+    if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion });
+  }, [appVersion, currentUser.id]);
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
   useEffect(() => {
@@ -1269,7 +1276,8 @@ export default function App() {
 
     const refreshInvites = async () => {
       const requests = await getPendingInviteRequests();
-      setInviteRequests(requests.map(r => ({
+      // Sadece aksiyon bekleyen (pending) talepler gösterilir
+      setInviteRequests(requests.filter(r => r.status === 'pending').map(r => ({
         id: r.id,
         email: r.email,
         status: r.status as InviteRequest['status'],
@@ -1285,7 +1293,7 @@ export default function App() {
 
     // Supabase Realtime: yeni invite_request INSERT'lerini anlık al
     const channel = supabaseClient
-      .channel('invite-requests-admin-rt')
+      .channel(`invite-requests-admin-rt-${currentUser.id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'invite_requests' },
@@ -1478,7 +1486,7 @@ export default function App() {
     });
 
     setCurrentUser(newUser);
-    startPresence(newUser);
+    startPresence(newUser, appVersion);
 
     const { data: regAllProfiles } = await getAllProfiles();
     const regOfflineUsers: User[] = regAllProfiles

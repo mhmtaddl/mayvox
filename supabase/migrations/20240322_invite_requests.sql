@@ -179,6 +179,7 @@ $$;
 GRANT EXECUTE ON FUNCTION get_invite_request_status(uuid) TO anon, authenticated;
 
 -- admin_send_invite_code: sadece admin
+-- Race condition koruması: atomik UPDATE WHERE status='pending' → 0 row = başkası aldı
 CREATE OR REPLACE FUNCTION admin_send_invite_code(p_request_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -191,6 +192,7 @@ DECLARE
   v_code text;
   v_chars text := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   v_i integer;
+  v_rows_affected integer;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM profiles
@@ -200,15 +202,13 @@ BEGIN
     RETURN jsonb_build_object('error', 'unauthorized');
   END IF;
 
+  -- Kaydın var olup olmadığını kontrol et
   SELECT * INTO v_req FROM invite_requests WHERE id = p_request_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('error', 'not_found');
   END IF;
 
-  IF v_req.status != 'pending' THEN
-    RETURN jsonb_build_object('error', 'invalid_status', 'current_status', v_req.status);
-  END IF;
-
+  -- Unique kod üret
   LOOP
     v_code := '';
     FOR v_i IN 1..10 LOOP
@@ -219,9 +219,23 @@ BEGIN
 
   v_expires_at := v_now + (5 * 60 * 1000);
 
+  -- Atomik UPDATE: WHERE status='pending' garantisi → 2 admin aynı anda basarsa
+  -- sadece biri 1 row etkiler, diğeri 0 row alır ve 'already_processed' döner
   UPDATE invite_requests
   SET status = 'approved', code = v_code, expires_at = v_expires_at, updated_at = now()
-  WHERE id = p_request_id;
+  WHERE id = p_request_id AND status = 'pending';
+
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+
+  IF v_rows_affected = 0 THEN
+    -- Başka bir admin zaten işlem yapmış
+    SELECT * INTO v_req FROM invite_requests WHERE id = p_request_id;
+    RETURN jsonb_build_object(
+      'error', 'invalid_status',
+      'current_status', v_req.status,
+      'message', 'Bu talep zaten işleme alınmış.'
+    );
+  END IF;
 
   INSERT INTO invite_codes (code, created_by, expires_at, used, email)
   VALUES (v_code, auth.uid(), v_expires_at, false, v_req.email)

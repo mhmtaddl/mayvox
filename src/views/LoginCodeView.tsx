@@ -23,6 +23,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
   const [error, setError] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   // Davet talebi state
   const [requestState, setRequestState] = useState<RequestState>('idle');
@@ -42,6 +43,14 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
+
+  // Bileşen ayrıldığında sessionStorage'ı temizle (çıkış/geri dönüşte eski veri kalmasın)
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem('invite_request_id');
+      sessionStorage.removeItem('invite_request_email');
+    };
+  }, []);
 
   // Sayfa açılınca sessionStorage'dan aktif talep varsa yükle
   useEffect(() => {
@@ -74,10 +83,9 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
       const result = await getInviteRequestStatus(requestId);
       if (!result || result.error) return;
       const st = result.status as RequestState;
-      if (st && st !== requestState) {
-        setRequestState(st);
-        if (result.expires_at) setExpiresAt(result.expires_at);
-      }
+      // expires_at'i her zaman güncelle (F5 sonrası countdown doğru görünsün)
+      if (result.expires_at) setExpiresAt(result.expires_at);
+      if (st && st !== requestState) setRequestState(st);
     };
     const id = setInterval(poll, 5000);
     return () => clearInterval(id);
@@ -90,7 +98,8 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
       return;
     }
     const tick = () => {
-      const s = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+      const s = Math.floor(remaining / 1000);
       setSecondsLeft(s);
       if (s <= 0 && requestState === 'pending') setRequestState('expired');
     };
@@ -106,7 +115,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
       return;
     }
     const tick = () => {
-      const s = Math.max(0, Math.floor((blockedUntil - Date.now()) / 1000));
+      const s = Math.floor(Math.max(0, new Date(blockedUntil).getTime() - Date.now()) / 1000);
       setBlockedSecondsLeft(s);
       if (s <= 0) setRequestState('idle');
     };
@@ -114,6 +123,13 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [blockedUntil, requestState, permanentlyBlocked]);
+
+  // Kod onaylandığında input'a fokusla
+  useEffect(() => {
+    if (requestState === 'approved') {
+      setTimeout(() => codeInputRef.current?.focus(), 50);
+    }
+  }, [requestState]);
 
   const handleRequestCode = async () => {
     if (!isValidEmail(email)) {
@@ -168,6 +184,16 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
     setExpiresAt(null);
     setRequestState('idle');
     setError(null);
+  };
+
+  // Süresi dolunca veya reddedilince direkt yeni talep gönder (1 tık)
+  const retryRequest = async () => {
+    sessionStorage.removeItem('invite_request_id');
+    sessionStorage.removeItem('invite_request_email');
+    setRequestId(null);
+    setExpiresAt(null);
+    setError(null);
+    await handleRequestCode();
   };
 
   const onSubmit = async () => {
@@ -265,6 +291,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
             <div className="relative">
               <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={codeInputRef}
                 type="text"
                 placeholder="Admin'den aldığınız kodu girin"
                 value={code}
@@ -358,7 +385,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                     <AlertCircle size={13} />
                     Talebiniz reddedildi.
                   </span>
-                  <button onClick={clearRequest} className="text-[10px] underline hover:text-red-300 transition-colors">
+                  <button onClick={retryRequest} className="text-[10px] underline hover:text-red-300 transition-colors">
                     Tekrar Dene
                   </button>
                 </motion.div>
@@ -376,7 +403,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
                     <Clock size={13} />
                     Talep süresi doldu.
                   </span>
-                  <button onClick={clearRequest} className="text-[10px] underline hover:text-amber-300 transition-colors">
+                  <button onClick={retryRequest} className="text-[10px] underline hover:text-amber-300 transition-colors">
                     Yeni Talep
                   </button>
                 </motion.div>

@@ -19,13 +19,9 @@ import {
   Camera,
   KeyRound,
   X,
-  Mail,
-  Send,
-  Ban,
-  Loader,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, InviteRequest } from '../types';
+import { User } from '../types';
 import { THEMES } from '../constants';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../lib/supabase';
 import AvatarCropModal from '../components/AvatarCropModal';
@@ -33,144 +29,6 @@ import { previewSound, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
 import { useSettings } from '../contexts/SettingsCtx';
-
-// ─── Davet Talepleri Alt Bölümü (Admin) ──────────────────────────────────────
-function InviteRequestsSection({
-  requests,
-  onSendCode,
-  onReject,
-}: {
-  requests: InviteRequest[];
-  onSendCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
-  onReject: (req: InviteRequest) => Promise<void>;
-}) {
-  return (
-    <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-accent)]/20 rounded-2xl p-6 mb-0">
-      <div className="flex items-center gap-2 mb-4">
-        <Mail className="text-[var(--theme-accent)]" size={18} />
-        <h4 className="font-bold text-[var(--theme-text)]">Bekleyen Davet Talepleri</h4>
-        <span className="text-[10px] bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] font-bold px-2 py-0.5 rounded-full border border-[var(--theme-accent)]/20">
-          {requests.length}
-        </span>
-      </div>
-      <div className="space-y-3">
-        {requests.map((req, i) => (
-          <React.Fragment key={req.id}>
-            <InviteRequestRow req={req} index={i + 1} onSendCode={onSendCode} onReject={onReject} />
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function InviteRequestRow({
-  req,
-  index,
-  onSendCode,
-  onReject,
-}: {
-  req: InviteRequest;
-  index: number;
-  onSendCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
-  onReject: (req: InviteRequest) => Promise<void>;
-}) {
-  const [sending, setSending] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [sentCode, setSentCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-
-  useEffect(() => {
-    if (!req.expiresAt) return;
-    const tick = () => {
-      const s = Math.max(0, Math.floor((req.expiresAt - Date.now()) / 1000));
-      setSecondsLeft(s);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [req.expiresAt]);
-
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-
-  const handleSend = async () => {
-    setSending(true);
-    const result = await onSendCode(req);
-    setSending(false);
-    if (result.code) setSentCode(result.code);
-  };
-
-  const handleReject = async () => {
-    setRejecting(true);
-    await onReject(req);
-    setRejecting(false);
-  };
-
-  const handleCopy = () => {
-    if (!sentCode) return;
-    navigator.clipboard.writeText(sentCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="flex items-center gap-3 p-3 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)]">
-      <div className="w-6 h-6 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[10px] font-black text-[var(--theme-accent)] flex-shrink-0">
-        {index}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-[var(--theme-text)] truncate">{req.email}</p>
-        <div className="flex items-center gap-3 mt-0.5">
-          {sentCode ? (
-            <span className="text-[10px] text-emerald-500 font-bold">✓ Gönderildi</span>
-          ) : (
-            <span className={`text-[10px] font-bold ${req.status === 'approved' ? 'text-emerald-500' : 'text-[var(--theme-secondary-text)]'}`}>
-              {req.status === 'approved' ? 'Onaylandı' : 'Bekliyor'}
-            </span>
-          )}
-          {secondsLeft > 0 && (
-            <span className={`text-[10px] font-bold flex items-center gap-0.5 ${secondsLeft < 60 ? 'text-red-500 animate-pulse' : 'text-[var(--theme-secondary-text)]'}`}>
-              <Clock size={10} />
-              {fmt(secondsLeft)}
-            </span>
-          )}
-          {req.rejectionCount > 0 && (
-            <span className="text-[10px] text-amber-500">{req.rejectionCount}. talep</span>
-          )}
-        </div>
-        {sentCode && (
-          <div className="flex items-center gap-2 mt-1.5 bg-[var(--theme-sidebar)] rounded-lg px-2 py-1 border border-[var(--theme-border)]">
-            <span className="font-mono text-xs font-black tracking-wider text-[var(--theme-text)] flex-1 select-all">{sentCode}</span>
-            <button onClick={handleCopy} className="text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors">
-              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-            </button>
-          </div>
-        )}
-      </div>
-      {!sentCode && (
-        <div className="flex gap-2 flex-shrink-0">
-          <button
-            onClick={handleSend}
-            disabled={sending || rejecting}
-            className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
-          >
-            {sending ? <Loader size={11} className="animate-spin" /> : <Send size={11} />}
-            Gönder
-          </button>
-          <button
-            onClick={handleReject}
-            disabled={sending || rejecting}
-            className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-red-500 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-          >
-            {rejecting ? <Loader size={11} className="animate-spin" /> : <Ban size={11} />}
-            Reddet
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function SettingsView() {
   const {
@@ -221,9 +79,6 @@ export default function SettingsView() {
     formatTime,
     passwordResetRequests,
     handleAdminManualReset,
-    inviteRequests,
-    handleSendInviteCode,
-    handleRejectInvite,
   } = useAppState();
 
   // Memoized admin user list
@@ -866,15 +721,6 @@ export default function SettingsView() {
                 </h3>
               </div>
 
-              {/* Bekleyen Davet Talepleri */}
-              {inviteRequests.length > 0 && (
-                <InviteRequestsSection
-                  requests={inviteRequests}
-                  onSendCode={handleSendInviteCode}
-                  onReject={handleRejectInvite}
-                />
-              )}
-
               <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6">
                 <div className="flex flex-col gap-6">
                   <div className="flex items-center justify-between">
@@ -951,7 +797,12 @@ export default function SettingsView() {
                                 : user.avatar}
                             </div>
                             <div>
-                              <div className="text-sm font-bold text-[var(--theme-text)]">{user.firstName} {user.lastName}</div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-bold text-[var(--theme-text)]">{user.firstName} {user.lastName}</div>
+                                {user.appVersion && (
+                                  <span className="text-[9px] font-medium text-[var(--theme-secondary-text)]/60">v{user.appVersion}</span>
+                                )}
+                              </div>
                               <div className="flex gap-2 mt-1">
                                 {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Susturuldu</span>}
                                 {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20">Konuşma Yasaklı</span>}

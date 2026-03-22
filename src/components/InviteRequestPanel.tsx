@@ -26,7 +26,7 @@ function RequestCard({
   useEffect(() => {
     if (!req.expiresAt) return;
     const tick = () => {
-      const s = Math.max(0, Math.floor((req.expiresAt - Date.now()) / 1000));
+      const s = Math.floor(Math.max(0, new Date(req.expiresAt).getTime() - Date.now()) / 1000);
       setSecondsLeft(s);
     };
     tick();

@@ -153,7 +153,6 @@ export default function ChatView() {
 
   // Davet talebi bildirim baloncuğu
   const [showInvitePanel, setShowInvitePanel] = useState(false);
-  const invitePanelRef = useRef<HTMLDivElement>(null);
 
   // Yeni istek gelince baloncuğu aç ve 15sn timer başlat
   useEffect(() => {
@@ -170,28 +169,18 @@ export default function ChatView() {
     setShowInvitePanel(true);
   }, [inviteRequests.length]);
 
-  // Dışarı tıklayınca kapat
+  // Dışarı tıklayınca kapat (her iki panel de resetPanelRef içinde)
   useEffect(() => {
-    if (!showResetPanel) return;
+    if (!showResetPanel && !showInvitePanel) return;
     const handler = (e: MouseEvent) => {
       if (resetPanelRef.current && !resetPanelRef.current.contains(e.target as Node)) {
         setShowResetPanel(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showResetPanel]);
-
-  useEffect(() => {
-    if (!showInvitePanel) return;
-    const handler = (e: MouseEvent) => {
-      if (invitePanelRef.current && !invitePanelRef.current.contains(e.target as Node)) {
         setShowInvitePanel(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showInvitePanel]);
+  }, [showResetPanel, showInvitePanel]);
 
   // Admin mute geri sayımı
   const isAdminMuted = currentUser.isMuted === true;
@@ -1457,9 +1446,9 @@ export default function ChatView() {
         <div className="w-64 px-4 flex items-center justify-evenly h-full">
           {renderConnectionQuality()}
 
-          {/* Davet talebi bildirim baloncuğu (admin) */}
-          {currentUser.isAdmin && (
-            <div className="relative" ref={invitePanelRef}>
+          <div className="relative" ref={resetPanelRef}>
+            {/* Davet talebi bildirim baloncuğu (admin) */}
+            {currentUser.isAdmin && (
               <AnimatePresence>
                 {showInvitePanel && inviteRequests.length > 0 && (
                   <motion.div
@@ -1468,7 +1457,7 @@ export default function ChatView() {
                     exit={{ opacity: 0, y: 8, scale: 0.95 }}
                     className="absolute bottom-full mb-3 right-0 w-72 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-50 overflow-hidden"
                   >
-                    <div className="absolute -bottom-[7px] right-4 w-3.5 h-3.5 bg-[var(--theme-bg)] border-r border-b border-[var(--theme-border)] rotate-45" />
+                    <div className="absolute -bottom-[7px] right-6 w-3.5 h-3.5 bg-[var(--theme-bg)] border-r border-b border-[var(--theme-border)] rotate-45" />
                     <div className="px-3 py-2 border-b border-[var(--theme-border)] flex items-center gap-1.5">
                       <Mail size={12} className="text-[var(--theme-accent)]" />
                       <span className="text-[10px] font-bold text-[var(--theme-text)] uppercase tracking-wide">Davet Talepleri</span>
@@ -1484,31 +1473,8 @@ export default function ChatView() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              <button
-                onClick={() => setShowInvitePanel(!showInvitePanel)}
-                className={`relative flex items-center gap-1.5 transition-all font-bold text-[10px] uppercase tracking-widest ${
-                  inviteRequests.length > 0
-                    ? 'text-[var(--theme-accent)]'
-                    : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
-                }`}
-              >
-                <span className="relative">
-                  <Mail size={14} />
-                  {inviteRequests.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--theme-accent)] rounded-full animate-pulse" />
-                  )}
-                </span>
-                Davetler
-                {inviteRequests.length > 0 && (
-                  <span className="text-[9px] bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] px-1 py-0.5 rounded font-black">
-                    {inviteRequests.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
+            )}
 
-          <div className="relative" ref={resetPanelRef}>
             {/* Şifre sıfırlama bildirim baloncuğu */}
             <AnimatePresence>
               {showResetPanel && passwordResetRequests.length > 0 && (
@@ -1569,9 +1535,7 @@ export default function ChatView() {
             onClick={handleLogout}
             className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-red-500 transition-all font-bold text-[10px] uppercase tracking-widest group"
           >
-            <button onClick={() => handleLogout()}>
-              <LogOut size={18} />
-            </button>
+            <LogOut size={18} />
             Çıkış
           </button>
         </div>

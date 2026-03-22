@@ -185,18 +185,6 @@ export const saveInviteCode = async (code: string, expiresAt: number) => {
   });
 };
 
-// VERIFY INVITE CODE (kayıt öncesi anonim doğrulama)
-export const verifyInviteCode = async (code: string): Promise<boolean> => {
-  const { data } = await supabase.rpc('verify_invite_code', { p_code: code.toUpperCase() });
-  return !!data;
-};
-
-// USE INVITE CODE (kayıt sonrası kodu geçersiz kıl)
-export const useInviteCode = async (code: string): Promise<boolean> => {
-  const { data } = await supabase.rpc('use_invite_code', { p_code: code.toUpperCase() });
-  return !!data;
-};
-
 // ─── Davet Talebi Sistemi ────────────────────────────────────────────────────
 
 // DAVET KODU İSTE (anon)
@@ -291,13 +279,21 @@ export const useInviteCodeForEmail = async (code: string, email: string): Promis
   return !!data;
 };
 
-// SEND INVITE EMAIL via Supabase Edge Function
+// SEND INVITE EMAIL via token server
 export const sendInviteEmail = async (email: string, code: string, expiresAt: number): Promise<boolean> => {
   try {
-    const { error } = await supabase.functions.invoke('send-invite-email', {
-      body: { email, code, expiresAt },
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return false;
+    const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL as string;
+    const res = await fetch(`${tokenServerUrl}/api/send-invite-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ email, code, expiresAt }),
     });
-    return !error;
+    return res.ok;
   } catch {
     return false;
   }

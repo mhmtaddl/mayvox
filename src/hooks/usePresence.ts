@@ -50,7 +50,7 @@ export function usePresence({
   const onPasswordResetUpdateRef = useRef(onPasswordResetUpdate);
   onPasswordResetUpdateRef.current = onPasswordResetUpdate;
 
-  const startPresence = (user: User) => {
+  const startPresence = (user: User, appVersion?: string) => {
     if (presenceChannelRef.current) {
       presenceChannelRef.current.unsubscribe();
     }
@@ -61,15 +61,18 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string }>();
-      const onlineIds = new Set(
-        Object.values(state).flatMap(s => s.map(p => p.userId)),
+      const state = channel.presenceState<{ userId: string; appVersion?: string }>();
+      const presenceData = Object.values(state).flatMap(s => s);
+      const onlineIds = new Set(presenceData.map(p => p.userId));
+      const versionMap = new Map(
+        presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
       );
       setAllUsers(prev =>
         prev.map(
           u =>
             ({
               ...u,
+              appVersion: versionMap.get(u.id) ?? u.appVersion,
               status:
                 u.id === user.id
                   ? 'online'
@@ -197,7 +200,7 @@ export function usePresence({
 
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id });
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '' });
       }
     });
   };
