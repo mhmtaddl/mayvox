@@ -261,5 +261,5 @@ export function usePresence({
     );
   };
 
-  return { presenceChannelRef, startPresence, stopPresence, resyncPresence };
+  return { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence };
 }

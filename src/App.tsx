@@ -313,7 +313,7 @@ export default function App() {
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
-  const { presenceChannelRef, startPresence, stopPresence, resyncPresence } = usePresence({
+  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
@@ -512,9 +512,9 @@ export default function App() {
       const { data: allProfiles } = await getAllProfiles();
       if (allProfiles) {
         setAllUsers((prev) => {
-          const onlineIds = new Set(prev.map((u) => u.id));
+          const prevMap = new Map(prev.map((u) => [u.id, u]));
           const offlineUsers: User[] = allProfiles
-            .filter((p: DbProfile) => !onlineIds.has(p.id))
+            .filter((p: DbProfile) => !prevMap.has(p.id))
             .map((p: DbProfile) => ({
               id: p.id,
               email: p.email || '',
@@ -529,6 +529,7 @@ export default function App() {
               isPrimaryAdmin: p.is_primary_admin || false,
               isMuted: p.is_muted || false,
               isVoiceBanned: p.is_voice_banned || false,
+              appVersion: knownVersionsRef.current.get(p.id),
             }));
           return [...prev, ...offlineUsers];
         });
@@ -579,6 +580,11 @@ export default function App() {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Settings açıldığında presence versiyon bilgisini hemen tazele
+  useEffect(() => {
+    if (view === 'settings') resyncPresenceRef.current();
+  }, [view]);
 
   // ── Global click listener to close all popups/menus ──────────────────────
   useEffect(() => {
@@ -1201,10 +1207,20 @@ export default function App() {
             isPrimaryAdmin: p.is_primary_admin || false,
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
+            appVersion: knownVersionsRef.current.get(p.id),
           }))
       : [];
 
-    setAllUsers([loggedInUser, ...offlineUsers]);
+    setAllUsers(prev => {
+      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
+      return [
+        loggedInUser,
+        ...offlineUsers.map(u => ({
+          ...u,
+          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
+        })),
+      ];
+    });
     resyncPresence();
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
@@ -1598,10 +1614,20 @@ export default function App() {
             isPrimaryAdmin: p.is_primary_admin || false,
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
+            appVersion: knownVersionsRef.current.get(p.id),
           }))
       : [];
 
-    setAllUsers([newUser, ...regOfflineUsers]);
+    setAllUsers(prev => {
+      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
+      return [
+        newUser,
+        ...regOfflineUsers.map(u => ({
+          ...u,
+          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
+        })),
+      ];
+    });
     resyncPresence();
     setView('chat');
     setLoginNick('');

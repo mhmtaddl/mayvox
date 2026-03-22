@@ -84,7 +84,17 @@ export default function SettingsView() {
     inviteRequests,
     handleSendInviteCode,
     handleRejectInvite,
+    appVersion: currentAppVersion,
   } = useAppState();
+
+  const isOutdated = (userVersion: string, appVer: string): boolean => {
+    const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
+    const [uMaj, uMin, uPat] = parse(userVersion);
+    const [aMaj, aMin, aPat] = parse(appVer);
+    if (uMaj !== aMaj) return uMaj < aMaj;
+    if (uMin !== aMin) return uMin < aMin;
+    return uPat < aPat;
+  };
 
   // Memoized admin user list
   const otherUsers = useMemo(
@@ -828,9 +838,14 @@ export default function SettingsView() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <div className="text-sm font-bold text-[var(--theme-text)]">{user.firstName} {user.lastName}</div>
-                                {user.appVersion && (
-                                  <span className="text-[9px] font-medium text-[var(--theme-secondary-text)]/60">v{user.appVersion}</span>
-                                )}
+                                {user.appVersion && (() => {
+                                  const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
+                                  return (
+                                    <span className={`text-[9px] font-medium ${outdated ? 'text-red-400 animate-pulse' : 'text-green-400'}`}>
+                                      v{user.appVersion}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="flex gap-2 mt-1">
                                 {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Susturuldu</span>}
