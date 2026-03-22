@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { AppView, User, VoiceChannel } from '../types';
+import { AppView, User, VoiceChannel, InviteRequest } from '../types';
 import { supabase } from '../lib/supabase';
 import type { ResetRequest } from '../components/PasswordResetPanel';
 
@@ -87,6 +87,11 @@ export interface AppStateContextType {
   handleApproveReset: (req: ResetRequest) => Promise<void>;
   handleDismissReset: (userId: string) => Promise<void>;
   handleAdminManualReset: (userId: string, userName: string, userEmail: string) => Promise<void>;
+
+  // Davet talebi yönetimi (admin)
+  inviteRequests: InviteRequest[];
+  handleSendInviteCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
+  handleRejectInvite: (req: InviteRequest) => Promise<void>;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

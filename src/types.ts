@@ -40,6 +40,17 @@ export interface VoiceChannel {
 
 export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-password' | 'register-details' | 'chat' | 'settings';
 
+export interface InviteRequest {
+  id: string;
+  email: string;
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'used';
+  expiresAt: number;
+  rejectionCount: number;
+  blockedUntil?: number | null;
+  permanentlyBlocked?: boolean;
+  createdAt: string;
+}
+
 export interface Theme {
   id: string;
   name: string;

@@ -172,10 +172,11 @@ export const deleteChannel = async (id: string) => {
   return await supabase.from('channels').delete().eq('id', id);
 };
 
-// SAVE INVITE CODE (eski tüm kodları siler, yeni kodu kaydeder)
+// SAVE INVITE CODE (eski global kodları siler, email'e bağlı kodları korur)
 export const saveInviteCode = async (code: string, expiresAt: number) => {
   const { data: { session } } = await supabase.auth.getSession();
-  await supabase.from('invite_codes').delete().neq('code', '');
+  // Sadece email bağlı olmayan (global) kodları sil
+  await supabase.from('invite_codes').delete().is('email', null);
   return await supabase.from('invite_codes').insert({
     code: code.toUpperCase(),
     created_by: session?.user?.id,
@@ -194,6 +195,112 @@ export const verifyInviteCode = async (code: string): Promise<boolean> => {
 export const useInviteCode = async (code: string): Promise<boolean> => {
   const { data } = await supabase.rpc('use_invite_code', { p_code: code.toUpperCase() });
   return !!data;
+};
+
+// ─── Davet Talebi Sistemi ────────────────────────────────────────────────────
+
+// DAVET KODU İSTE (anon)
+export const requestInvite = async (email: string): Promise<{
+  ok?: boolean;
+  request_id?: string;
+  expires_at?: number;
+  error?: string;
+  message?: string;
+  blocked_until?: number;
+  rejection_count?: number;
+  status?: string;
+}> => {
+  const { data, error } = await supabase.rpc('request_invite', { p_email: email });
+  if (error) throw error;
+  return data;
+};
+
+// DAVET TALEBİ DURUMU (anon — UUID capability token)
+export const getInviteRequestStatus = async (requestId: string): Promise<{
+  status?: string;
+  email?: string;
+  expires_at?: number;
+  rejection_count?: number;
+  blocked_until?: number | null;
+  permanently_blocked?: boolean;
+  error?: string;
+} | null> => {
+  const { data, error } = await supabase.rpc('get_invite_request_status', { p_request_id: requestId });
+  if (error) return null;
+  return data;
+};
+
+// ADMIN: KOD GÖNDER
+export const adminSendInviteCode = async (requestId: string): Promise<{
+  ok?: boolean;
+  code?: string;
+  expires_at?: number;
+  email?: string;
+  error?: string;
+  current_status?: string;
+}> => {
+  const { data, error } = await supabase.rpc('admin_send_invite_code', { p_request_id: requestId });
+  if (error) throw error;
+  return data;
+};
+
+// ADMIN: DAVETI REDDET
+export const adminRejectInvite = async (requestId: string): Promise<{
+  ok?: boolean;
+  rejection_count?: number;
+  blocked_until?: number | null;
+  permanently_blocked?: boolean;
+  error?: string;
+}> => {
+  const { data, error } = await supabase.rpc('admin_reject_invite', { p_request_id: requestId });
+  if (error) throw error;
+  return data;
+};
+
+// ADMIN: BEKLEYENLERİ LİSTELE
+export const getPendingInviteRequests = async (): Promise<Array<{
+  id: string;
+  email: string;
+  status: string;
+  expires_at: number;
+  created_at: string;
+  rejection_count: number;
+  blocked_until?: number | null;
+  permanently_blocked: boolean;
+}>> => {
+  const { data, error } = await supabase.rpc('get_pending_invite_requests');
+  if (error) return [];
+  return Array.isArray(data) ? data : [];
+};
+
+// VERIFY INVITE CODE FOR EMAIL (email bağlamalı, anon)
+export const verifyInviteCodeForEmail = async (code: string, email: string): Promise<boolean> => {
+  const { data } = await supabase.rpc('verify_invite_code_for_email', {
+    p_code: code.toUpperCase(),
+    p_email: email,
+  });
+  return !!data;
+};
+
+// USE INVITE CODE FOR EMAIL (email bağlamalı, anon)
+export const useInviteCodeForEmail = async (code: string, email: string): Promise<boolean> => {
+  const { data } = await supabase.rpc('use_invite_code_for_email', {
+    p_code: code.toUpperCase(),
+    p_email: email,
+  });
+  return !!data;
+};
+
+// SEND INVITE EMAIL via Supabase Edge Function
+export const sendInviteEmail = async (email: string, code: string, expiresAt: number): Promise<boolean> => {
+  try {
+    const { error } = await supabase.functions.invoke('send-invite-email', {
+      body: { email, code, expiresAt },
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 };
 
 // UPLOAD AVATAR — Supabase Storage "avatars" bucket'ına yükler, public URL döner

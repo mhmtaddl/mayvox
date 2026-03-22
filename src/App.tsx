@@ -25,9 +25,13 @@ import {
   verifyChannelPassword,
   setChannelPassword,
   saveInviteCode,
-  verifyInviteCode,
-  useInviteCode,
+  verifyInviteCodeForEmail,
+  useInviteCodeForEmail,
   getPendingPasswordResets,
+  getPendingInviteRequests,
+  adminSendInviteCode,
+  adminRejectInvite,
+  sendInviteEmail,
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
@@ -46,6 +50,7 @@ type DbChannel = {
 };
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
+import type { InviteRequest } from './types';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
 import { UserContext, UserContextType } from './contexts/UserContext';
 import { ChannelContext, ChannelContextType } from './contexts/ChannelContext';
@@ -187,6 +192,7 @@ export default function App() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
   const [passwordResetRequests, setPasswordResetRequests] = useState<ResetRequest[]>([]);
+  const [inviteRequests, setInviteRequests] = useState<InviteRequest[]>([]);
 
   useEffect(() => {
     const w = window as Window & {
@@ -1199,7 +1205,7 @@ export default function App() {
       setShowForcePasswordChange(true);
     }
 
-    // Admin ise bekleyen şifre sıfırlama isteklerini yükle
+    // Admin ise bekleyen şifre sıfırlama ve davet isteklerini yükle
     if (loggedInUser.isAdmin || loggedInUser.isPrimaryAdmin) {
       const { data: pending } = await getPendingPasswordResets();
       if (pending) {
@@ -1207,6 +1213,19 @@ export default function App() {
           userId: p.id,
           userName: p.name,
           userEmail: p.email,
+        })));
+      }
+      const pendingInvites = await getPendingInviteRequests();
+      if (pendingInvites.length > 0) {
+        setInviteRequests(pendingInvites.map(r => ({
+          id: r.id,
+          email: r.email,
+          status: r.status as InviteRequest['status'],
+          expiresAt: r.expires_at,
+          rejectionCount: r.rejection_count,
+          blockedUntil: r.blocked_until,
+          permanentlyBlocked: r.permanently_blocked,
+          createdAt: r.created_at,
         })));
       }
     }
@@ -1220,6 +1239,7 @@ export default function App() {
     setView('login-selection');
     setActiveChannel(null);
     setPasswordResetRequests([]);
+    setInviteRequests([]);
   };
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
@@ -1241,6 +1261,59 @@ export default function App() {
     const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
   }, [currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
+
+  // ── Admin: bekleyen davet talep isteklerini 30sn'de bir kontrol et + Realtime
+  useEffect(() => {
+    if (!currentUser.id || (!currentUser.isAdmin && !currentUser.isPrimaryAdmin)) return;
+    if (view !== 'chat' && view !== 'settings') return;
+
+    const refreshInvites = async () => {
+      const requests = await getPendingInviteRequests();
+      setInviteRequests(requests.map(r => ({
+        id: r.id,
+        email: r.email,
+        status: r.status as InviteRequest['status'],
+        expiresAt: r.expires_at,
+        rejectionCount: r.rejection_count,
+        blockedUntil: r.blocked_until,
+        permanentlyBlocked: r.permanently_blocked,
+        createdAt: r.created_at,
+      })));
+    };
+
+    const interval = setInterval(refreshInvites, 30000);
+
+    // Supabase Realtime: yeni invite_request INSERT'lerini anlık al
+    const channel = supabaseClient
+      .channel('invite-requests-admin-rt')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'invite_requests' },
+        (payload) => {
+          const row = payload.new as {
+            id: string; email: string; status: string;
+            expires_at: number; created_at: string;
+          };
+          setInviteRequests(prev => {
+            if (prev.find(r => r.id === row.id)) return prev;
+            return [...prev, {
+              id: row.id,
+              email: row.email,
+              status: row.status as InviteRequest['status'],
+              expiresAt: row.expires_at,
+              rejectionCount: 0,
+              createdAt: row.created_at,
+            }];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      channel.unsubscribe();
+    };
+  }, [currentUser.id, currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
 
   const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
 
@@ -1302,11 +1375,39 @@ export default function App() {
     await handleApproveReset({ userId, userName, userEmail });
   };
 
+  // ── Admin: Davet kodu gönder
+  const handleSendInviteCode = async (req: InviteRequest): Promise<{ code?: string; error?: string }> => {
+    try {
+      const result = await adminSendInviteCode(req.id);
+      if (result.error) {
+        if (result.error === 'invalid_status') return { error: 'Bu talep artık beklemede değil.' };
+        return { error: result.error };
+      }
+      if (!result.ok || !result.code) return { error: 'Kod üretilemedi.' };
+      // Talebi listeden kaldır
+      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+      // E-posta gönder (başarısız olsa bile kod üretildi)
+      sendInviteEmail(req.email, result.code, result.expires_at ?? 0);
+      return { code: result.code };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Bilinmeyen hata' };
+    }
+  };
+
+  // ── Admin: Daveti reddet
+  const handleRejectInvite = async (req: InviteRequest): Promise<void> => {
+    try {
+      await adminRejectInvite(req.id);
+    } finally {
+      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+    }
+  };
+
   const handleRegister = async (code: string, nick: string, password: string, repeatPwd: string) => {
     if (!code.trim()) throw new Error('Davet kodunu giriniz!');
     if (!nick || !password) throw new Error('E-posta ve parola giriniz!');
     if (password !== repeatPwd) throw new Error('Parolalar eşleşmiyor!');
-    const isValid = await verifyInviteCode(code.trim());
+    const isValid = await verifyInviteCodeForEmail(code.trim(), nick);
     if (!isValid) throw new Error('Geçersiz veya süresi dolmuş davet kodu!');
     pendingInviteCodeRef.current = code.trim().toUpperCase();
     setLoginNick(nick);
@@ -1346,7 +1447,7 @@ export default function App() {
     }
 
     if (pendingInviteCodeRef.current) {
-      await useInviteCode(pendingInviteCodeRef.current);
+      await useInviteCodeForEmail(pendingInviteCodeRef.current, loginNick);
       pendingInviteCodeRef.current = null;
     }
 
@@ -1574,6 +1675,9 @@ export default function App() {
     handleApproveReset,
     handleDismissReset,
     handleAdminManualReset,
+    inviteRequests,
+    handleSendInviteCode,
+    handleRejectInvite,
   };
 
   const audioValue: AudioContextType = {

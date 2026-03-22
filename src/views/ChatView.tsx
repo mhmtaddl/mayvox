@@ -32,6 +32,8 @@ import { useSettings } from '../contexts/SettingsCtx';
 import SettingsView from './SettingsView';
 import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
+import InviteRequestPanel from '../components/InviteRequestPanel';
+import { Mail } from 'lucide-react';
 
 export default function ChatView() {
   const {
@@ -120,6 +122,9 @@ export default function ChatView() {
     passwordResetRequests,
     handleApproveReset,
     handleDismissReset,
+    inviteRequests,
+    handleSendInviteCode,
+    handleRejectInvite,
   } = useAppState();
 
   const {
@@ -146,6 +151,10 @@ export default function ChatView() {
   const resetPanelRef = useRef<HTMLDivElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Davet talebi bildirim baloncuğu
+  const [showInvitePanel, setShowInvitePanel] = useState(false);
+  const invitePanelRef = useRef<HTMLDivElement>(null);
+
   // Yeni istek gelince baloncuğu aç ve 15sn timer başlat
   useEffect(() => {
     if (passwordResetRequests.length === 0) { setShowResetPanel(false); return; }
@@ -154,6 +163,12 @@ export default function ChatView() {
     resetTimerRef.current = setTimeout(() => setShowResetPanel(false), 15000);
     return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
   }, [passwordResetRequests.length]);
+
+  // Yeni davet talebi gelince baloncuğu aç
+  useEffect(() => {
+    if (inviteRequests.length === 0) { setShowInvitePanel(false); return; }
+    setShowInvitePanel(true);
+  }, [inviteRequests.length]);
 
   // Dışarı tıklayınca kapat
   useEffect(() => {
@@ -166,6 +181,17 @@ export default function ChatView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showResetPanel]);
+
+  useEffect(() => {
+    if (!showInvitePanel) return;
+    const handler = (e: MouseEvent) => {
+      if (invitePanelRef.current && !invitePanelRef.current.contains(e.target as Node)) {
+        setShowInvitePanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showInvitePanel]);
 
   // Admin mute geri sayımı
   const isAdminMuted = currentUser.isMuted === true;
@@ -1430,6 +1456,58 @@ export default function ChatView() {
 
         <div className="w-64 px-4 flex items-center justify-evenly h-full">
           {renderConnectionQuality()}
+
+          {/* Davet talebi bildirim baloncuğu (admin) */}
+          {currentUser.isAdmin && (
+            <div className="relative" ref={invitePanelRef}>
+              <AnimatePresence>
+                {showInvitePanel && inviteRequests.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                    className="absolute bottom-full mb-3 right-0 w-72 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-50 overflow-hidden"
+                  >
+                    <div className="absolute -bottom-[7px] right-4 w-3.5 h-3.5 bg-[var(--theme-bg)] border-r border-b border-[var(--theme-border)] rotate-45" />
+                    <div className="px-3 py-2 border-b border-[var(--theme-border)] flex items-center gap-1.5">
+                      <Mail size={12} className="text-[var(--theme-accent)]" />
+                      <span className="text-[10px] font-bold text-[var(--theme-text)] uppercase tracking-wide">Davet Talepleri</span>
+                      <span className="ml-auto text-[9px] bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] font-bold px-1.5 py-0.5 rounded-full">{inviteRequests.length}</span>
+                    </div>
+                    <div className="divide-y divide-[var(--theme-border)] max-h-80 overflow-y-auto custom-scrollbar">
+                      <InviteRequestPanel
+                        requests={inviteRequests}
+                        onSendCode={handleSendInviteCode}
+                        onReject={handleRejectInvite}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <button
+                onClick={() => setShowInvitePanel(!showInvitePanel)}
+                className={`relative flex items-center gap-1.5 transition-all font-bold text-[10px] uppercase tracking-widest ${
+                  inviteRequests.length > 0
+                    ? 'text-[var(--theme-accent)]'
+                    : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
+                }`}
+              >
+                <span className="relative">
+                  <Mail size={14} />
+                  {inviteRequests.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--theme-accent)] rounded-full animate-pulse" />
+                  )}
+                </span>
+                Davetler
+                {inviteRequests.length > 0 && (
+                  <span className="text-[9px] bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] px-1 py-0.5 rounded font-black">
+                    {inviteRequests.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
           <div className="relative" ref={resetPanelRef}>
             {/* Şifre sıfırlama bildirim baloncuğu */}
             <AnimatePresence>
@@ -1480,7 +1558,7 @@ export default function ChatView() {
             >
               <span className="relative">
                 <Settings size={14} className={`transition-transform duration-300 ${view === 'settings' ? 'rotate-90' : 'group-hover:rotate-90'}`} />
-                {passwordResetRequests.length > 0 && (
+                {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
                 )}
               </span>
