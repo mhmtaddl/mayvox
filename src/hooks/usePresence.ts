@@ -40,6 +40,11 @@ export function usePresence({
 }: Props) {
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
 
+  // Persistent cross-render cache: userId → appVersion
+  // Populated by every presence sync/join event so resyncPresence can fall back to it
+  // even when presenceState() hasn't populated yet (race condition fix).
+  const knownVersionsRef = useRef<Map<string, string>>(new Map());
+
   // Use a ref so the kick handler always calls the latest disconnectFromLiveKit
   const disconnectRef = useRef(disconnectFromLiveKit);
   disconnectRef.current = disconnectFromLiveKit;
@@ -67,12 +72,17 @@ export function usePresence({
       const versionMap = new Map(
         presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
       );
+
+      // Persist to cross-render cache so resyncPresence can use it even if
+      // presenceState() is empty at call time (race condition fix).
+      versionMap.forEach((v, id) => knownVersionsRef.current.set(id, v));
+
       setAllUsers(prev =>
         prev.map(
           u =>
             ({
               ...u,
-              appVersion: versionMap.get(u.id) ?? u.appVersion,
+              appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
               status:
                 u.id === user.id
                   ? 'online'
@@ -218,19 +228,33 @@ export function usePresence({
     const state = channel.presenceState<{ userId: string; appVersion?: string }>();
     const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string }[];
     const onlineIds = new Set(presenceData.map(p => p.userId));
-    const versionMap = new Map(
-      presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
-    );
-    if (onlineIds.size === 0) return;
+
+    // Build merged version map: fresh presenceState takes priority, cache fills the gaps
+    // This breaks the race where presenceState() is empty right after subscription.
+    const mergedVersionMap = new Map(knownVersionsRef.current);
+    presenceData.filter(p => p.appVersion).forEach(p => {
+      mergedVersionMap.set(p.userId, p.appVersion!);
+      knownVersionsRef.current.set(p.userId, p.appVersion!);
+    });
+
+    // Only skip if both live state AND cache are empty (truly no data yet)
+    if (onlineIds.size === 0 && mergedVersionMap.size === 0) return;
+
     setAllUsers(prev =>
       prev.map(u => {
+        const cachedVersion = mergedVersionMap.get(u.id);
         if (onlineIds.has(u.id)) {
           return {
             ...u,
-            appVersion: versionMap.get(u.id) ?? u.appVersion,
+            appVersion: cachedVersion ?? u.appVersion,
             status: 'online' as const,
             statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
           };
+        }
+        // Even if not in live onlineIds, apply cached version if available
+        // (prevents version from disappearing during brief presence gaps)
+        if (cachedVersion && cachedVersion !== u.appVersion) {
+          return { ...u, appVersion: cachedVersion };
         }
         return u;
       }),

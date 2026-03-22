@@ -324,6 +324,11 @@ app.post('/api/send-invite-email', async (req, res) => {
     return res.status(403).json({ error: 'Admin yetkisi gerekli' });
   }
 
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[invite-email] RESEND_API_KEY tanımlı değil');
+    return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış (RESEND_API_KEY eksik)' });
+  }
+
   const { email, code, expiresAt } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'email ve code gerekli' });
 

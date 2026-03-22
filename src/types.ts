@@ -44,12 +44,14 @@ export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-pass
 export interface InviteRequest {
   id: string;
   email: string;
-  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'used';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'rejected' | 'expired' | 'used';
   expiresAt: number;
   rejectionCount: number;
   blockedUntil?: number | null;
   permanentlyBlocked?: boolean;
   createdAt: string;
+  lastSendError?: string;
+  sentCode?: string;
 }
 
 export interface Theme {

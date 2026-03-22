@@ -30,8 +30,11 @@ import {
   verifyInviteCodeForEmail,
   useInviteCodeForEmail,
   getPendingPasswordResets,
+  getAdminInviteRequests,
   getPendingInviteRequests,
   adminSendInviteCode,
+  adminMarkInviteSent,
+  adminMarkInviteFailed,
   adminRejectInvite,
   sendInviteEmail,
   supabase as supabaseClient,
@@ -1224,10 +1227,9 @@ export default function App() {
           userEmail: p.email,
         })));
       }
-      const pendingInvites = await getPendingInviteRequests();
-      const actionable = pendingInvites.filter(r => r.status === 'pending');
-      if (actionable.length > 0) {
-        setInviteRequests(actionable.map(r => ({
+      const adminInvites = await getAdminInviteRequests();
+      if (adminInvites.length > 0) {
+        setInviteRequests(adminInvites.map(r => ({
           id: r.id,
           email: r.email,
           status: r.status as InviteRequest['status'],
@@ -1236,6 +1238,8 @@ export default function App() {
           blockedUntil: r.blocked_until,
           permanentlyBlocked: r.permanently_blocked,
           createdAt: r.created_at,
+          lastSendError: r.last_send_error ?? undefined,
+          sentCode: r.code ?? undefined,
         })));
       }
     }
@@ -1283,24 +1287,33 @@ export default function App() {
     if (!currentUser.id || (!currentUser.isAdmin && !currentUser.isPrimaryAdmin)) return;
     if (view !== 'chat' && view !== 'settings') return;
 
+    const mapRow = (r: {
+      id: string; email: string; status: string; code?: string | null;
+      expires_at: number; created_at: string; rejection_count: number;
+      blocked_until?: number | null; permanently_blocked: boolean;
+      last_send_error?: string | null;
+    }): InviteRequest => ({
+      id: r.id,
+      email: r.email,
+      status: r.status as InviteRequest['status'],
+      expiresAt: r.expires_at,
+      rejectionCount: r.rejection_count,
+      blockedUntil: r.blocked_until,
+      permanentlyBlocked: r.permanently_blocked,
+      createdAt: r.created_at,
+      lastSendError: r.last_send_error ?? undefined,
+      sentCode: r.code ?? undefined,
+    });
+
     const refreshInvites = async () => {
-      const requests = await getPendingInviteRequests();
-      // Sadece aksiyon bekleyen (pending) talepler gösterilir
-      setInviteRequests(requests.filter(r => r.status === 'pending').map(r => ({
-        id: r.id,
-        email: r.email,
-        status: r.status as InviteRequest['status'],
-        expiresAt: r.expires_at,
-        rejectionCount: r.rejection_count,
-        blockedUntil: r.blocked_until,
-        permanentlyBlocked: r.permanently_blocked,
-        createdAt: r.created_at,
-      })));
+      const requests = await getAdminInviteRequests();
+      setInviteRequests(requests.map(mapRow));
     };
 
+    refreshInvites();
     const interval = setInterval(refreshInvites, 30000);
 
-    // Supabase Realtime: yeni invite_request INSERT'lerini anlık al
+    // Supabase Realtime: yeni INSERT ve statusun değiştiği UPDATE'leri anlık al
     const channel = supabaseClient
       .channel(`invite-requests-admin-rt-${currentUser.id}`)
       .on(
@@ -1308,8 +1321,9 @@ export default function App() {
         { event: 'INSERT', schema: 'public', table: 'invite_requests' },
         (payload) => {
           const row = payload.new as {
-            id: string; email: string; status: string;
+            id: string; email: string; status: string; code?: string | null;
             expires_at: number; created_at: string;
+            last_send_error?: string | null;
           };
           setInviteRequests(prev => {
             if (prev.find(r => r.id === row.id)) return prev;
@@ -1320,8 +1334,37 @@ export default function App() {
               expiresAt: row.expires_at,
               rejectionCount: 0,
               createdAt: row.created_at,
+              lastSendError: row.last_send_error ?? undefined,
+              sentCode: row.code ?? undefined,
             }];
           });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'invite_requests' },
+        (payload) => {
+          const row = payload.new as {
+            id: string; status: string; code?: string | null;
+            last_send_error?: string | null; expires_at: number;
+          };
+          // Artık aksiyon gerektirmeyen statüsleri listeden kaldır
+          const actionable = ['pending', 'sending', 'failed'];
+          if (!actionable.includes(row.status)) {
+            setInviteRequests(prev => prev.filter(r => r.id !== row.id));
+          } else {
+            setInviteRequests(prev => prev.map(r =>
+              r.id === row.id
+                ? {
+                    ...r,
+                    status: row.status as InviteRequest['status'],
+                    lastSendError: row.last_send_error ?? undefined,
+                    sentCode: row.code ?? undefined,
+                    expiresAt: row.expires_at,
+                  }
+                : r,
+            ));
+          }
         }
       )
       .subscribe();
@@ -1394,20 +1437,60 @@ export default function App() {
 
   // ── Admin: Davet kodu gönder
   const handleSendInviteCode = async (req: InviteRequest): Promise<{ code?: string; error?: string }> => {
+    let optimisticApplied = false;
+    let lockedCode: string | undefined;
     try {
+      // 1. DB'de atomik kilit: status → 'sending', yeni kod üret
       const result = await adminSendInviteCode(req.id);
       if (result.error) {
-        if (result.error === 'invalid_status') return { error: 'Bu talep artık beklemede değil.' };
+        if (result.error === 'invalid_status') return { error: 'Bu talep zaten işleme alınmış.' };
         return { error: result.error };
       }
       if (!result.ok || !result.code) return { error: 'Kod üretilemedi.' };
-      // Talebi listeden kaldır
-      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
-      // E-posta gönder (başarısız olsa bile kod üretildi)
-      sendInviteEmail(req.email, result.code, result.expires_at ?? 0);
-      return { code: result.code };
+      lockedCode = result.code;
+
+      // UI'da hemen 'sending' olarak işaretle (Realtime UPDATE gelmeden önce)
+      setInviteRequests(prev => prev.map(r =>
+        r.id === req.id
+          ? { ...r, status: 'sending' as const, sentCode: lockedCode }
+          : r,
+      ));
+      optimisticApplied = true;
+
+      // 2. E-posta gönder — await ile bekle
+      const emailResult = await sendInviteEmail(req.email, lockedCode, result.expires_at ?? 0);
+
+      if (emailResult.success) {
+        // 3a. Başarılı → 'sent' olarak işaretle, listeden kaldır
+        await adminMarkInviteSent(req.id);
+        setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+        return { code: lockedCode };
+      } else {
+        // 3b. Başarısız → 'failed' olarak kaydet, hata mesajını sakla
+        const errMsg = emailResult.error ?? 'E-posta gönderilemedi';
+        await adminMarkInviteFailed(req.id, errMsg);
+        setInviteRequests(prev => prev.map(r =>
+          r.id === req.id
+            ? { ...r, status: 'failed' as const, lastSendError: errMsg }
+            : r,
+        ));
+        return { code: lockedCode, error: errMsg };
+      }
     } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Bilinmeyen hata' };
+      const errMsg = e instanceof Error ? e.message : 'Bilinmeyen hata';
+      // Eğer optimistik 'sending' uygulandıysa ama sonrasında exception fırladıysa
+      // UI'ı 'failed' konumuna al; DB satırı 2 dakika sonra zaten timeout ile failed'a düşer.
+      if (optimisticApplied) {
+        setInviteRequests(prev => prev.map(r =>
+          r.id === req.id
+            ? { ...r, status: 'failed' as const, lastSendError: errMsg }
+            : r,
+        ));
+        if (lockedCode) {
+          adminMarkInviteFailed(req.id, errMsg).catch(() => {});
+        }
+      }
+      return { error: errMsg };
     }
   };
 

@@ -280,10 +280,14 @@ export const useInviteCodeForEmail = async (code: string, email: string): Promis
 };
 
 // SEND INVITE EMAIL via token server
-export const sendInviteEmail = async (email: string, code: string, expiresAt: number): Promise<boolean> => {
+export const sendInviteEmail = async (
+  email: string,
+  code: string,
+  expiresAt: number,
+): Promise<{ success: boolean; error?: string }> => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return false;
+    if (!session?.access_token) return { success: false, error: 'Oturum bulunamadı' };
     const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL as string;
     const res = await fetch(`${tokenServerUrl}/api/send-invite-email`, {
       method: 'POST',
@@ -293,10 +297,47 @@ export const sendInviteEmail = async (email: string, code: string, expiresAt: nu
       },
       body: JSON.stringify({ email, code, expiresAt }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (res.ok) return { success: true };
+    const body = await res.json().catch(() => ({}));
+    return { success: false, error: body?.error ?? `HTTP ${res.status}` };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Ağ hatası' };
   }
+};
+
+// ADMIN: KODU GÖNDERILDI OLARAK İŞARETLE
+export const adminMarkInviteSent = async (requestId: string): Promise<{ ok?: boolean; error?: string }> => {
+  const { data, error } = await supabase.rpc('admin_mark_invite_sent', { p_request_id: requestId });
+  if (error) throw error;
+  return data;
+};
+
+// ADMIN: GÖNDERIM BAŞARISIZ OLARAK İŞARETLE
+export const adminMarkInviteFailed = async (requestId: string, sendError: string): Promise<{ ok?: boolean; error?: string }> => {
+  const { data, error } = await supabase.rpc('admin_mark_invite_failed', {
+    p_request_id: requestId,
+    p_error: sendError,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// ADMIN: TÜM AKSİYON BEKLEYENLERİ LİSTELE (pending + failed + sending)
+export const getAdminInviteRequests = async (): Promise<Array<{
+  id: string;
+  email: string;
+  status: string;
+  code?: string | null;
+  expires_at: number;
+  created_at: string;
+  rejection_count: number;
+  blocked_until?: number | null;
+  permanently_blocked: boolean;
+  last_send_error?: string | null;
+}>> => {
+  const { data, error } = await supabase.rpc('get_admin_invite_requests');
+  if (error) return [];
+  return Array.isArray(data) ? data : [];
 };
 
 // UPLOAD AVATAR — Supabase Storage "avatars" bucket'ına yükler, public URL döner
