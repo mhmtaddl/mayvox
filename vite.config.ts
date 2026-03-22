@@ -7,6 +7,10 @@ export default defineConfig(() => {
   return {
     base: './', // 🔥 ELECTRON İÇİN KRİTİK (beyaz ekranı engeller)
 
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version || ''),
+    },
+
     plugins: [
       react(),
       tailwindcss()

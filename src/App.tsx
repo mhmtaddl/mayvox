@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+declare const __APP_VERSION__: string;
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -187,7 +189,9 @@ export default function App() {
   // ── Auto-update state ─────────────────────────────────────────────────────
   type UpdateState = 'available' | 'downloading' | 'downloaded' | 'dismissed';
   const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
-  const [appVersion, setAppVersion] = useState<string>('');
+  const [appVersion, setAppVersion] = useState<string>(() => {
+    try { return __APP_VERSION__ || ''; } catch { return ''; }
+  });
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
@@ -321,6 +325,10 @@ export default function App() {
       setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
     },
   });
+
+  // Stable ref so the 5s timer always calls the latest resyncPresence
+  const resyncPresenceRef = useRef(resyncPresence);
+  resyncPresenceRef.current = resyncPresence;
 
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit } = useLiveKitConnection({
@@ -563,6 +571,7 @@ export default function App() {
           }
           return updated ? newUser : u;
         }));
+        resyncPresenceRef.current();
       }
     }, 5000);
     return () => clearInterval(interval);

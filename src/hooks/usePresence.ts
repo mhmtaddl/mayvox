@@ -215,9 +215,11 @@ export function usePresence({
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string }>();
-    const onlineIds = new Set(
-      Object.values(state).flatMap(s => (s as { userId: string }[]).map(p => p.userId)),
+    const state = channel.presenceState<{ userId: string; appVersion?: string }>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string }[];
+    const onlineIds = new Set(presenceData.map(p => p.userId));
+    const versionMap = new Map(
+      presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
     );
     if (onlineIds.size === 0) return;
     setAllUsers(prev =>
@@ -225,6 +227,7 @@ export function usePresence({
         if (onlineIds.has(u.id)) {
           return {
             ...u,
+            appVersion: versionMap.get(u.id) ?? u.appVersion,
             status: 'online' as const,
             statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
           };
