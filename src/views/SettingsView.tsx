@@ -19,12 +19,14 @@ import {
   Camera,
   KeyRound,
   X,
+  Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 import { THEMES } from '../constants';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../lib/supabase';
 import AvatarCropModal from '../components/AvatarCropModal';
+import InviteRequestPanel from '../components/InviteRequestPanel';
 import { previewSound, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
@@ -79,6 +81,9 @@ export default function SettingsView() {
     formatTime,
     passwordResetRequests,
     handleAdminManualReset,
+    inviteRequests,
+    handleSendInviteCode,
+    handleRejectInvite,
   } = useAppState();
 
   // Memoized admin user list
@@ -781,6 +786,30 @@ export default function SettingsView() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Davet Talepleri */}
+                  <div className="pt-6 border-t border-[var(--theme-border)]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Mail className="text-amber-500" size={18} />
+                      <h4 className="font-bold text-[var(--theme-text)]">Davet Talepleri</h4>
+                      {inviteRequests.length > 0 && (
+                        <span className="ml-auto text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">
+                          {inviteRequests.length}
+                        </span>
+                      )}
+                    </div>
+                    {inviteRequests.length > 0 ? (
+                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] divide-y divide-[var(--theme-border)] overflow-hidden">
+                        <InviteRequestPanel
+                          requests={inviteRequests}
+                          onSendCode={handleSendInviteCode}
+                          onReject={handleRejectInvite}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--theme-secondary-text)] italic">Şu an bekleyen davet talebi yok.</p>
+                    )}
+                  </div>
 
                   <div className="mt-8 pt-8 border-t border-[var(--theme-border)]">
                     <div className="flex items-center gap-2 mb-4">
