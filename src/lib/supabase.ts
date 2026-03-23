@@ -77,6 +77,14 @@ export const getAllProfiles = async () => {
   return await supabase.from('profiles').select('*').order('name');
 };
 
+// UPDATE OWN APP VERSION (kalıcılık: kullanıcı offline olsa bile son versiyon görünsün)
+export const updateUserAppVersion = async (id: string, version: string) => {
+  return await supabase
+    .from('profiles')
+    .update({ app_version: version })
+    .eq('id', id);
+};
+
 // UPDATE USER MODERATION (admin/mute/ban) — server-side admin kontrolü ile
 export const updateUserModeration = async (id: string, updates: {
   is_admin?: boolean;

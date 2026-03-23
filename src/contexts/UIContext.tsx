@@ -3,8 +3,8 @@ import React, { createContext, useContext } from 'react';
 export interface UIContextType {
   toastMsg: string | null;
   setToastMsg: (v: string | null) => void;
-  invitationModal: { inviterId: string; inviterName: string; roomName: string; roomId: string } | null;
-  setInvitationModal: (v: { inviterId: string; inviterName: string; roomName: string; roomId: string } | null) => void;
+  invitationModal: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null;
+  setInvitationModal: (v: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null) => void;
   userActionMenu: { userId: string; x: number; y: number } | null;
   setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
   contextMenu: { x: number; y: number; channelId: string } | null;

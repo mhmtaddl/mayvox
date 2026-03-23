@@ -30,6 +30,12 @@ export interface SettingsContextType {
   setAvatarBorderColor: (v: string) => void;
   pttReleaseDelay: number;
   setPttReleaseDelay: (v: number) => void;
+  soundInvite: boolean;
+  setSoundInvite: (v: boolean) => void;
+  soundInviteVariant: 1 | 2;
+  setSoundInviteVariant: (v: 1 | 2) => void;
+  idleAnimation: 'bars' | 'wave' | 'off';
+  setIdleAnimation: (v: 'bars' | 'wave' | 'off') => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
@@ -53,6 +53,10 @@ let pttKeycode = null;       // uiohook keycode (klavye)
 let pttMouseButton = null;   // uiohook button (fare)
 let isListeningForPtt = false;
 let pttWindow = null;
+
+// Tray & quit state
+let tray = null;
+let isQuitting = false;
 
 function parseSavedPttKey(keyStr) {
   if (!keyStr) return;
@@ -209,6 +213,48 @@ const Store = (() => {
   };
 })();
 
+function getTrayIcon() {
+  const candidates = [
+    path.join(__dirname, "../build/icon.ico"),
+    path.join(process.resourcesPath || "", "icon.ico"),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return nativeImage.createFromPath(p);
+    } catch {}
+  }
+  return nativeImage.createEmpty();
+}
+
+function setupTray(win) {
+  tray = new Tray(getTrayIcon());
+  tray.setToolTip("CylkSohbet");
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Göster / Aç",
+      click: () => {
+        win.show();
+        win.focus();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Çıkış",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  tray.on("double-click", () => {
+    win.show();
+    win.focus();
+  });
+}
+
 function createWindow() {
   const saved = Store.get();
 
@@ -240,6 +286,14 @@ function createWindow() {
 
   win.on("resize", saveState);
   win.on("move", saveState);
+
+  // X butonuna basıldığında kapat değil, tray'e indir
+  win.on("close", (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
 
   if (isDev) {
     win.loadURL("http://127.0.0.1:3000");
@@ -328,18 +382,25 @@ app.whenReady().then(() => {
   const win = BrowserWindow.getAllWindows()[0];
   setupAutoUpdater(win);
   setupGlobalPtt(win);
+  setupTray(win);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else {
+      BrowserWindow.getAllWindows()[0].show();
     }
   });
 });
 
+// Pencere kapatılınca uygulama sonlanmaz — tray'de çalışmaya devam eder.
+// Gerçek çıkış sadece tray > Çıkış ile olur (isQuitting = true).
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // Kasıtlı boş bırakıldı
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
 });
 
 app.on("will-quit", () => {

@@ -27,7 +27,7 @@ import { THEMES } from '../constants';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../lib/supabase';
 import AvatarCropModal from '../components/AvatarCropModal';
 import InviteRequestPanel from '../components/InviteRequestPanel';
-import { previewSound, type SoundVariant } from '../lib/sounds';
+import { previewSound, previewInviteRingtone, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -61,10 +61,16 @@ export default function SettingsView() {
     setSoundPtt,
     soundPttVariant,
     setSoundPttVariant,
+    soundInvite,
+    setSoundInvite,
+    soundInviteVariant,
+    setSoundInviteVariant,
     avatarBorderColor,
     setAvatarBorderColor,
     pttReleaseDelay,
     setPttReleaseDelay,
+    idleAnimation,
+    setIdleAnimation,
   } = useSettings();
 
   const {
@@ -115,7 +121,7 @@ export default function SettingsView() {
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
   const [muteInputs, setMuteInputs] = useState<Record<string, string>>({});
   const [banInputs, setBanInputs] = useState<Record<string, string>>({});
-  const [keyResetConfirm, setKeyResetConfirm] = useState<string | null>(null); // userId
+  const [keyResetConfirm, setKeyResetConfirm] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(
     currentUser.avatar?.startsWith('http') ? currentUser.avatar : null
@@ -219,7 +225,6 @@ export default function SettingsView() {
 
     const ageNum = parseInt(settingsAge) || 0;
     const avatarText = getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: ageNum });
-    // Profil fotoğrafı varsa koru; yoksa baş harf + yaş kullan
     const finalAvatar = customAvatarUrl ?? avatarText;
     const updatedUser = {
       ...currentUser,
@@ -307,460 +312,445 @@ export default function SettingsView() {
     }
   };
 
+  // ── UI helpers ────────────────────────────────────────────────────────────
+
+  const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+        checked ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
+      }`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  );
+
+  const SLabel = ({ icon, children, badge }: { icon: React.ReactNode; children: React.ReactNode; badge?: React.ReactNode }) => (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="text-[var(--theme-secondary-text)] opacity-60">{icon}</span>
+      <span className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest">{children}</span>
+      {badge}
+    </div>
+  );
+
+  // Shared input class
+  const inputCls = 'w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3 py-2.5 text-sm focus:border-[var(--theme-accent)] outline-none transition-colors text-[var(--theme-text)]';
+
+  // Shared card class
+  const cardCls = 'bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl overflow-hidden';
+
   return (
     <>
-    {cropSrc && (
-      <AvatarCropModal
-        imageSrc={cropSrc}
-        onConfirm={handleCropConfirm}
-        onCancel={() => setCropSrc(null)}
-      />
-    )}
-    <div className="w-full max-w-3xl mx-auto">
-      <div className="p-8 border-b border-[var(--theme-border)]">
-        <div className="flex items-center gap-3 mb-1">
-          <Settings className="text-[var(--theme-accent)]" size={32} />
-          <h2 className="text-4xl font-black tracking-tight text-[var(--theme-text)]">Ayarlar</h2>
-        </div>
-        <p className="text-[var(--theme-secondary-text)] font-medium ml-11">Kullanıcı profilini ve uygulama tercihlerini yönet.</p>
-      </div>
+      {cropSrc && (
+        <AvatarCropModal
+          imageSrc={cropSrc}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropSrc(null)}
+        />
+      )}
+      <div className="w-full max-w-2xl mx-auto pb-12">
 
-      <div className="p-8 space-y-12">
-        {/* User Info */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <UserIcon className="text-[var(--theme-accent)]" size={20} />
-            <h3 className="text-lg font-bold text-[var(--theme-text)]">Kullanıcı Bilgileri</h3>
+        {/* ── Page header ──────────────────────────────────────────────── */}
+        <div className="flex items-center gap-3 pt-8 pb-7">
+          <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+            <Settings size={18} className="text-[var(--theme-accent)]" />
           </div>
+          <div>
+            <h2 className="text-xl font-bold text-[var(--theme-text)]">Ayarlar</h2>
+            <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Profil ve uygulama tercihleri</p>
+          </div>
+        </div>
 
-          {/* Avatar Upload */}
-          <div className="flex flex-col items-center mb-6 gap-4">
-            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-              <div
-                className="h-20 w-20 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-lg"
-                style={{ borderColor: avatarBorderColor }}
-              >
-                {customAvatarUrl ? (
-                  <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
+        <div className="space-y-8">
+
+          {/* ════════════════════════════════════════════════════════════
+              HESAP
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<UserIcon size={12} />}>Hesap</SLabel>
+            <div className={cardCls}>
+
+              {/* Avatar + kimlik satırı */}
+              <div className="flex items-center gap-4 p-5 border-b border-[var(--theme-border)]">
+                <div
+                  className="relative group cursor-pointer shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <div
+                    className="h-14 w-14 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-sm"
+                    style={{ borderColor: avatarBorderColor }}
+                  >
+                    {customAvatarUrl ? (
+                      <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
+                    )}
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    {avatarUploading
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <Camera size={15} className="text-white" />
+                    }
+                  </div>
+                  <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFileChange} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[var(--theme-text)] leading-tight truncate">
+                    {(settingsFirstName || settingsLastName)
+                      ? `${settingsFirstName} ${settingsLastName}`.trim()
+                      : settingsDisplayName || '—'}
+                  </p>
+                  <p className="text-xs text-[var(--theme-secondary-text)] truncate mt-0.5">{settingsUsername}</p>
+                  {/* Avatar border renk paleti */}
+                  <div className="flex items-center gap-1.5 mt-2.5">
+                    {['#3B82F6','#8B5CF6','#10B981','#EF4444','#F59E0B','#EC4899','#06B6D4','#F97316','#6B7280'].map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setAvatarBorderColor(color)}
+                        className="w-4 h-4 rounded-full border-2 transition-transform hover:scale-125 shrink-0"
+                        style={{
+                          backgroundColor: color,
+                          borderColor: avatarBorderColor === color ? 'white' : 'transparent',
+                          boxShadow: avatarBorderColor === color ? `0 0 0 1px ${color}` : 'none',
+                        }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {currentAppVersion && (
+                  <span className="text-[10px] text-[var(--theme-secondary-text)]/40 font-medium self-start shrink-0 tabular-nums">
+                    v{currentAppVersion}
+                  </span>
                 )}
               </div>
-              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                {avatarUploading
-                  ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Camera size={18} className="text-white" />
-                }
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFileChange} />
-            </div>
 
-            {/* Border Color Swatches */}
-            <div className="flex items-center gap-2">
-              {[
-                '#3B82F6', // Mavi
-                '#8B5CF6', // Mor
-                '#10B981', // Yeşil
-                '#EF4444', // Kırmızı
-                '#F59E0B', // Altın
-                '#EC4899', // Pembe
-                '#06B6D4', // Cyan
-                '#F97316', // Turuncu
-                '#6B7280', // Gri
-              ].map(color => (
-                <button
-                  key={color}
-                  onClick={() => setAvatarBorderColor(color)}
-                  className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: color,
-                    borderColor: avatarBorderColor === color ? 'white' : 'transparent',
-                    boxShadow: avatarBorderColor === color ? `0 0 0 1px ${color}` : 'none',
-                  }}
-                  title={color}
-                />
-              ))}
-            </div>
-            <p className="text-xs text-[var(--theme-secondary-text)] text-center">
-              JPG veya PNG · En fazla 5 MB · 512×512 önerilir
-            </p>
-          </div>
+              {/* Form alanları */}
+              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
+                  <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">E-Posta</label>
+                  <input type="text" value={settingsUsername} onChange={e => setSettingsUsername(e.target.value)} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Ad</label>
+                  <input type="text" value={settingsFirstName} onChange={e => setSettingsFirstName(e.target.value)} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Soyad</label>
+                  <input type="text" value={settingsLastName} onChange={e => setSettingsLastName(e.target.value)} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yaş</label>
+                  <input type="number" value={settingsAge} onChange={e => setSettingsAge(e.target.value)} className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yeni Şifre</label>
+                  <div className="relative">
+                    <input
+                      type={showSettingsPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={settingsPassword}
+                      onChange={e => setSettingsPassword(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') triggerSaveProfile(); }}
+                      className={inputCls}
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowSettingsPassword(!showSettingsPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
+                    >
+                      {showSettingsPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5 md:col-start-2">
+                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Şifre Tekrar</label>
+                  <input
+                    type={showSettingsPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={settingsPasswordRepeat}
+                    onChange={e => setSettingsPasswordRepeat(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') triggerSaveProfile(); }}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={settingsDisplayName}
-                  onChange={(e) => setSettingsDisplayName(e.target.value)}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-                <UserIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={14} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">E-Posta</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={settingsUsername}
-                  onChange={(e) => setSettingsUsername(e.target.value)}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-                <Edit2 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={14} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Adınız</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={settingsFirstName}
-                  onChange={(e) => setSettingsFirstName(e.target.value)}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-                <Edit2 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={14} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Soyadınız</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={settingsLastName}
-                  onChange={(e) => setSettingsLastName(e.target.value)}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-                <Edit2 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={14} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yaşınız</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={settingsAge}
-                  onChange={(e) => setSettingsAge(e.target.value)}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-                <Clock className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={14} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yeni Parola</label>
-              <div className="relative">
-                <input
-                  type={showSettingsPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={settingsPassword}
-                  onChange={(e) => setSettingsPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') triggerSaveProfile(); }}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
+              {/* Footer: mesaj + kaydet */}
+              <div className="px-5 pb-5 flex items-center justify-between gap-4">
+                <p className={`text-xs flex-1 leading-relaxed ${
+                  updateSuccessMessage
+                    ? 'text-emerald-500 font-semibold'
+                    : settingsPasswordError
+                      ? 'text-red-400'
+                      : !isPasswordValid
+                        ? 'text-red-400'
+                        : 'text-[var(--theme-secondary-text)]'
+                }`}>
+                  {updateSuccessMessage || settingsPasswordError || 'Şifre: en az 6 karakter, büyük+küçük harf ve rakam'}
+                </p>
                 <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowSettingsPassword(!showSettingsPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
+                  ref={saveProfileBtnRef}
+                  onClick={handleUpdateProfile}
+                  className={`shrink-0 px-5 py-2 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-black/10 hover:opacity-90 active:scale-[0.97] ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
                 >
-                  {showSettingsPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  Kaydet
                 </button>
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yeni Parola Tekrar</label>
-              <div className="relative">
-                <input
-                  type={showSettingsPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={settingsPasswordRepeat}
-                  onChange={(e) => setSettingsPasswordRepeat(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') triggerSaveProfile(); }}
-                  className="w-full bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[var(--theme-accent)] outline-none transition-all text-[var(--theme-text)]"
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              {updateSuccessMessage ? (
-                <p className="text-xs text-green-500 text-center font-bold">{updateSuccessMessage}</p>
-              ) : (
-                <p className={`text-xs ${!settingsPasswordError && isPasswordValid ? 'text-[var(--theme-secondary-text)]' : 'text-red-500'} text-center`}>
-                  {settingsPasswordError || 'Şifre en az 6 karakter, bir büyük harf, bir küçük harf ve bir rakam içermelidir.'}
-                </p>
-              )}
-            </div>
-          </div>
+          </section>
 
-          <div className="mt-6 flex justify-end">
-            <button
-              ref={saveProfileBtnRef}
-              onClick={handleUpdateProfile}
-              className={`px-6 py-2.5 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-black/20 active:scale-[0.97] ${pressingProfile ? 'opacity-90 scale-[0.97]' : 'hover:opacity-90'}`}
-            >
-              Bilgileri Güncelle
-            </button>
-          </div>
-        </section>
-
-        {/* Theme Selection */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <Recycle className="text-[var(--theme-accent)]" size={20} />
-            <h3 className="text-lg font-bold text-[var(--theme-text)]">Tema Ayarları</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => setCurrentTheme(theme)}
-                className={`flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
-                  currentTheme.id === theme.id
-                    ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
-                    : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-secondary-text)]/30'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[var(--theme-text)]">{theme.name}</span>
-                  {currentTheme.id === theme.id && <Check size={16} className="text-[var(--theme-accent)]" />}
-                </div>
-                <div className="flex gap-1">
-                  <div className="w-6 h-6 rounded-full border border-white/10" style={{ backgroundColor: theme.bg }}></div>
-                  <div className="w-6 h-6 rounded-full border border-white/10" style={{ backgroundColor: theme.accent }}></div>
-                  <div className="w-6 h-6 rounded-full border border-white/10" style={{ backgroundColor: theme.text }}></div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Performance & Data */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <Zap className="text-[var(--theme-accent)]" size={20} />
-            <h3 className="text-lg font-bold text-[var(--theme-text)]">Performans ve Veri</h3>
-          </div>
-
-          <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <h4 className="font-bold text-[var(--theme-text)]">Düşük Veri Kullanım Modu</h4>
-                <p className="text-xs text-[var(--theme-secondary-text)] mt-1">
-                  Oyunlarda ping yaratmamak için veri alışverişini minimize eder.
-                  Ses kalitesini korurken görsel güncellemeleri ve arka plan işlemlerini yavaşlatır.
-                </p>
-              </div>
-              <button
-                role="switch"
-                aria-checked={isLowDataMode}
-                aria-label="Düşük veri kullanım modunu aç/kapat"
-                onClick={() => setIsLowDataMode(!isLowDataMode)}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-                  isLowDataMode ? 'bg-emerald-500' : 'bg-red-500'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    isLowDataMode ? 'translate-x-6' : 'translate-x-1'
+          {/* ════════════════════════════════════════════════════════════
+              GÖRÜNÜM
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<Recycle size={12} />}>Görünüm</SLabel>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {THEMES.map(theme => (
+                <button
+                  key={theme.id}
+                  onClick={() => setCurrentTheme(theme)}
+                  className={`flex flex-col gap-2.5 p-3.5 rounded-xl border-2 transition-all text-left ${
+                    currentTheme.id === theme.id
+                      ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
+                      : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-secondary-text)]/40 hover:bg-[var(--theme-sidebar)]/60'
                   }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* PTT Bırakma Gecikmesi */}
-          <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h4 className="font-bold text-[var(--theme-text)]">Bas-Konuş Bırakma Gecikmesi</h4>
-                <p className="text-xs text-[var(--theme-secondary-text)] mt-1">
-                  Tuşu bıraktıktan sonra mikrofonun kapanmadan önce beklediği süre. Kelime sonlarının kesilmesini önler.
-                </p>
-              </div>
-              <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[3rem] text-right">
-                {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={500}
-              step={50}
-              value={pttReleaseDelay}
-              onChange={e => setPttReleaseDelay(Number(e.target.value))}
-              className="w-full accent-[var(--theme-accent)]"
-            />
-            <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
-              <span>Kapalı</span>
-              <span>500 ms</span>
-            </div>
-          </div>
-
-          {isNoiseSuppressionEnabled && (
-            <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h4 className="font-bold text-[var(--theme-text)]">Gürültü Eşiği</h4>
-                  <p className="text-xs text-[var(--theme-secondary-text)] mt-1">
-                    Mikrofonun arka plan sesini ne kadar filtreleceğini belirler. Yüksek değer daha agresif filtreler.
-                  </p>
-                </div>
-                <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[2rem] text-right">{noiseThreshold}</span>
-              </div>
-              {/* Canlı mikrofon seviyesi */}
-              {(() => {
-                const thresholdPct = ((noiseThreshold - 2) / (50 - 2)) * 100;
-                const micPct = Math.min(100, (micAverage / 50) * 100);
-                const belowWidth = Math.min(micPct, thresholdPct);
-                const aboveLeft = thresholdPct;
-                const aboveWidth = Math.max(0, micPct - thresholdPct);
-                return (
-                  <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-3">
-                    {/* Eşiğin altındaki kısım — gri */}
-                    <div
-                      className="absolute left-0 top-0 h-full transition-none"
-                      style={{ width: `${belowWidth}%`, backgroundColor: 'var(--theme-secondary-text)', opacity: 0.5 }}
-                    />
-                    {/* Eşiği geçen kısım — accent */}
-                    <div
-                      className="absolute top-0 h-full transition-none"
-                      style={{ left: `${aboveLeft}%`, width: `${aboveWidth}%`, backgroundColor: 'var(--theme-accent)', opacity: 0.85 }}
-                    />
-                    {/* Eşik çizgisi */}
-                    <div
-                      className="absolute top-0 h-full w-px bg-red-400"
-                      style={{ left: `${thresholdPct}%` }}
-                    />
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--theme-text)]">{theme.name}</span>
+                    {currentTheme.id === theme.id && <Check size={14} className="text-[var(--theme-accent)] shrink-0" />}
                   </div>
-                );
-              })()}
-              <input
-                type="range"
-                min={2}
-                max={50}
-                value={noiseThreshold}
-                onChange={e => setNoiseThreshold(Number(e.target.value))}
-                className="w-full accent-[var(--theme-accent)]"
-              />
-              <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
-                <span>Hafif</span>
-                <span>Agresif</span>
-              </div>
+                  <div className="flex gap-1.5">
+                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.bg }} />
+                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.accent }} />
+                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.text }} />
+                  </div>
+                </button>
+              ))}
             </div>
-          )}
-        </section>
+          </section>
 
-        <div className="border-t border-[var(--theme-border)]"></div>
-
-        {/* Sesler */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <Volume2 className="text-[var(--theme-accent)]" size={20} />
-            <h3 className="text-lg font-bold text-[var(--theme-text)]">Sesler</h3>
-          </div>
-          <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6 space-y-6">
-            {([
-              {
-                label: 'Giriş / Çıkış Sesleri',
-                desc: 'Birisi odaya girdiğinde veya ayrıldığında ses çalar.',
-                category: 'JoinLeave' as const,
-                variant: soundJoinLeaveVariant,
-                setVariant: setSoundJoinLeaveVariant,
-                enabled: soundJoinLeave,
-                setEnabled: setSoundJoinLeave,
-              },
-              {
-                label: 'Mikrofon / Hoparlör Sesleri',
-                desc: 'Mikrofon veya hoparlör açılıp kapatıldığında ses çalar.',
-                category: 'MuteDeafen' as const,
-                variant: soundMuteDeafenVariant,
-                setVariant: setSoundMuteDeafenVariant,
-                enabled: soundMuteDeafen,
-                setEnabled: setSoundMuteDeafen,
-              },
-              {
-                label: 'Bas-Konuş Sesi',
-                desc: 'Bas-Konuş tuşuna basılıp bırakıldığında ses çalar.',
-                category: 'Ptt' as const,
-                variant: soundPttVariant,
-                setVariant: setSoundPttVariant,
-                enabled: soundPtt,
-                setEnabled: setSoundPtt,
-              },
-            ]).map(({ label, desc, category, variant, setVariant, enabled, setEnabled }) => (
-              <div key={category} className="space-y-3">
-                <div>
-                  <h4 className="font-bold text-[var(--theme-text)]">{label}</h4>
-                  <p className="text-xs text-[var(--theme-secondary-text)] mt-1">{desc}</p>
+          {/* ════════════════════════════════════════════════════════════
+              SESLER
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<Volume2 size={12} />}>Sesler</SLabel>
+            <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
+              {([
+                { label: 'Giriş / Çıkış', desc: 'Birisi odaya girip ayrıldığında.', category: 'JoinLeave' as const, variant: soundJoinLeaveVariant, setVariant: setSoundJoinLeaveVariant, enabled: soundJoinLeave, setEnabled: setSoundJoinLeave },
+                { label: 'Mikrofon / Hoparlör', desc: 'Mikrofon veya hoparlör açılıp kapandığında.', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen },
+                { label: 'Bas-Konuş', desc: 'Bas-Konuş tuşuna basılıp bırakıldığında.', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt },
+              ] as const).map(({ label, desc, category, variant, setVariant, enabled, setEnabled }) => (
+                <div key={category} className="flex items-center gap-4 px-5 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[var(--theme-text)]">{label}</p>
+                    <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">{desc}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {([1, 2] as SoundVariant[]).map(v => (
+                      <button
+                        key={v}
+                        disabled={!enabled}
+                        onClick={() => { setVariant(v); previewSound(category, v); }}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                          variant === v && enabled
+                            ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)]'
+                            : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)]'
+                        }`}
+                      >
+                        Ses {v}
+                      </button>
+                    ))}
+                    <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {([1, 2] as SoundVariant[]).map(v => (
+              ))}
+
+              {/* Davet Çağrısı */}
+              <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Birisi sizi odaya davet ettiğinde çalan zil sesi.</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {([1, 2] as const).map(v => (
                     <button
                       key={v}
-                      onClick={() => { setVariant(v); previewSound(category, v); }}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
-                        variant === v
-                          ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-lg'
-                          : 'bg-[var(--theme-sidebar)] text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)]'
+                      disabled={!soundInvite}
+                      onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        soundInviteVariant === v && soundInvite
+                          ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)]'
+                          : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)]'
                       }`}
                     >
-                      Ses {v}
+                      {v === 1 ? 'Klasik' : 'Yumuşak'}
                     </button>
                   ))}
-                  <button
-                    role="switch"
-                    aria-checked={enabled}
-                    onClick={() => setEnabled(!enabled)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${enabled ? 'bg-emerald-500' : 'bg-red-500'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
+                  <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} />
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
+          </section>
 
-        {currentUser.isAdmin && (
-          <>
-            <div className="border-t border-[var(--theme-border)]"></div>
+          {/* ════════════════════════════════════════════════════════════
+              PERFORMANS
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<Zap size={12} />}>Performans ve Veri</SLabel>
+            <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
 
-            {/* Admin Panel */}
-            <section>
-              <div className="flex items-center gap-2 mb-6">
-                <ShieldCheck className="text-[var(--theme-accent)]" size={20} />
-                <h3 className="text-lg font-bold text-[var(--theme-text)] flex items-center gap-2">
-                  Yönetici Paneli
-                  <span className="text-[10px] bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] px-2 py-0.5 rounded border border-[var(--theme-accent)]/20 uppercase">Admin Only</span>
-                </h3>
+              {/* Düşük Veri Modu */}
+              <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[var(--theme-text)]">Düşük Veri Kullanım Modu</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Görsel güncellemeleri kısıtlar, ses kalitesini korur.</p>
+                </div>
+                <Toggle checked={isLowDataMode} onChange={() => setIsLowDataMode(!isLowDataMode)} />
               </div>
 
-              <div className="bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl p-6">
-                <div className="flex flex-col gap-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-[var(--theme-text)]">Davet Kodu Oluştur</h4>
-                      <p className="text-xs text-[var(--theme-secondary-text)] mt-1">Yeni kullanıcıların platforma katılması için süreli davet kodu oluşturun.</p>
-                    </div>
-                    <button
-                      onClick={handleGenerateCode}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-xl"
-                    >
-                      <LinkIcon size={18} />
-                      Kod Oluştur
-                    </button>
-                  </div>
+              {/* Gürültü Susturma toggle */}
+              <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Arka plan sesini filtreler, konuşmayı netleştirir.</p>
+                </div>
+                <Toggle checked={isNoiseSuppressionEnabled} onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} />
+              </div>
 
-                  {/* Generated Code Result */}
-                  <AnimatePresence>
-                    {generatedCode && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="p-5 bg-[var(--theme-accent)]/5 border border-[var(--theme-accent)]/20 rounded-xl overflow-hidden"
-                      >
+              {/* Gürültü Eşiği — sadece aktifken göster */}
+              {isNoiseSuppressionEnabled && (
+                <div className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Eşiği</p>
+                      <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Yüksek değer daha agresif filtreler.</p>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[2rem] text-right tabular-nums">{noiseThreshold}</span>
+                  </div>
+                  {(() => {
+                    const thresholdPct = ((noiseThreshold - 2) / (50 - 2)) * 100;
+                    const micPct = Math.min(100, (micAverage / 50) * 100);
+                    const belowWidth = Math.min(micPct, thresholdPct);
+                    const aboveLeft = thresholdPct;
+                    const aboveWidth = Math.max(0, micPct - thresholdPct);
+                    return (
+                      <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-3">
+                        <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${belowWidth}%`, backgroundColor: 'var(--theme-secondary-text)', opacity: 0.5 }} />
+                        <div className="absolute top-0 h-full transition-none" style={{ left: `${aboveLeft}%`, width: `${aboveWidth}%`, backgroundColor: 'var(--theme-accent)', opacity: 0.85 }} />
+                        <div className="absolute top-0 h-full w-px bg-red-400" style={{ left: `${thresholdPct}%` }} />
+                      </div>
+                    );
+                  })()}
+                  <input type="range" min={2} max={50} value={noiseThreshold} onChange={e => setNoiseThreshold(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
+                  <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+                    <span>Hafif</span><span>Agresif</span>
+                  </div>
+                </div>
+              )}
+
+              {/* PTT Bırakma Gecikmesi */}
+              <div className="px-5 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--theme-text)]">Bas-Konuş Bırakma Gecikmesi</p>
+                    <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Kelime sonlarının kesilmesini önler.</p>
+                  </div>
+                  <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[3.5rem] text-right tabular-nums">
+                    {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
+                  </span>
+                </div>
+                <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => setPttReleaseDelay(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
+                <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+                  <span>Kapalı</span><span>500 ms</span>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              BOŞ ODA ANİMASYONU
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<Eye size={12} />}>Boş Oda Animasyonu</SLabel>
+            <div className={cardCls}>
+              <div className="flex items-center gap-3 px-5 py-4">
+                {(
+                  [
+                    { value: 'bars',  label: 'Minimal Barlar', desc: 'Merkez odaklı, simetrik barlar' },
+                    { value: 'wave',  label: 'Ses Dalgası',    desc: 'Soldan sağa gezgin dalga' },
+                    { value: 'off',   label: 'Kapalı',         desc: 'Animasyon yok' },
+                  ] as { value: 'bars' | 'wave' | 'off'; label: string; desc: string }[]
+                ).map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setIdleAnimation(opt.value)}
+                    className={`flex-1 flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl border transition-all text-left ${
+                      idleAnimation === opt.value
+                        ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)] text-[var(--theme-text)]'
+                        : 'bg-transparent border-[var(--theme-border)] text-[var(--theme-secondary-text)] hover:border-[var(--theme-accent)]/50 hover:text-[var(--theme-text)]'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold leading-tight">{opt.label}</span>
+                    <span className="text-[10px] leading-tight opacity-70">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              YÖNETİCİ PANELİ (sadece admin)
+          ════════════════════════════════════════════════════════════ */}
+          {currentUser.isAdmin && (
+            <section>
+              <SLabel
+                icon={<ShieldCheck size={12} />}
+                badge={
+                  <span className="ml-1 text-[9px] bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] px-1.5 py-0.5 rounded border border-[var(--theme-accent)]/20 uppercase font-bold">
+                    Admin Only
+                  </span>
+                }
+              >
+                Yönetici Paneli
+              </SLabel>
+              <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
+
+                {/* Davet Kodu */}
+                <div className="flex items-center gap-4 px-5 py-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Kodu Oluştur</p>
+                    <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Yeni kullanıcılar için süreli giriş kodu.</p>
+                  </div>
+                  <button
+                    onClick={handleGenerateCode}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-black/10 shrink-0"
+                  >
+                    <LinkIcon size={14} />
+                    Oluştur
+                  </button>
+                </div>
+
+                {/* Generated Code */}
+                <AnimatePresence>
+                  {generatedCode && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 py-4 bg-[var(--theme-accent)]/5">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex-1">
                             <label className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-widest mb-1 block">Aktif Davet Kodu</label>
@@ -768,23 +758,21 @@ export default function SettingsView() {
                               <span className="text-2xl font-mono font-black tracking-[0.2em] text-[var(--theme-text)]">{generatedCode}</span>
                               <button
                                 onClick={handleCopyCode}
-                                className="p-2 rounded-lg bg-[var(--theme-sidebar)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
+                                className="p-1.5 rounded-lg bg-[var(--theme-sidebar)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
                               >
-                                <Copy size={18} />
+                                <Copy size={15} />
                               </button>
                             </div>
                           </div>
-
-                          <div className="text-right">
-                            <div className="flex items-center justify-end gap-1.5 text-orange-500 font-bold mb-1">
-                              <Timer size={14} className="animate-pulse" />
-                              <span className="text-xs uppercase tracking-tighter">Süre Azalıyor</span>
+                          <div className="text-right shrink-0">
+                            <div className="flex items-center justify-end gap-1 text-orange-500 font-bold mb-1">
+                              <Timer size={12} className="animate-pulse" />
+                              <span className="text-[10px] uppercase">Süre Azalıyor</span>
                             </div>
-                            <div className="text-2xl font-black text-[var(--theme-text)] tabular-nums">{formatTime(timeLeft)}</div>
+                            <div className="text-xl font-black text-[var(--theme-text)] tabular-nums">{formatTime(timeLeft)}</div>
                           </div>
                         </div>
-
-                        <div className="mt-4 w-full h-1 bg-[var(--theme-sidebar)] rounded-full overflow-hidden">
+                        <div className="mt-3 w-full h-1 bg-[var(--theme-sidebar)] rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: '100%' }}
                             animate={{ width: `${(timeLeft / 180) * 100}%` }}
@@ -792,215 +780,189 @@ export default function SettingsView() {
                             className="h-full bg-[var(--theme-accent)]"
                           />
                         </div>
-                        <p className="text-[10px] text-[var(--theme-secondary-text)] mt-2 italic">* Bu kod süre dolduğunda otomatik olarak geçersiz kılınacaktır.</p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Davet Talepleri */}
-                  <div className="pt-6 border-t border-[var(--theme-border)]">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Mail className="text-amber-500" size={18} />
-                      <h4 className="font-bold text-[var(--theme-text)]">Davet Talepleri</h4>
-                      {inviteRequests.length > 0 && (
-                        <span className="ml-auto text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">
-                          {inviteRequests.length}
-                        </span>
-                      )}
-                    </div>
-                    {inviteRequests.length > 0 ? (
-                      <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] divide-y divide-[var(--theme-border)] overflow-hidden">
-                        <InviteRequestPanel
-                          requests={inviteRequests}
-                          onSendCode={handleSendInviteCode}
-                          onReject={handleRejectInvite}
-                        />
                       </div>
-                    ) : (
-                      <p className="text-xs text-[var(--theme-secondary-text)] italic">Şu an bekleyen davet talebi yok.</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Davet Talepleri */}
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Mail className="text-amber-500 shrink-0" size={14} />
+                    <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Talepleri</p>
+                    {inviteRequests.length > 0 && (
+                      <span className="ml-auto text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">
+                        {inviteRequests.length}
+                      </span>
                     )}
                   </div>
-
-                  <div className="mt-8 pt-8 border-t border-[var(--theme-border)]">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Users className="text-[var(--theme-accent)]" size={18} />
-                      <h4 className="font-bold text-[var(--theme-text)]">Kullanıcı Yönetimi</h4>
+                  {inviteRequests.length > 0 ? (
+                    <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] divide-y divide-[var(--theme-border)] overflow-hidden">
+                      <InviteRequestPanel requests={inviteRequests} onSendCode={handleSendInviteCode} onReject={handleRejectInvite} />
                     </div>
-                    <div className="space-y-3">
-                      {otherUsers.map(user => (
-                        <div key={user.id} className="flex items-center justify-between p-3 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)]">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs">
-                              {user.avatar?.startsWith('http')
-                                ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                : user.avatar}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <div className="text-sm font-bold text-[var(--theme-text)]">{user.firstName} {user.lastName}</div>
-                                {user.appVersion && (() => {
-                                  const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
-                                  return (
-                                    <span className={`text-[9px] font-medium ${outdated ? 'text-red-400 animate-pulse' : 'text-green-400'}`}>
-                                      v{user.appVersion}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                              <div className="flex gap-2 mt-1">
-                                {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Susturuldu</span>}
-                                {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20">Konuşma Yasaklı</span>}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-4 items-center">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    placeholder="dk"
-                                    value={muteInputs[user.id] || ''}
-                                    onChange={(e) => setMuteInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
-                                    className="w-16 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">dk</span>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const mins = parseInt(muteInputs[user.id]);
-                                    if (mins > 0) handleMuteUser(user.id, mins);
-                                  }}
-                                  className="text-[10px] font-bold px-3 py-1 bg-[var(--theme-accent)] text-white rounded hover:opacity-90 transition-all"
-                                >
-                                  Sustur
-                                </button>
-                                {user.isMuted && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono text-orange-500 font-bold">
-                                      {Math.ceil((user.muteExpires! - Date.now()) / 60000)}dk kaldı
-                                    </span>
-                                    <button
-                                      onClick={() => handleUnmuteUser(user.id)}
-                                      className="text-[10px] font-bold px-3 py-1 bg-orange-500 text-white rounded hover:opacity-90 transition-all"
-                                    >
-                                      Kaldır
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    placeholder="gün"
-                                    value={banInputs[user.id] || ''}
-                                    onChange={(e) => setBanInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
-                                    className="w-16 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">gün</span>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const days = parseInt(banInputs[user.id]);
-                                    if (days > 0) handleBanUser(user.id, days * 1440);
-                                  }}
-                                  className="text-[10px] font-bold px-3 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all"
-                                >
-                                  Yasakla
-                                </button>
-                                {user.isVoiceBanned && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono text-red-500 font-bold">
-                                      {Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))}g kaldı
-                                    </span>
-                                    <button
-                                      onClick={() => handleUnbanUser(user.id)}
-                                      className="text-[10px] font-bold px-3 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all"
-                                    >
-                                      Kaldır
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                  ) : (
+                    <p className="text-xs text-[var(--theme-secondary-text)] italic">Bekleyen davet talebi yok.</p>
+                  )}
+                </div>
 
-                            <div className="flex flex-col gap-2 border-l border-[var(--theme-border)] pl-4">
-                              {currentUser.isPrimaryAdmin && (
-                                <button
-                                  onClick={() => handleToggleAdmin(user.id)}
-                                  className={`flex items-center justify-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded transition-all ${
-                                    user.isAdmin
-                                      ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20 hover:bg-orange-500 hover:text-white'
-                                      : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
-                                  }`}
-                                >
-                                  <ShieldCheck size={12} />
-                                  {user.isAdmin ? 'Admin Yetkisi Al' : 'Admin Yetkisi Ver'}
-                                </button>
-                              )}
-                              {/* Şifre sıfırlama butonu */}
-                              {keyResetConfirm === user.id ? (
-                                <div className="flex flex-col gap-1.5 p-2 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
-                                  <p className="text-[9px] text-[var(--theme-secondary-text)] leading-tight">
-                                    <span className="font-bold text-[var(--theme-text)]">{user.firstName}</span> kullanıcının şifresini sıfırlamak istediğinizden emin misiniz?
-                                  </p>
-                                  <div className="flex gap-1.5">
-                                    <button
-                                      onClick={async () => {
-                                        await handleAdminManualReset(user.id, user.name, user.email || '');
-                                        setKeyResetConfirm(null);
-                                      }}
-                                      className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded hover:bg-emerald-500 hover:text-white transition-all"
-                                    >
-                                      <Check size={10} />
-                                      Evet
-                                    </button>
-                                    <button
-                                      onClick={() => setKeyResetConfirm(null)}
-                                      className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
-                                    >
-                                      <X size={10} />
-                                      İptal
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setKeyResetConfirm(user.id)}
-                                  className={`flex items-center justify-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded transition-all ${
-                                    passwordResetRequests.some(r => r.userId === user.id)
-                                      ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white'
-                                      : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
-                                  }`}
-                                  title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var' : 'Şifre sıfırla'}
-                                >
-                                  <KeyRound size={12} />
-                                  Şifre Sıfırla
-                                </button>
-                              )}
-                              {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
-                                <button
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  className="flex items-center justify-center gap-1.5 text-[10px] font-bold px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
-                                >
-                                  <Trash2 size={12} />
-                                  Kullanıcıyı Sil
-                                </button>
-                              )}
+                {/* Kullanıcı Yönetimi */}
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="text-[var(--theme-accent)] shrink-0" size={14} />
+                    <p className="text-sm font-semibold text-[var(--theme-text)]">Kullanıcı Yönetimi</p>
+                  </div>
+                  <div className="space-y-2">
+                    {otherUsers.map(user => (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)]">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0">
+                            {user.avatar?.startsWith('http')
+                              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              : user.avatar}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-[var(--theme-text)] truncate">{user.firstName} {user.lastName}</span>
+                              {user.appVersion && (() => {
+                                const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
+                                return (
+                                  <span className={`text-[9px] font-medium shrink-0 ${outdated ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                                    v{user.appVersion}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                              {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Susturuldu</span>}
+                              {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20">Konuşma Yasaklı</span>}
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+
+                        <div className="flex gap-3 items-center shrink-0 ml-3">
+                          <div className="flex flex-col gap-1.5">
+                            {/* Susturma */}
+                            <div className="flex items-center gap-1.5">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  placeholder="dk"
+                                  value={muteInputs[user.id] || ''}
+                                  onChange={e => setMuteInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
+                                  className="w-14 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">dk</span>
+                              </div>
+                              <button
+                                onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) handleMuteUser(user.id, m); }}
+                                className="text-[10px] font-bold px-2.5 py-1 bg-[var(--theme-accent)] text-white rounded hover:opacity-90 transition-all"
+                              >
+                                Sustur
+                              </button>
+                              {user.isMuted && (
+                                <>
+                                  <span className="text-[10px] font-mono text-orange-500 font-bold">{Math.ceil((user.muteExpires! - Date.now()) / 60000)}dk</span>
+                                  <button onClick={() => handleUnmuteUser(user.id)} className="text-[10px] font-bold px-2.5 py-1 bg-orange-500 text-white rounded hover:opacity-90 transition-all">Kaldır</button>
+                                </>
+                              )}
+                            </div>
+                            {/* Yasaklama */}
+                            <div className="flex items-center gap-1.5">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  placeholder="gün"
+                                  value={banInputs[user.id] || ''}
+                                  onChange={e => setBanInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
+                                  className="w-14 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">gün</span>
+                              </div>
+                              <button
+                                onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) handleBanUser(user.id, d * 1440); }}
+                                className="text-[10px] font-bold px-2.5 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all"
+                              >
+                                Yasakla
+                              </button>
+                              {user.isVoiceBanned && (
+                                <>
+                                  <span className="text-[10px] font-mono text-red-500 font-bold">{Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))}g</span>
+                                  <button onClick={() => handleUnbanUser(user.id)} className="text-[10px] font-bold px-2.5 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all">Kaldır</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5 border-l border-[var(--theme-border)] pl-3">
+                            {currentUser.isPrimaryAdmin && (
+                              <button
+                                onClick={() => handleToggleAdmin(user.id)}
+                                className={`flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded transition-all ${
+                                  user.isAdmin
+                                    ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20 hover:bg-orange-500 hover:text-white'
+                                    : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                                }`}
+                              >
+                                <ShieldCheck size={11} />
+                                {user.isAdmin ? 'Al' : 'Ver'}
+                              </button>
+                            )}
+                            {keyResetConfirm === user.id ? (
+                              <div className="flex flex-col gap-1 p-1.5 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
+                                <p className="text-[9px] text-[var(--theme-secondary-text)] leading-tight">
+                                  <span className="font-bold text-[var(--theme-text)]">{user.firstName}</span> şifresi sıfırlansın mı?
+                                </p>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={async () => { await handleAdminManualReset(user.id, user.name, user.email || ''); setKeyResetConfirm(null); }}
+                                    className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded hover:bg-emerald-500 hover:text-white transition-all"
+                                  >
+                                    <Check size={10} /> Evet
+                                  </button>
+                                  <button
+                                    onClick={() => setKeyResetConfirm(null)}
+                                    className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
+                                  >
+                                    <X size={10} /> İptal
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setKeyResetConfirm(user.id)}
+                                className={`flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded transition-all ${
+                                  passwordResetRequests.some(r => r.userId === user.id)
+                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white'
+                                    : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                                }`}
+                                title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var' : 'Şifre sıfırla'}
+                              >
+                                <KeyRound size={11} />
+                                Şifre
+                              </button>
+                            )}
+                            {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
+                              <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
+                              >
+                                <Trash2 size={11} />
+                                Sil
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+
               </div>
             </section>
-          </>
-        )}
+          )}
+
+        </div>
       </div>
-    </div>
     </>
   );
 }

@@ -77,6 +77,12 @@
       "provider": "github",
       "owner": "mhmtaddl",
       "repo": "caylaklar-sesli-sohbet"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ]
   }
 }

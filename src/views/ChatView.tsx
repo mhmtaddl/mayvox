@@ -11,6 +11,7 @@ import {
   Volume2,
   Volume1,
   PhoneCall,
+  PhoneOff,
   Clock,
   X,
   Lock,
@@ -33,6 +34,9 @@ import SettingsView from './SettingsView';
 import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
+import IdleVoiceCenter from '../components/IdleVoiceCenter';
+import IdleVoiceWave from '../components/IdleVoiceWave';
+import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { Mail } from 'lucide-react';
 
 export default function ChatView() {
@@ -54,6 +58,7 @@ export default function ChatView() {
 
   const {
     toastMsg,
+    setToastMsg,
     invitationModal,
     setInvitationModal,
     userActionMenu,
@@ -86,6 +91,9 @@ export default function ChatView() {
     noiseThreshold,
     setNoiseThreshold,
     avatarBorderColor,
+    soundInvite,
+    soundInviteVariant,
+    idleAnimation,
   } = useSettings();
 
   const {
@@ -125,6 +133,8 @@ export default function ChatView() {
     inviteRequests,
     handleSendInviteCode,
     handleRejectInvite,
+    inviteCooldowns,
+    inviteStatuses,
   } = useAppState();
 
   const {
@@ -145,6 +155,17 @@ export default function ChatView() {
 
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
+
+  // Davet gelince çağrı sesi: modal açılınca başlar, kapanınca durur
+  // soundInvite kapalıysa hiç çalmaz; variant ayarı ile uygun ses seçilir
+  useEffect(() => {
+    if (invitationModal) {
+      if (soundInvite) startInviteRingtone(soundInviteVariant);
+    } else {
+      stopInviteRingtone();
+    }
+    return () => { stopInviteRingtone(); };
+  }, [invitationModal, soundInvite, soundInviteVariant]);
 
   // Şifre sıfırlama bildirim baloncuğu
   const [showResetPanel, setShowResetPanel] = useState(false);
@@ -293,7 +314,7 @@ export default function ChatView() {
           </div>
 
           <div className="flex items-center h-full">
-          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
@@ -467,8 +488,8 @@ export default function ChatView() {
                       )}
                     </div>
                     {channel.userCount > 0 && (
-                      <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full ${
-                        activeChannel === channel.id ? 'bg-white/20' : 'bg-[var(--theme-sidebar)]'
+                      <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        activeChannel === channel.id ? 'bg-white/20 text-white' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]'
                       }`}>
                         {channel.userCount}
                       </span>
@@ -489,7 +510,7 @@ export default function ChatView() {
                             onClick={(e) => user && handleUserActionClick(e, user.id)}
                             className="flex items-center gap-2 text-[11px] font-medium transition-all group/member cursor-pointer hover:text-[var(--theme-accent)]"
                           >
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]"></div>
                             <span className="truncate flex-1">{memberDisplayName}</span>
                             {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
                               <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
@@ -509,7 +530,7 @@ export default function ChatView() {
                   e.stopPropagation();
                   const userRooms = channels.filter(c => c.ownerId === currentUser.id);
                   if (userRooms.length >= 2) {
-                    alert('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
+                    setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
                     return;
                   }
                   setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
@@ -560,45 +581,144 @@ export default function ChatView() {
                 </div>
               )}
 
-              {activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userActionMenu.userId)?.name || '') && userActionMenu.userId !== currentUser.id && (
-                <button
-                  onClick={() => {
-                    handleInviteUser(userActionMenu.userId);
-                    setUserActionMenu(null);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
-                >
-                  Davet Et
-                </button>
-              )}
+              {activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userActionMenu.userId)?.name || '') && userActionMenu.userId !== currentUser.id && (() => {
+                const uid = userActionMenu.userId;
+                const status = inviteStatuses[uid];
+                const cooldownUntil = inviteCooldowns[uid];
+                const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
+                const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
+
+                if (status === 'pending') {
+                  return (
+                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-2 text-blue-400 cursor-default">
+                      <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                      Aranıyor...
+                    </button>
+                  );
+                }
+                if (status === 'accepted') {
+                  return (
+                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-emerald-400 cursor-default">
+                      ✓ Kabul Edildi
+                    </button>
+                  );
+                }
+                if (status === 'rejected') {
+                  return (
+                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-red-400 cursor-default">
+                      ✕ Reddedildi
+                    </button>
+                  );
+                }
+                return (
+                  <div>
+                    <button
+                      disabled={onCooldown}
+                      onClick={() => { handleInviteUser(uid); setUserActionMenu(null); }}
+                      className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white"
+                    >
+                      Davet Et
+                    </button>
+                    {onCooldown && (
+                      <p className="text-[10px] text-orange-400 px-3 pb-1">
+                        {remaining}s sonra tekrar davet edebilirsiniz.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Invitation Modal */}
+        {/* Invitation Modal — phone call UI */}
         <AnimatePresence>
           {invitationModal && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
             >
               <motion.div
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                initial={{ scale: 0.90, opacity: 0, y: 24 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                className="bg-[var(--theme-bg)] rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-[var(--theme-border)]"
+                exit={{ scale: 0.90, opacity: 0, y: 24 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+                className="w-full max-w-xs overflow-hidden rounded-3xl shadow-2xl border border-white/10"
+                style={{ background: 'linear-gradient(160deg, #0f1623 0%, var(--theme-bg) 60%)' }}
               >
-                <div className="p-6 text-center">
-                  <div className="w-16 h-16 rounded-full bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-accent)] mx-auto mb-4">
-                    <Volume2 size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold text-[var(--theme-text)] mb-2">Oda Daveti</h3>
-                  <p className="text-[var(--theme-secondary-text)] text-sm mb-6">
-                    <span className="font-bold text-[var(--theme-text)]">{invitationModal.inviterName}</span> kullanıcısı sizi <span className="font-bold text-[var(--theme-text)]">{invitationModal.roomName}</span> sohbet odasına davet ediyor.
+                {/* Header */}
+                <div className="pt-10 pb-7 px-8 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--theme-secondary-text)] mb-7">
+                    Gelen Çağrı
                   </p>
-                  <div className="flex gap-3">
+
+                  {/* Pulsing avatar */}
+                  <div className="relative w-20 h-20 mx-auto mb-5">
+                    <span
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: 'var(--theme-accent)',
+                        opacity: 0.12,
+                        animation: 'invitePing 1.6s ease-out infinite',
+                      }}
+                    />
+                    <span
+                      className="absolute inset-[-8px] rounded-full"
+                      style={{
+                        background: 'var(--theme-accent)',
+                        opacity: 0.07,
+                        animation: 'invitePing 1.6s ease-out 0.5s infinite',
+                      }}
+                    />
+                    <style>{`
+                      @keyframes invitePing {
+                        0%   { transform: scale(0.85); opacity: 0.16; }
+                        70%  { transform: scale(1.35); opacity: 0; }
+                        100% { transform: scale(1.35); opacity: 0; }
+                      }
+                    `}</style>
+                    <div
+                      className="relative w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold select-none"
+                      style={{
+                        background: 'rgba(var(--theme-accent-rgb, 16,185,129), 0.15)',
+                        border: '2px solid var(--theme-accent)',
+                        boxShadow: '0 0 24px var(--theme-accent, #10b981)33',
+                        color: 'var(--theme-accent)',
+                      }}
+                    >
+                      {invitationModal.inviterAvatar?.startsWith('http') ? (
+                        <img
+                          src={invitationModal.inviterAvatar}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        invitationModal.inviterAvatar || invitationModal.inviterName.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-[var(--theme-text)] leading-tight">
+                    {invitationModal.inviterName}
+                  </h3>
+                  <p className="mt-1.5 text-sm text-[var(--theme-secondary-text)]">
+                    <span className="font-semibold" style={{ color: 'var(--theme-accent)' }}>
+                      {invitationModal.roomName}
+                    </span>{' '}
+                    odasına davet ediyor
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-white/8" />
+
+                {/* Action buttons */}
+                <div className="py-8 flex justify-center gap-16">
+                  {/* Decline */}
+                  <div className="flex flex-col items-center gap-2.5">
                     <button
                       onClick={() => {
                         if (presenceChannelRef.current && invitationModal) {
@@ -607,25 +727,54 @@ export default function ChatView() {
                             event: 'invite-rejected',
                             payload: {
                               inviterId: invitationModal.inviterId,
+                              inviteeId: currentUser.id,
                               inviteeName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
                             },
                           });
                         }
                         setInvitationModal(null);
                       }}
-                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--theme-surface)] text-[var(--theme-secondary-text)] hover:bg-red-500/20 hover:text-red-500 font-bold transition-colors"
+                      className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 group"
+                      style={{
+                        background: 'rgba(239,68,68,0.12)',
+                        border: '2px solid rgba(239,68,68,0.35)',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgb(239,68,68)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgb(239,68,68)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.12)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.35)'; }}
                     >
-                      Ret
+                      <PhoneOff size={22} className="text-red-400 group-hover:text-white transition-colors" />
                     </button>
+                    <span className="text-[11px] text-[var(--theme-secondary-text)]">Reddet</span>
+                  </div>
+
+                  {/* Accept */}
+                  <div className="flex flex-col items-center gap-2.5">
                     <button
                       onClick={() => {
+                        if (presenceChannelRef.current && invitationModal) {
+                          presenceChannelRef.current.send({
+                            type: 'broadcast',
+                            event: 'invite-accepted',
+                            payload: {
+                              inviterId: invitationModal.inviterId,
+                              inviteeId: currentUser.id,
+                            },
+                          });
+                        }
                         handleJoinChannel(invitationModal.roomId, true);
                         setInvitationModal(null);
                       }}
-                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--theme-accent)] text-white font-bold hover:bg-emerald-500 transition-colors shadow-lg"
+                      className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 group"
+                      style={{
+                        background: 'rgba(16,185,129,0.12)',
+                        border: '2px solid rgba(16,185,129,0.35)',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgb(16,185,129)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgb(16,185,129)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16,185,129,0.12)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(16,185,129,0.35)'; }}
                     >
-                      Kabul
+                      <PhoneCall size={22} className="text-emerald-400 group-hover:text-white transition-colors" />
                     </button>
+                    <span className="text-[11px] text-[var(--theme-secondary-text)]">Kabul</span>
                   </div>
                 </div>
               </motion.div>
@@ -715,7 +864,10 @@ export default function ChatView() {
               >
                 <div className="p-8 flex flex-col items-center text-center">
                   <div className="w-16 h-16 bg-[var(--theme-accent)]/20 rounded-2xl flex items-center justify-center mb-6">
-                    <Settings className="text-[var(--theme-accent)]" size={32} />
+                    {roomModal.type === 'create'
+                      ? <PlusCircle className="text-[var(--theme-accent)]" size={32} />
+                      : <Settings className="text-[var(--theme-accent)]" size={32} />
+                    }
                   </div>
                   <h3 className="text-xl font-bold text-[var(--theme-text)] mb-6">
                     {roomModal.type === 'create' ? 'Yeni Oda Oluştur' : 'Oda Ayarları'}
@@ -958,7 +1110,7 @@ export default function ChatView() {
                     className="p-3 rounded-xl bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
                     title="Odadan Ayrıl"
                   >
-                    <PhoneCall size={20} />
+                    <PhoneOff size={20} />
                   </button>
                 </div>
               </div>
@@ -1076,12 +1228,22 @@ export default function ChatView() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <div className="w-24 h-24 rounded-full bg-[var(--theme-sidebar)] flex items-center justify-center text-[var(--theme-secondary-text)] mb-6 border border-[var(--theme-border)]">
-                <Volume2 size={48} />
-              </div>
-              <h2 className="text-2xl font-bold text-[var(--theme-text)] mb-2">Henüz Bir Odada Değilsiniz</h2>
-              <p className="text-[var(--theme-secondary-text)] max-w-xs">
+            <div className="flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden">
+              {idleAnimation === 'bars' && <IdleVoiceCenter />}
+              {idleAnimation === 'wave' && <IdleVoiceWave />}
+              {/* Ince accent çizgi — animasyon ve yazıyı tek bir blok gibi bağlar */}
+              <div
+                className="relative z-10 mb-5"
+                style={{
+                  width: 32,
+                  height: 1,
+                  background: 'linear-gradient(to right, transparent, rgba(var(--theme-accent-rgb), 0.35), transparent)',
+                }}
+              />
+              <h2 className="text-xl font-bold tracking-wide text-[var(--theme-text)] mb-3 relative z-10">
+                Henüz Bir Odada Değilsiniz
+              </h2>
+              <p className="text-sm text-[var(--theme-secondary-text)] max-w-[260px] leading-relaxed relative z-10">
                 Sohbete başlamak için sol taraftaki kanallardan birine katılın.
               </p>
             </div>
@@ -1133,14 +1295,45 @@ export default function ChatView() {
                           <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
                         </div>
                       </div>
-                      {canInvite && (
-                        <button
-                          onClick={() => handleInviteUser(user.id)}
-                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white border border-[var(--theme-accent)]/30"
-                        >
-                          Davet
-                        </button>
-                      )}
+                      {canInvite && (() => {
+                        const status = inviteStatuses[user.id];
+                        const cooldownUntil = inviteCooldowns[user.id];
+                        const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
+                        const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
+
+                        if (status === 'pending') {
+                          return (
+                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-blue-400 border border-blue-400/30 flex items-center gap-1 bg-blue-500/10">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                              Aranıyor
+                            </span>
+                          );
+                        }
+                        if (status === 'accepted') {
+                          return (
+                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-emerald-400 border border-emerald-400/30 bg-emerald-500/10">
+                              ✓ Kabul
+                            </span>
+                          );
+                        }
+                        if (status === 'rejected') {
+                          return (
+                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-red-400 border border-red-400/30 bg-red-500/10">
+                              ✕ Ret
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            disabled={onCooldown}
+                            onClick={() => handleInviteUser(user.id)}
+                            title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white border border-[var(--theme-accent)]/30 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            {onCooldown ? `${remaining}s` : 'Davet'}
+                          </button>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -1213,7 +1406,7 @@ export default function ChatView() {
                 }}
                 className="p-0.5 hover:bg-black/20 rounded transition-colors"
               >
-                <Settings size={10} />
+                <Settings size={12} />
               </div>
             </button>
 
@@ -1291,7 +1484,7 @@ export default function ChatView() {
                 }}
                 className="p-0.5 hover:bg-black/20 rounded transition-colors"
               >
-                <Settings size={10} />
+                <Settings size={12} />
               </div>
             </button>
 
@@ -1375,9 +1568,10 @@ export default function ChatView() {
                   {[...Array(3)].map((_, i) => (
                     <motion.div
                       key={i}
-                      animate={{ height: ['30%', '100%', '30%'] }}
+                      animate={isPttPressed && !isMuted ? { height: ['30%', '100%', '30%'] } : { height: '30%' }}
                       transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
                       className="w-0.5 bg-[var(--theme-accent)] rounded-full"
+                      style={{ height: '30%' }}
                     />
                   ))}
                 </div>
@@ -1413,7 +1607,7 @@ export default function ChatView() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsListeningForKey(true)}
-                className={`px-2 py-0.5 rounded text-[10px] font-black transition-all ${
+                className={`px-3 py-1 rounded text-[10px] font-black transition-all ${
                   isListeningForKey
                     ? 'bg-[var(--theme-accent)] text-white animate-pulse'
                     : 'bg-[var(--theme-border)] text-[var(--theme-secondary-text)] hover:bg-[var(--theme-accent)]/10'

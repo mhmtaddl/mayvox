@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type React from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, updateUserAppVersion } from '../lib/supabase';
 import type { User, VoiceChannel } from '../types';
 
 interface Props {
@@ -17,12 +17,15 @@ interface Props {
     v: {
       inviterId: string;
       inviterName: string;
+      inviterAvatar?: string;
       roomName: string;
       roomId: string;
     } | null,
   ) => void;
   onMoved: (targetChannelId: string) => void;
   onPasswordResetUpdate?: (userId: string) => void;
+  onInviteRejected?: (inviteeId: string) => void;
+  onInviteAccepted?: (inviteeId: string) => void;
 }
 
 export function usePresence({
@@ -37,6 +40,8 @@ export function usePresence({
   setInvitationModal,
   onMoved,
   onPasswordResetUpdate,
+  onInviteRejected,
+  onInviteAccepted,
 }: Props) {
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
 
@@ -54,6 +59,12 @@ export function usePresence({
 
   const onPasswordResetUpdateRef = useRef(onPasswordResetUpdate);
   onPasswordResetUpdateRef.current = onPasswordResetUpdate;
+
+  const onInviteRejectedRef = useRef(onInviteRejected);
+  onInviteRejectedRef.current = onInviteRejected;
+
+  const onInviteAcceptedRef = useRef(onInviteAccepted);
+  onInviteAcceptedRef.current = onInviteAccepted;
 
   const startPresence = (user: User, appVersion?: string) => {
     if (presenceChannelRef.current) {
@@ -102,7 +113,9 @@ export function usePresence({
       );
     };
 
-    channel.on('presence', { event: 'sync' }, applyPresenceState);
+    channel.on('presence', { event: 'sync' }, () => {
+      applyPresenceState();
+    });
     channel.on('presence', { event: 'join' }, applyPresenceState);
     channel.on('presence', { event: 'leave' }, applyPresenceState);
 
@@ -111,9 +124,16 @@ export function usePresence({
         setInvitationModal({
           inviterId: payload.inviterId,
           inviterName: payload.inviterName,
+          inviterAvatar: payload.inviterAvatar,
           roomName: payload.roomName,
           roomId: payload.roomId,
         });
+      }
+    });
+
+    channel.on('broadcast', { event: 'invite-accepted' }, ({ payload }) => {
+      if (payload.inviterId === user.id && payload.inviteeId) {
+        onInviteAcceptedRef.current?.(payload.inviteeId);
       }
     });
 
@@ -121,6 +141,9 @@ export function usePresence({
       if (payload.inviterId === user.id) {
         setToastMsg(`${payload.inviteeName} davetinize icabet etmedi.`);
         setTimeout(() => setToastMsg(null), 4000);
+        if (payload.inviteeId) {
+          onInviteRejectedRef.current?.(payload.inviteeId);
+        }
       }
     });
 
@@ -166,6 +189,11 @@ export function usePresence({
 
     channel.on('broadcast', { event: 'move' }, ({ payload }) => {
       if (payload.userId !== user.id) return;
+      // Ref'i hemen sıfırla — React render'ı beklemeden.
+      // Aksi hâlde bu noktadan sonra gelen channel-update broadcast'leri
+      // activeChannelRef.current'ı stale (eski oda) olarak okur ve
+      // kullanıcıyı zaten terk ettiği odaya yeniden ekler (çift oda bug'ı).
+      activeChannelRef.current = null;
       setActiveChannel(null);
       disconnectRef.current().then(() => {
         onMovedRef.current(payload.targetChannelId);
@@ -187,11 +215,29 @@ export function usePresence({
       } else if (payload.action === 'update') {
         setChannels(prev =>
           prev.map(c => {
-            if (c.id !== payload.channelId) return c;
+            const myName = currentUserRef.current.name;
+            const myChannel = activeChannelRef.current;
+
+            if (c.id !== payload.channelId) {
+              // Exclusivity: bir kanal için üye listesi güncellemesi geldiğinde,
+              // o kanalda artık olan üyeleri diğer tüm kanallardan temizle.
+              // Bu, oda taşıma sırasında "iki odada birden görünme" race condition'ını önler.
+              if (Array.isArray(payload.updates?.members)) {
+                const incomingMembers = payload.updates.members as string[];
+                const filtered = (c.members || []).filter(
+                  // Kendi adımızı yalnızca activeChannelRef'e göre yönetiyoruz —
+                  // başkasının broadcast'i bizi yanlış yerden silmesin.
+                  m => m === myName || !incomingMembers.includes(m),
+                );
+                if (filtered.length !== (c.members || []).length) {
+                  return { ...c, members: filtered, userCount: filtered.length };
+                }
+              }
+              return c;
+            }
+
             const updates = { ...payload.updates };
             if (Array.isArray(updates.members)) {
-              const myName = currentUserRef.current.name;
-              const myChannel = activeChannelRef.current;
               // Remove own name then re-add based on actual channel membership.
               // This prevents stale broadcasts causing duplicate member entries.
               updates.members = (updates.members as string[]).filter(
@@ -211,6 +257,24 @@ export function usePresence({
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
         await channel.track({ userId: user.id, appVersion: appVersion ?? '' });
+
+        // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
+        // son bilinen sürüm SettingsView'de görünmeye devam eder.
+        // user.appVersion = DB'deki mevcut değer; aynıysa gereksiz write atla.
+        if (appVersion && appVersion !== user.appVersion) {
+          updateUserAppVersion(user.id, appVersion).catch(() => {});
+        }
+
+        // ── Initial hydrate ───────────────────────────────────────────────
+        // Supabase Realtime'da 'sync' eventi SUBSCRIBED'dan önce veya sonra
+        // gelebilir. track() tamamlandıktan sonra presenceState() zaten
+        // dolu olmalı; burada manuel okuyarak hemen uyguluyoruz.
+        applyPresenceState();
+
+        // Fallback hydrate: yavaş ağ koşullarında presenceState track()
+        // sonrasında hâlâ boş gelebilir (Phoenix kanalı sync gecikmesi).
+        // 300ms sonra tekrar uygula — o zaman kesinlikle dolu olur.
+        setTimeout(applyPresenceState, 300);
       }
     });
   };

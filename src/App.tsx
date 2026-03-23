@@ -48,6 +48,7 @@ type DbProfile = {
   id: string; name: string; email?: string; first_name?: string; last_name?: string;
   age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
+  app_version?: string;
 };
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
@@ -146,6 +147,11 @@ export default function App() {
   const [soundPttVariant, setSoundPttVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundPttVariant') || '1') || 1) as 1|2|3);
   const setSoundPttVariant = (v: 1|2|3) => { localStorage.setItem('soundPttVariant', String(v)); setSoundPttVariantState(v); };
 
+  const [soundInvite, setSoundInviteState] = useState(() => localStorage.getItem('soundInvite') !== 'false');
+  const setSoundInvite = (v: boolean) => { localStorage.setItem('soundInvite', String(v)); setSoundInviteState(v); };
+  const [soundInviteVariant, setSoundInviteVariantState] = useState<1|2>(() => (parseInt(localStorage.getItem('soundInviteVariant') || '1') || 1) as 1|2);
+  const setSoundInviteVariant = (v: 1|2) => { localStorage.setItem('soundInviteVariant', String(v)); setSoundInviteVariantState(v); };
+
   const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
   const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
 
@@ -154,6 +160,11 @@ export default function App() {
     return saved !== null ? parseInt(saved) : 250;
   });
   const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
+
+  const [idleAnimation, setIdleAnimationState] = useState<'bars' | 'wave' | 'off'>(
+    () => (localStorage.getItem('idleAnimation') as 'bars' | 'wave' | 'off') || 'bars'
+  );
+  const setIdleAnimation = (v: 'bars' | 'wave' | 'off') => { localStorage.setItem('idleAnimation', v); setIdleAnimationState(v); };
 
   // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -229,7 +240,7 @@ export default function App() {
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [invitationModal, setInvitationModal] = useState<{ inviterId: string; inviterName: string; roomName: string; roomId: string } | null>(null);
+  const [invitationModal, setInvitationModal] = useState<{ inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null>(null);
   const [userActionMenu, setUserActionMenu] = useState<{ userId: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -252,6 +263,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
+  // ── Invite cooldowns: davet reddedilince 60sn bekleme ───────────────────
+  // Ref: senkron guard için; State: UI güncellemesi için
+  const inviteCooldownsRef = useRef<Record<string, number>>({});
+  const [inviteCooldowns, setInviteCooldowns] = useState<Record<string, number>>({});
+  // Stable ref wrapper'lar — usePresence çağrısı bu fonksiyonlardan önce geldiği için ref gerekir
+  const handleInviteRejectedCooldownRef = useRef<(inviteeId: string) => void>(() => {});
+  const handleInviteAcceptedRef = useRef<(inviteeId: string) => void>(() => {});
+
+  // Davet durum göstergesi: pending / accepted / rejected (yok = idle)
+  const [inviteStatuses, setInviteStatuses] = useState<Record<string, 'pending' | 'accepted' | 'rejected'>>({});
+
   // ── AppState-only state ──────────────────────────────────────────────────
   const [statusTimer, setStatusTimer] = useState<number | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
@@ -266,6 +288,8 @@ export default function App() {
 
   // ── Refs ─────────────────────────────────────────────────────────────────
   const connectionLostRef = useRef(false);
+  const isDeafenedRef = useRef(isDeafened);
+  useEffect(() => { isDeafenedRef.current = isDeafened; }, [isDeafened]);
   const pendingInviteCodeRef = useRef<string | null>(null);
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
@@ -327,6 +351,8 @@ export default function App() {
     onPasswordResetUpdate: (userId) => {
       setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
     },
+    onInviteRejected: (inviteeId) => handleInviteRejectedCooldownRef.current(inviteeId),
+    onInviteAccepted: (inviteeId) => handleInviteAcceptedRef.current(inviteeId),
   });
 
   // Stable ref so the 5s timer always calls the latest resyncPresence
@@ -339,6 +365,7 @@ export default function App() {
     currentUserRef,
     activeChannelRef,
     connectionLostRef,
+    isDeafenedRef,
     isNoiseSuppressionEnabled,
     selectedInput,
     selectedOutput,
@@ -465,6 +492,8 @@ export default function App() {
         muteExpires: profile.mute_expires || undefined,
         isVoiceBanned: profile.is_voice_banned || false,
         banExpires: profile.ban_expires || undefined,
+        // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
+        appVersion: profile.app_version || undefined,
       } : {
         id: session.user.id,
         name: email,
@@ -529,11 +558,15 @@ export default function App() {
               isPrimaryAdmin: p.is_primary_admin || false,
               isMuted: p.is_muted || false,
               isVoiceBanned: p.is_voice_banned || false,
-              appVersion: knownVersionsRef.current.get(p.id),
+              // Presence cache öncelikli; yoksa DB'deki kalıcı versiyon
+              appVersion: knownVersionsRef.current.get(p.id) || p.app_version,
             }));
           return [...prev, ...offlineUsers];
         });
         resyncPresence();
+        // Fallback: WebSocket bağlantısı getAllProfiles'tan yavaş olabilir.
+        // 1.5s sonra tekrar dene — o zaman presenceState kesinlikle dolmuş olur.
+        setTimeout(() => resyncPresenceRef.current(), 1500);
       }
 
       setView('chat');
@@ -857,6 +890,10 @@ export default function App() {
   };
 
   const handleInviteUser = (userId: string) => {
+    // Cooldown guard: ret sonrası 60sn bekleme
+    const cooldownUntil = inviteCooldownsRef.current[userId];
+    if (cooldownUntil && Date.now() < cooldownUntil) return;
+
     const channel = channels.find(c => c.id === activeChannel);
     if (!channel || !presenceChannelRef.current) return;
     presenceChannelRef.current.send({
@@ -866,12 +903,60 @@ export default function App() {
         inviterId: currentUser.id,
         inviteeId: userId,
         inviterName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
+        inviterAvatar: currentUser.avatar,
         roomName: channel.name,
         roomId: channel.id,
       },
     });
+    // Davet gönderildi → pending durumuna geç, 10sn sonra otomatik sıfırla
+    setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
+    setTimeout(() => {
+      setInviteStatuses(prev => {
+        if (prev[userId] !== 'pending') return prev;
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }, 10_000);
     setUserActionMenu(null);
   };
+
+  const handleInviteRejectedCooldown = (inviteeId: string) => {
+    // Kısa süre "reddedildi" göster, sonra sil (cooldown buton disable'ı devralır)
+    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'rejected' }));
+    setTimeout(() => {
+      setInviteStatuses(prev => {
+        const next = { ...prev };
+        delete next[inviteeId];
+        return next;
+      });
+    }, 2_000);
+    // 60sn cooldown başlat
+    const expiresAt = Date.now() + 60_000;
+    inviteCooldownsRef.current[inviteeId] = expiresAt;
+    setInviteCooldowns(prev => ({ ...prev, [inviteeId]: expiresAt }));
+    setTimeout(() => {
+      setInviteCooldowns(prev => {
+        const next = { ...prev };
+        delete next[inviteeId];
+        return next;
+      });
+      delete inviteCooldownsRef.current[inviteeId];
+    }, 60_000);
+  };
+  handleInviteRejectedCooldownRef.current = handleInviteRejectedCooldown;
+
+  const handleInviteAccepted = (inviteeId: string) => {
+    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'accepted' }));
+    setTimeout(() => {
+      setInviteStatuses(prev => {
+        const next = { ...prev };
+        delete next[inviteeId];
+        return next;
+      });
+    }, 2_000);
+  };
+  handleInviteAcceptedRef.current = handleInviteAccepted;
 
   const handleKickUser = (userId: string) => {
     if (!currentUser.isAdmin) return;
@@ -1062,6 +1147,10 @@ export default function App() {
     const now = Date.now();
     const myName = currentUser.name;
     setActiveChannel(channelId);
+    // Ref'i hemen güncelle — React render'ı beklemeden.
+    // channel-update handler'ı activeChannelRef'i okur; stale kalırsa
+    // incoming broadcast'ler kullanıcıyı yanlış kanala ekleyebilir.
+    activeChannelRef.current = channelId;
     setIsConnecting(true);
     setChannels(prev => prev.map(c => {
       const members = (c.members || []).filter(m => m !== myName);
@@ -1082,9 +1171,8 @@ export default function App() {
   };
 
   const handleJoinChannel = async (id: string, isInvited: boolean = false) => {
-    console.log('[JOIN] handleJoinChannel çağrıldı', { id, isInvited, currentActiveChannel: activeChannel, currentUserName: currentUser.name });
     const channel = channels.find(c => c.id === id);
-    if (!channel) { console.warn('[JOIN] Kanal bulunamadı:', id); return; }
+    if (!channel) return;
 
     if (!isInvited && channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
       alert("Bu odaya sadece davetle girilebilir.");
@@ -1101,7 +1189,6 @@ export default function App() {
       setPasswordInput('');
       setPasswordError(false);
     } else {
-      console.log('[JOIN] connectToLiveKit çağrılıyor...');
       await performJoin(id, channel.name);
     }
   };
@@ -1170,6 +1257,8 @@ export default function App() {
       isVoiceBanned: profile.is_voice_banned || false,
       banExpires: profile.ban_expires || undefined,
       mustChangePassword: profile.must_change_password || false,
+      // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
+      appVersion: profile.app_version || undefined,
     } : {
       id: userId,
       name: email,
@@ -1222,6 +1311,8 @@ export default function App() {
       ];
     });
     resyncPresence();
+    // Fallback: aynı timing koruması — login sırasında da WebSocket geç bağlanabilir
+    setTimeout(() => resyncPresenceRef.current(), 1500);
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
     setLoginNick('');
@@ -1629,6 +1720,8 @@ export default function App() {
       ];
     });
     resyncPresence();
+    // Fallback: kayıt sırasında da WebSocket henüz bağlanmamış olabilir
+    setTimeout(() => resyncPresenceRef.current(), 1500);
     setView('chat');
     setLoginNick('');
     setLoginPassword('');
@@ -1717,6 +1810,12 @@ export default function App() {
     setAvatarBorderColor,
     pttReleaseDelay,
     setPttReleaseDelay,
+    soundInvite,
+    setSoundInvite,
+    soundInviteVariant,
+    setSoundInviteVariant,
+    idleAnimation,
+    setIdleAnimation,
   };
 
   const appStateValue: AppStateContextType = {
@@ -1804,6 +1903,8 @@ export default function App() {
     inviteRequests,
     handleSendInviteCode,
     handleRejectInvite,
+    inviteCooldowns,
+    inviteStatuses,
   };
 
   const audioValue: AudioContextType = {

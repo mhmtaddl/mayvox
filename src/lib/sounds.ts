@@ -80,6 +80,93 @@ function playPtt(ctx: AudioContext, isOn: boolean, variant: SoundVariant) {
   }
 }
 
+// ── Invite Ringtone ───────────────────────────────────────────────────────────
+export type InviteRingtoneVariant = 1 | 2;
+
+let ringtoneGain: GainNode | null = null;
+let ringtoneAutoStop: ReturnType<typeof setTimeout> | null = null;
+
+function toneToNode(
+  ctx: AudioContext, dest: AudioNode, freq: number, start: number, dur: number,
+  vol = 0.28, type: OscillatorType = 'sine',
+) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.connect(g); g.connect(dest);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, start);
+  const att = Math.min(0.01, dur * 0.1);
+  const rel = Math.min(0.03, dur * 0.15);
+  g.gain.setValueAtTime(0, start);
+  g.gain.linearRampToValueAtTime(vol, start + att);
+  g.gain.setValueAtTime(vol, start + dur - rel);
+  g.gain.linearRampToValueAtTime(0, start + dur);
+  osc.start(start); osc.stop(start + dur);
+}
+
+// Klasik: iki çift akort — 480+620 Hz, 2 saniyelik çevrim
+function ringCycleClassic(ctx: AudioContext, dest: AudioNode, t: number) {
+  toneToNode(ctx, dest, 480, t, 0.38);
+  toneToNode(ctx, dest, 620, t, 0.38);
+  toneToNode(ctx, dest, 480, t + 0.55, 0.38);
+  toneToNode(ctx, dest, 620, t + 0.55, 0.38);
+}
+
+// Yumuşak: üç çan notası (A4-C#5-E5) — triangle osilatör, 2 saniyelik çevrim
+function ringCycleSoft(ctx: AudioContext, dest: AudioNode, t: number) {
+  toneToNode(ctx, dest, 440, t,        0.28, 0.22, 'triangle');
+  toneToNode(ctx, dest, 554, t + 0.36, 0.28, 0.22, 'triangle');
+  toneToNode(ctx, dest, 659, t + 0.72, 0.28, 0.22, 'triangle');
+}
+
+function buildRingtone(ctx: AudioContext, variant: InviteRingtoneVariant, cycles: number): GainNode {
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(1, ctx.currentTime);
+  master.connect(ctx.destination);
+  for (let i = 0; i < cycles; i++) {
+    const t = ctx.currentTime + i * 2;
+    if (variant === 1) ringCycleClassic(ctx, master, t);
+    else ringCycleSoft(ctx, master, t);
+  }
+  return master;
+}
+
+export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
+  stopInviteRingtone();
+  try {
+    const ctx = getCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    ringtoneGain = buildRingtone(ctx, variant, 5); // 5 × 2s = 10s
+    ringtoneAutoStop = setTimeout(stopInviteRingtone, 10000);
+  } catch { /* sessizce geç */ }
+}
+
+export function stopInviteRingtone(): void {
+  if (ringtoneAutoStop) { clearTimeout(ringtoneAutoStop); ringtoneAutoStop = null; }
+  if (ringtoneGain) {
+    try {
+      const ctx = getCtx();
+      const g = ringtoneGain;
+      ringtoneGain = null;
+      g.gain.cancelScheduledValues(ctx.currentTime);
+      g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.06);
+      setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, 150);
+    } catch { ringtoneGain = null; }
+  }
+}
+
+// Önizleme: tek çevrim çal (2s), ardından otomatik durdur
+export function previewInviteRingtone(variant: InviteRingtoneVariant): void {
+  stopInviteRingtone();
+  try {
+    const ctx = getCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    ringtoneGain = buildRingtone(ctx, variant, 1); // sadece 1 çevrim
+    ringtoneAutoStop = setTimeout(stopInviteRingtone, 2200);
+  } catch { /* sessizce geç */ }
+}
+
 // ── Yardımcı ─────────────────────────────────────────────────────────────────
 function getCategory(type: SoundType): SoundCategory {
   if (type === 'join' || type === 'leave') return 'JoinLeave';

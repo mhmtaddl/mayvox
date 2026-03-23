@@ -19,6 +19,7 @@ interface Props {
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
   connectionLostRef: React.MutableRefObject<boolean>;
+  isDeafenedRef: React.MutableRefObject<boolean>;
   isNoiseSuppressionEnabled: boolean;
   selectedInput: string;
   selectedOutput: string;
@@ -37,6 +38,7 @@ export function useLiveKitConnection({
   currentUserRef,
   activeChannelRef,
   connectionLostRef,
+  isDeafenedRef,
   isNoiseSuppressionEnabled,
   selectedInput,
   selectedOutput,
@@ -65,14 +67,7 @@ export function useLiveKitConnection({
   const connectToLiveKit = async (
     channelId: string,
   ): Promise<boolean> => {
-    console.log('[LK] connectToLiveKit BAŞLADI', {
-      channelId,
-      currentUserName: currentUserRef.current.name,
-      hasExistingRoom: !!livekitRoomRef.current,
-    });
-
     if (isConnectingRef.current) {
-      console.warn('[LK] Zaten bağlanılıyor, bu çağrı iptal edildi');
       return false;
     }
     isConnectingRef.current = true;
@@ -83,22 +78,15 @@ export function useLiveKitConnection({
       const oldRoom = livekitRoomRef.current;
       if (oldRoom) {
         livekitRoomRef.current = null;
-        console.log('[LK] Eski oda var, disconnect ediliyor...');
         await oldRoom.disconnect();
-        console.log('[LK] Eski oda disconnect edildi');
       }
 
-      console.log('[LK] Token alınıyor...', {
-        channelId,
-        participantName: currentUserRef.current.name,
-      });
       const token = await getLiveKitToken(
         channelId,
         currentUserRef.current.name,
         () => setToastMsg('Ses sunucusuna bağlanılıyor…'),
       );
       setToastMsg(null);
-      console.log('[LK] Token alındı ✓', { tokenLength: token?.length });
 
       const room = new Room({
         audioCaptureDefaults: {
@@ -175,7 +163,10 @@ export function useLiveKitConnection({
         if (track.kind === Track.Kind.Audio) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.setAttribute('data-livekit-audio', 'true');
-          // isDeafened is applied separately via the deafen useEffect in App.tsx
+          // Yeni gelen track için deafen state'ini anında uygula.
+          // (App.tsx'teki deafen effect yalnızca mevcut elementlere çalışır;
+          //  bu satır olmadan kırmızı hoparlör açıkken yeni katılan sesi duyulur.)
+          audioEl.muted = isDeafenedRef.current;
           document.body.appendChild(audioEl);
 
           // Kaydedilmiş ses seviyesini uygula
@@ -225,7 +216,6 @@ export function useLiveKitConnection({
         setConnectionLevel(1);
         setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
         reconnectTimeout = setTimeout(async () => {
-          console.log('[LK] Reconnect timeout (15s) — zorla disconnect');
           await room.disconnect();
           setConnectionLevel(0);
           setToastMsg(
@@ -279,7 +269,6 @@ export function useLiveKitConnection({
           isConnectingRef.current = false;
           setIsConnecting(false);
           if (reason !== DisconnectReason.CLIENT_INITIATED) {
-            console.log('[LK] Non-CLIENT_INITIATED → activeChannel null');
             setActiveChannel(null);
             connectionLostRef.current = true;
             setConnectionLevel(0);
@@ -309,7 +298,6 @@ export function useLiveKitConnection({
       // ban durumu değiştiğinde App.tsx'teki effect mic'i tekrar kapatır.
       await room.localParticipant.setMicrophoneEnabled(false);
 
-      console.log('[LK] connectToLiveKit TAMAMLANDI ✓');
       isConnectingRef.current = false;
       return true;
     } catch (err) {
