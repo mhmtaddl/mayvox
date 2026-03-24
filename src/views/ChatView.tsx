@@ -1112,6 +1112,12 @@ export default function ChatView() {
                 </div>
               </div>
 
+              <style>{`
+                @keyframes speakBar {
+                  0%, 100% { transform: scaleY(0.25); }
+                  50%       { transform: scaleY(1); }
+                }
+              `}</style>
               <div className={`grid gap-4 ${
                 sortedChannelMembers.length <= 1 ? 'grid-cols-1' :
                 sortedChannelMembers.length <= 4 ? 'grid-cols-1 sm:grid-cols-2' :
@@ -1136,6 +1142,10 @@ export default function ChatView() {
                     roleLabel = 'A';
                   }
 
+                  const isSpeakingActive =
+                    (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) ||
+                    (!isMe && !!user.isSpeaking);
+
                   return (
                     <div
                       key={user.id}
@@ -1143,13 +1153,15 @@ export default function ChatView() {
                       className={`${
                         isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]' : 'bg-[var(--theme-sidebar)]/40 border-[var(--theme-border)]'
                       } border-2 rounded-2xl ${boxPadding} flex items-center gap-3 relative group cursor-pointer transition-all duration-200 ${
-                        isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned
-                          ? 'border-[var(--theme-accent)] shadow-[0_0_15px_rgba(var(--theme-accent-rgb),0.5)] scale-[1.02]'
+                        isSpeakingActive
+                          ? 'border-[var(--theme-accent)] shadow-[0_0_14px_rgba(var(--theme-accent-rgb),0.40)] scale-[1.02]'
                           : ''
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden`}>
+                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden ${
+                          isSpeakingActive ? 'ring-2 ring-[var(--theme-accent)] ring-offset-1 ring-offset-[var(--theme-bg)]' : ''
+                        }`}>
                           {user.avatar && user.avatar.startsWith('http') ? (
                             <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
@@ -1186,7 +1198,18 @@ export default function ChatView() {
                               </div>
                             </div>
                           ) : user.isSpeaking ? (
-                            <p className="text-[var(--theme-accent)] text-[10px] font-bold animate-pulse">Konuşuyor...</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[var(--theme-accent)] text-[10px] font-bold">Konuşuyor</span>
+                              <div className="flex items-end gap-[2px] h-3">
+                                {[0, 1, 2].map(j => (
+                                  <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
+                                    height: '10px',
+                                    transformOrigin: 'bottom',
+                                    animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
+                                  }} />
+                                ))}
+                              </div>
+                            </div>
                           ) : (
                             <p className={`${statusSize} font-bold truncate ${getStatusColor(user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif'))}`}>
                               {user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')}
@@ -1263,7 +1286,7 @@ export default function ChatView() {
                       <div className="relative shrink-0">
                         <div
                           className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
-                          style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
+                          style={{ borderColor: user.isSpeaking ? 'var(--theme-accent)' : (isMe ? avatarBorderColor : 'transparent') }}
                         >
                           {user.avatar?.startsWith('http')
                             ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -1279,9 +1302,26 @@ export default function ChatView() {
                           {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
-                          {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
-                          {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
-                          <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                          {user.isSpeaking ? (
+                            <>
+                              <span className="text-[9px] font-bold uppercase tracking-tight text-[var(--theme-accent)]">Konuşuyor</span>
+                              <div className="flex items-end gap-[1.5px] h-2.5 ml-0.5">
+                                {[0, 1, 2].map(j => (
+                                  <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
+                                    height: '8px',
+                                    transformOrigin: 'bottom',
+                                    animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
+                                  }} />
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
+                              {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
+                              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       {canInvite && (() => {
