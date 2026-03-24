@@ -77,7 +77,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -88,28 +88,41 @@ export function usePresence({
       // presenceState() is empty at call time (race condition fix).
       versionMap.forEach((v, id) => knownVersionsRef.current.set(id, v));
 
+      // Audio state map: selfMuted / selfDeafened from presence track.
+      // This provides initial hydrate for new joiners who haven't received a speaking broadcast yet.
+      const audioMap = new Map(
+        presenceData
+          .filter(p => p.selfMuted !== undefined || p.selfDeafened !== undefined)
+          .map(p => [p.userId, { selfMuted: p.selfMuted, selfDeafened: p.selfDeafened }]),
+      );
+
       setAllUsers(prev =>
-        prev.map(
-          u =>
-            ({
-              ...u,
-              appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
-              status:
-                u.id === user.id
+        prev.map(u => {
+          const audio = audioMap.get(u.id);
+          return {
+            ...u,
+            appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
+            status:
+              u.id === user.id
+                ? 'online'
+                : onlineIds.has(u.id)
                   ? 'online'
-                  : onlineIds.has(u.id)
-                    ? 'online'
-                    : 'offline',
-              statusText:
-                u.id === user.id
-                  ? u.statusText
-                  : onlineIds.has(u.id)
-                    ? u.statusText === 'Çevrimdışı'
-                      ? 'Aktif'
-                      : u.statusText
-                    : 'Çevrimdışı',
-            }) as User,
-        ),
+                  : 'offline',
+            statusText:
+              u.id === user.id
+                ? u.statusText
+                : onlineIds.has(u.id)
+                  ? u.statusText === 'Çevrimdışı'
+                    ? 'Aktif'
+                    : u.statusText
+                  : 'Çevrimdışı',
+            // Apply audio state only if presence data includes it (skip self — local state is authoritative)
+            ...(audio !== undefined && u.id !== user.id && {
+              selfMuted: audio.selfMuted,
+              selfDeafened: audio.selfDeafened,
+            }),
+          } as User;
+        }),
       );
     };
 

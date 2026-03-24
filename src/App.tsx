@@ -1365,10 +1365,19 @@ export default function App() {
   };
 
   // ── appVersion IPC async geldikten sonra presence'ı güncelle
+  // selfMuted / selfDeafened dahil edilmezse track() bunları siler; her zaman tam payload gönder.
   useEffect(() => {
     if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened });
   }, [appVersion, currentUser.id]);
+
+  // ── Mic / Deafen toggle → presence track güncelle (initial hydrate için)
+  // Speaking broadcast anlık değişimi yayar; bu effect yeni açılan client'ların
+  // presenceState() üzerinden doğru audio state'i görmesini sağlar.
+  useEffect(() => {
+    if (!currentUser.id || !presenceChannelRef.current) return;
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened });
+  }, [isMuted, isDeafened]);
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
   useEffect(() => {
