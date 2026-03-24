@@ -48,6 +48,7 @@ import { type AudioCaptureOptions, type RemoteParticipant, RemoteAudioTrack } fr
 type DbProfile = {
   id: string; name: string; email?: string; first_name?: string; last_name?: string;
   age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
+  is_moderator?: boolean;
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
   app_version?: string; last_seen_at?: string; total_usage_minutes?: number;
 };
@@ -62,7 +63,7 @@ import { AudioCtx, AudioContextType } from './contexts/AudioContext';
 import { UserContext, UserContextType } from './contexts/UserContext';
 import { ChannelContext, ChannelContextType } from './contexts/ChannelContext';
 import { UIContext, UIContextType } from './contexts/UIContext';
-import { SettingsCtx, SettingsContextType } from './contexts/SettingsCtx';
+import { SettingsCtx, SettingsContextType, AUDIO_PRESETS, type AudioProfile } from './contexts/SettingsCtx';
 
 import { useDevices } from './hooks/useDevices';
 import { usePttAudio } from './hooks/usePttAudio';
@@ -164,6 +165,20 @@ export default function App() {
     return saved !== null ? parseInt(saved) : 250;
   });
   const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
+
+  const [audioProfile, setAudioProfileState] = useState<AudioProfile>(
+    () => (localStorage.getItem('audioProfile') as AudioProfile) || 'clean',
+  );
+  const setAudioProfile = (profile: AudioProfile) => {
+    localStorage.setItem('audioProfile', profile);
+    setAudioProfileState(profile);
+    if (profile !== 'custom') {
+      const p = AUDIO_PRESETS[profile];
+      setIsNoiseSuppressionEnabled(p.noiseSuppression);
+      setNoiseThreshold(p.noiseThreshold);
+      setPttReleaseDelay(p.pttReleaseDelay);
+    }
+  };
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -364,6 +379,8 @@ export default function App() {
   resyncPresenceRef.current = resyncPresence;
 
   // ── LiveKit hook ─────────────────────────────────────────────────────────
+  const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
+
   const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit } = useLiveKitConnection({
     presenceChannelRef,
     currentUserRef,
@@ -381,6 +398,7 @@ export default function App() {
     setAllUsers,
     allUsersRef,
     userVolumesRef,
+    setSpeakingLevels,
   });
 
   // Keep forward ref current so usePresence always calls the real function
@@ -395,6 +413,7 @@ export default function App() {
     handleUnbanUser,
     handleDeleteUser,
     handleToggleAdmin,
+    handleToggleModerator,
   } = useModeration({
     currentUser,
     allUsers,
@@ -404,9 +423,13 @@ export default function App() {
     onSelfDelete: () => setView('login-selection'),
   });
 
-  // ── Global network quality monitoring ────────────────────────────────────
+  // ── Fallback network quality (oda dışı) ─────────────────────────────────
+  // Oda içindeyken LiveKit kendi ConnectionQualityChanged eventi ile besler.
+  // Bu fallback sadece LiveKit bağlantısı yokken çalışır.
   useEffect(() => {
-    const getQualityLevel = (): number => {
+    const isInRoom = () => !!livekitRoomRef.current;
+
+    const getNetworkType = (): number => {
       if (!navigator.onLine) return 0;
       const conn = (navigator as any).connection;
       if (!conn) return 4;
@@ -417,14 +440,17 @@ export default function App() {
       return 4;
     };
 
+    const rttToLevel = (rtt: number): number =>
+      rtt < 150 ? 4 : rtt < 300 ? 3 : rtt < 600 ? 2 : 1;
+
     const onOffline = () => {
       connectionLostRef.current = true;
       setConnectionLevel(0);
       setToastMsg('İnternet bağlantısı kesildi.');
     };
     const onOnline = () => {
-      if (livekitRoomRef.current) return;
-      setConnectionLevel(getQualityLevel());
+      if (isInRoom()) return;
+      setConnectionLevel(getNetworkType());
       if (connectionLostRef.current) {
         connectionLostRef.current = false;
         setToastMsg('İnternet bağlantısı yeniden kuruldu.');
@@ -432,8 +458,8 @@ export default function App() {
       }
     };
     const onConnectionChange = () => {
-      if (livekitRoomRef.current) return;
-      setConnectionLevel(getQualityLevel());
+      if (isInRoom()) return;
+      setConnectionLevel(getNetworkType());
     };
 
     window.addEventListener('offline', onOffline);
@@ -441,23 +467,29 @@ export default function App() {
     const conn = (navigator as any).connection;
     if (conn) conn.addEventListener('change', onConnectionChange);
 
+    // Fallback ping — sadece oda dışında
     const pingInterval = setInterval(async () => {
-      if (livekitRoomRef.current || !navigator.onLine) return;
+      if (isInRoom() || !navigator.onLine) return;
       const start = Date.now();
       try {
         await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store', headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY } });
         const rtt = Date.now() - start;
-        setConnectionLevel(rtt < 100 ? 4 : rtt < 250 ? 3 : rtt < 500 ? 2 : 1);
+        // Ref'i tekrar kontrol — fetch sırasında odaya girilmiş olabilir
+        if (isInRoom()) return;
+        const level = rttToLevel(rtt);
+        logger.info('Fallback ping', { rtt, level });
+        setConnectionLevel(level);
         if (connectionLostRef.current) {
           connectionLostRef.current = false;
           setToastMsg(null);
         }
       } catch {
+        if (isInRoom()) return;
         setConnectionLevel(0);
       }
-    }, 10000);
+    }, 15000);
 
-    setConnectionLevel(getQualityLevel());
+    setConnectionLevel(getNetworkType());
 
     return () => {
       window.removeEventListener('offline', onOffline);
@@ -562,6 +594,7 @@ export default function App() {
               statusText: 'Çevrimdışı',
               isAdmin: p.is_admin || false,
               isPrimaryAdmin: p.is_primary_admin || false,
+              isModerator: p.is_moderator || false,
               isMuted: p.is_muted || false,
               isVoiceBanned: p.is_voice_banned || false,
               // Presence cache öncelikli; yoksa DB'deki kalıcı versiyon
@@ -1266,6 +1299,7 @@ export default function App() {
       statusText: 'Aktif',
       isAdmin: profile.is_admin || false,
       isPrimaryAdmin: profile.is_primary_admin || false,
+      isModerator: profile.is_moderator || false,
       isMuted: profile.is_muted || false,
       muteExpires: profile.mute_expires || undefined,
       isVoiceBanned: profile.is_voice_banned || false,
@@ -1311,6 +1345,7 @@ export default function App() {
             statusText: 'Çevrimdışı',
             isAdmin: p.is_admin || false,
             isPrimaryAdmin: p.is_primary_admin || false,
+            isModerator: p.is_moderator || false,
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
             appVersion: knownVersionsRef.current.get(p.id),
@@ -1750,6 +1785,7 @@ export default function App() {
             statusText: 'Çevrimdışı',
             isAdmin: p.is_admin || false,
             isPrimaryAdmin: p.is_primary_admin || false,
+            isModerator: p.is_moderator || false,
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
             appVersion: knownVersionsRef.current.get(p.id),
@@ -1865,6 +1901,8 @@ export default function App() {
     setSoundInviteVariant,
     adminBorderEffect,
     setAdminBorderEffect,
+    audioProfile,
+    setAudioProfile,
   };
 
   const appStateValue: AppStateContextType = {
@@ -1917,6 +1955,7 @@ export default function App() {
     handleUnbanUser,
     handleDeleteUser,
     handleToggleAdmin,
+    handleToggleModerator,
     handleGenerateCode,
     handleLogin,
     handleLogout,
@@ -1975,6 +2014,7 @@ export default function App() {
     setShowInputSettings,
     showOutputSettings,
     setShowOutputSettings,
+    speakingLevels,
   };
 
   return (

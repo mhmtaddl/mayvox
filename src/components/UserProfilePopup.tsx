@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor, Clock, History, Activity } from 'lucide-react';
+import { ShieldCheck, Shield, Monitor, Clock, History, Activity } from 'lucide-react';
 import type { User } from '../types';
 
 interface Props {
@@ -137,7 +137,8 @@ export default function UserProfilePopup({
             <span className="font-bold text-sm text-[var(--theme-text)] leading-tight">
               {user.firstName} {user.lastName}
             </span>
-            {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
+            {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
+            {!user.isAdmin && user.isModerator && <Shield size={12} className="text-violet-400 shrink-0" title="Moderatör" />}
             {isMe && (
               <span className="text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] rounded-full border border-[var(--theme-accent)]/25 leading-none">
                 SEN

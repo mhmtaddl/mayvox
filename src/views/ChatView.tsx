@@ -35,6 +35,8 @@ import UserProfilePopup from '../components/UserProfilePopup';
 import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
+import AnnouncementsPanel from '../components/AnnouncementsPanel';
+import UpdateHub from '../components/UpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { Mail } from 'lucide-react';
 
@@ -139,6 +141,7 @@ export default function ChatView() {
   const {
     volumeLevel,
     isPttPressed,
+    speakingLevels,
     connectionLevel,
     selectedInput,
     setSelectedInput,
@@ -324,14 +327,25 @@ export default function ChatView() {
       {/* Header */}
       <header className="flex flex-col bg-[var(--theme-bg)] z-10 shrink-0">
         <div className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0 ring-1 ring-[var(--theme-border)]/30">
               <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-lg font-bold tracking-tight">CAYLAKLAR İLE SOHBET</h1>
+            <div className="flex flex-col leading-none">
+              <h1 className="text-[15px] tracking-[-0.01em]"><span className="font-extrabold text-[var(--theme-text)]">CYLK</span><span className="font-semibold text-[var(--theme-accent)]">Sohbet</span></h1>
+              <span className="text-[8px] font-medium tracking-[0.2em] uppercase text-[var(--theme-secondary-text)]/40 mt-0.5">sadece caylaklar</span>
+            </div>
           </div>
 
-          <div className="flex items-center h-full">
+          <div className="flex items-center h-full gap-2">
+          {updateInfo && (
+            <UpdateHub
+              updateInfo={updateInfo}
+              onDownload={onUpdateDownload}
+              onInstall={onUpdateInstall}
+              onDismiss={onUpdateDismiss}
+            />
+          )}
           <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
@@ -409,57 +423,7 @@ export default function ChatView() {
           </div>
         </div>
 
-        {/* Güncelleme bildirimi — header alt bandı */}
-        <AnimatePresence>
-          {updateInfo && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              {updateInfo.state === 'available' && (
-                <div className="flex items-center justify-between px-6 py-2 bg-blue-600/20 border-t border-blue-500/30 text-sm">
-                  <span className="text-blue-300 font-medium">
-                    Yeni sürüm: <span className="font-bold text-white">v{updateInfo.version}</span>
-                    {updateInfo.sizeMB && <span className="text-blue-400 ml-1">({updateInfo.sizeMB} MB)</span>}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={onUpdateDownload} className="px-3 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold transition-colors">
-                      İndir
-                    </button>
-                    <button onClick={onUpdateDismiss} className="px-2 py-1 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-red-300 text-xs font-bold transition-colors">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              )}
-              {updateInfo.state === 'downloading' && (
-                <div className="flex items-center gap-3 px-6 py-2 bg-amber-600/20 border-t border-amber-500/30">
-                  <span className="text-amber-300 text-xs font-medium shrink-0">v{updateInfo.version} indiriliyor…</span>
-                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${updateInfo.progress}%` }} />
-                  </div>
-                  <span className="text-amber-300 text-xs font-bold shrink-0">%{updateInfo.progress}</span>
-                </div>
-              )}
-              {updateInfo.state === 'downloaded' && (
-                <div className="flex items-center justify-between px-6 py-2 bg-emerald-600/20 border-t border-emerald-500/30 text-sm">
-                  <span className="text-emerald-300 font-medium">v{updateInfo.version} indirildi ve hazır</span>
-                  <button onClick={onUpdateInstall} className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors">
-                    Yükle ve Yeniden Başlat
-                  </button>
-                </div>
-              )}
-              {updateInfo.state === 'dismissed' && (
-                <div className="flex items-center justify-between px-6 py-2 bg-red-600/10 border-t border-red-500/20 text-xs">
-                  <span className="text-red-400">Yeni versiyonu indirmediğiniz için uygulamayı kullanırken hatalarla karşılaşabilirsiniz.</span>
-                  <button onClick={onUpdateDismiss} className="ml-3 text-red-400 hover:text-red-300 font-bold transition-colors shrink-0">✕</button>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Eski banner kaldırıldı — UpdateHub header'da yaşıyor */}
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -1168,8 +1132,10 @@ export default function ChatView() {
                   let roleLabel = (index + 1).toString();
                   if (currentChannel?.ownerId === user.id) {
                     roleLabel = 'M';
-                  } else if (!currentChannel?.ownerId && user.isAdmin) {
+                  } else if (user.isAdmin) {
                     roleLabel = 'A';
+                  } else if (user.isModerator) {
+                    roleLabel = 'Mod';
                   }
 
                   const isSpeakingActive =
@@ -1206,8 +1172,8 @@ export default function ChatView() {
                         {user.isAdmin && adminBorderEffect && !isSpeakingActive && (
                           <div className="absolute inset-[-3px] rounded-xl ring-2 ring-[var(--theme-accent)]/45 animate-pulse pointer-events-none" />
                         )}
-                        <div className={`absolute -bottom-1 -right-1 ${memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-md flex items-center justify-center font-bold ${
-                          roleLabel === 'M' || roleLabel === 'A' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'
+                        <div className={`absolute -bottom-1 -right-1 ${roleLabel === 'Mod' ? 'w-5 h-4 text-[7px]' : memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-md flex items-center justify-center font-bold ${
+                          roleLabel === 'M' || roleLabel === 'A' ? 'text-[var(--theme-accent)]' : roleLabel === 'Mod' ? 'text-violet-400' : 'text-[var(--theme-secondary-text)]'
                         }`}>
                           {roleLabel}
                         </div>
@@ -1241,13 +1207,19 @@ export default function ChatView() {
                             </div>
                           ) : user.isSpeaking ? (
                             <div className="flex items-end gap-[2px] h-3">
-                              {[0, 1, 2].map(j => (
-                                <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
-                                  height: '10px',
-                                  transformOrigin: 'bottom',
-                                  animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
-                                }} />
-                              ))}
+                              {([0.65, 1.0, 0.55] as const).map((mult, j) => {
+                                const lvl = (speakingLevels[user.name] ?? 0) * 100;
+                                const h = lvl > 4
+                                  ? Math.max(25, Math.min(100, lvl * mult))
+                                  : 25;
+                                return (
+                                  <div
+                                    key={j}
+                                    className="w-[2px] rounded-full bg-[var(--theme-accent)] transition-all duration-200"
+                                    style={{ height: `${h}%`, transformOrigin: 'bottom' }}
+                                  />
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className={`${statusSize} font-bold truncate ${getStatusColor(user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif'))}`}>
@@ -1287,16 +1259,19 @@ export default function ChatView() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center mb-6">
-                <Volume2 size={32} className="text-[var(--theme-accent)]" />
+            <div className="flex-1 flex flex-col overflow-y-auto">
+              <div className="text-center pt-10 pb-2">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center mb-4 mx-auto">
+                  <Volume2 size={28} className="text-[var(--theme-accent)]" />
+                </div>
+                <h2 className="text-lg font-bold tracking-wide text-[var(--theme-text)] mb-1.5">
+                  Henüz Bir Odada Değilsiniz
+                </h2>
+                <p className="text-xs text-[var(--theme-secondary-text)] max-w-[240px] leading-relaxed mx-auto">
+                  Sohbete başlamak için sol taraftaki kanallardan birine katılın.
+                </p>
               </div>
-              <h2 className="text-xl font-bold tracking-wide text-[var(--theme-text)] mb-3">
-                Henüz Bir Odada Değilsiniz
-              </h2>
-              <p className="text-sm text-[var(--theme-secondary-text)] max-w-[260px] leading-relaxed">
-                Sohbete başlamak için sol taraftaki kanallardan birine katılın.
-              </p>
+              <AnnouncementsPanel currentUser={currentUser} />
             </div>
           )}
         </main>
@@ -1342,7 +1317,8 @@ export default function ChatView() {
                       <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{user.firstName} {user.lastName} ({user.age})</span>
-                          {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
+                          {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
+                          {!user.isAdmin && user.isModerator && <Shield size={12} className="text-violet-400 shrink-0" title="Moderatör" />}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                           {/* Mic / deafen durum ikonları — kalıcı audio state */}
@@ -1426,7 +1402,8 @@ export default function ChatView() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{user.firstName} {user.lastName} ({user.age})</span>
-                      {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" />}
+                      {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" title="Admin" />}
+                      {!user.isAdmin && user.isModerator && <Shield size={12} className="text-violet-400" title="Moderatör" />}
                     </div>
                   </div>
                 ))}

@@ -4,6 +4,7 @@ import {
   updateUserModeration,
   deleteUser,
   signOut,
+  toggleUserModerator,
 } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import type { User } from '../types';
@@ -156,6 +157,23 @@ export function useModeration({
     broadcastModeration(userId, updates);
   };
 
+  const handleToggleModerator = async (userId: string): Promise<void> => {
+    if (!currentUser.isPrimaryAdmin) return;
+    const targetUser = allUsers.find(u => u.id === userId);
+    if (!targetUser) return;
+    const newIsModerator = !targetUser.isModerator;
+    const updates = { isModerator: newIsModerator };
+    if (isSupabaseUser(userId)) {
+      const { data, error } = await toggleUserModerator(userId, newIsModerator);
+      if (error || rpcError(data)) { showError(); return; }
+    }
+    logger.info('Moderation: toggle-moderator', { by: currentUser.id, target: userId, newIsModerator });
+    setAllUsers(prev =>
+      prev.map(u => (u.id === userId ? { ...u, ...updates } : u)),
+    );
+    broadcastModeration(userId, updates);
+  };
+
   return {
     broadcastModeration,
     handleMuteUser,
@@ -164,5 +182,6 @@ export function useModeration({
     handleUnbanUser,
     handleDeleteUser,
     handleToggleAdmin,
+    handleToggleModerator,
   };
 }

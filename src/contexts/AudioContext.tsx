@@ -19,6 +19,7 @@ export interface AudioContextType {
   setShowInputSettings: (v: boolean) => void;
   showOutputSettings: boolean;
   setShowOutputSettings: (v: boolean) => void;
+  speakingLevels: Record<string, number>;
 }
 
 export const AudioCtx = createContext<AudioContextType | null>(null);

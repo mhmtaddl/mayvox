@@ -1,6 +1,60 @@
 import React, { createContext, useContext } from 'react';
 import { Theme } from '../types';
 
+export type AudioProfile = 'clean' | 'broadcast' | 'natural' | 'noisy' | 'custom';
+
+export interface AudioPreset {
+  noiseSuppression: boolean;
+  noiseThreshold: number;
+  pttReleaseDelay: number;
+}
+
+export const AUDIO_PRESETS: Record<Exclude<AudioProfile, 'custom'>, AudioPreset> = {
+  clean:     { noiseSuppression: true,  noiseThreshold: 15, pttReleaseDelay: 150 },
+  broadcast: { noiseSuppression: true,  noiseThreshold: 35, pttReleaseDelay: 300 },
+  natural:   { noiseSuppression: false, noiseThreshold: 5,  pttReleaseDelay: 100 },
+  noisy:     { noiseSuppression: true,  noiseThreshold: 42, pttReleaseDelay: 350 },
+};
+
+export interface AudioProfileMeta {
+  id: Exclude<AudioProfile, 'custom'>;
+  icon: string;
+  label: string;
+  desc: string;
+  tags: string[];
+}
+
+export const AUDIO_PROFILE_META: AudioProfileMeta[] = [
+  {
+    id: 'clean',
+    icon: '🎙️',
+    label: 'Temiz Ses',
+    desc: 'Dengeli filtre, günlük kullanım için ideal.',
+    tags: ['Gürültü susturma', 'Orta eşik'],
+  },
+  {
+    id: 'broadcast',
+    icon: '🎧',
+    label: 'Yayıncı Modu',
+    desc: 'Maksimum filtre, en temiz ses kalitesi.',
+    tags: ['Agresif filtre', 'Uzun gecikme'],
+  },
+  {
+    id: 'natural',
+    icon: '🗣️',
+    label: 'Doğal Ses',
+    desc: 'Minimum işlem, ham ve doğal ses.',
+    tags: ['Filtre kapalı', 'Düşük gecikme'],
+  },
+  {
+    id: 'noisy',
+    icon: '🔇',
+    label: 'Gürültülü Ortam',
+    desc: 'Kafe ve dış ortam için yüksek baskılama.',
+    tags: ['Yüksek eşik', 'Arka plan filtreli'],
+  },
+];
+
 export interface SettingsContextType {
   currentTheme: Theme;
   setCurrentTheme: (v: Theme) => void;
@@ -36,6 +90,8 @@ export interface SettingsContextType {
   setSoundInviteVariant: (v: 1 | 2) => void;
   adminBorderEffect: boolean;
   setAdminBorderEffect: (v: boolean) => void;
+  audioProfile: AudioProfile;
+  setAudioProfile: (v: AudioProfile) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

@@ -8,6 +8,7 @@ import {
   ConnectionQuality,
   DisconnectReason,
   RemoteAudioTrack,
+  type Participant,
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
@@ -31,6 +32,7 @@ interface Props {
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
   allUsersRef: React.MutableRefObject<User[]>;
   userVolumesRef: React.MutableRefObject<Record<string, number>>;
+  setSpeakingLevels: (levels: Record<string, number>) => void;
 }
 
 export function useLiveKitConnection({
@@ -50,6 +52,7 @@ export function useLiveKitConnection({
   setAllUsers,
   allUsersRef,
   userVolumesRef,
+  setSpeakingLevels,
 }: Props) {
   const livekitRoomRef = useRef<Room | null>(null);
   const isConnectingRef = useRef(false);
@@ -197,6 +200,14 @@ export function useLiveKitConnection({
         playSound('leave');
       });
 
+      room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
+        const levels: Record<string, number> = {};
+        speakers.forEach(p => {
+          if (!p.isLocal) levels[p.identity] = p.audioLevel;
+        });
+        setSpeakingLevels(levels);
+      });
+
       room.on(RoomEvent.ConnectionQualityChanged, quality => {
         const level =
           quality === ConnectionQuality.Excellent
@@ -204,8 +215,9 @@ export function useLiveKitConnection({
             : quality === ConnectionQuality.Good
               ? 3
               : quality === ConnectionQuality.Poor
-                ? 1
-                : 0;
+                ? 2
+                : 1; // Lost / Unknown
+        logger.info('LiveKit quality', { quality: ConnectionQuality[quality], level });
         setConnectionLevel(level);
       });
 
@@ -264,6 +276,7 @@ export function useLiveKitConnection({
         // Only update app-level state if this room is still the active room.
         // On channel switch, livekitRoomRef is already null (cleared above)
         // so we won't accidentally reset state for the new room.
+        setSpeakingLevels({});
         if (livekitRoomRef.current === room) {
           livekitRoomRef.current = null;
           isConnectingRef.current = false;

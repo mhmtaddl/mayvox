@@ -20,6 +20,8 @@ import {
   KeyRound,
   X,
   Mail,
+  VolumeX,
+  Ban,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
@@ -30,7 +32,33 @@ import InviteRequestPanel from '../components/InviteRequestPanel';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../lib/sounds';
 import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
-import { useSettings } from '../contexts/SettingsCtx';
+import { useSettings, AUDIO_PROFILE_META } from '../contexts/SettingsCtx';
+import { useUI } from '../contexts/UIContext';
+
+// ── Module-level helpers (stable references, no unmount/remount on re-render) ──
+
+const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(); }}
+    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none cursor-pointer ${
+      checked ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
+    }`}
+  >
+    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+  </button>
+);
+
+const SLabel = ({ icon, children, badge }: { icon: React.ReactNode; children: React.ReactNode; badge?: React.ReactNode }) => (
+  <div className="flex items-center gap-2 mb-5">
+    <span className="text-[var(--theme-accent)]/70">{icon}</span>
+    <span className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">{children}</span>
+    {badge}
+    <div className="flex-1 h-px bg-[var(--theme-border)]/60 ml-1" />
+  </div>
+);
 
 export default function SettingsView() {
   const {
@@ -71,7 +99,11 @@ export default function SettingsView() {
     setPttReleaseDelay,
     adminBorderEffect,
     setAdminBorderEffect,
+    audioProfile,
+    setAudioProfile,
   } = useSettings();
+
+  const { setToastMsg } = useUI();
 
   const {
     handleMuteUser,
@@ -80,6 +112,7 @@ export default function SettingsView() {
     handleUnbanUser,
     handleDeleteUser,
     handleToggleAdmin,
+    handleToggleModerator,
     handleGenerateCode,
     handleCopyCode,
     generatedCode,
@@ -334,28 +367,6 @@ export default function SettingsView() {
   };
 
   // ── UI helpers ────────────────────────────────────────────────────────────
-
-  const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none cursor-pointer ${
-        checked ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
-      }`}
-    >
-      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-    </button>
-  );
-
-  const SLabel = ({ icon, children, badge }: { icon: React.ReactNode; children: React.ReactNode; badge?: React.ReactNode }) => (
-    <div className="flex items-center gap-2 mb-5">
-      <span className="text-[var(--theme-accent)]/70">{icon}</span>
-      <span className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">{children}</span>
-      {badge}
-      <div className="flex-1 h-px bg-[var(--theme-border)]/60 ml-1" />
-    </div>
-  );
 
   // Shared input class
   const inputCls = 'w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3.5 py-2.5 text-sm focus:border-[var(--theme-accent)] focus:ring-2 focus:ring-[var(--theme-accent)]/10 outline-none transition-all text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40';
@@ -627,18 +638,18 @@ export default function SettingsView() {
                 { label: 'Mikrofon / Hoparlör', desc: 'Mikrofon veya hoparlör açılıp kapandığında.', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen },
                 { label: 'Bas-Konuş', desc: 'Bas-Konuş tuşuna basılıp bırakıldığında.', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt },
               ] as const).map(({ label, desc, category, variant, setVariant, enabled, setEnabled }) => (
-                <div key={category} className="flex items-center gap-4 px-6 py-4">
-                  <div className="flex-1 min-w-0">
+                <div key={category} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-6 py-4">
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--theme-text)]">{label}</p>
                     <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">{desc}</p>
                   </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex items-center gap-2">
                     {([1, 2] as SoundVariant[]).map(v => (
                       <button
                         key={v}
                         disabled={!enabled}
                         onClick={() => { setVariant(v); previewSound(category, v); }}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
+                        className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                           variant === v && enabled
                             ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
                             : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
@@ -647,24 +658,24 @@ export default function SettingsView() {
                         {v === 1 ? 'Ses A' : 'Ses B'}
                       </button>
                     ))}
-                    <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} />
                   </div>
+                  <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} />
                 </div>
               ))}
 
               {/* Davet Çağrısı */}
-              <div className="flex items-center gap-4 px-6 py-4">
-                <div className="flex-1 min-w-0">
+              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-6 py-4">
+                <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
                   <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Birisi sizi odaya davet ettiğinde çalan zil sesi.</p>
                 </div>
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex items-center gap-2">
                   {([1, 2] as const).map(v => (
                     <button
                       key={v}
                       disabled={!soundInvite}
                       onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
+                      className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                         soundInviteVariant === v && soundInvite
                           ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
                           : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
@@ -673,10 +684,76 @@ export default function SettingsView() {
                       {v === 1 ? 'Klasik' : 'Yumuşak'}
                     </button>
                   ))}
-                  <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} />
                 </div>
+                <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} />
               </div>
             </div>
+          </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              SES PROFİLİ
+          ════════════════════════════════════════════════════════════ */}
+          <section>
+            <SLabel icon={<Volume2 size={12} />}>Ses Profili</SLabel>
+            <div className="grid grid-cols-2 gap-3">
+              {AUDIO_PROFILE_META.map(profile => {
+                const isActive = audioProfile === profile.id;
+                return (
+                  <button
+                    type="button"
+                    key={profile.id}
+                    onClick={() => {
+                      setAudioProfile(profile.id);
+                      setToastMsg(`${profile.icon} ${profile.label} aktif`);
+                      setTimeout(() => setToastMsg(null), 2500);
+                    }}
+                    className={`flex flex-col gap-2 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+                      isActive
+                        ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-sm shadow-[var(--theme-accent)]/20'
+                        : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-accent)]/40 hover:bg-[var(--theme-sidebar)]/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg leading-none">{profile.icon}</span>
+                      {isActive && (
+                        <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0">
+                          <Check size={9} className="text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <p className={`text-sm font-bold leading-tight ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
+                      {profile.label}
+                    </p>
+                    <p className="text-[10px] text-[var(--theme-secondary-text)]/80 leading-snug">
+                      {profile.desc}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {profile.tags.map(tag => (
+                        <span
+                          key={tag}
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none ${
+                            isActive
+                              ? 'border-[var(--theme-accent)]/30 text-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
+                              : 'border-[var(--theme-border)] text-[var(--theme-secondary-text)] bg-[var(--theme-bg)]/50'
+                          }`}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {audioProfile === 'custom' && (
+              <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-sidebar)]/20">
+                <div className="w-7 h-7 rounded-lg bg-[var(--theme-border)]/40 flex items-center justify-center shrink-0 text-sm">⚙️</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[var(--theme-text)]">Özel Ayarlar</p>
+                  <p className="text-[10px] text-[var(--theme-secondary-text)]/70 mt-0.5">Manuel ayar değişikliği yapıldı.</p>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* ════════════════════════════════════════════════════════════
@@ -701,7 +778,7 @@ export default function SettingsView() {
                   <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
                   <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Arka plan sesini filtreler, konuşmayı netleştirir.</p>
                 </div>
-                <Toggle checked={isNoiseSuppressionEnabled} onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} />
+                <Toggle checked={isNoiseSuppressionEnabled} onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }} />
               </div>
 
               {/* Gürültü Eşiği — sadece aktifken göster */}
@@ -728,7 +805,7 @@ export default function SettingsView() {
                       </div>
                     );
                   })()}
-                  <input type="range" min={2} max={50} value={noiseThreshold} onChange={e => setNoiseThreshold(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
+                  <input type="range" min={2} max={50} value={noiseThreshold} onChange={e => { setNoiseThreshold(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
                   <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
                     <span>Hafif</span><span>Agresif</span>
                   </div>
@@ -746,7 +823,7 @@ export default function SettingsView() {
                     {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
                   </span>
                 </div>
-                <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => setPttReleaseDelay(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
+                <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => { setPttReleaseDelay(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
                 <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
                   <span>Kapalı</span><span>500 ms</span>
                 </div>
@@ -869,6 +946,12 @@ export default function SettingsView() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-[var(--theme-text)] truncate">{user.firstName} {user.lastName}</span>
+                              {user.isAdmin && (
+                                <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] rounded-full border border-[var(--theme-accent)]/20 leading-none" title="Admin">A</span>
+                              )}
+                              {user.isModerator && (
+                                <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 bg-violet-500/12 text-violet-400 rounded-full border border-violet-500/20 leading-none" title="Moderatör">M</span>
+                              )}
                               {user.appVersion && (() => {
                                 const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
                                 return (
@@ -901,14 +984,17 @@ export default function SettingsView() {
                               </div>
                               <button
                                 onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) handleMuteUser(user.id, m); }}
-                                className="text-[10px] font-bold px-2.5 py-1 bg-[var(--theme-accent)] text-white rounded hover:opacity-90 transition-all"
+                                title="Sustur"
+                                className="flex items-center justify-center w-7 h-7 bg-[var(--theme-accent)] text-white rounded hover:opacity-90 transition-all"
                               >
-                                Sustur
+                                <VolumeX size={13} />
                               </button>
                               {user.isMuted && (
                                 <>
                                   <span className="text-[10px] font-mono text-orange-500 font-bold">{Math.ceil((user.muteExpires! - Date.now()) / 60000)}dk</span>
-                                  <button onClick={() => handleUnmuteUser(user.id)} className="text-[10px] font-bold px-2.5 py-1 bg-orange-500 text-white rounded hover:opacity-90 transition-all">Kaldır</button>
+                                  <button onClick={() => handleUnmuteUser(user.id)} title="Susturmayı Kaldır" className="flex items-center justify-center w-7 h-7 bg-orange-500 text-white rounded hover:opacity-90 transition-all">
+                                    <Recycle size={13} />
+                                  </button>
                                 </>
                               )}
                             </div>
@@ -926,74 +1012,87 @@ export default function SettingsView() {
                               </div>
                               <button
                                 onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) handleBanUser(user.id, d * 1440); }}
-                                className="text-[10px] font-bold px-2.5 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all"
+                                title="Yasakla"
+                                className="flex items-center justify-center w-7 h-7 bg-red-500 text-white rounded hover:opacity-90 transition-all"
                               >
-                                Yasakla
+                                <Ban size={13} />
                               </button>
                               {user.isVoiceBanned && (
                                 <>
                                   <span className="text-[10px] font-mono text-red-500 font-bold">{Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))}g</span>
-                                  <button onClick={() => handleUnbanUser(user.id)} className="text-[10px] font-bold px-2.5 py-1 bg-red-500 text-white rounded hover:opacity-90 transition-all">Kaldır</button>
+                                  <button onClick={() => handleUnbanUser(user.id)} title="Yasağı Kaldır" className="flex items-center justify-center w-7 h-7 bg-red-500 text-white rounded hover:opacity-90 transition-all">
+                                    <Recycle size={13} />
+                                  </button>
                                 </>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-1.5 border-l border-[var(--theme-border)] pl-3">
+                          <div className="flex flex-wrap items-center gap-1 border-l border-[var(--theme-border)] pl-3">
                             {currentUser.isPrimaryAdmin && (
                               <button
                                 onClick={() => handleToggleAdmin(user.id)}
-                                className={`flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded transition-all ${
+                                title={user.isAdmin ? 'Admin Yetkisini Kaldır' : 'Admin Yap'}
+                                className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
                                   user.isAdmin
-                                    ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20 hover:bg-orange-500 hover:text-white'
-                                    : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                                    ? 'bg-orange-500 text-white border border-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.3)] hover:bg-orange-600'
+                                    : 'bg-emerald-500/8 text-emerald-500/60 border border-emerald-500/15 hover:bg-emerald-500/20 hover:text-emerald-500'
                                 }`}
                               >
-                                <ShieldCheck size={11} />
-                                {user.isAdmin ? 'Al' : 'Ver'}
+                                <ShieldCheck size={13} />
+                              </button>
+                            )}
+                            {currentUser.isPrimaryAdmin && (
+                              <button
+                                onClick={() => handleToggleModerator(user.id)}
+                                title={user.isModerator ? 'Moderatör Yetkisini Kaldır' : 'Moderatör Yap'}
+                                className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
+                                  user.isModerator
+                                    ? 'bg-violet-500 text-white border border-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.35)] hover:bg-violet-600'
+                                    : 'bg-violet-500/8 text-violet-400/60 border border-violet-500/15 hover:bg-violet-500/20 hover:text-violet-400'
+                                }`}
+                              >
+                                <span className="text-[11px] font-black leading-none">M</span>
                               </button>
                             )}
                             {keyResetConfirm === user.id ? (
-                              <div className="flex flex-col gap-1 p-1.5 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
-                                <p className="text-[9px] text-[var(--theme-secondary-text)] leading-tight">
-                                  <span className="font-bold text-[var(--theme-text)]">{user.firstName}</span> şifresi sıfırlansın mı?
-                                </p>
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={async () => { await handleAdminManualReset(user.id, user.name, user.email || ''); setKeyResetConfirm(null); }}
-                                    className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded hover:bg-emerald-500 hover:text-white transition-all"
-                                  >
-                                    <Check size={10} /> Evet
-                                  </button>
-                                  <button
-                                    onClick={() => setKeyResetConfirm(null)}
-                                    className="flex-1 flex items-center justify-center gap-1 py-1 text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
-                                  >
-                                    <X size={10} /> İptal
-                                  </button>
-                                </div>
+                              <div className="flex items-center gap-1 p-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
+                                <span className="text-[9px] text-[var(--theme-secondary-text)] px-1">Sıfırla?</span>
+                                <button
+                                  onClick={async () => { await handleAdminManualReset(user.id, user.name, user.email || ''); setKeyResetConfirm(null); }}
+                                  className="flex items-center justify-center w-6 h-6 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all"
+                                  title="Onayla"
+                                >
+                                  <Check size={11} />
+                                </button>
+                                <button
+                                  onClick={() => setKeyResetConfirm(null)}
+                                  className="flex items-center justify-center w-6 h-6 rounded bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                                  title="İptal"
+                                >
+                                  <X size={11} />
+                                </button>
                               </div>
                             ) : (
                               <button
                                 onClick={() => setKeyResetConfirm(user.id)}
-                                className={`flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded transition-all ${
+                                title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var!' : 'Şifre Sıfırla'}
+                                className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
                                   passwordResetRequests.some(r => r.userId === user.id)
-                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white'
+                                    ? 'bg-red-500/15 text-red-500 border border-red-500/25 hover:bg-red-500 hover:text-white'
                                     : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
                                 }`}
-                                title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var' : 'Şifre sıfırla'}
                               >
-                                <KeyRound size={11} />
-                                Şifre
+                                <KeyRound size={13} />
                               </button>
                             )}
                             {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
                               <button
                                 onClick={() => handleDeleteUser(user.id)}
-                                className="flex items-center justify-center gap-1 text-[10px] font-bold px-2.5 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
+                                title="Kullanıcıyı Sil"
+                                className="flex items-center justify-center w-7 h-7 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
                               >
-                                <Trash2 size={11} />
-                                Sil
+                                <Trash2 size={13} />
                               </button>
                             )}
                           </div>

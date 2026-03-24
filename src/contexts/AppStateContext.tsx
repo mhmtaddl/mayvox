@@ -66,6 +66,7 @@ export interface AppStateContextType {
   handleUnbanUser: (userId: string) => Promise<void>;
   handleDeleteUser: (userId: string) => void;
   handleToggleAdmin: (userId: string) => Promise<void>;
+  handleToggleModerator: (userId: string) => Promise<void>;
   handleGenerateCode: () => Promise<void>;
   handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;

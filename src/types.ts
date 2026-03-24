@@ -17,6 +17,7 @@ export interface User {
   lastSeen?: string;
   isAdmin?: boolean;
   isPrimaryAdmin?: boolean;
+  isModerator?: boolean;
   isVoiceBanned?: boolean;
   muteExpires?: number;
   banExpires?: number;
@@ -69,4 +70,24 @@ export interface Theme {
   secondaryText: string;
   accent: string;
   border: string;
+}
+
+export type AnnouncementPriority = 'normal' | 'important' | 'critical';
+export type AnnouncementType = 'announcement' | 'event';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  author_id: string;
+  author_name: string;
+  is_pinned: boolean;
+  priority: AnnouncementPriority;
+  type: AnnouncementType;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  event_date?: string | null;
+  participation_time?: string | null;
+  participation_requirements?: string | null;
 }

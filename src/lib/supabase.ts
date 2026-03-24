@@ -356,6 +356,57 @@ export const getAdminInviteRequests = async (): Promise<Array<{
   return Array.isArray(data) ? data : [];
 };
 
+// ─── Moderatör Yönetimi ─────────────────────────────────────────────────────
+export const toggleUserModerator = async (targetUserId: string, newValue: boolean) => {
+  return await supabase.rpc('toggle_moderator', {
+    target_user_id: targetUserId,
+    new_value: newValue,
+  });
+};
+
+// ─── Duyurular (Announcements) ──────────────────────────────────────────────
+export const getAnnouncements = async () => {
+  return await supabase
+    .from('announcements')
+    .select('*')
+    .eq('is_active', true)
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false });
+};
+
+export const createAnnouncement = async (announcement: {
+  title: string;
+  content: string;
+  author_id: string;
+  author_name: string;
+  is_pinned?: boolean;
+  priority?: string;
+  type?: string;
+  event_date?: string | null;
+  participation_time?: string | null;
+  participation_requirements?: string | null;
+}) => {
+  return await supabase.from('announcements').insert(announcement).select().single();
+};
+
+export const updateAnnouncement = async (id: string, updates: {
+  title?: string;
+  content?: string;
+  is_pinned?: boolean;
+  priority?: string;
+  is_active?: boolean;
+  type?: string;
+  event_date?: string | null;
+  participation_time?: string | null;
+  participation_requirements?: string | null;
+}) => {
+  return await supabase.from('announcements').update(updates).eq('id', id).select().single();
+};
+
+export const deleteAnnouncement = async (id: string) => {
+  return await supabase.from('announcements').delete().eq('id', id);
+};
+
 // UPLOAD AVATAR — Supabase Storage "avatars" bucket'ına yükler, public URL döner
 export const uploadAvatar = async (userId: string, file: File): Promise<string> => {
   const path = `${userId}/avatar`;
