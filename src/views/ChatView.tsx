@@ -1280,7 +1280,7 @@ export default function ChatView() {
                       <div className="relative shrink-0">
                         <div
                           className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
-                          style={{ borderColor: user.isSpeaking ? 'var(--theme-accent)' : (isMe ? avatarBorderColor : 'transparent') }}
+                          style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
                         >
                           {user.avatar?.startsWith('http')
                             ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -1296,31 +1296,17 @@ export default function ChatView() {
                           {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
-                          {/* Mic / deafen durum ikonları — her zaman görünür, kapalıysa kırmızı */}
+                          {/* Mic / deafen durum ikonları — kalıcı audio state */}
                           {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && (
                             <Mic size={8} className="text-red-500 shrink-0" />
                           )}
                           {(isMe ? isDeafened : !!user.selfDeafened) && (
                             <Headphones size={8} className="text-red-500 shrink-0" />
                           )}
-                          {/* Konuşma: metin yok, sadece mini equalizer */}
-                          {user.isSpeaking ? (
-                            <div className="flex items-end gap-[1.5px] h-2.5">
-                              {[0, 1, 2].map(j => (
-                                <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
-                                  height: '8px',
-                                  transformOrigin: 'bottom',
-                                  animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
-                                }} />
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
-                              {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
-                              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
-                            </>
-                          )}
+                          {/* Kalıcı durum — speaking göstergesi yok */}
+                          {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
+                          {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
+                          <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
                         </div>
                       </div>
                       {canInvite && (() => {
