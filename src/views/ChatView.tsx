@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import appLogo from '../assets/app-logo.png';
 import {
   Mic,
   Settings,
@@ -36,7 +35,7 @@ import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
-import UpdateHub from '../components/UpdateHub';
+import BrandUpdateArea from '../components/BrandUpdateArea';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { Mail } from 'lucide-react';
 
@@ -327,25 +326,13 @@ export default function ChatView() {
       {/* Header */}
       <header className="flex flex-col bg-[var(--theme-bg)] z-10 shrink-0">
         <div className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 overflow-hidden rounded-[20%] shrink-0 ring-1 ring-[var(--theme-border)]/30">
-              <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
-            </div>
-            <div className="flex flex-col leading-none">
-              <h1 className="text-[15px] tracking-[-0.01em]"><span className="font-extrabold text-[var(--theme-text)]">CYLK</span><span className="font-semibold text-[var(--theme-accent)]">Sohbet</span></h1>
-              <span className="text-[8px] font-medium tracking-[0.2em] uppercase text-[var(--theme-secondary-text)]/40 mt-0.5">sadece caylaklar</span>
-            </div>
-          </div>
+          <BrandUpdateArea
+            updateInfo={updateInfo}
+            onDownload={onUpdateDownload}
+            onInstall={onUpdateInstall}
+          />
 
           <div className="flex items-center h-full gap-2">
-          {updateInfo && (
-            <UpdateHub
-              updateInfo={updateInfo}
-              onDownload={onUpdateDownload}
-              onInstall={onUpdateInstall}
-              onDismiss={onUpdateDismiss}
-            />
-          )}
           <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
