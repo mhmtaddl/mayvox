@@ -1118,6 +1118,14 @@ export default function ChatView() {
                   0%, 100% { transform: scaleY(0.25); }
                   50%       { transform: scaleY(1); }
                 }
+                @keyframes speakCard {
+                  0%, 100% { transform: scale(1);    box-shadow: 0 0 8px rgba(var(--theme-accent-rgb), 0.22); }
+                  50%       { transform: scale(1.01); box-shadow: 0 0 16px rgba(var(--theme-accent-rgb), 0.42); }
+                }
+                @keyframes speakRingPulse {
+                  0%, 100% { box-shadow: 0 0 0 2px rgba(var(--theme-accent-rgb), 0.65); }
+                  50%       { box-shadow: 0 0 0 2px rgba(var(--theme-accent-rgb), 1), 0 0 8px rgba(var(--theme-accent-rgb), 0.28); }
+                }
               `}</style>
               <div className={`grid gap-4 ${
                 sortedChannelMembers.length <= 1 ? 'grid-cols-1' :
@@ -1155,16 +1163,18 @@ export default function ChatView() {
                         isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]/60' : 'bg-[var(--theme-sidebar)]/50 border-[var(--theme-border)]'
                       } border rounded-2xl ${boxPadding} flex items-center gap-3 relative group cursor-pointer transition-all duration-200 ${
                         isSpeakingActive
-                          ? 'border-[var(--theme-accent)] shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.35)] scale-[1.02]'
+                          ? 'border-[var(--theme-accent)]'
                           : 'hover:bg-[var(--theme-accent)]/5 hover:scale-[1.005] hover:border-[var(--theme-accent)]/25'
                       }`}
+                      style={isSpeakingActive ? { animation: 'speakCard 2.8s ease-in-out infinite' } : undefined}
                     >
                       <div className="relative shrink-0">
-                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden transition-all ${
-                          isSpeakingActive
-                            ? 'ring-2 ring-[var(--theme-accent)] ring-offset-1 ring-offset-[var(--theme-bg)]'
-                            : 'ring-1 ring-[var(--theme-border)]/60'
-                        }`}>
+                        <div
+                          className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden transition-all duration-200 ${
+                            !isSpeakingActive ? 'ring-1 ring-[var(--theme-border)]/60' : ''
+                          }`}
+                          style={isSpeakingActive ? { animation: 'speakRingPulse 2s 0.4s ease-in-out infinite' } : undefined}
+                        >
                           {user.avatar && user.avatar.startsWith('http') ? (
                             <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
