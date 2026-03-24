@@ -273,10 +273,23 @@ export default function ChatView() {
       return 'text-red-500';
     };
 
-    if (connectionLevel === 0) {
+    const statusLabel = activeChannel
+      ? isConnecting
+        ? { text: 'Bağlanıyor', color: 'text-yellow-400' }
+        : connectionLevel === 0
+          ? { text: 'Bağlantı Yok', color: 'text-red-400' }
+          : connectionLevel === 1
+            ? { text: 'Zayıf', color: 'text-red-400' }
+            : null
+      : null;
+
+    if (connectionLevel === 0 && !isConnecting) {
       return (
-        <div className="flex items-center justify-center">
+        <div className="flex flex-col items-center gap-0.5">
           <X size={14} className="text-red-500" />
+          {statusLabel && (
+            <span className={`text-[8px] font-bold animate-pulse ${statusLabel.color}`}>{statusLabel.text}</span>
+          )}
         </div>
       );
     }
@@ -285,7 +298,7 @@ export default function ChatView() {
       <motion.div
         animate={connectionLevel <= 2 ? { opacity: [1, 0.5, 1] } : {}}
         transition={{ duration: 1, repeat: Infinity }}
-        className="flex items-center justify-center"
+        className="flex flex-col items-center gap-0.5"
       >
         <div className="flex items-end gap-0.5 h-3">
           {[1, 2, 3, 4].map((i) => (
@@ -298,6 +311,9 @@ export default function ChatView() {
             />
           ))}
         </div>
+        {statusLabel && (
+          <span className={`text-[8px] font-bold animate-pulse leading-none ${statusLabel.color}`}>{statusLabel.text}</span>
+        )}
       </motion.div>
     );
   };

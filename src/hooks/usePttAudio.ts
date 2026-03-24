@@ -12,6 +12,7 @@ interface UsePttAudioParams {
   noiseThreshold: number;
   isLowDataMode: boolean;
   pttReleaseDelay: number;
+  onMicError?: (msg: string) => void;
 }
 
 // Electron preload tarafından enjekte edilen global PTT API
@@ -45,6 +46,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     noiseThreshold,
     isLowDataMode,
     pttReleaseDelay,
+    onMicError,
   } = params;
 
   const [isPttPressed, setIsPttPressed] = useState(false);
@@ -215,7 +217,7 @@ export function usePttAudio(params: UsePttAudioParams) {
             stream = await navigator.mediaDevices.getUserMedia({
               audio: {
                 deviceId: selectedInput ? { exact: selectedInput } : undefined,
-                echoCancellation: isNoiseSuppressionEnabled,
+                echoCancellation: true,   // her zaman açık — yankı iptali ses kalitesi için kritik
                 noiseSuppression: isNoiseSuppressionEnabled,
                 autoGainControl: isNoiseSuppressionEnabled,
               },
@@ -225,7 +227,7 @@ export function usePttAudio(params: UsePttAudioParams) {
               console.warn("Seçili cihazla ses analizi başlatılamadı, varsayılan cihaz deneniyor:", innerErr);
               stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                  echoCancellation: isNoiseSuppressionEnabled,
+                  echoCancellation: true,
                   noiseSuppression: isNoiseSuppressionEnabled,
                   autoGainControl: isNoiseSuppressionEnabled,
                 },
@@ -274,6 +276,14 @@ export function usePttAudio(params: UsePttAudioParams) {
 
           updateVolume();
         } catch (err) {
+          const name = (err as Error)?.name;
+          if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            onMicError?.('Mikrofon iznine erişilemiyor. Sistem veya tarayıcı ayarlarından izin verin.');
+          } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+            onMicError?.('Mikrofon bulunamadı. Bağlı bir mikrofon olduğundan emin olun.');
+          } else {
+            onMicError?.('Mikrofon başlatılamadı.');
+          }
           console.error("Ses analizi başlatılamadı:", err);
         }
       } else {

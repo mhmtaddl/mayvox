@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Hash, Monitor } from 'lucide-react';
+import { ShieldCheck, Monitor } from 'lucide-react';
 import type { User } from '../types';
 
 interface Props {
@@ -124,20 +124,12 @@ export default function UserProfilePopup({
           </div>
 
           {/* Meta */}
-          <div className="flex flex-col gap-1.5 mb-3">
-            <div className="flex items-center gap-1.5">
-              <Hash size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
-              <span className="text-[10px] font-mono text-[var(--theme-secondary-text)]">
-                {user.id.slice(-8).toUpperCase()}
-              </span>
+          {user.appVersion && (
+            <div className="flex items-center gap-1.5 mb-3">
+              <Monitor size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
+              <span className="text-[10px] text-[var(--theme-secondary-text)]">v{user.appVersion}</span>
             </div>
-            {user.appVersion && (
-              <div className="flex items-center gap-1.5">
-                <Monitor size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
-                <span className="text-[10px] text-[var(--theme-secondary-text)]">v{user.appVersion}</span>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Action */}
           {canInvite && (

@@ -329,6 +329,10 @@ export default function App() {
     noiseThreshold,
     isLowDataMode,
     pttReleaseDelay,
+    onMicError: (msg) => {
+      setToastMsg(msg);
+      setTimeout(() => setToastMsg(null), 6000);
+    },
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
