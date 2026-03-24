@@ -7,6 +7,35 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.4.0': {
+    title: 'v1.4.0 — Büyük Güncelleme',
+    items: [
+      'Duyuru ve etkinlik sistemi eklendi.',
+      'Moderatör rolü eklendi.',
+      'Ses profilleri eklendi (Temiz Ses, Yayıncı, Doğal, Gürültülü Ortam).',
+      'Kullanıcı profil kartı eklendi — isme tıklayınca detaylar açılıyor.',
+      'Online süre, son görülme ve toplam kullanım bilgisi profil kartında görünüyor.',
+      'Konuşan kullanıcı artık sesle senkron parıldıyor.',
+      'Oda içi kullanıcı kartları yeniden tasarlandı.',
+      'Oda oluşturma ekranı modernleştirildi.',
+      'Güncelleme bildirimi artık sol üst marka alanında görünüyor.',
+      'Ayarlar ekranı görsel olarak yenilendi.',
+      'Bağlantı kalitesi göstergesi düzeltildi.',
+      'Mikrofon ve hoparlör durumu artık tüm kullanıcılarda anlık senkron.',
+      'Bas-konuş sadece ses bağlantısı kurulduğunda çalışıyor.',
+      'Kart boyutu ayarı eklendi — oda içinde kartları küçük, orta veya büyük gösterebilirsiniz.',
+      'Ses ayarları hizalaması düzeltildi.',
+    ],
+    adminItems: [
+      'Güncelleme yönetim paneli eklendi (zorunlu güncelleme kontrolü).',
+      'Moderatör yetki ver/al butonu eklendi.',
+      'Zorunlu güncelleme overlay sistemi eklendi.',
+      'Kullanıcı sürüm takibi — her kullanıcının uygulama versiyonu yönetim panelinde görünüyor.',
+      'Yönetim paneli butonları sadeleştirildi (ikon bazlı).',
+      'Oturum kurtarma hata yönetimi güçlendirildi.',
+      'Versiyon karşılaştırma güvenliği artırıldı.',
+    ],
+  },
   '1.3.0': {
     title: 'Bu sürümde neler değişti?',
     items: [

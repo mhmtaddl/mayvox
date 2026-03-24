@@ -230,30 +230,46 @@ function setupTray(win) {
   tray = new Tray(getTrayIcon());
   tray.setToolTip("CylkSohbet");
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Göster / Aç",
-      click: () => {
-        win.show();
-        win.focus();
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Çıkış",
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      },
-    },
-  ]);
-  tray.setContextMenu(contextMenu);
+  // İlk menü oluştur
+  updateTrayMenu(win, null);
 
   tray.on("double-click", () => {
     win.show();
     win.focus();
   });
 }
+
+// Tray menüsünü güncelleyen yardımcı
+function updateTrayMenu(win, channelName) {
+  if (!tray) return;
+  const items = [
+    {
+      label: "Aç",
+      click: () => { win.show(); win.focus(); },
+    },
+  ];
+
+  if (channelName) {
+    items.push({
+      label: channelName,
+      enabled: false,
+    });
+  }
+
+  items.push({ type: "separator" });
+  items.push({
+    label: "Çıkış",
+    click: () => { isQuitting = true; app.quit(); },
+  });
+
+  tray.setContextMenu(Menu.buildFromTemplate(items));
+}
+
+// Renderer'dan oda değişikliği bildirimi
+ipcMain.on("tray:set-channel", (_e, channelName) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) updateTrayMenu(win, channelName || null);
+});
 
 function createWindow() {
   const saved = Store.get();
@@ -342,17 +358,21 @@ function setupAutoUpdater(win) {
   });
 
   // İlk kontrolü 10 saniye sonra yap (uygulama tam yüklendikten sonra)
-  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+  setTimeout(() => autoUpdater.checkForUpdates().catch(e => logger.warn("Update check failed", { message: e?.message })), 10_000);
   // Sonraki kontroller her 6 saatte bir
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+  setInterval(() => autoUpdater.checkForUpdates().catch(e => logger.warn("Update check failed", { message: e?.message })), 6 * 60 * 60 * 1000);
 }
 
 ipcMain.on("updater:start-download", () => {
-  autoUpdater.downloadUpdate().catch(() => {});
+  autoUpdater.downloadUpdate().catch(e => logger.error("Download failed", { message: e?.message }));
 });
 
 ipcMain.on("updater:install-now", () => {
-  autoUpdater.quitAndInstall();
+  try {
+    autoUpdater.quitAndInstall();
+  } catch (e) {
+    logger.error("Install failed", { message: e?.message });
+  }
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());

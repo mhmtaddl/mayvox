@@ -7,6 +7,7 @@ interface UsePttAudioParams {
   setIsListeningForKey: (v: boolean) => void;
   isMuted: boolean;
   isVoiceBanned: boolean;
+  isVoiceConnected: boolean;
   selectedInput: string;
   isNoiseSuppressionEnabled: boolean;
   noiseThreshold: number;
@@ -41,6 +42,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     setIsListeningForKey,
     isMuted,
     isVoiceBanned,
+    isVoiceConnected,
     selectedInput,
     isNoiseSuppressionEnabled,
     noiseThreshold,
@@ -58,7 +60,13 @@ export function usePttAudio(params: UsePttAudioParams) {
   const animationRef = useRef<number | null>(null);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pttReleaseDelayRef = useRef(pttReleaseDelay);
+  const isVoiceConnectedRef = useRef(isVoiceConnected);
   useEffect(() => { pttReleaseDelayRef.current = pttReleaseDelay; }, [pttReleaseDelay]);
+  useEffect(() => {
+    isVoiceConnectedRef.current = isVoiceConnected;
+    // Bağlantı koptuğunda aktif PTT'yi hemen bırak
+    if (!isVoiceConnected && isPttPressed) setIsPttPressed(false);
+  }, [isVoiceConnected, isPttPressed]);
 
   // Başlangıçta mevcut pttKey'i main process'e bildir.
   // Önce raw keycode dene (sağ/sol CTRL gibi çakışmaları önler), yoksa isim tabanlı fallback.
@@ -129,6 +137,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     if (ep) {
       // Electron ortamı: main process global hook'tan IPC ile gelir
       ep.onDown(() => {
+        if (!isVoiceConnectedRef.current) return;
         if (releaseTimerRef.current) {
           clearTimeout(releaseTimerRef.current);
           releaseTimerRef.current = null;
@@ -151,6 +160,7 @@ export function usePttAudio(params: UsePttAudioParams) {
 
     // Electron dışı fallback — pencere event listener
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isVoiceConnectedRef.current) return;
       let keyName = e.key;
       if (keyName === ' ') keyName = 'Space';
       if (keyName === 'Control') keyName = 'CTRL';
@@ -177,6 +187,7 @@ export function usePttAudio(params: UsePttAudioParams) {
       if (keyName.toUpperCase() === pttKey) scheduleRelease();
     };
     const handleMouseDown = (e: MouseEvent) => {
+      if (!isVoiceConnectedRef.current) return;
       if (`MOUSE ${e.button}` === pttKey) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronUpdater', {
 
 contextBridge.exposeInMainWorld('electronApp', {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),
 });
 
 // Global PTT (bas-konuş) API — main process uiohook-napi kullanır,

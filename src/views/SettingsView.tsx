@@ -34,6 +34,7 @@ import { useAppState } from '../contexts/AppStateContext';
 import { useUser } from '../contexts/UserContext';
 import { useSettings, AUDIO_PROFILE_META } from '../contexts/SettingsCtx';
 import { useUI } from '../contexts/UIContext';
+import UpdatePolicyPanel from '../components/UpdatePolicyPanel';
 
 // ── Module-level helpers (stable references, no unmount/remount on re-render) ──
 
@@ -1102,6 +1103,29 @@ export default function SettingsView() {
                   </div>
                 </div>
 
+              </div>
+            </section>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════
+              GÜNCELLEME YÖNETİMİ (sadece admin)
+          ════════════════════════════════════════════════════════════ */}
+          {currentUser.isAdmin && (
+            <section>
+              <SLabel
+                icon={<Zap size={12} />}
+                badge={
+                  <span className="text-[9px] bg-amber-500/12 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase font-bold tracking-wider">
+                    Policy
+                  </span>
+                }
+              >
+                Güncelleme Yönetimi
+              </SLabel>
+              <div className={cardCls}>
+                <div className="px-6 py-5">
+                  <UpdatePolicyPanel appVersion={currentAppVersion} />
+                </div>
               </div>
             </section>
           )}

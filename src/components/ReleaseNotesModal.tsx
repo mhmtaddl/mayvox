@@ -27,13 +27,13 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   return (
     <div
       ref={ref}
-      className="absolute bottom-full right-0 mb-3 w-72 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden"
+      className="absolute bottom-full right-0 mb-3 w-72 max-h-[50vh] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden"
     >
       {/* Ok işareti */}
       <div className="absolute -bottom-[7px] right-3 w-3.5 h-3.5 bg-[var(--theme-bg)] border-r border-b border-[var(--theme-border)] rotate-45" />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[var(--theme-border)]">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[var(--theme-border)] shrink-0">
         <div className="flex items-center gap-1.5">
           <Sparkles size={14} className="text-[var(--theme-accent)]" />
           <span className="text-xs font-bold text-[var(--theme-text)]">Güncelleme Notları</span>
@@ -50,8 +50,8 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
         </button>
       </div>
 
-      {/* İçerik */}
-      <div className="px-4 py-3">
+      {/* İçerik — scroll */}
+      <div className="px-4 py-3 overflow-y-auto custom-scrollbar">
         <p className="text-[11px] font-semibold text-[var(--theme-text)] mb-2">{notes.title}</p>
         <ul className="space-y-1.5">
           {notes.items.map((item, i) => (

@@ -81,6 +81,8 @@ import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
+import { useUpdatePolicy } from './hooks/useUpdatePolicy';
+import ForceUpdateOverlay from './components/ForceUpdateOverlay';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -235,7 +237,7 @@ export default function App() {
         startDownload: () => void;
         installNow: () => void;
       };
-      electronApp?: { getVersion: () => Promise<string> };
+      electronApp?: { getVersion: () => Promise<string>; setTrayChannel?: (name: string | null) => void };
     };
     w.electronApp?.getVersion().then(v => {
       setAppVersion(v);
@@ -251,6 +253,9 @@ export default function App() {
     updater.onDownloadProgress((info) => setUpdateInfo(prev => prev ? { ...prev, state: 'downloading', progress: info.percent } : prev));
     updater.onUpdateDownloaded((info) => setUpdateInfo(prev => prev ? { ...prev, version: info.version, state: 'downloaded', progress: 100 } : prev));
   }, []);
+
+  // ── Update policy (akıllı zorunlu güncelleme) ──────────────────────────
+  const updatePolicy = useUpdatePolicy(appVersion);
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -344,6 +349,7 @@ export default function App() {
     setIsListeningForKey,
     isMuted,
     isVoiceBanned: currentUser.isVoiceBanned ?? false,
+    isVoiceConnected: !!activeChannel && !isConnecting,
     selectedInput,
     isNoiseSuppressionEnabled,
     noiseThreshold,
@@ -509,6 +515,8 @@ export default function App() {
         return;
       }
 
+      try {
+
       const email = session.user.email || '';
       const { data: profile } = await getProfile(session.user.id);
 
@@ -524,6 +532,7 @@ export default function App() {
         statusText: 'Aktif',
         isAdmin: profile.is_admin || false,
         isPrimaryAdmin: profile.is_primary_admin || false,
+        isModerator: profile.is_moderator || false,
         isMuted: profile.is_muted || false,
         muteExpires: profile.mute_expires || undefined,
         isVoiceBanned: profile.is_voice_banned || false,
@@ -612,9 +621,26 @@ export default function App() {
 
       setView('chat');
       setIsSessionLoading(false);
+
+      } catch (err) {
+        logger.error('Session restore failed', { error: err instanceof Error ? err.message : err });
+        setView('login-selection');
+        setIsSessionLoading(false);
+      }
+    }).catch((err) => {
+      logger.error('getSession failed', { error: err instanceof Error ? err.message : err });
+      setView('login-selection');
+      setIsSessionLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Tray menüsüne aktif oda adını bildir ────────────────────────────────
+  useEffect(() => {
+    const w = window as Window & { electronApp?: { setTrayChannel?: (name: string | null) => void } };
+    const channelName = activeChannel ? channels.find(c => c.id === activeChannel)?.name || null : null;
+    w.electronApp?.setTrayChannel?.(channelName);
+  }, [activeChannel, channels]);
 
   // ── TEK 5000ms INTERVAL — mute/ban süresi kontrolü ───────────────────────
   const slowTickRef = useRef(0);
@@ -804,7 +830,7 @@ export default function App() {
   }, [currentUser.isMuted]);
 
   useEffect(() => {
-    if (!activeChannel) return;
+    if (!activeChannel || isConnecting) return;
     playSound(isPttPressed ? 'ptt-on' : 'ptt-off');
   }, [isPttPressed]);
 
@@ -1993,6 +2019,7 @@ export default function App() {
     handleRejectInvite,
     inviteCooldowns,
     inviteStatuses,
+    isUpdateRecommended: updatePolicy.isRecommended,
   };
 
   const audioValue: AudioContextType = {
@@ -2175,6 +2202,23 @@ export default function App() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Force update overlay — kritik sürümlerde uygulamayı kilitler */}
+                  {updatePolicy.isForced && (
+                    <ForceUpdateOverlay
+                      message={updatePolicy.displayMessage}
+                      updateInfo={updateInfo}
+                      onDownload={() => {
+                        const w = window as Window & { electronUpdater?: { startDownload: () => void } };
+                        w.electronUpdater?.startDownload();
+                        setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
+                      }}
+                      onInstall={() => {
+                        const w = window as Window & { electronUpdater?: { installNow: () => void } };
+                        w.electronUpdater?.installNow();
+                      }}
+                    />
+                  )}
                 </div>
               </AudioCtx.Provider>
             </AppStateContext.Provider>

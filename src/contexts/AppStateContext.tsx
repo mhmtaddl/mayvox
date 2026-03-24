@@ -98,6 +98,9 @@ export interface AppStateContextType {
   inviteCooldowns: Record<string, number>;
   // Davet gönderen tarafta durum göstergesi
   inviteStatuses: Record<string, 'pending' | 'accepted' | 'rejected'>;
+
+  // Update policy
+  isUpdateRecommended: boolean;
 }
 
 export const AppStateContext = createContext<AppStateContextType | null>(null);

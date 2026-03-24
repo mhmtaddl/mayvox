@@ -14,32 +14,37 @@ interface Props {
   updateInfo: UpdateInfo | null;
   onDownload: () => void;
   onInstall: () => void;
+  isRecommended?: boolean;
 }
 
 // ── Nudge messages — progressive urgency without aggression ─────────────────
 
-const NUDGE_STEPS = [
+const NUDGE_NORMAL = [
   { delay: 0,      text: 'Yeni sürüm hazır' },
   { delay: 120000, text: 'Daha iyi performans için güncelleyin' },
   { delay: 300000, text: 'Güncellemeniz önerilir' },
 ] as const;
 
-function useNudge(state: string | undefined): string {
+const NUDGE_RECOMMENDED = [
+  { delay: 0,      text: 'Güncellemeniz önerilir' },
+  { delay: 90000,  text: 'Lütfen güncellemeyi yükleyin' },
+] as const;
+
+function useNudge(state: string | undefined, recommended: boolean): string {
   const [idx, setIdx] = useState(0);
-  const enteredAtRef = useRef(0);
+  const steps = recommended ? NUDGE_RECOMMENDED : NUDGE_NORMAL;
 
   useEffect(() => {
     if (state !== 'available') { setIdx(0); return; }
-    enteredAtRef.current = Date.now();
     setIdx(0);
 
-    const timers = NUDGE_STEPS.slice(1).map((step, i) =>
+    const timers = steps.slice(1).map((step, i) =>
       setTimeout(() => setIdx(i + 1), step.delay),
     );
     return () => timers.forEach(clearTimeout);
-  }, [state]);
+  }, [state, recommended]);
 
-  return NUDGE_STEPS[idx].text;
+  return steps[Math.min(idx, steps.length - 1)].text;
 }
 
 // ── SVG progress ring — theme-aware ─────────────────────────────────────────
@@ -137,10 +142,10 @@ const LogoIcon = ({ state }: { state: string | undefined }) => {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function BrandUpdateArea({ updateInfo, onDownload, onInstall }: Props) {
+export default function BrandUpdateArea({ updateInfo, onDownload, onInstall, isRecommended }: Props) {
   const st = updateInfo?.state;
   const [installing, setInstalling] = useState(false);
-  const nudgeText = useNudge(st);
+  const nudgeText = useNudge(st, !!isRecommended);
 
   const isClickable = (st === 'available' || st === 'downloaded') && !installing;
 
@@ -152,7 +157,13 @@ export default function BrandUpdateArea({ updateInfo, onDownload, onInstall }: P
     }
   };
 
+  // Reset installing: state değişirse VEYA 8 saniye geçerse (install fail safety)
   useEffect(() => { if (st !== 'downloaded') setInstalling(false); }, [st]);
+  useEffect(() => {
+    if (!installing) return;
+    const timeout = setTimeout(() => setInstalling(false), 8000);
+    return () => clearTimeout(timeout);
+  }, [installing]);
 
   return (
     <div
