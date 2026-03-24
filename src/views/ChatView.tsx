@@ -1087,29 +1087,30 @@ export default function ChatView() {
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <>
               <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20">
-                    <Volume2 size={24} />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
+                    <Volume2 size={20} />
                   </div>
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-[var(--theme-text)]">
+                    <h2 className="text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
                       {channels.find(c => c.id === activeChannel)?.name || 'Sohbet Odası'}
                     </h2>
-                    <p className="text-[var(--theme-secondary-text)] text-sm font-medium">
-                      {channels.find(c => c.id === activeChannel)?.userCount || 0} Caylak Aktif
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <p className="text-xs text-[var(--theme-secondary-text)] font-medium">
+                        {channels.find(c => c.id === activeChannel)?.userCount || 0} kişi aktif
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
-                    className="p-3 rounded-xl bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10"
-                    title="Odadan Ayrıl"
-                  >
-                    <PhoneOff size={20} />
-                  </button>
-                </div>
+                <button
+                  onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
+                  className="p-2.5 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                  title="Odadan Ayrıl"
+                >
+                  <PhoneOff size={18} />
+                </button>
               </div>
 
               <style>{`
@@ -1151,16 +1152,18 @@ export default function ChatView() {
                       key={user.id}
                       onDoubleClick={() => !isMe && currentUser.isAdmin && handleKickUser(user.id)}
                       className={`${
-                        isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]' : 'bg-[var(--theme-sidebar)]/40 border-[var(--theme-border)]'
-                      } border-2 rounded-2xl ${boxPadding} flex items-center gap-3 relative group cursor-pointer transition-all duration-200 ${
+                        isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]/60' : 'bg-[var(--theme-sidebar)]/50 border-[var(--theme-border)]'
+                      } border rounded-2xl ${boxPadding} flex items-center gap-3 relative group cursor-pointer transition-all duration-200 ${
                         isSpeakingActive
-                          ? 'border-[var(--theme-accent)] shadow-[0_0_14px_rgba(var(--theme-accent-rgb),0.40)] scale-[1.02]'
-                          : ''
+                          ? 'border-[var(--theme-accent)] shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.35)] scale-[1.02]'
+                          : 'hover:bg-[var(--theme-accent)]/5 hover:scale-[1.005] hover:border-[var(--theme-accent)]/25'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden ${
-                          isSpeakingActive ? 'ring-2 ring-[var(--theme-accent)] ring-offset-1 ring-offset-[var(--theme-bg)]' : ''
+                        <div className={`${avatarSize} rounded-xl bg-[var(--theme-accent)]/20 flex items-center justify-center text-[var(--theme-text)] font-bold text-lg overflow-hidden transition-all ${
+                          isSpeakingActive
+                            ? 'ring-2 ring-[var(--theme-accent)] ring-offset-1 ring-offset-[var(--theme-bg)]'
+                            : 'ring-1 ring-[var(--theme-border)]/60'
                         }`}>
                           {user.avatar && user.avatar.startsWith('http') ? (
                             <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -1168,15 +1171,22 @@ export default function ChatView() {
                             user.avatar
                           )}
                         </div>
-                        <div className={`absolute -bottom-1 -right-1 ${memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded flex items-center justify-center font-bold text-white`}>
+                        <div className={`absolute -bottom-1 -right-1 ${memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-md flex items-center justify-center font-bold ${
+                          roleLabel === 'M' || roleLabel === 'A' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'
+                        }`}>
                           {roleLabel}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`font-bold truncate ${nameSize} text-[var(--theme-text)]`}>
-                            {user.firstName} {user.lastName} ({user.age}){isMe && ' (Siz)'}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`font-semibold truncate ${nameSize} text-[var(--theme-text)]`}>
+                            {user.firstName} {user.lastName} ({user.age})
                           </span>
+                          {isMe && (
+                            <span className="shrink-0 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] rounded-full border border-[var(--theme-accent)]/25 leading-none">
+                              SEN
+                            </span>
+                          )}
                         </div>
                         <div className="mt-0.5">
                           {isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned ? (
@@ -1211,10 +1221,10 @@ export default function ChatView() {
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-col items-center gap-1 shrink-0">
-                        <div className="flex gap-2">
-                          <Headphones size={iconSize} className={(isMe ? isDeafened : !!user.selfDeafened) ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
-                          <Mic size={iconSize} className={(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
+                      <div className="flex flex-col items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5 bg-[var(--theme-bg)]/40 rounded-lg px-2 py-1">
+                          <Headphones size={iconSize} className={(isMe ? isDeafened : !!user.selfDeafened) ? 'text-red-500' : 'text-[var(--theme-accent)]/70'} />
+                          <Mic size={iconSize} className={(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) ? 'text-red-500' : 'text-[var(--theme-accent)]/70'} />
                         </div>
                         <div className="flex gap-2 h-4 items-center justify-center">
                           {user.statusText === 'Telefonda' && (
