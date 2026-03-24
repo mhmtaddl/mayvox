@@ -69,8 +69,6 @@ export default function SettingsView() {
     setAvatarBorderColor,
     pttReleaseDelay,
     setPttReleaseDelay,
-    idleAnimation,
-    setIdleAnimation,
   } = useSettings();
 
   const {
@@ -675,37 +673,6 @@ export default function SettingsView() {
                 </div>
               </div>
 
-            </div>
-          </section>
-
-          {/* ════════════════════════════════════════════════════════════
-              BOŞ ODA ANİMASYONU
-          ════════════════════════════════════════════════════════════ */}
-          <section>
-            <SLabel icon={<Eye size={12} />}>Boş Oda Animasyonu</SLabel>
-            <div className={cardCls}>
-              <div className="flex items-center gap-3 px-5 py-4">
-                {(
-                  [
-                    { value: 'bars',  label: 'Minimal Barlar', desc: 'Merkez odaklı, simetrik barlar' },
-                    { value: 'wave',  label: 'Ses Dalgası',    desc: 'Soldan sağa gezgin dalga' },
-                    { value: 'off',   label: 'Kapalı',         desc: 'Animasyon yok' },
-                  ] as { value: 'bars' | 'wave' | 'off'; label: string; desc: string }[]
-                ).map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setIdleAnimation(opt.value)}
-                    className={`flex-1 flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl border transition-all text-left ${
-                      idleAnimation === opt.value
-                        ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)] text-[var(--theme-text)]'
-                        : 'bg-transparent border-[var(--theme-border)] text-[var(--theme-secondary-text)] hover:border-[var(--theme-accent)]/50 hover:text-[var(--theme-text)]'
-                    }`}
-                  >
-                    <span className="text-sm font-semibold leading-tight">{opt.label}</span>
-                    <span className="text-[10px] leading-tight opacity-70">{opt.desc}</span>
-                  </button>
-                ))}
-              </div>
             </div>
           </section>
 

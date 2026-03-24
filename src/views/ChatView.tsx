@@ -34,8 +34,6 @@ import SettingsView from './SettingsView';
 import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
-import IdleVoiceCenter from '../components/IdleVoiceCenter';
-import IdleVoiceWave from '../components/IdleVoiceWave';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { Mail } from 'lucide-react';
 
@@ -93,7 +91,6 @@ export default function ChatView() {
     avatarBorderColor,
     soundInvite,
     soundInviteVariant,
-    idleAnimation,
   } = useSettings();
 
   const {
@@ -1228,13 +1225,14 @@ export default function ChatView() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden">
-              {idleAnimation === 'bars' && <IdleVoiceCenter />}
-              {idleAnimation === 'wave' && <IdleVoiceWave />}
-              <h2 className="text-xl font-bold tracking-wide text-[var(--theme-text)] mb-3 relative z-10">
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center mb-6">
+                <Volume2 size={32} className="text-[var(--theme-accent)]" />
+              </div>
+              <h2 className="text-xl font-bold tracking-wide text-[var(--theme-text)] mb-3">
                 Henüz Bir Odada Değilsiniz
               </h2>
-              <p className="text-sm text-[var(--theme-secondary-text)] max-w-[260px] leading-relaxed relative z-10">
+              <p className="text-sm text-[var(--theme-secondary-text)] max-w-[260px] leading-relaxed">
                 Sohbete başlamak için sol taraftaki kanallardan birine katılın.
               </p>
             </div>

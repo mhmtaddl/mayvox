@@ -161,12 +161,7 @@ export default function App() {
   });
   const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
 
-  const [idleAnimation, setIdleAnimationState] = useState<'bars' | 'wave' | 'off'>(
-    () => (localStorage.getItem('idleAnimation') as 'bars' | 'wave' | 'off') || 'bars'
-  );
-  const setIdleAnimation = (v: 'bars' | 'wave' | 'off') => { localStorage.setItem('idleAnimation', v); setIdleAnimationState(v); };
-
-  // ── Audio control state ──────────────────────────────────────────────────
+// ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [connectionLevel, setConnectionLevel] = useState(4);
@@ -1814,8 +1809,6 @@ export default function App() {
     setSoundInvite,
     soundInviteVariant,
     setSoundInviteVariant,
-    idleAnimation,
-    setIdleAnimation,
   };
 
   const appStateValue: AppStateContextType = {
