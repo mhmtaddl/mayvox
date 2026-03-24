@@ -92,6 +92,7 @@ export default function ChatView() {
     avatarBorderColor,
     soundInvite,
     soundInviteVariant,
+    adminBorderEffect,
   } = useSettings();
 
   const {
@@ -1202,6 +1203,9 @@ export default function ChatView() {
                             user.avatar
                           )}
                         </div>
+                        {user.isAdmin && adminBorderEffect && !isSpeakingActive && (
+                          <div className="absolute inset-[-3px] rounded-xl ring-2 ring-[var(--theme-accent)]/45 animate-pulse pointer-events-none" />
+                        )}
                         <div className={`absolute -bottom-1 -right-1 ${memberCount <= 9 ? 'w-4 h-4 text-[9px]' : 'w-3.5 h-3.5 text-[8px]'} bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-md flex items-center justify-center font-bold ${
                           roleLabel === 'M' || roleLabel === 'A' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'
                         }`}>
@@ -1328,6 +1332,9 @@ export default function ChatView() {
                             ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             : user.avatar}
                         </div>
+                        {user.isAdmin && adminBorderEffect && (
+                          <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
+                        )}
                         <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
                           user.status === 'online' ? 'bg-emerald-500' : 'bg-orange-500'
                         }`}></div>
@@ -1403,7 +1410,8 @@ export default function ChatView() {
                 {offlineUsers.map(user => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:grayscale-0"
+                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:opacity-80 hover:bg-[var(--theme-sidebar)] cursor-pointer"
+                    onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                   >
                     <div className="relative">
                       <div
@@ -1435,7 +1443,7 @@ export default function ChatView() {
           if (!popupUser) return null;
           const isMe = popupUser.id === currentUser.id;
           const alreadyInChannel = activeChannel && channels.find(c => c.id === activeChannel)?.members?.includes(popupUser.name);
-          const canInvite = !isMe && !!activeChannel && !alreadyInChannel;
+          const canInvite = !isMe && !!activeChannel && !alreadyInChannel && popupUser.status === 'online';
           const inviteStatus = inviteStatuses[popupUser.id];
           const cooldownUntil = inviteCooldowns[popupUser.id];
           const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);

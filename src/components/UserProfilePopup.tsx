@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor } from 'lucide-react';
+import { ShieldCheck, Monitor, Clock, History, Activity } from 'lucide-react';
 import type { User } from '../types';
 
 interface Props {
@@ -16,7 +16,32 @@ interface Props {
 }
 
 const POPUP_W = 224;
-const POPUP_H = 290;
+const POPUP_H = 310;
+
+const formatOnlineDuration = (onlineSince: number) => {
+  const mins = Math.floor((Date.now() - onlineSince) / 60000);
+  if (mins < 1) return '< 1 dk';
+  if (mins < 60) return `${mins} dk`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m > 0 ? `${h} sa ${m} dk` : `${h} sa`;
+};
+
+const formatLastSeen = (lastSeenAt: string) => {
+  const d = new Date(lastSeenAt);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return `Bugün ${time}`;
+  if (d.toDateString() === yesterday.toDateString()) return `Dün ${time}`;
+  return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
+};
+
+const formatTotalUsage = (minutes: number) => {
+  if (minutes < 60) return `${minutes} dk`;
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return m > 0 ? `${h} sa ${m} dk` : `${h} sa`;
+};
 
 export default function UserProfilePopup({
   user,
@@ -30,6 +55,7 @@ export default function UserProfilePopup({
   isMe,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [, setTick] = useState(0);
 
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 12);
   const y = Math.min(position.y + 8, window.innerHeight - POPUP_H - 12);
@@ -39,6 +65,13 @@ export default function UserProfilePopup({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // 30s timer — online duration canlı güncellenir
+  useEffect(() => {
+    if (!user.onlineSince) return;
+    const id = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, [user.onlineSince]);
 
   const statusDot = () => {
     if (user.status !== 'online') return 'bg-[var(--theme-border)]';
@@ -128,6 +161,29 @@ export default function UserProfilePopup({
             <div className="flex items-center gap-1.5 mb-3">
               <Monitor size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
               <span className="text-[10px] text-[var(--theme-secondary-text)]">v{user.appVersion}</span>
+            </div>
+          )}
+
+          {/* Activity stats */}
+          {(user.onlineSince || user.lastSeenAt || (user.totalUsageMinutes ?? 0) > 0) && (
+            <div className="flex flex-col gap-1 mb-3">
+              {user.status === 'online' && user.onlineSince ? (
+                <div className="flex items-center gap-1.5" title="Şu anki online süresi">
+                  <Clock size={10} className="text-emerald-400/80 shrink-0" />
+                  <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatOnlineDuration(user.onlineSince)}</span>
+                </div>
+              ) : user.lastSeenAt ? (
+                <div className="flex items-center gap-1.5" title="Son görülme">
+                  <History size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
+                  <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatLastSeen(user.lastSeenAt)}</span>
+                </div>
+              ) : null}
+              {(user.totalUsageMinutes ?? 0) > 0 && (
+                <div className="flex items-center gap-1.5" title="Toplam kullanım süresi">
+                  <Activity size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
+                  <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatTotalUsage(user.totalUsageMinutes!)}</span>
+                </div>
+              )}
             </div>
           )}
 

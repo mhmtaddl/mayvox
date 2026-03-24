@@ -69,6 +69,8 @@ export default function SettingsView() {
     setAvatarBorderColor,
     pttReleaseDelay,
     setPttReleaseDelay,
+    adminBorderEffect,
+    setAdminBorderEffect,
   } = useSettings();
 
   const {
@@ -203,6 +205,12 @@ export default function SettingsView() {
     return `${initials}${user.age || ''}`;
   };
 
+  // Her kelimenin ilk harfini büyük, kalanı küçük yap (Türkçe i/İ korumalı)
+  const toTitleCase = (str: string) =>
+    str.replace(/\S+/g, w =>
+      w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1).toLocaleLowerCase('tr-TR')
+    );
+
   const triggerSaveProfile = () => {
     setPressingProfile(true);
     setTimeout(() => setPressingProfile(false), 150);
@@ -210,6 +218,14 @@ export default function SettingsView() {
   };
 
   const handleUpdateProfile = async () => {
+    if (!settingsFirstName.trim()) {
+      setSettingsPasswordError('Ad alanı boş bırakılamaz.');
+      return;
+    }
+    if (!settingsLastName.trim()) {
+      setSettingsPasswordError('Soyad alanı boş bırakılamaz.');
+      return;
+    }
     if (settingsPassword.length > 0) {
       if (!validatePassword(settingsPassword)) {
         setSettingsPasswordError('Şifre en az 6 karakter, bir büyük harf, bir küçük harf ve bir rakam içermelidir.');
@@ -222,15 +238,20 @@ export default function SettingsView() {
     }
     setSettingsPasswordError('');
 
+    const normalizedFirst = toTitleCase(settingsFirstName.trim());
+    const normalizedLast = toTitleCase(settingsLastName.trim());
+    setSettingsFirstName(normalizedFirst);
+    setSettingsLastName(normalizedLast);
+
     const ageNum = parseInt(settingsAge) || 0;
-    const avatarText = getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: ageNum });
+    const avatarText = getAvatarText({ firstName: normalizedFirst, lastName: normalizedLast, age: ageNum });
     const finalAvatar = customAvatarUrl ?? avatarText;
     const updatedUser = {
       ...currentUser,
       name: settingsDisplayName,
       email: settingsUsername,
-      firstName: settingsFirstName,
-      lastName: settingsLastName,
+      firstName: normalizedFirst,
+      lastName: normalizedLast,
       age: ageNum,
       avatar: finalAvatar,
     };
@@ -239,8 +260,8 @@ export default function SettingsView() {
       id: currentUser.id,
       name: updatedUser.name,
       email: settingsUsername,
-      first_name: updatedUser.firstName || '',
-      last_name: updatedUser.lastName || '',
+      first_name: normalizedFirst,
+      last_name: normalizedLast,
       age: updatedUser.age || 18,
       avatar: updatedUser.avatar,
     });
@@ -319,27 +340,31 @@ export default function SettingsView() {
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none cursor-pointer ${
         checked ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'
       }`}
     >
-      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
   );
 
   const SLabel = ({ icon, children, badge }: { icon: React.ReactNode; children: React.ReactNode; badge?: React.ReactNode }) => (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="text-[var(--theme-secondary-text)] opacity-60">{icon}</span>
-      <span className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest">{children}</span>
+    <div className="flex items-center gap-2 mb-5">
+      <span className="text-[var(--theme-accent)]/70">{icon}</span>
+      <span className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">{children}</span>
       {badge}
+      <div className="flex-1 h-px bg-[var(--theme-border)]/60 ml-1" />
     </div>
   );
 
   // Shared input class
-  const inputCls = 'w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3 py-2.5 text-sm focus:border-[var(--theme-accent)] outline-none transition-colors text-[var(--theme-text)]';
+  const inputCls = 'w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3.5 py-2.5 text-sm focus:border-[var(--theme-accent)] focus:ring-2 focus:ring-[var(--theme-accent)]/10 outline-none transition-all text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40';
+
+  // Shared label class
+  const labelCls = 'text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em]';
 
   // Shared card class
-  const cardCls = 'bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl overflow-hidden';
+  const cardCls = 'bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-2xl overflow-hidden shadow-sm';
 
   return (
     <>
@@ -350,20 +375,20 @@ export default function SettingsView() {
           onCancel={() => setCropSrc(null)}
         />
       )}
-      <div className="w-full max-w-2xl mx-auto pb-12">
+      <div className="w-full max-w-2xl mx-auto pb-14">
 
         {/* ── Page header ──────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 pt-8 pb-7">
-          <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-            <Settings size={18} className="text-[var(--theme-accent)]" />
+        <div className="flex items-center gap-4 pt-10 pb-9">
+          <div className="w-11 h-11 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+            <Settings size={20} className="text-[var(--theme-accent)]" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[var(--theme-text)]">Ayarlar</h2>
+            <h2 className="text-2xl font-bold text-[var(--theme-text)] tracking-tight">Ayarlar</h2>
             <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Profil ve uygulama tercihleri</p>
           </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-10">
 
           {/* ════════════════════════════════════════════════════════════
               HESAP
@@ -372,14 +397,17 @@ export default function SettingsView() {
             <SLabel icon={<UserIcon size={12} />}>Hesap</SLabel>
             <div className={cardCls}>
 
+              {/* Gradient şerit */}
+              <div className="h-1.5 bg-gradient-to-r from-[var(--theme-accent)]/50 via-[var(--theme-accent)]/20 to-transparent" />
+
               {/* Avatar + kimlik satırı */}
-              <div className="flex items-center gap-4 p-5 border-b border-[var(--theme-border)]">
+              <div className="flex items-center gap-5 px-6 py-5 border-b border-[var(--theme-border)]">
                 <div
                   className="relative group cursor-pointer shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <div
-                    className="h-14 w-14 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-sm"
+                    className="h-16 w-16 rounded-full bg-[var(--theme-accent)]/20 border-[3px] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base shadow-sm"
                     style={{ borderColor: avatarBorderColor }}
                   >
                     {customAvatarUrl ? (
@@ -388,105 +416,140 @@ export default function SettingsView() {
                       getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
                     )}
                   </div>
-                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     {avatarUploading
                       ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : <Camera size={15} className="text-white" />
+                      : <Camera size={16} className="text-white" />
                     }
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFileChange} />
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[var(--theme-text)] leading-tight truncate">
-                    {(settingsFirstName || settingsLastName)
-                      ? `${settingsFirstName} ${settingsLastName}`.trim()
-                      : settingsDisplayName || '—'}
-                  </p>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <p className="font-bold text-base text-[var(--theme-text)] leading-tight truncate">
+                      {(settingsFirstName || settingsLastName)
+                        ? `${settingsFirstName} ${settingsLastName}`.trim()
+                        : settingsDisplayName || '—'}
+                    </p>
+                    {currentAppVersion && (
+                      <span className="text-[9px] font-semibold text-[var(--theme-secondary-text)]/50 tabular-nums shrink-0">
+                        v{currentAppVersion}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-[var(--theme-secondary-text)] truncate mt-0.5">{settingsUsername}</p>
                   {/* Avatar border renk paleti */}
-                  <div className="flex items-center gap-1.5 mt-2.5">
-                    {['#3B82F6','#8B5CF6','#10B981','#EF4444','#F59E0B','#EC4899','#06B6D4','#F97316','#6B7280'].map(color => (
-                      <button
-                        key={color}
-                        onClick={() => setAvatarBorderColor(color)}
-                        className="w-4 h-4 rounded-full border-2 transition-transform hover:scale-125 shrink-0"
-                        style={{
-                          backgroundColor: color,
-                          borderColor: avatarBorderColor === color ? 'white' : 'transparent',
-                          boxShadow: avatarBorderColor === color ? `0 0 0 1px ${color}` : 'none',
-                        }}
-                        title={color}
-                      />
-                    ))}
+                  <div className="mt-3">
+                    <p className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Çerçeve Rengi</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[
+                        { hex: '#3B82F6', name: 'Mavi' },
+                        { hex: '#8B5CF6', name: 'Mor' },
+                        { hex: '#10B981', name: 'Yeşil' },
+                        { hex: '#EF4444', name: 'Kırmızı' },
+                        { hex: '#F59E0B', name: 'Sarı' },
+                        { hex: '#EC4899', name: 'Pembe' },
+                        { hex: '#06B6D4', name: 'Cyan' },
+                        { hex: '#F97316', name: 'Turuncu' },
+                        { hex: '#6B7280', name: 'Gri' },
+                      ].map(({ hex, name }) => {
+                        const isSelected = avatarBorderColor === hex;
+                        return (
+                          <button
+                            key={hex}
+                            onClick={() => setAvatarBorderColor(hex)}
+                            title={name}
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              backgroundColor: hex,
+                              border: isSelected ? '2.5px solid white' : '2px solid transparent',
+                              boxShadow: isSelected ? `0 0 0 2px ${hex}` : `0 0 0 1px ${hex}55`,
+                              transform: isSelected ? 'scale(1.22)' : 'scale(1)',
+                              transition: 'all 0.15s ease',
+                              cursor: 'pointer',
+                              outline: 'none',
+                              flexShrink: 0,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-
-                {currentAppVersion && (
-                  <span className="text-[10px] text-[var(--theme-secondary-text)]/40 font-medium self-start shrink-0 tabular-nums">
-                    v{currentAppVersion}
-                  </span>
-                )}
               </div>
 
-              {/* Form alanları */}
-              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
-                  <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={inputCls} />
+              {/* Profil alanları */}
+              <div className="px-6 pt-5 pb-4">
+                <p className={`${labelCls} mb-3`}>Profil Bilgileri</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Kullanıcı Adı</label>
+                    <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={inputCls} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>E-Posta</label>
+                    <input type="text" value={settingsUsername} onChange={e => setSettingsUsername(e.target.value)} className={inputCls} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Ad</label>
+                    <input type="text" value={settingsFirstName} onChange={e => setSettingsFirstName(toTitleCase(e.target.value))} className={inputCls} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Soyad</label>
+                    <input type="text" value={settingsLastName} onChange={e => setSettingsLastName(toTitleCase(e.target.value))} className={inputCls} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Yaş</label>
+                    <input type="number" value={settingsAge} onChange={e => setSettingsAge(e.target.value)} className={inputCls} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">E-Posta</label>
-                  <input type="text" value={settingsUsername} onChange={e => setSettingsUsername(e.target.value)} className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Ad</label>
-                  <input type="text" value={settingsFirstName} onChange={e => setSettingsFirstName(e.target.value)} className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Soyad</label>
-                  <input type="text" value={settingsLastName} onChange={e => setSettingsLastName(e.target.value)} className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yaş</label>
-                  <input type="number" value={settingsAge} onChange={e => setSettingsAge(e.target.value)} className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Yeni Şifre</label>
-                  <div className="relative">
+              </div>
+
+              {/* Güvenlik alanları */}
+              <div className="border-t border-[var(--theme-border)] mx-6" />
+              <div className="px-6 pt-4 pb-5">
+                <p className={`${labelCls} mb-3`}>Güvenlik</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Yeni Şifre</label>
+                    <div className="relative">
+                      <input
+                        type={showSettingsPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={settingsPassword}
+                        onChange={e => setSettingsPassword(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') triggerSaveProfile(); }}
+                        className={inputCls}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowSettingsPassword(!showSettingsPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
+                      >
+                        {showSettingsPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>Şifre Tekrar</label>
                     <input
                       type={showSettingsPassword ? 'text' : 'password'}
                       placeholder="••••••••"
-                      value={settingsPassword}
-                      onChange={e => setSettingsPassword(e.target.value)}
+                      value={settingsPasswordRepeat}
+                      onChange={e => setSettingsPasswordRepeat(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') triggerSaveProfile(); }}
                       className={inputCls}
                     />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowSettingsPassword(!showSettingsPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
-                    >
-                      {showSettingsPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
                   </div>
-                </div>
-                <div className="space-y-1.5 md:col-start-2">
-                  <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Şifre Tekrar</label>
-                  <input
-                    type={showSettingsPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={settingsPasswordRepeat}
-                    onChange={e => setSettingsPasswordRepeat(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') triggerSaveProfile(); }}
-                    className={inputCls}
-                  />
                 </div>
               </div>
 
               {/* Footer: mesaj + kaydet */}
-              <div className="px-5 pb-5 flex items-center justify-between gap-4">
+              <div className="border-t border-[var(--theme-border)] px-6 py-4 flex items-center justify-between gap-4 bg-[var(--theme-bg)]/30">
                 <p className={`text-xs flex-1 leading-relaxed ${
                   updateSuccessMessage
                     ? 'text-emerald-500 font-semibold'
@@ -501,7 +564,7 @@ export default function SettingsView() {
                 <button
                   ref={saveProfileBtnRef}
                   onClick={handleUpdateProfile}
-                  className={`shrink-0 px-5 py-2 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-black/10 hover:opacity-90 active:scale-[0.97] ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
+                  className={`shrink-0 px-6 py-2.5 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-[var(--theme-accent)]/20 hover:opacity-90 hover:shadow-lg active:scale-[0.97] ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
                 >
                   Kaydet
                 </button>
@@ -519,25 +582,39 @@ export default function SettingsView() {
                 <button
                   key={theme.id}
                   onClick={() => setCurrentTheme(theme)}
-                  className={`flex flex-col gap-2.5 p-3.5 rounded-xl border-2 transition-all text-left ${
+                  className={`flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
                     currentTheme.id === theme.id
-                      ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
-                      : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-secondary-text)]/40 hover:bg-[var(--theme-sidebar)]/60'
+                      ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-sm'
+                      : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-secondary-text)]/30 hover:bg-[var(--theme-sidebar)]/60 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-[var(--theme-text)]">{theme.name}</span>
-                    {currentTheme.id === theme.id && <Check size={14} className="text-[var(--theme-accent)] shrink-0" />}
+                    {currentTheme.id === theme.id
+                      ? <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0"><Check size={10} className="text-white" /></div>
+                      : <div className="w-5 h-5 rounded-full border-2 border-[var(--theme-border)] shrink-0" />
+                    }
                   </div>
-                  <div className="flex gap-1.5">
-                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.bg }} />
-                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.accent }} />
-                    <div className="w-5 h-5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: theme.text }} />
+                  <div className="flex rounded-lg overflow-hidden h-5 border border-white/10">
+                    <div className="flex-1" style={{ backgroundColor: theme.bg }} />
+                    <div className="w-5 border-l border-white/10" style={{ backgroundColor: theme.sidebar }} />
+                    <div className="w-5 border-l border-white/10" style={{ backgroundColor: theme.accent }} />
                   </div>
                 </button>
               ))}
             </div>
           </section>
+
+          {/* Admin border effect */}
+          <div className={`${cardCls} -mt-6`}>
+            <div className="flex items-center gap-4 px-6 py-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
+                <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
+              </div>
+              <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} />
+            </div>
+          </div>
 
           {/* ════════════════════════════════════════════════════════════
               SESLER
@@ -550,24 +627,24 @@ export default function SettingsView() {
                 { label: 'Mikrofon / Hoparlör', desc: 'Mikrofon veya hoparlör açılıp kapandığında.', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen },
                 { label: 'Bas-Konuş', desc: 'Bas-Konuş tuşuna basılıp bırakıldığında.', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt },
               ] as const).map(({ label, desc, category, variant, setVariant, enabled, setEnabled }) => (
-                <div key={category} className="flex items-center gap-4 px-5 py-4">
+                <div key={category} className="flex items-center gap-4 px-6 py-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-[var(--theme-text)]">{label}</p>
-                    <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">{desc}</p>
+                    <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">{desc}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     {([1, 2] as SoundVariant[]).map(v => (
                       <button
                         key={v}
                         disabled={!enabled}
                         onClick={() => { setVariant(v); previewSound(category, v); }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                           variant === v && enabled
-                            ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)]'
-                            : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)]'
+                            ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
+                            : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
                         }`}
                       >
-                        Ses {v}
+                        {v === 1 ? 'Ses A' : 'Ses B'}
                       </button>
                     ))}
                     <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} />
@@ -576,21 +653,21 @@ export default function SettingsView() {
               ))}
 
               {/* Davet Çağrısı */}
-              <div className="flex items-center gap-4 px-5 py-4">
+              <div className="flex items-center gap-4 px-6 py-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
-                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Birisi sizi odaya davet ettiğinde çalan zil sesi.</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Birisi sizi odaya davet ettiğinde çalan zil sesi.</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   {([1, 2] as const).map(v => (
                     <button
                       key={v}
                       disabled={!soundInvite}
                       onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                         soundInviteVariant === v && soundInvite
-                          ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)]'
-                          : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)]'
+                          ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
+                          : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
                       }`}
                     >
                       {v === 1 ? 'Klasik' : 'Yumuşak'}
@@ -610,26 +687,26 @@ export default function SettingsView() {
             <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
 
               {/* Düşük Veri Modu */}
-              <div className="flex items-center gap-4 px-5 py-4">
+              <div className="flex items-center gap-4 px-6 py-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[var(--theme-text)]">Düşük Veri Kullanım Modu</p>
-                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Görsel güncellemeleri kısıtlar, ses kalitesini korur.</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Görsel güncellemeleri kısıtlar, ses kalitesini korur.</p>
                 </div>
                 <Toggle checked={isLowDataMode} onChange={() => setIsLowDataMode(!isLowDataMode)} />
               </div>
 
               {/* Gürültü Susturma toggle */}
-              <div className="flex items-center gap-4 px-5 py-4">
+              <div className="flex items-center gap-4 px-6 py-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
-                  <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Arka plan sesini filtreler, konuşmayı netleştirir.</p>
+                  <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Arka plan sesini filtreler, konuşmayı netleştirir.</p>
                 </div>
                 <Toggle checked={isNoiseSuppressionEnabled} onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} />
               </div>
 
               {/* Gürültü Eşiği — sadece aktifken göster */}
               {isNoiseSuppressionEnabled && (
-                <div className="px-5 py-4">
+                <div className="px-6 py-4">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Eşiği</p>
@@ -659,7 +736,7 @@ export default function SettingsView() {
               )}
 
               {/* PTT Bırakma Gecikmesi */}
-              <div className="px-5 py-4">
+              <div className="px-6 py-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-sm font-semibold text-[var(--theme-text)]">Bas-Konuş Bırakma Gecikmesi</p>
@@ -686,8 +763,8 @@ export default function SettingsView() {
               <SLabel
                 icon={<ShieldCheck size={12} />}
                 badge={
-                  <span className="ml-1 text-[9px] bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] px-1.5 py-0.5 rounded border border-[var(--theme-accent)]/20 uppercase font-bold">
-                    Admin Only
+                  <span className="text-[9px] bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] px-2 py-0.5 rounded-full border border-[var(--theme-accent)]/20 uppercase font-bold tracking-wider">
+                    Admin
                   </span>
                 }
               >
@@ -696,14 +773,14 @@ export default function SettingsView() {
               <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
 
                 {/* Davet Kodu */}
-                <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex items-center gap-4 px-6 py-5">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Kodu Oluştur</p>
-                    <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Yeni kullanıcılar için süreli giriş kodu.</p>
+                    <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Yeni kullanıcılar için süreli giriş kodu.</p>
                   </div>
                   <button
                     onClick={handleGenerateCode}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-black/10 shrink-0"
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-accent)] text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-md shadow-[var(--theme-accent)]/20 shrink-0"
                   >
                     <LinkIcon size={14} />
                     Oluştur
@@ -719,7 +796,7 @@ export default function SettingsView() {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="px-5 py-4 bg-[var(--theme-accent)]/5">
+                      <div className="px-6 py-5 bg-[var(--theme-accent)]/5">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex-1">
                             <label className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-widest mb-1 block">Aktif Davet Kodu</label>
@@ -755,8 +832,8 @@ export default function SettingsView() {
                 </AnimatePresence>
 
                 {/* Davet Talepleri */}
-                <div className="px-5 py-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="px-6 py-5">
+                  <div className="flex items-center gap-2 mb-4">
                     <Mail className="text-amber-500 shrink-0" size={14} />
                     <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Talepleri</p>
                     {inviteRequests.length > 0 && (
@@ -775,35 +852,35 @@ export default function SettingsView() {
                 </div>
 
                 {/* Kullanıcı Yönetimi */}
-                <div className="px-5 py-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="px-6 py-5">
+                  <div className="flex items-center gap-2 mb-4">
                     <Users className="text-[var(--theme-accent)] shrink-0" size={14} />
                     <p className="text-sm font-semibold text-[var(--theme-text)]">Kullanıcı Yönetimi</p>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {otherUsers.map(user => (
-                      <div key={user.id} className="flex items-center justify-between p-3 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)]">
+                      <div key={user.id} className="flex items-center justify-between p-3.5 bg-[var(--theme-bg)] rounded-xl border border-[var(--theme-border)] hover:border-[var(--theme-border)]/80 transition-colors">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0">
+                          <div className="h-9 w-9 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0 ring-1 ring-[var(--theme-border)]">
                             {user.avatar?.startsWith('http')
                               ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               : user.avatar}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-[var(--theme-text)] truncate">{user.firstName} {user.lastName}</span>
+                              <span className="text-sm font-semibold text-[var(--theme-text)] truncate">{user.firstName} {user.lastName}</span>
                               {user.appVersion && (() => {
                                 const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
                                 return (
-                                  <span className={`text-[9px] font-medium shrink-0 ${outdated ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                                  <span className={`text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
                                     v{user.appVersion}
                                   </span>
                                 );
                               })()}
                             </div>
-                            <div className="flex gap-1.5 mt-0.5 flex-wrap">
-                              {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Susturuldu</span>}
-                              {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20">Konuşma Yasaklı</span>}
+                            <div className="flex gap-1.5 mt-1 flex-wrap">
+                              {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded-full border border-orange-500/20 font-medium">Susturuldu</span>}
+                              {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded-full border border-red-500/20 font-medium">Konuşma Yasaklı</span>}
                             </div>
                           </div>
                         </div>

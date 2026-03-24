@@ -25,6 +25,9 @@ export interface User {
   mustChangePassword?: boolean;
   passwordResetRequested?: boolean;
   appVersion?: string;
+  lastSeenAt?: string;
+  totalUsageMinutes?: number;
+  onlineSince?: number;
 }
 
 export interface VoiceChannel {

@@ -37,6 +37,7 @@ import {
   adminMarkInviteFailed,
   adminRejectInvite,
   sendInviteEmail,
+  updateActivityOnLogout,
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
@@ -48,7 +49,7 @@ type DbProfile = {
   id: string; name: string; email?: string; first_name?: string; last_name?: string;
   age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
-  app_version?: string;
+  app_version?: string; last_seen_at?: string; total_usage_minutes?: number;
 };
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
@@ -115,11 +116,14 @@ export default function App() {
     root.style.colorScheme = currentTheme.id === 'beige' ? 'light' : 'dark';
   }, [currentTheme]);
 
-  const [isLowDataMode, setIsLowDataMode] = useState(() => localStorage.getItem('lowDataMode') === 'true');
-  useEffect(() => { localStorage.setItem('lowDataMode', String(isLowDataMode)); }, [isLowDataMode]);
+  const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');
+  const setIsLowDataMode = (v: boolean) => { localStorage.setItem('lowDataMode', String(v)); setIsLowDataModeState(v); };
 
-  const [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled] = useState(() => localStorage.getItem('noiseSuppression') !== 'false');
-  useEffect(() => { localStorage.setItem('noiseSuppression', String(isNoiseSuppressionEnabled)); }, [isNoiseSuppressionEnabled]);
+  const [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabledState] = useState(() => localStorage.getItem('noiseSuppression') !== 'false');
+  const setIsNoiseSuppressionEnabled = (v: boolean) => { localStorage.setItem('noiseSuppression', String(v)); setIsNoiseSuppressionEnabledState(v); };
+
+  const [adminBorderEffect, setAdminBorderEffectState] = useState(() => localStorage.getItem('adminBorderEffect') !== 'false');
+  const setAdminBorderEffect = (v: boolean) => { localStorage.setItem('adminBorderEffect', String(v)); setAdminBorderEffectState(v); };
 
   const [noiseThreshold, setNoiseThreshold] = useState<number>(() => {
     const saved = localStorage.getItem('noiseThreshold');
@@ -288,6 +292,7 @@ export default function App() {
   const pendingInviteCodeRef = useRef<string | null>(null);
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  const sessionStartedAtRef = useRef<number>(Date.now());
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
   const isLowDataModeRef = useRef(isLowDataMode);
@@ -493,6 +498,8 @@ export default function App() {
         banExpires: profile.ban_expires || undefined,
         // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
         appVersion: profile.app_version || undefined,
+        lastSeenAt: profile.last_seen_at || undefined,
+        totalUsageMinutes: profile.total_usage_minutes || 0,
       } : {
         id: session.user.id,
         name: email,
@@ -559,6 +566,8 @@ export default function App() {
               isVoiceBanned: p.is_voice_banned || false,
               // Presence cache öncelikli; yoksa DB'deki kalıcı versiyon
               appVersion: knownVersionsRef.current.get(p.id) || p.app_version,
+              lastSeenAt: p.last_seen_at || undefined,
+              totalUsageMinutes: p.total_usage_minutes || 0,
             }));
           return [...prev, ...offlineUsers];
         });
@@ -1264,6 +1273,8 @@ export default function App() {
       mustChangePassword: profile.must_change_password || false,
       // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
       appVersion: profile.app_version || undefined,
+      lastSeenAt: profile.last_seen_at || undefined,
+      totalUsageMinutes: profile.total_usage_minutes || 0,
     } : {
       id: userId,
       name: email,
@@ -1279,6 +1290,7 @@ export default function App() {
 
     if (!loggedInUser.avatar) loggedInUser.avatar = getAvatarText(loggedInUser);
 
+    sessionStartedAtRef.current = Date.now();
     setCurrentUser(loggedInUser);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
     startPresence(loggedInUser, appVersion);
@@ -1302,6 +1314,8 @@ export default function App() {
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
             appVersion: knownVersionsRef.current.get(p.id),
+            lastSeenAt: p.last_seen_at || undefined,
+            totalUsageMinutes: p.total_usage_minutes || 0,
           }))
       : [];
 
@@ -1359,6 +1373,11 @@ export default function App() {
 
   const handleLogout = async () => {
     logger.info('Logout', { userId: currentUser.id, name: currentUser.name });
+    if (currentUser.id) {
+      const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
+      const newTotal = (currentUser.totalUsageMinutes || 0) + sessionMins;
+      await updateActivityOnLogout(currentUser.id, newTotal).catch(() => {});
+    }
     stopPresence();
     await disconnectFromLiveKit();
     await signOut();
@@ -1382,6 +1401,19 @@ export default function App() {
     if (!currentUser.id || !presenceChannelRef.current) return;
     presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened });
   }, [isMuted, isDeafened]);
+
+  // ── Pencere kapanırken son görülme + kullanım süresi kaydet
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const u = currentUserRef.current;
+      if (!u.id) return;
+      const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
+      const newTotal = (u.totalUsageMinutes || 0) + sessionMins;
+      updateActivityOnLogout(u.id, newTotal).catch(() => {});
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
   useEffect(() => {
@@ -1698,6 +1730,7 @@ export default function App() {
       avatar: newUser.avatar,
     });
 
+    sessionStartedAtRef.current = Date.now();
     setCurrentUser(newUser);
     startPresence(newUser, appVersion);
 
@@ -1720,6 +1753,8 @@ export default function App() {
             isMuted: p.is_muted || false,
             isVoiceBanned: p.is_voice_banned || false,
             appVersion: knownVersionsRef.current.get(p.id),
+            lastSeenAt: p.last_seen_at || undefined,
+            totalUsageMinutes: p.total_usage_minutes || 0,
           }))
       : [];
 
@@ -1828,6 +1863,8 @@ export default function App() {
     setSoundInvite,
     soundInviteVariant,
     setSoundInviteVariant,
+    adminBorderEffect,
+    setAdminBorderEffect,
   };
 
   const appStateValue: AppStateContextType = {

@@ -96,26 +96,32 @@ export function usePresence({
           .map(p => [p.userId, { selfMuted: p.selfMuted, selfDeafened: p.selfDeafened }]),
       );
 
+      const now = Date.now();
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
+          const wasOnline = u.status === 'online';
+          const willBeOnline = u.id === user.id || onlineIds.has(u.id);
           return {
             ...u,
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
-            status:
-              u.id === user.id
-                ? 'online'
-                : onlineIds.has(u.id)
-                  ? 'online'
-                  : 'offline',
+            status: willBeOnline ? 'online' : 'offline',
             statusText:
               u.id === user.id
                 ? u.statusText
-                : onlineIds.has(u.id)
+                : willBeOnline
                   ? u.statusText === 'Çevrimdışı'
                     ? 'Aktif'
                     : u.statusText
                   : 'Çevrimdışı',
+            // Kullanıcı yeni online oldu: onlineSince başlat
+            onlineSince: willBeOnline
+              ? (u.onlineSince ?? now)
+              : undefined,
+            // Kullanıcı online'dan offline'a geçti: lastSeenAt güncelle (yaklaşım)
+            lastSeenAt: !willBeOnline && wasOnline
+              ? new Date().toISOString()
+              : u.lastSeenAt,
             // Apply audio state only if presence data includes it (skip self — local state is authoritative)
             ...(audio !== undefined && u.id !== user.id && {
               selfMuted: audio.selfMuted,

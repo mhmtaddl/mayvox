@@ -85,6 +85,14 @@ export const updateUserAppVersion = async (id: string, version: string) => {
     .eq('id', id);
 };
 
+// Logout / window close sırasında son görülme zamanını ve birikimli kullanım dakikasını yazar.
+export const updateActivityOnLogout = async (id: string, totalUsageMinutes: number) => {
+  return await supabase
+    .from('profiles')
+    .update({ last_seen_at: new Date().toISOString(), total_usage_minutes: totalUsageMinutes })
+    .eq('id', id);
+};
+
 // UPDATE USER MODERATION (admin/mute/ban) — server-side admin kontrolü ile
 export const updateUserModeration = async (id: string, updates: {
   is_admin?: boolean;
