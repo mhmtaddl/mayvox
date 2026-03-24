@@ -1231,15 +1231,6 @@ export default function ChatView() {
             <div className="flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden">
               {idleAnimation === 'bars' && <IdleVoiceCenter />}
               {idleAnimation === 'wave' && <IdleVoiceWave />}
-              {/* Ince accent çizgi — animasyon ve yazıyı tek bir blok gibi bağlar */}
-              <div
-                className="relative z-10 mb-5"
-                style={{
-                  width: 32,
-                  height: 1,
-                  background: 'linear-gradient(to right, transparent, rgba(var(--theme-accent-rgb), 0.35), transparent)',
-                }}
-              />
               <h2 className="text-xl font-bold tracking-wide text-[var(--theme-text)] mb-3 relative z-10">
                 Henüz Bir Odada Değilsiniz
               </h2>
