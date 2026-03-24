@@ -161,7 +161,14 @@ export function usePresence({
       setAllUsers(prev =>
         prev.map(u =>
           u.id === payload.userId
-            ? { ...u, isSpeaking: payload.isSpeaking }
+            ? {
+                ...u,
+                isSpeaking: payload.isSpeaking,
+                // selfMuted / selfDeafened: kullanıcının kendi audio toggle'ı
+                // undefined gelirse mevcut değeri koru (backward compat)
+                ...(payload.selfMuted    !== undefined && { selfMuted:    payload.selfMuted }),
+                ...(payload.selfDeafened !== undefined && { selfDeafened: payload.selfDeafened }),
+              }
             : u,
         ),
       );

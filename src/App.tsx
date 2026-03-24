@@ -721,16 +721,22 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── PTT speaking broadcast ────────────────────────────────────────────────
+  // ── PTT speaking broadcast + audio state sync ─────────────────────────────
+  // selfMuted / selfDeafened: kullanıcının kendi toggle'ı. Admin mute'tan ayrı.
   useEffect(() => {
     if (!activeChannel) return;
     const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned;
     presenceChannelRef.current?.send({
       type: 'broadcast',
       event: 'speaking',
-      payload: { userId: currentUser.id, isSpeaking: canSpeak },
+      payload: {
+        userId: currentUser.id,
+        isSpeaking: canSpeak,
+        selfMuted: isMuted,
+        selfDeafened: isDeafened,
+      },
     });
-  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, activeChannel]);
+  }, [isPttPressed, isMuted, isDeafened, currentUser.isVoiceBanned, activeChannel, currentUser.id]);
 
   // ── Ses bildirimleri ──────────────────────────────────────────────────────
   const soundMountedRef = useRef(false);

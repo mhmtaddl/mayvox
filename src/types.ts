@@ -10,7 +10,9 @@ export interface User {
   status: UserStatus;
   statusText?: string;
   avatar: string;
-  isMuted?: boolean;
+  isMuted?: boolean;       // admin tarafından susturulma
+  selfMuted?: boolean;    // kullanıcının kendi mikrofon kapatması
+  selfDeafened?: boolean; // kullanıcının kendi hoparlör kapatması
   isSpeaking?: boolean;
   lastSeen?: string;
   isAdmin?: boolean;

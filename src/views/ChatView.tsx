@@ -1180,35 +1180,29 @@ export default function ChatView() {
                         </div>
                         <div className="mt-0.5">
                           {isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned ? (
-                            <div className="flex items-center gap-2">
-                              <p className="text-[var(--theme-accent)] text-[10px] font-bold animate-pulse">Konuşuyor...</p>
-                              <div className="flex items-end gap-0.5 h-3 w-12">
-                                {[1, 2, 3, 4, 5, 6].map((i) => {
-                                  const isActive = volumeLevel > (i * 15);
-                                  return (
-                                    <div
-                                      key={i}
-                                      className={`w-1 rounded-full transition-all duration-75 ${isActive ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'}`}
-                                      style={{
-                                        height: isActive ? `${Math.max(20, Math.min(100, volumeLevel - (i * 5)))}%` : '20%'
-                                      }}
-                                    />
-                                  );
-                                })}
-                              </div>
+                            <div className="flex items-end gap-0.5 h-3 w-12">
+                              {[1, 2, 3, 4, 5, 6].map((i) => {
+                                const isActive = volumeLevel > (i * 15);
+                                return (
+                                  <div
+                                    key={i}
+                                    className={`w-1 rounded-full transition-all duration-75 ${isActive ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]'}`}
+                                    style={{
+                                      height: isActive ? `${Math.max(20, Math.min(100, volumeLevel - (i * 5)))}%` : '20%'
+                                    }}
+                                  />
+                                );
+                              })}
                             </div>
                           ) : user.isSpeaking ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[var(--theme-accent)] text-[10px] font-bold">Konuşuyor</span>
-                              <div className="flex items-end gap-[2px] h-3">
-                                {[0, 1, 2].map(j => (
-                                  <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
-                                    height: '10px',
-                                    transformOrigin: 'bottom',
-                                    animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
-                                  }} />
-                                ))}
-                              </div>
+                            <div className="flex items-end gap-[2px] h-3">
+                              {[0, 1, 2].map(j => (
+                                <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
+                                  height: '10px',
+                                  transformOrigin: 'bottom',
+                                  animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
+                                }} />
+                              ))}
                             </div>
                           ) : (
                             <p className={`${statusSize} font-bold truncate ${getStatusColor(user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif'))}`}>
@@ -1219,8 +1213,8 @@ export default function ChatView() {
                       </div>
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         <div className="flex gap-2">
-                          <Headphones size={iconSize} className={(isMe ? isDeafened : user.status === 'offline') ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
-                          <Mic size={iconSize} className={(isMe ? isMuted : user.status === 'busy') ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
+                          <Headphones size={iconSize} className={(isMe ? isDeafened : !!user.selfDeafened) ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
+                          <Mic size={iconSize} className={(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) ? 'text-red-500' : 'text-[var(--theme-accent)]'} />
                         </div>
                         <div className="flex gap-2 h-4 items-center justify-center">
                           {user.statusText === 'Telefonda' && (
@@ -1302,19 +1296,24 @@ export default function ChatView() {
                           {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" />}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
+                          {/* Mic / deafen durum ikonları — her zaman görünür, kapalıysa kırmızı */}
+                          {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && (
+                            <Mic size={8} className="text-red-500 shrink-0" />
+                          )}
+                          {(isMe ? isDeafened : !!user.selfDeafened) && (
+                            <Headphones size={8} className="text-red-500 shrink-0" />
+                          )}
+                          {/* Konuşma: metin yok, sadece mini equalizer */}
                           {user.isSpeaking ? (
-                            <>
-                              <span className="text-[9px] font-bold uppercase tracking-tight text-[var(--theme-accent)]">Konuşuyor</span>
-                              <div className="flex items-end gap-[1.5px] h-2.5 ml-0.5">
-                                {[0, 1, 2].map(j => (
-                                  <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
-                                    height: '8px',
-                                    transformOrigin: 'bottom',
-                                    animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
-                                  }} />
-                                ))}
-                              </div>
-                            </>
+                            <div className="flex items-end gap-[1.5px] h-2.5">
+                              {[0, 1, 2].map(j => (
+                                <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)]" style={{
+                                  height: '8px',
+                                  transformOrigin: 'bottom',
+                                  animation: `speakBar 0.75s ${j * 0.14}s ease-in-out infinite`,
+                                }} />
+                              ))}
+                            </div>
                           ) : (
                             <>
                               {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
