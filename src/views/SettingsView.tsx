@@ -89,6 +89,7 @@ export default function SettingsView() {
     handleSendInviteCode,
     handleRejectInvite,
     appVersion: currentAppVersion,
+    broadcastModeration,
   } = useAppState();
 
   const isOutdated = (userVersion: string, appVer: string): boolean => {
@@ -301,6 +302,7 @@ export default function SettingsView() {
       const updated = { ...currentUser, avatar: url };
       setCurrentUser(updated);
       setAllUsers(allUsers.map(u => u.id === currentUser.id ? updated : u));
+      broadcastModeration(currentUser.id, { avatar: url });
       setUpdateSuccessMessage('Profil fotoğrafı güncellendi!');
       setTimeout(() => setUpdateSuccessMessage(''), 3000);
     } catch {

@@ -31,6 +31,7 @@ import { useChannel } from '../contexts/ChannelContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
 import SettingsView from './SettingsView';
+import UserProfilePopup from '../components/UserProfilePopup';
 import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
@@ -152,6 +153,9 @@ export default function ChatView() {
 
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
+
+  // Profile popup
+  const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
 
   // Davet gelince çağrı sesi: modal açılınca başlar, kapanınca durur
   // soundInvite kapalıysa hiç çalmaz; variant ayarı ile uygun ses seçilir
@@ -1158,6 +1162,7 @@ export default function ChatView() {
                   return (
                     <div
                       key={user.id}
+                      onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                       onDoubleClick={() => !isMe && currentUser.isAdmin && handleKickUser(user.id)}
                       className={`${
                         isMe ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]/60' : 'bg-[var(--theme-sidebar)]/50 border-[var(--theme-border)]'
@@ -1295,7 +1300,8 @@ export default function ChatView() {
                   return (
                     <div
                       key={user.id}
-                      className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)]"
+                      className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)] cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                     >
                       <div className="relative shrink-0">
                         <div
@@ -1405,6 +1411,34 @@ export default function ChatView() {
           </div>
         </aside>
       </div>
+
+      {/* User Profile Popup */}
+      <AnimatePresence>
+        {profilePopup && (() => {
+          const popupUser = allUsers.find(u => u.id === profilePopup.userId);
+          if (!popupUser) return null;
+          const isMe = popupUser.id === currentUser.id;
+          const alreadyInChannel = activeChannel && channels.find(c => c.id === activeChannel)?.members?.includes(popupUser.name);
+          const canInvite = !isMe && !!activeChannel && !alreadyInChannel;
+          const inviteStatus = inviteStatuses[popupUser.id];
+          const cooldownUntil = inviteCooldowns[popupUser.id];
+          const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
+          const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
+          return (
+            <UserProfilePopup
+              user={popupUser}
+              position={profilePopup}
+              onClose={() => setProfilePopup(null)}
+              onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
+              canInvite={!!canInvite}
+              inviteStatus={inviteStatus}
+              onCooldown={onCooldown}
+              cooldownRemaining={remaining}
+              isMe={isMe}
+            />
+          );
+        })()}
+      </AnimatePresence>
 
       {/* Footer Controls */}
       <footer className="h-16 bg-[var(--theme-sidebar)] flex items-center relative">
