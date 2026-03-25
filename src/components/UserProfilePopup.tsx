@@ -161,12 +161,13 @@ export default function UserProfilePopup({
           </div>
 
           {/* Meta */}
-          {user.appVersion && (() => {
-            const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
+          {(() => {
+            const hasVersion = !!user.appVersion;
+            const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
             return (
               <div className="flex items-center gap-1.5 mb-3">
-                <Monitor size={10} className={`shrink-0 ${outdated ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/70'}`} />
-                <span className={`text-[10px] ${outdated ? 'text-red-400 font-semibold' : 'text-[var(--theme-secondary-text)]'}`}>v{user.appVersion}</span>
+                <Monitor size={10} className={`shrink-0 ${outdated ? 'text-red-400' : 'text-emerald-400'}`} />
+                <span className={`text-[10px] font-semibold ${outdated ? 'text-red-400' : 'text-emerald-400'}`}>{hasVersion ? `v${user.appVersion}` : 'Eski'}</span>
               </div>
             );
           })()}

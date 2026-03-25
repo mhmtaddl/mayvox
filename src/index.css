@@ -21,3 +21,50 @@ body {
   color: var(--theme-text);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* Card scale slider (chat room header) */
+.card-scale-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 3px;
+  border-radius: 4px;
+  background: rgba(var(--theme-accent-rgb), 0.12);
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease;
+}
+.card-scale-slider:hover {
+  background: rgba(var(--theme-accent-rgb), 0.2);
+}
+.card-scale-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  border: 2px solid rgba(0,0,0,0.25);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 0 8px rgba(var(--theme-accent-rgb), 0.35);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.card-scale-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(var(--theme-accent-rgb), 0.45);
+}
+.card-scale-slider::-webkit-slider-thumb:active {
+  transform: scale(1.18);
+  cursor: grabbing;
+}
+
+/* Idle breathing — avatar ring ambient glow */
+@keyframes idle-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(var(--theme-accent-rgb), 0.04), 0 0 6px rgba(var(--theme-accent-rgb), 0.03); }
+  50% { box-shadow: 0 0 0 1px rgba(var(--theme-accent-rgb), 0.07), 0 0 10px rgba(var(--theme-accent-rgb), 0.06); }
+}
+
+/* Idle breathing — card surface micro-pulse */
+@keyframes idle-surface {
+  0%, 100% { border-color: rgba(var(--theme-accent-rgb), 0.07); }
+  50% { border-color: rgba(var(--theme-accent-rgb), 0.10); }
+}

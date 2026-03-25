@@ -7,6 +7,23 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.4.1': {
+    title: 'v1.4.1 — Premium Deneyim Güncellemesi',
+    items: [
+      'Ses ayarı artık tüm kullanıcılara açık — herkes aynı odadaki birinin sesini kendine özel ayarlayabiliyor.',
+      'Versiyon takibi genişletildi — eski sürüm kullananlar kırmızı, güncel olanlar yeşil görünüyor.',
+      'Kullanıcı kartı sistemi yeniden yapılandırıldı — daha modüler ve bakımı kolay mimari.',
+      'En baskın konuşmacı otomatik öne çıkıyor (Dominant Speaker Focus).',
+      'Sessiz anlarda kartlarda çok hafif ambient canlılık (Idle Breathing).',
+      'Geçiş animasyonları daha yumuşak ve premium hissettiriyor.',
+      'Admin, Moderatör ve SEN için daha profesyonel görsel ayrım.',
+      'Kart boyutu kontrolü yenilendi — tek tıkla dönen ikon (Kompakt / Dengeli / Geniş).',
+      'Bas-konuş ipucu artık seçili tuşu gösteriyor.',
+    ],
+    adminItems: [
+      'Tüm kullanıcıların versiyon bilgisi artık eksik olsa bile görünüyor (eski sürüm = kırmızı "Eski" etiketi).',
+    ],
+  },
   '1.4.0': {
     title: 'v1.4.0 — Büyük Güncelleme',
     items: [

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Mic,
   Settings,
@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Recycle,
   KeyRound,
+  Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppState } from '../contexts/AppStateContext';
@@ -37,7 +38,8 @@ import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandUpdateArea from '../components/BrandUpdateArea';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
-import { Mail } from 'lucide-react';
+import { UserCard, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../components/chat';
+import type { CardScale } from '../components/chat';
 
 export default function ChatView() {
   const {
@@ -271,60 +273,65 @@ export default function ChatView() {
     setDraggedUser(null);
   };
 
-  // renderConnectionQuality (inline copy)
-  const renderConnectionQuality = () => {
-    const getColor = (level: number) => {
-      if (level >= 4) return 'bg-emerald-500';
-      if (level === 3) return 'bg-yellow-500';
-      if (level === 2) return 'bg-orange-500';
-      if (level === 1) return 'bg-red-500';
-      return 'text-red-500';
-    };
+  // cardScale config lookup
+  const scaleConfig = CARD_SCALE_MAP[cardScale as CardScale];
 
-    const statusLabel = activeChannel
-      ? isConnecting
-        ? { text: 'Bağlanıyor', color: 'text-yellow-400' }
-        : connectionLevel === 0
-          ? { text: 'Bağlantı Yok', color: 'text-red-400' }
-          : connectionLevel === 1
-            ? { text: 'Zayıf', color: 'text-red-400' }
-            : null
-      : null;
+  // Audio intensity per user: 0–1
+  const getIntensity = useCallback((user: typeof sortedChannelMembers[0]): number => {
+    const isMe = user.id === currentUser.id;
+    if (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) {
+      return Math.min(1, volumeLevel / 80);
+    }
+    if (user.isSpeaking) {
+      return Math.min(1, (speakingLevels[user.name] ?? 0) * 2.5);
+    }
+    return 0;
+  }, [currentUser.id, currentUser.isVoiceBanned, isPttPressed, isMuted, volumeLevel, speakingLevels]);
 
-    if (connectionLevel === 0 && !isConnecting) {
-      return (
-        <div className="flex flex-col items-center gap-0.5">
-          <X size={14} className="text-red-500" />
-          {statusLabel && (
-            <span className={`text-[8px] font-bold animate-pulse ${statusLabel.color}`}>{statusLabel.text}</span>
-          )}
-        </div>
-      );
+  // ─── Dominant speaker detection with hysteresis ───────────────
+  const dominantSpeakerRef = useRef<string | null>(null);
+  const dominantSpeakerId = useMemo(() => {
+    // Find the speaker with the highest level among active speakers
+    let maxLevel = 0;
+    let maxId: string | null = null;
+
+    for (const member of sortedChannelMembers) {
+      const isMe = member.id === currentUser.id;
+      const isSpeaking = isMe
+        ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned)
+        : !!member.isSpeaking;
+
+      if (!isSpeaking) continue;
+
+      const level = isMe ? volumeLevel / 80 : (speakingLevels[member.name] ?? 0) * 2.5;
+      if (level > maxLevel) {
+        maxLevel = level;
+        maxId = member.id;
+      }
     }
 
-    return (
-      <motion.div
-        animate={connectionLevel <= 2 ? { opacity: [1, 0.5, 1] } : {}}
-        transition={{ duration: 1, repeat: Infinity }}
-        className="flex flex-col items-center gap-0.5"
-      >
-        <div className="flex items-end gap-0.5 h-3">
-          {[1, 2, 3, 4].map((i) => (
-            <motion.div
-              key={i}
-              animate={connectionLevel <= 1 ? { height: [`${i * 25}%`, `${i * 15}%`, `${i * 25}%`] } : {}}
-              transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
-              className={`w-1 rounded-full transition-all ${i <= connectionLevel ? getColor(connectionLevel) : 'bg-[var(--theme-border)]'}`}
-              style={{ height: `${i * 25}%` }}
-            />
-          ))}
-        </div>
-        {statusLabel && (
-          <span className={`text-[8px] font-bold animate-pulse leading-none ${statusLabel.color}`}>{statusLabel.text}</span>
-        )}
-      </motion.div>
-    );
-  };
+    // Hysteresis: keep current dominant unless new speaker is 20% louder
+    const prev = dominantSpeakerRef.current;
+    if (prev && prev !== maxId && maxLevel > 0) {
+      const prevMember = sortedChannelMembers.find(m => m.id === prev);
+      if (prevMember) {
+        const prevIsMe = prev === currentUser.id;
+        const prevSpeaking = prevIsMe
+          ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned)
+          : !!prevMember.isSpeaking;
+        if (prevSpeaking) {
+          const prevLevel = prevIsMe ? volumeLevel / 80 : (speakingLevels[prevMember.name] ?? 0) * 2.5;
+          // Only switch if new speaker is significantly louder
+          if (maxLevel < prevLevel * 1.2) {
+            return prev;
+          }
+        }
+      }
+    }
+
+    dominantSpeakerRef.current = maxId;
+    return maxId;
+  }, [sortedChannelMembers, currentUser.id, currentUser.isVoiceBanned, isPttPressed, isMuted, volumeLevel, speakingLevels]);
 
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
@@ -1135,54 +1142,33 @@ export default function ChatView() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Card scale slider */}
-                  <div className="flex items-center gap-2.5" title="Kart Boyutu">
-                    <Users size={13} className="text-[var(--theme-secondary-text)]/70" />
-                    <style>{`
-                      .card-scale-slider {
-                        -webkit-appearance: none;
-                        appearance: none;
-                        width: 72px;
-                        height: 3px;
-                        border-radius: 4px;
-                        background: rgba(var(--theme-accent-rgb), 0.12);
-                        cursor: pointer;
-                        outline: none;
-                        transition: background 0.15s ease;
-                      }
-                      .card-scale-slider:hover {
-                        background: rgba(var(--theme-accent-rgb), 0.2);
-                      }
-                      .card-scale-slider::-webkit-slider-thumb {
-                        -webkit-appearance: none;
-                        width: 16px;
-                        height: 16px;
-                        border-radius: 50%;
-                        background: var(--theme-accent);
-                        border: 2px solid rgba(0,0,0,0.25);
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 0 8px rgba(var(--theme-accent-rgb), 0.35);
-                        cursor: grab;
-                        transition: transform 0.15s ease, box-shadow 0.15s ease;
-                      }
-                      .card-scale-slider::-webkit-slider-thumb:hover {
-                        transform: scale(1.12);
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(var(--theme-accent-rgb), 0.45);
-                      }
-                      .card-scale-slider::-webkit-slider-thumb:active {
-                        transform: scale(1.18);
-                        cursor: grabbing;
-                      }
-                    `}</style>
-                    <input
-                      type="range"
-                      min={1}
-                      max={3}
-                      step={1}
-                      value={cardScale}
-                      onChange={(e) => { const v = parseInt(e.target.value); setCardScale(v); localStorage.setItem('cardScale', String(v)); }}
-                      className="card-scale-slider"
-                    />
-                  </div>
+                  {/* Card density toggle — click to cycle */}
+                  <button
+                    onClick={() => {
+                      const next = (cardScale % 3) + 1;
+                      setCardScale(next);
+                      localStorage.setItem('cardScale', String(next));
+                    }}
+                    className="p-2 rounded-lg border border-[var(--theme-border)]/40 hover:bg-[var(--theme-accent)]/8 transition-all group/density"
+                    title={cardScale === 1 ? 'Kompakt' : cardScale === 2 ? 'Dengeli' : 'Geniş'}
+                  >
+                    <svg width="16" height="14" viewBox="0 0 16 14" fill="none" className="text-[var(--theme-secondary-text)] group-hover/density:text-[var(--theme-accent)] transition-colors">
+                      {cardScale === 1 ? (
+                        <>
+                          <rect x="0" y="0"  width="16" height="3.5" rx="1" fill="currentColor" opacity="0.7" />
+                          <rect x="0" y="5.25" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.5" />
+                          <rect x="0" y="10.5" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.3" />
+                        </>
+                      ) : cardScale === 2 ? (
+                        <>
+                          <rect x="0" y="0.5" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.7" />
+                          <rect x="0" y="8"   width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.45" />
+                        </>
+                      ) : (
+                        <rect x="0" y="0" width="16" height="14" rx="2" fill="currentColor" opacity="0.6" />
+                      )}
+                    </svg>
+                  </button>
 
                   <button
                     onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
@@ -1198,185 +1184,48 @@ export default function ChatView() {
               <div className="relative z-[1] flex-1">
                 {(() => {
                   const count = sortedChannelMembers.length;
-                  // Scale 1=compact, 2=medium, 3=large — cardScale from user preference
                   const s = cardScale;
-                  const av = s === 1 ? 'w-8 h-8 text-[10px]' : s === 2 ? 'w-10 h-10 text-xs' : 'w-12 h-12 text-sm';
-                  const pad = s === 1 ? 'px-2.5 py-2' : s === 2 ? 'px-3.5 py-3' : 'px-4 py-3.5';
-                  const cardGap = s === 1 ? 'gap-2' : s === 2 ? 'gap-2.5' : 'gap-3';
-                  const nm = s === 1 ? 'text-[12px]' : s === 2 ? 'text-[13px]' : 'text-[14px]';
-                  const stSz = s === 1 ? 'text-[8px]' : s === 2 ? 'text-[9px]' : 'text-[10px]';
-                  const ic = s === 1 ? 11 : s === 2 ? 13 : 14;
-                  const dense = s === 1;
                   const anySpeaking = sortedChannelMembers.some(u =>
                     u.id === currentUser.id ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned) : !!u.isSpeaking
                   );
 
-                  // Audio intensity per user: 0–1, smoothed via CSS transition
-                  const getIntensity = (user: typeof sortedChannelMembers[0]): number => {
-                    const isMe = user.id === currentUser.id;
-                    if (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) {
-                      return Math.min(1, volumeLevel / 80);
-                    }
-                    if (user.isSpeaking) {
-                      return Math.min(1, (speakingLevels[user.name] ?? 0) * 2.5);
-                    }
-                    return 0;
-                  };
-
                   return (
                     <>
-                      <div className={`grid ${s === 1 ? 'gap-1.5' : s === 2 ? 'gap-2' : 'gap-2.5'} mx-auto w-full ${
+                      <div className={`grid ${scaleConfig.gridGap} mx-auto w-full ${
                         s === 3
                           ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')
                           : s === 2
                             ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl' : count <= 9 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5')
                             : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6')
                       }`}>
-                        {sortedChannelMembers.map((user, index) => {
+                        {sortedChannelMembers.map((user) => {
                           const isMe = user.id === currentUser.id;
-
-                          const isOwner = currentChannel?.ownerId === user.id;
-                          const hasRole = isOwner || user.isAdmin || user.isModerator;
-
                           const isSpeakingActive =
                             (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) ||
                             (!isMe && !!user.isSpeaking);
 
-                          // Audio-reactive intensity (0–1)
-                          const intensity = getIntensity(user);
-                          // Derived visual values
-                          // Speaking: güçlü glow + surface
-                          const glowSpread = isSpeakingActive ? 12 + intensity * 16 : 0;
-                          const glowAlpha = isSpeakingActive ? 0.1 + intensity * 0.15 : 0;
-                          const borderAlpha = isSpeakingActive ? 0.25 + intensity * 0.2 : 0.08;
-                          // Idle: self ve other yakın tonlar (0.07 vs 0.055)
-                          const surfaceAlpha = isSpeakingActive ? 0.08 + intensity * 0.1 : isMe ? 0.07 : 0.055;
-                          const ringSpread = isSpeakingActive ? 2 + intensity * 1.5 : 0;
-                          const ringGlow = isSpeakingActive ? 8 + intensity * 14 : 0;
-
                           return (
-                            <div
+                            <UserCard
                               key={user.id}
+                              user={user}
+                              isMe={isMe}
+                              isOwner={currentChannel?.ownerId === user.id}
+                              isSpeakingActive={isSpeakingActive}
+                              isDominant={isSpeakingActive && user.id === dominantSpeakerId}
+                              intensity={getIntensity(user)}
+                              scale={scaleConfig}
+                              adminBorderEffect={adminBorderEffect}
+                              isPttPressed={isPttPressed}
+                              isMuted={isMe ? isMuted : false}
+                              isDeafened={isMe ? isDeafened : false}
+                              isVoiceBanned={isMe ? !!currentUser.isVoiceBanned : false}
+                              volumeLevel={volumeLevel}
+                              speakingLevel={speakingLevels[user.name] ?? 0}
+                              statusTimer={isMe ? statusTimer : null}
+                              effectiveStatus={getEffectiveStatus()}
                               onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                              onDoubleClick={() => !isMe && currentUser.isAdmin && handleKickUser(user.id)}
-                              className={`rounded-xl ${pad} flex items-center ${cardGap} relative group cursor-pointer ${
-                                isSpeakingActive ? '' : 'hover:scale-[1.008]'
-                              }`}
-                              style={{
-                                transition: 'all 0.25s ease-out',
-                                background: isSpeakingActive
-                                  ? `linear-gradient(135deg, rgba(var(--theme-accent-rgb), ${surfaceAlpha}) 0%, rgba(var(--theme-accent-rgb), ${surfaceAlpha * 0.35}) 100%)`
-                                  : `linear-gradient(135deg, rgba(var(--theme-accent-rgb), ${surfaceAlpha}) 0%, rgba(var(--theme-accent-rgb), ${surfaceAlpha * 0.4}) 100%)`,
-                                border: '1px solid transparent',
-                                borderColor: `rgba(var(--theme-accent-rgb), ${borderAlpha})`,
-                                boxShadow: isSpeakingActive
-                                  ? `0 0 ${glowSpread}px rgba(var(--theme-accent-rgb), ${glowAlpha}), 0 0 4px rgba(var(--theme-accent-rgb), ${glowAlpha * 0.4}), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.05)`
-                                  : '0 1px 3px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.03)',
-                              }}
-                            >
-                              {/* Avatar */}
-                              <div className="relative shrink-0">
-                                <div
-                                  className={`${av} rounded-lg bg-[var(--theme-accent)]/8 flex items-center justify-center text-[var(--theme-text)] font-bold overflow-hidden`}
-                                  style={{
-                                    transition: 'box-shadow 0.25s ease-out',
-                                    boxShadow: isSpeakingActive
-                                      ? `0 0 0 ${ringSpread}px rgba(var(--theme-accent-rgb), ${0.4 + intensity * 0.25}), 0 0 ${ringGlow}px rgba(var(--theme-accent-rgb), ${0.12 + intensity * 0.22})`
-                                      : `0 0 0 1px rgba(var(--theme-accent-rgb), 0.06)`,
-                                  }}
-                                >
-                                  {user.avatar && user.avatar.startsWith('http') ? (
-                                    <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                  ) : (
-                                    user.avatar
-                                  )}
-                                </div>
-                                {user.isAdmin && adminBorderEffect && !isSpeakingActive && (
-                                  <div className="absolute inset-[-2px] rounded-lg ring-[1.5px] ring-[var(--theme-accent)]/25 animate-pulse pointer-events-none" />
-                                )}
-                                {hasRole && (
-                                  <div className={`absolute -bottom-0.5 -right-0.5 ${s === 1 ? 'w-3.5 h-3.5' : s === 2 ? 'w-4 h-4' : 'w-[18px] h-[18px]'} bg-[var(--theme-bg)] border border-[var(--theme-border)]/30 rounded flex items-center justify-center`}>
-                                    {user.isAdmin
-                                      ? <ShieldCheck size={s === 1 ? 8 : s === 2 ? 9 : 10} className="text-[var(--theme-accent)]" />
-                                      : user.isModerator
-                                        ? <span className={`${s === 1 ? 'text-[6px]' : s === 2 ? 'text-[7px]' : 'text-[8px]'} font-black text-violet-400`}>M</span>
-                                        : <span className={`${s === 1 ? 'text-[6px]' : s === 2 ? 'text-[7px]' : 'text-[8px]'} font-bold text-[var(--theme-accent)]`}>M</span>
-                                    }
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Name + status */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <span className={`${nm} font-semibold truncate text-[var(--theme-text)]`}>
-                                    {user.firstName} {user.lastName}
-                                  </span>
-                                  <span className={`${s === 1 ? 'text-[9px]' : s === 2 ? 'text-[10px]' : 'text-[11px]'} font-medium shrink-0`} style={{ color: 'rgba(var(--theme-accent-rgb), 0.4)' }}>{user.age}</span>
-                                  {user.isAdmin && <ShieldCheck size={s === 1 ? 10 : s === 2 ? 11 : 12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
-                                  {!user.isAdmin && user.isModerator && <span className={`${s === 1 ? 'text-[9px]' : s === 2 ? 'text-[10px]' : 'text-[11px]'} font-black text-violet-400 shrink-0`} title="Moderatör">M</span>}
-                                  {isMe && (
-                                    <span className={`shrink-0 ${s === 1 ? 'text-[5px]' : s === 2 ? 'text-[6px]' : 'text-[7px]'} font-bold px-1 py-px bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] rounded leading-none`}>
-                                      SEN
-                                    </span>
-                                  )}
-                                </div>
-                                <div className={s >= 2 ? 'mt-0.5' : ''}>
-                                  {isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned ? (
-                                    <div className={`flex items-end gap-0.5 ${s === 1 ? 'h-2 w-8' : s === 2 ? 'h-2.5 w-10' : 'h-3 w-12'}`}>
-                                      {[1, 2, 3, 4, 5, 6].map((i) => {
-                                        const isActive = volumeLevel > (i * 15);
-                                        return (
-                                          <div
-                                            key={i}
-                                            className={`w-[2px] rounded-full transition-all duration-75 ${isActive ? 'bg-[var(--theme-accent)]' : 'bg-[var(--theme-border)]/25'}`}
-                                            style={{ height: isActive ? `${Math.max(20, Math.min(100, volumeLevel - (i * 5)))}%` : '20%' }}
-                                          />
-                                        );
-                                      })}
-                                    </div>
-                                  ) : user.isSpeaking ? (
-                                    <div className={`flex items-end gap-[2px] ${s === 1 ? 'h-2' : s === 2 ? 'h-2.5' : 'h-3'}`}>
-                                      {([0.65, 1.0, 0.55] as const).map((mult, j) => {
-                                        const lvl = (speakingLevels[user.name] ?? 0) * 100;
-                                        const h = lvl > 4 ? Math.max(25, Math.min(100, lvl * mult)) : 25;
-                                        return (
-                                          <div key={j} className="w-[2px] rounded-full bg-[var(--theme-accent)] transition-all duration-200" style={{ height: `${h}%`, transformOrigin: 'bottom' }} />
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5">
-                                      <div className={`${dense ? 'w-1.5 h-1.5' : 'w-[5px] h-[5px]'} rounded-full shrink-0 ${
-                                        (user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')) === 'Aktif'
-                                          ? 'bg-emerald-400'
-                                          : (user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')) === 'Telefonda'
-                                            ? 'bg-red-400'
-                                            : 'bg-orange-400'
-                                      }`} />
-                                      <p className={`${stSz} font-medium truncate text-[var(--theme-secondary-text)]/60`}>
-                                        {user.id === currentUser.id ? getEffectiveStatus() : (user.statusText || 'Aktif')}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Right: audio + status */}
-                              <div className="flex items-center gap-1 shrink-0 opacity-40 group-hover:opacity-80 transition-opacity duration-200">
-                                {user.statusText === 'Telefonda' && <PhoneCall size={s === 1 ? 9 : s === 2 ? 10 : 11} className="text-red-500 !opacity-100" />}
-                                {user.statusText === 'Hemen Geleceğim' && <Recycle size={s === 1 ? 9 : s === 2 ? 10 : 11} className="text-orange-500 !opacity-100" />}
-                                {isMe && statusTimer !== null && statusTimer > 0 && (
-                                  <span className={`${s === 1 ? 'text-[7px]' : s === 2 ? 'text-[8px]' : 'text-[9px]'} text-yellow-500 font-bold tabular-nums !opacity-100`}>
-                                    {Math.floor(statusTimer / 60)}:{(statusTimer % 60).toString().padStart(2, '0')}
-                                  </span>
-                                )}
-                                <div className={`flex items-center ${s === 1 ? 'gap-0.5' : 'gap-1'} ml-0.5`}>
-                                  <Headphones size={ic} className={(isMe ? isDeafened : !!user.selfDeafened) ? 'text-red-500 !opacity-100' : 'text-[var(--theme-secondary-text)]'} />
-                                  <Mic size={ic} className={(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) ? 'text-red-500 !opacity-100' : 'text-[var(--theme-secondary-text)]'} />
-                                </div>
-                              </div>
-                            </div>
+                              onDoubleClick={() => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); }}
+                            />
                           );
                         })}
                       </div>
@@ -1386,7 +1235,7 @@ export default function ChatView() {
                         <div className="flex items-center justify-center mt-8">
                           <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
                             <Mic size={12} />
-                            Konuşmaya başlamak için mikrofonunu aç
+                            Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
                           </p>
                         </div>
                       )}
@@ -1845,7 +1694,7 @@ export default function ChatView() {
         </div>
 
         <div className="w-64 px-4 flex items-center justify-evenly h-full">
-          {renderConnectionQuality()}
+          <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
 
           <div className="relative" ref={resetPanelRef}>
             {/* Davet talebi bildirim baloncuğu (admin) */}

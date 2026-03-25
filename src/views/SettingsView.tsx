@@ -953,11 +953,12 @@ export default function SettingsView() {
                               {user.isModerator && (
                                 <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 bg-violet-500/12 text-violet-400 rounded-full border border-violet-500/20 leading-none" title="Moderatör">M</span>
                               )}
-                              {user.appVersion && (() => {
-                                const outdated = currentAppVersion ? isOutdated(user.appVersion, currentAppVersion) : false;
+                              {(() => {
+                                const hasVersion = !!user.appVersion;
+                                const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
                                 return (
                                   <span className={`text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
-                                    v{user.appVersion}
+                                    {hasVersion ? `v${user.appVersion}` : 'Eski'}
                                   </span>
                                 );
                               })()}

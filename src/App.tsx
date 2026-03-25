@@ -953,11 +953,6 @@ export default function App() {
     e.stopPropagation();
     if (userId === currentUser.id) return;
 
-    const isAdmin = currentUser.isAdmin;
-    const canInvite = activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(allUsers.find(u => u.id === userId)?.name || '') && userId !== currentUser.id;
-
-    if (!isAdmin && !canInvite) return;
-
     setUserActionMenu({ userId, x: e.clientX, y: e.clientY });
     setContextMenu(null);
   };
