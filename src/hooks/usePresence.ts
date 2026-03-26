@@ -66,6 +66,53 @@ export function usePresence({
   const onInviteAcceptedRef = useRef(onInviteAccepted);
   onInviteAcceptedRef.current = onInviteAccepted;
 
+  // ── Presence-derived room membership sync ────────────────────────────────
+  // Broadcast'ler anlık güncelleme sağlar ama fire-and-forget'tir.
+  // Yeni bağlanan veya broadcast'i kaçıran client'lar için presence
+  // state'inden oda üyeliklerini türetiyoruz — bu stateful ve güvenilir.
+  const syncRoomMembersFromPresence = (
+    presenceData: Array<{ currentRoom?: string; userName?: string }>,
+  ) => {
+    const roomMembers = new Map<string, string[]>();
+    for (const p of presenceData) {
+      if (p.currentRoom && p.userName) {
+        const list = roomMembers.get(p.currentRoom) || [];
+        if (!list.includes(p.userName)) list.push(p.userName);
+        roomMembers.set(p.currentRoom, list);
+      }
+    }
+
+    const myName = currentUserRef.current.name;
+    const myChannel = activeChannelRef.current;
+
+    setChannels(prev => {
+      let hasChanges = false;
+      const next = prev.map(c => {
+        const presenceMembers = roomMembers.get(c.id) || [];
+        let members = [...presenceMembers];
+        // Self: local ref is more up-to-date than presence propagation
+        if (myChannel === c.id && myName && !members.includes(myName)) {
+          members.push(myName);
+        }
+        if (myChannel !== c.id && myName) {
+          members = members.filter(m => m !== myName);
+        }
+        const currentMembers = c.members || [];
+        const sortedNew = [...members].sort();
+        const sortedOld = [...currentMembers].sort();
+        if (
+          sortedNew.length !== sortedOld.length ||
+          sortedNew.some((m, i) => m !== sortedOld[i])
+        ) {
+          hasChanges = true;
+          return { ...c, members, userCount: members.length };
+        }
+        return c;
+      });
+      return hasChanges ? next : prev;
+    });
+  };
+
   const startPresence = (user: User, appVersion?: string) => {
     if (presenceChannelRef.current) {
       presenceChannelRef.current.unsubscribe();
@@ -77,7 +124,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -130,6 +177,9 @@ export function usePresence({
           } as User;
         }),
       );
+
+      // Room membership from presence state (reliable fallback for missed broadcasts)
+      syncRoomMembersFromPresence(presenceData);
     };
 
     channel.on('presence', { event: 'sync' }, () => {
@@ -282,7 +332,7 @@ export function usePresence({
 
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '' });
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.
@@ -315,8 +365,8 @@ export function usePresence({
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string; appVersion?: string }>();
-    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string }[];
+    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string }>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string }[];
     const onlineIds = new Set(presenceData.map(p => p.userId));
 
     // Build merged version map: fresh presenceState takes priority, cache fills the gaps
@@ -349,6 +399,9 @@ export function usePresence({
         return u;
       }),
     );
+
+    // Room membership from presence state (reliable fallback for missed broadcasts)
+    syncRoomMembersFromPresence(presenceData);
   };
 
   return { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence };

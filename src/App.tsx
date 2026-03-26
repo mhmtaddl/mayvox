@@ -561,8 +561,8 @@ export default function App() {
       setAllUsers((prev) => [...prev.filter((u) => u.id !== session.user.id), restoredUser]);
       setCurrentUser(restoredUser);
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
-      startPresence(restoredUser, appVersion);
 
+      // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
       const { data: savedChannels } = await getChannels();
       if (savedChannels && savedChannels.length > 0) {
         const userChannels: VoiceChannel[] = savedChannels.map((c: DbChannel) => ({
@@ -585,6 +585,7 @@ export default function App() {
         members: (c.members || []).filter((m) => m !== 'Kullanıcı 1'),
       })));
 
+      // ── 2. Users yükle
       const { data: allProfiles } = await getAllProfiles();
       if (allProfiles) {
         setAllUsers((prev) => {
@@ -613,11 +614,15 @@ export default function App() {
             }));
           return [...prev, ...offlineUsers];
         });
-        resyncPresence();
-        // Fallback: WebSocket bağlantısı getAllProfiles'tan yavaş olabilir.
-        // 1.5s sonra tekrar dene — o zaman presenceState kesinlikle dolmuş olur.
-        setTimeout(() => resyncPresenceRef.current(), 1500);
       }
+
+      // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat ──────────────
+      // SUBSCRIBED callback → applyPresenceState → syncRoomMembersFromPresence.
+      // Kanallar zaten yüklendiği için member bilgisi sıfırlanmaz.
+      startPresence(restoredUser, appVersion);
+      resyncPresence();
+      // Fallback: WebSocket bağlantısı geç olabilir. 1.5s sonra tekrar dene.
+      setTimeout(() => resyncPresenceRef.current(), 1500);
 
       setView('chat');
       setIsSessionLoading(false);
@@ -1348,8 +1353,26 @@ export default function App() {
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(loggedInUser);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
-    startPresence(loggedInUser, appVersion);
 
+    // ── 1. Channels yükle (login akışında da gerekli — kullanıcı odaları DB'den gelir)
+    const { data: loginChannels } = await getChannels();
+    if (loginChannels && loginChannels.length > 0) {
+      const userChannels: VoiceChannel[] = loginChannels.map((c: DbChannel) => ({
+        id: c.id,
+        name: c.name,
+        userCount: 0,
+        members: [],
+        isSystemChannel: false,
+        ownerId: c.owner_id,
+        maxUsers: c.max_users,
+        isInviteOnly: c.is_invite_only,
+        isHidden: c.is_hidden,
+        password: c.password || undefined,
+      }));
+      setChannels([...CHANNELS, ...userChannels]);
+    }
+
+    // ── 2. Users yükle
     const { data: allProfiles } = await getAllProfiles();
     const offlineUsers: User[] = allProfiles
       ? allProfiles
@@ -1385,8 +1408,10 @@ export default function App() {
         })),
       ];
     });
+
+    // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
+    startPresence(loggedInUser, appVersion);
     resyncPresence();
-    // Fallback: aynı timing koruması — login sırasında da WebSocket geç bağlanabilir
     setTimeout(() => resyncPresenceRef.current(), 1500);
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
@@ -1447,7 +1472,7 @@ export default function App() {
   // selfMuted / selfDeafened dahil edilmezse track() bunları siler; her zaman tam payload gönder.
   useEffect(() => {
     if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [appVersion, currentUser.id]);
 
   // ── Mic / Deafen toggle → presence track güncelle (initial hydrate için)
@@ -1455,8 +1480,14 @@ export default function App() {
   // presenceState() üzerinden doğru audio state'i görmesini sağlar.
   useEffect(() => {
     if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [isMuted, isDeafened]);
+
+  // ── Oda değişince presence'ı güncelle — diğer client'lar oda üyeliğini presence'dan türetir
+  useEffect(() => {
+    if (!currentUser.id || !presenceChannelRef.current) return;
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+  }, [activeChannel]);
 
   // ── Pencere kapanırken son görülme + kullanım süresi kaydet
   useEffect(() => {
@@ -1788,8 +1819,26 @@ export default function App() {
 
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(newUser);
-    startPresence(newUser, appVersion);
 
+    // ── 1. Channels yükle (kayıt sırasında da mevcut odalar yüklenmeli)
+    const { data: regChannels } = await getChannels();
+    if (regChannels && regChannels.length > 0) {
+      const userChannels: VoiceChannel[] = regChannels.map((c: DbChannel) => ({
+        id: c.id,
+        name: c.name,
+        userCount: 0,
+        members: [],
+        isSystemChannel: false,
+        ownerId: c.owner_id,
+        maxUsers: c.max_users,
+        isInviteOnly: c.is_invite_only,
+        isHidden: c.is_hidden,
+        password: c.password || undefined,
+      }));
+      setChannels([...CHANNELS, ...userChannels]);
+    }
+
+    // ── 2. Users yükle
     const { data: regAllProfiles } = await getAllProfiles();
     const regOfflineUsers: User[] = regAllProfiles
       ? regAllProfiles
@@ -1825,8 +1874,10 @@ export default function App() {
         })),
       ];
     });
+
+    // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
+    startPresence(newUser, appVersion);
     resyncPresence();
-    // Fallback: kayıt sırasında da WebSocket henüz bağlanmamış olabilir
     setTimeout(() => resyncPresenceRef.current(), 1500);
     setView('chat');
     setLoginNick('');

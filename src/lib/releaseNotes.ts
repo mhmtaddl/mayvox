@@ -7,6 +7,14 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.4.2': {
+    title: 'v1.4.2 — Oda Görünürlük Düzeltmesi',
+    items: [
+      'Sonradan giriş yapan kullanıcılar artık dolu odaları ve içindeki üyeleri sidebar\'da görebiliyor.',
+      'Presence tabanlı oda üyelik takibi eklendi — broadcast kaçırılsa bile oda durumu güvenilir şekilde senkron.',
+      'Login ve kayıt akışlarında eksik olan kanal yüklemesi düzeltildi.',
+    ],
+  },
   '1.4.1': {
     title: 'v1.4.1 — Premium Deneyim Güncellemesi',
     items: [
