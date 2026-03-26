@@ -7,6 +7,12 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.4.4': {
+    title: 'v1.4.4 — Çıkış Düzeltmesi',
+    items: [
+      'Çıkış yapan veya uygulamayı kapatan kullanıcılar artık anında odadan düşüyor.',
+    ],
+  },
   '1.4.2': {
     title: 'v1.4.2 — Oda Görünürlük Düzeltmesi',
     items: [
