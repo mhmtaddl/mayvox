@@ -7,6 +7,14 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.4.3': {
+    title: 'v1.4.3 — Hayalet Kullanıcı Düzeltmesi',
+    items: [
+      'Uygulamayı kapatan veya çıkış yapan kullanıcılar artık anında offline görünüyor ve odalardan düşüyor.',
+      'Çökme veya bağlantı kopması durumunda kullanıcılar en geç 15 saniye içinde otomatik olarak temizleniyor.',
+      'Çıkış sırası düzeltildi — ses bağlantısı kesilmeden presence kanalı kapanma hatası giderildi.',
+    ],
+  },
   '1.4.2': {
     title: 'v1.4.2 — Oda Görünürlük Düzeltmesi',
     items: [

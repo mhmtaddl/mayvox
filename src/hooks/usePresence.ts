@@ -4,6 +4,20 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, updateUserAppVersion } from '../lib/supabase';
 import type { User, VoiceChannel } from '../types';
 
+// ── Heartbeat: 5sn'de bir track, 15sn'den eski → stale sayılır ──────────
+const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_STALE_MS = 15_000;
+
+type PresencePayload = {
+  userId: string;
+  appVersion?: string;
+  selfMuted?: boolean;
+  selfDeafened?: boolean;
+  currentRoom?: string;
+  userName?: string;
+  lastHeartbeat?: number;
+};
+
 interface Props {
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
@@ -46,11 +60,12 @@ export function usePresence({
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
 
   // Persistent cross-render cache: userId → appVersion
-  // Populated by every presence sync/join event so resyncPresence can fall back to it
-  // even when presenceState() hasn't populated yet (race condition fix).
   const knownVersionsRef = useRef<Map<string, string>>(new Map());
 
-  // Use a ref so the kick handler always calls the latest disconnectFromLiveKit
+  // Heartbeat refs
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastTrackRef = useRef<Record<string, unknown> | null>(null);
+
   const disconnectRef = useRef(disconnectFromLiveKit);
   disconnectRef.current = disconnectFromLiveKit;
 
@@ -66,15 +81,32 @@ export function usePresence({
   const onInviteAcceptedRef = useRef(onInviteAccepted);
   onInviteAcceptedRef.current = onInviteAccepted;
 
+  // ── trackPresence: tek noktadan track + lastHeartbeat + ref güncelle ───
+  const trackPresence = (payload: Record<string, unknown>) => {
+    const ch = presenceChannelRef.current;
+    if (!ch) return;
+    const full = { ...payload, lastHeartbeat: Date.now() };
+    lastTrackRef.current = full;
+    ch.track(full);
+  };
+
+  // ── Stale-aware: presenceData'dan alive olanları filtrele ──────────────
+  const filterAlive = (presenceData: PresencePayload[]): PresencePayload[] => {
+    const now = Date.now();
+    return presenceData.filter(
+      p => !p.lastHeartbeat || (now - p.lastHeartbeat) <= HEARTBEAT_STALE_MS,
+    );
+  };
+
   // ── Presence-derived room membership sync ────────────────────────────────
-  // Broadcast'ler anlık güncelleme sağlar ama fire-and-forget'tir.
-  // Yeni bağlanan veya broadcast'i kaçıran client'lar için presence
-  // state'inden oda üyeliklerini türetiyoruz — bu stateful ve güvenilir.
   const syncRoomMembersFromPresence = (
-    presenceData: Array<{ currentRoom?: string; userName?: string }>,
+    presenceData: Array<{ currentRoom?: string; userName?: string; lastHeartbeat?: number }>,
   ) => {
+    const now = Date.now();
     const roomMembers = new Map<string, string[]>();
     for (const p of presenceData) {
+      // Skip stale heartbeats
+      if (p.lastHeartbeat && (now - p.lastHeartbeat) > HEARTBEAT_STALE_MS) continue;
       if (p.currentRoom && p.userName) {
         const list = roomMembers.get(p.currentRoom) || [];
         if (!list.includes(p.userName)) list.push(p.userName);
@@ -90,7 +122,6 @@ export function usePresence({
       const next = prev.map(c => {
         const presenceMembers = roomMembers.get(c.id) || [];
         let members = [...presenceMembers];
-        // Self: local ref is more up-to-date than presence propagation
         if (myChannel === c.id && myName && !members.includes(myName)) {
           members.push(myName);
         }
@@ -114,6 +145,11 @@ export function usePresence({
   };
 
   const startPresence = (user: User, appVersion?: string) => {
+    // Önceki heartbeat'i temizle
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
     if (presenceChannelRef.current) {
       presenceChannelRef.current.unsubscribe();
     }
@@ -124,21 +160,22 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string }>();
+      const state = channel.presenceState<PresencePayload>();
       const presenceData = Object.values(state).flatMap(s => s);
-      const onlineIds = new Set(presenceData.map(p => p.userId));
+
+      // Alive filter: stale heartbeat'li kullanıcıları online/room'dan çıkar
+      const aliveData = filterAlive(presenceData);
+
+      const onlineIds = new Set(aliveData.map(p => p.userId));
+
+      // Version cache: tüm datadan (stale dahil) — versiyon expire olmaz
       const versionMap = new Map(
         presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
       );
-
-      // Persist to cross-render cache so resyncPresence can use it even if
-      // presenceState() is empty at call time (race condition fix).
       versionMap.forEach((v, id) => knownVersionsRef.current.set(id, v));
 
-      // Audio state map: selfMuted / selfDeafened from presence track.
-      // This provides initial hydrate for new joiners who haven't received a speaking broadcast yet.
       const audioMap = new Map(
-        presenceData
+        aliveData
           .filter(p => p.selfMuted !== undefined || p.selfDeafened !== undefined)
           .map(p => [p.userId, { selfMuted: p.selfMuted, selfDeafened: p.selfDeafened }]),
       );
@@ -161,15 +198,12 @@ export function usePresence({
                     ? 'Aktif'
                     : u.statusText
                   : 'Çevrimdışı',
-            // Kullanıcı yeni online oldu: onlineSince başlat
             onlineSince: willBeOnline
               ? (u.onlineSince ?? now)
               : undefined,
-            // Kullanıcı online'dan offline'a geçti: lastSeenAt güncelle (yaklaşım)
             lastSeenAt: !willBeOnline && wasOnline
               ? new Date().toISOString()
               : u.lastSeenAt,
-            // Apply audio state only if presence data includes it (skip self — local state is authoritative)
             ...(audio !== undefined && u.id !== user.id && {
               selfMuted: audio.selfMuted,
               selfDeafened: audio.selfDeafened,
@@ -178,8 +212,8 @@ export function usePresence({
         }),
       );
 
-      // Room membership from presence state (reliable fallback for missed broadcasts)
-      syncRoomMembersFromPresence(presenceData);
+      // Room membership from alive presence data
+      syncRoomMembersFromPresence(aliveData);
     };
 
     channel.on('presence', { event: 'sync' }, () => {
@@ -233,8 +267,6 @@ export function usePresence({
             ? {
                 ...u,
                 isSpeaking: payload.isSpeaking,
-                // selfMuted / selfDeafened: kullanıcının kendi audio toggle'ı
-                // undefined gelirse mevcut değeri koru (backward compat)
                 ...(payload.selfMuted    !== undefined && { selfMuted:    payload.selfMuted }),
                 ...(payload.selfDeafened !== undefined && { selfDeafened: payload.selfDeafened }),
               }
@@ -246,7 +278,6 @@ export function usePresence({
     channel.on('broadcast', { event: 'moderation' }, ({ payload }) => {
       if (payload.userId === user.id) {
         setCurrentUser(prev => ({ ...prev, ...payload.updates }));
-        // Ban geldiğinde aktif sesli kanaldan çıkar
         if (payload.updates.isVoiceBanned === true) {
           setActiveChannel(null);
           disconnectRef.current();
@@ -265,15 +296,22 @@ export function usePresence({
 
     channel.on('broadcast', { event: 'move' }, ({ payload }) => {
       if (payload.userId !== user.id) return;
-      // Ref'i hemen sıfırla — React render'ı beklemeden.
-      // Aksi hâlde bu noktadan sonra gelen channel-update broadcast'leri
-      // activeChannelRef.current'ı stale (eski oda) olarak okur ve
-      // kullanıcıyı zaten terk ettiği odaya yeniden ekler (çift oda bug'ı).
       activeChannelRef.current = null;
       setActiveChannel(null);
       disconnectRef.current().then(() => {
         onMovedRef.current(payload.targetChannelId);
       });
+    });
+
+    // ── room-leave: kullanıcı graceful çıkış yaptığında anında temizle ──
+    channel.on('broadcast', { event: 'room-leave' }, ({ payload }) => {
+      if (!payload.userName || !payload.channelId) return;
+      setChannels(prev => prev.map(c => {
+        if (c.id !== payload.channelId) return c;
+        const members = (c.members || []).filter(m => m !== payload.userName);
+        if (members.length === (c.members || []).length) return c;
+        return { ...c, members, userCount: members.length };
+      }));
     });
 
     channel.on('broadcast', { event: 'channel-update' }, ({ payload }) => {
@@ -295,14 +333,9 @@ export function usePresence({
             const myChannel = activeChannelRef.current;
 
             if (c.id !== payload.channelId) {
-              // Exclusivity: bir kanal için üye listesi güncellemesi geldiğinde,
-              // o kanalda artık olan üyeleri diğer tüm kanallardan temizle.
-              // Bu, oda taşıma sırasında "iki odada birden görünme" race condition'ını önler.
               if (Array.isArray(payload.updates?.members)) {
                 const incomingMembers = payload.updates.members as string[];
                 const filtered = (c.members || []).filter(
-                  // Kendi adımızı yalnızca activeChannelRef'e göre yönetiyoruz —
-                  // başkasının broadcast'i bizi yanlış yerden silmesin.
                   m => m === myName || !incomingMembers.includes(m),
                 );
                 if (filtered.length !== (c.members || []).length) {
@@ -314,8 +347,6 @@ export function usePresence({
 
             const updates = { ...payload.updates };
             if (Array.isArray(updates.members)) {
-              // Remove own name then re-add based on actual channel membership.
-              // This prevents stale broadcasts causing duplicate member entries.
               updates.members = (updates.members as string[]).filter(
                 m => m !== myName,
               );
@@ -332,52 +363,87 @@ export function usePresence({
 
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined });
+        const initPayload: Record<string, unknown> = {
+          userId: user.id,
+          appVersion: appVersion ?? '',
+          userName: user.name,
+          currentRoom: activeChannelRef.current || undefined,
+        };
+        trackPresence(initPayload);
 
-        // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
-        // son bilinen sürüm SettingsView'de görünmeye devam eder.
-        // user.appVersion = DB'deki mevcut değer; aynıysa gereksiz write atla.
         if (appVersion && appVersion !== user.appVersion) {
           updateUserAppVersion(user.id, appVersion).catch(() => {});
         }
 
-        // ── Initial hydrate ───────────────────────────────────────────────
-        // Supabase Realtime'da 'sync' eventi SUBSCRIBED'dan önce veya sonra
-        // gelebilir. track() tamamlandıktan sonra presenceState() zaten
-        // dolu olmalı; burada manuel okuyarak hemen uyguluyoruz.
         applyPresenceState();
-
-        // Fallback hydrate: yavaş ağ koşullarında presenceState track()
-        // sonrasında hâlâ boş gelebilir (Phoenix kanalı sync gecikmesi).
-        // 300ms sonra tekrar uygula — o zaman kesinlikle dolu olur.
         setTimeout(applyPresenceState, 300);
+
+        // ── Heartbeat: 5sn'de bir track güncelle ─────────────────────────
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => {
+          if (!lastTrackRef.current) return;
+          const payload = {
+            ...lastTrackRef.current,
+            currentRoom: activeChannelRef.current || undefined,
+            lastHeartbeat: Date.now(),
+          };
+          lastTrackRef.current = payload;
+          channel.track(payload).catch(() => {});
+        }, HEARTBEAT_INTERVAL_MS);
       }
     });
   };
 
-  const stopPresence = () => {
-    if (presenceChannelRef.current) {
-      presenceChannelRef.current.unsubscribe();
-      presenceChannelRef.current = null;
+  // ── cleanupPresence: graceful çıkış — broadcast + untrack + unsubscribe ─
+  const cleanupPresence = () => {
+    // 1. Heartbeat durdur
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
     }
+
+    const ch = presenceChannelRef.current;
+    if (!ch) return;
+
+    const myName = currentUserRef.current.name;
+    const myChannel = activeChannelRef.current;
+
+    // 2. Odadaysa anında room-leave broadcast (fire-and-forget, sync WebSocket push)
+    if (myChannel && myName) {
+      ch.send({
+        type: 'broadcast',
+        event: 'room-leave',
+        payload: { userName: myName, channelId: myChannel },
+      });
+    }
+
+    // 3. Presence'dan kaldır + kanalı kapat
+    ch.untrack();
+    ch.unsubscribe();
+    presenceChannelRef.current = null;
+    lastTrackRef.current = null;
+  };
+
+  // stopPresence artık cleanupPresence'a delege ediyor
+  const stopPresence = () => {
+    cleanupPresence();
   };
 
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string }>();
-    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string }[];
-    const onlineIds = new Set(presenceData.map(p => p.userId));
+    const state = channel.presenceState<PresencePayload>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as PresencePayload[];
 
-    // Build merged version map: fresh presenceState takes priority, cache fills the gaps
-    // This breaks the race where presenceState() is empty right after subscription.
+    const aliveData = filterAlive(presenceData);
+    const onlineIds = new Set(aliveData.map(p => p.userId));
+
     const mergedVersionMap = new Map(knownVersionsRef.current);
     presenceData.filter(p => p.appVersion).forEach(p => {
       mergedVersionMap.set(p.userId, p.appVersion!);
       knownVersionsRef.current.set(p.userId, p.appVersion!);
     });
 
-    // Only skip if both live state AND cache are empty (truly no data yet)
     if (onlineIds.size === 0 && mergedVersionMap.size === 0) return;
 
     setAllUsers(prev =>
@@ -391,8 +457,6 @@ export function usePresence({
             statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
           };
         }
-        // Even if not in live onlineIds, apply cached version if available
-        // (prevents version from disappearing during brief presence gaps)
         if (cachedVersion && cachedVersion !== u.appVersion) {
           return { ...u, appVersion: cachedVersion };
         }
@@ -400,9 +464,17 @@ export function usePresence({
       }),
     );
 
-    // Room membership from presence state (reliable fallback for missed broadcasts)
-    syncRoomMembersFromPresence(presenceData);
+    // Room membership from alive presence data
+    syncRoomMembersFromPresence(aliveData);
   };
 
-  return { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence };
+  return {
+    presenceChannelRef,
+    knownVersionsRef,
+    startPresence,
+    stopPresence,
+    cleanupPresence,
+    resyncPresence,
+    trackPresence,
+  };
 }

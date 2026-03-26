@@ -362,7 +362,7 @@ export default function App() {
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
-  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence } = usePresence({
+  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, cleanupPresence, resyncPresence, trackPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
@@ -1459,8 +1459,11 @@ export default function App() {
       const newTotal = (currentUser.totalUsageMinutes || 0) + sessionMins;
       await updateActivityOnLogout(currentUser.id, newTotal).catch(() => {});
     }
-    stopPresence();
+    // SIRA KRİTİK: Önce LiveKit disconnect (broadcast presence üzerinden gider),
+    // sonra presence cleanup (untrack + unsubscribe).
+    // Ters sırada broadcast başarısız olur çünkü kanal kapanmış olur.
     await disconnectFromLiveKit();
+    cleanupPresence();
     await signOut();
     setView('login-selection');
     setActiveChannel(null);
@@ -1469,34 +1472,38 @@ export default function App() {
   };
 
   // ── appVersion IPC async geldikten sonra presence'ı güncelle
-  // selfMuted / selfDeafened dahil edilmezse track() bunları siler; her zaman tam payload gönder.
   useEffect(() => {
-    if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    if (!appVersion || !currentUser.id) return;
+    trackPresence({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [appVersion, currentUser.id]);
 
   // ── Mic / Deafen toggle → presence track güncelle (initial hydrate için)
-  // Speaking broadcast anlık değişimi yayar; bu effect yeni açılan client'ların
-  // presenceState() üzerinden doğru audio state'i görmesini sağlar.
   useEffect(() => {
-    if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    if (!currentUser.id) return;
+    trackPresence({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [isMuted, isDeafened]);
 
   // ── Oda değişince presence'ı güncelle — diğer client'lar oda üyeliğini presence'dan türetir
   useEffect(() => {
-    if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    if (!currentUser.id) return;
+    trackPresence({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [activeChannel]);
 
-  // ── Pencere kapanırken son görülme + kullanım süresi kaydet
+  // ── Pencere kapanırken: aktivite kaydet + room leave + presence cleanup ─
   useEffect(() => {
     const handleBeforeUnload = () => {
       const u = currentUserRef.current;
       if (!u.id) return;
+
+      // Aktivite kaydet
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
       const newTotal = (u.totalUsageMinutes || 0) + sessionMins;
       updateActivityOnLogout(u.id, newTotal).catch(() => {});
+
+      // Best-effort room leave + presence cleanup
+      // send() WebSocket buffer'a sync push yapar — browser flush eder.
+      // untrack/unsubscribe de buffer'a push — çoğu durumda gönderilir.
+      cleanupPresence();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
