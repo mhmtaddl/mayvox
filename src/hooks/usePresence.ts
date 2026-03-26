@@ -288,18 +288,6 @@ export function usePresence({
         setActiveChannel(prev =>
           prev === payload.channelId ? null : prev,
         );
-      } else if (payload.action === 'member-left') {
-        // Graceful çıkış: kullanıcıyı belirtilen odadan anında kaldır
-        const leftName = payload.userName as string;
-        const leftChannel = payload.channelId as string;
-        if (leftName && leftChannel) {
-          setChannels(prev => prev.map(c => {
-            if (c.id !== leftChannel) return c;
-            const members = (c.members || []).filter(m => m !== leftName);
-            if (members.length === (c.members || []).length) return c;
-            return { ...c, members, userCount: members.length };
-          }));
-        }
       } else if (payload.action === 'update') {
         setChannels(prev =>
           prev.map(c => {
@@ -367,35 +355,12 @@ export function usePresence({
     });
   };
 
-  // ── cleanupPresence: graceful çıkış — room leave broadcast + untrack + unsubscribe
-  const cleanupPresence = () => {
-    const ch = presenceChannelRef.current;
-    if (!ch) return;
-
-    const myName = currentUserRef.current.name;
-    const myChannel = activeChannelRef.current;
-
-    // Odadaysa diğer client'lara anında bildir
-    if (myChannel && myName) {
-      ch.send({
-        type: 'broadcast',
-        event: 'channel-update',
-        payload: {
-          action: 'member-left',
-          channelId: myChannel,
-          userName: myName,
-        },
-      });
-    }
-
-    // Presence'dan kaldır
-    ch.untrack();
-    ch.unsubscribe();
-    presenceChannelRef.current = null;
-  };
-
   const stopPresence = () => {
-    cleanupPresence();
+    if (presenceChannelRef.current) {
+      presenceChannelRef.current.untrack();
+      presenceChannelRef.current.unsubscribe();
+      presenceChannelRef.current = null;
+    }
   };
 
   const resyncPresence = () => {
@@ -440,5 +405,5 @@ export function usePresence({
     syncRoomMembersFromPresence(presenceData);
   };
 
-  return { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, cleanupPresence, resyncPresence };
+  return { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence };
 }

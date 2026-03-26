@@ -362,7 +362,7 @@ export default function App() {
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
-  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, cleanupPresence, resyncPresence } = usePresence({
+  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
@@ -1460,7 +1460,7 @@ export default function App() {
       await updateActivityOnLogout(currentUser.id, newTotal).catch(() => {});
     }
     await disconnectFromLiveKit();
-    cleanupPresence();
+    stopPresence();
     await signOut();
     setView('login-selection');
     setActiveChannel(null);
@@ -1489,7 +1489,7 @@ export default function App() {
     presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
   }, [activeChannel]);
 
-  // ── Pencere kapanırken: aktivite kaydet + presence cleanup
+  // ── Pencere kapanırken son görülme + kullanım süresi kaydet
   useEffect(() => {
     const handleBeforeUnload = () => {
       const u = currentUserRef.current;
@@ -1497,8 +1497,6 @@ export default function App() {
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
       const newTotal = (u.totalUsageMinutes || 0) + sessionMins;
       updateActivityOnLogout(u.id, newTotal).catch(() => {});
-      // Best-effort: room leave broadcast + untrack + unsubscribe
-      cleanupPresence();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
