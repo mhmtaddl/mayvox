@@ -115,13 +115,30 @@ export default function App() {
     root.style.setProperty('--theme-accent', currentTheme.accent);
     root.style.setProperty('--theme-border', currentTheme.border);
 
-    const hex = currentTheme.accent.replace('#', '');
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    root.style.setProperty('--theme-accent-rgb', `${r}, ${g}, ${b}`);
+    // Helper: hex → "r, g, b"
+    const hexToRgb = (hex: string) => {
+      const h = hex.replace('#', '');
+      return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`;
+    };
 
-    root.style.colorScheme = currentTheme.id === 'beige' ? 'light' : 'dark';
+    root.style.setProperty('--theme-accent-rgb', hexToRgb(currentTheme.accent));
+    root.style.setProperty('--theme-bg-rgb', hexToRgb(currentTheme.bg));
+    root.style.setProperty('--theme-sidebar-rgb', hexToRgb(currentTheme.sidebar));
+
+    // Glass system tokens
+    const glow = currentTheme.glow || currentTheme.accent;
+    const glowSecondary = currentTheme.glowSecondary || currentTheme.accent;
+    root.style.setProperty('--theme-glow', glow);
+    root.style.setProperty('--theme-glow-rgb', hexToRgb(glow));
+    root.style.setProperty('--theme-glow-secondary', glowSecondary);
+    root.style.setProperty('--theme-glow-secondary-rgb', hexToRgb(glowSecondary));
+
+    const isLight = currentTheme.id === 'beige';
+    root.style.colorScheme = isLight ? 'light' : 'dark';
+    // Glass border adapts: white on dark, black on light
+    root.style.setProperty('--glass-tint', isLight ? '0, 0, 0' : '255, 255, 255');
+    // Shadow base: warm brown for beige, pure black for dark themes
+    root.style.setProperty('--shadow-base', isLight ? '80, 60, 40' : '0, 0, 0');
   }, [currentTheme]);
 
   const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');

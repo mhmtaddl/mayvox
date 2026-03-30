@@ -71,7 +71,7 @@ function UserCardInner({
 
   const cardShadow = isSpeakingActive
     ? `0 0 ${v.glowSpread}px rgba(var(--theme-accent-rgb), ${v.glowAlpha}), 0 0 4px rgba(var(--theme-accent-rgb), ${v.glowAlpha * 0.4}), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.05)`
-    : '0 1px 3px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.03)';
+    : '0 1px 3px rgba(var(--shadow-base),0.08), inset 0 1px 0 rgba(var(--glass-tint),0.03)';
 
   // ─── 2) Avatar shadow: reactive when speaking, static when idle ─
   const avatarShadow = isSpeakingActive

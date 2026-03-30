@@ -70,6 +70,9 @@ export interface Theme {
   secondaryText: string;
   accent: string;
   border: string;
+  // Glass system tokens
+  glow?: string;        // ambient glow color (hex)
+  glowSecondary?: string; // secondary glow for background (hex)
 }
 
 export type AnnouncementPriority = 'normal' | 'important' | 'critical';

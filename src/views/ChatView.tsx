@@ -344,7 +344,7 @@ export default function ChatView() {
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
       {/* Header */}
-      <header className="flex flex-col bg-[var(--theme-bg)] z-10 shrink-0">
+      <header className="flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0">
         <div className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16">
           <BrandUpdateArea
             updateInfo={updateInfo}
@@ -354,7 +354,7 @@ export default function ChatView() {
           />
 
           <div className="flex items-center h-full gap-2">
-          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.03)] transition-all duration-200" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
@@ -436,11 +436,11 @@ export default function ChatView() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-72 bg-[var(--theme-sidebar)]/30 flex flex-col">
+        <aside className="w-72 bg-[rgba(var(--theme-sidebar-rgb),0.35)] backdrop-blur-xl border-r border-[rgba(var(--glass-tint),0.04)] flex flex-col">
           <div className="p-6 flex flex-col h-full">
-            <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold mb-6">
-              <Volume2 size={16} />
-              <span className="uppercase text-xs tracking-widest">Ses Kanalları</span>
+            <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-6">
+              <Volume2 size={14} className="opacity-60" />
+              <span className="uppercase text-[10px] tracking-[0.15em]">Ses Kanalları</span>
             </div>
 
             <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
@@ -452,10 +452,10 @@ export default function ChatView() {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, channel.id)}
                     disabled={isConnecting}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group disabled:cursor-not-allowed ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group disabled:cursor-not-allowed ${
                       activeChannel === channel.id
-                        ? `bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
-                        : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)]'
+                        ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
+                        : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
                     }`}
                   >
                     <div className="relative">
@@ -479,7 +479,7 @@ export default function ChatView() {
                     </div>
                     {channel.userCount > 0 && (
                       <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                        activeChannel === channel.id ? 'bg-white/20 text-white' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]'
+                        activeChannel === channel.id ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]'
                       }`}>
                         {channel.userCount}
                       </span>
@@ -488,7 +488,7 @@ export default function ChatView() {
 
                   {/* Members List */}
                   {channel.members && channel.members.length > 0 && (
-                    <div className="pl-10 space-y-1 pb-2">
+                    <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
                       {channel.members.map((member, idx) => {
                         const user = allUsers.find(u => u.name === member);
                         const memberDisplayName = user ? `${formatFullName(user.firstName, user.lastName)} (${user.age})` : member;
@@ -498,9 +498,9 @@ export default function ChatView() {
                             draggable={currentUser.isAdmin}
                             onDragStart={(e) => handleDragStart(e, member)}
                             onClick={(e) => user && handleUserActionClick(e, user.id)}
-                            className="flex items-center gap-2 text-[11px] font-medium transition-all group/member cursor-pointer hover:text-[var(--theme-accent)]"
+                            className="flex items-center gap-2.5 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-0.5 px-2 rounded-md hover:bg-[var(--theme-accent)]/5"
                           >
-                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]"></div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]/60 group-hover/member:bg-[var(--theme-accent)] transition-colors"></div>
                             <span className="truncate flex-1">{memberDisplayName}</span>
                             {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
                               <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
@@ -525,10 +525,10 @@ export default function ChatView() {
                   }
                   setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
                 }}
-                className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${
+                className={`w-full flex items-center justify-center gap-2 transition-all duration-200 py-3 rounded-xl font-bold text-sm ${
                   channels.filter(c => c.ownerId === currentUser.id).length >= 2
-                    ? 'bg-gray-500 cursor-not-allowed opacity-50'
-                    : 'bg-[var(--theme-accent)] hover:opacity-90'
+                    ? 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)] cursor-not-allowed opacity-50 border border-[rgba(var(--glass-tint),0.04)]'
+                    : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)]/25 hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.15)]'
                 }`}
               >
                 <PlusCircle size={18} />
@@ -852,7 +852,7 @@ export default function ChatView() {
                 exit={{ scale: 0.96, opacity: 0, y: 12 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="w-full max-w-[420px] rounded-2xl border border-[var(--theme-border)]/30 overflow-hidden"
-                style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(var(--theme-accent-rgb), 0.05)' }}
+                style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 25px 60px rgba(var(--shadow-base),0.4), 0 0 0 1px rgba(var(--theme-accent-rgb), 0.05)' }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Top accent line */}
@@ -888,10 +888,10 @@ export default function ChatView() {
                         style={{
                           background: 'var(--theme-bg)',
                           border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
-                          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                          boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
                         }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1)`; }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; }}
                         value={roomModal.name}
                         onChange={(e) => setRoomModal({ ...roomModal, name: e.target.value })}
                         onKeyDown={(e) => {
@@ -911,10 +911,10 @@ export default function ChatView() {
                         style={{
                           background: 'var(--theme-bg)',
                           border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
-                          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                          boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
                         }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1)`; }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; }}
                         value={roomModal.maxUsers}
                         onChange={(e) => setRoomModal({ ...roomModal, maxUsers: parseInt(e.target.value) || 0 })}
                       />
@@ -1116,7 +1116,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar ${view !== 'settings' ? 'p-8' : ''}`}>
+        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar relative ${view !== 'settings' ? 'p-8' : ''}`} style={{ backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <div className="relative flex-1 flex flex-col">
               {/* Ambient background — canlı ama sessiz */}
@@ -1254,14 +1254,18 @@ export default function ChatView() {
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-y-auto">
-              <div className="text-center pt-10 pb-2">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center mb-4 mx-auto">
-                  <Volume2 size={28} className="text-[var(--theme-accent)]" />
+              <div className="text-center pt-10 pb-2 px-6">
+                <div className="relative inline-block mb-6">
+                  {/* Focused halo behind icon */}
+                  <div className="absolute inset-[-8px] bg-[var(--theme-accent)] rounded-full blur-xl opacity-[0.06]" />
+                  <div className="relative w-16 h-16 rounded-2xl bg-[rgba(var(--theme-sidebar-rgb),0.5)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.06)] flex items-center justify-center shadow-[inset_0_1px_0_0_rgba(var(--glass-tint),0.04)]">
+                    <Volume2 size={28} className="text-[var(--theme-accent)] opacity-70" />
+                  </div>
                 </div>
-                <h2 className="text-lg font-bold tracking-wide text-[var(--theme-text)] mb-1.5">
+                <h2 className="text-lg font-bold tracking-wide text-[var(--theme-text)] mb-2">
                   Henüz Bir Odada Değilsiniz
                 </h2>
-                <p className="text-xs text-[var(--theme-secondary-text)] max-w-[240px] leading-relaxed mx-auto">
+                <p className="text-xs text-[var(--theme-secondary-text)]/55 max-w-[260px] leading-relaxed mx-auto">
                   Sohbete başlamak için sol taraftaki kanallardan birine katılın.
                 </p>
               </div>
@@ -1271,16 +1275,16 @@ export default function ChatView() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className="w-64 bg-[var(--theme-sidebar)]/30 flex flex-col hidden lg:flex">
-          <div className="p-6 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Kullanıcılar</h3>
-            <span className="text-[10px] bg-[var(--theme-sidebar)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{allUsers.length}</span>
+        <aside className="w-64 bg-[rgba(var(--theme-sidebar-rgb),0.45)] backdrop-blur-xl border-l border-[rgba(var(--glass-tint),0.05)] flex flex-col hidden lg:flex">
+          <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-[rgba(var(--glass-tint),0.04)]">
+            <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
+            <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
             {/* Online */}
             <div>
-              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Çevrimiçi — {onlineUsers.length}</p>
+              <p className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase mb-3 px-2 tracking-[0.14em]">Çevrimiçi — {onlineUsers.length}</p>
               <div className="space-y-1">
                 {onlineUsers.map(user => {
                   const isMe = user.id === currentUser.id;
@@ -1289,12 +1293,12 @@ export default function ChatView() {
                   return (
                     <div
                       key={user.id}
-                      className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-sidebar)] cursor-pointer"
+                      className="flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-200 group hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer"
                       onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                     >
                       <div className="relative shrink-0">
                         <div
-                          className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                          className="h-8 w-8 rounded-full bg-[rgba(var(--glass-tint),0.06)] border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
                           style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
                         >
                           {user.avatar?.startsWith('http')
@@ -1304,8 +1308,8 @@ export default function ChatView() {
                         {user.isAdmin && adminBorderEffect && (
                           <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
                         )}
-                        <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[var(--theme-sidebar)] rounded-full ${
-                          user.status === 'online' ? 'bg-emerald-500' : 'bg-orange-500'
+                        <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[rgba(var(--theme-sidebar-rgb),0.8)] rounded-full ${
+                          user.status === 'online' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]' : 'bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.3)]'
                         }`}></div>
                       </div>
                       <div className="flex flex-col flex-1 min-w-0">
@@ -1387,19 +1391,19 @@ export default function ChatView() {
                 {offlineUsers.map(user => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 transition-all group hover:opacity-80 hover:bg-[var(--theme-sidebar)] cursor-pointer"
+                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-50 transition-all duration-200 group hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer"
                     onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                   >
                     <div className="relative">
                       <div
-                        className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/10 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                        className="h-8 w-8 rounded-full bg-[rgba(var(--glass-tint),0.04)] border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
                         style={{ borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' }}
                       >
                         {user.avatar?.startsWith('http')
                           ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           : user.avatar}
                       </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--theme-sidebar)] border-2 border-[var(--theme-sidebar)] rounded-full"></div>
+                      <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--theme-sidebar)] border-2 border-[rgba(var(--theme-sidebar-rgb),0.8)] rounded-full"></div>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
@@ -1444,7 +1448,7 @@ export default function ChatView() {
       </AnimatePresence>
 
       {/* Footer Controls */}
-      <footer className="h-16 bg-[var(--theme-sidebar)] flex items-center relative">
+      <footer className="h-16 bg-[rgba(var(--theme-sidebar-rgb),0.6)] backdrop-blur-xl border-t border-[rgba(var(--glass-tint),0.04)] flex items-center relative">
         <div className="w-72 px-4 flex gap-2 h-full items-center">
           <div className="relative flex-1">
             <button
@@ -1460,12 +1464,11 @@ export default function ChatView() {
               }}
               aria-label={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
               aria-pressed={isDeafened}
-              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all duration-200 ${
                 isDeafened
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
-                  : 'text-white shadow-lg'
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/25 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                  : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.12)]'
               }`}
-              style={!isDeafened ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
             >
               <Headphones size={14} />
               <span className="truncate">Hoparlör</span>
@@ -1487,7 +1490,7 @@ export default function ChatView() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl p-3 shadow-2xl z-50"
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-[rgba(var(--theme-bg-rgb),0.85)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.08)] rounded-xl p-3 shadow-2xl z-50"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Çıkış Cihazı Seçin</h4>
@@ -1534,14 +1537,13 @@ export default function ChatView() {
               }}
               aria-label={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
               aria-pressed={isMuted}
-              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+              className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all duration-200 ${
                 isAdminMuted
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 cursor-not-allowed'
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/25 shadow-[0_0_12px_rgba(249,115,22,0.15)] cursor-not-allowed'
                   : isMuted
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
-                    : 'text-white shadow-lg'
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/25 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                    : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.12)]'
               }`}
-              style={!isAdminMuted && !isMuted ? { backgroundColor: 'var(--theme-accent)', boxShadow: '0 4px 14px rgba(var(--theme-accent-rgb),0.35)' } : undefined}
             >
               <Mic size={14} />
               <span className="truncate">
@@ -1565,7 +1567,7 @@ export default function ChatView() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl p-3 shadow-2xl z-50"
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-[rgba(var(--theme-bg-rgb),0.85)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.08)] rounded-xl p-3 shadow-2xl z-50"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Giriş Cihazı Seçin</h4>
@@ -1621,14 +1623,14 @@ export default function ChatView() {
 
         {/* Middle Section - PTT Indicator */}
         <div className="flex-1 h-full flex items-center justify-center px-4">
-          <div className="flex items-center gap-4 bg-[var(--theme-surface)]/80 px-5 py-2 rounded-xl border border-[var(--theme-border)] shadow-sm">
-            <div className="flex items-center gap-2 text-[var(--theme-text)] font-bold text-[10px] uppercase tracking-widest shrink-0">
+          <div className="flex items-center gap-4 bg-[rgba(var(--theme-bg-rgb),0.6)] backdrop-blur-xl px-5 py-2.5 rounded-xl border border-[rgba(var(--glass-tint),0.08)] shadow-[inset_0_1px_0_0_rgba(var(--glass-tint),0.04),0_4px_16px_-2px_rgba(var(--theme-glow-rgb),0.08),0_1px_4px_rgba(var(--shadow-base),0.12)]">
+            <div className="flex items-center gap-2 text-[var(--theme-text)]/90 font-bold text-[10px] uppercase tracking-widest shrink-0">
               <button
                 onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
-                className={`p-1 rounded-md transition-all ${
+                className={`p-1 rounded-md transition-all duration-200 ${
                   isNoiseSuppressionEnabled
-                    ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]'
-                    : 'bg-[var(--theme-border)] text-[var(--theme-secondary-text)]'
+                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]'
+                    : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]'
                 }`}
                 title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}
               >
@@ -1664,8 +1666,8 @@ export default function ChatView() {
                     key={i}
                     className={`w-1 rounded-full transition-all duration-150 ${
                       isActive
-                        ? 'bg-[var(--theme-accent)] shadow-[0_0_8px_var(--theme-accent)]'
-                        : 'bg-[var(--theme-border)]'
+                        ? 'bg-[var(--theme-accent)] shadow-[0_0_6px_rgba(var(--theme-accent-rgb),0.5)]'
+                        : 'bg-[rgba(var(--glass-tint),0.12)]'
                     }`}
                     style={{
                       height: isActive ? `${(i + 1) * 16.6}%` : '4px',
@@ -1678,17 +1680,17 @@ export default function ChatView() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsListeningForKey(true)}
-                className={`px-3 py-1 rounded text-[10px] font-black transition-all ${
+                className={`px-3 py-1 rounded-md text-[10px] font-black transition-all duration-200 ${
                   isListeningForKey
-                    ? 'bg-[var(--theme-accent)] text-white animate-pulse'
-                    : 'bg-[var(--theme-border)] text-[var(--theme-secondary-text)] hover:bg-[var(--theme-accent)]/10'
+                    ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.25)] animate-pulse border border-[var(--theme-accent)]/30'
+                    : 'bg-[rgba(var(--glass-tint),0.08)] text-[var(--theme-text)]/70 hover:bg-[rgba(var(--glass-tint),0.12)] border border-[rgba(var(--glass-tint),0.06)]'
                 }`}
               >
                 {isListeningForKey ? '...' : pttKey}
               </button>
             </div>
             {appVersion && (
-              <div className="relative border-l border-[var(--theme-border)] pl-3 ml-1">
+              <div className="relative border-l border-[rgba(var(--glass-tint),0.08)] pl-3 ml-1">
                 <button
                   onClick={() => getReleaseNotes(appVersion) && setShowReleaseNotes(!showReleaseNotes)}
                   className={`text-[9px] font-medium transition-colors ${getReleaseNotes(appVersion) ? 'text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] cursor-pointer' : 'text-[var(--theme-secondary-text)]/50 cursor-default'}`}

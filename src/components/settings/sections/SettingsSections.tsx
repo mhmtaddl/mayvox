@@ -17,23 +17,23 @@ export function AppearanceSection() {
           <button
             key={theme.id}
             onClick={() => setCurrentTheme(theme)}
-            className={`flex flex-col gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
+            className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${
               currentTheme.id === theme.id
-                ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-sm'
-                : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-secondary-text)]/30 hover:bg-[var(--theme-sidebar)]/60 hover:shadow-sm'
+                ? 'border-[var(--theme-accent)]/30 bg-[var(--theme-accent)]/8 ring-1 ring-[var(--theme-accent)]/15 shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.06)]'
+                : 'border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--theme-sidebar-rgb),0.3)] hover:border-[rgba(var(--glass-tint),0.1)] hover:bg-[rgba(var(--theme-sidebar-rgb),0.5)]'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-[var(--theme-text)]">{theme.name}</span>
               {currentTheme.id === theme.id
-                ? <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0"><Check size={10} className="text-white" /></div>
-                : <div className="w-5 h-5 rounded-full border-2 border-[var(--theme-border)] shrink-0" />
+                ? <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)]/20 border border-[var(--theme-accent)]/40 flex items-center justify-center shrink-0 shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.3)]"><Check size={10} className="text-[var(--theme-accent)]" /></div>
+                : <div className="w-5 h-5 rounded-full border border-[rgba(var(--glass-tint),0.1)] shrink-0" />
               }
             </div>
-            <div className="flex rounded-lg overflow-hidden h-5 border border-white/10">
+            <div className="flex rounded-lg overflow-hidden h-6 border border-[rgba(var(--glass-tint),0.06)]">
               <div className="flex-1" style={{ backgroundColor: theme.bg }} />
-              <div className="w-5 border-l border-white/10" style={{ backgroundColor: theme.sidebar }} />
-              <div className="w-5 border-l border-white/10" style={{ backgroundColor: theme.accent }} />
+              <div className="w-6 border-l border-[rgba(var(--glass-tint),0.06)]" style={{ backgroundColor: theme.sidebar }} />
+              <div className="w-6 border-l border-[rgba(var(--glass-tint),0.06)]" style={{ backgroundColor: theme.accent }} />
             </div>
           </button>
         ))}
@@ -44,7 +44,7 @@ export function AppearanceSection() {
         <div className="flex items-center gap-4 px-6 py-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
+            <p className="text-xs text-[var(--theme-secondary-text)]/60 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
           </div>
           <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} />
         </div>

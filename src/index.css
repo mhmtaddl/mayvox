@@ -6,20 +6,87 @@
 }
 
 :root {
-  --theme-bg: #111621;
-  --theme-surface: #0d1117;
-  --theme-sidebar: #0f172a;
-  --theme-text: #f1f5f9;
-  --theme-secondary-text: #94a3b8;
-  --theme-accent: #2563eb;
-  --theme-border: #1e293b;
+  --theme-bg: #0a0e1a;
+  --theme-surface: #0d1220;
+  --theme-sidebar: #0b1024;
+  --theme-text: #e8ecf4;
+  --theme-secondary-text: #7b8ba8;
+  --theme-accent: #3b82f6;
+  --theme-border: #1a2540;
+  --theme-accent-rgb: 59, 130, 246;
+  --theme-bg-rgb: 10, 14, 26;
+  --theme-sidebar-rgb: 11, 16, 36;
+  --theme-glow: #3b82f6;
+  --theme-glow-rgb: 59, 130, 246;
+  --theme-glow-secondary: #6366f1;
+  --theme-glow-secondary-rgb: 99, 102, 241;
+  --glass-tint: 255, 255, 255;
+  --shadow-base: 0, 0, 0;
   color-scheme: dark;
 }
 
+/* ─── Global premium atmosphere ─── */
 body {
   background-color: var(--theme-bg);
   color: var(--theme-text);
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Multi-layer atmospheric background */
+#root {
+  position: relative;
+  min-height: 100vh;
+}
+
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 35% at 10% 10%, rgba(var(--theme-glow-rgb), 0.04) 0%, rgba(var(--theme-glow-rgb), 0.015) 40%, transparent 70%),
+    radial-gradient(ellipse 35% 40% at 90% 90%, rgba(var(--theme-glow-secondary-rgb), 0.035) 0%, rgba(var(--theme-glow-secondary-rgb), 0.01) 45%, transparent 70%);
+}
+
+/* Subtle noise grain overlay */
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* Ensure main content sits above atmosphere layers */
+#root > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Glass surface utilities ─── */
+.glass-surface {
+  background: rgba(var(--theme-sidebar-rgb), 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(var(--glass-tint), 0.06);
+}
+
+.glass-surface-strong {
+  background: rgba(var(--theme-sidebar-rgb), 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(var(--glass-tint), 0.08);
+}
+
+/* Inner highlight — top edge subtle glow */
+.glass-highlight {
+  box-shadow:
+    inset 0 1px 0 0 rgba(var(--glass-tint), 0.04);
+  /* no second shadow needed */
 }
 
 /* Card scale slider (chat room header) */
@@ -43,14 +110,14 @@ body {
   height: 16px;
   border-radius: 50%;
   background: var(--theme-accent);
-  border: 2px solid rgba(0,0,0,0.25);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 0 8px rgba(var(--theme-accent-rgb), 0.35);
+  border: 2px solid rgba(var(--shadow-base),0.25);
+  box-shadow: 0 2px 6px rgba(var(--shadow-base),0.35), 0 0 8px rgba(var(--theme-accent-rgb), 0.35);
   cursor: grab;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .card-scale-slider::-webkit-slider-thumb:hover {
   transform: scale(1.12);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(var(--theme-accent-rgb), 0.45);
+  box-shadow: 0 2px 8px rgba(var(--shadow-base),0.4), 0 0 12px rgba(var(--theme-accent-rgb), 0.45);
 }
 .card-scale-slider::-webkit-slider-thumb:active {
   transform: scale(1.18);

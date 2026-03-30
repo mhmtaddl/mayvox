@@ -19,7 +19,7 @@ export default function SettingsView() {
 
       {/* ── Page header ── */}
       <div className="flex items-center gap-4 pt-10 pb-6">
-        <div className="w-11 h-11 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+        <div className="w-11 h-11 rounded-2xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/15 flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(var(--theme-accent-rgb),0.08)]">
           <Settings size={20} className="text-[var(--theme-accent)]" />
         </div>
         <div className="flex-1 min-w-0">
@@ -30,13 +30,13 @@ export default function SettingsView() {
 
       {/* ── Tab bar — only visible for admins ── */}
       {currentUser.isAdmin && (
-        <div className="flex gap-1 mb-8 p-1 bg-[var(--theme-sidebar)]/50 rounded-xl border border-[var(--theme-border)]">
+        <div className="flex gap-1 mb-8 p-1 bg-[rgba(var(--theme-sidebar-rgb),0.4)] backdrop-blur-xl rounded-xl border border-[rgba(var(--glass-tint),0.06)]">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 flex-1 justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 flex-1 justify-center py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === 'settings'
-                ? 'bg-[var(--theme-accent)] text-white shadow-md shadow-[var(--theme-accent)]/20'
-                : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)]/50'
+                ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.1)]'
+                : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.04)]'
             }`}
           >
             <Settings size={15} />
@@ -44,10 +44,10 @@ export default function SettingsView() {
           </button>
           <button
             onClick={() => setActiveTab('admin')}
-            className={`flex items-center gap-2 flex-1 justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 flex-1 justify-center py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === 'admin'
-                ? 'bg-[var(--theme-accent)] text-white shadow-md shadow-[var(--theme-accent)]/20'
-                : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)]/50'
+                ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.1)]'
+                : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.04)]'
             }`}
           >
             <ShieldCheck size={15} />
