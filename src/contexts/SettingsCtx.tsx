@@ -92,6 +92,10 @@ export interface SettingsContextType {
   setAdminBorderEffect: (v: boolean) => void;
   audioProfile: AudioProfile;
   setAudioProfile: (v: AudioProfile) => void;
+  autoLeaveEnabled: boolean;
+  setAutoLeaveEnabled: (v: boolean) => void;
+  autoLeaveMinutes: number;
+  setAutoLeaveMinutes: (v: number) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

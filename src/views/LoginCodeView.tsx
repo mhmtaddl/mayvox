@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Mic, Key, Lock, Eye, EyeOff, ArrowLeft, ArrowRight,
+  Key, Lock, Eye, EyeOff, ArrowLeft, ArrowRight,
   Mail, Clock, Send, Ban, AlertCircle, Check, Loader,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { requestInvite, getInviteRequestStatus } from '../lib/supabase';
+import appLogo from '../assets/app-logo.png';
 
 type RequestState = 'idle' | 'requesting' | 'pending' | 'approved' | 'rejected' | 'blocked' | 'expired';
 
@@ -34,6 +35,12 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
   const [permanentlyBlocked, setPermanentlyBlocked] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [blockedSecondsLeft, setBlockedSecondsLeft] = useState(0);
+
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
+    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
+  }, []);
 
   const isValidEmail = (e: string) =>
     /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(e);
@@ -232,8 +239,8 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
         </button>
 
         <div className="flex justify-center mb-8">
-          <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 text-[var(--theme-accent)]">
-            <Mic size={48} />
+          <div className="w-20 h-20 overflow-hidden rounded-[20%]">
+            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -503,6 +510,14 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
           </button>
         </div>
       </motion.div>
+
+      <div className="mt-8 flex items-center gap-6 text-xs text-[var(--theme-secondary-text)] font-medium">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+          Sunucu Durumu: Aktif
+        </div>
+        {appVersion && <div>v{appVersion}</div>}
+      </div>
     </div>
   );
 }

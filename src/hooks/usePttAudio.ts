@@ -258,31 +258,41 @@ export function usePttAudio(params: UsePttAudioParams) {
           const bufferLength = analyser.frequencyBinCount;
           const dataArray = new Uint8Array(bufferLength);
 
+          // ─── Throttled volume analysis ───────────────────────
+          // Normal: ~20fps (50ms), LowData: ~15fps (66ms), Window hidden: ~2fps (500ms)
+          let lastUpdateTime = 0;
+          const NORMAL_INTERVAL = 50;    // ~20fps — yeterli görsel akıcılık
+          const LOW_DATA_INTERVAL = 66;  // ~15fps
+          const HIDDEN_INTERVAL = 500;   // ~2fps — pencere görünmüyorken
+
           const updateVolume = () => {
             if (!analyserRef.current) return;
-            analyserRef.current.getByteFrequencyData(dataArray);
 
-            let sum = 0;
-            for (let i = 0; i < bufferLength; i++) {
-              sum += dataArray[i];
-            }
-            const average = sum / bufferLength;
+            const now = performance.now();
+            const interval = document.hidden ? HIDDEN_INTERVAL
+              : isLowDataMode ? LOW_DATA_INTERVAL
+              : NORMAL_INTERVAL;
 
-            const threshold = isNoiseSuppressionEnabled ? noiseThreshold : 2;
-            if (average < threshold) {
-              setVolumeLevel(0);
-            } else {
-              const normalized = Math.min(100, (average - threshold) * 1.5);
-              setVolumeLevel(normalized);
+            if (now - lastUpdateTime >= interval) {
+              lastUpdateTime = now;
+              analyserRef.current.getByteFrequencyData(dataArray);
+
+              let sum = 0;
+              for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
+              }
+              const average = sum / bufferLength;
+
+              const threshold = isNoiseSuppressionEnabled ? noiseThreshold : 2;
+              if (average < threshold) {
+                setVolumeLevel(0);
+              } else {
+                const normalized = Math.min(100, (average - threshold) * 1.5);
+                setVolumeLevel(normalized);
+              }
             }
 
-            if (isLowDataMode) {
-              setTimeout(() => {
-                animationRef.current = requestAnimationFrame(updateVolume);
-              }, 66);
-            } else {
-              animationRef.current = requestAnimationFrame(updateVolume);
-            }
+            animationRef.current = requestAnimationFrame(updateVolume);
           };
 
           updateVolume();

@@ -22,8 +22,10 @@ import {
   Recycle,
   KeyRound,
   Mail,
+  ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatFullName } from '../lib/formatName';
 import { useAppState } from '../contexts/AppStateContext';
 import { useAudio } from '../contexts/AudioContext';
 import { useUser } from '../contexts/UserContext';
@@ -162,6 +164,12 @@ export default function ChatView() {
 
   // Profile popup
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
+
+  // Offline users collapse
+  const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
+    const saved = localStorage.getItem('offlineUsersExpanded');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
     return saved ? Math.max(1, Math.min(3, parseInt(saved))) : 2;
@@ -348,7 +356,7 @@ export default function ChatView() {
           <div className="flex items-center h-full gap-2">
           <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
-              <p className="text-sm font-semibold leading-none truncate w-full">{currentUser.firstName} {currentUser.lastName} ({currentUser.age})</p>
+              <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
             </div>
             <div className="h-10 w-10 rounded-full bg-blue-500/20 border-2 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
@@ -483,7 +491,7 @@ export default function ChatView() {
                     <div className="pl-10 space-y-1 pb-2">
                       {channel.members.map((member, idx) => {
                         const user = allUsers.find(u => u.name === member);
-                        const memberDisplayName = user ? `${user.firstName} ${user.lastName} (${user.age})` : member;
+                        const memberDisplayName = user ? `${formatFullName(user.firstName, user.lastName)} (${user.age})` : member;
                         return (
                           <div
                             key={idx}
@@ -710,7 +718,7 @@ export default function ChatView() {
                             payload: {
                               inviterId: invitationModal.inviterId,
                               inviteeId: currentUser.id,
-                              inviteeName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
+                              inviteeName: formatFullName(currentUser.firstName, currentUser.lastName),
                             },
                           });
                         }
@@ -1302,7 +1310,7 @@ export default function ChatView() {
                       </div>
                       <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{user.firstName} {user.lastName} ({user.age})</span>
+                          <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
                           {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
                           {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400 shrink-0" title="Moderatör">M</span>}
                         </div>
@@ -1367,8 +1375,15 @@ export default function ChatView() {
 
             {/* Offline */}
             <div>
-              <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-60 uppercase mb-3 px-2">Çevrimdışı — {offlineUsers.length}</p>
-              <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => { const next = !offlineExpanded; setOfflineExpanded(next); localStorage.setItem('offlineUsersExpanded', String(next)); }}
+                className="flex items-center gap-1 w-full text-[10px] font-bold text-[var(--theme-text)] opacity-60 uppercase mb-3 px-2 hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                <span>Çevrimdışı — {offlineUsers.length}</span>
+                <ChevronDown size={12} className={`transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
+              </button>
+              {offlineExpanded && <div className="space-y-1">
                 {offlineUsers.map(user => (
                   <div
                     key={user.id}
@@ -1387,13 +1402,13 @@ export default function ChatView() {
                       <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--theme-sidebar)] border-2 border-[var(--theme-sidebar)] rounded-full"></div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{user.firstName} {user.lastName} ({user.age})</span>
+                      <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
                       {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" title="Admin" />}
                       {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400" title="Moderatör">M</span>}
                     </div>
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           </div>
         </aside>

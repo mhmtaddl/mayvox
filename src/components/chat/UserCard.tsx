@@ -11,19 +11,29 @@ import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
 import OwnVoiceEqualizer from './OwnVoiceEqualizer';
 import MiniEqualizer from './MiniEqualizer';
+import { formatFullName } from '../../lib/formatName';
 
 // ─── Refined transition curves ────────────────────────────────────
-// Property-specific transitions instead of blanket "all 0.25s"
+// Property-specific transitions — no "all", no "filter"
 const CARD_TRANSITION = [
   'background 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
   'border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   'box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
   'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
   'opacity 0.4s ease',
-  'filter 0.4s ease',
 ].join(', ');
 
 const AVATAR_TRANSITION = 'box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+
+// ─── Static idle styles (no animation) ────────────────────────────
+const IDLE_AVATAR_STYLE: React.CSSProperties = {
+  boxShadow: '0 0 0 1px rgba(var(--theme-accent-rgb), 0.05), 0 0 6px rgba(var(--theme-accent-rgb), 0.03)',
+};
+
+const IDLE_CARD_STYLE: React.CSSProperties = {
+  border: '1px solid transparent',
+  borderColor: 'rgba(var(--theme-accent-rgb), 0.08)',
+};
 
 function UserCardInner({
   user,
@@ -63,15 +73,14 @@ function UserCardInner({
     ? `0 0 ${v.glowSpread}px rgba(var(--theme-accent-rgb), ${v.glowAlpha}), 0 0 4px rgba(var(--theme-accent-rgb), ${v.glowAlpha * 0.4}), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.05)`
     : '0 1px 3px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.03)';
 
-  // ─── 2) Idle breathing: avatar ring ───────────────────────────
-  // When idle (not speaking), apply CSS animation; when speaking, override with reactive shadow
+  // ─── 2) Avatar shadow: reactive when speaking, static when idle ─
   const avatarShadow = isSpeakingActive
     ? `0 0 0 ${v.ringSpread}px rgba(var(--theme-accent-rgb), ${0.4 + intensity * 0.25}), 0 0 ${v.ringGlow}px rgba(var(--theme-accent-rgb), ${0.12 + intensity * 0.22})`
-    : undefined; // idle — CSS animation handles it
+    : undefined;
 
   const avatarStyle: React.CSSProperties = isSpeakingActive
     ? { transition: AVATAR_TRANSITION, boxShadow: avatarShadow }
-    : { animation: 'idle-breathe 5s ease-in-out infinite' };
+    : IDLE_AVATAR_STYLE;
 
   // ─── Role badge size (scales with card) ────────────────────────
   const badgeSize = s.dense ? 'w-3.5 h-3.5' : s.icon === 13 ? 'w-4 h-4' : 'w-[18px] h-[18px]';
@@ -89,16 +98,16 @@ function UserCardInner({
       ? 'bg-emerald-400'
       : userStatusText === 'Telefonda'
         ? 'bg-red-400'
-        : 'bg-orange-400';
+        : userStatusText === 'AFK'
+          ? 'bg-violet-400'
+          : 'bg-orange-400';
 
   // Own voice active state
   const isOwnVoiceActive = isMe && isPttPressed && !isMuted && !isVoiceBanned;
 
-  // ─── 1) Dominant vs non-dominant: whole-card perception shift ──
-  // Non-dominant speakers recede subtly; dominant stays fully vivid
+  // ─── Dominant vs non-dominant: opacity shift (no filter:saturate) ─
   const isNonDominantSpeaker = isSpeakingActive && !isDominant;
   const cardOpacity = isNonDominantSpeaker ? 0.88 : 1;
-  const cardSaturate = isNonDominantSpeaker ? 'saturate(0.92)' : 'saturate(1)';
   // Dominant: name gets bolder + slightly wider tracking for focus lock
   const nameFontWeight = isDominant ? 700 : 600;
   const nameLetterSpacing = isDominant ? '0.01em' : '0em';
@@ -111,19 +120,19 @@ function UserCardInner({
         isSpeakingActive ? '' : 'hover:scale-[1.008]'
       }`}
       style={isSpeakingActive ? {
+        contain: 'layout paint',
         transition: CARD_TRANSITION,
         transform: `translateY(${dominantLift}px)`,
         opacity: cardOpacity,
-        filter: cardSaturate,
         background: cardBackground,
         border: '1px solid transparent',
         borderColor: `rgba(var(--theme-accent-rgb), ${v.borderAlpha})`,
         boxShadow: cardShadow,
       } : {
+        contain: 'layout paint',
         background: cardBackground,
-        border: '1px solid transparent',
         boxShadow: cardShadow,
-        animation: 'idle-surface 5s ease-in-out infinite',
+        ...IDLE_CARD_STYLE,
       }}
     >
       {/* Avatar */}
@@ -156,7 +165,6 @@ function UserCardInner({
                 : user.isModerator
                   ? '1px solid rgba(139, 92, 246, 0.25)'
                   : '1px solid rgba(var(--theme-accent-rgb), 0.2)',
-              backdropFilter: 'blur(4px)',
             }}
           >
             {user.isAdmin ? (
@@ -181,7 +189,7 @@ function UserCardInner({
               transition: 'font-weight 0.3s ease, letter-spacing 0.3s ease',
             }}
           >
-            {user.firstName} {user.lastName}
+            {formatFullName(user.firstName, user.lastName)}
           </span>
           <span className={`${ageFontSize} font-medium shrink-0`} style={{ color: 'rgba(var(--theme-accent-rgb), 0.4)' }}>
             {user.age}
@@ -261,5 +269,49 @@ function UserCardInner({
   );
 }
 
-const UserCard = React.memo(UserCardInner);
+// ─── Custom memo comparator: skip re-render for irrelevant changes ───
+function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
+  // Visual state changes → must re-render
+  if (prev.isSpeakingActive !== next.isSpeakingActive) return false;
+  if (prev.isDominant !== next.isDominant) return false;
+  if (prev.isMe !== next.isMe) return false;
+  if (prev.isOwner !== next.isOwner) return false;
+
+  // Speaking users: check intensity with threshold to skip micro-changes
+  if (next.isSpeakingActive) {
+    if (Math.abs(prev.intensity - next.intensity) > 0.05) return false;
+    if (next.isMe && Math.abs(prev.volumeLevel - next.volumeLevel) > 3) return false;
+    if (!next.isMe && Math.abs(prev.speakingLevel - next.speakingLevel) > 0.02) return false;
+  }
+
+  // Non-speaking: volumeLevel/speakingLevel changes are irrelevant
+  if (prev.isMuted !== next.isMuted) return false;
+  if (prev.isDeafened !== next.isDeafened) return false;
+  if (prev.isVoiceBanned !== next.isVoiceBanned) return false;
+  if (prev.statusTimer !== next.statusTimer) return false;
+  if (prev.effectiveStatus !== next.effectiveStatus) return false;
+  if (prev.isPttPressed !== next.isPttPressed) return false;
+  if (prev.adminBorderEffect !== next.adminBorderEffect) return false;
+  if (prev.scale !== next.scale) return false;
+
+  // User object: compare visual-relevant fields instead of reference
+  const pu = prev.user;
+  const nu = next.user;
+  if (pu.id !== nu.id) return false;
+  if (pu.isSpeaking !== nu.isSpeaking) return false;
+  if (pu.selfMuted !== nu.selfMuted) return false;
+  if (pu.selfDeafened !== nu.selfDeafened) return false;
+  if (pu.isMuted !== nu.isMuted) return false;
+  if (pu.isAdmin !== nu.isAdmin) return false;
+  if (pu.isModerator !== nu.isModerator) return false;
+  if (pu.statusText !== nu.statusText) return false;
+  if (pu.avatar !== nu.avatar) return false;
+  if (pu.firstName !== nu.firstName) return false;
+  if (pu.lastName !== nu.lastName) return false;
+  if (pu.age !== nu.age) return false;
+
+  return true; // equal → skip re-render
+}
+
+const UserCard = React.memo(UserCardInner, arePropsEqual);
 export default UserCard;

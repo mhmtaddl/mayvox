@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ShieldCheck, Shield, Monitor, Clock, History, Activity } from 'lucide-react';
 import type { User } from '../types';
 import { isOutdated } from '../lib/versionCompare';
+import { formatFullName } from '../lib/formatName';
 
 interface Props {
   user: User;
@@ -138,7 +139,7 @@ export default function UserProfilePopup({
           {/* Name row */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-sm text-[var(--theme-text)] leading-tight">
-              {user.firstName} {user.lastName}
+              {formatFullName(user.firstName, user.lastName)}
             </span>
             {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
             {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400 shrink-0" title="Moderatör">M</span>}

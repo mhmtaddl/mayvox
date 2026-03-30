@@ -1,20 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { Mic, User as UserIcon, Lock, Eye, EyeOff, ArrowLeft, ArrowRight } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { User as UserIcon, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import appLogo from '../assets/app-logo.png';
 
 interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
-  handleLogout: () => Promise<void>;
   onForgotPassword: () => void;
+  onGoToRegister: () => void;
 }
 
-export default function LoginPasswordView({ handleLogin, handleLogout, onForgotPassword }: LoginPasswordViewProps) {
+export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister }: LoginPasswordViewProps) {
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
+    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
+  }, []);
 
   const onSubmit = async () => {
     setError(null);
@@ -36,20 +43,11 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[420px] bg-[var(--theme-sidebar)]/50 p-10 rounded-2xl border border-[var(--theme-border)] shadow-2xl backdrop-blur-sm relative"
+        className="w-full max-w-[420px] bg-[var(--theme-sidebar)]/50 p-10 rounded-2xl border border-[var(--theme-border)] shadow-2xl backdrop-blur-sm"
       >
-        <button
-          onClick={handleLogout}
-          aria-label="Geri dön"
-          className="absolute left-6 top-6 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors flex items-center gap-1 text-xs font-bold uppercase tracking-widest"
-        >
-          <ArrowLeft size={16} />
-          Geri
-        </button>
-
         <div className="flex justify-center mb-8">
-          <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 text-[var(--theme-accent)]">
-            <Mic size={48} />
+          <div className="w-20 h-20 overflow-hidden rounded-[20%]">
+            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -117,7 +115,7 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
             <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
 
-          <div className="text-center">
+          <div className="flex items-center justify-center gap-4">
             <button
               type="button"
               onClick={onForgotPassword}
@@ -125,9 +123,25 @@ export default function LoginPasswordView({ handleLogin, handleLogout, onForgotP
             >
               Şifremi Unuttum
             </button>
+            <span className="text-[var(--theme-border)]">|</span>
+            <button
+              type="button"
+              onClick={onGoToRegister}
+              className="text-xs text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors underline underline-offset-2"
+            >
+              Üye Ol
+            </button>
           </div>
         </div>
       </motion.div>
+
+      <div className="mt-8 flex items-center gap-6 text-xs text-[var(--theme-secondary-text)] font-medium">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+          Sunucu Durumu: Aktif
+        </div>
+        {appVersion && <div>v{appVersion}</div>}
+      </div>
     </div>
   );
 }

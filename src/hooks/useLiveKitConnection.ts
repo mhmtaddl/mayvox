@@ -200,12 +200,23 @@ export function useLiveKitConnection({
         playSound('leave');
       });
 
+      // ─── Throttled speaker levels (~30fps) ───────────────────
+      let pendingLevels: Record<string, number> = {};
+      let speakingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+      const SPEAKING_THROTTLE_MS = 33; // ~30fps
+
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const levels: Record<string, number> = {};
         speakers.forEach(p => {
           if (!p.isLocal) levels[p.identity] = p.audioLevel;
         });
-        setSpeakingLevels(levels);
+        pendingLevels = levels;
+        if (!speakingThrottleTimer) {
+          speakingThrottleTimer = setTimeout(() => {
+            setSpeakingLevels(pendingLevels);
+            speakingThrottleTimer = null;
+          }, SPEAKING_THROTTLE_MS);
+        }
       });
 
       room.on(RoomEvent.ConnectionQualityChanged, quality => {

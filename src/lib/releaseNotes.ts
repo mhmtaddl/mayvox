@@ -7,6 +7,25 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.5.0': {
+    title: 'v1.5.0 — Performans, UI/UX ve Yeni Özellikler',
+    items: [
+      'Boşta kalınca kanaldan otomatik ayrılma özelliği eklendi.',
+      'Otomatik ayrılma öncesi 30 saniye uyarı bildirimi eklendi.',
+      'Otomatik ayrılma sonrası AFK durumu gösterimi eklendi.',
+      'Çevrimdışı kullanıcı listesi açılır/kapanır hale getirildi.',
+      'Giriş ekranı yeniden düzenlendi.',
+      'İsim gösterimi standardize edildi.',
+      'Performans iyileştirmeleri (GPU/CPU yükü azaltıldı).',
+      'Premium scrollbar tasarımı.',
+    ],
+    adminItems: [
+      'Ayarlar ekranı yeniden tasarlandı (Ayarlar / Yönetim sekmeli yapı).',
+      'Kullanıcı yönetimi paneli geliştirildi (arama, filtre, iç scroll).',
+      'Tüm ayar bölümleri açılır/kapanır (accordion) yapıda.',
+      'Kod yapısı modülerleştirildi (SettingsView → 5 ayrı section dosyası).',
+    ],
+  },
   '1.4.5': {
     title: 'v1.4.5 — Çıkış Sırası Düzeltmesi',
     items: [

@@ -83,10 +83,15 @@ import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
 import { useUpdatePolicy } from './hooks/useUpdatePolicy';
 import ForceUpdateOverlay from './components/ForceUpdateOverlay';
+import { useWindowActivity } from './hooks/useWindowActivity';
+import { toTitleCaseTr, formatFullName } from './lib/formatName';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
 export default function App() {
+  // ── Window activity: toggles .window-inactive CSS class on <html> ──
+  useWindowActivity();
+
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
@@ -181,6 +186,15 @@ export default function App() {
       setPttReleaseDelay(p.pttReleaseDelay);
     }
   };
+
+  // ── Auto-leave on idle ──────────────────────────────────────────────────
+  const [autoLeaveEnabled, setAutoLeaveEnabledState] = useState(() => localStorage.getItem('autoLeaveEnabled') === 'true');
+  const setAutoLeaveEnabled = (v: boolean) => { localStorage.setItem('autoLeaveEnabled', String(v)); setAutoLeaveEnabledState(v); };
+  const [autoLeaveMinutes, setAutoLeaveMinutesState] = useState<number>(() => {
+    const saved = localStorage.getItem('autoLeaveMinutes');
+    return saved ? parseInt(saved) : 10;
+  });
+  const setAutoLeaveMinutes = (v: number) => { localStorage.setItem('autoLeaveMinutes', String(v)); setAutoLeaveMinutesState(v); };
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -426,7 +440,7 @@ export default function App() {
     presenceChannelRef,
     setAllUsers,
     setToastMsg,
-    onSelfDelete: () => setView('login-selection'),
+    onSelfDelete: () => setView('login-password'),
   });
 
   // ── Fallback network quality (oda dışı) ─────────────────────────────────
@@ -510,7 +524,7 @@ export default function App() {
     getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session?.user) {
-        setView('login-selection');
+        setView('login-password');
         setIsSessionLoading(false);
         return;
       }
@@ -629,12 +643,12 @@ export default function App() {
 
       } catch (err) {
         logger.error('Session restore failed', { error: err instanceof Error ? err.message : err });
-        setView('login-selection');
+        setView('login-password');
         setIsSessionLoading(false);
       }
     }).catch((err) => {
       logger.error('getSession failed', { error: err instanceof Error ? err.message : err });
-      setView('login-selection');
+      setView('login-password');
       setIsSessionLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -858,6 +872,68 @@ export default function App() {
     });
   }, [isDeafened]);
 
+  // ── Auto-leave on idle: kullanıcı konuşmadan belirli süre geçerse kanaldan çıkar ──
+  const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+  const idleWarningShownRef = useRef(false);
+
+  // PTT basıldığında (konuşma aktivitesi) idle timer'ı sıfırla + uyarı flag'ini temizle
+  useEffect(() => {
+    if (isPttPressed) {
+      lastActivityRef.current = Date.now();
+      idleWarningShownRef.current = false;
+    }
+  }, [isPttPressed]);
+
+  // Kanal veya ayar değiştiğinde timer'ı yeniden kur
+  useEffect(() => {
+    if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
+    if (!autoLeaveEnabled || !activeChannel) return;
+
+    // Kanal değiştiğinde activity'yi sıfırla
+    lastActivityRef.current = Date.now();
+    idleWarningShownRef.current = false;
+
+    const WARNING_SECONDS = 30;
+    const thresholdMs = autoLeaveMinutes * 60 * 1000;
+    const warningMs = thresholdMs - WARNING_SECONDS * 1000;
+
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - lastActivityRef.current;
+
+      // 30 saniye uyarısı — aynı idle döngüsünde sadece 1 kez
+      if (warningMs > 0 && !idleWarningShownRef.current && elapsed >= warningMs && elapsed < thresholdMs) {
+        idleWarningShownRef.current = true;
+        setToastMsg('Pasif kaldığınız için kanaldan ayrılmanıza 30 saniye kaldı.');
+        setTimeout(() => setToastMsg(null), 8000);
+      }
+
+      // Otomatik ayrılma
+      if (elapsed >= thresholdMs) {
+        clearInterval(checkInterval);
+        idleTimerRef.current = null;
+        idleWarningShownRef.current = false;
+        disconnectFromLiveKit().then(() => {
+          setActiveChannel(null);
+          // AFK durumu set et
+          const afkUser = { ...currentUserRef.current, statusText: 'AFK' };
+          setCurrentUser(afkUser);
+          setAllUsers(prev => prev.map(u => u.id === afkUser.id ? afkUser : u));
+          presenceChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'moderation',
+            payload: { userId: afkUser.id, updates: { statusText: 'AFK' } },
+          });
+          setToastMsg('Uzun süre konuşmadığınız için kanaldan ayrıldınız.');
+          setTimeout(() => setToastMsg(null), 5000);
+        });
+      }
+    }, 10_000);
+
+    idleTimerRef.current = checkInterval;
+    return () => { clearInterval(checkInterval); };
+  }, [autoLeaveEnabled, autoLeaveMinutes, activeChannel]);
+
   // ── Kanaldan çıkılınca (activeChannel null) kullanıcıyı tüm kanallardan temizle ──
   // NOT: Kanala GİRİŞ için optimistic ekleme handleJoinChannel içinde yapılır;
   //      gerçek liste updateMembers() tarafından yazılır. Bu effect sadece çıkışı işler.
@@ -885,6 +961,7 @@ export default function App() {
     if (statusText.includes('Sonra Geleceğim')) return 'text-yellow-500';
     if (statusText === 'Dinliyor') return 'text-orange-500';
     if (statusText === 'Sessiz') return 'text-[var(--theme-secondary-text)]';
+    if (statusText === 'AFK') return 'text-violet-400';
     return 'text-blue-500';
   };
 
@@ -975,7 +1052,7 @@ export default function App() {
       payload: {
         inviterId: currentUser.id,
         inviteeId: userId,
-        inviterName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
+        inviterName: formatFullName(currentUser.firstName, currentUser.lastName),
         inviterAvatar: currentUser.avatar,
         roomName: channel.name,
         roomId: channel.id,
@@ -1217,6 +1294,17 @@ export default function App() {
   // ── Join helpers ──────────────────────────────────────────────────────────
   // Extracted to avoid duplicating the optimistic join + connect + rollback logic
   const performJoin = async (channelId: string, channelName: string) => {
+    // AFK durumundaysa kanala girince temizle
+    if (currentUser.statusText === 'AFK') {
+      const activeUser = { ...currentUser, statusText: 'Aktif' };
+      setCurrentUser(activeUser);
+      setAllUsers(prev => prev.map(u => u.id === activeUser.id ? activeUser : u));
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'moderation',
+        payload: { userId: activeUser.id, updates: { statusText: 'Aktif' } },
+      });
+    }
     const now = Date.now();
     const myName = currentUser.name;
     setActiveChannel(channelId);
@@ -1462,7 +1550,7 @@ export default function App() {
     await disconnectFromLiveKit();
     stopPresence();
     await signOut();
-    setView('login-selection');
+    setView('login-password');
     setActiveChannel(null);
     setPasswordResetRequests([]);
     setInviteRequests([]);
@@ -1791,12 +1879,15 @@ export default function App() {
       pendingInviteCodeRef.current = null;
     }
 
+    const normalizedFirst = toTitleCaseTr(firstName);
+    const normalizedLast = toTitleCaseTr(lastName);
+
     const newUser: User = {
       id: data.user?.id || Math.random().toString(36).slice(2, 11),
       name: displayName,
       email: loginNick,
-      firstName,
-      lastName,
+      firstName: normalizedFirst,
+      lastName: normalizedLast,
       age: ageNum,
       avatar: '',
       status: 'online',
@@ -1975,6 +2066,10 @@ export default function App() {
     setAdminBorderEffect,
     audioProfile,
     setAudioProfile,
+    autoLeaveEnabled,
+    setAutoLeaveEnabled,
+    autoLeaveMinutes,
+    setAutoLeaveMinutes,
   };
 
   const appStateValue: AppStateContextType = {
@@ -2168,14 +2263,14 @@ export default function App() {
                       {view === 'login-code' && (
                         <LoginCodeView
                           handleRegister={handleRegister}
-                          handleLogout={handleLogout}
+                          handleLogout={() => setView('login-password')}
                         />
                       )}
                       {view === 'login-password' && (
                         <LoginPasswordView
                           handleLogin={handleLogin}
-                          handleLogout={handleLogout}
                           onForgotPassword={() => setShowForgotPassword(true)}
+                          onGoToRegister={() => setView('login-code')}
                         />
                       )}
                       {view === 'register-details' && (
