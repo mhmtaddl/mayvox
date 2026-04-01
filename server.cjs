@@ -24,10 +24,19 @@ const tokenLimiter = rateLimit({
 // CORS
 // Kabul edilen origin'ler:
 //   - http://localhost:3000 / 127.0.0.1:3000 → Vite dev server
-//   - "null" → packaged Electron app (file:// origin tarayıcı tarafından "null" gönderir)
+//   - http://localhost / https://localhost   → Capacitor Android WebView
+//   - capacitor://localhost                  → Capacitor iOS WebView
+//   - "null"                                 → packaged Electron app (file:// origin)
 // Not: token endpoint zaten Supabase JWT doğrulaması yapıyor;
 //      CORS bypass edense bile geçerli oturumu olmadan token alamaz.
-const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'null'];
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'null',
+];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
