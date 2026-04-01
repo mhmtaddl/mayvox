@@ -165,6 +165,21 @@ export default function ChatView() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
+  // ── Handle swipe helper — handle üzerinden başlayan swipe'ı algılar ──
+  const handleSwipeRef = useRef<{ startX: number; startY: number } | null>(null);
+  const onHandleTouchStart = useCallback((e: React.TouchEvent) => {
+    handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY };
+  }, []);
+  const makeHandleTouchEnd = useCallback((action: () => void, direction: 'right' | 'left') => (e: React.TouchEvent) => {
+    if (!handleSwipeRef.current) return;
+    const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX;
+    const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY);
+    handleSwipeRef.current = null;
+    if (dy > 60) return; // Dikey kaydırma, swipe değil
+    if (direction === 'right' && dx > 30) action();
+    if (direction === 'left' && dx < -30) action();
+  }, []);
+
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
 
@@ -457,6 +472,39 @@ export default function ChatView() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
+        {/* ── Mobil kenar handle'ları — tıkla veya sürükle ile drawer aç ── */}
+        {!mobileLeftOpen && !mobileRightOpen && (
+          <>
+            {/* Sol handle */}
+            <div
+              className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none"
+              onClick={() => setMobileLeftOpen(true)}
+              onTouchStart={onHandleTouchStart}
+              onTouchEnd={makeHandleTouchEnd(() => setMobileLeftOpen(true), 'right')}
+            >
+              <div className="w-[6px] h-16 rounded-r-full bg-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)]/40 transition-colors flex items-center justify-center">
+                <svg width="4" height="10" viewBox="0 0 4 10" fill="none" className="text-[var(--theme-accent)]/50">
+                  <path d="M0.5 1L3 5L0.5 9" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* Sağ handle */}
+            <div
+              className="lg:hidden fixed right-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none"
+              onClick={() => setMobileRightOpen(true)}
+              onTouchStart={onHandleTouchStart}
+              onTouchEnd={makeHandleTouchEnd(() => setMobileRightOpen(true), 'left')}
+            >
+              <div className="w-[6px] h-16 rounded-l-full bg-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)]/40 transition-colors flex items-center justify-center">
+                <svg width="4" height="10" viewBox="0 0 4 10" fill="none" className="text-[var(--theme-accent)]/50">
+                  <path d="M3.5 1L1 5L3.5 9" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* ── Mobil sol drawer overlay ── */}
         <AnimatePresence>
           {mobileLeftOpen && (
@@ -474,6 +522,14 @@ export default function ChatView() {
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                 className="lg:hidden fixed inset-y-0 left-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+                onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
+                onTouchEnd={(e) => {
+                  if (!handleSwipeRef.current) return;
+                  const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX;
+                  const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY);
+                  handleSwipeRef.current = null;
+                  if (dy < 60 && dx < -40) setMobileLeftOpen(false);
+                }}
               >
                 <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
                   <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold">
@@ -530,6 +586,14 @@ export default function ChatView() {
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                 className="lg:hidden fixed inset-y-0 right-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+                onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
+                onTouchEnd={(e) => {
+                  if (!handleSwipeRef.current) return;
+                  const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX;
+                  const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY);
+                  handleSwipeRef.current = null;
+                  if (dy < 60 && dx > 40) setMobileRightOpen(false);
+                }}
               >
                 <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
                   <div className="flex items-center gap-2">
@@ -550,17 +614,33 @@ export default function ChatView() {
                         return (
                           <div
                             key={user.id}
-                            className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-bg)]/50 cursor-pointer"
-                            onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); setMobileRightOpen(false); }}
+                            className="flex items-center gap-3 px-2 py-2 rounded-lg transition-colors group hover:bg-[var(--theme-bg)]/50 cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                           >
                             <div className="relative shrink-0">
-                              <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
+                              <div className="h-9 w-9 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
                                 {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}
                               </div>
+                              {user.isAdmin && adminBorderEffect && (
+                                <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
+                              )}
                               <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[var(--theme-sidebar)] ${user.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                             </div>
                             <div className="flex flex-col flex-1 min-w-0">
-                              <span className="text-sm font-medium text-[var(--theme-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)}{user.age ? ` (${user.age})` : ''}</span>
+                                {user.isAdmin && <ShieldCheck size={11} className="text-[var(--theme-accent)] shrink-0" />}
+                                {!user.isAdmin && user.isModerator && <span className="text-[9px] font-black text-violet-400 shrink-0">M</span>}
+                                {user.platform === 'mobile' && (
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400 shrink-0"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
+                                {(isMe ? isDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
+                                {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
+                                <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                              </div>
                             </div>
                           </div>
                         );
@@ -574,13 +654,13 @@ export default function ChatView() {
                       {offlineUsers.map(user => (
                         <div
                           key={user.id}
-                          className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 cursor-pointer hover:bg-[var(--theme-bg)]/50"
-                          onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); setMobileRightOpen(false); }}
+                          className="flex items-center gap-3 px-2 py-2 rounded-lg opacity-60 cursor-pointer hover:bg-[var(--theme-bg)]/50"
+                          onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                         >
-                          <div className="h-8 w-8 rounded-full bg-[var(--theme-border)]/30 overflow-hidden flex items-center justify-center text-[var(--theme-secondary-text)] font-bold text-[10px]">
+                          <div className="h-9 w-9 rounded-full bg-[var(--theme-border)]/30 overflow-hidden flex items-center justify-center text-[var(--theme-secondary-text)] font-bold text-[10px]">
                             {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover grayscale" referrerPolicy="no-referrer" /> : user.avatar}
                           </div>
-                          <span className="text-sm text-[var(--theme-secondary-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                          <span className="text-[13px] text-[var(--theme-secondary-text)] truncate">{formatFullName(user.firstName, user.lastName)}{user.age ? ` (${user.age})` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1287,18 +1367,18 @@ export default function ChatView() {
                 />
               </div>
 
-              <div className="relative z-[1] flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
-                    <Volume2 size={20} />
+              <div className="relative z-[1] flex items-center justify-between mb-3 sm:mb-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
+                    <Volume2 size={18} className="sm:w-5 sm:h-5" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
+                    <h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
                       {channels.find(c => c.id === activeChannel)?.name || 'Sohbet Odası'}
                     </h2>
-                    <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="flex items-center gap-1.5 mt-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <p className="text-xs text-[var(--theme-secondary-text)] font-medium">
+                      <p className="text-[10px] sm:text-xs text-[var(--theme-secondary-text)] font-medium">
                         {channels.find(c => c.id === activeChannel)?.userCount || 0} kişi aktif
                       </p>
                     </div>
@@ -1394,9 +1474,9 @@ export default function ChatView() {
                         })}
                       </div>
 
-                      {/* Idle hint — kimse konuşmuyorsa */}
+                      {/* Idle hint — kimse konuşmuyorsa (sadece masaüstünde göster) */}
                       {!anySpeaking && (
-                        <div className="flex items-center justify-center mt-8">
+                        <div className="hidden lg:flex items-center justify-center mt-8">
                           <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
                             <Mic size={12} />
                             Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
@@ -1469,6 +1549,9 @@ export default function ChatView() {
                           <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
                           {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
                           {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400 shrink-0" title="Moderatör">M</span>}
+                          {user.platform === 'mobile' && (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400 shrink-0" title="Mobil"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                           {/* Mic / deafen durum ikonları — kalıcı audio state */}
@@ -1607,40 +1690,92 @@ export default function ChatView() {
       {/* ── Mobil footer ── */}
       <footer className="lg:hidden bg-[var(--theme-sidebar)] shrink-0 pb-[env(safe-area-inset-bottom)]">
         {/* Mobil PTT butonu — sadece odadayken göster */}
-        {activeChannel && view !== 'settings' && (
-          <div className="flex items-center justify-center py-2 px-4">
-            <button
-              onTouchStart={(e) => { e.preventDefault(); setIsPttPressed(true); }}
-              onTouchEnd={() => setIsPttPressed(false)}
-              onTouchCancel={() => setIsPttPressed(false)}
-              className={`w-full max-w-xs py-4 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all select-none ${
-                isPttPressed
-                  ? 'bg-[var(--theme-accent)] text-white scale-95 shadow-xl shadow-[var(--theme-accent)]/40'
-                  : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-3">
-                <Mic size={20} />
-                <span>{isPttPressed ? 'Konuşuluyor...' : 'Basılı Tut — Konuş'}</span>
-              </div>
-              {isPttPressed && (
-                <div className="flex items-center justify-center gap-1 mt-2">
-                  {[...Array(5)].map((_, i) => (
-                    <motion.div
-                      key={i}
-                      animate={{ height: ['4px', '16px', '4px'] }}
-                      transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
-                      className="w-1 bg-white/70 rounded-full"
-                    />
-                  ))}
+        {activeChannel && view !== 'settings' && (() => {
+          const pttDisabled = isMuted || isAdminMuted || !!currentUser.isVoiceBanned;
+          const pttLabel = isAdminMuted
+            ? (muteRemaining ?? 'Susturuldu')
+            : isMuted
+              ? 'Mikrofon Kapalı'
+              : currentUser.isVoiceBanned
+                ? 'Ses Yasağı'
+                : isPttPressed
+                  ? 'Konuşuyorsun'
+                  : 'Basılı Tut — Konuş';
+
+          return (
+            <div className="flex items-center justify-center pt-3 pb-1 px-4">
+              <button
+                onPointerDown={(e) => {
+                  if (pttDisabled) return;
+                  e.preventDefault();
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                  setIsPttPressed(true);
+                }}
+                onPointerUp={(e) => {
+                  if (pttDisabled) return;
+                  (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+                  setIsPttPressed(false);
+                }}
+                onPointerCancel={() => { if (!pttDisabled) setIsPttPressed(false); }}
+                onContextMenu={(e) => e.preventDefault()}
+                className={`relative w-full max-w-xs select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
+                  pttDisabled
+                    ? 'opacity-50'
+                    : isPttPressed
+                      ? 'scale-[0.97]'
+                      : 'scale-100'
+                }`}
+              >
+                {/* Arka plan katmanı */}
+                <div className={`absolute inset-0 transition-all duration-150 rounded-2xl ${
+                  pttDisabled
+                    ? 'bg-[var(--theme-border)]/20 border border-[var(--theme-border)]/30'
+                    : isPttPressed
+                      ? 'bg-[var(--theme-accent)] shadow-[0_0_30px_rgba(var(--theme-accent-rgb),0.5)]'
+                      : 'bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/25'
+                }`} />
+
+                {/* Aktifken dış ring glow */}
+                {isPttPressed && !pttDisabled && (
+                  <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/60 ring-offset-2 ring-offset-[var(--theme-sidebar)]" />
+                )}
+
+                {/* İçerik */}
+                <div className="relative z-10 py-5 px-6">
+                  <div className="flex items-center justify-center gap-3">
+                    <div className={`transition-all duration-150 ${
+                      pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-[var(--theme-accent)]'
+                    }`}>
+                      <Mic size={22} strokeWidth={2.5} />
+                    </div>
+                    <span className={`font-bold text-[14px] tracking-wide transition-all duration-150 ${
+                      pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-[var(--theme-accent)]'
+                    }`}>
+                      {pttLabel}
+                    </span>
+                  </div>
+
+                  {/* Aktifken ses dalga animasyonu */}
+                  {isPttPressed && !pttDisabled && (
+                    <div className="flex items-center justify-center gap-[3px] mt-3 h-4">
+                      {[...Array(7)].map((_, i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ scaleY: [0.3, 1, 0.3] }}
+                          transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.07, ease: 'easeInOut' }}
+                          className="w-[3px] h-full bg-white/80 rounded-full origin-center"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </button>
-          </div>
-        )}
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Mobil kontrol çubuğu */}
-        <div className="flex items-center justify-around px-2 py-2 gap-1">
+        <div className="flex items-center justify-around px-3 py-2.5 border-t border-[var(--theme-border)]/20">
           {/* Hoparlör */}
           <button
             onClick={() => {

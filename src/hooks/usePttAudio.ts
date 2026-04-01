@@ -328,5 +328,5 @@ export function usePttAudio(params: UsePttAudioParams) {
     };
   }, [isPttPressed, isMuted, isVoiceBanned, selectedInput, isNoiseSuppressionEnabled, noiseThreshold, isLowDataMode]);
 
-  return { isPttPressed, volumeLevel };
+  return { isPttPressed, setIsPttPressed, volumeLevel };
 }

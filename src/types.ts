@@ -29,6 +29,7 @@ export interface User {
   lastSeenAt?: string;
   totalUsageMinutes?: number;
   onlineSince?: number;
+  platform?: 'mobile' | 'desktop';
 }
 
 export interface VoiceChannel {

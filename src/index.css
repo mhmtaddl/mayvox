@@ -20,24 +20,26 @@ body {
   background-color: var(--theme-bg);
   color: var(--theme-text);
   transition: background-color 0.3s ease, color 0.3s ease;
-  /* Mobil safe area desteği — notch / nav bar altında içerik kaymasını engeller */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-  /* Mobilde overscroll bounce'u engelle */
   overscroll-behavior: none;
-  /* Mobilde text selection/highlight'ı engelle (uygulama hissi) */
-  -webkit-user-select: none;
-  user-select: none;
-  /* iOS dokunma vurgulamasını kaldır */
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Input ve textarea'larda text seçimi aktif kalsın */
-input, textarea, [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
+/* Mobilde uygulama hissi — masaüstünü etkilemez */
+@media (max-width: 1023px) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Input ve textarea'larda text seçimi düzgün çalışsın */
+input, textarea, select, [contenteditable] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation;
 }
 
 /* Card scale slider (chat room header) */

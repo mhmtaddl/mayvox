@@ -124,7 +124,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -143,6 +143,11 @@ export function usePresence({
           .map(p => [p.userId, { selfMuted: p.selfMuted, selfDeafened: p.selfDeafened }]),
       );
 
+      // Platform bilgisi: mobile / desktop
+      const platformMap = new Map(
+        presenceData.filter(p => p.platform).map(p => [p.userId, p.platform as 'mobile' | 'desktop']),
+      );
+
       const now = Date.now();
       setAllUsers(prev =>
         prev.map(u => {
@@ -152,6 +157,7 @@ export function usePresence({
           return {
             ...u,
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
+            platform: platformMap.get(u.id) ?? u.platform,
             status: willBeOnline ? 'online' : 'offline',
             statusText:
               u.id === user.id
@@ -197,6 +203,8 @@ export function usePresence({
           roomName: payload.roomName,
           roomId: payload.roomId,
         });
+        // Mobilde yerel bildirim — arka planda/kilitli ekranda da görünsün
+        import('../lib/notifications').then(m => m.showInviteNotification(payload.inviterName, payload.roomName)).catch(() => {});
       }
     });
 
@@ -332,7 +340,8 @@ export function usePresence({
 
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined });
+        const isMobilePlatform = typeof (window as any).Capacitor !== 'undefined' || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop' });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.

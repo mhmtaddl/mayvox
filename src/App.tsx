@@ -83,7 +83,9 @@ import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
 import { useUpdatePolicy } from './hooks/useUpdatePolicy';
 import ForceUpdateOverlay from './components/ForceUpdateOverlay';
+import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
+import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
@@ -94,6 +96,16 @@ export default function App() {
 
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+  // ── Mobil izin onboarding — sadece Capacitor'da, ilk açılışta ──
+  const [permissionsGranted, setPermissionsGranted] = useState(() => {
+    if (!isCapacitor()) return true; // Masaüstünde izin akışı yok
+    return localStorage.getItem('cylk-permissions-granted') === 'true';
+  });
+  const handlePermissionsComplete = () => {
+    localStorage.setItem('cylk-permissions-granted', 'true');
+    setPermissionsGranted(true);
+  };
 
   // ── Settings state ───────────────────────────────────────────────────────
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
@@ -356,7 +368,7 @@ export default function App() {
   } = useDevices();
 
   // ── PTT Audio hook ───────────────────────────────────────────────────────
-  const { isPttPressed, volumeLevel } = usePttAudio({
+  const { isPttPressed, setIsPttPressed: setPttPressed, volumeLevel } = usePttAudio({
     pttKey,
     setPttKey,
     isListeningForKey,
@@ -2167,7 +2179,7 @@ export default function App() {
     volumeLevel,
     setVolumeLevel: () => {},
     isPttPressed,
-    setIsPttPressed: () => {},
+    setIsPttPressed: setPttPressed,
     connectionLevel,
     setConnectionLevel,
     selectedInput,
@@ -2193,6 +2205,11 @@ export default function App() {
             <AppStateContext.Provider value={appStateValue}>
               <AudioCtx.Provider value={audioValue}>
                 <div className="font-sans selection:bg-blue-500/30">
+                  {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}
+                  {!permissionsGranted ? (
+                    <PermissionOnboarding onComplete={handlePermissionsComplete} />
+                  ) : <>
+
                   {currentTheme.id === 'cylk' && (
                     <div
                       aria-hidden="true"
@@ -2360,6 +2377,7 @@ export default function App() {
                       }}
                     />
                   )}
+                </>}
                 </div>
               </AudioCtx.Provider>
             </AppStateContext.Provider>
