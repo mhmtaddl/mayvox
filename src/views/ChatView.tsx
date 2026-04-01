@@ -23,6 +23,7 @@ import {
   KeyRound,
   Mail,
   ChevronDown,
+  Menu,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -145,6 +146,7 @@ export default function ChatView() {
   const {
     volumeLevel,
     isPttPressed,
+    setIsPttPressed,
     speakingLevels,
     connectionLevel,
     selectedInput,
@@ -158,6 +160,10 @@ export default function ChatView() {
     showOutputSettings,
     setShowOutputSettings,
   } = useAudio();
+
+  // ── Mobil drawer state ──
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
@@ -345,7 +351,15 @@ export default function ChatView() {
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
       {/* Header */}
       <header className="flex flex-col bg-[var(--theme-bg)] z-10 shrink-0">
-        <div className="flex items-center justify-between pl-6 pr-4 lg:pr-0 h-16">
+        <div className="flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 lg:pr-0 h-14 sm:h-16">
+          {/* Mobil: sol drawer butonu */}
+          <button
+            onClick={() => setMobileLeftOpen(true)}
+            className="lg:hidden p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors mr-1"
+          >
+            <Menu size={20} />
+          </button>
+
           <BrandUpdateArea
             updateInfo={updateInfo}
             onDownload={onUpdateDownload}
@@ -353,8 +367,16 @@ export default function ChatView() {
             isRecommended={isUpdateRecommended}
           />
 
-          <div className="flex items-center h-full gap-2">
-          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+          <div className="flex items-center h-full gap-1 sm:gap-2">
+          {/* Mobil: sağ drawer (kullanıcılar) butonu */}
+          <button
+            onClick={() => setMobileRightOpen(true)}
+            className="lg:hidden p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors"
+          >
+            <Users size={18} />
+          </button>
+
+          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-2 sm:gap-3 group relative cursor-pointer hover:bg-[var(--theme-sidebar)]/50 transition-colors" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
@@ -434,9 +456,143 @@ export default function ChatView() {
         {/* Eski banner kaldırıldı — UpdateHub header'da yaşıyor */}
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <aside className="w-72 bg-[var(--theme-sidebar)]/30 flex flex-col">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* ── Mobil sol drawer overlay ── */}
+        <AnimatePresence>
+          {mobileLeftOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="lg:hidden fixed inset-0 bg-black/60 z-40"
+                onClick={() => setMobileLeftOpen(false)}
+              />
+              <motion.aside
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="lg:hidden fixed inset-y-0 left-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+              >
+                <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
+                  <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold">
+                    <Volume2 size={16} />
+                    <span className="uppercase text-xs tracking-widest">Ses Kanalları</span>
+                  </div>
+                  <button onClick={() => setMobileLeftOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
+                  {visibleChannels.map(channel => (
+                    <div key={channel.id} className="space-y-1">
+                      <button
+                        onClick={() => { handleJoinChannel(channel.id); setMobileLeftOpen(false); }}
+                        disabled={isConnecting}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group disabled:cursor-not-allowed ${
+                          activeChannel === channel.id
+                            ? `bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
+                            : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'
+                        }`}
+                      >
+                        <PhoneCall size={16} className="shrink-0" />
+                        <span className="text-sm font-semibold truncate">{channel.name}</span>
+                        {channel.password && <Lock size={12} className="shrink-0 ml-auto opacity-50" />}
+                        {(channel.userCount ?? 0) > 0 && (
+                          <span className={`text-[10px] font-bold ml-auto shrink-0 ${activeChannel === channel.id ? 'text-white/60' : 'text-[var(--theme-secondary-text)]/50'}`}>
+                            {channel.userCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </nav>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* ── Mobil sağ drawer overlay ── */}
+        <AnimatePresence>
+          {mobileRightOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="lg:hidden fixed inset-0 bg-black/60 z-40"
+                onClick={() => setMobileRightOpen(false)}
+              />
+              <motion.aside
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="lg:hidden fixed inset-y-0 right-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+              >
+                <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Kullanıcılar</h3>
+                    <span className="text-[10px] bg-[var(--theme-bg)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{allUsers.length}</span>
+                  </div>
+                  <button onClick={() => setMobileRightOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                  {/* Online */}
+                  <div>
+                    <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Çevrimiçi — {onlineUsers.length}</p>
+                    <div className="space-y-1">
+                      {onlineUsers.map(user => {
+                        const isMe = user.id === currentUser.id;
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors group hover:bg-[var(--theme-bg)]/50 cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); setMobileRightOpen(false); }}
+                          >
+                            <div className="relative shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
+                                {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}
+                              </div>
+                              <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[var(--theme-sidebar)] ${user.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            </div>
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <span className="text-sm font-medium text-[var(--theme-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Offline */}
+                  <div>
+                    <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-50 uppercase mb-3 px-2">Çevrimdışı — {offlineUsers.length}</p>
+                    <div className="space-y-1">
+                      {offlineUsers.map(user => (
+                        <div
+                          key={user.id}
+                          className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-60 cursor-pointer hover:bg-[var(--theme-bg)]/50"
+                          onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); setMobileRightOpen(false); }}
+                        >
+                          <div className="h-8 w-8 rounded-full bg-[var(--theme-border)]/30 overflow-hidden flex items-center justify-center text-[var(--theme-secondary-text)] font-bold text-[10px]">
+                            {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover grayscale" referrerPolicy="no-referrer" /> : user.avatar}
+                          </div>
+                          <span className="text-sm text-[var(--theme-secondary-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Left Sidebar — sadece masaüstünde sabit görünür */}
+        <aside className="w-72 bg-[var(--theme-sidebar)]/30 hidden lg:flex flex-col">
           <div className="p-6 flex flex-col h-full">
             <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold mb-6">
               <Volume2 size={16} />
@@ -1116,7 +1272,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar ${view !== 'settings' ? 'p-8' : ''}`}>
+        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar ${view !== 'settings' ? 'p-3 sm:p-8' : ''}`}>
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <div className="relative flex-1 flex flex-col">
               {/* Ambient background — canlı ama sessiz */}
@@ -1262,7 +1418,7 @@ export default function ChatView() {
                   Henüz Bir Odada Değilsiniz
                 </h2>
                 <p className="text-xs text-[var(--theme-secondary-text)] max-w-[240px] leading-relaxed mx-auto">
-                  Sohbete başlamak için sol taraftaki kanallardan birine katılın.
+                  Sohbete başlamak için kanallardan birine katılın.
                 </p>
               </div>
               <AnnouncementsPanel currentUser={currentUser} />
@@ -1443,8 +1599,115 @@ export default function ChatView() {
         })()}
       </AnimatePresence>
 
-      {/* Footer Controls */}
-      <footer className="h-16 bg-[var(--theme-sidebar)] flex items-center relative">
+      {/* ═══════════════════════════════════════════════════════════════════
+           FOOTER — Masaüstü: 3 bölüm (hoparlör/mikrofon | PTT | ayarlar)
+                     Mobil: kompakt kontrol çubuğu + büyük PTT butonu
+         ═══════════════════════════════════════════════════════════════════ */}
+
+      {/* ── Mobil footer ── */}
+      <footer className="lg:hidden bg-[var(--theme-sidebar)] shrink-0 pb-[env(safe-area-inset-bottom)]">
+        {/* Mobil PTT butonu — sadece odadayken göster */}
+        {activeChannel && view !== 'settings' && (
+          <div className="flex items-center justify-center py-2 px-4">
+            <button
+              onTouchStart={(e) => { e.preventDefault(); setIsPttPressed(true); }}
+              onTouchEnd={() => setIsPttPressed(false)}
+              onTouchCancel={() => setIsPttPressed(false)}
+              className={`w-full max-w-xs py-4 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all select-none ${
+                isPttPressed
+                  ? 'bg-[var(--theme-accent)] text-white scale-95 shadow-xl shadow-[var(--theme-accent)]/40'
+                  : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-3">
+                <Mic size={20} />
+                <span>{isPttPressed ? 'Konuşuluyor...' : 'Basılı Tut — Konuş'}</span>
+              </div>
+              {isPttPressed && (
+                <div className="flex items-center justify-center gap-1 mt-2">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ height: ['4px', '16px', '4px'] }}
+                      transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                      className="w-1 bg-white/70 rounded-full"
+                    />
+                  ))}
+                </div>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Mobil kontrol çubuğu */}
+        <div className="flex items-center justify-around px-2 py-2 gap-1">
+          {/* Hoparlör */}
+          <button
+            onClick={() => {
+              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
+              if (isSpecialStatus) setIsDeafened(false);
+              else setIsDeafened(!isDeafened);
+            }}
+            className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
+              isDeafened ? 'bg-red-500/20 text-red-400' : 'text-[var(--theme-secondary-text)]'
+            }`}
+          >
+            <Headphones size={18} />
+            <span className="text-[9px] font-bold">{isDeafened ? 'Kapalı' : 'Hoparlör'}</span>
+          </button>
+
+          {/* Mikrofon */}
+          <button
+            onClick={() => {
+              if (isAdminMuted) return;
+              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
+              if (isSpecialStatus) handleSetStatus('Aktif');
+              else { if (isMuted && isDeafened) setIsDeafened(false); setIsMuted(!isMuted); }
+            }}
+            className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
+              isAdminMuted ? 'bg-orange-600/20 text-orange-400 cursor-not-allowed'
+              : isMuted ? 'bg-red-500/20 text-red-400'
+              : 'text-[var(--theme-secondary-text)]'
+            }`}
+          >
+            <Mic size={18} />
+            <span className="text-[9px] font-bold">{isAdminMuted ? (muteRemaining ?? 'Susturuldu') : isMuted ? 'Kapalı' : 'Mikrofon'}</span>
+          </button>
+
+          {/* Bağlantı */}
+          <div className="flex flex-col items-center gap-0.5 p-2 min-w-[52px]">
+            <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+          </div>
+
+          {/* Ayarlar */}
+          <button
+            onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+            className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
+              view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'
+            }`}
+          >
+            <span className="relative">
+              <Settings size={18} />
+              {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+              )}
+            </span>
+            <span className="text-[9px] font-bold">Ayarlar</span>
+          </button>
+
+          {/* Çıkış */}
+          <button
+            onClick={handleLogout}
+            className="flex flex-col items-center gap-0.5 p-2 rounded-xl text-[var(--theme-secondary-text)] hover:text-red-500 transition-all min-w-[52px]"
+          >
+            <LogOut size={18} />
+            <span className="text-[9px] font-bold">Çıkış</span>
+          </button>
+        </div>
+      </footer>
+
+      {/* ── Masaüstü footer (orijinal) ── */}
+      <footer className="hidden lg:flex h-16 bg-[var(--theme-sidebar)] items-center relative">
         <div className="w-72 px-4 flex gap-2 h-full items-center">
           <div className="relative flex-1">
             <button
@@ -1518,7 +1781,7 @@ export default function ChatView() {
           <div className="relative flex-1">
             <button
               onClick={() => {
-                if (isAdminMuted) return; // Admin susturması devredeyken açılamaz
+                if (isAdminMuted) return;
                 const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
                                         currentUser.statusText === 'Hemen Geleceğim' ||
                                         currentUser.statusText?.includes('Sonra Geleceğim');

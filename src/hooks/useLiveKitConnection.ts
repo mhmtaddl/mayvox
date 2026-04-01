@@ -332,7 +332,7 @@ export function useLiveKitConnection({
         stack: (err as Error)?.stack,
       });
       isConnectingRef.current = false;
-      setIsConnecting(false); // UI'ın "bağlanılıyor" state'inde kalmasını önle
+      setIsConnecting(false);
       setToastMsg(msg);
       setTimeout(() => setToastMsg(null), 6000);
       return false;

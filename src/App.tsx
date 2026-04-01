@@ -1703,7 +1703,7 @@ export default function App() {
     };
   }, [currentUser.id, currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
 
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
+  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://caylaklar-sesli-sohbet-1.onrender.com';
 
   const handleApproveReset = async (req: ResetRequest) => {
     const { data: { session } } = await supabaseClient.auth.getSession();

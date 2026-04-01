@@ -15,10 +15,10 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<'settings' | 'admin'>('settings');
 
   return (
-    <div className="w-full max-w-2xl mx-auto pb-14">
+    <div className="w-full max-w-2xl mx-auto pb-14 px-3 sm:px-0">
 
       {/* ── Page header ── */}
-      <div className="flex items-center gap-4 pt-10 pb-6">
+      <div className="flex items-center gap-4 pt-6 sm:pt-10 pb-6">
         <div className="w-11 h-11 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
           <Settings size={20} className="text-[var(--theme-accent)]" />
         </div>
