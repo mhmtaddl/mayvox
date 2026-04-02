@@ -4,6 +4,7 @@ import {
   Settings,
   Trash2,
   LogOut,
+  Power,
   Headphones,
   PlusCircle,
   Check,
@@ -46,6 +47,11 @@ import { UserCard, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../compone
 import type { CardScale } from '../components/chat';
 import DeviceBadge from '../components/chat/DeviceBadge';
 import ConfirmModal from '../components/ConfirmModal';
+import { isCapacitor } from '../lib/platform';
+
+// Capacitor (Android telefon/tablet) → her zaman mobil layout
+// Electron / desktop web → CSS breakpoint ile responsive
+const FORCE_MOBILE = isCapacitor();
 
 export default function ChatView() {
   const {
@@ -381,11 +387,11 @@ export default function ChatView() {
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
       {/* Header */}
       <header className="flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0">
-        <div className="flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 lg:pr-0 h-14 sm:h-16">
+        <div className={`flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 ${FORCE_MOBILE ? '' : 'lg:pr-0'} h-14 sm:h-16`}>
           {/* Mobil: sol drawer butonu */}
           <button
             onClick={() => setMobileLeftOpen(true)}
-            className="lg:hidden p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors mr-1"
+            className={`${FORCE_MOBILE ? '' : 'lg:hidden'} p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors mr-1`}
           >
             <Menu size={20} />
           </button>
@@ -401,12 +407,12 @@ export default function ChatView() {
           {/* Mobil: sağ drawer (kullanıcılar) butonu */}
           <button
             onClick={() => setMobileRightOpen(true)}
-            className="lg:hidden p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors"
+            className={`${FORCE_MOBILE ? '' : 'lg:hidden'} p-2 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] transition-colors`}
           >
             <Users size={18} />
           </button>
 
-          <div className="h-full flex items-center lg:w-64 lg:px-4 gap-2 sm:gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.03)] transition-all duration-200" onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+          <div className={`h-full flex items-center ${FORCE_MOBILE ? '' : 'lg:w-64 lg:px-4'} gap-2 sm:gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.03)] transition-all duration-200`} onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
@@ -492,7 +498,7 @@ export default function ChatView() {
           <>
             {/* Sol handle */}
             <div
-              className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none"
+              className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none`}
               onClick={() => setMobileLeftOpen(true)}
               onTouchStart={onHandleTouchStart}
               onTouchEnd={makeHandleTouchEnd(() => setMobileLeftOpen(true), 'right')}
@@ -506,7 +512,7 @@ export default function ChatView() {
 
             {/* Sağ handle */}
             <div
-              className="lg:hidden fixed right-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none"
+              className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed right-0 top-1/2 -translate-y-1/2 z-30 flex items-center cursor-pointer touch-none select-none`}
               onClick={() => setMobileRightOpen(true)}
               onTouchStart={onHandleTouchStart}
               onTouchEnd={makeHandleTouchEnd(() => setMobileRightOpen(true), 'left')}
@@ -528,7 +534,7 @@ export default function ChatView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="lg:hidden fixed inset-0 bg-black/60 z-40"
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-0 bg-black/60 z-40`}
                 onClick={() => setMobileLeftOpen(false)}
               />
               <motion.aside
@@ -536,7 +542,7 @@ export default function ChatView() {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="lg:hidden fixed inset-y-0 left-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 left-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl`}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => {
                   if (!handleSwipeRef.current) return;
@@ -650,7 +656,7 @@ export default function ChatView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="lg:hidden fixed inset-0 bg-black/60 z-40"
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-0 bg-black/60 z-40`}
                 onClick={() => setMobileRightOpen(false)}
               />
               <motion.aside
@@ -658,7 +664,7 @@ export default function ChatView() {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="lg:hidden fixed inset-y-0 right-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl"
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 right-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl`}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => {
                   if (!handleSwipeRef.current) return;
@@ -702,8 +708,16 @@ export default function ChatView() {
                             <div className="flex flex-col flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)}{user.age ? ` (${user.age})` : ''}</span>
-                                {user.isAdmin && <ShieldCheck size={11} className="text-[var(--theme-accent)] shrink-0" />}
-                                {!user.isAdmin && user.isModerator && <span className="text-[9px] font-black text-violet-400 shrink-0">M</span>}
+                                {user.isAdmin && (
+                                  <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
+                                    <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+                                  </span>
+                                )}
+                                {!user.isAdmin && user.isModerator && (
+                                  <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                                    <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1 mt-0.5">
                                 {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
@@ -742,7 +756,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Left Sidebar — sadece masaüstünde sabit görünür */}
-        <aside className="w-72 bg-[rgba(var(--theme-sidebar-rgb),0.35)] backdrop-blur-xl border-r border-[rgba(var(--glass-tint),0.04)] hidden lg:flex flex-col">
+        <aside className={`w-72 bg-[rgba(var(--theme-sidebar-rgb),0.35)] backdrop-blur-xl border-r border-[rgba(var(--glass-tint),0.04)] ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col`}>
           <div className="p-6 flex flex-col h-full">
             <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-6">
               <Volume2 size={14} className="opacity-60" />
@@ -797,17 +811,23 @@ export default function ChatView() {
                     <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
                       {channel.members.map((memberId, idx) => {
                         const user = allUsers.find(u => u.id === memberId);
-                        const memberDisplayName = user ? `${formatFullName(user.firstName, user.lastName)} (${user.age})` : memberId;
                         return (
                           <div
                             key={idx}
                             draggable={currentUser.isAdmin}
                             onDragStart={(e) => handleDragStart(e, user?.name || memberId)}
                             onClick={(e) => user && handleUserActionClick(e, user.id)}
-                            className="flex items-center gap-2.5 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-0.5 px-2 rounded-md hover:bg-[var(--theme-accent)]/5"
+                            className="flex items-center gap-2 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5"
                           >
-                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]/60 group-hover/member:bg-[var(--theme-accent)] transition-colors"></div>
-                            <span className="truncate flex-1">{memberDisplayName}</span>
+                            <div className="relative shrink-0">
+                              <div className="h-5 w-5 rounded-full bg-[var(--theme-accent)]/15 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
+                                {user?.avatar?.startsWith('http')
+                                  ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  : user?.avatar || '?'}
+                              </div>
+                              {user && <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />}
+                            </div>
+                            <span className="truncate flex-1">{user ? formatFullName(user.firstName, user.lastName) : memberId}</span>
                             {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
                               <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
                             )}
@@ -1447,12 +1467,6 @@ export default function ChatView() {
                     <h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
                       {channels.find(c => c.id === activeChannel)?.name || 'Sohbet Odası'}
                     </h2>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <p className="text-[10px] sm:text-xs text-[var(--theme-secondary-text)] font-medium">
-                        {channels.find(c => c.id === activeChannel)?.userCount || 0} kişi aktif
-                      </p>
-                    </div>
                   </div>
                 </div>
 
@@ -1507,11 +1521,17 @@ export default function ChatView() {
                   return (
                     <>
                       <div className={`grid ${scaleConfig.gridGap} mx-auto w-full ${
-                        s === 3
-                          ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')
-                          : s === 2
-                            ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl' : count <= 9 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5')
-                            : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6')
+                        FORCE_MOBILE
+                          ? (s === 3
+                              ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+                              : s === 2
+                                ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+                                : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'))
+                          : (s === 3
+                              ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')
+                              : s === 2
+                                ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl' : count <= 9 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5')
+                                : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'))
                       }`}>
                         {sortedChannelMembers.map((user) => {
                           const isMe = user.id === currentUser.id;
@@ -1582,7 +1602,7 @@ export default function ChatView() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className="w-64 bg-[rgba(var(--theme-sidebar-rgb),0.45)] backdrop-blur-xl border-l border-[rgba(var(--glass-tint),0.05)] flex flex-col hidden lg:flex">
+        <aside className={`w-64 bg-[rgba(var(--theme-sidebar-rgb),0.45)] backdrop-blur-xl border-l border-[rgba(var(--glass-tint),0.05)] flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`}>
           <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-[rgba(var(--glass-tint),0.04)]">
             <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
             <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
@@ -1591,7 +1611,11 @@ export default function ChatView() {
           <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
             {/* Online */}
             <div>
-              <p className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase mb-3 px-2 tracking-[0.14em]">Çevrimiçi — {onlineUsers.length}</p>
+              <div className="flex items-center gap-2 mb-3 px-2">
+                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.14em]">Çevrimiçi</span>
+                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">{onlineUsers.length}</span>
+                <div className="flex-1 h-px bg-[var(--theme-border)]/10" />
+              </div>
               <div className="space-y-1">
                 {onlineUsers.map(user => {
                   const isMe = user.id === currentUser.id;
@@ -1617,11 +1641,20 @@ export default function ChatView() {
                         )}
                         <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />
                       </div>
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
-                          {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
-                          {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400 shrink-0" title="Moderatör">M</span>}
+                      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                          <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)] shrink-0">{user.age}</span>
+                          {user.isAdmin && (
+                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
+                              <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+                            </span>
+                          )}
+                          {!user.isAdmin && user.isModerator && (
+                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                              <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                           {/* Mic / deafen durum ikonları — kalıcı audio state */}
@@ -1687,10 +1720,12 @@ export default function ChatView() {
               <button
                 type="button"
                 onClick={() => { const next = !offlineExpanded; setOfflineExpanded(next); localStorage.setItem('offlineUsersExpanded', String(next)); }}
-                className="flex items-center gap-1 w-full text-[10px] font-bold text-[var(--theme-text)] opacity-60 uppercase mb-3 px-2 hover:opacity-80 transition-opacity cursor-pointer"
+                className="flex items-center gap-2 w-full mb-3 px-2 hover:opacity-80 transition-opacity cursor-pointer"
               >
-                <span>Çevrimdışı — {offlineUsers.length}</span>
-                <ChevronDown size={12} className={`transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
+                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/50 uppercase tracking-[0.14em]">Çevrimdışı</span>
+                <span className="text-[9px] bg-[var(--theme-secondary-text)]/8 text-[var(--theme-secondary-text)]/50 px-2 py-0.5 rounded-full font-bold">{offlineUsers.length}</span>
+                <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
+                <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/40 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
               </button>
               {offlineExpanded && <div className="space-y-1">
                 {offlineUsers.map(user => (
@@ -1710,10 +1745,19 @@ export default function ChatView() {
                       </div>
                       <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-[var(--theme-text)] opacity-80 group-hover:text-[var(--theme-text)] transition-colors">{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
-                      {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)]" title="Admin" />}
-                      {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400" title="Moderatör">M</span>}
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[13px] font-medium text-[var(--theme-text)] opacity-80 leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 shrink-0">{user.age}</span>
+                      {user.isAdmin && (
+                        <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
+                          <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+                        </span>
+                      )}
+                      {!user.isAdmin && user.isModerator && (
+                        <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                          <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1758,7 +1802,7 @@ export default function ChatView() {
          ═══════════════════════════════════════════════════════════════════ */}
 
       {/* ── Mobil footer ── */}
-      <footer className="lg:hidden bg-[var(--theme-sidebar)] shrink-0 pb-[env(safe-area-inset-bottom)]">
+      <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} bg-[var(--theme-sidebar)] shrink-0 pb-[env(safe-area-inset-bottom)]`}>
         {/* Mobil ses giriş butonu — PTT veya VAD moduna göre */}
         {activeChannel && view !== 'settings' && (() => {
           const pttDisabled = isMuted || isAdminMuted || !!currentUser.isVoiceBanned;
@@ -1946,6 +1990,7 @@ export default function ChatView() {
           {/* Bağlantı */}
           <div className="flex flex-col items-center gap-0.5 p-2 min-w-[52px]">
             <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+            {FORCE_MOBILE && <span className="text-[8px] font-medium text-[var(--theme-secondary-text)]/30">v{appVersion}</span>}
           </div>
 
           {/* Ayarlar */}
@@ -1967,16 +2012,16 @@ export default function ChatView() {
           {/* Çıkış */}
           <button
             onClick={() => setLogoutConfirmOpen(true)}
-            className="flex flex-col items-center gap-0.5 p-2 rounded-xl text-[var(--theme-secondary-text)] hover:text-red-500 transition-all min-w-[52px]"
+            className="flex flex-col items-center gap-0.5 p-2 rounded-xl text-[var(--theme-secondary-text)] hover:text-red-400 transition-all min-w-[52px]"
           >
-            <LogOut size={18} />
+            <Power size={18} />
             <span className="text-[9px] font-bold">Çıkış</span>
           </button>
         </div>
       </footer>
 
       {/* ── Masaüstü footer (orijinal) ── */}
-      <footer className="hidden lg:flex h-16 bg-[rgba(var(--theme-sidebar-rgb),0.6)] backdrop-blur-xl border-t border-[rgba(var(--glass-tint),0.04)] items-center relative">
+      <footer className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} h-16 bg-[rgba(var(--theme-sidebar-rgb),0.6)] backdrop-blur-xl border-t border-[rgba(var(--glass-tint),0.04)] items-center relative`}>
         <div className="w-72 px-4 flex gap-2 h-full items-center">
           <div className="relative flex-1">
             <button
@@ -2328,9 +2373,9 @@ export default function ChatView() {
           </div>
           <button
             onClick={() => setLogoutConfirmOpen(true)}
-            className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-red-500 transition-all font-bold text-[10px] uppercase tracking-widest group"
+            className="flex items-center gap-1.5 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all font-bold text-[10px] uppercase tracking-widest group"
           >
-            <LogOut size={18} />
+            <Power size={16} />
             Çıkış
           </button>
         </div>

@@ -112,7 +112,6 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
             className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'bg-[var(--theme-accent)] text-white scale-[0.97]' : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white'}`}
           >
             <span>Giriş Yap</span>
-            <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
 
           <div className="flex items-center justify-center gap-4">

@@ -15,6 +15,9 @@ import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
 import { playSound } from '../lib/sounds';
 import type { User, VoiceChannel } from '../types';
 
+// Toplam bağlantı süresi üst sınırı (token + connect + mic setup)
+const TOTAL_JOIN_TIMEOUT_MS = 25_000;
+
 interface Props {
   presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
   currentUserRef: React.MutableRefObject<User>;
@@ -75,6 +78,10 @@ export function useLiveKitConnection({
     }
     isConnectingRef.current = true;
 
+    // Toplam süre koruması — sonsuz beklemeyi önler
+    const joinAbort = new AbortController();
+    const joinTimer = setTimeout(() => joinAbort.abort(), TOTAL_JOIN_TIMEOUT_MS);
+
     try {
       // Clear ref BEFORE disconnect so the old room's Disconnected handler
       // doesn't see the new room when it fires.
@@ -84,12 +91,24 @@ export function useLiveKitConnection({
         await oldRoom.disconnect();
       }
 
+      // ── AŞAMA 1: Token al ──
+      const t0 = performance.now();
+
+      if (joinAbort.signal.aborted) throw new Error('Bağlantı zaman aşımına uğradı.');
+
       const token = await getLiveKitToken(
         channelId,
         currentUserRef.current.name,
-        () => setToastMsg('Ses sunucusuna bağlanılıyor…'),
+        (msg) => setToastMsg(msg),
       );
-      setToastMsg(null);
+
+      const tokenMs = Math.round(performance.now() - t0);
+      logger.info('Token alındı, LiveKit bağlantısı başlıyor', { channelId, tokenMs });
+
+      if (joinAbort.signal.aborted) throw new Error('Bağlantı zaman aşımına uğradı.');
+
+      // ── AŞAMA 2: Room oluştur + bağlan ──
+      setToastMsg('Odaya bağlanılıyor...');
 
       const room = new Room({
         audioCaptureDefaults: {
@@ -102,7 +121,6 @@ export function useLiveKitConnection({
           deviceId: selectedOutput || undefined,
         },
       });
-      // Ref is NOT set here — only after a successful connect() call.
 
       const broadcastMemberUpdate = (members: string[], count: number) => {
         presenceChannelRef.current?.send({
@@ -166,13 +184,9 @@ export function useLiveKitConnection({
         if (track.kind === Track.Kind.Audio) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.setAttribute('data-livekit-audio', 'true');
-          // Yeni gelen track için deafen state'ini anında uygula.
-          // (App.tsx'teki deafen effect yalnızca mevcut elementlere çalışır;
-          //  bu satır olmadan kırmızı hoparlör açıkken yeni katılan sesi duyulur.)
           audioEl.muted = isDeafenedRef.current;
           document.body.appendChild(audioEl);
 
-          // Kaydedilmiş ses seviyesini uygula
           const user = allUsersRef.current.find(u => u.name === participant.identity);
           if (user) {
             const savedVolume = userVolumesRef.current[user.id];
@@ -203,7 +217,7 @@ export function useLiveKitConnection({
       // ─── Throttled speaker levels (~30fps) ───────────────────
       let pendingLevels: Record<string, number> = {};
       let speakingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
-      const SPEAKING_THROTTLE_MS = 33; // ~30fps
+      const SPEAKING_THROTTLE_MS = 33;
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const levels: Record<string, number> = {};
@@ -227,7 +241,7 @@ export function useLiveKitConnection({
               ? 3
               : quality === ConnectionQuality.Poor
                 ? 2
-                : 1; // Lost / Unknown
+                : 1;
         logger.info('LiveKit quality', { quality: ConnectionQuality[quality], level });
         setConnectionLevel(level);
       });
@@ -272,7 +286,6 @@ export function useLiveKitConnection({
         const identity =
           room.localParticipant?.identity || currentUserRef.current.id;
 
-        // Always clean the member list and notify others
         setChannels(prev => {
           const updated = prev.map(c => {
             if (c.id !== channelId) return c;
@@ -284,9 +297,6 @@ export function useLiveKitConnection({
           return updated;
         });
 
-        // Only update app-level state if this room is still the active room.
-        // On channel switch, livekitRoomRef is already null (cleared above)
-        // so we won't accidentally reset state for the new room.
         setSpeakingLevels({});
         if (livekitRoomRef.current === room) {
           livekitRoomRef.current = null;
@@ -306,9 +316,18 @@ export function useLiveKitConnection({
         }
       });
 
+      const t1 = performance.now();
       logger.info('LiveKit connecting', { channelId, url: LIVEKIT_URL });
       await room.connect(LIVEKIT_URL, token);
-      logger.info('LiveKit connected', { channelId, identity: room.localParticipant.identity });
+      const connectMs = Math.round(performance.now() - t1);
+      const totalMs = Math.round(performance.now() - t0);
+      logger.info('LiveKit connected', {
+        channelId,
+        identity: room.localParticipant.identity,
+        tokenMs,
+        connectMs,
+        totalMs,
+      });
 
       // Set ref only after successful connect
       livekitRoomRef.current = room;
@@ -317,15 +336,21 @@ export function useLiveKitConnection({
       syncUsers();
       playSound('join');
 
-      // Odaya girerken mikrofon her zaman kapalı başlar.
-      // isVoiceBanned olsun ya da olmasın: PTT effect konuşmayı kontrol eder,
-      // ban durumu değiştiğinde App.tsx'teki effect mic'i tekrar kapatır.
       await room.localParticipant.setMicrophoneEnabled(false);
 
+      setToastMsg(null);
       isConnectingRef.current = false;
+      clearTimeout(joinTimer);
       return true;
     } catch (err) {
-      const msg = (err as Error)?.message ?? 'Odaya bağlanılamadı.';
+      clearTimeout(joinTimer);
+      const errMsg = (err as Error)?.message ?? '';
+      const isTimeout = errMsg.includes('zaman aşımı') || (err as Error)?.name === 'AbortError';
+
+      const msg = isTimeout
+        ? 'Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin.'
+        : errMsg || 'Odaya bağlanılamadı.';
+
       logger.error('LiveKit bağlantı hatası', {
         channelId,
         message: msg,

@@ -4,8 +4,6 @@ import {
   Headphones,
   PhoneCall,
   Recycle,
-  ShieldCheck,
-  Shield,
 } from 'lucide-react';
 import DeviceBadge from './DeviceBadge';
 import type { UserCardProps } from './types';
@@ -56,7 +54,6 @@ function UserCardInner({
   onClick,
   onDoubleClick,
 }: UserCardProps) {
-  const hasRole = isOwner || !!user.isAdmin || !!user.isModerator;
   const v = computeSpeakingVisuals(isSpeakingActive, intensity, isMe, isDominant);
 
   // Map 5 card scales → 3 equalizer sizes (small/medium/large)
@@ -82,10 +79,6 @@ function UserCardInner({
   const avatarStyle: React.CSSProperties = isSpeakingActive
     ? { transition: AVATAR_TRANSITION, boxShadow: avatarShadow }
     : IDLE_AVATAR_STYLE;
-
-  // ─── Role badge size (scales with card) ────────────────────────
-  const badgeSize = s.dense ? 'w-3.5 h-3.5' : s.icon === 13 ? 'w-4 h-4' : 'w-[18px] h-[18px]';
-  const badgeIconSize = s.dense ? 8 : s.icon === 13 ? 9 : 10;
 
   // Age font size
   const ageFontSize = s.dense ? 'text-[9px]' : s.icon === 13 ? 'text-[10px]' : 'text-[11px]';
@@ -152,37 +145,7 @@ function UserCardInner({
           <div className="absolute inset-[-2px] rounded-lg ring-[1.5px] ring-[var(--theme-accent)]/25 animate-pulse pointer-events-none" />
         )}
 
-        {/* ─── 4) Refined role badges ──────────────────────────── */}
-        {hasRole && (
-          <div className={`absolute -bottom-0.5 -right-0.5 z-10 ${badgeSize} rounded flex items-center justify-center`}
-            style={{
-              background: user.isAdmin
-                ? 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.25), rgba(var(--theme-accent-rgb), 0.12))'
-                : user.isModerator
-                  ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(139, 92, 246, 0.10))'
-                  : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.18), rgba(var(--theme-accent-rgb), 0.08))',
-              border: user.isAdmin
-                ? '1px solid rgba(var(--theme-accent-rgb), 0.3)'
-                : user.isModerator
-                  ? '1px solid rgba(139, 92, 246, 0.25)'
-                  : '1px solid rgba(var(--theme-accent-rgb), 0.2)',
-            }}
-          >
-            {user.isAdmin ? (
-              <ShieldCheck size={badgeIconSize} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-            ) : user.isModerator ? (
-              <Shield size={badgeIconSize} className="text-violet-400" strokeWidth={2.5} />
-            ) : (
-              <Shield size={badgeIconSize} className="text-[var(--theme-accent)]/70" strokeWidth={2} />
-            )}
-          </div>
-        )}
-        {!hasRole && (
-          <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
-        )}
-        {hasRole && (
-          <DeviceBadge platform={user.platform} size={s.dense ? 11 : 12} className="absolute -bottom-0.5 -left-0.5" borderColor="var(--theme-bg)" />
-        )}
+        <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
       </div>
 
       {/* Name + status */}
@@ -227,19 +190,6 @@ function UserCardInner({
               MOD
             </span>
           )}
-          {isMe && (
-            <span
-              className={`shrink-0 ${s.dense ? 'text-[5px] px-1' : s.icon === 13 ? 'text-[6px] px-1' : 'text-[7px] px-1.5'} font-extrabold py-px rounded leading-none tracking-widest`}
-              style={{
-                background: 'rgba(var(--theme-accent-rgb), 0.06)',
-                color: 'rgba(var(--theme-accent-rgb), 0.55)',
-                border: '1px solid rgba(var(--theme-accent-rgb), 0.1)',
-                boxShadow: '0 0 5px rgba(var(--theme-accent-rgb), 0.08)',
-              }}
-            >
-              SEN
-            </span>
-          )}
         </div>
 
         <div className={s.dense ? '' : 'mt-0.5'}>
@@ -247,14 +197,14 @@ function UserCardInner({
             <OwnVoiceEqualizer volumeLevel={volumeLevel} scale={scaleStep as 1 | 2 | 3} />
           ) : user.isSpeaking ? (
             <MiniEqualizer speakingLevel={speakingLevel} scale={scaleStep as 1 | 2 | 3} />
-          ) : (
+          ) : userStatusText !== 'Aktif' ? (
             <div className="flex items-center gap-1.5">
               <div className={`${s.dense ? 'w-1.5 h-1.5' : 'w-[5px] h-[5px]'} rounded-full shrink-0 ${statusDotColor}`} />
               <p className={`${s.status} font-medium truncate text-[var(--theme-secondary-text)]/60`}>
                 {userStatusText}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 

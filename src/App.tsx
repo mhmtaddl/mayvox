@@ -87,6 +87,8 @@ import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
+import { warmUpTokenServer } from './lib/livekit';
+import { openApkDownload } from './lib/mobileUpdate';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -97,10 +99,10 @@ export default function App() {
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
-  // ── Mobil izin onboarding — ilk kurulumda gösterilir, sonraki açılışlarda atlanır ──
+  // ── Mobil izin onboarding — her açılışta gerçek izin durumunu kontrol eder ──
   const [permissionsGranted, setPermissionsGranted] = useState(() => {
     if (!isCapacitor()) return true; // Masaüstünde izin akışı yok
-    return localStorage.getItem('cylk-permissions-setup-done') === 'true';
+    return false; // Mobilde her zaman kontrol et — PermissionOnboarding kendi içinde granted ise auto-complete yapar
   });
   const handlePermissionsComplete = () => {
     localStorage.setItem('cylk-permissions-setup-done', 'true');
@@ -268,7 +270,7 @@ export default function App() {
   type UpdateState = 'available' | 'downloading' | 'downloaded' | 'dismissed';
   const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
   const [appVersion, setAppVersion] = useState<string>(() => {
-    try { return __APP_VERSION__ || ''; } catch { return ''; }
+    try { return __APP_VERSION__ || '0.0.0'; } catch { return '0.0.0'; }
   });
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -304,6 +306,29 @@ export default function App() {
 
   // ── Update policy (akıllı zorunlu güncelleme) ──────────────────────────
   const updatePolicy = useUpdatePolicy(appVersion);
+
+  // ── Android: local sürüm eski ise update bildirimi göster ──────────────
+  // Sadece Capacitor'da çalışır. Eligibility sadece LOCAL appVersion vs remote latestVersion
+  // karşılaştırmasına dayanır — kullanıcı bazlı DB alanlarından etkilenmez.
+  // Dismiss state korunur: kullanıcı dismiss ettiyse aynı sürüm için tekrar gösterilmez.
+  const mobileUpdateShownRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    if (!updatePolicy.policy) return;
+    if (updatePolicy.effectiveLevel === 'optional') return; // LOCAL sürüm güncel
+    const targetVersion = updatePolicy.policy.latestVersion;
+    // Bu sürüm için zaten gösterildi veya dismiss edildi ise tekrar gösterme
+    if (mobileUpdateShownRef.current === targetVersion) return;
+    // İndirme/kurulum devam ediyorsa üzerine yazma
+    if (updateInfo?.state === 'downloading' || updateInfo?.state === 'downloaded') return;
+    mobileUpdateShownRef.current = targetVersion;
+    setUpdateInfo({
+      version: targetVersion,
+      sizeMB: null,
+      state: 'available',
+      progress: 0,
+    });
+  }, [updatePolicy.effectiveLevel, updatePolicy.policy?.latestVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -602,6 +627,9 @@ export default function App() {
 
   // ── Session restore on page load ─────────────────────────────────────────
   useEffect(() => {
+    // Render cold start — sunucu uyuyorsa şimdiden uyandır
+    warmUpTokenServer();
+
     getSession().then(async ({ data }) => {
       const session = data.session;
       if (!session?.user) {
@@ -1784,7 +1812,7 @@ export default function App() {
     };
   }, [currentUser.id, currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
 
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://caylaklar-sesli-sohbet-1.onrender.com';
+  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
 
   const handleApproveReset = async (req: ResetRequest) => {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -2217,13 +2245,25 @@ export default function App() {
     appVersion,
     updateInfo,
     onUpdateDownload: () => {
-      const w = window as Window & { electronUpdater?: { startDownload: () => void } };
-      w.electronUpdater?.startDownload();
-      setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
+      if (isCapacitor()) {
+        const version = updateInfo?.version || updatePolicy.policy?.latestVersion;
+        if (!version) return;
+        openApkDownload(version);
+      } else {
+        const w = window as Window & { electronUpdater?: { startDownload: () => void } };
+        w.electronUpdater?.startDownload();
+        setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
+      }
     },
     onUpdateInstall: () => {
-      const w = window as Window & { electronUpdater?: { installNow: () => void } };
-      w.electronUpdater?.installNow();
+      if (isCapacitor()) {
+        const version = updateInfo?.version || updatePolicy.policy?.latestVersion;
+        if (!version) return;
+        openApkDownload(version);
+      } else {
+        const w = window as Window & { electronUpdater?: { installNow: () => void } };
+        w.electronUpdater?.installNow();
+      }
     },
     onUpdateDismiss: () => {
       setUpdateInfo(prev => {
@@ -2437,15 +2477,8 @@ export default function App() {
                     <ForceUpdateOverlay
                       message={updatePolicy.displayMessage}
                       updateInfo={updateInfo}
-                      onDownload={() => {
-                        const w = window as Window & { electronUpdater?: { startDownload: () => void } };
-                        w.electronUpdater?.startDownload();
-                        setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
-                      }}
-                      onInstall={() => {
-                        const w = window as Window & { electronUpdater?: { installNow: () => void } };
-                        w.electronUpdater?.installNow();
-                      }}
+                      onDownload={appStateValue.onUpdateDownload}
+                      onInstall={appStateValue.onUpdateInstall}
                     />
                   )}
                 </>}

@@ -145,8 +145,16 @@ export default function UserProfilePopup({
             <span className="font-bold text-sm text-[var(--theme-text)] leading-tight">
               {formatFullName(user.firstName, user.lastName)}
             </span>
-            {user.isAdmin && <ShieldCheck size={12} className="text-[var(--theme-accent)] shrink-0" title="Admin" />}
-            {!user.isAdmin && user.isModerator && <span className="text-[10px] font-black text-violet-400 shrink-0" title="Moderatör">M</span>}
+            {user.isAdmin && (
+              <span className="shrink-0 w-4 h-4 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
+                <ShieldCheck size={10} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+              </span>
+            )}
+            {!user.isAdmin && user.isModerator && (
+              <span className="shrink-0 w-4 h-4 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2.5 h-2.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+              </span>
+            )}
             {isMe && (
               <span className="text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] rounded-full border border-[var(--theme-accent)]/25 leading-none">
                 SEN

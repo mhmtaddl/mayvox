@@ -368,11 +368,38 @@ ipcMain.on("updater:start-download", () => {
 });
 
 ipcMain.on("updater:install-now", () => {
-  try {
-    autoUpdater.quitAndInstall();
-  } catch (e) {
-    logger.error("Install failed", { message: e?.message });
+  logger.info("Update install başlatılıyor — cleanup yapılıyor");
+
+  // 1. isQuitting flag — close handler'ın hide yapmasını engelle
+  isQuitting = true;
+
+  // 2. Tray'i yok et — tray yaşadığı sürece process kapanmaz
+  if (tray) {
+    try { tray.destroy(); } catch {}
+    tray = null;
   }
+
+  // 3. uIOhook native thread'i durdur — file lock kaynağı
+  try { uIOhook?.stop(); } catch {}
+  uIOhook = null;
+
+  // 4. Tüm pencereleri zorla yok et — renderer process'leri öldür
+  BrowserWindow.getAllWindows().forEach((w) => {
+    try { w.removeAllListeners('close'); w.destroy(); } catch {}
+  });
+
+  // 5. GPU ve child process'lerin ölmesi için bekle, sonra installer'ı başlat
+  setTimeout(() => {
+    try {
+      // isSilent=true: NSIS sessiz modda çalışır, eski process'i kapatmaya çalışmaz
+      // isForceRunAfter=true: kurulum sonrası uygulamayı yeniden başlat
+      autoUpdater.quitAndInstall(true, true);
+    } catch (e) {
+      logger.error("quitAndInstall failed", { message: e?.message });
+    }
+    // Son çare: quitAndInstall bazen process'i kapatmaz — zorla çık
+    setTimeout(() => { app.exit(0); }, 1000);
+  }, 2000);
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
@@ -425,4 +452,5 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   try { uIOhook?.stop(); } catch {}
+  if (tray) { try { tray.destroy(); } catch {} tray = null; }
 });

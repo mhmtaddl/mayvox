@@ -15,6 +15,9 @@ export interface IncomingCallPluginDef {
   requestMicrophonePermission(): Promise<{ microphone: string }>;
   openAppSettings(): Promise<void>;
   openNotificationSettings(): Promise<void>;
+  installApk(options: { base64: string; fileName: string }): Promise<void>;
+  canInstallApk(): Promise<{ allowed: boolean }>;
+  openInstallSettings(): Promise<void>;
   addListener(
     eventName: 'callRejectedFromNotification',
     listenerFunc: () => void,

@@ -1,8 +1,10 @@
 import { supabase } from './supabase';
 import { logger } from './logger';
 
-const TOKEN_TIMEOUT_MS = 20_000;
-const MAX_RETRIES = 5;
+const TOKEN_TIMEOUT_MS = 10_000;
+const MAX_RETRIES = 3;
+
+const TOKEN_SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
 
 const isRetryable = (status: number) => status === 502 || status === 503 || status === 504;
 
@@ -16,16 +18,25 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
+// ── Token server health check ─────────────────────────────────────────────
+let _warmedUp = false;
+
+export const warmUpTokenServer = () => {
+  if (_warmedUp) return;
+  _warmedUp = true;
+  fetch(`${TOKEN_SERVER_URL}/health`, { method: 'GET' }).catch(() => {});
+};
+
+// ── Token alma ─────────────────────────────────────────────────────────────
 export const getLiveKitToken = async (
   roomName: string,
   participantName: string,
-  onWaiting?: () => void,
+  onStatus?: (msg: string) => void,
 ): Promise<string> => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Oturum bulunamadı, lütfen tekrar giriş yapın');
 
-  const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://caylaklar-sesli-sohbet-1.onrender.com';
-  const url = `${tokenServerUrl}/livekit-token`;
+  const url = `${TOKEN_SERVER_URL}/livekit-token`;
 
   const options: RequestInit = {
     method: 'POST',
@@ -39,22 +50,34 @@ export const getLiveKitToken = async (
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt === 1) onWaiting?.();
-
     try {
-      const res = await fetchWithTimeout(url, options, TOKEN_TIMEOUT_MS);
-
-      if (res.ok) {
-        const json = await res.json();
-        return json.token;
+      if (attempt === 1) {
+        onStatus?.('Bağlantı kuruluyor...');
+      } else {
+        onStatus?.(`Tekrar deneniyor (${attempt}/${MAX_RETRIES})...`);
       }
 
-      const body = await res.text().catch(() => '');
-      logger.error('Token isteği başarısız', { url, status: res.status, body, attempt });
+      const t0 = performance.now();
+      const res = await fetchWithTimeout(url, options, TOKEN_TIMEOUT_MS);
+      const elapsed = Math.round(performance.now() - t0);
+
+      const rawText = await res.text();
+
+      if (res.ok) {
+        try {
+          const json = JSON.parse(rawText);
+          logger.info('Token alındı', { attempt, ms: elapsed });
+          return json.token;
+        } catch {
+          throw new Error('Sunucu geçersiz yanıt döndü.');
+        }
+      }
+
+      logger.error('Token isteği başarısız', { status: res.status, attempt, ms: elapsed });
 
       if (isRetryable(res.status) && attempt < MAX_RETRIES) {
-        const delay = 1000 * 2 ** (attempt - 1);
-        await new Promise(r => setTimeout(r, delay));
+        onStatus?.('Sunucu geçici olarak meşgul, tekrar deneniyor...');
+        await new Promise(r => setTimeout(r, 1500 * attempt));
         continue;
       }
 
@@ -70,25 +93,26 @@ export const getLiveKitToken = async (
       throw new Error(`Odaya bağlanılamadı (${res.status}).`);
 
     } catch (err) {
-      const errName = (err as Error).name || '';
-      const errMsg = (err as Error).message || '';
-      const isNetworkError = errName === 'AbortError'
-        || errMsg.includes('Failed to fetch')
-        || errMsg.includes('NetworkError')
-        || errMsg.includes('Load failed');
+      const error = err as Error;
+      const isNetworkError = error.name === 'AbortError'
+        || error.message.includes('Failed to fetch')
+        || error.message.includes('NetworkError')
+        || error.message.includes('Load failed');
 
       if (isNetworkError) {
-        logger.warn('Token isteği başarısız (ağ hatası)', { attempt, error: errMsg });
-        lastError = new Error('Ses sunucusuna bağlanılamıyor, tekrar deneniyor...');
+        logger.warn('Token ağ hatası', { attempt, error: error.message });
+        lastError = new Error(
+          attempt >= MAX_RETRIES
+            ? 'Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin.'
+            : 'Bağlantı kurulamıyor...',
+        );
         if (attempt < MAX_RETRIES) {
-          const delay = 2000 * attempt;
-          onWaiting?.();
-          await new Promise(r => setTimeout(r, delay));
+          onStatus?.('Bağlantı kurulamıyor, tekrar deneniyor...');
+          await new Promise(r => setTimeout(r, 1500 * attempt));
           continue;
         }
-        lastError = new Error('Ses sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.');
       } else {
-        throw err;
+        throw error;
       }
     }
   }

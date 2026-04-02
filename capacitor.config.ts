@@ -5,15 +5,14 @@ const config: CapacitorConfig = {
   appName: 'CylkSohbet',
   webDir: 'dist',
   server: {
-    // https şeması — Supabase (https) ile uyumlu
     androidScheme: 'https',
-    // Cleartext (ws://) bağlantılarına izin ver
     cleartext: true,
   },
   android: {
-    // Mixed content'e izin ver (https sayfa → ws:// bağlantısı)
     allowMixedContent: true,
     captureInput: true,
+    // Arka plana geçince WebView'ı dondurma — ses akışı devam etsin
+    webContentsDebuggingEnabled: false,
   },
 };
 

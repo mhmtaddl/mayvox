@@ -140,11 +140,10 @@ export default function AdminUserManagement() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-[var(--theme-text)] truncate" title={formatFullName(user.firstName, user.lastName)}>{formatFullName(user.firstName, user.lastName)}</span>
-                      {user.isAdmin && (
-                        <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] rounded-full border border-[var(--theme-accent)]/20 leading-none" title="Admin">A</span>
-                      )}
-                      {user.isModerator && (
-                        <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 bg-violet-500/12 text-violet-400 rounded-full border border-violet-500/20 leading-none" title="Moderatör">M</span>
+                      {!user.isAdmin && user.isModerator && (
+                        <span className="shrink-0 w-4 h-4 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                          <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2.5 h-2.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                        </span>
                       )}
                       {(() => {
                         const hasVersion = !!user.appVersion;

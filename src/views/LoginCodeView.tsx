@@ -506,7 +506,6 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
             }`}
           >
             <span>Devam Et</span>
-            <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />
           </button>
         </div>
       </motion.div>
