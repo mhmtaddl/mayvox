@@ -26,6 +26,7 @@ export interface User {
   mustChangePassword?: boolean;
   passwordResetRequested?: boolean;
   appVersion?: string;
+  platform?: 'mobile' | 'desktop';
   lastSeenAt?: string;
   totalUsageMinutes?: number;
   onlineSince?: number;

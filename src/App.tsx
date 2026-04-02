@@ -5,7 +5,7 @@
 
 declare const __APP_VERSION__: string;
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView, User, VoiceChannel, Theme } from './types';
@@ -83,7 +83,9 @@ import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
 import { useUpdatePolicy } from './hooks/useUpdatePolicy';
 import ForceUpdateOverlay from './components/ForceUpdateOverlay';
+import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
+import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
@@ -94,6 +96,16 @@ export default function App() {
 
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+  // ── Mobil izin onboarding — ilk kurulumda gösterilir, sonraki açılışlarda atlanır ──
+  const [permissionsGranted, setPermissionsGranted] = useState(() => {
+    if (!isCapacitor()) return true; // Masaüstünde izin akışı yok
+    return localStorage.getItem('cylk-permissions-setup-done') === 'true';
+  });
+  const handlePermissionsComplete = () => {
+    localStorage.setItem('cylk-permissions-setup-done', 'true');
+    setPermissionsGranted(true);
+  };
 
   // ── Settings state ───────────────────────────────────────────────────────
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
@@ -190,6 +202,11 @@ export default function App() {
   });
   const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
 
+  const [voiceMode, setVoiceModeState] = useState<import('./contexts/SettingsCtx').VoiceMode>(
+    () => (localStorage.getItem('voiceMode') as 'ptt' | 'vad') || 'ptt',
+  );
+  const setVoiceMode = (v: import('./contexts/SettingsCtx').VoiceMode) => { localStorage.setItem('voiceMode', v); setVoiceModeState(v); };
+
   const [audioProfile, setAudioProfileState] = useState<AudioProfile>(
     () => (localStorage.getItem('audioProfile') as AudioProfile) || 'clean',
   );
@@ -243,7 +260,7 @@ export default function App() {
     [channels, activeChannel]
   );
   const channelMembers = useMemo(
-    () => allUsers.filter(u => currentChannel?.members?.includes(u.name)),
+    () => allUsers.filter(u => currentChannel?.members?.includes(u.id)),
     [allUsers, currentChannel]
   );
 
@@ -290,7 +307,53 @@ export default function App() {
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [invitationModal, setInvitationModal] = useState<{ inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null>(null);
+  // ── Invite state: ephemeral state + persistent ref (rehydration için) ──
+  type InviteData = { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string };
+  const [invitationModal, setInvitationModalRaw] = useState<InviteData | null>(null);
+  const pendingInviteRef = useRef<InviteData | null>(null);
+
+  const setInvitationModal = useCallback((v: InviteData | null) => {
+    if (v) {
+      console.log('[InviteStore] pending_set:', v.inviterName, v.roomName);
+      pendingInviteRef.current = v;
+    } else {
+      console.log('[InviteStore] pending_cleared');
+      pendingInviteRef.current = null;
+    }
+    setInvitationModalRaw(v);
+  }, []);
+  // ── App resume / visibility change → pending invite rehydration ──
+  // Android WebView suspend olduğunda React state update'leri işlenmeyebilir.
+  // Ref her zaman synchronous güncel kalır. App ön plana gelince ref'ten state'e rehydrate.
+  useEffect(() => {
+    const rehydrate = () => {
+      if (pendingInviteRef.current) {
+        setInvitationModalRaw(prev => {
+          if (prev) return prev; // zaten açık
+          console.log('[InviteStore] pending_used (rehydrated on resume)');
+          return pendingInviteRef.current;
+        });
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[App] resume_check_invite, pending:', !!pendingInviteRef.current);
+        rehydrate();
+      }
+    };
+    // Capacitor resume event
+    const onResume = () => {
+      console.log('[App] capacitor_resume, pending:', !!pendingInviteRef.current);
+      rehydrate();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('resume', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('resume', onResume);
+    };
+  }, []);
+
   const [userActionMenu, setUserActionMenu] = useState<{ userId: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -373,7 +436,7 @@ export default function App() {
   } = useDevices();
 
   // ── PTT Audio hook ───────────────────────────────────────────────────────
-  const { isPttPressed, volumeLevel } = usePttAudio({
+  const { isPttPressed, setIsPttPressed: setPttPressed, volumeLevel } = usePttAudio({
     pttKey,
     setPttKey,
     isListeningForKey,
@@ -386,6 +449,7 @@ export default function App() {
     noiseThreshold,
     isLowDataMode,
     pttReleaseDelay,
+    voiceMode,
     onMicError: (msg) => {
       setToastMsg(msg);
       setTimeout(() => setToastMsg(null), 6000);
@@ -956,11 +1020,11 @@ export default function App() {
   //      gerçek liste updateMembers() tarafından yazılır. Bu effect sadece çıkışı işler.
   useEffect(() => {
     if (activeChannel !== null) return;
-    const name = currentUserRef.current.name;
-    if (!name) return;
+    const id = currentUserRef.current.id;
+    if (!id) return;
     setChannels(prev => prev.map(c => {
-      if (!c.members?.includes(name)) return c;
-      const members = c.members.filter(m => m !== name);
+      if (!c.members?.includes(id)) return c;
+      const members = c.members.filter(m => m !== id);
       return { ...c, members, userCount: members.length };
     }));
   }, [activeChannel]);
@@ -1323,7 +1387,7 @@ export default function App() {
       });
     }
     const now = Date.now();
-    const myName = currentUser.name;
+    const myId = currentUser.id;
     setActiveChannel(channelId);
     // Ref'i hemen güncelle — React render'ı beklemeden.
     // channel-update handler'ı activeChannelRef'i okur; stale kalırsa
@@ -1331,9 +1395,9 @@ export default function App() {
     activeChannelRef.current = channelId;
     setIsConnecting(true);
     setChannels(prev => prev.map(c => {
-      const members = (c.members || []).filter(m => m !== myName);
+      const members = (c.members || []).filter(m => m !== myId);
       return c.id === channelId
-        ? { ...c, members: [...members, myName], userCount: members.length + 1 }
+        ? { ...c, members: [...members, myId], userCount: members.length + 1 }
         : { ...c, members, userCount: members.length };
     }));
     setCurrentUser(prev => ({ ...prev, joinedAt: now }));
@@ -1720,7 +1784,7 @@ export default function App() {
     };
   }, [currentUser.id, currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
 
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
+  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://caylaklar-sesli-sohbet-1.onrender.com';
 
   const handleApproveReset = async (req: ResetRequest) => {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -2087,6 +2151,8 @@ export default function App() {
     setAutoLeaveEnabled,
     autoLeaveMinutes,
     setAutoLeaveMinutes,
+    voiceMode,
+    setVoiceMode,
   };
 
   const appStateValue: AppStateContextType = {
@@ -2184,7 +2250,7 @@ export default function App() {
     volumeLevel,
     setVolumeLevel: () => {},
     isPttPressed,
-    setIsPttPressed: () => {},
+    setIsPttPressed: setPttPressed,
     connectionLevel,
     setConnectionLevel,
     selectedInput,
@@ -2210,6 +2276,11 @@ export default function App() {
             <AppStateContext.Provider value={appStateValue}>
               <AudioCtx.Provider value={audioValue}>
                 <div className="font-sans selection:bg-blue-500/30">
+                  {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}
+                  {!permissionsGranted ? (
+                    <PermissionOnboarding onComplete={handlePermissionsComplete} />
+                  ) : <>
+
                   {currentTheme.id === 'cylk' && (
                     <div
                       aria-hidden="true"
@@ -2377,6 +2448,7 @@ export default function App() {
                       }}
                     />
                   )}
+                </>}
                 </div>
               </AudioCtx.Provider>
             </AppStateContext.Provider>

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import type { VoiceMode } from '../contexts/SettingsCtx';
 
 interface UsePttAudioParams {
   pttKey: string;
@@ -13,10 +14,10 @@ interface UsePttAudioParams {
   noiseThreshold: number;
   isLowDataMode: boolean;
   pttReleaseDelay: number;
+  voiceMode: VoiceMode;
   onMicError?: (msg: string) => void;
 }
 
-// Electron preload tarafından enjekte edilen global PTT API
 declare global {
   interface Window {
     electronPtt?: {
@@ -34,21 +35,14 @@ declare global {
   }
 }
 
+const VAD_SILENCE_TIMEOUT = 500;
+
 export function usePttAudio(params: UsePttAudioParams) {
   const {
-    pttKey,
-    setPttKey,
-    isListeningForKey,
-    setIsListeningForKey,
-    isMuted,
-    isVoiceBanned,
-    isVoiceConnected,
-    selectedInput,
-    isNoiseSuppressionEnabled,
-    noiseThreshold,
-    isLowDataMode,
-    pttReleaseDelay,
-    onMicError,
+    pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
+    isMuted, isVoiceBanned, isVoiceConnected, selectedInput,
+    isNoiseSuppressionEnabled, noiseThreshold, isLowDataMode,
+    pttReleaseDelay, voiceMode, onMicError,
   } = params;
 
   const [isPttPressed, setIsPttPressed] = useState(false);
@@ -59,139 +53,92 @@ export function usePttAudio(params: UsePttAudioParams) {
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vadSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pttReleaseDelayRef = useRef(pttReleaseDelay);
   const isVoiceConnectedRef = useRef(isVoiceConnected);
+  const isPttPressedRef = useRef(isPttPressed);
+  const noiseThresholdRef = useRef(noiseThreshold);
+  const isNoiseSupRef = useRef(isNoiseSuppressionEnabled);
+  const isLowDataRef = useRef(isLowDataMode);
+
   useEffect(() => { pttReleaseDelayRef.current = pttReleaseDelay; }, [pttReleaseDelay]);
+  useEffect(() => { isPttPressedRef.current = isPttPressed; }, [isPttPressed]);
+  useEffect(() => { noiseThresholdRef.current = noiseThreshold; }, [noiseThreshold]);
+  useEffect(() => { isNoiseSupRef.current = isNoiseSuppressionEnabled; }, [isNoiseSuppressionEnabled]);
+  useEffect(() => { isLowDataRef.current = isLowDataMode; }, [isLowDataMode]);
   useEffect(() => {
     isVoiceConnectedRef.current = isVoiceConnected;
-    // Bağlantı koptuğunda aktif PTT'yi hemen bırak
     if (!isVoiceConnected && isPttPressed) setIsPttPressed(false);
   }, [isVoiceConnected, isPttPressed]);
 
-  // Başlangıçta mevcut pttKey'i main process'e bildir.
-  // Önce raw keycode dene (sağ/sol CTRL gibi çakışmaları önler), yoksa isim tabanlı fallback.
+  // Electron PTT init
   useEffect(() => {
     const rawCode = localStorage.getItem('pttRawCode');
-    if (rawCode && window.electronPtt?.initRaw) {
-      window.electronPtt.initRaw(rawCode);
-    } else {
-      window.electronPtt?.init(pttKey);
-    }
+    if (rawCode && window.electronPtt?.initRaw) window.electronPtt.initRaw(rawCode);
+    else window.electronPtt?.init(pttKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // PTT tuşu atama
   useEffect(() => {
-    if (!isListeningForKey) {
-      window.electronPtt?.stopListening();
-      return;
-    }
-
-    const ep = window.electronPtt;
-
-    if (ep) {
-      // Electron ortamı: global hook üzerinden yakala (uygulama odaklanmamış olsa da çalışır)
-      ep.startListening();
-      ep.onKeyAssigned((data) => {
-        setPttKey(data.displayName);
-        if (data.rawCode) {
-          localStorage.setItem('pttRawCode', data.rawCode);
-        }
+    if (!isListeningForKey) return;
+    if (window.electronPtt) {
+      window.electronPtt.startListening();
+      window.electronPtt.onKeyAssigned(({ displayName, rawCode }) => {
+        setPttKey(displayName);
+        if (rawCode) localStorage.setItem('pttRawCode', rawCode);
         setIsListeningForKey(false);
+        window.electronPtt!.stopListening();
       });
-      return () => {
-        ep.offKeyAssigned();
-        ep.stopListening();
-      };
+      return () => { window.electronPtt!.offKeyAssigned(); window.electronPtt!.stopListening(); };
     }
-
-    // Electron dışı (web dev) — pencere listener'ı fallback
     const handleKeyDown = (e: KeyboardEvent) => {
-      e.preventDefault();
-      let keyName = e.key;
-      if (keyName === ' ') keyName = 'Space';
-      if (keyName === 'Control') keyName = 'CTRL';
-      if (keyName === 'AltGraph') keyName = 'Alt Gr';
-      setPttKey(keyName.toUpperCase());
-      setIsListeningForKey(false);
+      e.preventDefault(); e.stopPropagation();
+      const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
+      setPttKey(k); setIsListeningForKey(false);
     };
     const handleMouseDown = (e: MouseEvent) => {
-      e.preventDefault();
-      setPttKey(`MOUSE ${e.button}`);
+      e.preventDefault(); e.stopPropagation();
+      setPttKey(e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`);
       setIsListeningForKey(false);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('mousedown', handleMouseDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('mousedown', handleMouseDown);
-    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('mousedown', handleMouseDown, true);
+    return () => { window.removeEventListener('keydown', handleKeyDown, true); window.removeEventListener('mousedown', handleMouseDown, true); };
   }, [isListeningForKey, setPttKey, setIsListeningForKey]);
 
-  // PTT basma/bırakma algılama
+  // PTT tuş dinleyicileri (sadece PTT modunda)
   useEffect(() => {
-    if (isListeningForKey) return;
-
-    const ep = window.electronPtt;
-
-    if (ep) {
-      // Electron ortamı: main process global hook'tan IPC ile gelir
-      ep.onDown(() => {
+    if (isListeningForKey || voiceMode === 'vad') return;
+    if (window.electronPtt) {
+      window.electronPtt.onDown(() => {
         if (!isVoiceConnectedRef.current) return;
-        if (releaseTimerRef.current) {
-          clearTimeout(releaseTimerRef.current);
-          releaseTimerRef.current = null;
-        }
+        if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; }
         setIsPttPressed(true);
       });
-      ep.onUp(() => {
-        releaseTimerRef.current = setTimeout(() => {
-          setIsPttPressed(false);
-          releaseTimerRef.current = null;
-        }, pttReleaseDelayRef.current);
+      window.electronPtt.onUp(() => {
+        releaseTimerRef.current = setTimeout(() => { setIsPttPressed(false); releaseTimerRef.current = null; }, pttReleaseDelayRef.current);
       });
-      return () => {
-        ep.offDown();
-        ep.offUp();
-        if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
-        setIsPttPressed(false);
-      };
+      return () => { window.electronPtt!.offDown(); window.electronPtt!.offUp(); };
     }
-
-    // Electron dışı fallback — pencere event listener
+    const cancelRelease = () => { if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; } };
+    const scheduleRelease = () => { cancelRelease(); releaseTimerRef.current = setTimeout(() => { setIsPttPressed(false); releaseTimerRef.current = null; }, pttReleaseDelayRef.current); };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isVoiceConnectedRef.current) return;
-      let keyName = e.key;
-      if (keyName === ' ') keyName = 'Space';
-      if (keyName === 'Control') keyName = 'CTRL';
-      if (keyName === 'AltGraph') keyName = 'Alt Gr';
-      if (keyName.toUpperCase() === pttKey) { cancelRelease(); setIsPttPressed(true); }
-    };
-    const scheduleRelease = () => {
-      releaseTimerRef.current = setTimeout(() => {
-        setIsPttPressed(false);
-        releaseTimerRef.current = null;
-      }, pttReleaseDelayRef.current);
-    };
-    const cancelRelease = () => {
-      if (releaseTimerRef.current) {
-        clearTimeout(releaseTimerRef.current);
-        releaseTimerRef.current = null;
-      }
+      if (e.repeat) return;
+      const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
+      if (k === pttKey && isVoiceConnectedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      let keyName = e.key;
-      if (keyName === ' ') keyName = 'Space';
-      if (keyName === 'Control') keyName = 'CTRL';
-      if (keyName === 'AltGraph') keyName = 'Alt Gr';
-      if (keyName.toUpperCase() === pttKey) scheduleRelease();
+      const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
+      if (k === pttKey) scheduleRelease();
     };
     const handleMouseDown = (e: MouseEvent) => {
-      if (!isVoiceConnectedRef.current) return;
-      if (`MOUSE ${e.button}` === pttKey) { cancelRelease(); setIsPttPressed(true); }
+      const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
+      if (btn === pttKey && isVoiceConnectedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {
-      if (`MOUSE ${e.button}` === pttKey) scheduleRelease();
+      const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
+      if (btn === pttKey) scheduleRelease();
     };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -203,130 +150,140 @@ export function usePttAudio(params: UsePttAudioParams) {
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isListeningForKey, pttKey]);
+  }, [isListeningForKey, pttKey, voiceMode]);
 
-  // Ses analizi (requestAnimationFrame tabanlı)
+  // ── Capture kararı: PTT ve VAD farklı koşullara bağlı ──
+  // Önemli: VAD modunda isPttPressed DEĞİŞİNCE capture restart OLMAMALI.
+  // VAD kendi isPttPressed'ini yönetir — capture isVoiceConnected'a bağlı.
+  // VAD: capture isVoiceConnected'a bağlı (isPttPressed capture'ı tetiklememeli)
+  // PTT: capture isPttPressed'a bağlı
+  const shouldCapture = useMemo(() => {
+    if (isMuted || isVoiceBanned) return false;
+    return voiceMode === 'vad' ? isVoiceConnected : isPttPressed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceMode, isMuted, isVoiceBanned, isVoiceConnected, isPttPressed]);
+
+  // ── Ses analizi effect — shouldCapture değişince start/stop ──
   useEffect(() => {
-    const startAudioAnalysis = async () => {
-      if (isPttPressed && !isMuted && !isVoiceBanned) {
+    if (!shouldCapture) {
+      // Durdur
+      if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      if (vadSilenceTimerRef.current) { clearTimeout(vadSilenceTimerRef.current); vadSilenceTimerRef.current = null; }
+      setVolumeLevel(0);
+      if (voiceMode === 'vad') setIsPttPressed(false);
+      console.log('[usePttAudio] capture stopped, voiceMode:', voiceMode);
+      return;
+    }
+
+    let cancelled = false;
+    console.log('[usePttAudio] capture starting, voiceMode:', voiceMode);
+
+    const startCapture = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) return;
+
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
+
+        let stream: MediaStream;
         try {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            console.error("Tarayıcı ses kaydını desteklemiyor.");
-            return;
-          }
-
-          if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-          }
-
-          if (audioContextRef.current.state === 'suspended') {
-            await audioContextRef.current.resume();
-          }
-
-          let stream: MediaStream;
-          try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: selectedInput ? { exact: selectedInput } : undefined,
+              echoCancellation: true,
+              noiseSuppression: isNoiseSupRef.current,
+              autoGainControl: isNoiseSupRef.current,
+            },
+          });
+        } catch {
+          if (selectedInput) {
             stream = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                deviceId: selectedInput ? { exact: selectedInput } : undefined,
-                echoCancellation: true,   // her zaman açık — yankı iptali ses kalitesi için kritik
-                noiseSuppression: isNoiseSuppressionEnabled,
-                autoGainControl: isNoiseSuppressionEnabled,
-              },
+              audio: { echoCancellation: true, noiseSuppression: isNoiseSupRef.current, autoGainControl: isNoiseSupRef.current },
             });
-          } catch (innerErr) {
-            if (selectedInput) {
-              console.warn("Seçili cihazla ses analizi başlatılamadı, varsayılan cihaz deneniyor:", innerErr);
-              stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                  echoCancellation: true,
-                  noiseSuppression: isNoiseSuppressionEnabled,
-                  autoGainControl: isNoiseSuppressionEnabled,
-                },
-              });
+          } else { throw new Error('mic_unavailable'); }
+        }
+
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        streamRef.current = stream;
+        const source = audioContextRef.current!.createMediaStreamSource(stream);
+        const analyser = audioContextRef.current!.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        let lastUpdateTime = 0;
+
+        const updateVolume = () => {
+          if (cancelled || !analyserRef.current) return;
+          const now = performance.now();
+          const interval = document.hidden ? 500 : isLowDataRef.current ? 66 : 50;
+
+          if (now - lastUpdateTime >= interval) {
+            lastUpdateTime = now;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+            const average = sum / bufferLength;
+
+            const threshold = isNoiseSupRef.current ? noiseThresholdRef.current : 2;
+            if (average < threshold) {
+              setVolumeLevel(0);
+              // VAD: sessizlik algılandı → timer başlat
+              if (voiceMode === 'vad' && isPttPressedRef.current && !vadSilenceTimerRef.current) {
+                vadSilenceTimerRef.current = setTimeout(() => {
+                  console.log('[usePttAudio] VAD silence timeout → isPttPressed = false');
+                  setIsPttPressed(false);
+                  vadSilenceTimerRef.current = null;
+                }, VAD_SILENCE_TIMEOUT);
+              }
             } else {
-              throw innerErr;
-            }
-          }
-
-          streamRef.current = stream;
-          const source = audioContextRef.current.createMediaStreamSource(stream);
-          const analyser = audioContextRef.current.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
-          analyserRef.current = analyser;
-
-          const bufferLength = analyser.frequencyBinCount;
-          const dataArray = new Uint8Array(bufferLength);
-
-          // ─── Throttled volume analysis ───────────────────────
-          // Normal: ~20fps (50ms), LowData: ~15fps (66ms), Window hidden: ~2fps (500ms)
-          let lastUpdateTime = 0;
-          const NORMAL_INTERVAL = 50;    // ~20fps — yeterli görsel akıcılık
-          const LOW_DATA_INTERVAL = 66;  // ~15fps
-          const HIDDEN_INTERVAL = 500;   // ~2fps — pencere görünmüyorken
-
-          const updateVolume = () => {
-            if (!analyserRef.current) return;
-
-            const now = performance.now();
-            const interval = document.hidden ? HIDDEN_INTERVAL
-              : isLowDataMode ? LOW_DATA_INTERVAL
-              : NORMAL_INTERVAL;
-
-            if (now - lastUpdateTime >= interval) {
-              lastUpdateTime = now;
-              analyserRef.current.getByteFrequencyData(dataArray);
-
-              let sum = 0;
-              for (let i = 0; i < bufferLength; i++) {
-                sum += dataArray[i];
-              }
-              const average = sum / bufferLength;
-
-              const threshold = isNoiseSuppressionEnabled ? noiseThreshold : 2;
-              if (average < threshold) {
-                setVolumeLevel(0);
-              } else {
-                const normalized = Math.min(100, (average - threshold) * 1.5);
-                setVolumeLevel(normalized);
+              const normalized = Math.min(100, (average - threshold) * 1.5);
+              setVolumeLevel(normalized);
+              // VAD: ses algılandı → konuşma başlat
+              if (voiceMode === 'vad') {
+                if (vadSilenceTimerRef.current) {
+                  clearTimeout(vadSilenceTimerRef.current);
+                  vadSilenceTimerRef.current = null;
+                }
+                if (!isPttPressedRef.current) {
+                  console.log('[usePttAudio] VAD voice detected → isPttPressed = true, avg:', average.toFixed(1));
+                  setIsPttPressed(true);
+                }
               }
             }
-
-            animationRef.current = requestAnimationFrame(updateVolume);
-          };
-
-          updateVolume();
-        } catch (err) {
-          const name = (err as Error)?.name;
-          if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-            onMicError?.('Mikrofon iznine erişilemiyor. Sistem veya tarayıcı ayarlarından izin verin.');
-          } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-            onMicError?.('Mikrofon bulunamadı. Bağlı bir mikrofon olduğundan emin olun.');
-          } else {
-            onMicError?.('Mikrofon başlatılamadı.');
           }
-          console.error("Ses analizi başlatılamadı:", err);
+          animationRef.current = requestAnimationFrame(updateVolume);
+        };
+        updateVolume();
+      } catch (err) {
+        const name = (err as Error)?.name;
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          onMicError?.('Mikrofon iznine erişilemiyor. Sistem veya tarayıcı ayarlarından izin verin.');
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          onMicError?.('Mikrofon bulunamadı.');
+        } else {
+          onMicError?.('Mikrofon başlatılamadı.');
         }
-      } else {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-          animationRef.current = null;
-        }
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
-        setVolumeLevel(0);
+        console.error('[usePttAudio] capture error:', err);
       }
     };
 
-    startAudioAnalysis();
+    startCapture();
 
     return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+      cancelled = true;
+      if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      // VAD silence timer'ı KORUYORUZ — cleanup'ta temizlemiyoruz
+      // Böylece sessizlik algılama effect restart'tan etkilenmez
     };
-  }, [isPttPressed, isMuted, isVoiceBanned, selectedInput, isNoiseSuppressionEnabled, noiseThreshold, isLowDataMode]);
+  }, [shouldCapture, selectedInput, voiceMode]);
 
-  return { isPttPressed, volumeLevel };
+  return { isPttPressed, setIsPttPressed, volumeLevel };
 }

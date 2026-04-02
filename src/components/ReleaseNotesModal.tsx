@@ -54,12 +54,22 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
       <div className="px-4 py-3 overflow-y-auto custom-scrollbar">
         <p className="text-[11px] font-semibold text-[var(--theme-text)] mb-2">{notes.title}</p>
         <ul className="space-y-1.5">
-          {notes.items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-secondary-text)] leading-snug">
-              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
-              {item}
-            </li>
-          ))}
+          {notes.items.map((item, i) => {
+            if (!item) return <li key={i} className="h-1" />;
+            if (item.startsWith('—') && item.endsWith('—')) {
+              return (
+                <li key={i} className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide pt-1.5 first:pt-0">
+                  {item}
+                </li>
+              );
+            }
+            return (
+              <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-secondary-text)] leading-snug">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
+                {item}
+              </li>
+            );
+          })}
         </ul>
 
         {/* Admin bölümü */}

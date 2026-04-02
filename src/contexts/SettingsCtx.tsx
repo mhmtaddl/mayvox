@@ -2,6 +2,7 @@ import React, { createContext, useContext } from 'react';
 import { Theme } from '../types';
 
 export type AudioProfile = 'clean' | 'broadcast' | 'natural' | 'noisy' | 'custom';
+export type VoiceMode = 'ptt' | 'vad';
 
 export interface AudioPreset {
   noiseSuppression: boolean;
@@ -96,6 +97,8 @@ export interface SettingsContextType {
   setAutoLeaveEnabled: (v: boolean) => void;
   autoLeaveMinutes: number;
   setAutoLeaveMinutes: (v: number) => void;
+  voiceMode: VoiceMode;
+  setVoiceMode: (v: VoiceMode) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

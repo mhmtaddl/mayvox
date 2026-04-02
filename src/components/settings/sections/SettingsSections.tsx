@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Headphones } from 'lucide-react';
+import { Check, Recycle, Volume2, Zap, Headphones, Mic, AudioLines } from 'lucide-react';
 import { AccordionSection, Toggle, cardCls } from '../shared';
 import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
 import { THEMES } from '../../../constants';
+import { isMobile } from '../../../lib/platform';
 
 // ── Görünüm ──
 export function AppearanceSection() {
@@ -367,6 +368,60 @@ export function VoiceChannelSection() {
           </div>
         )}
 
+      </div>
+    </AccordionSection>
+  );
+}
+
+// ── Mikrofon Modu (sadece mobil) ──
+export function VoiceModeSection() {
+  if (!isMobile()) return null;
+  const { voiceMode, setVoiceMode } = useSettings();
+
+  const modes = [
+    {
+      id: 'ptt' as const,
+      icon: <Mic size={18} />,
+      label: 'Bas-Konuş',
+      desc: 'Butona basılı tutarak konuş, bırakınca mikrofon kapanır.',
+    },
+    {
+      id: 'vad' as const,
+      icon: <AudioLines size={18} />,
+      label: 'Ses Algılama',
+      desc: 'Konuşmaya başlayınca mikrofon otomatik açılır, susunca kapanır.',
+    },
+  ];
+
+  return (
+    <AccordionSection icon={<Mic size={12} />} title="Mikrofon Modu">
+      <div className="grid grid-cols-2 gap-3">
+        {modes.map(m => (
+          <button
+            key={m.id}
+            onClick={() => setVoiceMode(m.id)}
+            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all text-center ${
+              voiceMode === m.id
+                ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/8 shadow-sm shadow-[var(--theme-accent)]/10'
+                : 'border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-border)]/80'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              voiceMode === m.id ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]' : 'bg-[var(--theme-border)]/50 text-[var(--theme-secondary-text)]'
+            }`}>
+              {m.icon}
+            </div>
+            <span className={`text-sm font-bold ${voiceMode === m.id ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
+              {m.label}
+            </span>
+            <span className="text-[10px] text-[var(--theme-secondary-text)] leading-snug">{m.desc}</span>
+            {voiceMode === m.id && (
+              <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)] flex items-center justify-center">
+                <Check size={12} className="text-white" strokeWidth={3} />
+              </div>
+            )}
+          </button>
+        ))}
       </div>
     </AccordionSection>
   );

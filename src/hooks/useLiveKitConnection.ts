@@ -118,7 +118,7 @@ export function useLiveKitConnection({
 
       const updateMembers = () => {
         const localIdentity =
-          room.localParticipant.identity || currentUserRef.current.name;
+          room.localParticipant.identity || currentUserRef.current.id;
         const participants = [
           localIdentity,
           ...Array.from(room.remoteParticipants.values()).map(p => p.identity),
@@ -139,9 +139,9 @@ export function useLiveKitConnection({
         ).map(p => p.identity);
         remoteIdentities.forEach(identity => {
           setAllUsers(prev => {
-            if (prev.find(u => u.name === identity)) return prev;
+            if (prev.find(u => u.id === identity)) return prev;
             const newUser: User = {
-              id: `lk-${identity}`,
+              id: identity,
               name: identity,
               firstName: identity,
               lastName: '',
@@ -157,7 +157,7 @@ export function useLiveKitConnection({
         });
         setAllUsers(prev =>
           prev.filter(
-            u => !u.id.startsWith('lk-') || remoteIdentities.includes(u.name),
+            u => !u.id.startsWith('lk-') || remoteIdentities.includes(u.id),
           ),
         );
       };
@@ -270,7 +270,7 @@ export function useLiveKitConnection({
           reconnectTimeout = null;
         }
         const identity =
-          room.localParticipant?.identity || currentUserRef.current.name;
+          room.localParticipant?.identity || currentUserRef.current.id;
 
         // Always clean the member list and notify others
         setChannels(prev => {
@@ -332,7 +332,7 @@ export function useLiveKitConnection({
         stack: (err as Error)?.stack,
       });
       isConnectingRef.current = false;
-      setIsConnecting(false); // UI'ın "bağlanılıyor" state'inde kalmasını önle
+      setIsConnecting(false);
       setToastMsg(msg);
       setTimeout(() => setToastMsg(null), 6000);
       return false;

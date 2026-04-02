@@ -4,6 +4,7 @@ import { ShieldCheck, Shield, Monitor, Clock, History, Activity } from 'lucide-r
 import type { User } from '../types';
 import { isOutdated } from '../lib/versionCompare';
 import { formatFullName } from '../lib/formatName';
+import DeviceBadge from './chat/DeviceBadge';
 
 interface Props {
   user: User;
@@ -127,10 +128,13 @@ export default function UserProfilePopup({
         {/* Banner + avatar */}
         <div className="relative h-14 bg-gradient-to-br from-[var(--theme-accent)]/25 to-[var(--theme-sidebar)]" />
         <div className="absolute top-6 left-4">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--theme-accent)]/20 border-[3px] border-[var(--theme-bg)] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xl shadow-lg">
-            {user.avatar?.startsWith('http')
-              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span>{user.avatar}</span>}
+          <div className="relative">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--theme-accent)]/20 border-[3px] border-[var(--theme-bg)] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xl shadow-lg">
+              {user.avatar?.startsWith('http')
+                ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                : <span>{user.avatar}</span>}
+            </div>
+            <DeviceBadge platform={user.platform} size={18} className="absolute -bottom-1 -right-1" borderColor="var(--theme-bg)" />
           </div>
         </div>
 

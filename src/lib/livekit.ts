@@ -1,10 +1,9 @@
 import { supabase } from './supabase';
 import { logger } from './logger';
 
-const TOKEN_TIMEOUT_MS = 15_000;
-const MAX_RETRIES = 3;
+const TOKEN_TIMEOUT_MS = 20_000;
+const MAX_RETRIES = 5;
 
-// Belirli HTTP durum kodları için retry yapılabilir (Render cold-start 502/503)
 const isRetryable = (status: number) => status === 502 || status === 503 || status === 504;
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
@@ -25,7 +24,7 @@ export const getLiveKitToken = async (
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Oturum bulunamadı, lütfen tekrar giriş yapın');
 
-  const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'http://localhost:3001';
+  const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://caylaklar-sesli-sohbet-1.onrender.com';
   const url = `${tokenServerUrl}/livekit-token`;
 
   const options: RequestInit = {
@@ -40,7 +39,6 @@ export const getLiveKitToken = async (
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    // İlk deneme başlıyorsa bekleme bildirimi göster
     if (attempt === 1) onWaiting?.();
 
     try {
@@ -55,12 +53,11 @@ export const getLiveKitToken = async (
       logger.error('Token isteği başarısız', { url, status: res.status, body, attempt });
 
       if (isRetryable(res.status) && attempt < MAX_RETRIES) {
-        const delay = 1000 * 2 ** (attempt - 1); // 1s, 2s, 4s
+        const delay = 1000 * 2 ** (attempt - 1);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
 
-      // Kullanıcıya anlamlı mesaj ver
       if (res.status === 401 || res.status === 403) {
         throw new Error('Oturumunuz geçersiz, lütfen tekrar giriş yapın.');
       }
@@ -73,15 +70,24 @@ export const getLiveKitToken = async (
       throw new Error(`Odaya bağlanılamadı (${res.status}).`);
 
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        logger.warn('Token isteği zaman aşımına uğradı', { attempt });
-        lastError = new Error('Sunucu yanıt vermedi, bağlantınızı kontrol edin.');
+      const errName = (err as Error).name || '';
+      const errMsg = (err as Error).message || '';
+      const isNetworkError = errName === 'AbortError'
+        || errMsg.includes('Failed to fetch')
+        || errMsg.includes('NetworkError')
+        || errMsg.includes('Load failed');
+
+      if (isNetworkError) {
+        logger.warn('Token isteği başarısız (ağ hatası)', { attempt, error: errMsg });
+        lastError = new Error('Ses sunucusuna bağlanılamıyor, tekrar deneniyor...');
         if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 1000 * attempt));
+          const delay = 2000 * attempt;
+          onWaiting?.();
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
+        lastError = new Error('Ses sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.');
       } else {
-        // Anlamlı mesaj içeriyorsa direkt fırlat
         throw err;
       }
     }

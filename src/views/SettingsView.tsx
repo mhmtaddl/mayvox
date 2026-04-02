@@ -4,9 +4,10 @@ import { useUser } from '../contexts/UserContext';
 
 // ── Section components ──
 import AccountSection from '../components/settings/sections/AccountSection';
-import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSection, VoiceChannelSection } from '../components/settings/sections/SettingsSections';
+import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSection, VoiceChannelSection, VoiceModeSection } from '../components/settings/sections/SettingsSections';
 import AdminUserManagement from '../components/settings/sections/AdminUserManagement';
 import { InviteCodeSection, InviteRequestsSection, UpdatePolicySection } from '../components/settings/sections/AdminPanelSections';
+import PermissionSection from '../components/settings/sections/PermissionSection';
 
 export default function SettingsView() {
   const { currentUser } = useUser();
@@ -15,10 +16,10 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<'settings' | 'admin'>('settings');
 
   return (
-    <div className="w-full max-w-2xl mx-auto pb-14">
+    <div className="w-full max-w-2xl mx-auto pb-14 px-3 sm:px-0">
 
       {/* ── Page header ── */}
-      <div className="flex items-center gap-4 pt-10 pb-6">
+      <div className="flex items-center gap-4 pt-6 sm:pt-10 pb-6">
         <div className="w-11 h-11 rounded-2xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/15 flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(var(--theme-accent-rgb),0.08)]">
           <Settings size={20} className="text-[var(--theme-accent)]" />
         </div>
@@ -60,9 +61,11 @@ export default function SettingsView() {
       {(activeTab === 'settings' || !currentUser.isAdmin) && (
         <div className="space-y-8">
           <AccountSection />
+          <PermissionSection />
           <AppearanceSection />
           <SoundsSection />
           <AudioProfileSection />
+          <VoiceModeSection />
           <VoiceChannelSection />
           <PerformanceSection />
         </div>

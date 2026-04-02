@@ -7,6 +7,30 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.6.0': {
+    title: 'v1.6.0 — Android Desteği + Çapraz Platform',
+    items: [
+      '— Android —',
+      'Android mobil uygulama desteği eklendi.',
+      'Mobil arayüz: swipe drawer, dokunmatik PTT butonu, kompakt footer.',
+      'Ses algılama modu (VAD) — butona basmadan konuş.',
+      'Davet geldiğinde native bildirim.',
+      'İlk açılışta mikrofon ve bildirim izin onboarding.',
+      '',
+      '— Masaüstü —',
+      'Glass tema regresyonu giderildi.',
+      'Platform algılama düzeltmesi (desktop doğru ikon gösteriyor).',
+      '',
+      '— Ortak —',
+      'Cihaz rozeti — avatarda mobil/masaüstü ikonu.',
+      'Çıkış onay modalı eklendi.',
+      'Kanal üyeliği isim yerine ID tabanlı (isim değişikliğine dayanıklı).',
+      'Token server bağlantı dayanıklılığı artırıldı.',
+      'Davet modalı arka plandan dönüşte kaybolmaz.',
+      'Online süre göstergesi düzeltildi — artık herkes aynı süreyi görüyor.',
+      'Tek versiyon kaynağı: desktop ve Android aynı sürümü paylaşıyor.',
+    ],
+  },
   '1.5.0': {
     title: 'v1.5.0 — Performans, UI/UX ve Yeni Özellikler',
     items: [

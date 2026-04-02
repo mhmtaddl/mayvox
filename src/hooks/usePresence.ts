@@ -71,18 +71,18 @@ export function usePresence({
   // Yeni bağlanan veya broadcast'i kaçıran client'lar için presence
   // state'inden oda üyeliklerini türetiyoruz — bu stateful ve güvenilir.
   const syncRoomMembersFromPresence = (
-    presenceData: Array<{ currentRoom?: string; userName?: string }>,
+    presenceData: Array<{ currentRoom?: string; userId?: string }>,
   ) => {
     const roomMembers = new Map<string, string[]>();
     for (const p of presenceData) {
-      if (p.currentRoom && p.userName) {
+      if (p.currentRoom && p.userId) {
         const list = roomMembers.get(p.currentRoom) || [];
-        if (!list.includes(p.userName)) list.push(p.userName);
+        if (!list.includes(p.userId)) list.push(p.userId);
         roomMembers.set(p.currentRoom, list);
       }
     }
 
-    const myName = currentUserRef.current.name;
+    const myId = currentUserRef.current.id;
     const myChannel = activeChannelRef.current;
 
     setChannels(prev => {
@@ -91,11 +91,11 @@ export function usePresence({
         const presenceMembers = roomMembers.get(c.id) || [];
         let members = [...presenceMembers];
         // Self: local ref is more up-to-date than presence propagation
-        if (myChannel === c.id && myName && !members.includes(myName)) {
-          members.push(myName);
+        if (myChannel === c.id && myId && !members.includes(myId)) {
+          members.push(myId);
         }
-        if (myChannel !== c.id && myName) {
-          members = members.filter(m => m !== myName);
+        if (myChannel !== c.id && myId) {
+          members = members.filter(m => m !== myId);
         }
         const currentMembers = c.members || [];
         const sortedNew = [...members].sort();
@@ -124,11 +124,16 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
         presenceData.filter(p => p.appVersion).map(p => [p.userId, p.appVersion!]),
+      );
+
+      // onlineSince: her kullanıcı kendi oturum başlangıç zamanını yayınlar
+      const onlineSinceMap = new Map(
+        presenceData.filter(p => p.onlineSince).map(p => [p.userId, p.onlineSince!]),
       );
 
       // Persist to cross-render cache so resyncPresence can use it even if
@@ -143,15 +148,26 @@ export function usePresence({
           .map(p => [p.userId, { selfMuted: p.selfMuted, selfDeafened: p.selfDeafened }]),
       );
 
-      const now = Date.now();
+      // Platform bilgisi: mobile / desktop
+      const platformMap = new Map(
+        presenceData.filter(p => p.platform).map(p => [p.userId, p.platform as 'mobile' | 'desktop']),
+      );
+
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
           const wasOnline = u.status === 'online';
           const willBeOnline = u.id === user.id || onlineIds.has(u.id);
+          const nextOnlineSince = willBeOnline
+            ? (onlineSinceMap.get(u.id) ?? u.onlineSince)
+            : undefined;
+          if (willBeOnline && nextOnlineSince !== u.onlineSince) {
+            console.log('[usePresence] merge_user userId=' + u.id + ' previousOnlineSince=' + u.onlineSince + ' nextOnlineSince=' + nextOnlineSince);
+          }
           return {
             ...u,
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
+            platform: platformMap.get(u.id) ?? u.platform,
             status: willBeOnline ? 'online' : 'offline',
             statusText:
               u.id === user.id
@@ -161,10 +177,8 @@ export function usePresence({
                     ? 'Aktif'
                     : u.statusText
                   : 'Çevrimdışı',
-            // Kullanıcı yeni online oldu: onlineSince başlat
-            onlineSince: willBeOnline
-              ? (u.onlineSince ?? now)
-              : undefined,
+            // onlineSince: presence payload'dan — her kullanıcının kendi oturum başlangıcı
+            onlineSince: nextOnlineSince,
             // Kullanıcı online'dan offline'a geçti: lastSeenAt güncelle (yaklaşım)
             lastSeenAt: !willBeOnline && wasOnline
               ? new Date().toISOString()
@@ -190,6 +204,7 @@ export function usePresence({
 
     channel.on('broadcast', { event: 'invite' }, ({ payload }) => {
       if (payload.inviteeId === user.id) {
+        console.log('[usePresence] invite_received from:', payload.inviterName, 'room:', payload.roomName);
         setInvitationModal({
           inviterId: payload.inviterId,
           inviterName: payload.inviterName,
@@ -197,6 +212,9 @@ export function usePresence({
           roomName: payload.roomName,
           roomId: payload.roomId,
         });
+        console.log('[usePresence] invitation_modal_set');
+        // Mobilde yerel bildirim — arka planda/kilitli ekranda da görünsün
+        import('../lib/notifications').then(m => m.showInviteNotification(payload.inviterName, payload.roomName, payload.roomId)).catch(() => {});
       }
     });
 
@@ -291,7 +309,7 @@ export function usePresence({
       } else if (payload.action === 'update') {
         setChannels(prev =>
           prev.map(c => {
-            const myName = currentUserRef.current.name;
+            const myId = currentUserRef.current.id;
             const myChannel = activeChannelRef.current;
 
             if (c.id !== payload.channelId) {
@@ -301,9 +319,9 @@ export function usePresence({
               if (Array.isArray(payload.updates?.members)) {
                 const incomingMembers = payload.updates.members as string[];
                 const filtered = (c.members || []).filter(
-                  // Kendi adımızı yalnızca activeChannelRef'e göre yönetiyoruz —
+                  // Kendi ID'mizi yalnızca activeChannelRef'e göre yönetiyoruz —
                   // başkasının broadcast'i bizi yanlış yerden silmesin.
-                  m => m === myName || !incomingMembers.includes(m),
+                  m => m === myId || !incomingMembers.includes(m),
                 );
                 if (filtered.length !== (c.members || []).length) {
                   return { ...c, members: filtered, userCount: filtered.length };
@@ -314,13 +332,13 @@ export function usePresence({
 
             const updates = { ...payload.updates };
             if (Array.isArray(updates.members)) {
-              // Remove own name then re-add based on actual channel membership.
+              // Remove own ID then re-add based on actual channel membership.
               // This prevents stale broadcasts causing duplicate member entries.
               updates.members = (updates.members as string[]).filter(
-                m => m !== myName,
+                m => m !== myId,
               );
-              if (myChannel === payload.channelId && myName) {
-                updates.members = [...updates.members, myName];
+              if (myChannel === payload.channelId && myId) {
+                updates.members = [...updates.members, myId];
               }
               updates.userCount = updates.members.length;
             }
@@ -332,7 +350,10 @@ export function usePresence({
 
     channel.subscribe(async status => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined });
+        const isMobilePlatform = !!(window as any).Capacitor?.isNativePlatform?.() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const onlineSince = Date.now();
+        console.log('[usePresence] track_payload onlineSince=' + onlineSince);
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop', onlineSince });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.
@@ -366,8 +387,8 @@ export function usePresence({
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string }>();
-    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string }[];
+    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number }>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number }[];
     const onlineIds = new Set(presenceData.map(p => p.userId));
 
     // Build merged version map: fresh presenceState takes priority, cache fills the gaps
@@ -377,6 +398,11 @@ export function usePresence({
       mergedVersionMap.set(p.userId, p.appVersion!);
       knownVersionsRef.current.set(p.userId, p.appVersion!);
     });
+
+    // onlineSince from presence payload
+    const onlineSinceMap = new Map(
+      presenceData.filter(p => p.onlineSince).map(p => [p.userId, p.onlineSince!]),
+    );
 
     // Only skip if both live state AND cache are empty (truly no data yet)
     if (onlineIds.size === 0 && mergedVersionMap.size === 0) return;
@@ -390,6 +416,7 @@ export function usePresence({
             appVersion: cachedVersion ?? u.appVersion,
             status: 'online' as const,
             statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
+            onlineSince: onlineSinceMap.get(u.id) ?? u.onlineSince,
           };
         }
         // Even if not in live onlineIds, apply cached version if available

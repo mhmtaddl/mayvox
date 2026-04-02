@@ -24,10 +24,19 @@ const tokenLimiter = rateLimit({
 // CORS
 // Kabul edilen origin'ler:
 //   - http://localhost:3000 / 127.0.0.1:3000 → Vite dev server
-//   - "null" → packaged Electron app (file:// origin tarayıcı tarafından "null" gönderir)
+//   - http://localhost / https://localhost   → Capacitor Android WebView
+//   - capacitor://localhost                  → Capacitor iOS WebView
+//   - "null"                                 → packaged Electron app (file:// origin)
 // Not: token endpoint zaten Supabase JWT doğrulaması yapıyor;
 //      CORS bypass edense bile geçerli oturumu olmadan token alamaz.
-const allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'null'];
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'null',
+];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -73,24 +82,16 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
     return res.status(400).json({ error: 'roomName gerekli' });
   }
 
-  // 4. Canonical kullanıcı adını JWT'den türet — body'deki participantName güvenilmez
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('name')
-    .eq('id', user.id)
-    .single();
-
-  if (profileError || !profile?.name) {
-    return res.status(403).json({ error: 'Profil bulunamadı' });
-  }
-
-  const participantName = profile.name;
+  // 4. LiveKit identity olarak Supabase auth UID kullan — stable ve unique.
+  // Display name yerine ID kullanılır; böylece aynı isimli kullanıcılar
+  // ve isim değişiklikleri oda üyeliğini bozmaz.
+  const participantIdentity = user.id;
 
   // 5. LiveKit token üret
   const at = new AccessToken(
     process.env.LIVEKIT_API_KEY,
     process.env.LIVEKIT_API_SECRET,
-    { identity: participantName }
+    { identity: participantIdentity }
   );
 
   at.addGrant({

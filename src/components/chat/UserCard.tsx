@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Shield,
 } from 'lucide-react';
+import DeviceBadge from './DeviceBadge';
 import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
 import OwnVoiceEqualizer from './OwnVoiceEqualizer';
@@ -153,7 +154,7 @@ function UserCardInner({
 
         {/* ─── 4) Refined role badges ──────────────────────────── */}
         {hasRole && (
-          <div className={`absolute -bottom-0.5 -right-0.5 ${badgeSize} rounded flex items-center justify-center`}
+          <div className={`absolute -bottom-0.5 -right-0.5 z-10 ${badgeSize} rounded flex items-center justify-center`}
             style={{
               background: user.isAdmin
                 ? 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.25), rgba(var(--theme-accent-rgb), 0.12))'
@@ -175,6 +176,12 @@ function UserCardInner({
               <Shield size={badgeIconSize} className="text-[var(--theme-accent)]/70" strokeWidth={2} />
             )}
           </div>
+        )}
+        {!hasRole && (
+          <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
+        )}
+        {hasRole && (
+          <DeviceBadge platform={user.platform} size={s.dense ? 11 : 12} className="absolute -bottom-0.5 -left-0.5" borderColor="var(--theme-bg)" />
         )}
       </div>
 
@@ -309,6 +316,7 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (pu.firstName !== nu.firstName) return false;
   if (pu.lastName !== nu.lastName) return false;
   if (pu.age !== nu.age) return false;
+  if (pu.platform !== nu.platform) return false;
 
   return true; // equal → skip re-render
 }
