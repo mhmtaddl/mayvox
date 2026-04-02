@@ -438,9 +438,19 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  // Native kaynakları erken serbest bırak — installer başlamadan dosya kilitleri kalksın
+  if (uIOhook) {
+    try { uIOhook.stop(); } catch (e) { logger.error("uIOhook stop hatası", { message: e?.message }); }
+    uIOhook = null;
+  }
+  if (tray) { try { tray.destroy(); } catch {} tray = null; }
 });
 
 app.on("will-quit", () => {
-  try { uIOhook?.stop(); } catch (e) { logger.error("uIOhook stop hatası", { message: e?.message }); }
+  // before-quit'te temizlenmediyse son şans
+  if (uIOhook) {
+    try { uIOhook.stop(); } catch {}
+    uIOhook = null;
+  }
   if (tray) { try { tray.destroy(); } catch {} tray = null; }
 });
