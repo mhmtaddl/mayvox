@@ -58,6 +58,13 @@ let pttWindow = null;
 let tray = null;
 let isQuitting = false;
 
+// ── Single Instance Lock ─────────────────────────────────────────────────────
+// Installer veya ikinci bir instance çalışırsa, mevcut instance kapanır.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
 function parseSavedPttKey(keyStr) {
   if (!keyStr) return;
   const upper = keyStr.trim().toUpperCase();
@@ -304,11 +311,11 @@ function createWindow() {
   win.on("move", saveState);
 
   // X butonuna basıldığında kapat değil, tray'e indir
+  // isQuitting true ise hiçbir şey yapma — pencere normal kapansın
   win.on("close", (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
-      win.hide();
-    }
+    if (isQuitting) return;
+    e.preventDefault();
+    win.hide();
   });
 
   if (isDev) {
@@ -368,38 +375,12 @@ ipcMain.on("updater:start-download", () => {
 });
 
 ipcMain.on("updater:install-now", () => {
-  logger.info("Update install başlatılıyor — cleanup yapılıyor");
-
-  // 1. isQuitting flag — close handler'ın hide yapmasını engelle
-  isQuitting = true;
-
-  // 2. Tray'i yok et — tray yaşadığı sürece process kapanmaz
-  if (tray) {
-    try { tray.destroy(); } catch {}
-    tray = null;
+  try {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  } catch (e) {
+    logger.error("Install failed", { message: e?.message });
   }
-
-  // 3. uIOhook native thread'i durdur — file lock kaynağı
-  try { uIOhook?.stop(); } catch {}
-  uIOhook = null;
-
-  // 4. Tüm pencereleri zorla yok et — renderer process'leri öldür
-  BrowserWindow.getAllWindows().forEach((w) => {
-    try { w.removeAllListeners('close'); w.destroy(); } catch {}
-  });
-
-  // 5. GPU ve child process'lerin ölmesi için bekle, sonra installer'ı başlat
-  setTimeout(() => {
-    try {
-      // isSilent=true: NSIS sessiz modda çalışır, eski process'i kapatmaya çalışmaz
-      // isForceRunAfter=true: kurulum sonrası uygulamayı yeniden başlat
-      autoUpdater.quitAndInstall(true, true);
-    } catch (e) {
-      logger.error("quitAndInstall failed", { message: e?.message });
-    }
-    // Son çare: quitAndInstall bazen process'i kapatmaz — zorla çık
-    setTimeout(() => { app.exit(0); }, 1000);
-  }, 2000);
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
@@ -431,6 +412,15 @@ app.whenReady().then(() => {
   setupGlobalPtt(win);
   setupTray(win);
 
+  // İkinci instance tetiklenirse (installer vs.) bu pencereyi öne getir
+  app.on("second-instance", () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+  });
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -451,6 +441,6 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
-  try { uIOhook?.stop(); } catch {}
+  try { uIOhook?.stop(); } catch (e) { logger.error("uIOhook stop hatası", { message: e?.message }); }
   if (tray) { try { tray.destroy(); } catch {} tray = null; }
 });
