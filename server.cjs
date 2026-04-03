@@ -1,5 +1,5 @@
 const express = require('express');
-const { AccessToken } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const { rateLimit } = require('express-rate-limit');
 if (!process.env.ELECTRON_IS_PACKAGED) {
@@ -103,12 +103,33 @@ async function verifyAdmin(req, res) {
 }
 
 // ── LiveKit Token ──────────────────────────────────────────────────────────
+const roomService = new RoomServiceClient(
+  process.env.LIVEKIT_HOST,
+  process.env.LIVEKIT_API_KEY,
+  process.env.LIVEKIT_API_SECRET,
+);
+
 app.post('/livekit-token', tokenLimiter, async (req, res) => {
   const user = await verifyAuth(req, res);
   if (!user) return;
 
   const { roomName } = req.body;
   if (!roomName) return res.status(400).json({ error: 'roomName gerekli' });
+
+  // Tek-oda kuralı: kullanıcı başka bir odadaysa oradan çıkar
+  try {
+    const rooms = await roomService.listRooms();
+    for (const room of rooms) {
+      if (room.name === roomName) continue; // Aynı oda — LiveKit kendi DUPLICATE_IDENTITY'sini halleder
+      const participants = await roomService.listParticipants(room.name);
+      if (participants.some(p => p.identity === user.id)) {
+        await roomService.removeParticipant(room.name, user.id);
+      }
+    }
+  } catch (e) {
+    // Temizlik başarısız olursa token üretimini engelleme
+    console.warn('Room cleanup failed:', e.message);
+  }
 
   const at = new AccessToken(
     process.env.LIVEKIT_API_KEY,

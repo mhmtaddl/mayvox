@@ -13,6 +13,24 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.3': {
+    title: 'v1.7.3',
+    items: [],
+    desktop: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    android: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    common: [
+      'Aynı hesapla iki farklı cihazdan farklı sohbet odalarına aynı anda bağlanma engellendi.',
+      'İkinci cihazdan herhangi bir odaya bağlanıldığında ilk cihazdaki bağlantı otomatik sonlandırılıyor.',
+      'Bağlantı kesilme mesajı netleştirildi.',
+    ],
+    admin: [
+      'Bu sürümde değişiklik yok.',
+    ],
+  },
   '1.7.2': {
     title: 'v1.7.2',
     items: [],
