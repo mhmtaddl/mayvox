@@ -58,6 +58,13 @@ let pttWindow = null;
 let tray = null;
 let isQuitting = false;
 
+// Installer/uninstall kaynaklı başlatma mı?
+function isInstallerArgs(argv) {
+  const flags = ['--updated', '--install', '--uninstall', '--squirrel-install',
+    '--squirrel-updated', '--squirrel-uninstall', '--squirrel-obsolete'];
+  return argv.some(a => flags.includes(a.toLowerCase()));
+}
+
 // ── Single Instance Lock ─────────────────────────────────────────────────────
 // Installer veya ikinci bir instance çalışırsa, mevcut instance kapanır.
 const gotTheLock = app.requestSingleInstanceLock();
@@ -311,9 +318,12 @@ function createWindow() {
   win.on("move", saveState);
 
   // X butonuna basıldığında kapat değil, tray'e indir
-  // isQuitting true ise hiçbir şey yapma — pencere normal kapansın
+  // isQuitting true ise hiçbir şey yapma — pencere normal kapansın (installer/quit akışı)
   win.on("close", (e) => {
-    if (isQuitting) return;
+    if (isQuitting) {
+      logger.info("Window close: quitting mode — pencere kapanacak");
+      return;
+    }
     e.preventDefault();
     win.hide();
   });
@@ -441,8 +451,16 @@ app.whenReady().then(() => {
   setupGlobalPtt(win);
   setupTray(win);
 
-  // İkinci instance tetiklenirse (installer vs.) bu pencereyi öne getir
-  app.on("second-instance", () => {
+  // İkinci instance tetiklenirse
+  app.on("second-instance", (_event, argv) => {
+    // Installer/uninstall kaynaklı ise uygulamayı kapat
+    if (isInstallerArgs(argv)) {
+      logger.info("second-instance: installer algılandı, uygulama kapatılıyor", { argv: argv.slice(0, 5) });
+      isQuitting = true;
+      app.quit();
+      return;
+    }
+    // Normal ikinci instance → pencereyi öne getir
     if (win) {
       if (win.isMinimized()) win.restore();
       win.show();
@@ -461,8 +479,9 @@ app.whenReady().then(() => {
 
 // Pencere kapatılınca uygulama sonlanmaz — tray'de çalışmaya devam eder.
 // Gerçek çıkış sadece tray > Çıkış ile olur (isQuitting = true).
+// Ama installer/quit modundaysa process sonlansın.
 app.on("window-all-closed", () => {
-  // Kasıtlı boş bırakıldı
+  if (isQuitting) app.quit();
 });
 
 app.on("before-quit", () => {

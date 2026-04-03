@@ -13,6 +13,23 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.2': {
+    title: 'v1.7.2',
+    items: [],
+    desktop: [
+      'Windows kurulumu sırasında "CylkSohbet kapatılamaz" hatası düzeltildi.',
+      'Güncelleme kurulumu artık uygulamayı otomatik kapatıp sorunsuz tamamlanıyor.',
+    ],
+    android: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    common: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    admin: [
+      'Bu sürümde değişiklik yok.',
+    ],
+  },
   '1.7.1': {
     title: 'v1.7.1',
     items: [],
