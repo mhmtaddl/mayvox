@@ -313,11 +313,28 @@ export default function ChatView() {
 
   const handleDrop = (e: React.DragEvent, channelId: string) => {
     e.preventDefault();
+    e.stopPropagation(); // Parent handleDropToRemove'a bubble etmesin
     const userName = e.dataTransfer.getData('userName') || draggedUser;
     if (userName) {
       handleMoveUser(userName, channelId);
     }
     setDraggedUser(null);
+  };
+
+  // Oda dışı alana bırakıldığında kullanıcıyı odadan çıkar (admin only)
+  const handleDropToRemove = (e: React.DragEvent) => {
+    e.preventDefault();
+    const userName = e.dataTransfer.getData('userName') || draggedUser;
+    setDraggedUser(null);
+    if (!currentUser.isAdmin || !userName) return;
+    const user = allUsers.find(u => u.name === userName);
+    if (!user) return;
+    // Kendini kickleme engeli
+    if (user.id === currentUser.id) return;
+    // Kullanıcı gerçekten bir odada mı kontrol et
+    const inRoom = channels.some(c => c.members?.includes(userName));
+    if (!inRoom) return;
+    handleKickUser(user.id);
   };
 
   // cardScale config lookup
@@ -1434,7 +1451,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar relative ${view !== 'settings' ? 'p-3 sm:p-8' : ''}`} style={{ backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
+        <main onDragOver={currentUser.isAdmin ? handleDragOver : undefined} onDrop={currentUser.isAdmin ? handleDropToRemove : undefined} className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar relative ${view !== 'settings' ? 'p-3 sm:p-8' : ''}`} style={{ backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <div className="relative flex-1 flex flex-col">
               {/* Ambient background — canlı ama sessiz */}
@@ -1551,6 +1568,7 @@ export default function ChatView() {
                               effectiveStatus={getEffectiveStatus()}
                               onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                               onDoubleClick={() => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); }}
+                              onContextMenu={(e) => { if (!isMe && currentUser.isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) handleKickUser(user.id); } }}
                             />
                           );
                         })}
@@ -1981,7 +1999,7 @@ export default function ChatView() {
           {/* Bağlantı */}
           <div className="flex flex-col items-center gap-0.5 p-2 min-w-[52px]">
             <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
-            {FORCE_MOBILE && <MobileUpdateHub currentVersion={appVersion} />}
+            {FORCE_MOBILE && <MobileUpdateHub currentVersion={appVersion} isAdmin={currentUser.isAdmin} autoShowNotes={showReleaseNotes} onNotesShown={() => setShowReleaseNotes(false)} />}
           </div>
 
           {/* Ayarlar */}
@@ -2255,7 +2273,12 @@ export default function ChatView() {
             </div>
             {appVersion && !FORCE_MOBILE && (
               <div className="relative border-l border-[rgba(var(--glass-tint),0.08)] pl-3 ml-1">
-                <UpdateVersionHub currentVersion={appVersion} />
+                <UpdateVersionHub
+                  currentVersion={appVersion}
+                  isAdmin={currentUser.isAdmin}
+                  autoShowNotes={showReleaseNotes}
+                  onNotesShown={() => setShowReleaseNotes(false)}
+                />
               </div>
             )}
           </div>

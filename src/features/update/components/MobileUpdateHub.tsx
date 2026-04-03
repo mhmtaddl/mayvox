@@ -1,26 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUpdateController } from '../hooks/useUpdateController';
 import { useUpdateVisibility } from '../hooks/useUpdateVisibility';
 import UpdateStatusIcon from './UpdateStatusIcon';
 import UpdateProgressRing from './UpdateProgressRing';
 import MobileUpdateSheet from './MobileUpdateSheet';
 import ForceUpdateOverlay from './ForceUpdateOverlay';
+import { getReleaseNotes } from '../../../lib/releaseNotes';
+import ReleaseNotesPopover from '../../../components/ReleaseNotesModal';
 
 interface Props {
   currentVersion: string;
+  isAdmin?: boolean;
+  autoShowNotes?: boolean;
+  onNotesShown?: () => void;
 }
 
-export default function MobileUpdateHub({ currentVersion }: Props) {
+export default function MobileUpdateHub({ currentVersion, isAdmin, autoShowNotes, onNotesShown }: Props) {
   const { state, urgency, check, download, install } = useUpdateController(currentVersion);
   const vis = useUpdateVisibility(state, urgency, currentVersion);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
 
   const hasUpdate = vis.showUpdateHub;
+
+  // App'ten gelen otomatik gösterim
+  useEffect(() => {
+    if (autoShowNotes && getReleaseNotes(currentVersion)) {
+      setShowReleaseNotes(true);
+      onNotesShown?.();
+    }
+  }, [autoShowNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClick = () => {
+    if (hasUpdate && vis.canOpenDetails) {
+      setSheetOpen(true);
+      return;
+    }
+    // Normal: release notes
+    if (getReleaseNotes(currentVersion)) {
+      setShowReleaseNotes(prev => !prev);
+    }
+  };
 
   return (
     <>
       <button
-        onClick={() => hasUpdate && vis.canOpenDetails && setSheetOpen(true)}
+        onClick={handleClick}
         className={`flex items-center gap-1 text-[8px] font-medium transition-colors ${
           hasUpdate
             ? 'text-[var(--theme-accent)]'
@@ -47,6 +72,15 @@ export default function MobileUpdateHub({ currentVersion }: Props) {
           onInstall={install}
           onRetry={check}
           onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      {showReleaseNotes && getReleaseNotes(currentVersion) && (
+        <ReleaseNotesPopover
+          version={currentVersion}
+          notes={getReleaseNotes(currentVersion)!}
+          onClose={() => setShowReleaseNotes(false)}
+          isAdmin={isAdmin}
         />
       )}
 

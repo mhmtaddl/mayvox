@@ -96,4 +96,5 @@ export interface UserCardProps {
   effectiveStatus: string;
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }

@@ -306,8 +306,11 @@ export function useLiveKitConnection({
             setActiveChannel(null);
             connectionLostRef.current = true;
             setConnectionLevel(0);
+            const isDuplicate = reason === DisconnectReason.DUPLICATE_IDENTITY;
             setToastMsg(
-              'Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.',
+              isDuplicate
+                ? 'Bağlantınız kesildi. Aynı anda iki cihazda sohbet odasına bağlandınız.'
+                : 'Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.',
             );
           } else {
             playSound('leave');

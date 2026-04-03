@@ -53,6 +53,7 @@ function UserCardInner({
   effectiveStatus,
   onClick,
   onDoubleClick,
+  onContextMenu,
 }: UserCardProps) {
   const v = computeSpeakingVisuals(isSpeakingActive, intensity, isMe, isDominant);
 
@@ -110,6 +111,7 @@ function UserCardInner({
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       className={`rounded-xl ${s.padding} flex items-center ${s.gap} relative group cursor-pointer ${
         isSpeakingActive ? '' : 'hover:scale-[1.008]'
       }`}

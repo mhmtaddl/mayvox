@@ -246,7 +246,7 @@ export default function AdminUserManagement() {
                               : 'bg-violet-500/8 text-violet-400/60 border border-violet-500/15 hover:bg-violet-500/20 hover:text-violet-400'
                           }`}
                         >
-                          <span className="text-[11px] font-black leading-none">M</span>
+                          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
                         </button>
                       </div>
                     )}

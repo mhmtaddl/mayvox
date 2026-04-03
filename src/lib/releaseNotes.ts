@@ -1,12 +1,57 @@
 export interface ReleaseNote {
   title: string;
+  /** Eski format — tek liste (geriye uyumluluk) */
   items: string[];
-  adminItems?: string[]; // Sadece admin yetkisine sahip kullanıcılara gösterilir
+  adminItems?: string[];
+  /** Yeni format — platform bazlı ayrım */
+  desktop?: string[];
+  android?: string[];
+  common?: string[];
+  admin?: string[];
 }
 
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.1': {
+    title: 'v1.7.1',
+    items: [],
+    desktop: [
+      'Ayarlar ekranındayken oda seçildiğinde veya yeni oda oluşturulduğunda sohbet ekranına otomatik geçiş düzeltildi.',
+    ],
+    android: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    common: [
+      'Aynı hesapla iki cihazdan aynı odaya bağlanma durumunda doğru uyarı mesajı gösteriliyor.',
+      'Güncelleme kontrolü internet bağlantısı olmadığında gereksiz tekrar denemesi yapmıyor.',
+      'Bağlantı geri geldiğinde otomatik güncelleme kontrolü yapılıyor.',
+    ],
+    admin: [
+      'Kullanıcı sürüklenip oda dışı boş alana bırakıldığında odadan çıkarma özelliği eklendi.',
+      'Sürükleme ile taşıma ve çıkarma işlemlerinin çift tetiklenmesi engellendi.',
+      'Android\'de kullanıcı kartına uzun basma ile odadan çıkarma desteklendi.',
+      'Moderatör butonunda ikon kullanıldı.',
+    ],
+  },
+  '1.7.0': {
+    title: 'v1.7.0 — Yeni Güncelleme Sistemi',
+    items: [],
+    desktop: [
+      'GitHub Releases tabanlı otomatik güncelleme sistemi eklendi.',
+      'Güncelleme durumu alt versiyon alanında gösteriliyor.',
+    ],
+    android: [
+      'APK indirme yönlendirmeli güncelleme sistemi eklendi.',
+    ],
+    common: [
+      'Zorunlu güncelleme desteği eklendi.',
+      'Ağ bağlantısı olmadığında güncelleme kontrolü atlanıyor.',
+    ],
+    admin: [
+      'Bu sürümde değişiklik yok.',
+    ],
+  },
   '1.6.0': {
     title: 'v1.6.0 — Android Desteği + Çapraz Platform',
     items: [

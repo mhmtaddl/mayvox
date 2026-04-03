@@ -11,13 +11,25 @@ import ReleaseNotesPopover from '../../../components/ReleaseNotesModal';
 
 interface Props {
   currentVersion: string;
+  isAdmin?: boolean;
+  /** App seviyesinden gelen otomatik gösterim isteği (ilk açılış) */
+  autoShowNotes?: boolean;
+  onNotesShown?: () => void;
 }
 
-export default function UpdateVersionHub({ currentVersion }: Props) {
+export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNotes, onNotesShown }: Props) {
   const { state, urgency, check, download, install, dismiss } = useUpdateController(currentVersion);
   const vis = useUpdateVisibility(state, urgency, currentVersion);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+
+  // App'ten gelen otomatik gösterim
+  useEffect(() => {
+    if (autoShowNotes && getReleaseNotes(currentVersion)) {
+      setShowReleaseNotes(true);
+      onNotesShown?.();
+    }
+  }, [autoShowNotes]); // eslint-disable-line react-hooks/exhaustive-deps
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dışına tıklayınca popover kapat
@@ -102,6 +114,7 @@ export default function UpdateVersionHub({ currentVersion }: Props) {
             version={currentVersion}
             notes={getReleaseNotes(currentVersion)!}
             onClose={() => setShowReleaseNotes(false)}
+            isAdmin={isAdmin}
           />
         )}
       </div>

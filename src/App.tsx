@@ -282,8 +282,17 @@ export default function App() {
       if (lastSeen && lastSeen !== v && getReleaseNotes(v)) {
         setShowReleaseNotes(true);
       }
+      // Version'ı hemen kaydet — ilk açılışta zaten true set edildi
       localStorage.setItem('cylk-last-version', v);
-    }).catch(() => {});
+    }).catch(() => {
+      // Electron değilse build-time version kullan
+      const v = appVersion;
+      const lastSeen = localStorage.getItem('cylk-last-version');
+      if (lastSeen && lastSeen !== v && getReleaseNotes(v)) {
+        setShowReleaseNotes(true);
+      }
+      localStorage.setItem('cylk-last-version', v);
+    });
   }, []);
 
   // ── UI state ─────────────────────────────────────────────────────────────
@@ -1276,6 +1285,7 @@ export default function App() {
       }
       setChannels([...channels, newRoom]);
       presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
+      if (view === 'settings') setView('chat');
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
       const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden };
       setChannels(channels.map(c => c.id === roomModal.channelId ? { ...c, ...updates } : c));
@@ -1397,6 +1407,9 @@ export default function App() {
   };
 
   const handleJoinChannel = async (id: string, isInvited: boolean = false) => {
+    // Ayarlar ekranındaysa sohbet ekranına dön
+    if (view === 'settings') setView('chat');
+
     const channel = channels.find(c => c.id === id);
     if (!channel) return;
 
