@@ -25,15 +25,6 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
   return 0;
 }
 
-/** currentVersion, minSupportedVersion altında mı? */
-export function isBelowMin(current: string, min: string): boolean {
-  // Boş/geçersiz current → güvenli fallback: force tetikleme
-  if (!current || !current.trim()) return false;
-  // Boş/geçersiz min → güvenli: kimseyi zorlama
-  if (!min || !min.trim() || min === '0.0.0') return false;
-  return compareSemver(current, min) < 0;
-}
-
 /** current, latest'ten düşük mü? */
 export function isOutdated(current: string, latest: string): boolean {
   if (!current || !latest) return false;

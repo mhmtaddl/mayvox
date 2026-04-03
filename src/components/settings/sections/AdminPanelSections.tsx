@@ -1,10 +1,9 @@
 import React from 'react';
-import { Link as LinkIcon, Copy, Timer, Mail, Zap } from 'lucide-react';
+import { Link as LinkIcon, Copy, Timer, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AccordionSection, SLabel, cardCls } from '../shared';
 import { useAppState } from '../../../contexts/AppStateContext';
 import InviteRequestPanel from '../../InviteRequestPanel';
-import UpdatePolicyPanel from '../../UpdatePolicyPanel';
 
 // ── Davet Kodu ──
 export function InviteCodeSection() {
@@ -100,25 +99,3 @@ export function InviteRequestsSection() {
   );
 }
 
-// ── Güncelleme Yönetimi ──
-export function UpdatePolicySection() {
-  const { appVersion: currentAppVersion } = useAppState();
-
-  return (
-    <AccordionSection
-      icon={<Zap size={12} />}
-      title="Güncelleme Yönetimi"
-      badge={
-        <span className="text-[9px] bg-amber-500/12 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase font-bold tracking-wider">
-          Policy
-        </span>
-      }
-    >
-      <div className={cardCls}>
-        <div className="px-6 py-5">
-          <UpdatePolicyPanel appVersion={currentAppVersion} />
-        </div>
-      </div>
-    </AccordionSection>
-  );
-}

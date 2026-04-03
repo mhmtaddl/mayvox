@@ -40,7 +40,7 @@ import ReleaseNotesPopover from '../components/ReleaseNotesModal';
 import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
-import BrandUpdateArea from '../components/BrandUpdateArea';
+import BrandArea from '../components/BrandArea';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { dismissInviteNotification } from '../lib/notifications';
 import { UserCard, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../components/chat';
@@ -138,10 +138,6 @@ export default function ChatView() {
     view,
     setView,
     appVersion,
-    updateInfo,
-    onUpdateDownload,
-    onUpdateInstall,
-    onUpdateDismiss,
     showReleaseNotes,
     setShowReleaseNotes,
     passwordResetRequests,
@@ -152,7 +148,6 @@ export default function ChatView() {
     handleRejectInvite,
     inviteCooldowns,
     inviteStatuses,
-    isUpdateRecommended,
   } = useAppState();
 
   const {
@@ -396,12 +391,7 @@ export default function ChatView() {
             <Menu size={20} />
           </button>
 
-          <BrandUpdateArea
-            updateInfo={updateInfo}
-            onDownload={onUpdateDownload}
-            onInstall={onUpdateInstall}
-            isRecommended={isUpdateRecommended}
-          />
+          <BrandArea />
 
           <div className="flex items-center h-full gap-1 sm:gap-2">
           {/* Mobil: sağ drawer (kullanıcılar) butonu */}
@@ -489,7 +479,6 @@ export default function ChatView() {
           </div>
         </div>
 
-        {/* Eski banner kaldırıldı — UpdateHub header'da yaşıyor */}
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">

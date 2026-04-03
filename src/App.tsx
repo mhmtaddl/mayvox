@@ -81,14 +81,11 @@ import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import { type ResetRequest } from './components/PasswordResetPanel';
 import { getReleaseNotes } from './lib/releaseNotes';
-import { useUpdatePolicy } from './hooks/useUpdatePolicy';
-import ForceUpdateOverlay from './components/ForceUpdateOverlay';
 import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
 import { warmUpTokenServer } from './lib/livekit';
-import { openApkDownload } from './lib/mobileUpdate';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -266,9 +263,6 @@ export default function App() {
     [allUsers, currentChannel]
   );
 
-  // ── Auto-update state ─────────────────────────────────────────────────────
-  type UpdateState = 'available' | 'downloading' | 'downloaded' | 'dismissed';
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; sizeMB: number | null; state: UpdateState; progress: number } | null>(null);
   const [appVersion, setAppVersion] = useState<string>(() => {
     try { return __APP_VERSION__ || '0.0.0'; } catch { return '0.0.0'; }
   });
@@ -280,13 +274,6 @@ export default function App() {
 
   useEffect(() => {
     const w = window as Window & {
-      electronUpdater?: {
-        onUpdateAvailable: (cb: (info: { version: string; sizeMB: number | null }) => void) => void;
-        onDownloadProgress: (cb: (info: { percent: number }) => void) => void;
-        onUpdateDownloaded: (cb: (info: { version: string }) => void) => void;
-        startDownload: () => void;
-        installNow: () => void;
-      };
       electronApp?: { getVersion: () => Promise<string>; setTrayChannel?: (name: string | null) => void };
     };
     w.electronApp?.getVersion().then(v => {
@@ -297,38 +284,7 @@ export default function App() {
       }
       localStorage.setItem('cylk-last-version', v);
     }).catch(() => {});
-    const updater = w.electronUpdater;
-    if (!updater) return;
-    updater.onUpdateAvailable((info) => setUpdateInfo({ version: info.version, sizeMB: info.sizeMB, state: 'available', progress: 0 }));
-    updater.onDownloadProgress((info) => setUpdateInfo(prev => prev ? { ...prev, state: 'downloading', progress: info.percent } : prev));
-    updater.onUpdateDownloaded((info) => setUpdateInfo(prev => prev ? { ...prev, version: info.version, state: 'downloaded', progress: 100 } : prev));
   }, []);
-
-  // ── Update policy (akıllı zorunlu güncelleme) ──────────────────────────
-  const updatePolicy = useUpdatePolicy(appVersion);
-
-  // ── Android: local sürüm eski ise update bildirimi göster ──────────────
-  // Sadece Capacitor'da çalışır. Eligibility sadece LOCAL appVersion vs remote latestVersion
-  // karşılaştırmasına dayanır — kullanıcı bazlı DB alanlarından etkilenmez.
-  // Dismiss state korunur: kullanıcı dismiss ettiyse aynı sürüm için tekrar gösterilmez.
-  const mobileUpdateShownRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isCapacitor()) return;
-    if (!updatePolicy.policy) return;
-    if (updatePolicy.effectiveLevel === 'optional') return; // LOCAL sürüm güncel
-    const targetVersion = updatePolicy.policy.latestVersion;
-    // Bu sürüm için zaten gösterildi veya dismiss edildi ise tekrar gösterme
-    if (mobileUpdateShownRef.current === targetVersion) return;
-    // İndirme/kurulum devam ediyorsa üzerine yazma
-    if (updateInfo?.state === 'downloading' || updateInfo?.state === 'downloaded') return;
-    mobileUpdateShownRef.current = targetVersion;
-    setUpdateInfo({
-      version: targetVersion,
-      sizeMB: null,
-      state: 'available',
-      progress: 0,
-    });
-  }, [updatePolicy.effectiveLevel, updatePolicy.policy?.latestVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -2243,35 +2199,6 @@ export default function App() {
     formatTime,
     broadcastModeration,
     appVersion,
-    updateInfo,
-    onUpdateDownload: () => {
-      if (isCapacitor()) {
-        const version = updateInfo?.version || updatePolicy.policy?.latestVersion;
-        if (!version) return;
-        openApkDownload(version);
-      } else {
-        const w = window as Window & { electronUpdater?: { startDownload: () => void } };
-        w.electronUpdater?.startDownload();
-        setUpdateInfo(prev => prev ? { ...prev, state: 'downloading' } : prev);
-      }
-    },
-    onUpdateInstall: () => {
-      if (isCapacitor()) {
-        const version = updateInfo?.version || updatePolicy.policy?.latestVersion;
-        if (!version) return;
-        openApkDownload(version);
-      } else {
-        const w = window as Window & { electronUpdater?: { installNow: () => void } };
-        w.electronUpdater?.installNow();
-      }
-    },
-    onUpdateDismiss: () => {
-      setUpdateInfo(prev => {
-        if (!prev) return prev;
-        if (prev.state === 'dismissed') return null;
-        return { ...prev, state: 'dismissed' };
-      });
-    },
     showReleaseNotes,
     setShowReleaseNotes,
     passwordResetRequests,
@@ -2283,7 +2210,6 @@ export default function App() {
     handleRejectInvite,
     inviteCooldowns,
     inviteStatuses,
-    isUpdateRecommended: updatePolicy.isRecommended,
   };
 
   const audioValue: AudioContextType = {
@@ -2472,15 +2398,6 @@ export default function App() {
                     )}
                   </AnimatePresence>
 
-                  {/* Force update overlay — kritik sürümlerde uygulamayı kilitler */}
-                  {updatePolicy.isForced && (
-                    <ForceUpdateOverlay
-                      message={updatePolicy.displayMessage}
-                      updateInfo={updateInfo}
-                      onDownload={appStateValue.onUpdateDownload}
-                      onInstall={appStateValue.onUpdateInstall}
-                    />
-                  )}
                 </>}
                 </div>
               </AudioCtx.Provider>

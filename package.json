@@ -1,7 +1,7 @@
 {
   "name": "caylaklar-sesli-sohbet",
   "private": true,
-  "version": "1.6.9",
+  "version": "1.7.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -12,9 +12,8 @@
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently \"npm run dev\" \"node server.cjs\" \"wait-on http://127.0.0.1:3000 && electron .\"",
     "electron:build": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
-    "release": "npm run electron:build && npm run android:build && node -e \"const v='v'+require('./package.json').version; const ver=require('./package.json').version; const{execSync}=require('child_process'); execSync('gh release create '+v+' ./release/CylkSohbet-'+ver+'-setup.exe ./release/latest.yml ./release/CylkSohbet-'+ver+'-setup.exe.blockmap ./android/app/build/outputs/apk/release/CylkSohbet-'+ver+'.apk --title \"'+v+'\" --generate-notes', {stdio:'inherit'})\"",
+    "release": "npm run electron:build && npm run android:build && node -e \"const v='v'+require('./package.json').version; const ver=require('./package.json').version; const{execSync}=require('child_process'); execSync('gh release create '+v+' ./release/CylkSohbet-'+ver+'-setup.exe ./android/app/build/outputs/apk/release/CylkSohbet-'+ver+'.apk --title \"'+v+'\" --generate-notes', {stdio:'inherit'})\"",
     "server:start": "node server.cjs",
-    "update-policy": "node -e \"require('dotenv').config(); const{createClient}=require('@supabase/supabase-js'); const v=require('./package.json').version; const sb=createClient(process.env.VITE_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY); sb.from('update_policy').update({latest_version:v,updated_at:new Date().toISOString()}).eq('id',1).then(({error})=>{if(error)console.error(error);else console.log('update_policy → '+v)});\"",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
     "cap:run": "npx cap run android",
@@ -30,7 +29,6 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
-    "electron-updater": "^6.8.3",
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.1",
     "livekit-client": "^2.17.3",
@@ -86,11 +84,6 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
       "shortcutName": "CylkSohbet"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "mhmtaddl",
-      "repo": "caylaklar-sesli-sohbet"
     },
     "extraResources": [
       {

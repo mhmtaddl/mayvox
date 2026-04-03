@@ -6,23 +6,6 @@ contextBridge.exposeInMainWorld('electronLogger', {
   },
 });
 
-contextBridge.exposeInMainWorld('electronUpdater', {
-  onUpdateAvailable: (cb) => {
-    ipcRenderer.removeAllListeners('updater:update-available');
-    ipcRenderer.on('updater:update-available', (_e, info) => cb(info));
-  },
-  onDownloadProgress: (cb) => {
-    ipcRenderer.removeAllListeners('updater:download-progress');
-    ipcRenderer.on('updater:download-progress', (_e, info) => cb(info));
-  },
-  onUpdateDownloaded: (cb) => {
-    ipcRenderer.removeAllListeners('updater:update-downloaded');
-    ipcRenderer.on('updater:update-downloaded', (_e, info) => cb(info));
-  },
-  startDownload: () => ipcRenderer.send('updater:start-download'),
-  installNow: () => ipcRenderer.send('updater:install-now'),
-});
-
 contextBridge.exposeInMainWorld('electronApp', {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),

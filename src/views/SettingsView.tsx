@@ -6,7 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import AccountSection from '../components/settings/sections/AccountSection';
 import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSection, VoiceChannelSection, VoiceModeSection } from '../components/settings/sections/SettingsSections';
 import AdminUserManagement from '../components/settings/sections/AdminUserManagement';
-import { InviteCodeSection, InviteRequestsSection, UpdatePolicySection } from '../components/settings/sections/AdminPanelSections';
+import { InviteCodeSection, InviteRequestsSection } from '../components/settings/sections/AdminPanelSections';
 import PermissionSection from '../components/settings/sections/PermissionSection';
 
 export default function SettingsView() {
@@ -77,7 +77,6 @@ export default function SettingsView() {
           <InviteCodeSection />
           <InviteRequestsSection />
           <AdminUserManagement />
-          <UpdatePolicySection />
         </div>
       )}
 

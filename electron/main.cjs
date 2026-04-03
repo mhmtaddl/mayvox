@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
-const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
 
@@ -330,59 +329,6 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
   logger[level]?.(message, data);
 });
 
-// ── Auto-updater ───────────────────────────────────────────────────────────
-function setupAutoUpdater(win) {
-  if (isDev) return; // Güncelleme kontrolü sadece production'da
-
-  autoUpdater.logger = {
-    info:  (msg) => logger.info("[updater] " + msg),
-    warn:  (msg) => logger.warn("[updater] " + msg),
-    error: (msg) => logger.error("[updater] " + msg),
-    debug: () => {},
-  };
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    logger.info("Yeni sürüm mevcut", info);
-    const sizeMB = info.files?.[0]?.size
-      ? Math.round(info.files[0].size / 1024 / 1024 * 10) / 10
-      : null;
-    win.webContents.send("updater:update-available", { version: info.version, sizeMB });
-  });
-
-  autoUpdater.on("download-progress", (progress) => {
-    win.webContents.send("updater:download-progress", { percent: Math.round(progress.percent) });
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    logger.info("Güncelleme indirildi", info);
-    win.webContents.send("updater:update-downloaded", { version: info.version });
-  });
-
-  autoUpdater.on("error", (err) => {
-    logger.error("Güncelleme hatası", { message: err?.message });
-  });
-
-  // İlk kontrolü 10 saniye sonra yap (uygulama tam yüklendikten sonra)
-  setTimeout(() => autoUpdater.checkForUpdates().catch(e => logger.warn("Update check failed", { message: e?.message })), 10_000);
-  // Sonraki kontroller her 6 saatte bir
-  setInterval(() => autoUpdater.checkForUpdates().catch(e => logger.warn("Update check failed", { message: e?.message })), 6 * 60 * 60 * 1000);
-}
-
-ipcMain.on("updater:start-download", () => {
-  autoUpdater.downloadUpdate().catch(e => logger.error("Download failed", { message: e?.message }));
-});
-
-ipcMain.on("updater:install-now", () => {
-  try {
-    isQuitting = true;
-    autoUpdater.quitAndInstall();
-  } catch (e) {
-    logger.error("Install failed", { message: e?.message });
-  }
-});
-
 ipcMain.handle("app:getVersion", () => app.getVersion());
 
 // ── Main process crash handling ────────────────────────────────────────────
@@ -408,7 +354,6 @@ app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
   createWindow();
   const win = BrowserWindow.getAllWindows()[0];
-  setupAutoUpdater(win);
   setupGlobalPtt(win);
   setupTray(win);
 
