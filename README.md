@@ -9,7 +9,6 @@ Electron + React ile yazılmış, LiveKit tabanlı masaüstü sesli sohbet uygul
 - Bas-konuş (PTT) — arka planda çalışırken de tuş/fare dinler (uiohook-napi)
 - Oda şifresi, davet-only oda, kullanıcı başına ses seviyesi
 - Moderasyon: susturma, ban, admin atama
-- Otomatik güncelleme (electron-updater, GitHub Releases)
 
 ## Teknoloji Yığını
 

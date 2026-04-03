@@ -41,6 +41,8 @@ import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
+import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
+import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { dismissInviteNotification } from '../lib/notifications';
 import { UserCard, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../components/chat';
@@ -1979,7 +1981,7 @@ export default function ChatView() {
           {/* Bağlantı */}
           <div className="flex flex-col items-center gap-0.5 p-2 min-w-[52px]">
             <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
-            {FORCE_MOBILE && <span className="text-[8px] font-medium text-[var(--theme-secondary-text)]/30">v{appVersion}</span>}
+            {FORCE_MOBILE && <MobileUpdateHub currentVersion={appVersion} />}
           </div>
 
           {/* Ayarlar */}
@@ -2251,22 +2253,9 @@ export default function ChatView() {
                 {isListeningForKey ? '...' : pttKey}
               </button>
             </div>
-            {appVersion && (
+            {appVersion && !FORCE_MOBILE && (
               <div className="relative border-l border-[rgba(var(--glass-tint),0.08)] pl-3 ml-1">
-                <button
-                  onClick={() => getReleaseNotes(appVersion) && setShowReleaseNotes(!showReleaseNotes)}
-                  className={`text-[9px] font-medium transition-colors ${getReleaseNotes(appVersion) ? 'text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] cursor-pointer' : 'text-[var(--theme-secondary-text)]/50 cursor-default'}`}
-                >
-                  v{appVersion}
-                </button>
-                {showReleaseNotes && getReleaseNotes(appVersion) && (
-                  <ReleaseNotesPopover
-                    version={appVersion}
-                    notes={getReleaseNotes(appVersion)!}
-                    onClose={() => setShowReleaseNotes(false)}
-                    isAdmin={currentUser.isAdmin}
-                  />
-                )}
+                <UpdateVersionHub currentVersion={appVersion} />
               </div>
             )}
           </div>

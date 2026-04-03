@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ShieldCheck, Shield, Monitor, Clock, History, Activity } from 'lucide-react';
 import type { User } from '../types';
-import { isOutdated } from '../lib/versionCompare';
+import { isOutdated } from '../features/update/compareVersions';
 import { formatFullName } from '../lib/formatName';
 import DeviceBadge from './chat/DeviceBadge';
 

@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
 
@@ -331,6 +332,88 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
 
+// ── Auto-updater ───────────────────────────────────────────────────────────
+function setupAutoUpdater(win) {
+  if (isDev) return;
+
+  let isCheckingOrDownloading = false;
+
+  autoUpdater.logger = {
+    info:  (msg) => logger.info("[updater] " + msg),
+    warn:  (msg) => logger.warn("[updater] " + msg),
+    error: (msg) => logger.error("[updater] " + msg),
+    debug: () => {},
+  };
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  // Güvenli send — window destroy olduysa crash önle
+  const safeSend = (channel, data) => {
+    try {
+      if (!win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+        win.webContents.send(channel, data);
+      }
+    } catch {}
+  };
+
+  // Event'leri renderer'a ilet + guard sıfırla
+  autoUpdater.on("checking-for-update", () => {
+    safeSend("update:checking");
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    isCheckingOrDownloading = false;
+    logger.info("Update available", { version: info.version });
+    const size = info.files?.[0]?.size;
+    safeSend("update:available", { version: info.version, size });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    isCheckingOrDownloading = false;
+    safeSend("update:not-available");
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    safeSend("update:progress", { percent: Math.round(progress.percent) });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    isCheckingOrDownloading = false;
+    logger.info("Update downloaded", { version: info.version });
+    safeSend("update:downloaded", { version: info.version });
+  });
+
+  autoUpdater.on("error", (err) => {
+    isCheckingOrDownloading = false;
+    logger.error("Update error", { message: err?.message });
+    safeSend("update:error", { message: err?.message || "Bilinmeyen hata" });
+  });
+
+  // Renderer'dan gelen komutlar — duplicate guard
+  ipcMain.on("update:check", () => {
+    if (isCheckingOrDownloading) return;
+    isCheckingOrDownloading = true;
+    autoUpdater.checkForUpdates().catch(e => {
+      isCheckingOrDownloading = false;
+      logger.warn("Check failed", { message: e?.message });
+    });
+  });
+
+  ipcMain.on("update:download", () => {
+    if (isCheckingOrDownloading) return;
+    isCheckingOrDownloading = true;
+    autoUpdater.downloadUpdate().catch(e => {
+      isCheckingOrDownloading = false;
+      logger.error("Download failed", { message: e?.message });
+    });
+  });
+
+  ipcMain.on("update:install", () => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  });
+}
+
 // ── Main process crash handling ────────────────────────────────────────────
 // uncaughtException: logger zaten init edilmiş olabilir ya da olmayabilir.
 // Güvenli tarafta kalmak için her iki durumu da handle ediyoruz.
@@ -354,6 +437,7 @@ app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
   createWindow();
   const win = BrowserWindow.getAllWindows()[0];
+  setupAutoUpdater(win);
   setupGlobalPtt(win);
   setupTray(win);
 

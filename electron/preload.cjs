@@ -6,6 +6,41 @@ contextBridge.exposeInMainWorld('electronLogger', {
   },
 });
 
+// ── Auto-update bridge ──────────────────────────────────────────────────────
+contextBridge.exposeInMainWorld('electronUpdate', {
+  check: () => ipcRenderer.send('update:check'),
+  download: () => ipcRenderer.send('update:download'),
+  install: () => ipcRenderer.send('update:install'),
+  onChecking: (cb) => {
+    ipcRenderer.removeAllListeners('update:checking');
+    ipcRenderer.on('update:checking', () => cb());
+  },
+  onAvailable: (cb) => {
+    ipcRenderer.removeAllListeners('update:available');
+    ipcRenderer.on('update:available', (_e, info) => cb(info));
+  },
+  onNotAvailable: (cb) => {
+    ipcRenderer.removeAllListeners('update:not-available');
+    ipcRenderer.on('update:not-available', () => cb());
+  },
+  onProgress: (cb) => {
+    ipcRenderer.removeAllListeners('update:progress');
+    ipcRenderer.on('update:progress', (_e, info) => cb(info));
+  },
+  onDownloaded: (cb) => {
+    ipcRenderer.removeAllListeners('update:downloaded');
+    ipcRenderer.on('update:downloaded', (_e, info) => cb(info));
+  },
+  onError: (cb) => {
+    ipcRenderer.removeAllListeners('update:error');
+    ipcRenderer.on('update:error', (_e, info) => cb(info));
+  },
+  removeAllListeners: () => {
+    ['update:checking', 'update:available', 'update:not-available', 'update:progress', 'update:downloaded', 'update:error']
+      .forEach(ch => ipcRenderer.removeAllListeners(ch));
+  },
+});
+
 contextBridge.exposeInMainWorld('electronApp', {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),

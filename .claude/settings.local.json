@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(node -e \"console.log\\(require\\('./package.json'\\).version\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\({version:p.version,name:p.name,build:p.build},null,2\\)\\)\")",
+      "Bash(node -e \"const v='1.5.0'.split\\('.'\\); console.log\\('versionCode:', v[0]*10000+v[1]*100+v[2]*1\\); console.log\\('versionName:', '1.5.0'\\)\")",
+      "Bash(npm run:*)",
+      "Bash(npx cap:*)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew assembleRelease)",
+      "Bash(node -e \"require\\('child_process'\\).execSync\\('android\\\\\\\\\\\\\\\\gradlew.bat assembleRelease',{stdio:'inherit',cwd:'.'}\\)\")",
+      "Bash(node -e \"require\\('child_process'\\).execSync\\('cmd /c android\\\\\\\\\\\\\\\\gradlew.bat assembleRelease',{stdio:'inherit'}\\)\")",
+      "Bash(cmd.exe /c \"cd android && gradlew.bat assembleRelease\")",
+      "Bash(cmd.exe /c \"gradlew.bat assembleRelease\")",
+      "Bash(\"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/android/gradlew.bat\" -p android assembleRelease)",
+      "Bash(./android/gradlew -p android assembleRelease)",
+      "Bash(\"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/android/gradlew\" -p android assembleRelease)",
+      "Bash(ls:*)",
+      "Bash(gh release create v1.6.0 ./release/CylkSohbet-1.6.0-setup.exe ./release/latest.yml ./release/CylkSohbet-1.6.0-setup.exe.blockmap ./android/app/build/outputs/apk/release/CylkSohbet-1.6.0.apk --title 'v1.6.0 — Android Desteği + Çapraz Platform' --notes ':*)",
+      "Bash(gh release:*)",
+      "Bash(xxd)",
+      "Bash(keytool -list -keystore __TRACKED_VAR__/.android/debug.keystore -storepass android)",
+      "Bash(./gradlew clean:*)",
+      "Bash(jarsigner -verify -verbose -certs \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/android/app/build/outputs/apk/release/CylkSohbet-1.6.0.apk\")",
+      "Bash(/c/Users/MEMAS041/AppData/Local/Android/Sdk/build-tools/37.0.0/apksigner.bat verify:*)",
+      "Bash(xargs grep:*)",
+      "Bash(node -e ':*)",
+      "Bash(cp:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(node -e \"const pkg = require\\('./package.json'\\); console.log\\('electron-updater in deps:', 'electron-updater' in \\(pkg.dependencies||{}\\)\\); console.log\\('electron-updater in devDeps:', 'electron-updater' in \\(pkg.devDependencies||{}\\)\\); console.log\\('update-policy script:', 'update-policy' in \\(pkg.scripts||{}\\)\\);\")",
+      "Bash(npm install:*)"
+    ]
+  }
+}

@@ -1,7 +1,4 @@
-/**
- * Semver karşılaştırma yardımcıları.
- * Sadece major.minor.patch destekler (pre-release tag'leri yok sayılır).
- */
+// ── Semver Comparison ───────────────────────────────────────────────────────
 
 function parse(v: string | null | undefined): [number, number, number] {
   if (!v || typeof v !== 'string') return [0, 0, 0];
@@ -29,4 +26,10 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
 export function isOutdated(current: string, latest: string): boolean {
   if (!current || !latest) return false;
   return compareSemver(current, latest) < 0;
+}
+
+/** current, minSupported altında mı? */
+export function isBelowMin(current: string, min: string): boolean {
+  if (!current?.trim() || !min?.trim() || min === '0.0.0') return false;
+  return compareSemver(current, min) < 0;
 }
