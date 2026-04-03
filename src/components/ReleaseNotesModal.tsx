@@ -54,11 +54,11 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   const useNew = hasNewFormat(notes);
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-16 sm:pb-20 bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
       <div
         ref={ref}
         onClick={e => e.stopPropagation()}
-        className="w-[90%] max-w-md max-h-[70vh] bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="w-[90%] max-w-md max-h-[60vh] bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[var(--theme-border)] shrink-0">

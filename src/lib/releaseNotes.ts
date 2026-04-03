@@ -13,6 +13,23 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.4': {
+    title: 'v1.7.4',
+    items: [],
+    desktop: [
+      'Windows kurulumu sırasında eski sürümün kapatılamaması sorunu kesin olarak düzeltildi.',
+      'Güncelleme kurulumu artık uygulamayı otomatik kapatıp sorunsuz tamamlanıyor.',
+    ],
+    android: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    common: [
+      'Sürüm notları penceresi versiyon numarası hizasında açılacak şekilde düzeltildi.',
+    ],
+    admin: [
+      'Bu sürümde değişiklik yok.',
+    ],
+  },
   '1.7.3': {
     title: 'v1.7.3',
     items: [],
