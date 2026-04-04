@@ -103,11 +103,10 @@ async function verifyAdmin(req, res) {
 }
 
 // ── LiveKit Token ──────────────────────────────────────────────────────────
-const roomService = new RoomServiceClient(
-  process.env.LIVEKIT_HOST,
-  process.env.LIVEKIT_API_KEY,
-  process.env.LIVEKIT_API_SECRET,
-);
+const LIVEKIT_URL = process.env.LIVEKIT_HOST || process.env.LIVEKIT_URL;
+const roomService = LIVEKIT_URL
+  ? new RoomServiceClient(LIVEKIT_URL, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET)
+  : null;
 
 app.post('/livekit-token', tokenLimiter, async (req, res) => {
   const user = await verifyAuth(req, res);
@@ -117,7 +116,7 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
   if (!roomName) return res.status(400).json({ error: 'roomName gerekli' });
 
   // Tek-oda kuralı: kullanıcı başka bir odadaysa oradan çıkar
-  try {
+  if (roomService) try {
     const rooms = await roomService.listRooms();
     for (const room of rooms) {
       if (room.name === roomName) continue; // Aynı oda — LiveKit kendi DUPLICATE_IDENTITY'sini halleder
@@ -266,6 +265,7 @@ const required = ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'SUPABASE_SERVICE_ROL
 const missing = required.filter(k => !process.env[k]);
 if (!getSupabaseUrl()) missing.push('SUPABASE_URL');
 if (!getSupabaseAnonKey()) missing.push('SUPABASE_ANON_KEY');
+if (!LIVEKIT_URL) missing.push('LIVEKIT_URL (veya LIVEKIT_HOST)');
 if (missing.length) console.warn(`[server] Eksik env: ${missing.join(', ')}`);
 
 app.listen(PORT, '0.0.0.0', () => {
