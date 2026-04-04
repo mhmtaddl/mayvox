@@ -419,6 +419,19 @@ function setupAutoUpdater(win) {
   });
 
   ipcMain.on("update:install", () => {
+    try {
+      const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'CylkSohbet-update-debug.log');
+      const diag = [
+        `[${new Date().toISOString()}] update:install tetiklendi`,
+        `execPath: ${process.execPath}`,
+        `exePath: ${app.getPath('exe')}`,
+        `userData: ${app.getPath('userData')}`,
+        `isPackaged: ${app.isPackaged}`,
+        `pid: ${process.pid}`,
+        `quitAndInstall(true, true) çağrılacak`,
+      ].join('\n') + '\n';
+      fs.appendFileSync(diagPath, diag, 'utf8');
+    } catch {}
     isQuitting = true;
     autoUpdater.quitAndInstall(true, true);
   });
@@ -481,10 +494,12 @@ app.whenReady().then(() => {
 // Gerçek çıkış sadece tray > Çıkış ile olur (isQuitting = true).
 // Ama installer/quit modundaysa process sonlansın.
 app.on("window-all-closed", () => {
+  try { fs.appendFileSync(path.join(process.env.TEMP || '', 'CylkSohbet-update-debug.log'), `[${new Date().toISOString()}] window-all-closed isQuitting=${isQuitting}\n`, 'utf8'); } catch {}
   if (isQuitting) app.quit();
 });
 
 app.on("before-quit", () => {
+  try { fs.appendFileSync(path.join(process.env.TEMP || '', 'CylkSohbet-update-debug.log'), `[${new Date().toISOString()}] before-quit tetiklendi\n`, 'utf8'); } catch {}
   isQuitting = true;
   // Native kaynakları erken serbest bırak — installer başlamadan dosya kilitleri kalksın
   if (uIOhook) {
@@ -495,6 +510,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
+  try { fs.appendFileSync(path.join(process.env.TEMP || '', 'CylkSohbet-update-debug.log'), `[${new Date().toISOString()}] will-quit tetiklendi\n`, 'utf8'); } catch {}
   // before-quit'te temizlenmediyse son şans
   if (uIOhook) {
     try { uIOhook.stop(); } catch {}
