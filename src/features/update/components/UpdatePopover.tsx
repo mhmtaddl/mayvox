@@ -58,7 +58,7 @@ export default function UpdatePopover({ state, urgency, onDownload, onInstall, o
           <div className="flex items-center gap-4 mt-3">
             <UpdateProgressRing progress={progress} size={44} stroke={3.5} />
             <div>
-              <p className="text-sm font-semibold text-[var(--theme-text)]">İndiriliyor</p>
+              <p className="text-sm font-semibold text-[var(--theme-text)]">{progress > 0 && progress < 100 ? 'İndiriliyor' : 'Hazırlanıyor'}</p>
               <p className="text-lg font-bold text-[var(--theme-accent)] tabular-nums">%{progress}</p>
             </div>
           </div>

@@ -66,7 +66,7 @@ export function useUpdateVisibility(
         showUpdateHub: true,
         showProgress: true,
         label: `%${progress}`,
-        sublabel: 'İndiriliyor',
+        sublabel: progress > 0 && progress < 100 ? 'İndiriliyor' : 'Hazırlanıyor',
       };
 
     case 'downloaded':
