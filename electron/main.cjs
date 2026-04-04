@@ -420,7 +420,7 @@ function setupAutoUpdater(win) {
 
   ipcMain.on("update:install", () => {
     isQuitting = true;
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(true, true);
   });
 }
 
