@@ -13,6 +13,13 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.8': {
+    title: 'v1.7.8',
+    items: [],
+    desktop: [
+      'Farklı kurulum kapsamlarında (tüm kullanıcılar / tek kullanıcı) oluşan güncelleme hatası giderildi.',
+    ],
+  },
   '1.7.7': {
     title: 'v1.7.7',
     items: [],
