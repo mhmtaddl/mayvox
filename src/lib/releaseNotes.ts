@@ -13,6 +13,13 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.11': {
+    title: 'v1.7.11',
+    items: [],
+    desktop: [
+      'Güncelleme penceresi artık Android ile aynı içerik ve stilde gösteriliyor.',
+    ],
+  },
   '1.7.10': {
     title: 'v1.7.10',
     items: [],

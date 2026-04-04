@@ -5,7 +5,7 @@
 
 !macro customInit
   ; ── Diagnostic log — davranış değişikliği yok ──
-  FileOpen $0 "$TEMP\CylkSohbet-installer.log" w
+  FileOpen $0 "$TEMP\CylkSohbet-installer.log" a
   FileWrite $0 "=== CylkSohbet Installer Diagnostic ===$\r$\n"
   FileWrite $0 "INSTDIR: $INSTDIR$\r$\n"
   FileWrite $0 "TEMP: $TEMP$\r$\n"
