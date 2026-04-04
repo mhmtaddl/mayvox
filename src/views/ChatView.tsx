@@ -1575,7 +1575,7 @@ export default function ChatView() {
                       </div>
 
                       {/* Idle hint — kimse konuşmuyorsa (sadece masaüstünde göster) */}
-                      {!anySpeaking && (
+                      {!anySpeaking && !FORCE_MOBILE && (
                         <div className="flex items-center justify-center mt-8">
                           <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
                             <Mic size={12} />
@@ -1754,17 +1754,33 @@ export default function ChatView() {
                       </div>
                       <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />
                     </div>
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[13px] font-medium text-[var(--theme-text)] opacity-80 leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
-                      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 shrink-0">{user.age}</span>
-                      {user.isAdmin && (
-                        <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-                          <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-                        </span>
-                      )}
-                      {!user.isAdmin && user.isModerator && (
-                        <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                          <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[13px] font-medium text-[var(--theme-text)] opacity-80 leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                        <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 shrink-0">{user.age}</span>
+                        {user.isAdmin && (
+                          <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
+                            <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+                          </span>
+                        )}
+                        {!user.isAdmin && user.isModerator && (
+                          <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                            <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                          </span>
+                        )}
+                      </div>
+                      {user.lastSeenAt && (
+                        <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-none mt-0.5 block">
+                          {(() => {
+                            const d = new Date(user.lastSeenAt);
+                            const now = new Date();
+                            const yesterday = new Date(now);
+                            yesterday.setDate(now.getDate() - 1);
+                            const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                            if (d.toDateString() === now.toDateString()) return `Son görülme: Bugün ${time}`;
+                            if (d.toDateString() === yesterday.toDateString()) return `Son görülme: Dün ${time}`;
+                            return `Son görülme: ${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
+                          })()}
                         </span>
                       )}
                     </div>

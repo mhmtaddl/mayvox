@@ -13,6 +13,22 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.5': {
+    title: 'v1.7.5',
+    items: [],
+    desktop: [
+      'Bu sürümde değişiklik yok.',
+    ],
+    android: [
+      'Odada kimse konuşmuyorken gösterilen "tuşa basılı tut" ipucu kaldırıldı.',
+    ],
+    common: [
+      'Çevrimdışı kullanıcıya tıklandığında son çevrimiçi olduğu tarih ve saat gösteriliyor.',
+    ],
+    admin: [
+      'Bu sürümde değişiklik yok.',
+    ],
+  },
   '1.7.4': {
     title: 'v1.7.4',
     items: [],
