@@ -224,7 +224,7 @@ export default function AccountSection() {
                   : <Camera size={16} className="text-white" />
                 }
               </div>
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFileChange} />
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
             </div>
 
             <div className="flex-1 min-w-0">

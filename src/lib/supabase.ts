@@ -93,6 +93,15 @@ export const updateActivityOnLogout = async (id: string, totalUsageMinutes: numb
     .eq('id', id);
 };
 
+// Online heartbeat — crash / force-close'a karşı last_seen_at'i periyodik günceller.
+// Kullanıcı temiz çıkış yapamazsa bile DB'de en fazla 5 dk eski bir timestamp kalır.
+export const updateLastSeenHeartbeat = async (id: string) => {
+  return await supabase
+    .from('profiles')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('id', id);
+};
+
 // UPDATE USER MODERATION (admin/mute/ban) — server-side admin kontrolü ile
 export const updateUserModeration = async (id: string, updates: {
   is_admin?: boolean;

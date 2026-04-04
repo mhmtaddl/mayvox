@@ -38,6 +38,7 @@ import {
   adminRejectInvite,
   sendInviteEmail,
   updateActivityOnLogout,
+  updateLastSeenHeartbeat,
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
@@ -397,6 +398,7 @@ export default function App() {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const sessionStartedAtRef = useRef<number>(Date.now());
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
   const isLowDataModeRef = useRef(isLowDataMode);
@@ -711,6 +713,7 @@ export default function App() {
       resyncPresence();
       // Fallback: WebSocket bağlantısı geç olabilir. 1.5s sonra tekrar dene.
       setTimeout(() => resyncPresenceRef.current(), 1500);
+      startHeartbeat(restoredUser.id);
 
       setView('chat');
       setIsSessionLoading(false);
@@ -1618,8 +1621,21 @@ export default function App() {
     }
   };
 
+  // last_seen_at heartbeat — crash/force-close'a karşı periyodik DB güncellemesi
+  const startHeartbeat = (userId: string) => {
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    updateLastSeenHeartbeat(userId).catch(() => {});
+    heartbeatRef.current = setInterval(() => {
+      updateLastSeenHeartbeat(userId).catch(() => {});
+    }, 5 * 60 * 1000);
+  };
+  const stopHeartbeat = () => {
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+  };
+
   const handleLogout = async () => {
     logger.info('Logout', { userId: currentUser.id, name: currentUser.name });
+    stopHeartbeat();
     if (currentUser.id) {
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
       const newTotal = (currentUser.totalUsageMinutes || 0) + sessionMins;
@@ -1658,6 +1674,7 @@ export default function App() {
   // ── Pencere kapanırken son görülme + kullanım süresi kaydet
   useEffect(() => {
     const handleBeforeUnload = () => {
+      stopHeartbeat();
       const u = currentUserRef.current;
       if (!u.id) return;
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
@@ -1665,7 +1682,10 @@ export default function App() {
       updateActivityOnLogout(u.id, newTotal).catch(() => {});
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      stopHeartbeat();
+    };
   }, []);
 
   // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
@@ -2048,6 +2068,7 @@ export default function App() {
     startPresence(newUser, appVersion);
     resyncPresence();
     setTimeout(() => resyncPresenceRef.current(), 1500);
+    startHeartbeat(newUser.id);
     setView('chat');
     setLoginNick('');
     setLoginPassword('');

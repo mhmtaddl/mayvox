@@ -13,6 +13,16 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.7': {
+    title: 'v1.7.7',
+    items: [],
+    android: [
+      'Profil fotoğrafı değiştirme artık çalışıyor (galeri ve kamera erişim izinleri eklendi).',
+    ],
+    common: [
+      'Çevrimdışı kullanıcıların "son görülme" bilgisi artık her durumda görünüyor.',
+    ],
+  },
   '1.7.6': {
     title: 'v1.7.6',
     items: [],
