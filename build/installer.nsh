@@ -46,3 +46,8 @@
   FileWrite $0 "taskkill tamamlandi, kuruluma devam$\r$\n"
   FileClose $0
 !macroend
+
+; Eski sürüm uninstall başarısız olursa installer'ı durdurma,
+; overwrite ile devam et (auto-update senaryosu için)
+!macro customUnInstallCheck
+!macroend
