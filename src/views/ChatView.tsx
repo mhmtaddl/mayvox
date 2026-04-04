@@ -113,6 +113,7 @@ export default function ChatView() {
     voiceMode,
     audioProfile: _audioProfile,
     setAudioProfile,
+    showLastSeen,
   } = useSettings();
 
   const {
@@ -1769,7 +1770,7 @@ export default function ChatView() {
                           </span>
                         )}
                       </div>
-                      {user.lastSeenAt && (
+                      {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
                         <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-none mt-0.5 block">
                           {(() => {
                             const d = new Date(user.lastSeenAt);

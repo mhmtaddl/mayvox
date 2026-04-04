@@ -4,7 +4,7 @@ import { useUser } from '../contexts/UserContext';
 
 // ── Section components ──
 import AccountSection from '../components/settings/sections/AccountSection';
-import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSection, VoiceChannelSection, VoiceModeSection } from '../components/settings/sections/SettingsSections';
+import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSection, VoiceChannelSection, VoiceModeSection, LastSeenSection } from '../components/settings/sections/SettingsSections';
 import AdminUserManagement from '../components/settings/sections/AdminUserManagement';
 import { InviteCodeSection, InviteRequestsSection } from '../components/settings/sections/AdminPanelSections';
 import PermissionSection from '../components/settings/sections/PermissionSection';
@@ -62,6 +62,7 @@ export default function SettingsView() {
         <div className="space-y-8">
           <AccountSection />
           <PermissionSection />
+          <LastSeenSection />
           <AppearanceSection />
           <SoundsSection />
           <AudioProfileSection />

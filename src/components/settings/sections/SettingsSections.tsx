@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Headphones, Mic, AudioLines } from 'lucide-react';
+import { Check, Recycle, Volume2, Zap, Headphones, Mic, AudioLines, Eye } from 'lucide-react';
 import { AccordionSection, Toggle, cardCls } from '../shared';
 import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
@@ -422,6 +422,26 @@ export function VoiceModeSection() {
             )}
           </button>
         ))}
+      </div>
+    </AccordionSection>
+  );
+}
+
+// ── Son Görülme ──
+export function LastSeenSection() {
+  const { showLastSeen, setShowLastSeen } = useSettings();
+  return (
+    <AccordionSection icon={<Eye size={12} />} title="Son Görülme">
+      <div className={`${cardCls}`}>
+        <div className="flex items-center gap-4 px-6 py-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-[var(--theme-text)]">Son görülme bilgisini göster</p>
+            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">
+              Kapatırsanız kimse sizin son görülme bilginizi göremez ve siz de başkalarının son görülme bilgisini göremezsiniz.
+            </p>
+          </div>
+          <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
+        </div>
       </div>
     </AccordionSection>
   );

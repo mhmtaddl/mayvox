@@ -99,6 +99,8 @@ export interface SettingsContextType {
   setAutoLeaveMinutes: (v: number) => void;
   voiceMode: VoiceMode;
   setVoiceMode: (v: VoiceMode) => void;
+  showLastSeen: boolean;
+  setShowLastSeen: (v: boolean) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

@@ -4,6 +4,7 @@ import { ShieldCheck, Shield, Monitor, Clock, History, Activity } from 'lucide-r
 import type { User } from '../types';
 import { isOutdated } from '../features/update/compareVersions';
 import { formatFullName } from '../lib/formatName';
+import { useSettings } from '../contexts/SettingsCtx';
 import DeviceBadge from './chat/DeviceBadge';
 
 interface Props {
@@ -61,6 +62,7 @@ export default function UserProfilePopup({
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
+  const { showLastSeen } = useSettings();
 
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 12);
   const y = Math.min(position.y + 8, window.innerHeight - POPUP_H - 12);
@@ -193,7 +195,7 @@ export default function UserProfilePopup({
                   <Clock size={10} className="text-emerald-400/80 shrink-0" />
                   <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatOnlineDuration(user.onlineSince)}</span>
                 </div>
-              ) : user.lastSeenAt ? (
+              ) : showLastSeen && user.showLastSeen !== false && user.lastSeenAt ? (
                 <div className="flex items-center gap-1.5" title="Son görülme">
                   <History size={10} className="text-[var(--theme-secondary-text)]/70 shrink-0" />
                   <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatLastSeen(user.lastSeenAt)}</span>

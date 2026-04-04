@@ -39,6 +39,7 @@ import {
   sendInviteEmail,
   updateActivityOnLogout,
   updateLastSeenHeartbeat,
+  updateShowLastSeen,
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
@@ -52,6 +53,7 @@ type DbProfile = {
   is_moderator?: boolean;
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
   app_version?: string; last_seen_at?: string; total_usage_minutes?: number;
+  show_last_seen?: boolean;
 };
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
@@ -229,6 +231,18 @@ export default function App() {
     return saved ? parseInt(saved) : 10;
   });
   const setAutoLeaveMinutes = (v: number) => { localStorage.setItem('autoLeaveMinutes', String(v)); setAutoLeaveMinutesState(v); };
+
+  // ── Son görülme gizlilik ayarı ────────────────────────────────────────
+  const [showLastSeen, setShowLastSeenState] = useState(() => localStorage.getItem('showLastSeen') !== 'false');
+  const setShowLastSeen = (v: boolean) => {
+    localStorage.setItem('showLastSeen', String(v));
+    setShowLastSeenState(v);
+    if (currentUser.id) {
+      updateShowLastSeen(currentUser.id, v).catch(() => {});
+      setCurrentUser(prev => ({ ...prev, showLastSeen: v }));
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, showLastSeen: v } : u));
+    }
+  };
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -631,6 +645,7 @@ export default function App() {
         appVersion: profile.app_version || undefined,
         lastSeenAt: profile.last_seen_at || undefined,
         totalUsageMinutes: profile.total_usage_minutes || 0,
+        showLastSeen: profile.show_last_seen !== false,
       } : {
         id: session.user.id,
         name: email,
@@ -650,6 +665,9 @@ export default function App() {
 
       setAllUsers((prev) => [...prev.filter((u) => u.id !== session.user.id), restoredUser]);
       setCurrentUser(restoredUser);
+      // DB'deki son görülme tercihini localStorage'a sync et
+      if (restoredUser.showLastSeen === false) localStorage.setItem('showLastSeen', 'false');
+      else localStorage.setItem('showLastSeen', 'true');
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
 
       // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
@@ -701,6 +719,7 @@ export default function App() {
               appVersion: knownVersionsRef.current.get(p.id) || p.app_version,
               lastSeenAt: p.last_seen_at || undefined,
               totalUsageMinutes: p.total_usage_minutes || 0,
+              showLastSeen: p.show_last_seen !== false,
             }));
           return [...prev, ...offlineUsers];
         });
@@ -1504,6 +1523,7 @@ export default function App() {
       appVersion: profile.app_version || undefined,
       lastSeenAt: profile.last_seen_at || undefined,
       totalUsageMinutes: profile.total_usage_minutes || 0,
+      showLastSeen: profile.show_last_seen !== false,
     } : {
       id: userId,
       name: email,
@@ -1564,6 +1584,7 @@ export default function App() {
             appVersion: knownVersionsRef.current.get(p.id),
             lastSeenAt: p.last_seen_at || undefined,
             totalUsageMinutes: p.total_usage_minutes || 0,
+            showLastSeen: p.show_last_seen !== false,
           }))
       : [];
 
@@ -2050,6 +2071,7 @@ export default function App() {
             appVersion: knownVersionsRef.current.get(p.id),
             lastSeenAt: p.last_seen_at || undefined,
             totalUsageMinutes: p.total_usage_minutes || 0,
+            showLastSeen: p.show_last_seen !== false,
           }))
       : [];
 
@@ -2171,6 +2193,8 @@ export default function App() {
     setAutoLeaveMinutes,
     voiceMode,
     setVoiceMode,
+    showLastSeen,
+    setShowLastSeen,
   };
 
   const appStateValue: AppStateContextType = {

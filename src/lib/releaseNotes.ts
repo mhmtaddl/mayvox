@@ -13,6 +13,13 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '1.7.9': {
+    title: 'v1.7.9',
+    items: [],
+    common: [
+      'Ayarlar\'da "Son Görülme" gizlilik ayarı eklendi — kapatırsanız kimse sizin son görülme bilginizi göremez, siz de başkalarınınkini göremezsiniz.',
+    ],
+  },
   '1.7.8': {
     title: 'v1.7.8',
     items: [],

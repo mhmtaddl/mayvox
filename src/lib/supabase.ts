@@ -93,6 +93,14 @@ export const updateActivityOnLogout = async (id: string, totalUsageMinutes: numb
     .eq('id', id);
 };
 
+// Son görülme gizlilik ayarını güncelle
+export const updateShowLastSeen = async (id: string, show: boolean) => {
+  return await supabase
+    .from('profiles')
+    .update({ show_last_seen: show })
+    .eq('id', id);
+};
+
 // Online heartbeat — crash / force-close'a karşı last_seen_at'i periyodik günceller.
 // Kullanıcı temiz çıkış yapamazsa bile DB'de en fazla 5 dk eski bir timestamp kalır.
 export const updateLastSeenHeartbeat = async (id: string) => {

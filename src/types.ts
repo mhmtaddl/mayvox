@@ -30,6 +30,7 @@ export interface User {
   lastSeenAt?: string;
   totalUsageMinutes?: number;
   onlineSince?: number;
+  showLastSeen?: boolean;
 }
 
 export interface VoiceChannel {
