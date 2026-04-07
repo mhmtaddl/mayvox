@@ -132,7 +132,7 @@ export default function AdminUserManagement() {
             {filteredUsers.map(user => (
               <div key={user.id} className="flex items-center justify-between px-4 py-3 hover:bg-[var(--theme-accent)]/[0.03] transition-colors group/row">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-9 w-9 rounded-full bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0 ring-1 ring-[var(--theme-border)]">
+                  <div className="h-9 w-9 avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0 ring-1 ring-[var(--theme-border)]">
                     {user.avatar?.startsWith('http')
                       ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       : user.avatar}

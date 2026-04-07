@@ -58,7 +58,9 @@
       "Bash(sed -i 's/CYLKSohbet/PigeVox/g' CLAUDE.md)",
       "Bash(sed -i 's/CylkSohbet/PigeVox/g; s/CYLKSohbet/PigeVox/g' README.md)",
       "Bash(sed -i 's/Caylaklar ile Sohbete Doğru/PigeVox ile Sesini Duyur/g' src/views/LoginSelectionView.tsx src/views/LoginPasswordView.tsx src/views/LoginCodeView.tsx src/views/RegisterDetailsView.tsx)",
-      "Bash(sed -i 's/Sadece CAYLAKLAR Burada Sohbet Edebilir!//g' src/views/LoginSelectionView.tsx)"
+      "Bash(sed -i 's/Sadece CAYLAKLAR Burada Sohbet Edebilir!//g' src/views/LoginSelectionView.tsx)",
+      "Bash(sed -i 's/h-9 w-9 rounded-full bg-\\\\[var\\(--theme-accent\\)\\\\]\\\\/20 overflow-hidden/h-9 w-9 avatar-squircle bg-[var\\(--theme-accent\\)]\\\\/20 overflow-hidden/g' src/components/settings/sections/AdminUserManagement.tsx)",
+      "Bash(sed -i 's/h-16 w-16 rounded-full bg-\\\\[var\\(--theme-accent\\)\\\\]\\\\/20/h-16 w-16 avatar-squircle bg-[var\\(--theme-accent\\)]\\\\/20/g' src/components/settings/sections/AccountSection.tsx)"
     ]
   }
 }

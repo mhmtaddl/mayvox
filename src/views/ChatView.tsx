@@ -538,7 +538,7 @@ export default function ChatView() {
               <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-blue-500/20 border-2 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
+            <div className="h-10 w-10 overflow-hidden border-2 avatar-squircle relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
               {currentUser.avatar?.startsWith('http')
                 ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 : currentUser.avatar}
@@ -723,7 +723,7 @@ export default function ChatView() {
                                 className="flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1"
                               >
                                 <div className="relative shrink-0">
-                                  <div className="h-6 w-6 rounded-full bg-[var(--theme-accent)]/15 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]">
+                                  <div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]">
                                     {user.avatar?.startsWith('http')
                                       ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                       : user.avatar}
@@ -817,7 +817,7 @@ export default function ChatView() {
                             onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                           >
                             <div className="relative shrink-0">
-                              <div className="h-9 w-9 rounded-full bg-[var(--theme-accent)]/20 border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
+                              <div className="h-9 w-9 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
                                 {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}
                               </div>
                               {user.isAdmin && adminBorderEffect && (
@@ -944,7 +944,7 @@ export default function ChatView() {
                             className="flex items-center gap-2 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5"
                           >
                             <div className="relative shrink-0">
-                              <div className="h-5 w-5 rounded-full bg-[var(--theme-accent)]/15 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
+                              <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
                                 {user?.avatar?.startsWith('http')
                                   ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                   : user?.avatar || '?'}
@@ -1768,7 +1768,7 @@ export default function ChatView() {
                                   <div key={msg.id} className="flex items-start gap-1.5 py-1 group/msg">
                                     <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-1 tabular-nums w-10 text-right">{ts}</span>
                                     {/* Mini avatar */}
-                                    <div className="shrink-0 w-5 h-5 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ background: `${nameColor}20`, borderRadius: '18%' }}>
+                                    <div className="shrink-0 w-5 h-5 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ background: `${nameColor}20`, borderRadius: '22%' }}>
                                       {msg.avatar?.startsWith('http') ? (
                                         <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                       ) : (
@@ -1868,7 +1868,7 @@ export default function ChatView() {
             className="px-4 pt-4 pb-3 shrink-0 flex items-center gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.02)] rounded-t-2xl transition-all duration-200"
             onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}
           >
-            <div className="h-9 w-9 rounded-full bg-blue-500/20 border-2 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
+            <div className="h-9 w-9 overflow-hidden border-2 avatar-squircle relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
               {currentUser.avatar?.startsWith('http')
                 ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 : currentUser.avatar}
@@ -1929,7 +1929,7 @@ export default function ChatView() {
                     >
                       <div className="relative shrink-0">
                         <div
-                          className="h-8 w-8 rounded-full bg-[rgba(var(--glass-tint),0.06)] border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                          className="h-8 w-8 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
                           style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
                         >
                           {user.avatar?.startsWith('http')
@@ -2036,7 +2036,7 @@ export default function ChatView() {
                   >
                     <div className="relative">
                       <div
-                        className="h-8 w-8 rounded-full bg-[rgba(var(--glass-tint),0.04)] border-2 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
+                        className="h-8 w-8 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
                         style={{ borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' }}
                       >
                         {user.avatar?.startsWith('http')

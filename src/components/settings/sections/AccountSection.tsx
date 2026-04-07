@@ -209,7 +209,7 @@ export default function AccountSection() {
               onClick={() => fileInputRef.current?.click()}
             >
               <div
-                className="h-16 w-16 rounded-full bg-[var(--theme-accent)]/20 border-[3px] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base shadow-sm"
+                className="h-16 w-16 avatar-squircle bg-[var(--theme-accent)]/20 border-[3px] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base shadow-sm"
                 style={{ borderColor: avatarBorderColor }}
               >
                 {customAvatarUrl ? (
@@ -265,7 +265,7 @@ export default function AccountSection() {
                         style={{
                           width: 22,
                           height: 22,
-                          borderRadius: '50%',
+                          borderRadius: '22%',
                           backgroundColor: hex,
                           border: isSelected ? '2.5px solid white' : '2px solid transparent',
                           boxShadow: isSelected ? `0 0 0 2px ${hex}` : `0 0 0 1px ${hex}55`,

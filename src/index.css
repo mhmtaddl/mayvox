@@ -201,6 +201,11 @@ button, a, input, [role="button"] {
   transform: translateY(0);
 }
 
+/* ─── Squircle avatar shape ─── */
+.avatar-squircle {
+  border-radius: 22%;
+}
+
 /* ─── Bell ring animation ─── */
 @keyframes bell-ring {
   0% { transform: rotate(0deg); }
