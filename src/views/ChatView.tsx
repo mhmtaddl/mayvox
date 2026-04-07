@@ -2028,7 +2028,7 @@ export default function ChatView() {
                   exit={{ opacity: 0, y: 6, scale: 0.97 }}
                   transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute top-full left-0 right-0 mt-1.5 z-[100] overflow-hidden rounded-2xl"
-                  style={{ background: 'rgba(var(--theme-bg-rgb), 0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}
+                  style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Header — sürüm notları ile aynı stil */}
@@ -2091,7 +2091,7 @@ export default function ChatView() {
                   <div className="h-px mx-3" style={{ background: 'rgba(var(--theme-accent-rgb), 0.04)' }} />
 
                   {/* ── Son görülme ── */}
-                  <div className="px-3.5 py-3 flex items-center justify-between gap-3">
+                  <div className="px-3 py-3 flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-medium text-[var(--theme-text)] opacity-75 leading-tight">Son görülme</p>
                       <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-35 mt-0.5 leading-tight">Kapalıyken diğerleri göremez</p>
