@@ -38,28 +38,28 @@ export default function BanScreen({ banExpires }: Props) {
         </div>
 
         <div>
-          <h1 className="text-xl font-bold text-white mb-2">
+          <h1 className="text-xl font-bold text-[var(--theme-btn-primary-text)] mb-2">
             Sesli Sohbet Erişiminiz Kısıtlandı
           </h1>
-          <p className="text-sm text-white/50">
+          <p className="text-sm text-[var(--theme-btn-primary-text)]/50">
             Bir yönetici tarafından erişiminiz engellendi.
           </p>
         </div>
 
         {banExpires ? (
-          <div className="flex flex-col items-center gap-1.5 bg-white/5 border border-white/10 rounded-2xl px-8 py-4">
-            <span className="text-xs text-white/40 uppercase tracking-widest">Kalan süre</span>
+          <div className="flex flex-col items-center gap-1.5 bg-[var(--theme-btn-ghost-bg)] border border-[var(--theme-border)]/10 rounded-2xl px-8 py-4">
+            <span className="text-xs text-[var(--theme-btn-primary-text)]/40 uppercase tracking-widest">Kalan süre</span>
             <span className="text-3xl font-mono font-bold text-red-400 tabular-nums">
               {formatCountdown(timeLeft)}
             </span>
           </div>
         ) : (
-          <div className="bg-white/5 border border-white/10 rounded-2xl px-8 py-4">
-            <span className="text-sm text-white/50">Süresiz kısıtlama</span>
+          <div className="bg-[var(--theme-btn-ghost-bg)] border border-[var(--theme-border)]/10 rounded-2xl px-8 py-4">
+            <span className="text-sm text-[var(--theme-btn-primary-text)]/50">Süresiz kısıtlama</span>
           </div>
         )}
 
-        <p className="text-xs text-white/30 leading-relaxed">
+        <p className="text-xs text-[var(--theme-btn-primary-text)]/30 leading-relaxed">
           Süre dolduğunda veya yönetici kısıtlamayı kaldırdığında
           erişiminiz otomatik olarak açılacak.
         </p>

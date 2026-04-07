@@ -75,7 +75,7 @@ export default function AdminUserManagement() {
   ];
 
   return (
-    <AccordionSection icon={<Users size={12} />} title="Kullanıcı Yönetimi" defaultOpen>
+    <AccordionSection icon={<Users size={12} />} title="Kullanıcı Yönetimi">
 
       {/* Search + filter bar (sticky) */}
       <div className="sticky top-0 z-10 bg-[var(--theme-bg)] pb-3 space-y-3">

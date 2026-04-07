@@ -8,8 +8,10 @@ declare const __APP_VERSION__: string;
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AppView, User, VoiceChannel, Theme } from './types';
-import { CHANNELS, THEMES } from './constants';
+import { AppView, User, VoiceChannel } from './types';
+import { CHANNELS } from './constants';
+import { AppTheme, ThemeKey, themes, defaultThemeKey, backgroundPresets, defaultBackgroundId } from './themes';
+import { getDerivedTokens, applyDerivedTokens } from './lib/adaptiveTheme';
 import {
   signIn,
   signOut,
@@ -110,50 +112,40 @@ export default function App() {
   };
 
   // ── Settings state ───────────────────────────────────────────────────────
-  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return THEMES[0]; }
-    }
-    return THEMES[0];
+  const [currentTheme, setCurrentTheme] = useState<AppTheme>(() => {
+    const savedKey = localStorage.getItem('themeKey');
+    if (savedKey && themes[savedKey as ThemeKey]) return themes[savedKey as ThemeKey];
+    return themes[defaultThemeKey];
   });
 
+  // ── Background preset ──
+  const [activeBackground, setActiveBackgroundState] = useState(() => localStorage.getItem('activeBackground') || defaultBackgroundId);
+  const setActiveBackground = (id: string) => { localStorage.setItem('activeBackground', id); setActiveBackgroundState(id); };
+
+  // ── Adaptive theme — single effect for theme + background ──
   useEffect(() => {
-    localStorage.setItem('theme', JSON.stringify(currentTheme));
+    localStorage.setItem('themeKey', currentTheme.key);
+    const preset = backgroundPresets.find(b => b.id === activeBackground) || backgroundPresets[1];
+    const tokens = getDerivedTokens(currentTheme, preset);
+    applyDerivedTokens(tokens);
+
+    // Theme-specific tokens not derived from background
     const root = document.documentElement;
-    root.style.setProperty('--theme-bg', currentTheme.bg);
-    root.style.setProperty('--theme-surface', currentTheme.surface);
-    root.style.setProperty('--theme-sidebar', currentTheme.sidebar);
-    root.style.setProperty('--theme-text', currentTheme.text);
-    root.style.setProperty('--theme-secondary-text', currentTheme.secondaryText);
-    root.style.setProperty('--theme-accent', currentTheme.accent);
-    root.style.setProperty('--theme-border', currentTheme.border);
-
-    // Helper: hex → "r, g, b"
-    const hexToRgb = (hex: string) => {
-      const h = hex.replace('#', '');
-      return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`;
-    };
-
-    root.style.setProperty('--theme-accent-rgb', hexToRgb(currentTheme.accent));
-    root.style.setProperty('--theme-bg-rgb', hexToRgb(currentTheme.bg));
-    root.style.setProperty('--theme-sidebar-rgb', hexToRgb(currentTheme.sidebar));
-
-    // Glass system tokens
-    const glow = currentTheme.glow || currentTheme.accent;
-    const glowSecondary = currentTheme.glowSecondary || currentTheme.accent;
-    root.style.setProperty('--theme-glow', glow);
-    root.style.setProperty('--theme-glow-rgb', hexToRgb(glow));
-    root.style.setProperty('--theme-glow-secondary', glowSecondary);
-    root.style.setProperty('--theme-glow-secondary-rgb', hexToRgb(glowSecondary));
-
-    const isLight = currentTheme.id === 'beige';
-    root.style.colorScheme = isLight ? 'light' : 'dark';
-    // Glass border adapts: white on dark, black on light
-    root.style.setProperty('--glass-tint', isLight ? '0, 0, 0' : '255, 255, 255');
-    // Shadow base: warm brown for beige, pure black for dark themes
-    root.style.setProperty('--shadow-base', isLight ? '80, 60, 40' : '0, 0, 0');
-  }, [currentTheme]);
+    root.style.setProperty('--theme-accent-secondary', currentTheme.secondary);
+    root.style.setProperty('--theme-text-on-primary', currentTheme.textOnPrimary);
+    root.style.setProperty('--theme-text-on-accent', currentTheme.textOnAccent);
+    root.style.setProperty('--theme-success', currentTheme.success);
+    root.style.setProperty('--theme-warning', currentTheme.warning);
+    root.style.setProperty('--theme-danger', currentTheme.danger);
+    root.style.setProperty('--theme-elevated-panel', currentTheme.elevatedPanel);
+    root.style.setProperty('--theme-elevated-panel-hover', currentTheme.elevatedPanelHover);
+    root.style.setProperty('--popover-bg', currentTheme.popoverBg);
+    root.style.setProperty('--popover-border', currentTheme.popoverBorder);
+    root.style.setProperty('--popover-text', currentTheme.popoverText);
+    root.style.setProperty('--popover-text-secondary', currentTheme.popoverTextSecondary);
+    root.style.setProperty('--popover-shadow', currentTheme.popoverShadow);
+    root.style.setProperty('--theme-bg-elevated', currentTheme.backgroundElevated);
+  }, [currentTheme, activeBackground]);
 
   const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');
   const setIsLowDataMode = (v: boolean) => { localStorage.setItem('lowDataMode', String(v)); setIsLowDataModeState(v); };
@@ -560,8 +552,6 @@ export default function App() {
       setConnectionLevel(getNetworkType());
       if (connectionLostRef.current) {
         connectionLostRef.current = false;
-        setToastMsg('İnternet bağlantısı yeniden kuruldu.');
-        setTimeout(() => setToastMsg(null), 3000);
       }
     };
     const onConnectionChange = () => {
@@ -1845,8 +1835,6 @@ export default function App() {
     }
 
     setPasswordResetRequests(prev => prev.filter(r => r.userId !== req.userId));
-    setToastMsg(`${req.userName} kullanıcısına yeni parola e-posta ile gönderildi.`);
-    setTimeout(() => setToastMsg(null), 4000);
 
     // Diğer adminleri bilgilendir
     presenceChannelRef.current?.send({
@@ -2195,6 +2183,8 @@ export default function App() {
     setVoiceMode,
     showLastSeen,
     setShowLastSeen,
+    activeBackground,
+    setActiveBackground,
   };
 
   const appStateValue: AppStateContextType = {

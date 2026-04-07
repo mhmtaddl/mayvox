@@ -111,7 +111,7 @@ export default function AvatarCropModal({ imageSrc, onConfirm, onCancel }: Props
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 py-2 rounded-xl bg-[var(--theme-accent)] text-white text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+            className="flex-1 py-2 rounded-xl bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
           >
             <Check size={15} />
             Kırp ve Kaydet

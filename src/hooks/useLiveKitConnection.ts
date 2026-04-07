@@ -108,7 +108,6 @@ export function useLiveKitConnection({
       if (joinAbort.signal.aborted) throw new Error('Bağlantı zaman aşımına uğradı.');
 
       // ── AŞAMA 2: Room oluştur + bağlan ──
-      setToastMsg('Odaya bağlanılıyor...');
 
       const room = new Room({
         audioCaptureDefaults: {
@@ -269,8 +268,6 @@ export function useLiveKitConnection({
         }
         connectionLostRef.current = false;
         setConnectionLevel(4);
-        setToastMsg('Bağlantı yeniden kuruldu.');
-        setTimeout(() => setToastMsg(null), 3000);
       });
 
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {

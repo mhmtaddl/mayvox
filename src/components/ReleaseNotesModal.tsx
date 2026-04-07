@@ -54,20 +54,18 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   const useNew = hasNewFormat(notes);
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-16 sm:pb-20 bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-20 sm:pb-24 bg-black/15 backdrop-blur-[2px]" onClick={onClose}>
       <div
         ref={ref}
         onClick={e => e.stopPropagation()}
-        className="w-[90%] max-w-md max-h-[60vh] bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="w-[90%] max-w-md max-h-[70vh] bg-[var(--popover-bg)] border border-[var(--popover-border)] rounded-2xl flex flex-col overflow-hidden"
+        style={{ boxShadow: 'var(--popover-shadow)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[var(--theme-border)] shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-[var(--theme-accent)]" />
             <span className="text-sm font-bold text-[var(--theme-text)]">Sürüm Notları</span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]">
-              v{version}
-            </span>
           </div>
           <button
             onClick={onClose}

@@ -3,53 +3,118 @@ import { Check, Recycle, Volume2, Zap, Headphones, Mic, AudioLines, Eye } from '
 import { AccordionSection, Toggle, cardCls } from '../shared';
 import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
+import { useUser } from '../../../contexts/UserContext';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
-import { THEMES } from '../../../constants';
+import { themes, themeOrder, backgroundPresets } from '../../../themes';
 import { isMobile } from '../../../lib/platform';
 
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { currentTheme, setCurrentTheme, adminBorderEffect, setAdminBorderEffect } = useSettings();
+  const { currentTheme, setCurrentTheme, adminBorderEffect, setAdminBorderEffect, activeBackground, setActiveBackground } = useSettings();
+  const { currentUser } = useUser();
 
   return (
     <AccordionSection icon={<Recycle size={12} />} title="Görünüm">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {THEMES.map(theme => (
-          <button
-            key={theme.id}
-            onClick={() => setCurrentTheme(theme)}
-            className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${
-              currentTheme.id === theme.id
-                ? 'border-[var(--theme-accent)]/30 bg-[var(--theme-accent)]/8 ring-1 ring-[var(--theme-accent)]/15 shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.06)]'
-                : 'border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--theme-sidebar-rgb),0.3)] hover:border-[rgba(var(--glass-tint),0.1)] hover:bg-[rgba(var(--theme-sidebar-rgb),0.5)]'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-[var(--theme-text)]">{theme.name}</span>
-              {currentTheme.id === theme.id
-                ? <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)]/20 border border-[var(--theme-accent)]/40 flex items-center justify-center shrink-0 shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.3)]"><Check size={10} className="text-[var(--theme-accent)]" /></div>
-                : <div className="w-5 h-5 rounded-full border border-[rgba(var(--glass-tint),0.1)] shrink-0" />
-              }
-            </div>
-            <div className="flex rounded-lg overflow-hidden h-6 border border-[rgba(var(--glass-tint),0.06)]">
-              <div className="flex-1" style={{ backgroundColor: theme.bg }} />
-              <div className="w-6 border-l border-[rgba(var(--glass-tint),0.06)]" style={{ backgroundColor: theme.sidebar }} />
-              <div className="w-6 border-l border-[rgba(var(--glass-tint),0.06)]" style={{ backgroundColor: theme.accent }} />
-            </div>
-          </button>
-        ))}
-      </div>
 
-      {/* Admin border effect */}
-      <div className={`${cardCls} mt-4`}>
-        <div className="flex items-center gap-4 px-6 py-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/60 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
+      {/* ═══ RENK PALETLERİ ═══ */}
+      <div className="mb-8">
+        <div className="flex items-baseline justify-between mb-3">
+          <div>
+            <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">Renk Paletleri</p>
+            <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-60 mt-1">Uygulama içi vurgu ve tema renklerini belirler</p>
           </div>
-          <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} />
+          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0 ml-4">{currentTheme.name}</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3.5">
+          {themeOrder.map(key => {
+            const theme = themes[key];
+            const isSelected = currentTheme.key === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setCurrentTheme(theme)}
+                className="flex flex-col gap-2 p-3 rounded-2xl text-left transition-all duration-150"
+                style={{
+                  background: 'var(--theme-surface-card)',
+                  border: isSelected
+                    ? '1.5px solid var(--theme-accent)'
+                    : '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: isSelected
+                    ? '0 0 0 1px var(--theme-accent), 0 4px 16px rgba(0,0,0,0.3)'
+                    : '0 1px 6px rgba(0,0,0,0.18)',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                }}
+              >
+                {/* Preview strip */}
+                <div className="relative w-full h-9 rounded-lg overflow-hidden" style={{ background: theme.background }}>
+                  <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.1)' }} />
+                  <div className="absolute inset-0" style={{
+                    background: `radial-gradient(ellipse 70% 100% at 25% 85%, ${theme.primary}28, transparent 55%), radial-gradient(ellipse 50% 90% at 80% 15%, ${theme.secondary}20, transparent 50%)`,
+                  }} />
+                  <div className="absolute bottom-1 right-1.5 flex gap-1">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.primary, opacity: 0.9 }} />
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.secondary, opacity: 0.6 }} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[11px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.82)' }}>{theme.name}</span>
+                  {isSelected && (
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: `${theme.primary}20` }}>
+                      <Check size={9} style={{ color: theme.primary }} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {/* ═══ ARKA PLAN ═══ */}
+      <div className="pt-6 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em] mb-3">Arka Plan</p>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${backgroundPresets.length}, 1fr)`, gap: 8 }}>
+          {backgroundPresets.map(bg => {
+            const isActive = activeBackground === bg.id;
+            return (
+              <button
+                key={bg.id}
+                onClick={() => setActiveBackground(bg.id)}
+                title={bg.name}
+                className="relative overflow-hidden transition-all duration-150"
+                style={{
+                  height: 36,
+                  borderRadius: 10,
+                  background: bg.surface,
+                  border: isActive ? '1.5px solid var(--theme-accent)' : '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 2px 10px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.18)',
+                  transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                }}
+              >
+                {isActive && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Admin border effect — only visible to admins */}
+      {currentUser.isAdmin && (
+        <div className={`${cardCls} mt-5`}>
+          <div className="flex items-center gap-4 px-6 py-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
+              <p className="text-xs text-[var(--theme-secondary-text)]/60 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
+            </div>
+            <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} />
+          </div>
+        </div>
+      )}
     </AccordionSection>
   );
 }
@@ -88,7 +153,7 @@ export function SoundsSection() {
                   onClick={() => { setVariant(v); previewSound(category, v); }}
                   className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                     variant === v && enabled
-                      ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
+                      ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
                       : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
                   }`}
                 >
@@ -114,7 +179,7 @@ export function SoundsSection() {
                 onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
                 className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                   soundInviteVariant === v && soundInvite
-                    ? 'bg-[var(--theme-accent)] text-white border-[var(--theme-accent)] shadow-sm'
+                    ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
                     : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
                 }`}
               >
@@ -145,8 +210,6 @@ export function AudioProfileSection() {
               key={profile.id}
               onClick={() => {
                 setAudioProfile(profile.id);
-                setToastMsg(`${profile.icon} ${profile.label} aktif`);
-                setTimeout(() => setToastMsg(null), 2500);
               }}
               className={`flex flex-col gap-2 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
                 isActive
@@ -158,7 +221,7 @@ export function AudioProfileSection() {
                 <span className="text-lg leading-none">{profile.icon}</span>
                 {isActive && (
                   <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0">
-                    <Check size={9} className="text-white" />
+                    <Check size={9} className="text-[var(--theme-btn-primary-text)]" />
                   </div>
                 )}
               </div>
@@ -417,7 +480,7 @@ export function VoiceModeSection() {
             <span className="text-[10px] text-[var(--theme-secondary-text)] leading-snug">{m.desc}</span>
             {voiceMode === m.id && (
               <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)] flex items-center justify-center">
-                <Check size={12} className="text-white" strokeWidth={3} />
+                <Check size={12} className="text-[var(--theme-btn-primary-text)]" strokeWidth={3} />
               </div>
             )}
           </button>

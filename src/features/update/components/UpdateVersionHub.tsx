@@ -85,13 +85,12 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
             </span>
           )}
 
-          {/* Label */}
-          <span>{vis.label}</span>
-
-          {/* Sublabel */}
-          {vis.sublabel && (
-            <span className="text-[var(--theme-secondary-text)]/40">{vis.sublabel}</span>
-          )}
+          {/* Label — sadece yüzde veya versiyon, yazı yok */}
+          {vis.showProgress ? (
+            <span>{`%${state.progress}`}</span>
+          ) : !vis.showUpdateHub ? (
+            <span>{`v${currentVersion}`}</span>
+          ) : null}
         </button>
 
         {/* Popover */}

@@ -121,7 +121,7 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
             ref={submitBtnRef}
             onClick={handleSubmit}
             disabled={loading}
-            className={`w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
+            className={`w-full py-3 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-sm transition-all disabled:opacity-50 active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
           >
             {loading ? 'Kaydediliyor...' : 'Parolayı Kaydet'}
           </button>

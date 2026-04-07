@@ -196,7 +196,7 @@ export default function AccountSection() {
           onCancel={() => setCropSrc(null)}
         />
       )}
-      <AccordionSection icon={<UserIcon size={12} />} title="Hesap" defaultOpen>
+      <AccordionSection icon={<UserIcon size={12} />} title="Hesap">
         <div className={cardCls}>
 
           {/* Gradient şerit */}

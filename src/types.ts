@@ -62,20 +62,9 @@ export interface InviteRequest {
   sentCode?: string;
 }
 
-export interface Theme {
-  id: string;
-  name: string;
-  bg: string;
-  surface: string;
-  sidebar: string;
-  text: string;
-  secondaryText: string;
-  accent: string;
-  border: string;
-  // Glass system tokens
-  glow?: string;        // ambient glow color (hex)
-  glowSecondary?: string; // secondary glow for background (hex)
-}
+// Legacy Theme type — replaced by AppTheme from themes.ts
+// Kept as re-export for backward compatibility
+export type { AppTheme as Theme, ThemeKey } from './themes';
 
 export type AnnouncementPriority = 'normal' | 'important' | 'critical';
 export type AnnouncementType = 'announcement' | 'event';

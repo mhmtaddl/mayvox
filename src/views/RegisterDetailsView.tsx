@@ -140,7 +140,7 @@ export default function RegisterDetailsView({
           <button
             ref={submitBtnRef}
             onClick={handleCompleteRegistration}
-            className={`w-full h-14 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-lg shadow-lg shadow-black/20 transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'opacity-90 scale-[0.97]' : 'hover:opacity-90'}`}
+            className={`w-full h-14 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-lg shadow-lg shadow-black/20 transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'opacity-90 scale-[0.97]' : 'hover:opacity-90'}`}
           >
             <span>CAYLAK Kaydını Tamamla</span>
             <ArrowRight className={`ml-2 transition-transform ${pressing ? 'translate-x-1' : 'group-hover:translate-x-1'}`} />

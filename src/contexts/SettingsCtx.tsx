@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { Theme } from '../types';
+import { AppTheme } from '../themes';
 
 export type AudioProfile = 'clean' | 'broadcast' | 'natural' | 'noisy' | 'custom';
 export type VoiceMode = 'ptt' | 'vad';
@@ -57,8 +57,8 @@ export const AUDIO_PROFILE_META: AudioProfileMeta[] = [
 ];
 
 export interface SettingsContextType {
-  currentTheme: Theme;
-  setCurrentTheme: (v: Theme) => void;
+  currentTheme: AppTheme;
+  setCurrentTheme: (v: AppTheme) => void;
   isLowDataMode: boolean;
   setIsLowDataMode: (v: boolean) => void;
   isNoiseSuppressionEnabled: boolean;
@@ -101,6 +101,8 @@ export interface SettingsContextType {
   setVoiceMode: (v: VoiceMode) => void;
   showLastSeen: boolean;
   setShowLastSeen: (v: boolean) => void;
+  activeBackground: string;
+  setActiveBackground: (v: string) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

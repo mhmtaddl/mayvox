@@ -35,7 +35,7 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
         <div className="space-y-4">
           <button
             onClick={onGoToCode}
-            className="w-full h-16 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center px-6 group"
+            className="w-full h-16 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center px-6 group"
           >
             <Key className="mr-3" />
             <span>Kod Kullanarak Giriş Yap</span>
@@ -44,7 +44,7 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
 
           <button
             onClick={onGoToPassword}
-            className="w-full h-16 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white rounded-xl font-bold text-lg shadow-lg transition-all flex items-center px-6 group"
+            className="w-full h-16 bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center px-6 group"
           >
             <UserIcon className="mr-3" />
             <span>Kullanıcı Adı ve Parola</span>

@@ -110,7 +110,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 </p>
                 <button
                   onClick={onClose}
-                  className="mt-2 px-6 py-2 bg-[var(--theme-accent)] text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all"
+                  className="mt-2 px-6 py-2 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl text-sm font-bold hover:opacity-90 transition-all"
                 >
                   Kapat
                 </button>
@@ -162,7 +162,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <button
                   onClick={handleSubmit}
                   disabled={!foundUser}
-                  className={`w-full py-3 bg-[var(--theme-accent)] text-white rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
+                  className={`w-full py-3 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
                 >
                   Şifremi Sıfırla
                 </button>

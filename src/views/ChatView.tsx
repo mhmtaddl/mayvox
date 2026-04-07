@@ -25,6 +25,7 @@ import {
   Mail,
   ChevronDown,
   Menu,
+  Home,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -45,8 +46,9 @@ import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { dismissInviteNotification } from '../lib/notifications';
-import { UserCard, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../components/chat';
+import { UserCard, RoomNetworkVisualization, ConnectionQualityIndicator, CARD_SCALE_MAP } from '../components/chat';
 import type { CardScale } from '../components/chat';
+import { type CardStyle, CARD_STYLES, loadCardStyle, saveCardStyle } from '../components/chat/cardStyles';
 import DeviceBadge from '../components/chat/DeviceBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import { isCapacitor } from '../lib/platform';
@@ -193,18 +195,104 @@ export default function ChatView() {
   // Local state: draggedUser is only used inside ChatView
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
 
+  // ── TEST: Fake kullanıcı simülasyonu ──
+  const FAKE_NAMES = [
+    { firstName: 'Ahmet', lastName: 'Yılmaz', age: 28, avatar: 'AY' },
+    { firstName: 'Elif', lastName: 'Demir', age: 24, avatar: 'ED' },
+    { firstName: 'Can', lastName: 'Öztürk', age: 31, avatar: 'CÖ' },
+    { firstName: 'Zeynep', lastName: 'Kaya', age: 22, avatar: 'ZK' },
+    { firstName: 'Burak', lastName: 'Çelik', age: 27, avatar: 'BÇ' },
+    { firstName: 'Seda', lastName: 'Arslan', age: 25, avatar: 'SA' },
+    { firstName: 'Emre', lastName: 'Koç', age: 30, avatar: 'EK' },
+    { firstName: 'Ayşe', lastName: 'Şahin', age: 23, avatar: 'AŞ' },
+    { firstName: 'Mert', lastName: 'Aydın', age: 29, avatar: 'MA' },
+    { firstName: 'Deniz', lastName: 'Yıldız', age: 26, avatar: 'DY' },
+    { firstName: 'Oğuz', lastName: 'Kurt', age: 33, avatar: 'OK' },
+    { firstName: 'Gizem', lastName: 'Tan', age: 21, avatar: 'GT' },
+    { firstName: 'Hakan', lastName: 'Bal', age: 35, avatar: 'HB' },
+    { firstName: 'Nisa', lastName: 'Er', age: 20, avatar: 'NE' },
+    { firstName: 'Tolga', lastName: 'Ak', age: 32, avatar: 'TA' },
+    { firstName: 'İrem', lastName: 'Güneş', age: 24, avatar: 'İG' },
+    { firstName: 'Kaan', lastName: 'Işık', age: 27, avatar: 'Kİ' },
+    { firstName: 'Pınar', lastName: 'Su', age: 26, avatar: 'PS' },
+    { firstName: 'Arda', lastName: 'Tunç', age: 29, avatar: 'AT' },
+    { firstName: 'Yağmur', lastName: 'Bulut', age: 23, avatar: 'YB' },
+    { firstName: 'Onur', lastName: 'Kara', age: 34, avatar: 'OK' },
+    { firstName: 'Ceren', lastName: 'Ay', age: 22, avatar: 'CA' },
+    { firstName: 'Furkan', lastName: 'Gök', age: 28, avatar: 'FG' },
+    { firstName: 'Ece', lastName: 'Özkan', age: 25, avatar: 'EÖ' },
+    { firstName: 'Barış', lastName: 'Deniz', age: 31, avatar: 'BD' },
+    { firstName: 'Dila', lastName: 'Yurt', age: 21, avatar: 'DY' },
+    { firstName: 'Tuna', lastName: 'Sel', age: 30, avatar: 'TS' },
+    { firstName: 'Melisa', lastName: 'Çam', age: 24, avatar: 'MÇ' },
+    { firstName: 'Alp', lastName: 'Dağ', age: 33, avatar: 'AD' },
+    { firstName: 'Simge', lastName: 'Yol', age: 22, avatar: 'SY' },
+  ];
+  const [fakeUserCount, setFakeUserCount] = useState(0);
+
+  // ── Sohbet mesajları (local, max 50) ──
+  const [chatMessages, setChatMessages] = useState<{ id: string; sender: string; text: string; time: number }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const sendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatMessages(prev => {
+      const next = [...prev, { id: `${Date.now()}-${Math.random()}`, sender: formatFullName(currentUser.firstName, currentUser.lastName), text, time: Date.now() }];
+      return next.slice(-50);
+    });
+    setChatInput('');
+    setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+  };
+  const deleteChatMessage = (id: string) => setChatMessages(prev => prev.filter(m => m.id !== id));
+  const startEditMessage = (msg: { id: string; text: string }) => { setEditingMsgId(msg.id); setEditingText(msg.text); };
+  const saveEditMessage = () => {
+    if (!editingMsgId) return;
+    const text = editingText.trim();
+    if (!text) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
+    setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text } : m));
+    setEditingMsgId(null); setEditingText('');
+  };
+  const fakeUsers = useMemo(() => {
+    return FAKE_NAMES.slice(0, fakeUserCount).map((f, i) => ({
+      id: `fake-${i}`,
+      name: `${f.firstName} ${f.lastName}`,
+      firstName: f.firstName,
+      lastName: f.lastName,
+      age: f.age,
+      avatar: f.avatar,
+      status: 'online' as const,
+      statusText: i % 3 === 0 ? 'Aktif' : i % 3 === 1 ? 'Telefonda' : 'Aktif',
+      isSpeaking: i === 0 && fakeUserCount > 1, // ilk fake user konuşuyor simülasyonu
+      platform: (i % 2 === 0 ? 'desktop' : 'mobile') as 'desktop' | 'mobile',
+      isAdmin: i === 2,
+      isModerator: i === 4,
+      appVersion: '1.7.14',
+      onlineSince: Date.now() - (i + 1) * 600000,
+    }));
+  }, [fakeUserCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Profile popup
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
 
   // Offline users collapse
   const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
     const saved = localStorage.getItem('offlineUsersExpanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
     return saved ? Math.max(1, Math.min(3, parseInt(saved))) : 2;
   });
+  const [cardStyle, setCardStyleState] = useState<CardStyle>(loadCardStyle);
+  const cycleCardStyle = () => {
+    const order: CardStyle[] = ['current', 'revolt', 'linear', 'apple'];
+    const next = order[(order.indexOf(cardStyle) + 1) % order.length];
+    saveCardStyle(next);
+    setCardStyleState(next);
+  };
 
   // Davet gelince çağrı sesi: modal açılınca başlar, kapanınca durur
   // soundInvite kapalıysa hiç çalmaz; variant ayarı ile uygun ses seçilir
@@ -400,8 +488,8 @@ export default function ChatView() {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
-      {/* Header */}
-      <header className="flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0">
+      {/* Header — masaüstünde gizli, mobilde görünür */}
+      <header className={`${FORCE_MOBILE ? '' : 'lg:hidden'} flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0`}>
         <div className={`flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 ${FORCE_MOBILE ? '' : 'lg:pr-0'} h-14 sm:h-16`}>
           {/* Mobil: sol drawer butonu */}
           <button
@@ -501,7 +589,7 @@ export default function ChatView() {
 
       </header>
 
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className={`flex flex-1 min-h-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-3 lg:gap-[6px]'}`}>
         {/* ── Mobil kenar handle'ları — tıkla veya sürükle ile drawer aç ── */}
         {!mobileLeftOpen && !mobileRightOpen && (
           <>
@@ -765,9 +853,13 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Left Sidebar — sadece masaüstünde sabit görünür */}
-        <aside className={`w-72 bg-[rgba(var(--theme-sidebar-rgb),0.35)] backdrop-blur-xl border-r border-[rgba(var(--glass-tint),0.04)] ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col`}>
-          <div className="p-6 flex flex-col h-full">
-            <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-6">
+        <aside className={`w-60 bg-[rgba(var(--theme-sidebar-rgb),0.06)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.08)' }}>
+          {/* Brand */}
+          <div className="px-5 pt-4 pb-3 shrink-0">
+            <BrandArea />
+          </div>
+          <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
+            <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-4">
               <Volume2 size={14} className="opacity-60" />
               <span className="uppercase text-[10px] tracking-[0.15em]">Ses Kanalları</span>
             </div>
@@ -847,9 +939,8 @@ export default function ChatView() {
                   )}
                 </div>
               ))}
-            </nav>
 
-            <div className="mt-auto pt-6">
+              {/* Oda Oluştur — kanal listesi akışında, son kanal altında */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -860,16 +951,29 @@ export default function ChatView() {
                   }
                   setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
                 }}
-                className={`w-full flex items-center justify-center gap-2 transition-all duration-200 py-3 rounded-xl font-bold text-sm ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                   channels.filter(c => c.ownerId === currentUser.id).length >= 2
-                    ? 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)] cursor-not-allowed opacity-50 border border-[rgba(var(--glass-tint),0.04)]'
-                    : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)]/25 hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.15)]'
+                    ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
+                    : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
                 }`}
               >
                 <PlusCircle size={18} />
-                Oda Oluştur
+                <span className="text-sm font-medium">Oda Oluştur</span>
               </button>
-            </div>
+            </nav>
+          </div>
+
+          {/* Sol alt kontroller — Versiyon notları + Sinyal seviyesi */}
+          <div className="shrink-0 px-4 py-3 flex items-center justify-center gap-3">
+            {appVersion && (
+              <UpdateVersionHub
+                currentVersion={appVersion}
+                isAdmin={currentUser.isAdmin}
+                autoShowNotes={showReleaseNotes}
+                onNotesShown={() => setShowReleaseNotes(false)}
+              />
+            )}
+            <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
           </div>
         </aside>
 
@@ -1451,10 +1555,20 @@ export default function ChatView() {
           )}
         </AnimatePresence>
 
-        {/* Main Content */}
-        <main onDragOver={currentUser.isAdmin ? handleDragOver : undefined} onDrop={currentUser.isAdmin ? handleDropToRemove : undefined} className={`flex-1 flex flex-col bg-[var(--theme-surface)] overflow-y-auto custom-scrollbar relative ${view !== 'settings' ? 'p-3 sm:p-8' : ''}`} style={{ backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
+        {/* Main Content — outer shell (no scroll), inner region scrolls with bounded height */}
+        <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.03)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 2px 20px rgba(0,0,0,0.06)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
+          {/* Content region */}
+          <div
+            onDragOver={currentUser.isAdmin ? handleDragOver : undefined}
+            onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
+            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE
+              ? 'overflow-y-auto custom-scrollbar p-3'
+              : `lg:mb-[72px] ${activeChannel && view !== 'settings'
+                ? 'overflow-hidden'
+                : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}
+          >
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
-            <div className="relative flex-1 flex flex-col">
+            <div className="relative flex-1 flex flex-col min-h-0">
               {/* Ambient background — canlı ama sessiz */}
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
                 <div
@@ -1467,7 +1581,8 @@ export default function ChatView() {
                 />
               </div>
 
-              <div className="relative z-[1] flex items-center justify-between mb-3 sm:mb-6">
+              {/* Oda başlığı — sadece mobilde göster, masaüstünde kontroller floating cluster'da */}
+              <div className={`relative z-[1] flex items-center justify-between mb-3 sm:mb-6 ${FORCE_MOBILE ? '' : 'lg:hidden'}`}>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
                     <Volume2 size={18} className="sm:w-5 sm:h-5" />
@@ -1480,7 +1595,6 @@ export default function ChatView() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Card density toggle — click to cycle */}
                   <button
                     onClick={() => {
                       const next = (cardScale % 3) + 1;
@@ -1492,16 +1606,9 @@ export default function ChatView() {
                   >
                     <svg width="16" height="14" viewBox="0 0 16 14" fill="none" className="text-[var(--theme-secondary-text)] group-hover/density:text-[var(--theme-accent)] transition-colors">
                       {cardScale === 1 ? (
-                        <>
-                          <rect x="0" y="0"  width="16" height="3.5" rx="1" fill="currentColor" opacity="0.7" />
-                          <rect x="0" y="5.25" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.5" />
-                          <rect x="0" y="10.5" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.3" />
-                        </>
+                        <><rect x="0" y="0" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.7" /><rect x="0" y="5.25" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.5" /><rect x="0" y="10.5" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.3" /></>
                       ) : cardScale === 2 ? (
-                        <>
-                          <rect x="0" y="0.5" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.7" />
-                          <rect x="0" y="8"   width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.45" />
-                        </>
+                        <><rect x="0" y="0.5" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.7" /><rect x="0" y="8" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.45" /></>
                       ) : (
                         <rect x="0" y="0" width="16" height="14" rx="2" fill="currentColor" opacity="0.6" />
                       )}
@@ -1518,65 +1625,222 @@ export default function ChatView() {
                 </div>
               </div>
 
-              {/* Participant cards */}
+              {/* TEST BUTONU — geçici */}
+              <div className="absolute top-2 right-2 z-50 flex items-center gap-1.5">
+                <span className="text-[9px] text-[var(--theme-secondary-text)] font-mono">Test: {fakeUserCount}/30</span>
+                <button
+                  onClick={() => setFakeUserCount(c => Math.min(c + 1, 30))}
+                  className="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
+                >+ Ekle</button>
+                <button
+                  onClick={() => setFakeUserCount(c => Math.max(c - 1, 0))}
+                  className="px-2 py-1 text-[10px] font-bold rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                >− Çıkar</button>
+                <button
+                  onClick={() => setFakeUserCount(0)}
+                  className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[rgba(var(--glass-tint),0.08)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]"
+                >Sıfırla</button>
+              </div>
+
+              {/* Participant area */}
               <div className="relative z-[1] flex-1">
                 {(() => {
-                  const count = sortedChannelMembers.length;
+                  // Gerçek üyeler + fake test kullanıcıları
+                  const allMembers = [...sortedChannelMembers, ...fakeUsers];
+                  const count = allMembers.length;
                   const s = cardScale;
-                  const anySpeaking = sortedChannelMembers.some(u =>
+                  const anySpeaking = allMembers.some(u =>
                     u.id === currentUser.id ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned) : !!u.isSpeaking
                   );
 
+                  // Desktop: sort users — dominant speaker first, then "me", then others
+                  const desktopSorted = [...allMembers].sort((a, b) => {
+                    const aIsMe = a.id === currentUser.id;
+                    const bIsMe = b.id === currentUser.id;
+                    const aIsSpeaking = aIsMe ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned) : !!a.isSpeaking;
+                    const bIsSpeaking = bIsMe ? (isPttPressed && !isMuted && !currentUser.isVoiceBanned) : !!b.isSpeaking;
+                    const aIsDom = aIsSpeaking && a.id === dominantSpeakerId;
+                    const bIsDom = bIsSpeaking && b.id === dominantSpeakerId;
+                    if (aIsDom !== bIsDom) return aIsDom ? -1 : 1;
+                    if (aIsSpeaking !== bIsSpeaking) return aIsSpeaking ? -1 : 1;
+                    if (aIsMe !== bIsMe) return aIsMe ? -1 : 1;
+                    return 0;
+                  });
+
+                  const renderCardProps = (user: typeof allMembers[0]) => {
+                    const isMe = user.id === currentUser.id;
+                    const isSpeakingActive = (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) || (!isMe && !!user.isSpeaking);
+                    return {
+                      user,
+                      isMe,
+                      isOwner: currentChannel?.ownerId === user.id,
+                      isSpeakingActive,
+                      isDominant: isSpeakingActive && user.id === dominantSpeakerId,
+                      intensity: getIntensity(user),
+                      scale: scaleConfig,
+                      adminBorderEffect,
+                      isPttPressed,
+                      isMuted: isMe ? isMuted : false,
+                      isDeafened: isMe ? isDeafened : false,
+                      isVoiceBanned: isMe ? !!currentUser.isVoiceBanned : false,
+                      volumeLevel,
+                      speakingLevel: speakingLevels[user.name] ?? 0,
+                      statusTimer: isMe ? statusTimer : null,
+                      effectiveStatus: getEffectiveStatus(),
+                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); },
+                      onDoubleClick: () => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); },
+                      onContextMenu: (e: React.MouseEvent) => { if (!isMe && currentUser.isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) handleKickUser(user.id); } },
+                    };
+                  };
+
                   return (
                     <>
-                      <div className={`grid ${scaleConfig.gridGap} mx-auto w-full ${
-                        FORCE_MOBILE
-                          ? (s === 3
-                              ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
-                              : s === 2
-                                ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
-                                : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'))
-                          : (s === 3
-                              ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')
-                              : s === 2
-                                ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl' : count <= 9 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5')
-                                : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'))
-                      }`}>
-                        {sortedChannelMembers.map((user) => {
-                          const isMe = user.id === currentUser.id;
-                          const isSpeakingActive =
-                            (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) ||
-                            (!isMe && !!user.isSpeaking);
+                      {/* ── Masaüstü: 3 bölümlü sabit layout ── */}
+                      {!FORCE_MOBILE && (
+                        <div className="hidden lg:flex lg:flex-col flex-1 min-h-0">
 
-                          return (
-                            <UserCard
-                              key={user.id}
-                              user={user}
-                              isMe={isMe}
-                              isOwner={currentChannel?.ownerId === user.id}
-                              isSpeakingActive={isSpeakingActive}
-                              isDominant={isSpeakingActive && user.id === dominantSpeakerId}
-                              intensity={getIntensity(user)}
-                              scale={scaleConfig}
-                              adminBorderEffect={adminBorderEffect}
-                              isPttPressed={isPttPressed}
-                              isMuted={isMe ? isMuted : false}
-                              isDeafened={isMe ? isDeafened : false}
-                              isVoiceBanned={isMe ? !!currentUser.isVoiceBanned : false}
-                              volumeLevel={volumeLevel}
-                              speakingLevel={speakingLevels[user.name] ?? 0}
-                              statusTimer={isMe ? statusTimer : null}
-                              effectiveStatus={getEffectiveStatus()}
-                              onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                              onDoubleClick={() => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); }}
-                              onContextMenu={(e) => { if (!isMe && currentUser.isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) handleKickUser(user.id); } }}
+                          {/* ▶ BÖLÜM 1: Kullanıcı kartları — shrink-0, doğal yükseklik */}
+                          <div className="shrink-0 px-3 pt-3 pb-1">
+                            <RoomNetworkVisualization
+                              cardStyle={cardStyle}
+                              participants={allMembers.map(user => {
+                                const isMe = user.id === currentUser.id;
+                                const isSpeakingActive = (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) || (!isMe && !!user.isSpeaking);
+                                return {
+                                  id: user.id,
+                                  name: user.name,
+                                  firstName: user.firstName,
+                                  lastName: user.lastName,
+                                  age: user.age,
+                                  avatar: user.avatar,
+                                  isSelf: isMe,
+                                  isSpeaking: isSpeakingActive,
+                                  isMuted: isMe ? isMuted : (!!user.selfMuted || !!user.isMuted),
+                                  isDeafened: isMe ? isDeafened : !!user.selfDeafened,
+                                  platform: user.platform,
+                                  isAdmin: user.isAdmin,
+                                  isModerator: user.isModerator,
+                                  appVersion: user.appVersion,
+                                  adminBorderEffect,
+                                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); },
+                                  onDoubleClick: () => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); },
+                                  onContextMenu: (e: React.MouseEvent) => { if (!isMe && currentUser.isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) handleKickUser(user.id); } },
+                                };
+                              })}
                             />
-                          );
-                        })}
+                            {/* Idle hint */}
+                            {!anySpeaking && (
+                              <div className="flex items-center justify-center py-1">
+                                <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
+                                  <Mic size={12} />
+                                  Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ▶ BÖLÜM 2+3: Chat window — overflow-hidden flex-col wrapper */}
+                          <div className="flex-1 min-h-0 overflow-hidden flex flex-col mx-3 rounded-xl" style={{ border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+
+                            {/* Mesaj listesi — TEK scroll alanı */}
+                            <div
+                              ref={chatScrollRef}
+                              className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-2 flex flex-col"
+                              style={{ background: 'rgba(var(--glass-tint), 0.02)' }}
+                            >
+                              <div className="flex-1" />
+                              {chatMessages.length === 0 ? (
+                                <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">
+                                  Sohbet mesajları burada görünecek
+                                </p>
+                              ) : (
+                                chatMessages.map(msg => {
+                                  const t = new Date(msg.time);
+                                  const timeStr = t.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                  const isEditing = editingMsgId === msg.id;
+                                  return (
+                                    <div key={msg.id} className="flex items-start gap-2 py-1 group/msg">
+                                      <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-0.5 tabular-nums w-10 text-right">{timeStr}</span>
+                                      <span className="shrink-0 text-[11px] font-semibold text-[var(--theme-accent)] opacity-60 max-w-[100px] truncate">{msg.sender}</span>
+                                      {isEditing ? (
+                                        <input
+                                          autoFocus
+                                          type="text"
+                                          value={editingText}
+                                          onChange={(e) => setEditingText(e.target.value)}
+                                          onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }}
+                                          onBlur={saveEditMessage}
+                                          className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none"
+                                        />
+                                      ) : (
+                                        <span className="text-[14px] text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1">{msg.text}</span>
+                                      )}
+                                      {/* Düzenle + Sil butonları */}
+                                      {!isEditing && (
+                                        <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                                          <button
+                                            onClick={() => startEditMessage(msg)}
+                                            className="p-0.5 rounded hover:bg-[var(--theme-accent)]/10 transition-colors"
+                                            title="Düzenle"
+                                          >
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                          </button>
+                                          <button
+                                            onClick={() => deleteChatMessage(msg.id)}
+                                            className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                                            title="Sil"
+                                          >
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+
+                            {/* Mesaj input — shrink-0, scroll dışında */}
+                            <div
+                              className="shrink-0 flex items-center gap-2 px-3 py-2"
+                              style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}
+                            >
+                              <input
+                                type="text"
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                                placeholder="Mesaj yaz..."
+                                className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors"
+                              />
+                              <button
+                                onClick={sendChatMessage}
+                                className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all"
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                              </button>
+                            </div>
+
+                          </div>
+
+                        </div>
+                      )}
+
+                      {/* ── Mobil + küçük ekran: klasik grid layout ── */}
+                      <div className={`${FORCE_MOBILE ? '' : 'lg:hidden'} grid ${scaleConfig.gridGap} mx-auto w-full ${
+                        s === 3
+                          ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+                          : s === 2
+                            ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+                            : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4')
+                      }`}>
+                        {allMembers.map(user => (
+                          <UserCard key={user.id} {...renderCardProps(user)} />
+                        ))}
                       </div>
 
-                      {/* Idle hint — kimse konuşmuyorsa (sadece masaüstünde göster) */}
-                      {!anySpeaking && !FORCE_MOBILE && (
+                      {/* Idle hint — mobilde göster (masaüstünde sohbet panelinin içinde) */}
+                      {!anySpeaking && FORCE_MOBILE && (
                         <div className="flex items-center justify-center mt-8">
                           <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
                             <Mic size={12} />
@@ -1609,11 +1873,52 @@ export default function ChatView() {
               <AnnouncementsPanel currentUser={currentUser} />
             </div>
           )}
+          </div>{/* end bounded scroll region */}
         </main>
 
         {/* Right Sidebar */}
-        <aside className={`w-64 bg-[rgba(var(--theme-sidebar-rgb),0.45)] backdrop-blur-xl border-l border-[rgba(var(--glass-tint),0.05)] flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`}>
-          <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-[rgba(var(--glass-tint),0.04)]">
+        <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.06)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.08)' }}>
+          {/* Profil bloğu */}
+          <div
+            className="px-4 pt-4 pb-3 shrink-0 flex items-center gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.02)] rounded-t-2xl transition-all duration-200"
+            onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}
+          >
+            <div className="h-9 w-9 rounded-full bg-blue-500/20 border-2 overflow-hidden relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
+              {currentUser.avatar?.startsWith('http')
+                ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                : currentUser.avatar}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <p className="text-[13px] font-semibold leading-none truncate">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
+            </div>
+            {/* Status Menu — sağ sidebar profil altı */}
+            <AnimatePresence>
+              {isStatusMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full left-0 right-0 mt-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 z-[100] backdrop-blur-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Aktif</button>
+                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Telefonda</button>
+                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Hemen Geleceğim</button>
+                  <div className="border-t border-[var(--theme-border)] my-1" />
+                  <div className="px-3 py-2">
+                    <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest block mb-2">Süre (Dk)</label>
+                    <div className="flex gap-2">
+                      <input type="text" maxLength={2} placeholder="99" className="flex-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all" value={statusTimerInput} onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} />
+                      <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="px-3 py-1.5 bg-[var(--theme-accent)] text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all">Kur</button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
             <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
             <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
           </div>
@@ -1790,7 +2095,184 @@ export default function ChatView() {
               </div>}
             </div>
           </div>
+
+          {/* Sağ alt kontroller — Ayarlar, Bildirim Çanı, Çıkış */}
+          <div className="shrink-0 px-3 py-3 flex items-center justify-center gap-2">
+            {/* Ayarlar — hover çark dönme + accent renk */}
+            <button
+              onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+              className={`relative w-10 h-10 flex items-center justify-center transition-colors duration-200 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
+              title="Ayarlar"
+            >
+              <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+            </button>
+
+            {/* Bildirim çanı — hover sallanma + accent renk */}
+            <button
+              onClick={() => { /* TODO: bildirim paneli toggle */ }}
+              className="relative w-10 h-10 flex items-center justify-center transition-colors duration-200 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] group/bell"
+              title="Bildirimler"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover/bell:animate-[bell-ring_0.5s_ease-in-out]"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full" />
+              )}
+            </button>
+
+            {/* Çıkış — her zaman kırmızı */}
+            <button
+              onClick={() => setLogoutConfirmOpen(true)}
+              className="w-10 h-10 flex items-center justify-center transition-colors duration-200 text-red-400 hover:text-red-300"
+              title="Çıkış"
+            >
+              <Power size={16} />
+            </button>
+          </div>
         </aside>
+      </div>
+
+      {/* ── Masaüstü floating kontroller (fixed, scroll-proof) ── */}
+      <div className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-6 left-1/2 -translate-x-1/2 z-30 items-center gap-1.5`}>
+        {/* Mikrofon + ayar */}
+        <div className="relative group/mic">
+          <button
+            onClick={() => {
+              if (isAdminMuted) return;
+              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
+              if (isSpecialStatus) { handleSetStatus('Aktif'); return; }
+              if (isMuted && isDeafened) setIsDeafened(false);
+              setIsMuted(!isMuted);
+            }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${
+              isAdminMuted ? 'bg-orange-500/20 text-orange-400 border border-orange-500/25'
+              : isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/25'
+              : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
+            }`}
+            title={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
+          >
+            <Mic size={16} />
+          </button>
+          <div onClick={(e) => { e.stopPropagation(); setShowInputSettings(!showInputSettings); setShowOutputSettings(false); }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/mic:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]">
+            <Settings size={8} className="text-[var(--theme-text)]" />
+          </div>
+          <AnimatePresence>
+            {showInputSettings && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-xl p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
+                <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Giriş Cihazı</h4>
+                <div className="space-y-1">
+                  {inputDevices.map(device => (
+                    <button key={device.deviceId} onClick={() => { setSelectedInput(device.deviceId); setShowInputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedInput === device.deviceId ? 'bg-[var(--theme-accent)] text-white' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
+                      <span className="truncate">{device.label || `Mikrofon ${device.deviceId.slice(0, 5)}`}</span>
+                      {selectedInput === device.deviceId && <Check size={12} className="shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {/* Kulaklık + ayar */}
+        <div className="relative group/hp">
+          <button
+            onClick={() => {
+              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
+              if (isSpecialStatus) { setIsDeafened(false); return; }
+              setIsDeafened(!isDeafened);
+            }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${
+              isDeafened ? 'bg-red-500/20 text-red-400 border border-red-500/25' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
+            }`}
+            title={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
+          >
+            <Headphones size={16} />
+          </button>
+          <div onClick={(e) => { e.stopPropagation(); setShowOutputSettings(!showOutputSettings); setShowInputSettings(false); }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/hp:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]">
+            <Settings size={8} className="text-[var(--theme-text)]" />
+          </div>
+          <AnimatePresence>
+            {showOutputSettings && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-xl p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
+                <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Çıkış Cihazı</h4>
+                <div className="space-y-1">
+                  {outputDevices.map(device => (
+                    <button key={device.deviceId} onClick={() => { setSelectedOutput(device.deviceId); setShowOutputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedOutput === device.deviceId ? 'bg-[var(--theme-accent)] text-white' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
+                      <span className="truncate">{device.label || `Hoparlör ${device.deviceId.slice(0, 5)}`}</span>
+                      {selectedOutput === device.deviceId && <Check size={12} className="shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {/* Gürültü Susturma */}
+        <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
+          {isNoiseSuppressionEnabled ? <Shield size={16} /> : <ShieldOff size={16} />}
+        </button>
+        {/* PTT tuşu */}
+        <button onClick={() => setIsListeningForKey(true)} className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 text-[10px] font-black whitespace-nowrap ${isListeningForKey ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'}`} title="Bas-Konuş tuşu">
+          {isListeningForKey ? '...' : pttKey}
+        </button>
+        {/* Oda kontrolleri — sadece odadayken */}
+        {activeChannel && view !== 'settings' && (
+          <>
+            <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
+            <button
+              onClick={cycleCardStyle}
+              className="w-10 h-10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+              style={{
+                borderRadius: cardStyle === 'revolt' ? 8 : cardStyle === 'linear' ? 12 : cardStyle === 'apple' ? 14 : 12,
+                background: cardStyle === 'revolt'
+                  ? 'rgba(var(--theme-bg-rgb), 0.85)'
+                  : cardStyle === 'linear'
+                    ? 'rgba(var(--theme-bg-rgb), 0.75)'
+                    : cardStyle === 'apple'
+                      ? 'rgba(255,255,255,0.05)'
+                      : 'rgba(var(--glass-tint), 0.025)',
+                border: cardStyle === 'linear'
+                  ? '1px solid rgba(var(--theme-accent-rgb), 0.12)'
+                  : cardStyle === 'apple'
+                    ? '1px solid rgba(255,255,255,0.1)'
+                    : '1px solid rgba(var(--glass-tint), 0.06)',
+                boxShadow: cardStyle === 'linear'
+                  ? '0 2px 8px rgba(0,0,0,0.15)'
+                  : '0 1px 3px rgba(0,0,0,0.06)',
+                backdropFilter: cardStyle === 'apple' ? 'blur(12px)' : undefined,
+                transition: 'all 0.2s ease',
+              }}
+              title={`Görünüm: ${CARD_STYLES.find(s => s.key === cardStyle)?.label}`}
+            >
+              {/* Stil ikonu — her stil için benzersiz mini şekil */}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                {cardStyle === 'current' ? (
+                  /* Varsayılan: basit yuvarlatılmış kare */
+                  <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.5" className="text-[var(--theme-secondary-text)]" />
+                ) : cardStyle === 'revolt' ? (
+                  /* Revolt: keskin köşeli çift çerçeve */
+                  <><rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" className="text-[var(--theme-accent)]" opacity="0.5" /><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor" className="text-[var(--theme-accent)]" opacity="0.3" /></>
+                ) : cardStyle === 'linear' ? (
+                  /* Linear: iç glow efektli elmas */
+                  <><rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.2" className="text-[var(--theme-accent)]" /><circle cx="8" cy="8" r="2.5" fill="currentColor" className="text-[var(--theme-accent)]" opacity="0.5" /><circle cx="8" cy="8" r="4.5" stroke="currentColor" strokeWidth="0.8" className="text-[var(--theme-accent)]" opacity="0.25" /></>
+                ) : (
+                  /* Apple: soft rounded square + iç blur hissi */
+                  <><rect x="2" y="2" width="12" height="12" rx="4" stroke="currentColor" strokeWidth="1.2" className="text-[var(--theme-accent)]" opacity="0.6" /><rect x="4.5" y="4.5" width="7" height="7" rx="2.5" fill="currentColor" className="text-[var(--theme-accent)]" opacity="0.15" /></>
+                )}
+              </svg>
+            </button>
+            <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white" title="Odadan Ayrıl">
+              <PhoneOff size={16} />
+            </button>
+          </>
+        )}
+        {/* Ayarlardayken ana sayfa butonu */}
+        {view === 'settings' && (
+          <>
+            <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
+            <button onClick={() => setView('chat')} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]" title="Ana Sayfa">
+              <Home size={16} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* User Profile Popup */}
@@ -2046,9 +2528,9 @@ export default function ChatView() {
         </div>
       </footer>
 
-      {/* ── Masaüstü footer (orijinal) ── */}
-      <footer className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} h-16 bg-[rgba(var(--theme-sidebar-rgb),0.6)] backdrop-blur-xl border-t border-[rgba(var(--glass-tint),0.04)] items-center relative`}>
-        <div className="w-72 px-4 flex gap-2 h-full items-center">
+      {/* ── Masaüstü footer — artık kullanılmıyor, kontroller sidebar ve floating cluster'a taşındı ── */}
+      <footer className="hidden">
+        <div className="w-60 px-4 flex gap-2 h-full items-center">
           <div className="relative flex-1">
             <button
               onClick={() => {
@@ -2066,7 +2548,7 @@ export default function ChatView() {
               className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg font-bold text-[11px] transition-all duration-200 ${
                 isDeafened
                   ? 'bg-red-500/20 text-red-400 border border-red-500/25 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
-                  : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.12)]'
+                  : 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.15)]'
               }`}
             >
               <Headphones size={14} />
@@ -2141,7 +2623,7 @@ export default function ChatView() {
                   ? 'bg-orange-500/20 text-orange-400 border border-orange-500/25 shadow-[0_0_12px_rgba(249,115,22,0.15)] cursor-not-allowed'
                   : isMuted
                     ? 'bg-red-500/20 text-red-400 border border-red-500/25 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
-                    : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.12)]'
+                    : 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 shadow-[0_0_12px_rgba(var(--theme-accent-rgb),0.15)]'
               }`}
             >
               <Mic size={14} />
@@ -2301,7 +2783,7 @@ export default function ChatView() {
           </div>
         </div>
 
-        <div className="w-64 px-4 flex items-center justify-evenly h-full">
+        <div className="w-56 px-4 flex items-center justify-evenly h-full">
           <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
 
           <div className="relative" ref={resetPanelRef}>

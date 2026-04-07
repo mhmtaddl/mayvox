@@ -18,7 +18,7 @@ function getBarColor(level: number) {
 
 function getStatusLabel(isActive: boolean, isConnecting: boolean, connectionLevel: number) {
   if (!isActive) return null;
-  if (isConnecting) return { text: 'Bağlanıyor', color: 'text-yellow-400' };
+  if (isConnecting) return null;
   if (connectionLevel === 0) return { text: 'Bağlantı Yok', color: 'text-red-400' };
   if (connectionLevel === 1) return { text: 'Zayıf', color: 'text-red-400' };
   return null;

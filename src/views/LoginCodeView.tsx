@@ -501,8 +501,8 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
             onClick={onSubmit}
             className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${
               pressing
-                ? 'bg-[var(--theme-accent)] text-white scale-[0.97]'
-                : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white'
+                ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] scale-[0.97]'
+                : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)]'
             }`}
           >
             <span>Devam Et</span>

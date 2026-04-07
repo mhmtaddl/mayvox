@@ -1,13 +1,13 @@
 // ── Update System Constants ─────────────────────────────────────────────────
 
 /** İlk check gecikmesi (ms) — uygulama tam yüklendikten sonra */
-export const INITIAL_CHECK_DELAY = 15_000;
+export const INITIAL_CHECK_DELAY = 10_000;
 
-/** Desktop tekrar check aralığı (ms) — 6 saat */
-export const DESKTOP_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+/** Desktop tekrar check aralığı (ms) — 5 saat */
+export const DESKTOP_CHECK_INTERVAL = 5 * 60 * 60 * 1000;
 
-/** Android tekrar check aralığı (ms) — 10 dakika */
-export const ANDROID_CHECK_INTERVAL = 10 * 60 * 1000;
+/** Android tekrar check aralığı (ms) — 30 dakika */
+export const ANDROID_CHECK_INTERVAL = 30 * 60 * 1000;
 
 /** Network timeout (ms) */
 export const FETCH_TIMEOUT = 15_000;
