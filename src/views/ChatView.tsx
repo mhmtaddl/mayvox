@@ -1896,12 +1896,12 @@ export default function ChatView() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.96 }}
                   className="absolute top-full left-0 right-0 mt-1 rounded-xl p-1.5 z-[100]"
-                  style={{ background: 'var(--theme-surface-card)', border: '1px solid var(--theme-surface-card-border)', boxShadow: '0 12px 40px rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)' }}
+                  style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Aktif</button>
-                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Telefonda</button>
-                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Hemen Geleceğim</button>
+                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Aktif</button>
+                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Telefonda</button>
+                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Hemen Geleceğim</button>
                   <div className="h-px mx-2 my-1" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
                   <div className="px-3 py-2">
                     <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre (Dk)</label>
