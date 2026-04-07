@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User as UserIcon, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
 
@@ -7,10 +7,9 @@ interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
   onGoToRegister: () => void;
-  onGoBack?: () => void;
 }
 
-export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister, onGoBack }: LoginPasswordViewProps) {
+export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister }: LoginPasswordViewProps) {
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -23,13 +22,6 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
     const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
     w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!onGoBack) return;
-    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); onGoBack(); } };
-    window.addEventListener('mouseup', handler);
-    return () => window.removeEventListener('mouseup', handler);
-  }, [onGoBack]);
 
   const onSubmit = async () => {
     setError(null);
@@ -47,107 +39,142 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)] p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
+      {/* Ambient glows */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.07]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4), transparent 70%)' }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.05]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)' }} />
+      </div>
+
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[420px] bg-[var(--theme-sidebar)]/50 p-10 rounded-2xl border border-[var(--theme-border)] shadow-2xl backdrop-blur-sm"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-[420px] relative z-10 rounded-3xl overflow-hidden"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset',
+        }}
       >
-        <div className="flex justify-center mb-8">
-          <div className="w-44 h-44 overflow-hidden rounded-[20%]">
-            <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
-          </div>
-        </div>
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-        <div className="text-center mb-8">
-          <h1 className="text-[var(--theme-text)] text-3xl font-bold tracking-tight">PigeVox ile Sesini Duyur</h1>
-          <p className="text-[var(--theme-secondary-text)] mt-2 text-sm">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
-        </div>
-
-        <div className="space-y-6">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-bold text-center animate-pulse">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">Kullanıcı Adı</label>
+        <div className="px-10 pt-10 pb-8">
+          {/* Logo */}
+          <div className="flex justify-center mb-10">
             <div className="relative">
-              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
-              <input
-                type="text"
-                placeholder="Kullanıcı Adını Giriniz"
-                value={nick}
-                onChange={(e) => setNick(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
-                aria-label="Kullanıcı adı"
-                autoComplete="username"
-                className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
-              />
+              <div className="absolute inset-[-20px] rounded-full opacity-20 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
+              <div className="relative w-44 h-44 overflow-hidden rounded-[22%]">
+                <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">PAROLA GİRİNİZ</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
-              <input
-                type={showPwd ? 'text' : 'password'}
-                placeholder="Parolanızı giriniz"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
-                aria-label="Parola"
-                autoComplete="current-password"
-                className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-12 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
-              />
+          {/* Title */}
+          <div className="text-center mb-8">
+            <h1 className="text-[#F5F5F5] text-[28px] font-bold tracking-[-0.01em] leading-tight">PigeVox ile Sesini Duyur</h1>
+            <p className="text-white/50 mt-3 text-[14px] max-w-[80%] mx-auto leading-relaxed">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
+          </div>
+
+          <div className="space-y-5">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs font-bold text-center">
+                {error}
+              </div>
+            )}
+
+            {/* Kullanıcı adı */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-white/40 uppercase tracking-[0.12em]">Kullanıcı Adı</label>
+              <div className="relative">
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
+                <input
+                  type="text"
+                  placeholder="Kullanıcı adını gir"
+                  value={nick}
+                  onChange={(e) => setNick(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                  autoComplete="username"
+                  className="w-full h-[50px] rounded-2xl pl-11 pr-4 text-[14px] text-white placeholder:text-white/30 outline-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Parola */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-white/40 uppercase tracking-[0.12em]">Parola</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  placeholder="Parolanı gir"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                  autoComplete="current-password"
+                  className="w-full h-[50px] rounded-2xl pl-11 pr-12 text-[14px] text-white placeholder:text-white/30 outline-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPwd(!showPwd)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                >
+                  {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Giriş butonu */}
+            <button
+              ref={submitBtnRef}
+              onClick={onSubmit}
+              className="w-full h-[50px] rounded-2xl font-semibold text-[15px] text-white transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:opacity-90"
+              style={{
+                background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.6), rgba(139,92,246,0.4))',
+                boxShadow: '0 4px 16px rgba(var(--theme-accent-rgb), 0.15)',
+              }}
+            >
+              Giriş Yap
+            </button>
+
+            {/* Alt linkler */}
+            <div className="flex items-center justify-center gap-4 pt-1">
               <button
                 type="button"
-                tabIndex={-1}
-                onClick={() => setShowPwd(!showPwd)}
-                aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
+                onClick={onForgotPassword}
+                className="text-[12px] text-white/40 hover:text-white/70 transition-colors"
               >
-                {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
+                Şifremi Unuttum
+              </button>
+              <span className="text-white/15">|</span>
+              <button
+                type="button"
+                onClick={onGoToRegister}
+                className="text-[12px] text-white/40 hover:text-white/70 transition-colors"
+              >
+                Üye Ol
               </button>
             </div>
-          </div>
-
-          <button
-            ref={submitBtnRef}
-            onClick={onSubmit}
-            className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${pressing ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] scale-[0.97]' : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)]'}`}
-          >
-            <span>Giriş Yap</span>
-          </button>
-
-          <div className="flex items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={onForgotPassword}
-              className="text-xs text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors underline underline-offset-2"
-            >
-              Şifremi Unuttum
-            </button>
-            <span className="text-[var(--theme-border)]">|</span>
-            <button
-              type="button"
-              onClick={onGoToRegister}
-              className="text-xs text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors underline underline-offset-2"
-            >
-              Üye Ol
-            </button>
           </div>
         </div>
       </motion.div>
 
-      <div className="mt-8 flex items-center gap-6 text-xs text-[var(--theme-secondary-text)] font-medium">
+      {/* Footer */}
+      <div className="mt-8 flex items-center gap-6 text-[11px] text-white/30 font-medium relative z-10">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-          Sunucu Durumu: Aktif
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" />
+          Sunucu Aktif
         </div>
-        {appVersion && <div>v{appVersion}</div>}
+        {appVersion && <div className="opacity-50">v{appVersion}</div>}
       </div>
     </div>
   );

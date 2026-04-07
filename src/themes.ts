@@ -210,7 +210,7 @@ export const themes: Record<ThemeKey, AppTheme> = {
   },
 };
 
-export const defaultThemeKey: ThemeKey = "cyanViolet";
+export const defaultThemeKey: ThemeKey = "violetPink";
 
 // ── Background presets (independent from theme accent) ──
 
@@ -237,7 +237,7 @@ export const backgroundPresets: BackgroundPreset[] = [
   { id: "bg-royal-blue",    name: "Royal Blue",      type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #1D4ED8, #020617)", dominantHex: "#102A70", isLight: false },
 ];
 
-export const defaultBackgroundId = "bg-midnight";
+export const defaultBackgroundId = "bg-violet-night";
 
 export const themeOrder: ThemeKey[] = [
   "cyanViolet",

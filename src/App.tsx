@@ -76,7 +76,7 @@ import { useLiveKitConnection } from './hooks/useLiveKitConnection';
 import { usePresence } from './hooks/usePresence';
 import { useModeration } from './hooks/useModeration';
 
-import LoginSelectionView from './views/LoginSelectionView';
+// LoginSelectionView kaldırıldı — LoginPasswordView ana giriş ekranı
 import LoginCodeView from './views/LoginCodeView';
 import LoginPasswordView from './views/LoginPasswordView';
 import RegisterDetailsView from './views/RegisterDetailsView';
@@ -2356,25 +2356,18 @@ export default function App() {
                           </div>
                         </motion.div>
                       )}
-                      {view === 'login-selection' && (
-                        <LoginSelectionView
-                          onGoToCode={() => setView('login-code')}
-                          onGoToPassword={() => setView('login-password')}
+                      {view === 'login-password' && (
+                        <LoginPasswordView
+                          handleLogin={handleLogin}
+                          onForgotPassword={() => setShowForgotPassword(true)}
+                          onGoToRegister={() => setView('login-code')}
                         />
                       )}
                       {view === 'login-code' && (
                         <LoginCodeView
                           handleRegister={handleRegister}
                           handleLogout={() => setView('login-password')}
-                          onGoBack={() => setView('login-selection')}
-                        />
-                      )}
-                      {view === 'login-password' && (
-                        <LoginPasswordView
-                          handleLogin={handleLogin}
-                          onForgotPassword={() => setShowForgotPassword(true)}
-                          onGoToRegister={() => setView('login-code')}
-                          onGoBack={() => setView('login-selection')}
+                          onGoBack={() => setView('login-password')}
                         />
                       )}
                       {view === 'register-details' && (
@@ -2389,7 +2382,7 @@ export default function App() {
                           setAge={setAge}
                           loginError={loginError}
                           handleCompleteRegistration={handleCompleteRegistration}
-                          onGoBack={() => setView('login-code')}
+                          onGoBack={() => setView('login-password')}
                         />
                       )}
                       {(view === 'chat' || view === 'settings') && <ChatView />}
