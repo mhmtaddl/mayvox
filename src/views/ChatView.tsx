@@ -234,15 +234,21 @@ export default function ChatView() {
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: string; text: string; time: number }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const [cardsHeight, setCardsHeight] = useState(0);
+  useEffect(() => {
+    const el = cardsRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setCardsHeight(e.contentRect.height + 16));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [activeChannel]);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const sendChatMessage = () => {
     const text = chatInput.trim();
     if (!text) return;
-    setChatMessages(prev => {
-      const next = [...prev, { id: `${Date.now()}-${Math.random()}`, sender: formatFullName(currentUser.firstName, currentUser.lastName), text, time: Date.now() }];
-      return next.slice(-50);
-    });
+    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: formatFullName(currentUser.firstName, currentUser.lastName), text, time: Date.now() }].slice(-50));
     setChatInput('');
     setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
   };
@@ -250,9 +256,9 @@ export default function ChatView() {
   const startEditMessage = (msg: { id: string; text: string }) => { setEditingMsgId(msg.id); setEditingText(msg.text); };
   const saveEditMessage = () => {
     if (!editingMsgId) return;
-    const text = editingText.trim();
-    if (!text) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
-    setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text } : m));
+    const t = editingText.trim();
+    if (!t) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
+    setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text: t } : m));
     setEditingMsgId(null); setEditingText('');
   };
   const fakeUsers = useMemo(() => {
@@ -1564,11 +1570,11 @@ export default function ChatView() {
             className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE
               ? 'overflow-y-auto custom-scrollbar p-3'
               : `lg:mb-[72px] ${activeChannel && view !== 'settings'
-                ? 'overflow-hidden'
+                ? 'px-3 pt-3 sm:px-6 sm:pt-4'
                 : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}
           >
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
-            <div className="relative flex-1 flex flex-col min-h-0">
+            <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
               {/* Ambient background — canlı ama sessiz */}
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
                 <div
@@ -1695,12 +1701,12 @@ export default function ChatView() {
 
                   return (
                     <>
-                      {/* ── Masaüstü: 3 bölümlü sabit layout ── */}
+                      {/* ── Masaüstü layout ── */}
                       {!FORCE_MOBILE && (
-                        <div className="hidden lg:flex lg:flex-col flex-1 min-h-0">
+                        <div className="hidden lg:block relative h-full">
 
-                          {/* ▶ BÖLÜM 1: Kullanıcı kartları — shrink-0, doğal yükseklik */}
-                          <div className="shrink-0 px-3 pt-3 pb-1">
+                          {/* Kullanıcı kartları — doğal akış */}
+                          <div ref={cardsRef} className="px-3 pt-3 pb-1">
                             <RoomNetworkVisualization
                               cardStyle={cardStyle}
                               participants={allMembers.map(user => {
@@ -1730,7 +1736,7 @@ export default function ChatView() {
                             />
                             {/* Idle hint */}
                             {!anySpeaking && (
-                              <div className="flex items-center justify-center py-1">
+                              <div className="flex items-center justify-center py-2">
                                 <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
                                   <Mic size={12} />
                                   Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
@@ -1739,88 +1745,46 @@ export default function ChatView() {
                             )}
                           </div>
 
-                          {/* ▶ BÖLÜM 2+3: Chat window — overflow-hidden flex-col wrapper */}
-                          <div className="flex-1 min-h-0 overflow-hidden flex flex-col mx-3 rounded-xl" style={{ border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
-
-                            {/* Mesaj listesi — TEK scroll alanı */}
-                            <div
-                              ref={chatScrollRef}
-                              className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-2 flex flex-col"
-                              style={{ background: 'rgba(var(--glass-tint), 0.02)' }}
-                            >
+                          {/* Sohbet penceresi — absolute, kartların altından en alta kadar */}
+                          <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-t-xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.04)', borderBottom: 'none' }}>
+                            {/* Mesaj listesi — TEK scroll */}
+                            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-2 flex flex-col" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
                               <div className="flex-1" />
                               {chatMessages.length === 0 ? (
-                                <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">
-                                  Sohbet mesajları burada görünecek
-                                </p>
-                              ) : (
-                                chatMessages.map(msg => {
-                                  const t = new Date(msg.time);
-                                  const timeStr = t.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                                  const isEditing = editingMsgId === msg.id;
-                                  return (
-                                    <div key={msg.id} className="flex items-start gap-2 py-1 group/msg">
-                                      <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-0.5 tabular-nums w-10 text-right">{timeStr}</span>
-                                      <span className="shrink-0 text-[11px] font-semibold text-[var(--theme-accent)] opacity-60 max-w-[100px] truncate">{msg.sender}</span>
-                                      {isEditing ? (
-                                        <input
-                                          autoFocus
-                                          type="text"
-                                          value={editingText}
-                                          onChange={(e) => setEditingText(e.target.value)}
-                                          onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }}
-                                          onBlur={saveEditMessage}
-                                          className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none"
-                                        />
-                                      ) : (
-                                        <span className="text-[14px] text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1">{msg.text}</span>
-                                      )}
-                                      {/* Düzenle + Sil butonları */}
-                                      {!isEditing && (
-                                        <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-                                          <button
-                                            onClick={() => startEditMessage(msg)}
-                                            className="p-0.5 rounded hover:bg-[var(--theme-accent)]/10 transition-colors"
-                                            title="Düzenle"
-                                          >
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                          </button>
-                                          <button
-                                            onClick={() => deleteChatMessage(msg.id)}
-                                            className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                                            title="Sil"
-                                          >
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })
-                              )}
+                                <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajları burada görünecek</p>
+                              ) : chatMessages.map(msg => {
+                                const ts = new Date(msg.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                const isEd = editingMsgId === msg.id;
+                                return (
+                                  <div key={msg.id} className="flex items-start gap-2 py-1 group/msg">
+                                    <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-0.5 tabular-nums w-10 text-right">{ts}</span>
+                                    <span className="shrink-0 text-[11px] font-semibold text-[var(--theme-accent)] opacity-60 max-w-[100px] truncate">{msg.sender}</span>
+                                    {isEd ? (
+                                      <input autoFocus type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }} onBlur={saveEditMessage} className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none" />
+                                    ) : (
+                                      <span className="text-[14px] text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1">{msg.text}</span>
+                                    )}
+                                    {!isEd && (
+                                      <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                                        <button onClick={() => startEditMessage(msg)} className="p-0.5 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle">
+                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                        </button>
+                                        <button onClick={() => deleteChatMessage(msg.id)} className="p-0.5 rounded hover:bg-red-500/10 transition-colors" title="Sil">
+                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
-
-                            {/* Mesaj input — shrink-0, scroll dışında */}
-                            <div
-                              className="shrink-0 flex items-center gap-2 px-3 py-2"
-                              style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}
-                            >
-                              <input
-                                type="text"
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
-                                placeholder="Mesaj yaz..."
-                                className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors"
-                              />
-                              <button
-                                onClick={sendChatMessage}
-                                className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all"
-                              >
+                            {/* Input — shrink-0, sabit */}
+                            <div className="shrink-0 flex items-center gap-2 px-3 py-2" style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+                              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }} placeholder="Mesaj yaz..." className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors" />
+                              <button onClick={sendChatMessage} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                               </button>
                             </div>
-
                           </div>
 
                         </div>
@@ -1839,7 +1803,7 @@ export default function ChatView() {
                         ))}
                       </div>
 
-                      {/* Idle hint — mobilde göster (masaüstünde sohbet panelinin içinde) */}
+                      {/* Idle hint — mobilde göster */}
                       {!anySpeaking && FORCE_MOBILE && (
                         <div className="flex items-center justify-center mt-8">
                           <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
