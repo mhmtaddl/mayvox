@@ -56,7 +56,9 @@
       "Bash(sed -i 's/CylkSohbet::VoiceChat/PigeVox::VoiceChat/g' android/app/src/main/java/com/caylaklar/seslisohbet/MainActivity.java)",
       "Bash(sed -i 's/CylkSohbet/PigeVox/g' server.cjs)",
       "Bash(sed -i 's/CYLKSohbet/PigeVox/g' CLAUDE.md)",
-      "Bash(sed -i 's/CylkSohbet/PigeVox/g; s/CYLKSohbet/PigeVox/g' README.md)"
+      "Bash(sed -i 's/CylkSohbet/PigeVox/g; s/CYLKSohbet/PigeVox/g' README.md)",
+      "Bash(sed -i 's/Caylaklar ile Sohbete Doğru/PigeVox ile Sesini Duyur/g' src/views/LoginSelectionView.tsx src/views/LoginPasswordView.tsx src/views/LoginCodeView.tsx src/views/RegisterDetailsView.tsx)",
+      "Bash(sed -i 's/Sadece CAYLAKLAR Burada Sohbet Edebilir!//g' src/views/LoginSelectionView.tsx)"
     ]
   }
 }

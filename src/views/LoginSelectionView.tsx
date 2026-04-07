@@ -22,14 +22,14 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
         className="w-full max-w-[420px] bg-[var(--theme-sidebar)]/50 p-10 rounded-2xl border border-[var(--theme-border)] shadow-2xl backdrop-blur-sm"
       >
         <div className="flex justify-center mb-8">
-          <div className="w-24 h-24 overflow-hidden rounded-[20%]">
+          <div className="w-44 h-44 overflow-hidden rounded-[20%]">
             <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
           </div>
         </div>
 
         <div className="text-center mb-10">
-          <h1 className="text-[var(--theme-text)] text-3xl font-bold tracking-tight">Caylaklar ile Sohbete Doğru</h1>
-          <p className="text-[var(--theme-secondary-text)] mt-2 text-sm">Sadece CAYLAKLAR Burada Sohbet Edebilir!</p>
+          <h1 className="text-[var(--theme-text)] text-3xl font-bold tracking-tight">PigeVox ile Sesini Duyur</h1>
+          <p className="text-[var(--theme-secondary-text)] mt-2 text-sm">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
         </div>
 
         <div className="space-y-4">

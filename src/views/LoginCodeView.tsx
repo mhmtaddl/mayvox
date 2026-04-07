@@ -239,14 +239,14 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
         </button>
 
         <div className="flex justify-center mb-8">
-          <div className="w-20 h-20 overflow-hidden rounded-[20%]">
+          <div className="w-44 h-44 overflow-hidden rounded-[20%]">
             <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
           </div>
         </div>
 
         <div className="text-center mb-8">
-          <h1 className="text-[var(--theme-text)] text-3xl font-bold tracking-tight">Caylaklar ile Sohbete Doğru</h1>
-          <p className="text-[var(--theme-secondary-text)] mt-2 text-sm">Sadece Caylaklar Burada Sohbet Edebilir!</p>
+          <h1 className="text-[var(--theme-text)] text-3xl font-bold tracking-tight">PigeVox ile Sesini Duyur</h1>
+          <p className="text-[var(--theme-secondary-text)] mt-2 text-sm">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
         </div>
 
         <div className="space-y-6">
