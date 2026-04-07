@@ -42,7 +42,7 @@ import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
-// UserSearch kaldırıldı
+import SocialSearchHub from '../components/SocialSearchHub';
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
@@ -1796,6 +1796,11 @@ export default function ChatView() {
                       {!FORCE_MOBILE && (
                         <div className="hidden lg:block relative h-full">
 
+                          {/* Sosyal arama */}
+                          <div className="px-6 pt-3 pb-2">
+                            <SocialSearchHub currentUserId={currentUser.id} variant="center" />
+                          </div>
+
                           {/* Kullanıcı kartları — doğal akış */}
                           <div ref={cardsRef} className="px-3 pt-3 pb-1">
                             <RoomNetworkVisualization
@@ -1999,7 +2004,10 @@ export default function ChatView() {
 
         {/* Right Sidebar */}
         <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
-          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div className="pt-3 pb-1">
+            <SocialSearchHub currentUserId={currentUser.id} variant="sidebar" />
+          </div>
+          <div className="px-4 pt-2 pb-2 flex items-center justify-between">
             <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
             <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
           </div>
