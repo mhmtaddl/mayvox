@@ -231,9 +231,9 @@ export default function ChatView() {
   ];
   const [fakeUserCount, setFakeUserCount] = useState(0);
 
-  // ── Sohbet mesajları (local, limitsiz) ──
+  // ── Sohbet mesajları (Supabase Realtime) ──
   const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
-  const [chatMuted, setChatMuted] = useState(false); // mesaj engeli — admin/mod kontrollü
+  const [chatMuted, setChatMuted] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [chatFontSize, setChatFontSize] = useState(() => {
@@ -249,7 +249,6 @@ export default function ChatView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showEmojiPicker]);
-  // Her kullanıcıya sabit renk — id'den hash üretir
   const getUserColor = useCallback((userId: string) => {
     const colors = ['#F87171','#FB923C','#FBBF24','#34D399','#22D3EE','#818CF8','#C084FC','#F472B6','#A78BFA','#6EE7B7'];
     let hash = 0;
@@ -259,6 +258,7 @@ export default function ChatView() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
+  const roomCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
@@ -268,22 +268,103 @@ export default function ChatView() {
   }, [activeChannel]);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+
+  // Supabase'den mesajları yükle + realtime dinle
+  useEffect(() => {
+    if (!activeChannel) { setChatMessages([]); return; }
+    let cancelled = false;
+
+    // Mevcut mesajları yükle
+    import('../lib/supabase').then(({ fetchRoomMessages, supabase }) => {
+      if (cancelled) return;
+      fetchRoomMessages(activeChannel).then(rows => {
+        if (cancelled) return;
+        setChatMessages(rows.map((r: any) => ({
+          id: r.id,
+          senderId: r.sender_id,
+          sender: r.sender_name,
+          avatar: r.sender_avatar || '',
+          text: r.text,
+          time: new Date(r.created_at).getTime(),
+        })));
+        setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0 }), 100);
+      }).catch(() => {});
+
+      // Realtime subscription
+      const channel = supabase.channel(`room-chat:${activeChannel}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
+          const r = payload.new;
+          setChatMessages(prev => {
+            if (prev.some(m => m.id === r.id)) return prev;
+            return [...prev, { id: r.id, senderId: r.sender_id, sender: r.sender_name, avatar: r.sender_avatar || '', text: r.text, time: new Date(r.created_at).getTime() }];
+          });
+          setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 50);
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
+          setChatMessages(prev => prev.filter(m => m.id !== payload.old.id));
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
+          const r = payload.new;
+          setChatMessages(prev => prev.map(m => m.id === r.id ? { ...m, text: r.text } : m));
+        })
+        .subscribe();
+
+      return () => { cancelled = true; supabase.removeChannel(channel); };
+    });
+
+    return () => { cancelled = true; };
+  }, [activeChannel]);
+
+  // Odadan çıkıldığında 5 dk sonra mesajları temizle (odada kimse yoksa)
+  useEffect(() => {
+    if (roomCleanupTimerRef.current) { clearTimeout(roomCleanupTimerRef.current); roomCleanupTimerRef.current = null; }
+    // activeChannel yoksa (çıkıldı), eski kanalın mesajlarını 5dk sonra temizle
+    return () => {
+      const leftChannel = activeChannel;
+      if (!leftChannel) return;
+      roomCleanupTimerRef.current = setTimeout(() => {
+        // Odada hâlâ kimse var mı kontrol et
+        const ch = channels.find(c => c.id === leftChannel);
+        if (!ch || !ch.userCount || ch.userCount === 0) {
+          import('../lib/supabase').then(({ cleanupEmptyRoomMessages }) => {
+            cleanupEmptyRoomMessages(leftChannel);
+          });
+        }
+      }, 5 * 60 * 1000); // 5 dakika
+    };
+  }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const sendChatMessage = () => {
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
-    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }]);
     setChatInput('');
-    setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+    // Supabase'e gönder — realtime ile geri gelecek
+    import('../lib/supabase').then(({ sendRoomMessage }) => {
+      if (activeChannel) {
+        sendRoomMessage(activeChannel, currentUser.id, formatFullName(currentUser.firstName, currentUser.lastName), currentUser.avatar || '', text).catch(() => {
+          // Hata olursa local'e ekle
+          setChatMessages(prev => [...prev, { id: `local-${Date.now()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }]);
+        });
+      }
+    });
+    setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 100);
   };
-  const deleteChatMessage = (id: string) => setChatMessages(prev => prev.filter(m => m.id !== id));
-  const clearAllMessages = () => setChatMessages([]);
+  const deleteChatMessage = (id: string) => {
+    setChatMessages(prev => prev.filter(m => m.id !== id));
+    import('../lib/supabase').then(({ deleteRoomMessage }) => deleteRoomMessage(id).catch(() => {}));
+  };
+  const clearAllMessages = () => {
+    setChatMessages([]);
+    if (activeChannel) import('../lib/supabase').then(({ clearRoomMessages }) => clearRoomMessages(activeChannel).catch(() => {}));
+  };
   const startEditMessage = (msg: { id: string; text: string }) => { setEditingMsgId(msg.id); setEditingText(msg.text); };
   const saveEditMessage = () => {
     if (!editingMsgId) return;
     const t = editingText.trim();
     if (!t) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
     setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text: t } : m));
+    import('../lib/supabase').then(({ updateRoomMessage }) => updateRoomMessage(editingMsgId!, t).catch(() => {}));
     setEditingMsgId(null); setEditingText('');
   };
   const fakeUsers = useMemo(() => {

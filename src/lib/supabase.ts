@@ -433,4 +433,55 @@ export const uploadAvatar = async (userId: string, file: File): Promise<string> 
   if (error) throw error;
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return `${data.publicUrl}?t=${Date.now()}`;
+}
+
+// ── Room Chat Messages ──────────────────────────────────────────────────────
+
+/** Odanın mesajlarını getir (son 200) */
+export async function fetchRoomMessages(channelId: string) {
+  const { data, error } = await supabase
+    .from('room_messages')
+    .select('*')
+    .eq('channel_id', channelId)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Mesaj gönder */
+export async function sendRoomMessage(channelId: string, senderId: string, senderName: string, senderAvatar: string, text: string) {
+  const { error } = await supabase.from('room_messages').insert({
+    channel_id: channelId,
+    sender_id: senderId,
+    sender_name: senderName,
+    sender_avatar: senderAvatar,
+    text,
+  });
+  if (error) throw error;
+}
+
+/** Tek mesaj sil */
+export async function deleteRoomMessage(messageId: string) {
+  const { error } = await supabase.from('room_messages').delete().eq('id', messageId);
+  if (error) throw error;
+}
+
+/** Tek mesaj düzenle */
+export async function updateRoomMessage(messageId: string, newText: string) {
+  const { error } = await supabase.from('room_messages').update({ text: newText }).eq('id', messageId);
+  if (error) throw error;
+}
+
+/** Odanın tüm mesajlarını sil (admin/mod) */
+export async function clearRoomMessages(channelId: string) {
+  const { error } = await supabase.from('room_messages').delete().eq('channel_id', channelId);
+  if (error) throw error;
+}
+
+/** Boş odanın mesajlarını sil (5 dk sonra çağrılır) */
+export async function cleanupEmptyRoomMessages(channelId: string) {
+  // Odada kimse yoksa sil
+  const { error } = await supabase.from('room_messages').delete().eq('channel_id', channelId);
+  if (error) console.warn('Cleanup failed:', error);
 };
