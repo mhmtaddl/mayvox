@@ -1828,7 +1828,7 @@ export default function ChatView() {
                                       {msg.avatar?.startsWith('http') ? (
                                         <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                       ) : (
-                                        <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || '?'}</span>
+                                        <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || msg.sender?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}</span>
                                       )}
                                     </div>
                                     <span className="shrink-0 font-semibold max-w-[120px] truncate pt-0.5" style={{ fontSize: 11 + fs, color: nameColor }}>{msg.sender}</span>
