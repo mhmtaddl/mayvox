@@ -42,7 +42,7 @@ import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
-import ChannelQuickSearch from '../components/ChannelQuickSearch';
+import UserSearch from '../components/UserSearch';
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
@@ -954,17 +954,8 @@ export default function ChatView() {
           <div className="px-5 pt-4 pb-3 shrink-0">
             <BrandArea />
           </div>
-          {/* Kanal ara + oda oluştur */}
-          <ChannelQuickSearch
-            channels={visibleChannels.map(c => ({ id: c.id, name: c.name, userCount: c.userCount }))}
-            activeChannel={activeChannel}
-            onJoinChannel={handleJoinChannel}
-            onCreateRoom={() => {
-              const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-              if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; }
-              setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
-            }}
-          />
+          {/* Kullanıcı arama */}
+          <UserSearch currentUserId={currentUser.id} />
 
           <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
             <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-3">
