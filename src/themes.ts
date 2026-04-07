@@ -113,7 +113,7 @@ export const themes: Record<ThemeKey, AppTheme> = {
     description: "Cesur, dikkat çekici, karakterli.",
     isLight: false,
     primary: "#A970FF", secondary: "#FF4FD8", accent: "#FFC6F9",
-    background: "#0B0614", backgroundElevated: "#120A1F",
+    background: "#0d0b1a", backgroundElevated: "#15101f",
     surface: "rgba(255,255,255,0.04)", panel: "rgba(255,255,255,0.055)",
     panelHover: "rgba(255,255,255,0.075)", panelActive: "rgba(255,255,255,0.09)",
     borderSubtle: "rgba(255,255,255,0.08)", divider: "rgba(255,255,255,0.05)",
@@ -232,7 +232,7 @@ export const backgroundPresets: BackgroundPreset[] = [
   { id: "bg-midnight-depth",name: "Midnight Depth",  type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #111827, #020617)", dominantHex: "#0A1018", isLight: false },
   { id: "bg-emerald-night", name: "Emerald Night",   type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #064E3B, #020617)", dominantHex: "#042E24", isLight: false },
   { id: "bg-crimson-night", name: "Crimson Night",   type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #7F1D1D, #020617)", dominantHex: "#3A1010", isLight: false },
-  { id: "bg-violet-night",  name: "Violet Night",    type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #4C1D95, #020617)", dominantHex: "#280E50", isLight: false },
+  { id: "bg-violet-night",  name: "Violet Night",    type: "deep-gradient", surface: "linear-gradient(145deg, #1a0a12, #0d0b1a, #0a0e1a)", dominantHex: "#0d0b1a", isLight: false },
   { id: "bg-amber-night",   name: "Amber Night",     type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #92400E, #020617)", dominantHex: "#4A2208", isLight: false },
   { id: "bg-royal-blue",    name: "Royal Blue",      type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #1D4ED8, #020617)", dominantHex: "#102A70", isLight: false },
 ];

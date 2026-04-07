@@ -175,6 +175,26 @@ body {
   background: transparent;
 }
 
+/* ─── Primary button gradient — login tasarımından ─── */
+.btn-primary {
+  background: linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.6), rgba(139,92,246,0.4));
+  box-shadow: 0 4px 16px rgba(var(--theme-accent-rgb), 0.15);
+  color: white;
+  font-weight: 600;
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(var(--theme-accent-rgb), 0.25);
+  filter: brightness(1.1);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+  box-shadow: 0 2px 8px rgba(var(--theme-accent-rgb), 0.1);
+}
+
 /* ─── Bell ring animation ─── */
 @keyframes bell-ring {
   0% { transform: rotate(0deg); }

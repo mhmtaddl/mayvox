@@ -519,11 +519,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
           <button
             ref={submitBtnRef}
             onClick={onSubmit}
-            className={`w-full h-14 border border-[var(--theme-border)] rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center group active:scale-[0.97] ${
-              pressing
-                ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] scale-[0.97]'
-                : 'bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)]'
-            }`}
+            className={`w-full h-[50px] btn-primary text-[15px] flex items-center justify-center ${pressing ? 'opacity-90 scale-[0.97]' : ''}`}
           >
             <span>Devam Et</span>
           </button>
