@@ -99,7 +99,6 @@ export function useLiveKitConnection({
       const token = await getLiveKitToken(
         channelId,
         currentUserRef.current.name,
-        (msg) => setToastMsg(msg),
       );
 
       const tokenMs = Math.round(performance.now() - t0);
@@ -250,13 +249,10 @@ export function useLiveKitConnection({
       room.on(RoomEvent.Reconnecting, () => {
         logger.warn('LiveKit reconnecting', { channelId });
         setConnectionLevel(1);
-        setToastMsg('Bağlantı kesildi, yeniden bağlanılıyor...');
+        
         reconnectTimeout = setTimeout(async () => {
           await room.disconnect();
           setConnectionLevel(0);
-          setToastMsg(
-            'Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.',
-          );
         }, 15000);
       });
 
@@ -303,13 +299,7 @@ export function useLiveKitConnection({
             setActiveChannel(null);
             connectionLostRef.current = true;
             setConnectionLevel(0);
-            const isDualDevice = reason === DisconnectReason.DUPLICATE_IDENTITY
-              || reason === DisconnectReason.PARTICIPANT_REMOVED;
-            setToastMsg(
-              isDualDevice
-                ? 'Bağlantınız kesildi. Başka bir cihazdan sohbet odasına bağlandınız.'
-                : 'Bağlantı kesildi. İnternet bağlantınızı kontrol ediniz.',
-            );
+            // Toast kaldırıldı
           } else {
             playSound('leave');
             setConnectionLevel(4);
@@ -339,7 +329,6 @@ export function useLiveKitConnection({
 
       await room.localParticipant.setMicrophoneEnabled(false);
 
-      setToastMsg(null);
       isConnectingRef.current = false;
       clearTimeout(joinTimer);
       return true;
@@ -359,8 +348,6 @@ export function useLiveKitConnection({
       });
       isConnectingRef.current = false;
       setIsConnecting(false);
-      setToastMsg(msg);
-      setTimeout(() => setToastMsg(null), 6000);
       return false;
     }
   };
