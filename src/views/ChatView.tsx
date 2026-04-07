@@ -1888,28 +1888,93 @@ export default function ChatView() {
               <p className="text-[13px] font-semibold leading-none truncate">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
             </div>
-            {/* Status Menu — sağ sidebar profil altı */}
+            {/* Status & Presence Panel */}
             <AnimatePresence>
               {isStatusMenuOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                  className="absolute top-full left-0 right-0 mt-1 rounded-xl p-1.5 z-[100]"
-                  style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+                  transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute top-full left-0 right-0 mt-1 rounded-2xl z-[100]"
+                  style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Aktif</button>
-                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Telefonda</button>
-                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/12 hover:text-[var(--theme-accent)] rounded-lg transition-colors">Hemen Geleceğim</button>
-                  <div className="h-px mx-2 my-1" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
-                  <div className="px-3 py-2">
-                    <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre (Dk)</label>
+                  {/* Header — avatar + isim + durum */}
+                  <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                    <div className="h-12 w-12 overflow-hidden avatar-squircle flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ border: `2px solid ${avatarBorderColor}`, background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
+                      {currentUser.avatar?.startsWith('http')
+                        ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        : currentUser.avatar}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-[var(--theme-text)] truncate">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
+                      <p className={`text-[11px] font-medium mt-0.5 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
+                    </div>
+                  </div>
+
+                  <div className="h-px mx-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+
+                  {/* Status seçenekleri */}
+                  <div className="px-2 py-2 space-y-0.5">
+                    {([
+                      { status: 'Aktif', icon: '🟢', label: 'Aktif' },
+                      { status: 'Telefonda', icon: '📱', label: 'Telefonda' },
+                      { status: 'Hemen Geleceğim', icon: '⏳', label: 'Hemen Geleceğim' },
+                    ] as const).map(item => {
+                      const isActive = getEffectiveStatus() === item.status;
+                      return (
+                        <button
+                          key={item.status}
+                          onClick={() => handleSetStatus(item.status)}
+                          className={`w-full text-left px-3 py-2 text-[12px] font-medium rounded-lg transition-all duration-150 flex items-center gap-2.5 ${
+                            isActive
+                              ? 'text-[var(--theme-accent)]'
+                              : 'text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
+                          }`}
+                          style={isActive ? { background: 'rgba(var(--theme-accent-rgb), 0.1)', borderLeft: '2px solid var(--theme-accent)' } : { borderLeft: '2px solid transparent' }}
+                        >
+                          <span className="text-[13px]">{item.icon}</span>
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="h-px mx-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+
+                  {/* Süre ayarı */}
+                  <div className="px-4 py-3">
+                    <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre Sonra Geleceğim (Dk)</label>
                     <div className="flex gap-2">
-                      <input type="text" maxLength={2} placeholder="99" className="flex-1 rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none transition-all" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }} value={statusTimerInput} onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} />
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="99"
+                        className="flex-1 rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none transition-all focus:border-[var(--theme-accent)]/30"
+                        style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}
+                        value={statusTimerInput}
+                        onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }}
+                      />
                       <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="px-3 py-1.5 btn-primary text-[10px]">Kur</button>
                     </div>
                   </div>
+
+                  {/* Presence bilgisi */}
+                  {currentUser.onlineSince && (
+                    <div className="px-4 pb-3">
+                      <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-40">
+                        {(() => {
+                          const mins = Math.floor((Date.now() - currentUser.onlineSince!) / 60000);
+                          if (mins < 1) return '< 1 dk\'dır aktif';
+                          if (mins < 60) return `${mins} dk'dır aktif`;
+                          const h = Math.floor(mins / 60);
+                          return `${h} saat${mins % 60 > 0 ? ` ${mins % 60} dk` : ''}'dır aktif`;
+                        })()}
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
