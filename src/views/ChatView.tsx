@@ -231,8 +231,9 @@ export default function ChatView() {
   ];
   const [fakeUserCount, setFakeUserCount] = useState(0);
 
-  // ── Sohbet mesajları (local, max 50) ──
+  // ── Sohbet mesajları (local, limitsiz) ──
   const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
+  const [chatMuted, setChatMuted] = useState(false); // mesaj engeli — admin/mod kontrollü
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [chatFontSize, setChatFontSize] = useState(() => {
@@ -268,13 +269,15 @@ export default function ChatView() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const sendChatMessage = () => {
+    if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
-    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }].slice(-50));
+    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }]);
     setChatInput('');
     setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
   };
   const deleteChatMessage = (id: string) => setChatMessages(prev => prev.filter(m => m.id !== id));
+  const clearAllMessages = () => setChatMessages([]);
   const startEditMessage = (msg: { id: string; text: string }) => { setEditingMsgId(msg.id); setEditingText(msg.text); };
   const saveEditMessage = () => {
     if (!editingMsgId) return;
@@ -1822,10 +1825,30 @@ export default function ChatView() {
                                 </div>
                               )}
                               </div>
-                              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }} placeholder="Mesaj yaz..." className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors" />
-                              <button onClick={sendChatMessage} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all">
+                              <input
+                                type="text"
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                                placeholder={chatMuted && !currentUser.isAdmin && !currentUser.isModerator ? 'Sohbet engellendi' : 'Mesaj yaz...'}
+                                disabled={chatMuted && !currentUser.isAdmin && !currentUser.isModerator}
+                                className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              />
+                              {/* Gönder */}
+                              <button onClick={sendChatMessage} disabled={chatMuted && !currentUser.isAdmin && !currentUser.isModerator} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                               </button>
+                              {/* Admin/Mod: Tümünü Sil + Mesaj Engelle */}
+                              {(currentUser.isAdmin || currentUser.isModerator) && (
+                                <>
+                                  <button onClick={clearAllMessages} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Tüm mesajları sil">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                  </button>
+                                  <button onClick={() => setChatMuted(!chatMuted)} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/40 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
 
