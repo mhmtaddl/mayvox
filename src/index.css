@@ -52,19 +52,20 @@ body {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 50% 40% at 15% 10%, rgba(var(--theme-glow-rgb), 0.05) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 50% at 85% 85%, rgba(var(--theme-glow-secondary-rgb), 0.04) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 30% at 50% 50%, rgba(var(--theme-glow-rgb), 0.015) 0%, transparent 50%);
+    radial-gradient(ellipse 50% 40% at 15% 10%, rgba(var(--theme-glow-rgb), 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 85% 85%, rgba(var(--theme-glow-secondary-rgb), 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 40% at 50% 50%, rgba(var(--theme-glow-rgb), 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(var(--theme-accent-rgb), 0.015) 0%, transparent 60%);
 }
 
-/* Subtle noise grain overlay */
+/* Noise grain overlay */
 #root::after {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.02;
+  opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 200px 200px;
 }
@@ -108,16 +109,22 @@ body {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(var(--glass-tint), 0.06);
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 .glass-btn:hover {
   background: rgba(var(--glass-tint), 0.08);
   border-color: rgba(var(--glass-tint), 0.1);
   box-shadow: 0 0 12px rgba(var(--theme-accent-rgb), 0.08);
+  transform: translateY(-1px);
 }
 .glass-btn:active {
   background: rgba(var(--glass-tint), 0.06);
-  transform: scale(0.98);
+  transform: scale(0.97);
+}
+
+/* ─── Global smooth transitions ─── */
+button, a, input, [role="button"] {
+  transition: all 0.18s ease;
 }
 
 /* Card scale slider */

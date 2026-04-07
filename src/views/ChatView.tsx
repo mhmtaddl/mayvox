@@ -876,7 +876,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Left Sidebar — sadece masaüstünde sabit görünür */}
-        <aside className={`w-60 bg-[rgba(var(--theme-sidebar-rgb),0.06)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.08)' }}>
+        <aside className={`w-60 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
           {/* Brand */}
           <div className="px-5 pt-4 pb-3 shrink-0">
             <BrandArea />
@@ -1579,7 +1579,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Main Content — outer shell (no scroll), inner region scrolls with bounded height */}
-        <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.03)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 2px 20px rgba(0,0,0,0.06)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.02) 0%, rgba(var(--theme-glow-rgb), 0.008) 40%, transparent 65%)' }}>
+        <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02)', border: FORCE_MOBILE ? undefined : '1px solid rgba(var(--glass-tint), 0.03)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%)' }}>
           {/* Content region */}
           <div
             onDragOver={currentUser.isAdmin ? handleDragOver : undefined}
@@ -1763,9 +1763,9 @@ export default function ChatView() {
                           </div>
 
                           {/* Sohbet penceresi — absolute, kartların altından en alta kadar */}
-                          <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-t-xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.04)', borderBottom: 'none' }}>
+                          <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', borderBottom: 'none', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
                             {/* Mesaj listesi — TEK scroll */}
-                            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-2 flex flex-col" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
+                            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-5 py-3 flex flex-col" style={{ background: 'rgba(0,0,0,0.12)' }}>
                               <div className="flex-1" />
                               {chatMessages.length === 0 ? (
                                 <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajları burada görünecek</p>
@@ -1805,7 +1805,7 @@ export default function ChatView() {
                               })}
                             </div>
                             {/* Input — shrink-0, sabit */}
-                            <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 relative" style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+                            <div className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 relative" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
                               {/* Emoji butonu */}
                               <div ref={emojiRef} className="relative">
                               <button onClick={() => setShowEmojiPicker(p => !p)} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-50 hover:opacity-80 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
@@ -1880,7 +1880,7 @@ export default function ChatView() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.06)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.08)' }}>
+        <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
           {/* Profil bloğu */}
           <div
             className="px-4 pt-4 pb-3 shrink-0 flex items-center gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.02)] rounded-t-2xl transition-all duration-200"
@@ -2135,7 +2135,7 @@ export default function ChatView() {
       </div>
 
       {/* ── Masaüstü floating kontroller (fixed, scroll-proof) ── */}
-      <div className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-6 left-1/2 -translate-x-1/2 z-30 items-center gap-1.5`}>
+      <div className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 left-1/2 -translate-x-1/2 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl`} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }}>
         {/* Mikrofon + ayar */}
         <div className="relative group/mic">
           <button
