@@ -19,8 +19,8 @@ interface Props {
   currentAppVersion?: string;
 }
 
-const POPUP_W = 260;
-const POPUP_H = 380;
+const POPUP_W = 230;
+const POPUP_H = 340;
 
 const formatOnlineDuration = (onlineSince: number) => {
   const mins = Math.floor((Date.now() - onlineSince) / 60000);
@@ -104,15 +104,15 @@ export default function UserProfilePopup({
         className="rounded-[20px] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ background: 'rgba(20,20,30,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', borderRadius: 20 }}>
+        <div style={{ background: 'var(--theme-surface-card)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid var(--theme-surface-card-border)', boxShadow: '0 16px 48px rgba(0,0,0,0.4)', borderRadius: 18 }}>
           {/* Top light gradient */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" style={{ borderRadius: '20px 20px 0 0' }} />
 
           {/* Profile image area */}
-          <div className="flex flex-col items-center pt-6 pb-4 px-5">
+          <div className="flex flex-col items-center pt-5 pb-3 px-4">
             {/* Avatar */}
             <div className="relative mb-3">
-              <div className="overflow-hidden flex items-center justify-center" style={{ width: 80, height: 80, borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+              <div className="overflow-hidden flex items-center justify-center avatar-squircle" style={{ width: 68, height: 68, border: '1px solid rgba(var(--glass-tint), 0.08)', background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
                 {hasImage ? (
                   <img src={user.avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : user.avatar ? (

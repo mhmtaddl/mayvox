@@ -54,24 +54,21 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   const useNew = hasNewFormat(notes);
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-20 sm:pb-24 bg-black/15 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-20 sm:pb-24 bg-black/20 backdrop-blur-[2px]" onClick={onClose}>
       <div
         ref={ref}
         onClick={e => e.stopPropagation()}
-        className="w-[90%] max-w-md max-h-[70vh] bg-[var(--popover-bg)] border border-[var(--popover-border)] rounded-2xl flex flex-col overflow-hidden"
-        style={{ boxShadow: 'var(--popover-shadow)' }}
+        className="w-[85%] max-w-sm max-h-[65vh] rounded-2xl flex flex-col overflow-hidden"
+        style={{ background: 'var(--theme-surface-card)', border: '1px solid var(--theme-surface-card-border)', boxShadow: '0 16px 48px rgba(0,0,0,0.4)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[var(--theme-border)] shrink-0">
+        <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.04)' }}>
           <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-[var(--theme-accent)]" />
-            <span className="text-sm font-bold text-[var(--theme-text)]">Sürüm Notları</span>
+            <Sparkles size={14} className="text-[var(--theme-accent)]" />
+            <span className="text-[13px] font-semibold text-[var(--theme-text)]">Sürüm Notları</span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-sidebar)] transition-colors"
-          >
-            <X size={16} />
+          <button onClick={onClose} className="p-1 rounded-lg text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 transition-opacity">
+            <X size={14} />
           </button>
         </div>
 
