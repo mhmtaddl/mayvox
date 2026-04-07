@@ -2011,30 +2011,36 @@ export default function ChatView() {
               <p className="text-[13px] font-semibold leading-none truncate">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
             </div>
-            {/* Status & Presence Panel — premium, tema-duyarlı */}
+            {/* Status & Presence Panel — sürüm notları ile aynı kart teması */}
             <AnimatePresence>
               {isStatusMenuOpen && (
+                <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[99] popup-overlay"
+                  onClick={() => setIsStatusMenuOpen(false)}
+                />
                 <motion.div
                   initial={{ opacity: 0, y: 6, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.97 }}
                   transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-full left-0 right-0 mt-1.5 z-[100] overflow-hidden popup-surface"
+                  className="absolute top-full left-0 right-0 mt-1.5 z-[100] overflow-hidden rounded-2xl"
+                  style={{ background: 'rgba(var(--theme-bg-rgb), 0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* ── Profil header ── */}
-                  <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-                    <div className="h-11 w-11 overflow-hidden avatar-squircle flex items-center justify-center shrink-0" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
-                      {currentUser.avatar?.startsWith('http')
-                        ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        : <span className="text-[var(--theme-text)] font-bold text-sm">{currentUser.avatar}</span>}
+                  {/* Header — sürüm notları ile aynı stil */}
+                  <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
+                    <div className="flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)]"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span className="text-[13px] font-semibold text-[var(--theme-text)]">Durum ve Görünürlük</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
-                      <p className={`text-[10px] font-medium mt-0.5 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
-                    </div>
+                    <button onClick={() => setIsStatusMenuOpen(false)} className="p-1 rounded-lg text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 transition-opacity">
+                      <X size={14} />
+                    </button>
                   </div>
-
                   {/* ── Durum seçenekleri ── */}
                   <div className="px-2.5 py-1.5">
                     {([
@@ -2047,7 +2053,7 @@ export default function ChatView() {
                         <button
                           key={item.status}
                           onClick={() => handleSetStatus(item.status)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[12px] font-medium transition-all duration-150 ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)] opacity-75 hover:opacity-100 hover:bg-[rgba(var(--theme-accent-rgb),0.06)]'}`}
+                          className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[11px] font-medium transition-all duration-150 ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)] opacity-75 hover:opacity-100 hover:bg-[rgba(var(--theme-accent-rgb),0.06)]'}`}
                           style={isActive ? { background: 'rgba(var(--theme-accent-rgb), 0.08)' } : undefined}
                         >
                           <span className="text-[12px] w-5 text-center">{item.icon}</span>
@@ -2062,7 +2068,7 @@ export default function ChatView() {
 
                   {/* ── Süre ayarı ── */}
                   <div className="px-3.5 py-2.5">
-                    <p className="text-[10px] font-medium text-[var(--theme-secondary-text)] opacity-50 mb-2">Süre sonra geleceğim</p>
+                    <p className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide mb-2">Süre sonra geleceğim</p>
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
@@ -2113,6 +2119,7 @@ export default function ChatView() {
                     </div>
                   )}
                 </motion.div>
+                </>
               )}
             </AnimatePresence>
           </div>
