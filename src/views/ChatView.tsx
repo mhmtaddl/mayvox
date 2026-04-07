@@ -234,6 +234,15 @@ export default function ChatView() {
   const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setShowEmojiPicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEmojiPicker]);
   // Her kullanıcıya sabit renk — id'den hash üretir
   const getUserColor = useCallback((userId: string) => {
     const colors = ['#F87171','#FB923C','#FBBF24','#34D399','#22D3EE','#818CF8','#C084FC','#F472B6','#A78BFA','#6EE7B7'];
@@ -1798,17 +1807,18 @@ export default function ChatView() {
                             {/* Input — shrink-0, sabit */}
                             <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 relative" style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}>
                               {/* Emoji butonu */}
+                              <div ref={emojiRef} className="relative">
                               <button onClick={() => setShowEmojiPicker(p => !p)} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-50 hover:opacity-80 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                               </button>
-                              {/* Emoji picker dropdown */}
                               {showEmojiPicker && (
-                                <div className="absolute bottom-full left-3 mb-1 z-50 bg-[var(--theme-surface-card)] border border-[var(--theme-surface-card-border)] rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]">
+                                <div className="absolute bottom-full left-0 mb-1 z-50 bg-[var(--theme-surface-card)] border border-[var(--theme-surface-card-border)] rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]">
                                   {['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'].map(e => (
                                     <button key={e} onClick={() => { setChatInput(prev => prev + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
                                   ))}
                                 </div>
                               )}
+                              </div>
                               <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }} placeholder="Mesaj yaz..." className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors" />
                               <button onClick={sendChatMessage} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
