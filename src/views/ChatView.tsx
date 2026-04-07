@@ -278,7 +278,13 @@ export default function ChatView() {
         },
         onMessage: (msg) => {
           setChatMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-          setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 50);
+          // Kullanıcı en alttaysa auto-scroll, değilse badge artır
+          const el = chatScrollRef.current;
+          if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 60) {
+            setTimeout(() => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }), 50);
+          } else {
+            setNewMsgCount(c => c + 1);
+          }
         },
         onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),
         onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
@@ -302,13 +308,30 @@ export default function ChatView() {
     });
   }, [activeChannel]);
 
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+
+  // Scroll event — kullanıcı en altta mı?
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    setIsAtBottom(atBottom);
+    if (atBottom) setNewMsgCount(0);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+    setNewMsgCount(0);
+  }, []);
+
   const sendChatMessage = () => {
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
     setChatInput('');
     import('../lib/chatService').then(({ sendMessage }) => sendMessage(text));
-    setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 100);
+    setTimeout(scrollToBottom, 100);
   };
   const deleteChatMessage = (id: string) => {
     setChatMessages(prev => prev.filter(m => m.id !== id));
@@ -1810,83 +1833,118 @@ export default function ChatView() {
                               <button onClick={() => { const v = Math.min(5, chatFontSize + 1); setChatFontSize(v); localStorage.setItem('chatFontSize', String(v)); }} disabled={chatFontSize === 5} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Büyüt">A+</button>
                             </div>
                             {/* Mesaj listesi — TEK scroll */}
-                            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-5 py-3 flex flex-col" style={{ background: 'rgba(0,0,0,0.12)' }}>
+                            <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
                               <div className="flex-1" />
                               {chatMessages.length === 0 ? (
                                 <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajları burada görünecek</p>
-                              ) : chatMessages.map(msg => {
-                                const ts = new Date(msg.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                              ) : chatMessages.map((msg, idx) => {
+                                const d = new Date(msg.time);
+                                const now = new Date();
+                                const isToday = d.toDateString() === now.toDateString();
+                                const isYesterday = new Date(now.getTime() - 86400000).toDateString() === d.toDateString();
+                                const ts = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                const dateLabel = isToday ? '' : isYesterday ? 'Dün' : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
                                 const isEd = editingMsgId === msg.id;
                                 const nameColor = getUserColor(msg.senderId);
-                                const fs = chatFontSize; // 0-5 punto offset
-                                const avatarPx = 20 + fs * 2;
+                                const fs = chatFontSize;
+                                const avatarPx = 22 + fs * 2;
+                                const isMe = msg.senderId === currentUser.id;
+                                // Tarih ayırıcısı — önceki mesajdan farklı gün mü?
+                                const prevMsg = idx > 0 ? chatMessages[idx - 1] : null;
+                                const showDateSep = !prevMsg || new Date(prevMsg.time).toDateString() !== d.toDateString();
                                 return (
-                                  <div key={msg.id} className="flex items-start gap-1.5 py-1 group/msg">
-                                    <span className="shrink-0 text-[var(--theme-secondary-text)] opacity-30 pt-1 tabular-nums text-right" style={{ fontSize: 9 + fs, width: 40 + fs * 4 }}>{ts}</span>
-                                    {/* Mini avatar */}
-                                    <div className="shrink-0 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ width: avatarPx, height: avatarPx, background: `${nameColor}20`, borderRadius: '22%' }}>
-                                      {msg.avatar?.startsWith('http') ? (
-                                        <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                      ) : (
-                                        <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || msg.sender?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}</span>
-                                      )}
-                                    </div>
-                                    <span className="shrink-0 font-semibold max-w-[120px] truncate pt-0.5" style={{ fontSize: 11 + fs, color: nameColor }}>{msg.sender}</span>
-                                    {isEd ? (
-                                      <input autoFocus type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }} onBlur={saveEditMessage} className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none" />
-                                    ) : (
-                                      <span className="text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1" style={{ fontSize: 14 + fs }}>{msg.text}</span>
-                                    )}
-                                    {!isEd && (
-                                      <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-                                        <button onClick={() => startEditMessage(msg)} className="p-0.5 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle">
-                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                        </button>
-                                        <button onClick={() => deleteChatMessage(msg.id)} className="p-0.5 rounded hover:bg-red-500/10 transition-colors" title="Sil">
-                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                        </button>
+                                  <React.Fragment key={msg.id}>
+                                    {showDateSep && dateLabel && (
+                                      <div className="flex items-center gap-3 py-2 my-1">
+                                        <div className="flex-1 h-px" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+                                        <span className="text-[9px] font-medium text-[var(--theme-secondary-text)] opacity-30 uppercase tracking-wider">{dateLabel}</span>
+                                        <div className="flex-1 h-px" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
                                       </div>
                                     )}
-                                  </div>
+                                    <div className={`flex items-start gap-2 py-1 group/msg ${isMe ? 'flex-row-reverse' : ''}`}>
+                                      {/* Avatar */}
+                                      <div className="shrink-0 overflow-hidden flex items-center justify-center mt-0.5 avatar-squircle" style={{ width: avatarPx, height: avatarPx, background: `${nameColor}15` }}>
+                                        {msg.avatar?.startsWith('http') ? (
+                                          <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                        ) : (
+                                          <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || msg.sender?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}</span>
+                                        )}
+                                      </div>
+                                      {/* Mesaj balonu */}
+                                      <div className={`flex flex-col max-w-[75%] min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
+                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                          <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{msg.sender}</span>
+                                          <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: 8 + fs }}>{ts}</span>
+                                        </div>
+                                        {isEd ? (
+                                          <input autoFocus type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }} onBlur={saveEditMessage} className="w-full bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded-lg px-3 py-1.5 text-[12px] text-[var(--theme-text)] outline-none" />
+                                        ) : (
+                                          <div className={`rounded-xl px-3 py-1.5 break-words whitespace-pre-wrap ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`} style={{ fontSize: 13 + fs, color: 'var(--theme-text)', background: isMe ? 'rgba(var(--theme-accent-rgb), 0.1)' : 'rgba(var(--glass-tint), 0.04)', border: `1px solid ${isMe ? 'rgba(var(--theme-accent-rgb), 0.08)' : 'rgba(var(--glass-tint), 0.03)'}` }}>
+                                            {msg.text}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {/* Edit/Delete */}
+                                      {!isEd && (
+                                        <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1">
+                                          <button onClick={() => startEditMessage(msg)} className="p-1 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                          </button>
+                                          <button onClick={() => deleteChatMessage(msg.id)} className="p-1 rounded hover:bg-red-500/10 transition-colors" title="Sil">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </React.Fragment>
                                 );
                               })}
                             </div>
-                            {/* Input — shrink-0, sabit */}
-                            <div className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 relative" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
-                              {/* Emoji butonu */}
-                              <div ref={emojiRef} className="relative">
-                              <button onClick={() => setShowEmojiPicker(p => !p)} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-50 hover:opacity-80 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                            {/* Yeni mesajlar butonu */}
+                            {newMsgCount > 0 && !isAtBottom && (
+                              <button onClick={scrollToBottom} className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-[10px] font-bold transition-all" style={{ background: 'var(--theme-accent)', color: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                                ↓ {newMsgCount} yeni mesaj
                               </button>
-                              {showEmojiPicker && (
-                                <div className="absolute bottom-full left-0 mb-1 z-50 bg-[var(--theme-surface-card)] border border-[var(--theme-surface-card-border)] rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]">
-                                  {['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'].map(e => (
-                                    <button key={e} onClick={() => { setChatInput(prev => prev + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
-                                  ))}
-                                </div>
-                              )}
+                            )}
+                            {/* Input — shrink-0, sabit */}
+                            <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
+                              {/* Emoji */}
+                              <div ref={emojiRef} className="relative shrink-0">
+                                <button onClick={() => setShowEmojiPicker(p => !p)} className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                                </button>
+                                {showEmojiPicker && (
+                                  <div className="absolute bottom-full left-0 mb-1 z-50 rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]" style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+                                    {['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'].map(e => (
+                                      <button key={e} onClick={() => { setChatInput(prev => prev + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <input
-                                type="text"
+                              {/* Textarea — Enter gönder, Shift+Enter yeni satır */}
+                              <textarea
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
                                 placeholder={chatMuted && !currentUser.isAdmin && !currentUser.isModerator ? 'Sohbet engellendi' : 'Mesaj yaz...'}
                                 disabled={chatMuted && !currentUser.isAdmin && !currentUser.isModerator}
-                                className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                rows={1}
+                                className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed resize-none max-h-24 overflow-y-auto"
+                                style={{ minHeight: 36 }}
+                                onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
                               />
                               {/* Gönder */}
-                              <button onClick={sendChatMessage} disabled={chatMuted && !currentUser.isAdmin && !currentUser.isModerator} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                              <button onClick={sendChatMessage} disabled={(chatMuted && !currentUser.isAdmin && !currentUser.isModerator) || !chatInput.trim()} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatInput.trim() ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)] opacity-30'} disabled:cursor-not-allowed`}>
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                               </button>
-                              {/* Admin/Mod: Tümünü Sil + Mesaj Engelle */}
+                              {/* Admin/Mod butonları */}
                               {(currentUser.isAdmin || currentUser.isModerator) && (
                                 <>
-                                  <button onClick={clearAllMessages} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Tüm mesajları sil">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                  <button onClick={clearAllMessages} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Tüm mesajları sil">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                   </button>
-                                  <button onClick={() => setChatMuted(!chatMuted)} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/40 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
+                                  <button onClick={() => setChatMuted(!chatMuted)} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
                                   </button>
                                 </>
                               )}
