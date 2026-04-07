@@ -3,7 +3,7 @@ import appLogo from '../assets/app-logo.png';
 
 export default function BrandArea() {
   return (
-    <div className="flex items-center justify-center gap-3 select-none py-1">
+    <div className="flex items-center justify-center gap-3 select-none py-1 w-full">
       <div className="w-[40px] h-[40px] rounded-[20%] overflow-hidden ring-1 ring-[var(--theme-border)]/30 shrink-0">
         <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
       </div>

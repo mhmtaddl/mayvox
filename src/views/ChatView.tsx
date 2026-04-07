@@ -1796,11 +1796,6 @@ export default function ChatView() {
                       {!FORCE_MOBILE && (
                         <div className="hidden lg:block relative h-full">
 
-                          {/* Sosyal arama */}
-                          <div className="px-6 pt-3 pb-2">
-                            <SocialSearchHub currentUserId={currentUser.id} variant="center" />
-                          </div>
-
                           {/* Kullanıcı kartları — doğal akış */}
                           <div ref={cardsRef} className="px-3 pt-3 pb-1">
                             <RoomNetworkVisualization
