@@ -9,7 +9,6 @@ interface Props {
   isAdmin?: boolean;
 }
 
-// Yeni format mı (desktop/android/common alanları var mı)
 function hasNewFormat(notes: ReleaseNote): boolean {
   return !!(notes.desktop || notes.android || notes.common || notes.admin);
 }
@@ -25,11 +24,11 @@ function Section({ icon, title, items }: { icon: React.ReactNode; title: string;
         <span className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide">{title}</span>
       </div>
       {isNoChange ? (
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/50 italic pl-4">Bu sürümde değişiklik yok.</p>
+        <p className="text-[11px] text-[var(--theme-text)] opacity-40 italic pl-4">Bu sürümde değişiklik yok.</p>
       ) : (
         <ul className="space-y-1.5">
           {items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-secondary-text)] leading-snug">
+            <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
               {item}
             </li>
@@ -54,14 +53,19 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   const useNew = hasNewFormat(notes);
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-20 sm:pb-24 popup-overlay" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-[88px] popup-overlay" onClick={onClose}>
       <div
         ref={ref}
         onClick={e => e.stopPropagation()}
-        className="w-[85%] max-w-sm max-h-[65vh] flex flex-col overflow-hidden popup-surface"
+        className="w-[85%] max-w-sm max-h-[60vh] flex flex-col overflow-hidden rounded-2xl"
+        style={{
+          background: 'var(--theme-bg)',
+          border: '1px solid rgba(var(--theme-accent-rgb), 0.1)',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(var(--glass-tint), 0.04)',
+        }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+        <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-[var(--theme-accent)]" />
             <span className="text-[13px] font-semibold text-[var(--theme-text)]">Sürüm Notları</span>
@@ -72,7 +76,7 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
         </div>
 
         {/* İçerik */}
-        <div className="px-5 py-4 overflow-y-auto custom-scrollbar">
+        <div className="px-4 py-3 overflow-y-auto custom-scrollbar">
           {useNew ? (
             <>
               {notes.desktop && notes.desktop.length > 0 && (
@@ -90,7 +94,6 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
             </>
           ) : (
             <>
-              {/* Eski format — geriye uyumluluk */}
               {notes.title && <p className="text-[11px] font-semibold text-[var(--theme-text)] mb-2">{notes.title}</p>}
               <ul className="space-y-1.5">
                 {notes.items.map((item, i) => {
@@ -99,7 +102,7 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
                     return <li key={i} className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide pt-1.5 first:pt-0">{item}</li>;
                   }
                   return (
-                    <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-secondary-text)] leading-snug">
+                    <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
                       <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
                       {item}
                     </li>
@@ -107,14 +110,14 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
                 })}
               </ul>
               {isAdmin && notes.adminItems && notes.adminItems.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-[var(--theme-border)]">
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
                   <div className="flex items-center gap-1 mb-2">
                     <Shield size={11} className="text-[var(--theme-accent)]" />
                     <span className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide">Admin</span>
                   </div>
                   <ul className="space-y-1.5">
                     {notes.adminItems.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-secondary-text)] leading-snug">
+                      <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
                         <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)]/50 shrink-0" />
                         {item}
                       </li>
