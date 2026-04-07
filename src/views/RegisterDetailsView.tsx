@@ -39,6 +39,13 @@ export default function RegisterDetailsView({
     w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
   }, []);
 
+  // Mouse geri tuşu (button 3) ile geri dön
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); onGoBack(); } };
+    window.addEventListener('mouseup', handler);
+    return () => window.removeEventListener('mouseup', handler);
+  }, [onGoBack]);
+
   const triggerSubmit = () => {
     setPressing(true);
     setTimeout(() => setPressing(false), 150);

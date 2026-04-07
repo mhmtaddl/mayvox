@@ -7,9 +7,10 @@ interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
   onGoToRegister: () => void;
+  onGoBack?: () => void;
 }
 
-export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister }: LoginPasswordViewProps) {
+export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister, onGoBack }: LoginPasswordViewProps) {
   const [nick, setNick] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -22,6 +23,13 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
     const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
     w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!onGoBack) return;
+    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); onGoBack(); } };
+    window.addEventListener('mouseup', handler);
+    return () => window.removeEventListener('mouseup', handler);
+  }, [onGoBack]);
 
   const onSubmit = async () => {
     setError(null);

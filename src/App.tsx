@@ -2366,6 +2366,7 @@ export default function App() {
                         <LoginCodeView
                           handleRegister={handleRegister}
                           handleLogout={() => setView('login-password')}
+                          onGoBack={() => setView('login-selection')}
                         />
                       )}
                       {view === 'login-password' && (
@@ -2373,6 +2374,7 @@ export default function App() {
                           handleLogin={handleLogin}
                           onForgotPassword={() => setShowForgotPassword(true)}
                           onGoToRegister={() => setView('login-code')}
+                          onGoBack={() => setView('login-selection')}
                         />
                       )}
                       {view === 'register-details' && (

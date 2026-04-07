@@ -12,9 +12,10 @@ type RequestState = 'idle' | 'requesting' | 'pending' | 'approved' | 'rejected' 
 interface LoginCodeViewProps {
   handleRegister: (code: string, nick: string, password: string, repeatPwd: string) => void;
   handleLogout: () => Promise<void>;
+  onGoBack?: () => void;
 }
 
-export default function LoginCodeView({ handleRegister, handleLogout }: LoginCodeViewProps) {
+export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }: LoginCodeViewProps) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -41,6 +42,13 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
     const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
     w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!onGoBack) return;
+    const handler = (e: MouseEvent) => { if (e.button === 3) { e.preventDefault(); onGoBack(); } };
+    window.addEventListener('mouseup', handler);
+    return () => window.removeEventListener('mouseup', handler);
+  }, [onGoBack]);
 
   const isValidEmail = (e: string) =>
     /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(e);
