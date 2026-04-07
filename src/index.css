@@ -177,22 +177,21 @@ body {
 
 /* ─── Primary button gradient — login tasarımından ─── */
 .btn-primary {
-  background: linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.6), rgba(139,92,246,0.4));
-  box-shadow: 0 4px 16px rgba(var(--theme-accent-rgb), 0.15);
-  color: white;
+  background: transparent;
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.25);
+  color: var(--theme-accent);
   font-weight: 600;
   border-radius: 16px;
   transition: all 0.2s ease;
 }
 .btn-primary:hover {
+  background: rgba(var(--theme-accent-rgb), 0.08);
+  border-color: rgba(var(--theme-accent-rgb), 0.4);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(var(--theme-accent-rgb), 0.25);
-  filter: brightness(1.1);
 }
 .btn-primary:active {
+  background: rgba(var(--theme-accent-rgb), 0.12);
   transform: translateY(0);
-  filter: brightness(0.95);
-  box-shadow: 0 2px 8px rgba(var(--theme-accent-rgb), 0.1);
 }
 
 /* ─── Bell ring animation ─── */

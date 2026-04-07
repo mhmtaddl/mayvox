@@ -137,11 +137,7 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
             <button
               ref={submitBtnRef}
               onClick={onSubmit}
-              className="w-full h-[50px] rounded-2xl font-semibold text-[15px] text-white transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:opacity-90"
-              style={{
-                background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.6), rgba(139,92,246,0.4))',
-                boxShadow: '0 4px 16px rgba(var(--theme-accent-rgb), 0.15)',
-              }}
+              className="w-full h-[50px] btn-primary text-[15px] flex items-center justify-center"
             >
               Giriş Yap
             </button>
