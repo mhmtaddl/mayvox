@@ -100,6 +100,7 @@ export async function connectChat() {
         break;
       case 'auth_error':
         console.error('[chatService] Auth HATA:', msg.message);
+        intentionalClose = true; // Auth hatası → reconnect yapma
         handlers.onStatusChange?.('disconnected');
         break;
       case 'history':

@@ -26,7 +26,10 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   process.exit(1);
 }
 
+// Service role client — DB işlemleri için
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Anon client — token doğrulama için (getUser anon key ile çalışır)
+const supabaseAuth = SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : supabase;
 
 // ── State ──
 const rooms = new Map(); // roomId → Set<ws>
@@ -83,8 +86,10 @@ wss.on('connection', async (ws, req) => {
     if (msg.type === 'auth') {
       if (authenticated) return;
       try {
-        const { data: { user }, error } = await supabase.auth.getUser(msg.token);
-        if (error || !user) throw new Error('Geçersiz token');
+        console.log('[chat] Auth denemesi, token:', msg.token?.slice(0, 20) + '...');
+        const { data: { user }, error } = await supabaseAuth.auth.getUser(msg.token);
+        console.log('[chat] getUser sonuç:', error ? `HATA: ${error.message}` : `OK: ${user?.id}`);
+        if (error || !user) throw new Error(error?.message || 'Geçersiz token');
 
         // Profil bilgilerini al
         const { data: profile } = await supabase.from('profiles').select('name, first_name, last_name, avatar').eq('id', user.id).single();
