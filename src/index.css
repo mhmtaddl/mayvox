@@ -177,20 +177,20 @@ body {
 
 /* ─── Primary button gradient — login tasarımından ─── */
 .btn-primary {
-  background: transparent;
-  border: 1px solid rgba(var(--theme-accent-rgb), 0.25);
+  background: linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.06) 0%, rgba(var(--theme-glow-secondary-rgb), 0.04) 50%, rgba(var(--theme-accent-rgb), 0.06) 100%);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.2);
   color: var(--theme-accent);
   font-weight: 600;
   border-radius: 16px;
   transition: all 0.2s ease;
 }
 .btn-primary:hover {
-  background: rgba(var(--theme-accent-rgb), 0.08);
-  border-color: rgba(var(--theme-accent-rgb), 0.4);
+  background: linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.12) 0%, rgba(var(--theme-glow-secondary-rgb), 0.08) 50%, rgba(var(--theme-accent-rgb), 0.12) 100%);
+  border-color: rgba(var(--theme-accent-rgb), 0.35);
   transform: translateY(-1px);
 }
 .btn-primary:active {
-  background: rgba(var(--theme-accent-rgb), 0.12);
+  background: linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.15) 0%, rgba(var(--theme-glow-secondary-rgb), 0.1) 50%, rgba(var(--theme-accent-rgb), 0.15) 100%);
   transform: translateY(0);
 }
 

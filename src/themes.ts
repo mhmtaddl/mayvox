@@ -210,7 +210,7 @@ export const themes: Record<ThemeKey, AppTheme> = {
   },
 };
 
-export const defaultThemeKey: ThemeKey = "violetPink";
+export const defaultThemeKey: ThemeKey = "midnightBlueBird";
 
 // ── Background presets (independent from theme accent) ──
 
