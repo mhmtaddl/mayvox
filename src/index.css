@@ -203,15 +203,14 @@ button, a, input, [role="button"] {
 
 /* ─── Popup / Modal surface system ─── */
 .popup-surface {
-  background: var(--theme-bg-elevated);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(var(--theme-bg-rgb), 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(var(--theme-accent-rgb), 0.06);
   border-radius: 16px;
   box-shadow:
-    0 12px 40px rgba(0,0,0,0.35),
-    0 0 0 1px rgba(var(--glass-tint), 0.03),
-    inset 0 1px 0 rgba(var(--glass-tint), 0.04);
+    0 12px 40px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(var(--glass-tint), 0.03);
 }
 
 .popup-overlay {

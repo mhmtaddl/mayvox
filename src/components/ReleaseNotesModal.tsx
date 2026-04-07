@@ -59,9 +59,11 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
         onClick={e => e.stopPropagation()}
         className="w-[85%] max-w-sm max-h-[60vh] flex flex-col overflow-hidden rounded-2xl"
         style={{
-          background: 'var(--theme-bg)',
-          border: '1px solid rgba(var(--theme-accent-rgb), 0.1)',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(var(--glass-tint), 0.04)',
+          background: 'rgba(var(--theme-bg-rgb), 0.85)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)',
         }}
       >
         {/* Header */}
