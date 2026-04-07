@@ -201,6 +201,25 @@ button, a, input, [role="button"] {
   transform: translateY(0);
 }
 
+/* ─── Popup / Modal surface system ─── */
+.popup-surface {
+  background: var(--theme-bg-elevated);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.06);
+  border-radius: 16px;
+  box-shadow:
+    0 12px 40px rgba(0,0,0,0.35),
+    0 0 0 1px rgba(var(--glass-tint), 0.03),
+    inset 0 1px 0 rgba(var(--glass-tint), 0.04);
+}
+
+.popup-overlay {
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
 /* ─── Squircle avatar shape ─── */
 .avatar-squircle {
   border-radius: 22%;

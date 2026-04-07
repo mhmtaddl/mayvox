@@ -116,8 +116,7 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-52 max-h-64 overflow-y-auto custom-scrollbar rounded-xl py-2 px-1"
-                style={{ background: 'var(--theme-surface-card)', border: '1px solid var(--theme-surface-card-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-52 max-h-64 overflow-y-auto custom-scrollbar py-2 px-1 popup-surface"
               >
                 {hiddenRemotes.map(user => (
                   <div

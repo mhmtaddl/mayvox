@@ -1914,7 +1914,7 @@ export default function ChatView() {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                                 </button>
                                 {showEmojiPicker && (
-                                  <div className="absolute bottom-full left-0 mb-1 z-50 rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]" style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+                                  <div className="absolute bottom-full left-0 mb-1 z-50 p-2 grid grid-cols-8 gap-1 w-[280px] popup-surface">
                                     {['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'].map(e => (
                                       <button key={e} onClick={() => { setChatInput(prev => prev + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
                                     ))}
@@ -2019,8 +2019,7 @@ export default function ChatView() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.97 }}
                   transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-full left-0 right-0 mt-1.5 rounded-2xl z-[100] overflow-hidden"
-                  style={{ background: 'var(--theme-bg-elevated)', border: '1px solid rgba(var(--theme-accent-rgb), 0.06)', boxShadow: '0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(var(--glass-tint), 0.03)', backdropFilter: 'blur(20px)' }}
+                  className="absolute top-full left-0 right-0 mt-1.5 z-[100] overflow-hidden popup-surface"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* ── Profil header ── */}
@@ -2357,7 +2356,7 @@ export default function ChatView() {
           </div>
           <AnimatePresence>
             {showInputSettings && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-xl p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 popup-surface p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
                 <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Giriş Cihazı</h4>
                 <div className="space-y-1">
                   {inputDevices.map(device => (
@@ -2391,7 +2390,7 @@ export default function ChatView() {
           </div>
           <AnimatePresence>
             {showOutputSettings && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-xl p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-0 mb-2 w-64 popup-surface p-3 shadow-2xl z-50" onClick={(e) => e.stopPropagation()}>
                 <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Çıkış Cihazı</h4>
                 <div className="space-y-1">
                   {outputDevices.map(device => (

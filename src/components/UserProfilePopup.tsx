@@ -104,7 +104,7 @@ export default function UserProfilePopup({
         className="rounded-[20px] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ background: 'var(--theme-bg-elevated)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.45)', borderRadius: 18 }}>
+        <div className="popup-surface" style={{ borderRadius: 18 }}>
           {/* Top light gradient */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" style={{ borderRadius: '20px 20px 0 0' }} />
 
