@@ -1845,10 +1845,10 @@ export default function ChatView() {
                                 const ts = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                                 const dateLabel = isToday ? '' : isYesterday ? 'Dün' : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
                                 const isEd = editingMsgId === msg.id;
-                                const nameColor = getUserColor(msg.senderId);
                                 const fs = chatFontSize;
                                 const avatarPx = 22 + fs * 2;
                                 const isMe = msg.senderId === currentUser.id;
+                                const nameColor = isMe ? 'var(--theme-accent)' : getUserColor(msg.senderId);
                                 // Tarih ayırıcısı — önceki mesajdan farklı gün mü?
                                 const prevMsg = idx > 0 ? chatMessages[idx - 1] : null;
                                 const showDateSep = !prevMsg || new Date(prevMsg.time).toDateString() !== d.toDateString();
