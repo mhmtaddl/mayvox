@@ -42,7 +42,7 @@ import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
-import UserSearch from '../components/UserSearch';
+// UserSearch kaldırıldı
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
@@ -954,8 +954,6 @@ export default function ChatView() {
           <div className="px-5 pt-4 pb-3 shrink-0">
             <BrandArea />
           </div>
-          {/* Kullanıcı arama */}
-          <UserSearch currentUserId={currentUser.id} />
 
           <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
             <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-3">
@@ -2001,119 +1999,7 @@ export default function ChatView() {
 
         {/* Right Sidebar */}
         <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
-          {/* Profil bloğu */}
-          <div
-            className="px-4 pt-4 pb-3 shrink-0 flex items-center gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.02)] rounded-t-2xl transition-all duration-200"
-            onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}
-          >
-            <div className="h-9 w-9 overflow-hidden border-2 avatar-squircle relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
-              {currentUser.avatar?.startsWith('http')
-                ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                : currentUser.avatar}
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <p className="text-[13px] font-semibold leading-none truncate">{formatFullName(currentUser.firstName, currentUser.lastName)}</p>
-              <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
-            </div>
-            {/* Status & Presence Panel — sürüm notları ile aynı kart teması */}
-            <AnimatePresence>
-              {isStatusMenuOpen && (
-                <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[99] popup-overlay"
-                  onClick={() => setIsStatusMenuOpen(false)}
-                />
-                <motion.div
-                  initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                  transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-full left-0 right-0 mt-1.5 z-[100] overflow-hidden rounded-2xl"
-                  style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Header — sürüm notları ile aynı stil */}
-                  <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
-                    <div className="flex items-center gap-2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)]"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      <span className="text-[13px] font-semibold text-[var(--theme-text)]">Durum ve Görünürlük</span>
-                    </div>
-                    <button onClick={() => setIsStatusMenuOpen(false)} className="p-1 rounded-lg text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 transition-opacity">
-                      <X size={14} />
-                    </button>
-                  </div>
-                  {/* ── Durum seçenekleri ── */}
-                  <div className="px-2.5 py-1.5">
-                    {([
-                      { status: 'Aktif', icon: '🟢', label: 'Aktif' },
-                      { status: 'Telefonda', icon: '📱', label: 'Telefonda' },
-                      { status: 'Hemen Geleceğim', icon: '⏳', label: 'Hemen Geleceğim' },
-                    ] as const).map(item => {
-                      const isActive = getEffectiveStatus() === item.status;
-                      return (
-                        <button
-                          key={item.status}
-                          onClick={() => handleSetStatus(item.status)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[11px] font-medium transition-all duration-150 ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)] opacity-75 hover:opacity-100 hover:bg-[rgba(var(--theme-accent-rgb),0.06)]'}`}
-                          style={isActive ? { background: 'rgba(var(--theme-accent-rgb), 0.08)' } : undefined}
-                        >
-                          <span className="text-[12px] w-5 text-center">{item.icon}</span>
-                          <span className="truncate">{item.label}</span>
-                          {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="h-px mx-3" style={{ background: 'rgba(var(--theme-accent-rgb), 0.04)' }} />
-
-                  {/* ── Süre ayarı ── */}
-                  <div className="px-3.5 py-2.5">
-                    <p className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide mb-2">Süre sonra geleceğim</p>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        maxLength={3}
-                        placeholder="Dk"
-                        className="w-16 shrink-0 rounded-lg px-3 py-[6px] text-[12px] text-[var(--theme-text)] outline-none text-center transition-all focus:border-[var(--theme-accent)]/30"
-                        style={{ background: 'rgba(var(--glass-tint), 0.035)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}
-                        value={statusTimerInput}
-                        onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }}
-                      />
-                      <button
-                        onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }}
-                        disabled={!statusTimerInput}
-                        className="flex-1 py-[6px] btn-primary text-[11px] disabled:opacity-30 disabled:cursor-not-allowed"
-                      >Kur</button>
-                    </div>
-                  </div>
-
-
-                  {/* ── Presence ── */}
-                  {currentUser.onlineSince && (
-                    <div className="px-3.5 pb-3">
-                      <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-30">
-                        {(() => {
-                          const mins = Math.floor((Date.now() - currentUser.onlineSince!) / 60000);
-                          if (mins < 1) return '< 1 dk\'dır aktif';
-                          if (mins < 60) return `${mins} dk'dır aktif`;
-                          const h = Math.floor(mins / 60);
-                          return `${h} saat${mins % 60 > 0 ? ` ${mins % 60} dk` : ''}'dır aktif`;
-                        })()}
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
             <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
             <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
           </div>
