@@ -57,12 +57,14 @@ export function usePttAudio(params: UsePttAudioParams) {
   const pttReleaseDelayRef = useRef(pttReleaseDelay);
   const isVoiceConnectedRef = useRef(isVoiceConnected);
   const isPttPressedRef = useRef(isPttPressed);
+  const isMutedRef = useRef(isMuted);
   const noiseThresholdRef = useRef(noiseThreshold);
   const isNoiseSupRef = useRef(isNoiseSuppressionEnabled);
   const isLowDataRef = useRef(isLowDataMode);
 
   useEffect(() => { pttReleaseDelayRef.current = pttReleaseDelay; }, [pttReleaseDelay]);
   useEffect(() => { isPttPressedRef.current = isPttPressed; }, [isPttPressed]);
+  useEffect(() => { isMutedRef.current = isMuted; if (isMuted && isPttPressed) setIsPttPressed(false); }, [isMuted, isPttPressed]);
   useEffect(() => { noiseThresholdRef.current = noiseThreshold; }, [noiseThreshold]);
   useEffect(() => { isNoiseSupRef.current = isNoiseSuppressionEnabled; }, [isNoiseSuppressionEnabled]);
   useEffect(() => { isLowDataRef.current = isLowDataMode; }, [isLowDataMode]);
@@ -112,7 +114,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     if (isListeningForKey || voiceMode === 'vad') return;
     if (window.electronPtt) {
       window.electronPtt.onDown(() => {
-        if (!isVoiceConnectedRef.current) return;
+        if (!isVoiceConnectedRef.current || isMutedRef.current) return;
         if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; }
         setIsPttPressed(true);
       });
@@ -126,7 +128,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
-      if (k === pttKey && isVoiceConnectedRef.current) { cancelRelease(); setIsPttPressed(true); }
+      if (k === pttKey && isVoiceConnectedRef.current && !isMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
@@ -134,7 +136,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     };
     const handleMouseDown = (e: MouseEvent) => {
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
-      if (btn === pttKey && isVoiceConnectedRef.current) { cancelRelease(); setIsPttPressed(true); }
+      if (btn === pttKey && isVoiceConnectedRef.current && !isMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;

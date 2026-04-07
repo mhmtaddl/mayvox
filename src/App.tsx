@@ -238,7 +238,14 @@ export default function App() {
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
-  const [isDeafened, setIsDeafened] = useState(false);
+  const [isDeafened, setIsDeafenedState] = useState(false);
+  const isDeafenedRef = useRef(false);
+  const setIsDeafened = (v: boolean) => {
+    setIsDeafenedState(v);
+    isDeafenedRef.current = v;
+    // Tüm LiveKit audio element'lerini mute/unmute et
+    document.querySelectorAll('audio[data-livekit-audio]').forEach(el => { (el as HTMLAudioElement).muted = v; });
+  };
   const [connectionLevel, setConnectionLevel] = useState(4);
 
   // ── User state ───────────────────────────────────────────────────────────
@@ -398,8 +405,6 @@ export default function App() {
 
   // ── Refs ─────────────────────────────────────────────────────────────────
   const connectionLostRef = useRef(false);
-  const isDeafenedRef = useRef(isDeafened);
-  useEffect(() => { isDeafenedRef.current = isDeafened; }, [isDeafened]);
   const pendingInviteCodeRef = useRef<string | null>(null);
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
