@@ -42,6 +42,7 @@ import { getReleaseNotes } from '../lib/releaseNotes';
 import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
+import ChannelQuickSearch from '../components/ChannelQuickSearch';
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
@@ -953,8 +954,20 @@ export default function ChatView() {
           <div className="px-5 pt-4 pb-3 shrink-0">
             <BrandArea />
           </div>
+          {/* Kanal ara + oda oluştur */}
+          <ChannelQuickSearch
+            channels={visibleChannels.map(c => ({ id: c.id, name: c.name, userCount: c.userCount }))}
+            activeChannel={activeChannel}
+            onJoinChannel={handleJoinChannel}
+            onCreateRoom={() => {
+              const userRooms = channels.filter(c => c.ownerId === currentUser.id);
+              if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; }
+              setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+            }}
+          />
+
           <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
-            <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-4">
+            <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-3">
               <Volume2 size={14} className="opacity-60" />
               <span className="uppercase text-[10px] tracking-[0.15em]">Ses Kanalları</span>
             </div>
@@ -2088,21 +2101,6 @@ export default function ChatView() {
                     </div>
                   </div>
 
-                  <div className="h-px mx-3" style={{ background: 'rgba(var(--theme-accent-rgb), 0.04)' }} />
-
-                  {/* ── Son görülme ── */}
-                  <div className="px-3 py-3 flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-medium text-[var(--theme-text)] opacity-75 leading-tight">Son görülme</p>
-                      <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-35 mt-0.5 leading-tight">Kapalıyken diğerleri göremez</p>
-                    </div>
-                    <button
-                      onClick={() => setShowLastSeen(!showLastSeen)}
-                      className={`relative w-[36px] h-[20px] rounded-full transition-all duration-200 shrink-0 ${showLastSeen ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.08)]'}`}
-                    >
-                      <span className={`absolute top-[2px] w-4 h-4 rounded-full transition-transform duration-200 ${showLastSeen ? 'translate-x-[18px] bg-white shadow-sm' : 'translate-x-[2px] bg-[var(--theme-secondary-text)] opacity-50'}`} />
-                    </button>
-                  </div>
 
                   {/* ── Presence ── */}
                   {currentUser.onlineSince && (
