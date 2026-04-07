@@ -234,6 +234,10 @@ export default function ChatView() {
   const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [chatFontSize, setChatFontSize] = useState(() => {
+    const saved = localStorage.getItem('chatFontSize');
+    return saved ? Math.max(0, Math.min(5, parseInt(saved))) : 0;
+  });
   const emojiRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -1755,6 +1759,11 @@ export default function ChatView() {
 
                           {/* Sohbet penceresi — absolute, kartların altından en alta kadar */}
                           <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', borderBottom: 'none', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
+                            {/* Yazı boyutu ayarı — sağ üst */}
+                            <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
+                              <button onClick={() => { const v = Math.max(0, chatFontSize - 1); setChatFontSize(v); localStorage.setItem('chatFontSize', String(v)); }} disabled={chatFontSize === 0} className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-[var(--theme-secondary-text)] opacity-30 hover:opacity-60 disabled:opacity-10 transition-opacity" title="Küçült">A-</button>
+                              <button onClick={() => { const v = Math.min(5, chatFontSize + 1); setChatFontSize(v); localStorage.setItem('chatFontSize', String(v)); }} disabled={chatFontSize === 5} className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-[var(--theme-secondary-text)] opacity-30 hover:opacity-60 disabled:opacity-10 transition-opacity" title="Büyüt">A+</button>
+                            </div>
                             {/* Mesaj listesi — TEK scroll */}
                             <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-5 py-3 flex flex-col" style={{ background: 'rgba(0,0,0,0.12)' }}>
                               <div className="flex-1" />
@@ -1764,22 +1773,24 @@ export default function ChatView() {
                                 const ts = new Date(msg.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                                 const isEd = editingMsgId === msg.id;
                                 const nameColor = getUserColor(msg.senderId);
+                                const fs = chatFontSize; // 0-5 punto offset
+                                const avatarPx = 20 + fs * 2;
                                 return (
                                   <div key={msg.id} className="flex items-start gap-1.5 py-1 group/msg">
-                                    <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-1 tabular-nums w-10 text-right">{ts}</span>
+                                    <span className="shrink-0 text-[var(--theme-secondary-text)] opacity-30 pt-1 tabular-nums text-right" style={{ fontSize: 9 + fs, width: 40 + fs * 4 }}>{ts}</span>
                                     {/* Mini avatar */}
-                                    <div className="shrink-0 w-5 h-5 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ background: `${nameColor}20`, borderRadius: '22%' }}>
+                                    <div className="shrink-0 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ width: avatarPx, height: avatarPx, background: `${nameColor}20`, borderRadius: '22%' }}>
                                       {msg.avatar?.startsWith('http') ? (
                                         <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                       ) : (
-                                        <span className="text-[7px] font-bold" style={{ color: nameColor }}>{msg.avatar || '?'}</span>
+                                        <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || '?'}</span>
                                       )}
                                     </div>
-                                    <span className="shrink-0 text-[11px] font-semibold max-w-[100px] truncate pt-0.5" style={{ color: nameColor }}>{msg.sender}</span>
+                                    <span className="shrink-0 font-semibold max-w-[120px] truncate pt-0.5" style={{ fontSize: 11 + fs, color: nameColor }}>{msg.sender}</span>
                                     {isEd ? (
                                       <input autoFocus type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }} onBlur={saveEditMessage} className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none" />
                                     ) : (
-                                      <span className="text-[14px] text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1">{msg.text}</span>
+                                      <span className="text-[var(--theme-text)] opacity-80 break-words min-w-0 flex-1" style={{ fontSize: 14 + fs }}>{msg.text}</span>
                                     )}
                                     {!isEd && (
                                       <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
