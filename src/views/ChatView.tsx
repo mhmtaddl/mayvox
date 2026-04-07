@@ -1892,21 +1892,22 @@ export default function ChatView() {
             <AnimatePresence>
               {isStatusMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full left-0 right-0 mt-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 z-[100] backdrop-blur-xl"
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  className="absolute top-full left-0 right-0 mt-1 rounded-xl p-1.5 z-[100]"
+                  style={{ background: 'var(--theme-surface-card)', border: '1px solid var(--theme-surface-card-border)', boxShadow: '0 12px 40px rgba(0,0,0,0.35)', backdropFilter: 'blur(12px)' }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Aktif</button>
-                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Telefonda</button>
-                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors">Hemen Geleceğim</button>
-                  <div className="border-t border-[var(--theme-border)] my-1" />
+                  <button onClick={() => handleSetStatus('Aktif')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Aktif</button>
+                  <button onClick={() => handleSetStatus('Telefonda')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Telefonda</button>
+                  <button onClick={() => handleSetStatus('Hemen Geleceğim')} className="w-full text-left px-3 py-2 text-[12px] font-medium text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] rounded-lg transition-colors">Hemen Geleceğim</button>
+                  <div className="h-px mx-2 my-1" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
                   <div className="px-3 py-2">
-                    <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest block mb-2">Süre (Dk)</label>
+                    <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre (Dk)</label>
                     <div className="flex gap-2">
-                      <input type="text" maxLength={2} placeholder="99" className="flex-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all" value={statusTimerInput} onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} />
-                      <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="px-3 py-1.5 bg-[var(--theme-accent)] text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all">Kur</button>
+                      <input type="text" maxLength={2} placeholder="99" className="flex-1 rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none transition-all" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }} value={statusTimerInput} onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} />
+                      <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="px-3 py-1.5 btn-primary text-[10px]">Kur</button>
                     </div>
                   </div>
                 </motion.div>
