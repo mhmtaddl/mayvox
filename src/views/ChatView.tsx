@@ -116,6 +116,7 @@ export default function ChatView() {
     audioProfile: _audioProfile,
     setAudioProfile,
     showLastSeen,
+    setShowLastSeen,
   } = useSettings();
 
   const {
@@ -1944,26 +1945,42 @@ export default function ChatView() {
                   <div className="h-px mx-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
 
                   {/* Süre ayarı */}
-                  <div className="px-4 py-3">
-                    <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre Sonra Geleceğim (Dk)</label>
-                    <div className="flex gap-2">
+                  <div className="px-3 py-2.5">
+                    <label className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 uppercase tracking-wider block mb-1.5">Süre Sonra Geleceğim</label>
+                    <div className="flex gap-1.5">
                       <input
                         type="text"
-                        maxLength={2}
-                        placeholder="99"
-                        className="flex-1 rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none transition-all focus:border-[var(--theme-accent)]/30"
+                        maxLength={3}
+                        placeholder="Dk"
+                        className="w-14 shrink-0 rounded-lg px-2.5 py-1.5 text-xs text-[var(--theme-text)] outline-none transition-all text-center"
                         style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}
                         value={statusTimerInput}
                         onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))}
                         onKeyDown={(e) => { if (e.key === 'Enter' && statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }}
                       />
-                      <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="px-3 py-1.5 btn-primary text-[10px]">Kur</button>
+                      <button onClick={() => { if (statusTimerInput) { handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput)); setStatusTimerInput(''); } }} className="flex-1 py-1.5 btn-primary text-[10px]">Kur</button>
                     </div>
+                  </div>
+
+                  <div className="h-px mx-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+
+                  {/* Son görülme toggle */}
+                  <div className="px-3 py-2.5 flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-[var(--theme-text)] opacity-80">Son görülme</p>
+                      <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-40 mt-0.5">Kapalıyken diğerleri göremez</p>
+                    </div>
+                    <button
+                      onClick={() => setShowLastSeen(!showLastSeen)}
+                      className={`relative w-9 h-5 rounded-full transition-all duration-200 shrink-0 ${showLastSeen ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.1)]'}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full shadow-sm transition-transform duration-200 ${showLastSeen ? 'translate-x-[18px] bg-white' : 'translate-x-[2px] bg-white/50'}`} />
+                    </button>
                   </div>
 
                   {/* Presence bilgisi */}
                   {currentUser.onlineSince && (
-                    <div className="px-4 pb-3">
+                    <div className="px-3 pb-3 pt-1">
                       <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-40">
                         {(() => {
                           const mins = Math.floor((Date.now() - currentUser.onlineSince!) / 60000);
