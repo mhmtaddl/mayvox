@@ -265,7 +265,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
         </div>
 
         <div className="text-center mb-8">
-          <h1 className="text-[#F5F5F5] text-[24px] font-bold tracking-[-0.01em] leading-tight">Üye Ol</h1>
+          <h1 className="text-[#F5F5F5] text-[24px] font-bold tracking-[-0.01em] leading-tight">Bize Katıl</h1>
           <p className="text-white/50 mt-2 text-[13px] max-w-[80%] mx-auto">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
         </div>
 

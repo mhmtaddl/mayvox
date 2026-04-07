@@ -161,7 +161,7 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
                 onClick={onGoToRegister}
                 className="text-[12px] text-white/40 hover:text-white/70 transition-colors"
               >
-                Üye Ol
+                Bize Katıl
               </button>
             </div>
           </div>
