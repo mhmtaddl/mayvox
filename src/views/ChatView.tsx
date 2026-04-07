@@ -264,7 +264,7 @@ export default function ChatView() {
     const ro = new ResizeObserver(([e]) => setCardsHeight(e.contentRect.height + 16));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [activeChannel]);
+  }, [activeChannel, view]);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
 
