@@ -1,15 +1,15 @@
 /**
- * PigeVox WebSocket Chat Server
+ * PigeVox WebSocket Chat Server v2
  * - Supabase JWT auth
- * - Room-based messaging
- * - Supabase Postgres persistence
+ * - Room-based messaging with persistent history
+ * - Avatar + display name from profiles
+ * - 5 min empty room cleanup
  * - Reconnect-safe
  */
 
 const { WebSocketServer, WebSocket } = require('ws');
 const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
-const crypto = require('crypto');
 
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
@@ -26,106 +26,114 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   process.exit(1);
 }
 
-// Service role client — DB işlemleri için
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-// Anon client — token doğrulama için (getUser anon key ile çalışır)
 const supabaseAuth = SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : supabase;
 
 // ── State ──
-const rooms = new Map(); // roomId → Set<ws>
-const wsUserMap = new WeakMap(); // ws → { userId, userName, userAvatar }
+const rooms = new Map();       // roomId → Set<ws>
+const cleanupTimers = new Map(); // roomId → timeout
 
-// ── HTTP server (health check) ──
+// ── HTTP health check ──
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health') {
+    const conns = [...rooms.values()].reduce((s, r) => s + r.size, 0);
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', rooms: rooms.size, connections: [...rooms.values()].reduce((s, r) => s + r.size, 0) }));
+    res.end(JSON.stringify({ status: 'ok', rooms: rooms.size, connections: conns }));
     return;
   }
-  res.writeHead(404);
-  res.end();
+  res.writeHead(404); res.end();
 });
 
-// ── WebSocket server ──
-const wss = new WebSocketServer({ server: httpServer, maxPayload: 8 * 1024 }); // max 8KB message
+// ── WebSocket ──
+const wss = new WebSocketServer({ server: httpServer, maxPayload: 8 * 1024 });
 
-wss.on('connection', async (ws, req) => {
+wss.on('connection', (ws) => {
   let authenticated = false;
   let userId = null;
   let userName = null;
   let userAvatar = null;
   let currentRoom = null;
 
-  // Heartbeat
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  // Auth timeout — 5sn içinde auth olmazsa kapat
   const authTimeout = setTimeout(() => {
-    if (!authenticated) {
-      ws.close(4001, 'Auth timeout');
-    }
+    if (!authenticated) ws.close(4001, 'Auth timeout');
   }, 5000);
+
+  // Rate limit state
+  let msgCount = 0;
+  let msgReset = Date.now();
 
   ws.on('message', async (raw) => {
     let msg;
-    try {
-      msg = JSON.parse(raw.toString());
-    } catch {
-      return send(ws, { type: 'error', message: 'Geçersiz JSON' });
-    }
+    try { msg = JSON.parse(raw.toString()); } catch { return send(ws, { type: 'error', message: 'Geçersiz JSON' }); }
 
-    // Rate limit — basit: her ws'ye 20 mesaj/sn
-    if (!ws._msgCount) ws._msgCount = 0;
-    if (!ws._msgReset) ws._msgReset = Date.now();
-    ws._msgCount++;
-    if (Date.now() - ws._msgReset > 1000) { ws._msgCount = 1; ws._msgReset = Date.now(); }
-    if (ws._msgCount > 20) return send(ws, { type: 'error', message: 'Çok hızlı gönderiyorsun' });
+    // Rate limit
+    msgCount++;
+    if (Date.now() - msgReset > 1000) { msgCount = 1; msgReset = Date.now(); }
+    if (msgCount > 20) return send(ws, { type: 'error', message: 'Çok hızlı' });
 
-    // ── AUTH ──
+    // ────────────────── AUTH ──────────────────
     if (msg.type === 'auth') {
       if (authenticated) return;
       try {
-        console.log('[chat] Auth denemesi, token:', msg.token?.slice(0, 20) + '...');
         const { data: { user }, error } = await supabaseAuth.auth.getUser(msg.token);
-        console.log('[chat] getUser sonuç:', error ? `HATA: ${error.message}` : `OK: ${user?.id}`);
         if (error || !user) throw new Error(error?.message || 'Geçersiz token');
 
-        // Profil bilgilerini al
-        const { data: profile } = await supabase.from('profiles').select('name, first_name, last_name, avatar').eq('id', user.id).single();
+        // ★ Profil: ad, soyad, avatar
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, first_name, last_name, avatar')
+          .eq('id', user.id)
+          .single();
 
         userId = user.id;
-        userName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.name : user.email;
+
+        // ★ İsim: first_name + last_name > name > email
+        const fn = profile?.first_name || '';
+        const ln = profile?.last_name || '';
+        const fullName = `${fn} ${ln}`.trim();
+        userName = fullName || profile?.name || user.email;
+
+        // ★ Avatar
         userAvatar = profile?.avatar || '';
+
         authenticated = true;
         clearTimeout(authTimeout);
 
-        wsUserMap.set(ws, { userId, userName, userAvatar });
+        console.log(`[chat] Auth OK: ${userName} (${userId}) avatar: ${userAvatar ? 'var' : 'yok'}`);
         send(ws, { type: 'auth_ok', userId, userName });
       } catch (err) {
+        console.log(`[chat] Auth HATA: ${err.message}`);
         send(ws, { type: 'auth_error', message: err.message });
         ws.close(4002, 'Auth failed');
       }
       return;
     }
 
-    // Auth kontrolü
     if (!authenticated) return send(ws, { type: 'error', message: 'Auth gerekli' });
 
-    // ── JOIN ROOM ──
+    // ────────────────── JOIN ROOM ──────────────────
     if (msg.type === 'join') {
       const roomId = msg.roomId;
       if (!roomId || typeof roomId !== 'string') return;
 
-      // Eski odadan çık
+      // Eski odadan çık (ama mesajlar DB'de kalır)
       if (currentRoom) leaveRoom(ws, currentRoom);
 
-      // Yeni odaya katıl
+      // ★ Cleanup timer varsa iptal et — biri geri geldi
+      if (cleanupTimers.has(roomId)) {
+        clearTimeout(cleanupTimers.get(roomId));
+        cleanupTimers.delete(roomId);
+        console.log(`[chat] Cleanup iptal: ${roomId} (biri geri geldi)`);
+      }
+
       currentRoom = roomId;
       if (!rooms.has(roomId)) rooms.set(roomId, new Set());
       rooms.get(roomId).add(ws);
 
-      // Son mesajları gönder
+      // ★ O odanın geçmiş mesajlarını DB'den yükle
       try {
         const { data: messages } = await supabase
           .from('room_messages')
@@ -135,7 +143,7 @@ wss.on('connection', async (ws, req) => {
           .limit(200);
 
         send(ws, { type: 'history', roomId, messages: (messages || []).map(formatMsg) });
-      } catch (err) {
+      } catch {
         send(ws, { type: 'history', roomId, messages: [] });
       }
 
@@ -143,13 +151,14 @@ wss.on('connection', async (ws, req) => {
       return;
     }
 
-    // ── SEND MESSAGE ──
+    // ────────────────── SEND MESSAGE ──────────────────
     if (msg.type === 'send') {
       if (!currentRoom) return send(ws, { type: 'error', message: 'Odada değilsin' });
       const text = (msg.text || '').trim();
       if (!text || text.length > 2000) return;
 
       try {
+        // ★ DB'ye kaydet — avatar dahil
         const { data, error } = await supabase.from('room_messages').insert({
           channel_id: currentRoom,
           sender_id: userId,
@@ -160,15 +169,16 @@ wss.on('connection', async (ws, req) => {
 
         if (error) throw error;
 
-        // Odadaki herkese broadcast
+        // ★ Odadaki herkese broadcast — frontend formatında
         broadcastToRoom(currentRoom, { type: 'message', message: formatMsg(data) });
       } catch (err) {
+        console.warn('[chat] Mesaj kayıt hatası:', err.message);
         send(ws, { type: 'error', message: 'Mesaj gönderilemedi' });
       }
       return;
     }
 
-    // ── DELETE MESSAGE ──
+    // ────────────────── DELETE ──────────────────
     if (msg.type === 'delete') {
       if (!currentRoom || !msg.messageId) return;
       try {
@@ -178,7 +188,7 @@ wss.on('connection', async (ws, req) => {
       return;
     }
 
-    // ── EDIT MESSAGE ──
+    // ────────────────── EDIT ──────────────────
     if (msg.type === 'edit') {
       if (!currentRoom || !msg.messageId || !msg.text) return;
       const text = msg.text.trim();
@@ -190,17 +200,18 @@ wss.on('connection', async (ws, req) => {
       return;
     }
 
-    // ── CLEAR ALL (admin/mod) ──
+    // ────────────────── CLEAR ALL ──────────────────
     if (msg.type === 'clear') {
       if (!currentRoom) return;
       try {
         await supabase.from('room_messages').delete().eq('channel_id', currentRoom);
         broadcastToRoom(currentRoom, { type: 'clear', roomId: currentRoom });
+        console.log(`[chat] ${userName} tüm mesajları sildi: ${currentRoom}`);
       } catch {}
       return;
     }
 
-    // ── LEAVE ──
+    // ────────────────── LEAVE ──────────────────
     if (msg.type === 'leave') {
       if (currentRoom) {
         leaveRoom(ws, currentRoom);
@@ -214,13 +225,14 @@ wss.on('connection', async (ws, req) => {
     clearTimeout(authTimeout);
     if (currentRoom) {
       leaveRoom(ws, currentRoom);
-      // 5 dk sonra oda boşsa mesajları temizle
+      // ★ Oda boşaldıysa 5dk cleanup başlat
       scheduleCleanup(currentRoom);
     }
   });
 });
 
 // ── Helpers ──
+
 function send(ws, data) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
@@ -229,8 +241,8 @@ function broadcastToRoom(roomId, data) {
   const clients = rooms.get(roomId);
   if (!clients) return;
   const msg = JSON.stringify(data);
-  for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  for (const c of clients) {
+    if (c.readyState === WebSocket.OPEN) c.send(msg);
   }
 }
 
@@ -242,6 +254,7 @@ function leaveRoom(ws, roomId) {
   }
 }
 
+// ★ Frontend'in beklediği mesaj formatı
 function formatMsg(row) {
   return {
     id: row.id,
@@ -253,16 +266,32 @@ function formatMsg(row) {
   };
 }
 
-// ── 5 dk cleanup ──
-const cleanupTimers = new Map();
+// ★ 5 dakika boş oda cleanup
 function scheduleCleanup(roomId) {
-  if (cleanupTimers.has(roomId)) clearTimeout(cleanupTimers.get(roomId));
+  // Odada hâlâ biri varsa cleanup yapma
+  const clients = rooms.get(roomId);
+  if (clients && clients.size > 0) return;
+
+  // Zaten timer varsa tekrar kurma
+  if (cleanupTimers.has(roomId)) return;
+
+  console.log(`[chat] Cleanup timer başladı: ${roomId} (5dk)`);
+
   cleanupTimers.set(roomId, setTimeout(async () => {
     cleanupTimers.delete(roomId);
-    const clients = rooms.get(roomId);
-    if (clients && clients.size > 0) return; // Hâlâ biri var
+
+    // Son kontrol — biri geri gelmiş mi?
+    const check = rooms.get(roomId);
+    if (check && check.size > 0) {
+      console.log(`[chat] Cleanup iptal: ${roomId} (biri var)`);
+      return;
+    }
+
     try {
-      await supabase.from('room_messages').delete().eq('channel_id', roomId);
+      const { count } = await supabase
+        .from('room_messages')
+        .delete()
+        .eq('channel_id', roomId);
       console.log(`[chat] Oda ${roomId} mesajları temizlendi (5dk boş)`);
     } catch (err) {
       console.warn(`[chat] Cleanup hatası:`, err.message);
@@ -283,5 +312,5 @@ wss.on('close', () => clearInterval(heartbeat));
 
 // ── Start ──
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[chat-server] :${PORT} hazır (WebSocket)`);
+  console.log(`[chat-server] :${PORT} hazır (WebSocket v2)`);
 });
