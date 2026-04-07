@@ -52,13 +52,15 @@ export function setChatHandlers(h: ChatEventHandler) {
 }
 
 export async function connectChat() {
-  console.log('[chatService] connectChat() çağrıldı, ws state:', ws?.readyState);
+  console.log('[chatService] connectChat() çağrıldı, ws state:', ws?.readyState, 'intentionalClose:', intentionalClose);
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     console.log('[chatService] Zaten bağlı/bağlanıyor, skip');
     return;
   }
 
+  // Önceki auth hatası veya intentional close'u sıfırla
   intentionalClose = false;
+  reconnectAttempt = 0;
   handlers.onStatusChange?.('connecting');
 
   const token = await getAuthToken();

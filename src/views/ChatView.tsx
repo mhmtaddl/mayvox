@@ -289,14 +289,17 @@ export default function ChatView() {
     return () => { import('../lib/chatService').then(({ disconnectChat }) => disconnectChat()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Oda değişince WS'ye join/leave gönder
+  // Oda değişince WS'ye join/leave gönder + bağlantı yoksa yeniden bağlan
   useEffect(() => {
     if (!activeChannel) {
       setChatMessages([]);
       import('../lib/chatService').then(({ leaveRoom }) => leaveRoom());
       return;
     }
-    import('../lib/chatService').then(({ joinRoom }) => joinRoom(activeChannel));
+    import('../lib/chatService').then(({ joinRoom, connectChat }) => {
+      connectChat(); // bağlı değilse yeniden dener, bağlıysa skip
+      joinRoom(activeChannel);
+    });
   }, [activeChannel]);
 
   const sendChatMessage = () => {
