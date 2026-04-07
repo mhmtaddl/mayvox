@@ -81,12 +81,15 @@ wss.on('connection', (ws) => {
         const { data: { user }, error } = await supabaseAuth.auth.getUser(msg.token);
         if (error || !user) throw new Error(error?.message || 'Geçersiz token');
 
-        // ★ Profil: ad, soyad, avatar
-        const { data: profile } = await supabase
+        // ★ Profil: tüm kolonlar (select * ile)
+        const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('name, first_name, last_name, avatar')
+          .select('*')
           .eq('id', user.id)
           .single();
+
+        console.log('[chat] Profil sorgu:', profileErr ? `HATA: ${profileErr.message}` : 'OK');
+        console.log('[chat] Profil data:', profile ? JSON.stringify({ name: profile.name, first_name: profile.first_name, last_name: profile.last_name, avatar: profile.avatar?.slice(0, 30) }) : 'NULL');
 
         userId = user.id;
 
@@ -102,7 +105,7 @@ wss.on('connection', (ws) => {
         authenticated = true;
         clearTimeout(authTimeout);
 
-        console.log(`[chat] Auth OK: ${userName} (${userId}) avatar: ${userAvatar ? 'var' : 'yok'}`);
+        console.log(`[chat] Auth OK: ${userName} (${userId}) avatar: ${userAvatar ? userAvatar.slice(0, 30) + '...' : 'yok'}`);
         send(ws, { type: 'auth_ok', userId, userName });
       } catch (err) {
         console.log(`[chat] Auth HATA: ${err.message}`);
