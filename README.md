@@ -1,4 +1,4 @@
-# CylkSohbet — Caylaklar Sesli Sohbet
+# PigeVox — Caylaklar Sesli Sohbet
 
 Electron + React ile yazılmış, LiveKit tabanlı masaüstü sesli sohbet uygulaması.
 

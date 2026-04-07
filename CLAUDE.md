@@ -1,4 +1,4 @@
-# Proje Kuralları — CYLKSohbet
+# Proje Kuralları — PigeVox
 
 ## Türkçe UI Text Yazım Standardı
 

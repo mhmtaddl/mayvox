@@ -231,8 +231,16 @@ export default function ChatView() {
   const [fakeUserCount, setFakeUserCount] = useState(0);
 
   // ── Sohbet mesajları (local, max 50) ──
-  const [chatMessages, setChatMessages] = useState<{ id: string; sender: string; text: string; time: number }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  // Her kullanıcıya sabit renk — id'den hash üretir
+  const getUserColor = useCallback((userId: string) => {
+    const colors = ['#F87171','#FB923C','#FBBF24','#34D399','#22D3EE','#818CF8','#C084FC','#F472B6','#A78BFA','#6EE7B7'];
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0;
+    return colors[Math.abs(hash) % colors.length];
+  }, []);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
@@ -248,7 +256,7 @@ export default function ChatView() {
   const sendChatMessage = () => {
     const text = chatInput.trim();
     if (!text) return;
-    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: formatFullName(currentUser.firstName, currentUser.lastName), text, time: Date.now() }].slice(-50));
+    setChatMessages(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }].slice(-50));
     setChatInput('');
     setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
   };
@@ -1755,10 +1763,19 @@ export default function ChatView() {
                               ) : chatMessages.map(msg => {
                                 const ts = new Date(msg.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                                 const isEd = editingMsgId === msg.id;
+                                const nameColor = getUserColor(msg.senderId);
                                 return (
-                                  <div key={msg.id} className="flex items-start gap-2 py-1 group/msg">
-                                    <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-0.5 tabular-nums w-10 text-right">{ts}</span>
-                                    <span className="shrink-0 text-[11px] font-semibold text-[var(--theme-accent)] opacity-60 max-w-[100px] truncate">{msg.sender}</span>
+                                  <div key={msg.id} className="flex items-start gap-1.5 py-1 group/msg">
+                                    <span className="shrink-0 text-[9px] text-[var(--theme-secondary-text)] opacity-30 pt-1 tabular-nums w-10 text-right">{ts}</span>
+                                    {/* Mini avatar */}
+                                    <div className="shrink-0 w-5 h-5 rounded overflow-hidden flex items-center justify-center mt-0.5" style={{ background: `${nameColor}20`, borderRadius: '18%' }}>
+                                      {msg.avatar?.startsWith('http') ? (
+                                        <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                      ) : (
+                                        <span className="text-[7px] font-bold" style={{ color: nameColor }}>{msg.avatar || '?'}</span>
+                                      )}
+                                    </div>
+                                    <span className="shrink-0 text-[11px] font-semibold max-w-[100px] truncate pt-0.5" style={{ color: nameColor }}>{msg.sender}</span>
                                     {isEd ? (
                                       <input autoFocus type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') { setEditingMsgId(null); setEditingText(''); } }} onBlur={saveEditMessage} className="flex-1 min-w-0 bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded px-2 py-0.5 text-[12px] text-[var(--theme-text)] outline-none" />
                                     ) : (
@@ -1779,7 +1796,19 @@ export default function ChatView() {
                               })}
                             </div>
                             {/* Input — shrink-0, sabit */}
-                            <div className="shrink-0 flex items-center gap-2 px-3 py-2" style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+                            <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 relative" style={{ background: 'rgba(var(--glass-tint), 0.03)', borderTop: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+                              {/* Emoji butonu */}
+                              <button onClick={() => setShowEmojiPicker(p => !p)} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-50 hover:opacity-80 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                              </button>
+                              {/* Emoji picker dropdown */}
+                              {showEmojiPicker && (
+                                <div className="absolute bottom-full left-3 mb-1 z-50 bg-[var(--theme-surface-card)] border border-[var(--theme-surface-card-border)] rounded-xl shadow-2xl p-2 grid grid-cols-8 gap-1 w-[280px]">
+                                  {['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'].map(e => (
+                                    <button key={e} onClick={() => { setChatInput(prev => prev + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
+                                  ))}
+                                </div>
+                              )}
                               <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }} placeholder="Mesaj yaz..." className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors" />
                               <button onClick={sendChatMessage} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/25 transition-all">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>

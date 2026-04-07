@@ -240,7 +240,7 @@ export default function LoginCodeView({ handleRegister, handleLogout }: LoginCod
 
         <div className="flex justify-center mb-8">
           <div className="w-20 h-20 overflow-hidden rounded-[20%]">
-            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
+            <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
           </div>
         </div>
 

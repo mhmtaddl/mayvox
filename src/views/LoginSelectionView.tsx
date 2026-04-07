@@ -23,7 +23,7 @@ export default function LoginSelectionView({ onGoToCode, onGoToPassword }: Login
       >
         <div className="flex justify-center mb-8">
           <div className="w-24 h-24 overflow-hidden rounded-[20%]">
-            <img src={appLogo} alt="CylkSohbet" className="w-full h-full object-cover" />
+            <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
           </div>
         </div>
 

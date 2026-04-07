@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.caylaklar.seslisohbet',
-  appName: 'CylkSohbet',
+  appName: 'PigeVox',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

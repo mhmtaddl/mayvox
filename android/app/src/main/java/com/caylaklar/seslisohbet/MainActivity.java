@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
         // Partial wake lock — CPU uyumasın, ses akışı devam etsin
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         if (pm != null) {
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CylkSohbet::VoiceChat");
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PigeVox::VoiceChat");
             wakeLock.acquire();
         }
     }

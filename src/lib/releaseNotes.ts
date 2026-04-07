@@ -77,7 +77,7 @@ const RELEASE_NOTES: Record<string, ReleaseNote> = {
     title: 'v1.7.6',
     items: [],
     desktop: [
-      'Güncelleme kurulumu sırasında "CylkSohbet kapatılamaz" hatası giderildi.',
+      'Güncelleme kurulumu sırasında "PigeVox kapatılamaz" hatası giderildi.',
       'Kurulum artık sessiz modda çalışıyor, kesintisiz güncelleme sağlanıyor.',
     ],
     android: [
@@ -145,7 +145,7 @@ const RELEASE_NOTES: Record<string, ReleaseNote> = {
     title: 'v1.7.2',
     items: [],
     desktop: [
-      'Windows kurulumu sırasında "CylkSohbet kapatılamaz" hatası düzeltildi.',
+      'Windows kurulumu sırasında "PigeVox kapatılamaz" hatası düzeltildi.',
       'Güncelleme kurulumu artık uygulamayı otomatik kapatıp sorunsuz tamamlanıyor.',
     ],
     android: [
