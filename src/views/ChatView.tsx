@@ -1751,15 +1751,6 @@ export default function ChatView() {
                                 };
                               })}
                             />
-                            {/* Idle hint */}
-                            {!anySpeaking && (
-                              <div className="flex items-center justify-center py-2">
-                                <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
-                                  <Mic size={12} />
-                                  Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
-                                </p>
-                              </div>
-                            )}
                           </div>
 
                           {/* Sohbet penceresi — absolute, kartların altından en alta kadar */}
@@ -1842,15 +1833,6 @@ export default function ChatView() {
                         ))}
                       </div>
 
-                      {/* Idle hint — mobilde göster */}
-                      {!anySpeaking && FORCE_MOBILE && (
-                        <div className="flex items-center justify-center mt-8">
-                          <p className="text-[11px] text-[var(--theme-secondary-text)]/25 font-medium flex items-center gap-2">
-                            <Mic size={12} />
-                            Konuşmaya başlamak için <span className="font-bold text-[var(--theme-secondary-text)]/40">{pttKey}</span> tuşuna basılı tut
-                          </p>
-                        </div>
-                      )}
                     </>
                   );
                 })()}

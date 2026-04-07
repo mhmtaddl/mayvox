@@ -20,7 +20,7 @@ interface Props {
 }
 
 const POPUP_W = 260;
-const POPUP_H = 400;
+const POPUP_H = 380;
 
 const formatOnlineDuration = (onlineSince: number) => {
   const mins = Math.floor((Date.now() - onlineSince) / 60000);
@@ -48,24 +48,14 @@ const formatTotalUsage = (minutes: number) => {
 };
 
 export default function UserProfilePopup({
-  user,
-  position,
-  onClose,
-  onInvite,
-  canInvite,
-  inviteStatus,
-  onCooldown,
-  cooldownRemaining,
-  isMe,
-  currentAppVersion,
+  user, position, onClose, onInvite, canInvite, inviteStatus,
+  onCooldown, cooldownRemaining, isMe, currentAppVersion,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
   const { showLastSeen } = useSettings();
 
   const hasImage = !!user.avatar?.startsWith('http');
-
-  // Position — keep within viewport
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 16);
   const y = Math.min(position.y - 40, window.innerHeight - POPUP_H - 16);
 
@@ -83,37 +73,19 @@ export default function UserProfilePopup({
 
   const isOnline = user.status === 'online';
   const statusText = isOnline ? (user.statusText || 'Aktif') : 'Çevrimdışı';
-
-  const statusDotColor =
-    !isOnline ? 'bg-[var(--theme-border)]'
-    : statusText === 'Aktif' ? 'bg-emerald-500'
-    : statusText === 'Telefonda' ? 'bg-red-500'
-    : statusText === 'Hemen Geleceğim' || statusText.includes('Sonra') ? 'bg-orange-500'
-    : 'bg-emerald-500';
+  const statusColor = !isOnline ? 'text-white/40' : statusText === 'Aktif' ? 'text-emerald-400' : statusText === 'Telefonda' ? 'text-red-400' : 'text-orange-400';
+  const statusDotColor = !isOnline ? 'bg-white/20' : statusText === 'Aktif' ? 'bg-emerald-500' : statusText === 'Telefonda' ? 'bg-red-500' : 'bg-orange-500';
 
   const hasVersion = !!user.appVersion;
   const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
 
   const renderInvite = () => {
     if (!canInvite) return null;
-    if (inviteStatus === 'pending') return (
-      <div className="flex items-center gap-2 text-xs font-bold text-blue-400 py-2 justify-center">
-        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
-        Aranıyor...
-      </div>
-    );
-    if (inviteStatus === 'accepted') return (
-      <span className="text-xs font-bold text-emerald-400 py-2 block text-center">✓ Kabul Edildi</span>
-    );
-    if (inviteStatus === 'rejected') return (
-      <span className="text-xs font-bold text-red-400 py-2 block text-center">✕ Reddedildi</span>
-    );
+    if (inviteStatus === 'pending') return <div className="flex items-center gap-2 text-xs font-bold text-blue-400 py-2 justify-center"><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />Aranıyor...</div>;
+    if (inviteStatus === 'accepted') return <span className="text-xs font-bold text-emerald-400 py-2 block text-center">✓ Kabul Edildi</span>;
+    if (inviteStatus === 'rejected') return <span className="text-xs font-bold text-red-400 py-2 block text-center">✕ Reddedildi</span>;
     return (
-      <button
-        disabled={onCooldown}
-        onClick={() => onInvite?.()}
-        className="w-full py-2 rounded-xl text-[11px] font-bold transition-all bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-btn-primary-text)] border border-[var(--theme-accent)]/25 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
+      <button disabled={onCooldown} onClick={() => onInvite?.()} className="w-full py-2.5 btn-primary text-[12px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">
         {onCooldown ? `${cooldownRemaining}s` : 'Odaya Davet Et'}
       </button>
     );
@@ -124,149 +96,83 @@ export default function UserProfilePopup({
       <div className="fixed inset-0 z-[150]" onClick={onClose} />
       <motion.div
         ref={ref}
-        initial={{ opacity: 0, scale: 0.92, y: -8 }}
+        initial={{ opacity: 0, scale: 0.96, y: -4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: -8 }}
-        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        exit={{ opacity: 0, scale: 0.96, y: -4 }}
+        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
         style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: POPUP_W }}
-        className="rounded-2xl shadow-2xl shadow-black/60 overflow-hidden"
+        className="rounded-[20px] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Portrait hero area ── */}
-        <div className="relative" style={{ height: 200 }}>
-          {hasImage ? (
-            <img
-              src={user.avatar!}
-              alt=""
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            /* Placeholder hero — large icon + accent gradient */
-            <div
-              className="w-full h-full flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(145deg, rgba(var(--theme-accent-rgb), 0.2) 0%, rgba(var(--theme-accent-rgb), 0.05) 100%)',
-              }}
-            >
-              {user.avatar ? (
-                <span className="text-[64px] font-bold text-[var(--theme-text)] opacity-60 select-none">
-                  {user.avatar}
-                </span>
-              ) : (
-                <UserIcon size={80} className="text-[var(--theme-accent)] opacity-20" strokeWidth={1} />
-              )}
+        <div style={{ background: 'rgba(20,20,30,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', borderRadius: 20 }}>
+          {/* Top light gradient */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" style={{ borderRadius: '20px 20px 0 0' }} />
+
+          {/* Profile image area */}
+          <div className="flex flex-col items-center pt-6 pb-4 px-5">
+            {/* Avatar */}
+            <div className="relative mb-3">
+              <div className="overflow-hidden flex items-center justify-center" style={{ width: 80, height: 80, borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+                {hasImage ? (
+                  <img src={user.avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : user.avatar ? (
+                  <span className="text-[28px] font-bold text-white/60">{user.avatar}</span>
+                ) : (
+                  <UserIcon size={36} className="text-white/20" />
+                )}
+              </div>
+              {/* Status dot */}
+              <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ${statusDotColor} ring-2`} style={{ ringColor: 'rgba(20,20,30,0.8)' }} />
+              {/* "SEN" badge */}
+              {isMe && <span className="absolute -top-1 -right-1 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/60 text-white rounded-full leading-none">SEN</span>}
             </div>
-          )}
 
-          {/* Dark gradient overlay for text readability */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)',
-            }}
-          />
-
-          {/* Status dot — top right */}
-          <div className="absolute top-3 right-3 flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${statusDotColor} ring-2 ring-black/30`} />
-          </div>
-
-          {/* "SEN" badge — top left */}
-          {isMe && (
-            <div className="absolute top-3 left-3">
-              <span className="text-[8px] font-bold px-2 py-0.5 bg-[var(--theme-accent)]/80 text-white rounded-full leading-none">
-                SEN
-              </span>
-            </div>
-          )}
-
-          {/* Identity overlay — bottom of hero */}
-          <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
             {/* Name + role */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-[15px] text-white leading-tight drop-shadow-lg">
-                {formatFullName(user.firstName, user.lastName)}
-              </span>
-              {user.isAdmin && (
-                <span className="shrink-0 w-4.5 h-4.5 rounded flex items-center justify-center bg-white/15 backdrop-blur-sm">
-                  <ShieldCheck size={11} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-                </span>
-              )}
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="font-semibold text-[16px] text-[#F2F2F2] leading-tight">{formatFullName(user.firstName, user.lastName)}</span>
+              {user.isAdmin && <ShieldCheck size={14} className="text-[var(--theme-accent)] shrink-0" strokeWidth={2.5} />}
               {!user.isAdmin && user.isModerator && (
-                <span className="shrink-0 w-4.5 h-4.5 rounded flex items-center justify-center bg-violet-500/20 backdrop-blur-sm">
-                  <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2.5 h-2.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                </span>
+                <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-3.5 h-3.5 shrink-0"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
               )}
             </div>
-            {/* Age + status */}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[11px] text-white/60 font-medium">{user.age} yaşında</span>
-              <span className="text-white/25">·</span>
-              <span className="text-[11px] text-white/70 font-semibold">{statusText}</span>
-            </div>
-          </div>
-        </div>
 
-        {/* ── Info section ── */}
-        <div
-          className="px-4 py-3 flex flex-col gap-2"
-          style={{
-            background: 'var(--theme-surface-card)',
-            borderTop: '1px solid rgba(var(--glass-tint), 0.04)',
-          }}
-        >
-          {/* Meta grid */}
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {/* Platform */}
-            {user.platform && (
-              <div className="flex items-center gap-1.5">
-                {user.platform === 'mobile'
-                  ? <Smartphone size={11} className="text-[var(--theme-accent)] opacity-70 shrink-0" />
-                  : <Monitor size={11} className="text-[var(--theme-accent)] opacity-70 shrink-0" />
-                }
-                <span className="text-[10px] text-[var(--theme-secondary-text)] font-medium">
-                  {user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}
-                </span>
-              </div>
-            )}
-
-            {/* Version */}
-            <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${outdated ? 'bg-red-400' : 'bg-emerald-400'}`} />
-              <span className={`text-[10px] font-semibold ${outdated ? 'text-red-400' : 'text-emerald-400'}`}>
-                {hasVersion ? `v${user.appVersion}` : 'Eski'}
-              </span>
+            {/* Status */}
+            <div className="flex items-center gap-1.5 mb-4">
+              <span className={`text-[12px] font-medium ${statusColor}`}>{statusText}</span>
+              {user.age && <span className="text-[11px] text-white/30">• {user.age} yaşında</span>}
             </div>
 
-            {/* Online duration or last seen */}
-            {isOnline && user.onlineSince ? (
-              <div className="flex items-center gap-1.5">
-                <Clock size={10} className="text-emerald-400/70 shrink-0" />
-                <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatOnlineDuration(user.onlineSince)}</span>
-              </div>
-            ) : !isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt ? (
-              <div className="flex items-center gap-1.5">
-                <History size={10} className="text-[var(--theme-secondary-text)]/60 shrink-0" />
-                <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatLastSeen(user.lastSeenAt)}</span>
-              </div>
-            ) : null}
+            {/* Meta row */}
+            <div className="flex items-center gap-3 text-[11px] text-white/50 mb-4">
+              {user.platform && (
+                <div className="flex items-center gap-1">
+                  {user.platform === 'mobile' ? <Smartphone size={11} /> : <Monitor size={11} />}
+                  <span>{user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}</span>
+                </div>
+              )}
+              {isOnline && user.onlineSince && (
+                <div className="flex items-center gap-1">
+                  <Clock size={10} />
+                  <span>{formatOnlineDuration(user.onlineSince)}</span>
+                </div>
+              )}
+              {!isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
+                <div className="flex items-center gap-1">
+                  <History size={10} />
+                  <span>{formatLastSeen(user.lastSeenAt)}</span>
+                </div>
+              )}
+            </div>
 
-            {/* Total usage */}
-            {(user.totalUsageMinutes ?? 0) > 0 && (
-              <div className="flex items-center gap-1.5">
-                <Activity size={10} className="text-[var(--theme-secondary-text)]/60 shrink-0" />
-                <span className="text-[10px] text-[var(--theme-secondary-text)]">{formatTotalUsage(user.totalUsageMinutes!)}</span>
-              </div>
-            )}
+            {/* Invite action */}
+            {canInvite && renderInvite()}
           </div>
 
-          {/* Invite action */}
-          {canInvite && (
-            <>
-              <div className="border-t border-[rgba(var(--glass-tint),0.05)] my-0.5" />
-              {renderInvite()}
-            </>
+          {/* Version — bottom right, very subtle */}
+          {hasVersion && (
+            <div className="absolute bottom-2 right-3">
+              <span className={`text-[9px] ${outdated ? 'text-red-400/50' : 'text-white/20'}`}>v{user.appVersion}</span>
+            </div>
           )}
         </div>
       </motion.div>
