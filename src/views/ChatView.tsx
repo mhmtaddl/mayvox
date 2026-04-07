@@ -231,7 +231,7 @@ export default function ChatView() {
   ];
   const [fakeUserCount, setFakeUserCount] = useState(0);
 
-  // ── Sohbet mesajları (Supabase Realtime) ──
+  // ── Sohbet mesajları (WebSocket Chat Server) ──
   const [chatMessages, setChatMessages] = useState<{ id: string; senderId: string; sender: string; avatar: string; text: string; time: number }[]>([]);
   const [chatMuted, setChatMuted] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -258,7 +258,6 @@ export default function ChatView() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
-  const roomCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
@@ -269,94 +268,52 @@ export default function ChatView() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
 
-  // Supabase'den mesajları yükle + realtime dinle
+  // WebSocket chat bağlantısı
   useEffect(() => {
-    if (!activeChannel) { setChatMessages([]); return; }
-    let cancelled = false;
-
-    // Mevcut mesajları yükle
-    import('../lib/supabase').then(({ fetchRoomMessages, supabase }) => {
-      if (cancelled) return;
-      fetchRoomMessages(activeChannel).then(rows => {
-        if (cancelled) return;
-        setChatMessages(rows.map((r: any) => ({
-          id: r.id,
-          senderId: r.sender_id,
-          sender: r.sender_name,
-          avatar: r.sender_avatar || '',
-          text: r.text,
-          time: new Date(r.created_at).getTime(),
-        })));
-        setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0 }), 100);
-      }).catch(() => {});
-
-      // Realtime subscription
-      const channel = supabase.channel(`room-chat:${activeChannel}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
-          const r = payload.new;
-          setChatMessages(prev => {
-            if (prev.some(m => m.id === r.id)) return prev;
-            return [...prev, { id: r.id, senderId: r.sender_id, sender: r.sender_name, avatar: r.sender_avatar || '', text: r.text, time: new Date(r.created_at).getTime() }];
-          });
+    import('../lib/chatService').then(({ connectChat, setChatHandlers, disconnectChat }) => {
+      setChatHandlers({
+        onHistory: (_roomId, messages) => {
+          setChatMessages(messages);
+          setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0 }), 100);
+        },
+        onMessage: (msg) => {
+          setChatMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
           setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 50);
-        })
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
-          setChatMessages(prev => prev.filter(m => m.id !== payload.old.id));
-        })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_messages', filter: `channel_id=eq.${activeChannel}` }, (payload: any) => {
-          const r = payload.new;
-          setChatMessages(prev => prev.map(m => m.id === r.id ? { ...m, text: r.text } : m));
-        })
-        .subscribe();
-
-      return () => { cancelled = true; supabase.removeChannel(channel); };
+        },
+        onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),
+        onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
+        onClear: () => setChatMessages([]),
+      });
+      connectChat();
     });
+    return () => { import('../lib/chatService').then(({ disconnectChat }) => disconnectChat()); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => { cancelled = true; };
-  }, [activeChannel]);
-
-  // Odadan çıkıldığında 5 dk sonra mesajları temizle (odada kimse yoksa)
+  // Oda değişince WS'ye join/leave gönder
   useEffect(() => {
-    if (roomCleanupTimerRef.current) { clearTimeout(roomCleanupTimerRef.current); roomCleanupTimerRef.current = null; }
-    // activeChannel yoksa (çıkıldı), eski kanalın mesajlarını 5dk sonra temizle
-    return () => {
-      const leftChannel = activeChannel;
-      if (!leftChannel) return;
-      roomCleanupTimerRef.current = setTimeout(() => {
-        // Odada hâlâ kimse var mı kontrol et
-        const ch = channels.find(c => c.id === leftChannel);
-        if (!ch || !ch.userCount || ch.userCount === 0) {
-          import('../lib/supabase').then(({ cleanupEmptyRoomMessages }) => {
-            cleanupEmptyRoomMessages(leftChannel);
-          });
-        }
-      }, 5 * 60 * 1000); // 5 dakika
-    };
-  }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!activeChannel) {
+      setChatMessages([]);
+      import('../lib/chatService').then(({ leaveRoom }) => leaveRoom());
+      return;
+    }
+    import('../lib/chatService').then(({ joinRoom }) => joinRoom(activeChannel));
+  }, [activeChannel]);
 
   const sendChatMessage = () => {
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
     setChatInput('');
-    // Supabase'e gönder — realtime ile geri gelecek
-    import('../lib/supabase').then(({ sendRoomMessage }) => {
-      if (activeChannel) {
-        sendRoomMessage(activeChannel, currentUser.id, formatFullName(currentUser.firstName, currentUser.lastName), currentUser.avatar || '', text).catch(() => {
-          // Hata olursa local'e ekle
-          setChatMessages(prev => [...prev, { id: `local-${Date.now()}`, senderId: currentUser.id, sender: formatFullName(currentUser.firstName, currentUser.lastName), avatar: currentUser.avatar || '', text, time: Date.now() }]);
-        });
-      }
-    });
+    import('../lib/chatService').then(({ sendMessage }) => sendMessage(text));
     setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0, behavior: 'smooth' }), 100);
   };
   const deleteChatMessage = (id: string) => {
     setChatMessages(prev => prev.filter(m => m.id !== id));
-    import('../lib/supabase').then(({ deleteRoomMessage }) => deleteRoomMessage(id).catch(() => {}));
+    import('../lib/chatService').then(({ deleteMessage }) => deleteMessage(id));
   };
   const clearAllMessages = () => {
     setChatMessages([]);
-    if (activeChannel) import('../lib/supabase').then(({ clearRoomMessages }) => clearRoomMessages(activeChannel).catch(() => {}));
+    import('../lib/chatService').then(({ clearAllMessages: clearAll }) => clearAll());
   };
   const startEditMessage = (msg: { id: string; text: string }) => { setEditingMsgId(msg.id); setEditingText(msg.text); };
   const saveEditMessage = () => {
@@ -364,7 +321,7 @@ export default function ChatView() {
     const t = editingText.trim();
     if (!t) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
     setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text: t } : m));
-    import('../lib/supabase').then(({ updateRoomMessage }) => updateRoomMessage(editingMsgId!, t).catch(() => {}));
+    import('../lib/chatService').then(({ editMessage }) => editMessage(editingMsgId!, t));
     setEditingMsgId(null); setEditingText('');
   };
   const fakeUsers = useMemo(() => {
