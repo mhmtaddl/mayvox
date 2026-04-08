@@ -225,6 +225,23 @@ button, a, input, [role="button"] {
   transform: translateY(0);
 }
 
+/* ─── Cancel button — kırmızı iptal ─── */
+.btn-cancel {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: rgb(248, 113, 113);
+  font-weight: 600;
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+.btn-cancel:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.btn-cancel:active {
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* ─── Popup / Modal surface system ─── */
 .popup-surface {
   background: rgba(var(--theme-bg-rgb), 0.82);

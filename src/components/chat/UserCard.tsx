@@ -2,8 +2,6 @@ import React from 'react';
 import {
   Mic,
   Headphones,
-  PhoneCall,
-  Recycle,
 } from 'lucide-react';
 import DeviceBadge from './DeviceBadge';
 import type { UserCardProps } from './types';
@@ -49,7 +47,6 @@ function UserCardInner({
   isVoiceBanned,
   volumeLevel,
   speakingLevel,
-  statusTimer,
   effectiveStatus,
   onClick,
   onDoubleClick,
@@ -91,11 +88,13 @@ function UserCardInner({
   const statusDotColor =
     userStatusText === 'Aktif'
       ? 'bg-emerald-400'
-      : userStatusText === 'Telefonda'
-        ? 'bg-red-400'
-        : userStatusText === 'AFK'
-          ? 'bg-violet-400'
-          : 'bg-orange-400';
+      : userStatusText === 'AFK'
+        ? 'bg-violet-400'
+        : userStatusText === 'Pasif'
+          ? 'bg-yellow-400'
+          : userStatusText === 'Duymuyor'
+            ? 'bg-red-400'
+            : 'bg-orange-400';
 
   // Own voice active state
   const isOwnVoiceActive = isMe && isPttPressed && !isMuted && !isVoiceBanned;
@@ -212,13 +211,6 @@ function UserCardInner({
 
       {/* Right: audio + status icons */}
       <div className="flex items-center gap-1 shrink-0 opacity-40 group-hover:opacity-80 transition-opacity duration-200">
-        {user.statusText === 'Telefonda' && <PhoneCall size={s.dense ? 9 : s.icon === 13 ? 10 : 11} className="text-red-500 !opacity-100" />}
-        {user.statusText === 'Hemen Geleceğim' && <Recycle size={s.dense ? 9 : s.icon === 13 ? 10 : 11} className="text-orange-500 !opacity-100" />}
-        {isMe && statusTimer !== null && statusTimer > 0 && (
-          <span className={`${s.dense ? 'text-[7px]' : s.icon === 13 ? 'text-[8px]' : 'text-[9px]'} text-yellow-500 font-bold tabular-nums !opacity-100`}>
-            {Math.floor(statusTimer / 60)}:{(statusTimer % 60).toString().padStart(2, '0')}
-          </span>
-        )}
         <div className={`flex items-center ${s.dense ? 'gap-0.5' : 'gap-1'} ml-0.5`}>
           <Headphones size={s.icon} className={(isMe ? isDeafened : !!user.selfDeafened) ? 'text-red-500 !opacity-100' : 'text-[var(--theme-secondary-text)]'} />
           <Mic size={s.icon} className={(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) ? 'text-red-500 !opacity-100' : 'text-[var(--theme-secondary-text)]'} />
@@ -247,7 +239,6 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (prev.isMuted !== next.isMuted) return false;
   if (prev.isDeafened !== next.isDeafened) return false;
   if (prev.isVoiceBanned !== next.isVoiceBanned) return false;
-  if (prev.statusTimer !== next.statusTimer) return false;
   if (prev.effectiveStatus !== next.effectiveStatus) return false;
   if (prev.isPttPressed !== next.isPttPressed) return false;
   if (prev.adminBorderEffect !== next.adminBorderEffect) return false;

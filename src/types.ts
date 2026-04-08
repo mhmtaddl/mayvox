@@ -31,6 +31,8 @@ export interface User {
   totalUsageMinutes?: number;
   onlineSince?: number;
   showLastSeen?: boolean;
+  /** Auto-presence durumu: active/idle/deafened — otomatik tespit edilir */
+  autoStatus?: 'active' | 'idle' | 'deafened';
 }
 
 export interface VoiceChannel {
@@ -45,6 +47,8 @@ export interface VoiceChannel {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   ownerId?: string;
+  /** Oda modu: social/gaming/broadcast/quiet — undefined = social (fallback) */
+  mode?: string;
 }
 
 export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-password' | 'register-details' | 'chat' | 'settings';

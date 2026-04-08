@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Pin, Megaphone, Plus, Edit2, Trash2, X, AlertTriangle, AlertCircle,
   Calendar, Clock, Users, ChevronDown,
@@ -61,8 +62,8 @@ const PRIORITY_BORDER: Record<AnnouncementPriority, string> = {
 
 // ── Shared input classes ────────────────────────────────────────────────────
 
-const inputCls = 'w-full rounded-lg border border-[var(--theme-border)]/40 bg-[var(--theme-bg)] px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 focus:outline-none focus:border-[var(--theme-accent)]/50 transition-colors';
-const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-[var(--theme-secondary-text)] mb-1.5';
+const inputCls = 'w-full rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 focus:outline-none transition-colors' + ' ' + 'border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--shadow-base),0.15)] focus:border-[rgba(var(--theme-accent-rgb),0.4)] focus:shadow-[inset_0_1px_3px_rgba(var(--shadow-base),0.1),0_0_0_3px_rgba(var(--theme-accent-rgb),0.08)]';
+const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-[var(--theme-secondary-text)]/80 mb-1.5';
 
 // ── Add menu ────────────────────────────────────────────────────────────────
 
@@ -141,13 +142,99 @@ interface ModalProps {
   loading: boolean;
 }
 
+// ── Date / Time picker helpers ─────────────────────────────────────────────
+const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+function CalendarPicker({ value, onChange, onClose }: { value: string; onChange: (v: string) => void; onClose: () => void }) {
+  const today = new Date();
+  const selected = value ? new Date(value + 'T00:00') : null;
+  const [viewYear, setViewYear] = useState(selected?.getFullYear() ?? today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selected?.getMonth() ?? today.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay() || 7; // 1=Mon
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const pad = Array.from({ length: firstDay - 1 }, (_, i) => i);
+
+  const prev = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const next = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  return (
+    <div className="p-3 rounded-xl border border-[var(--theme-accent)]/15 w-[260px] backdrop-blur-xl" style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', boxShadow: '0 12px 40px rgba(var(--shadow-base),0.7), 0 0 0 1px rgba(var(--glass-tint),0.06)' }} onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={prev} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors text-xs">&lt;</button>
+        <span className="text-[12px] font-bold text-[var(--theme-text)]">{MONTHS_TR[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={next} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors text-xs">&gt;</button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
+        {['Pt','Sa','Ça','Pe','Cu','Ct','Pa'].map(d => <span key={d} className="text-[9px] font-bold text-[var(--theme-secondary-text)]/50 py-1">{d}</span>)}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {pad.map(i => <span key={`p${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const isSel = value === dateStr;
+          const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+          const isPast = new Date(dateStr) < new Date(today.toISOString().slice(0, 10));
+          return (
+            <button
+              key={day} type="button" disabled={isPast}
+              onClick={() => { onChange(dateStr); onClose(); }}
+              className={`w-8 h-8 rounded-lg text-[11px] font-semibold transition-all ${
+                isSel ? 'bg-[var(--theme-accent)] text-white' :
+                isToday ? 'text-[var(--theme-accent)] border border-[var(--theme-accent)]/30' :
+                isPast ? 'text-[var(--theme-secondary-text)]/20 cursor-not-allowed' :
+                'text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
+              }`}
+            >{day}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TimePicker({ value, onChange, onClose }: { value: string; onChange: (v: string) => void; onClose: () => void }) {
+  const [h, m] = value ? value.split(':').map(Number) : [20, 0];
+  const [hour, setHour] = useState(h);
+  const [minute, setMinute] = useState(m);
+
+  const apply = () => { onChange(`${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`); onClose(); };
+
+  return (
+    <div className="p-4 rounded-xl border border-[var(--theme-accent)]/15 w-[200px] backdrop-blur-xl" style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', boxShadow: '0 12px 40px rgba(var(--shadow-base),0.7), 0 0 0 1px rgba(var(--glass-tint),0.06)' }} onClick={e => e.stopPropagation()}>
+      <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/70 uppercase tracking-wider mb-3 text-center">Saat Seç</p>
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <div className="flex flex-col items-center">
+          <button type="button" onClick={() => setHour(p => (p + 1) % 24)} className="w-10 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] text-xs">&#9650;</button>
+          <span className="text-2xl font-bold text-[var(--theme-text)] tabular-nums w-10 text-center">{String(hour).padStart(2,'0')}</span>
+          <button type="button" onClick={() => setHour(p => (p - 1 + 24) % 24)} className="w-10 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] text-xs">&#9660;</button>
+        </div>
+        <span className="text-2xl font-bold text-[var(--theme-text)]/40">:</span>
+        <div className="flex flex-col items-center">
+          <button type="button" onClick={() => setMinute(p => (p + 5) % 60)} className="w-10 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] text-xs">&#9650;</button>
+          <span className="text-2xl font-bold text-[var(--theme-text)] tabular-nums w-10 text-center">{String(minute).padStart(2,'0')}</span>
+          <button type="button" onClick={() => setMinute(p => (p - 5 + 60) % 60)} className="w-10 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] text-xs">&#9660;</button>
+        </div>
+      </div>
+      <button type="button" onClick={apply} className="w-full py-1.5 rounded-lg btn-primary text-xs font-bold active:scale-[0.97]">Tamam</button>
+    </div>
+  );
+}
+
 const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: ModalProps) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState<AnnouncementPriority>('normal');
   const [isPinned, setIsPinned] = useState(false);
   const [type, setType] = useState<AnnouncementType>('announcement');
-  const [eventDate, setEventDate] = useState('');
+  const [eventDate, setEventDate] = useState(''); // YYYY-MM-DD
+  const [eventTime, setEventTime] = useState(''); // HH:MM
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showPartTimePicker, setShowPartTimePicker] = useState(false);
+  const calBtnRef = useRef<HTMLButtonElement>(null);
+  const timeBtnRef = useRef<HTMLButtonElement>(null);
+  const partTimeBtnRef = useRef<HTMLButtonElement>(null);
   const [participationTime, setParticipationTime] = useState('');
   const [participationReqs, setParticipationReqs] = useState('');
 
@@ -158,7 +245,11 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
       setPriority(initial.priority);
       setIsPinned(initial.is_pinned);
       setType(initial.type);
-      setEventDate(initial.event_date ? new Date(initial.event_date).toISOString().slice(0, 16) : '');
+      if (initial.event_date) {
+        const d = new Date(initial.event_date);
+        setEventDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+        setEventTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+      } else { setEventDate(''); setEventTime(''); }
       setParticipationTime(initial.participation_time || '');
       setParticipationReqs(initial.participation_requirements || '');
     } else {
@@ -168,9 +259,13 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
       setIsPinned(false);
       setType(initialType);
       setEventDate('');
+      setEventTime('');
       setParticipationTime('');
       setParticipationReqs('');
     }
+    setShowCalendar(false);
+    setShowTimePicker(false);
+    setShowPartTimePicker(false);
   }, [initial, initialType, open]);
 
   if (!open) return null;
@@ -178,16 +273,27 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
   const isEvent = type === 'event';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/30" onClick={onClose} />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="relative z-10 w-full max-w-md mx-4 rounded-xl border border-[var(--theme-border)]/50 bg-[var(--theme-surface)] shadow-2xl max-h-[85vh] flex flex-col"
+        initial={{ scale: 0.96, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.96, opacity: 0, y: 12 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="w-full max-w-md rounded-2xl border border-[var(--theme-accent)]/15 max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
+        onClick={(e) => e.stopPropagation()}
       >
+        {/* Top accent line */}
+        <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.3), transparent)` }} />
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--theme-border)]/30 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
           <div className="flex items-center gap-2.5">
             {isEvent
               ? <Calendar size={15} className="text-violet-400" />
@@ -220,16 +326,75 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
           {/* Event-specific fields */}
           {isEvent && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Etkinlik Tarihi</label>
-                  <input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} className={`${inputCls} text-xs`} />
+              {/* Tarih — tek satır */}
+              <div className="relative">
+                <label className={labelCls}>Etkinlik Tarihi</label>
+                <div className="relative">
+                  <input
+                    type="text" readOnly
+                    value={eventDate ? new Date(eventDate + 'T00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                    placeholder="Tarih seç..."
+                    onClick={() => { setShowCalendar(p => !p); setShowTimePicker(false); setShowPartTimePicker(false); }}
+                    className={`${inputCls} text-xs cursor-pointer pr-8`}
+                  />
+                  <button ref={calBtnRef} type="button" onClick={() => { setShowCalendar(p => !p); setShowTimePicker(false); setShowPartTimePicker(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-accent)] transition-colors">
+                    <Calendar size={14} />
+                  </button>
                 </div>
-                <div>
+                {showCalendar && calBtnRef.current && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[250]" onClick={() => setShowCalendar(false)} />
+                    <div className="fixed z-[251]" style={{ top: calBtnRef.current.getBoundingClientRect().top - 8, left: calBtnRef.current.getBoundingClientRect().left, transform: 'translateY(-100%)' }}>
+                      <CalendarPicker value={eventDate} onChange={setEventDate} onClose={() => setShowCalendar(false)} />
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </div>
+              {/* Etkinlik Saati + Katılım Saati — yan yana */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                  <label className={labelCls}>Etkinlik Saati</label>
+                  <div className="relative">
+                    <input type="text" readOnly value={eventTime || ''} placeholder="Saat seç..."
+                      onClick={() => { setShowTimePicker(p => !p); setShowCalendar(false); setShowPartTimePicker(false); }}
+                      className={`${inputCls} text-xs cursor-pointer pr-8`} />
+                    <button ref={timeBtnRef} type="button" onClick={() => { setShowTimePicker(p => !p); setShowCalendar(false); setShowPartTimePicker(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-accent)] transition-colors">
+                      <Clock size={14} />
+                    </button>
+                  </div>
+                  {showTimePicker && timeBtnRef.current && createPortal(
+                    <>
+                      <div className="fixed inset-0 z-[250]" onClick={() => setShowTimePicker(false)} />
+                      <div className="fixed z-[251]" style={{ top: timeBtnRef.current.getBoundingClientRect().top - 8, left: timeBtnRef.current.getBoundingClientRect().right - 200, transform: 'translateY(-100%)' }}>
+                        <TimePicker value={eventTime || '20:00'} onChange={setEventTime} onClose={() => setShowTimePicker(false)} />
+                      </div>
+                    </>,
+                    document.body,
+                  )}
+                </div>
+                <div className="relative">
                   <label className={labelCls}>Katılım Saati</label>
-                  <input type="text" value={participationTime} onChange={e => setParticipationTime(e.target.value)} maxLength={50} className={inputCls} placeholder="ör: 20:00 - 22:00" />
+                  <div className="relative">
+                    <input type="text" readOnly value={participationTime || ''} placeholder="Saat seç..."
+                      onClick={() => { setShowPartTimePicker(p => !p); setShowCalendar(false); setShowTimePicker(false); }}
+                      className={`${inputCls} text-xs cursor-pointer pr-8`} />
+                    <button ref={partTimeBtnRef} type="button" onClick={() => { setShowPartTimePicker(p => !p); setShowCalendar(false); setShowTimePicker(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-accent)] transition-colors">
+                      <Clock size={14} />
+                    </button>
+                  </div>
+                  {showPartTimePicker && partTimeBtnRef.current && createPortal(
+                    <>
+                      <div className="fixed inset-0 z-[250]" onClick={() => setShowPartTimePicker(false)} />
+                      <div className="fixed z-[251]" style={{ top: partTimeBtnRef.current.getBoundingClientRect().top - 8, left: partTimeBtnRef.current.getBoundingClientRect().right - 200, transform: 'translateY(-100%)' }}>
+                        <TimePicker value={participationTime || '20:00'} onChange={setParticipationTime} onClose={() => setShowPartTimePicker(false)} />
+                      </div>
+                    </>,
+                    document.body,
+                  )}
                 </div>
               </div>
+              {/* Katılım Şartları — tek satır */}
               <div>
                 <label className={labelCls}>Katılım Şartları</label>
                 <input type="text" value={participationReqs} onChange={e => setParticipationReqs(e.target.value)} maxLength={200} className={inputCls} placeholder="ör: Mikrofon zorunlu, min. 1 haftalık üye" />
@@ -282,32 +447,30 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-[var(--theme-border)]/30 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs font-medium text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)]/20 transition-colors">
+        <div className="flex justify-end gap-2.5 px-5 py-3 shrink-0" style={{ borderTop: '1px solid rgba(var(--glass-tint),0.04)' }}>
+          <button type="button" onClick={onClose} className="px-4 py-1.5 btn-cancel text-xs active:scale-[0.97]">
             İptal
           </button>
           <button
             type="button"
-            disabled={!title.trim() || loading}
+            disabled={!title.trim() || loading || (isEvent && (!eventDate || !eventTime))}
             onClick={() => onSubmit({
               title: title.trim(),
               content: content.trim(),
               priority,
               is_pinned: isPinned,
               type,
-              event_date: isEvent && eventDate ? new Date(eventDate).toISOString() : null,
+              event_date: isEvent && eventDate && eventTime ? new Date(`${eventDate}T${eventTime}`).toISOString() : isEvent && eventDate ? new Date(`${eventDate}T00:00`).toISOString() : null,
               participation_time: isEvent ? participationTime.trim() || null : null,
               participation_requirements: isEvent ? participationReqs.trim() || null : null,
             })}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40 ${
-              isEvent ? 'bg-violet-500' : 'bg-[var(--theme-accent)]'
-            }`}
+            className="px-4 py-1.5 rounded-lg text-xs font-bold btn-primary active:scale-[0.97] disabled:opacity-40"
           >
             {loading ? 'Kaydediliyor...' : initial ? 'Güncelle' : 'Yayınla'}
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -316,22 +479,32 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
 const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: () => void; loading: boolean }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/30" onClick={onClose} />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="relative z-10 w-full max-w-sm mx-4 rounded-xl border border-[var(--theme-border)]/50 bg-[var(--theme-surface)] shadow-2xl p-5"
+        initial={{ scale: 0.96, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.96, opacity: 0, y: 12 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="w-full max-w-sm rounded-2xl border border-[var(--theme-accent)]/15 p-5"
+        style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
+        onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm text-[var(--theme-text)] mb-4">Bu öğeyi silmek istediğinize emin misiniz?</p>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs font-medium text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)]/20 transition-colors">İptal</button>
-          <button type="button" disabled={loading} onClick={onConfirm} className="px-4 py-1.5 rounded-lg text-xs font-medium bg-red-500/80 text-white hover:bg-red-500 transition-colors disabled:opacity-40">
+        <div className="flex justify-end gap-2.5">
+          <button type="button" onClick={onClose} className="px-4 py-1.5 btn-cancel text-xs active:scale-[0.97]">İptal</button>
+          <button type="button" disabled={loading} onClick={onConfirm} className="px-4 py-1.5 btn-cancel text-xs font-bold active:scale-[0.97] disabled:opacity-40">
             {loading ? 'Siliniyor...' : 'Sil'}
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -656,21 +829,27 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
         </AnimatePresence>
       </div>
 
-      {/* Modals */}
-      <ItemModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditTarget(null); }}
-        onSubmit={handleSubmit}
-        initial={editTarget}
-        initialType={modalType}
-        loading={loading}
-      />
-      <DeleteConfirm
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        loading={loading}
-      />
+      {/* Modals — portal ile body'ye render (parent transform/overflow kırmasın) */}
+      {modalOpen && createPortal(
+        <ItemModal
+          open={modalOpen}
+          onClose={() => { setModalOpen(false); setEditTarget(null); }}
+          onSubmit={handleSubmit}
+          initial={editTarget}
+          initialType={modalType}
+          loading={loading}
+        />,
+        document.body,
+      )}
+      {!!deleteTarget && createPortal(
+        <DeleteConfirm
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          loading={loading}
+        />,
+        document.body,
+      )}
 
       {/* Toast */}
       <AnimatePresence>

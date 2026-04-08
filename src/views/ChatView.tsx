@@ -7,6 +7,7 @@ import {
   Power,
   Headphones,
   PlusCircle,
+  Sparkles,
   Check,
   Volume2,
   Volume1,
@@ -20,7 +21,6 @@ import {
   Users,
   Timer,
   ShieldCheck,
-  Recycle,
   KeyRound,
   Mail,
   ChevronDown,
@@ -56,6 +56,16 @@ import { type CardStyle, CARD_STYLES, loadCardStyle, saveCardStyle } from '../co
 import DeviceBadge from '../components/chat/DeviceBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import { isCapacitor } from '../lib/platform';
+import { Coffee, Gamepad2, Radio, VolumeX } from 'lucide-react';
+import { ROOM_MODE_LIST, getRoomModeConfig, type RoomMode } from '../lib/roomModeConfig';
+
+// Room mode ikon mapping — lucide component'leri
+const roomModeIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  social: Coffee,
+  gaming: Gamepad2,
+  broadcast: Radio,
+  quiet: VolumeX,
+};
 
 // Capacitor (Android telefon/tablet) → her zaman mobil layout
 // Electron / desktop web → CSS breakpoint ile responsive
@@ -97,10 +107,6 @@ export default function ChatView() {
     setPasswordError,
     contextMenu,
     setContextMenu,
-    isStatusMenuOpen,
-    setIsStatusMenuOpen,
-    statusTimerInput,
-    setStatusTimerInput,
     userVolumes,
   } = useUI();
 
@@ -117,6 +123,7 @@ export default function ChatView() {
     soundInviteVariant,
     adminBorderEffect,
     voiceMode,
+    setVoiceMode,
     audioProfile: _audioProfile,
     setAudioProfile,
     showLastSeen,
@@ -128,8 +135,6 @@ export default function ChatView() {
     setIsMuted,
     isDeafened,
     setIsDeafened,
-    statusTimer,
-    handleSetStatus,
     handleUpdateUserVolume,
     handleUserActionClick,
     handleInviteUser,
@@ -181,6 +186,35 @@ export default function ChatView() {
   // ── Mobil drawer state ──
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+
+  // ── Sol sidebar resizable (masaüstü) ──
+  const LEFT_SIDEBAR_MIN = 220;
+  const LEFT_SIDEBAR_MAX = 320;
+  const [leftSidebarW, setLeftSidebarW] = useState<number>(() => {
+    const saved = localStorage.getItem('leftSidebarW');
+    return saved ? Math.min(LEFT_SIDEBAR_MAX, Math.max(LEFT_SIDEBAR_MIN, parseInt(saved))) : 240;
+  });
+  const leftSidebarWRef = useRef(leftSidebarW);
+  leftSidebarWRef.current = leftSidebarW;
+  const sidebarDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const handleSidebarDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    sidebarDragRef.current = { startX: e.clientX, startW: leftSidebarWRef.current };
+    const onMove = (ev: MouseEvent) => {
+      if (!sidebarDragRef.current) return;
+      const delta = ev.clientX - sidebarDragRef.current.startX;
+      const next = Math.min(LEFT_SIDEBAR_MAX, Math.max(LEFT_SIDEBAR_MIN, sidebarDragRef.current.startW + delta));
+      setLeftSidebarW(next);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      localStorage.setItem('leftSidebarW', String(leftSidebarWRef.current));
+      sidebarDragRef.current = null;
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
 
   // ── Handle swipe helper — handle üzerinden başlayan swipe'ı algılar ──
   const handleSwipeRef = useRef<{ startX: number; startY: number } | null>(null);
@@ -330,6 +364,9 @@ export default function ChatView() {
   }, []);
 
   const sendChatMessage = () => {
+    // Room mode: chat kapalıysa gönderme
+    const activeChannelObj = channels.find(c => c.id === activeChannel);
+    if (!getRoomModeConfig(activeChannelObj?.mode).chatEnabled) return;
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
@@ -363,7 +400,7 @@ export default function ChatView() {
       age: f.age,
       avatar: f.avatar,
       status: 'online' as const,
-      statusText: i % 3 === 0 ? 'Aktif' : i % 3 === 1 ? 'Telefonda' : 'Aktif',
+      statusText: 'Aktif',
       isSpeaking: i === 0 && fakeUserCount > 1, // ilk fake user konuşuyor simülasyonu
       platform: (i % 2 === 0 ? 'desktop' : 'mobile') as 'desktop' | 'mobile',
       isAdmin: i === 2,
@@ -486,7 +523,7 @@ export default function ChatView() {
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
   );
   const onlineUsers = useMemo(
-    () => allUsers.filter(u => u.status === 'online' || (u.status === 'away' && u.statusText === 'Telefondayım')),
+    () => allUsers.filter(u => u.status === 'online'),
     [allUsers]
   );
   const offlineUsers = useMemo(
@@ -621,7 +658,7 @@ export default function ChatView() {
             <Users size={18} />
           </button>
 
-          <div className={`h-full flex items-center ${FORCE_MOBILE ? '' : 'lg:w-64 lg:px-4'} gap-2 sm:gap-3 group relative cursor-pointer hover:bg-[rgba(var(--glass-tint),0.03)] transition-all duration-200`} onClick={(e) => { e.stopPropagation(); setIsStatusMenuOpen(!isStatusMenuOpen); }}>
+          <div className={`h-full flex items-center ${FORCE_MOBILE ? '' : 'lg:w-64 lg:px-4'} gap-2 sm:gap-3 group relative`}>
             <div className="text-right hidden sm:flex flex-col items-end flex-1 min-w-0">
               <p className="text-sm font-semibold leading-none truncate w-full">{formatFullName(currentUser.firstName, currentUser.lastName)} ({currentUser.age})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${getStatusColor(getEffectiveStatus())}`}>{getEffectiveStatus()}</p>
@@ -631,69 +668,6 @@ export default function ChatView() {
                 ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 : currentUser.avatar}
             </div>
-
-            {/* Status Menu */}
-            <AnimatePresence>
-              {isStatusMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full right-0 mt-2 w-64 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 z-[100] backdrop-blur-xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => handleSetStatus('Aktif')}
-                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
-                  >
-                    Aktif
-                  </button>
-                  <button
-                    onClick={() => handleSetStatus('Telefonda')}
-                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
-                  >
-                    Telefonda
-                  </button>
-                  <button
-                    onClick={() => handleSetStatus('Hemen Geleceğim')}
-                    className="w-full text-left px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
-                  >
-                    Hemen Geleceğim
-                  </button>
-                  <div className="border-t border-[var(--theme-border)] my-1"></div>
-                  <div className="px-3 py-2">
-                    <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest block mb-2">Süre Sonra Geleceğim (Dk)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        maxLength={2}
-                        placeholder="99"
-                        className="flex-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all"
-                        value={statusTimerInput}
-                        onChange={(e) => setStatusTimerInput(e.target.value.replace(/\D/g, ''))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && statusTimerInput) {
-                            handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput));
-                            setStatusTimerInput('');
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (statusTimerInput) {
-                            handleSetStatus(`${statusTimerInput}:00 Sonra Geleceğim`, parseInt(statusTimerInput));
-                            setStatusTimerInput('');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-[var(--theme-accent)] text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-all"
-                      >
-                        Kur
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
           </div>
         </div>
@@ -781,8 +755,8 @@ export default function ChatView() {
                             : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'
                         }`}
                       >
-                        <PhoneCall size={16} className="shrink-0" />
-                        <span className="text-sm font-semibold truncate">{channel.name}</span>
+                        {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={15} className="shrink-0 opacity-70" />; })()}
+                        <span className="font-semibold truncate min-w-0" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
                         {channel.password && <Lock size={12} className="shrink-0 ml-auto opacity-50" />}
                         {(channel.userCount ?? 0) > 0 && (
                           <span className={`text-[10px] font-bold ml-auto shrink-0 ${activeChannel === channel.id ? 'text-white/60' : 'text-[var(--theme-secondary-text)]/50'}`}>
@@ -838,7 +812,7 @@ export default function ChatView() {
                         setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
                         return;
                       }
-                      setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+                      setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
                       setMobileLeftOpen(false);
                     }}
                     className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${
@@ -847,7 +821,7 @@ export default function ChatView() {
                         : 'bg-[var(--theme-accent)] hover:opacity-90'
                     }`}
                   >
-                    <PlusCircle size={18} />
+                    <Sparkles size={15} />
                     Oda Oluştur
                   </button>
                 </div>
@@ -930,8 +904,7 @@ export default function ChatView() {
                               <div className="flex items-center gap-1 mt-0.5">
                                 {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
                                 {(isMe ? isDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-                                {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
-                                <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                                                                <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
                               </div>
                             </div>
                           </div>
@@ -964,7 +937,12 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* Left Sidebar — sadece masaüstünde sabit görünür */}
-        <aside className={`w-60 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+        <aside className={`relative bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ width: leftSidebarW, boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+          {/* Resize handle — sağ kenar */}
+          <div
+            onMouseDown={handleSidebarDragStart}
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-[var(--theme-accent)]/20 active:bg-[var(--theme-accent)]/30 transition-colors"
+          />
           {/* Brand */}
           <div className="px-5 pt-4 pb-3 shrink-0">
             <BrandArea />
@@ -992,7 +970,7 @@ export default function ChatView() {
                     }`}
                   >
                     <div className="relative">
-                      <Volume2 size={18} />
+                      {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={16} className="opacity-70" />; })()}
                       {channel.password && (
                         <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
                           <Lock size={8} className="text-white" />
@@ -1000,7 +978,7 @@ export default function ChatView() {
                       )}
                     </div>
                     <div className="flex items-center justify-between flex-1 min-w-0">
-                      <span className="text-sm font-medium truncate">{channel.name}</span>
+                      <span className="font-medium truncate" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
                       {channel.deletionTimer !== undefined && !channel.userCount && (
                         <div className="flex items-center gap-1 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
                           <Timer size={10} className="text-red-500 animate-pulse" />
@@ -1061,7 +1039,7 @@ export default function ChatView() {
                     setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
                     return;
                   }
-                  setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+                  setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                   channels.filter(c => c.ownerId === currentUser.id).length >= 2
@@ -1069,7 +1047,7 @@ export default function ChatView() {
                     : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
                 }`}
               >
-                <PlusCircle size={18} />
+                <Sparkles size={15} />
                 <span className="text-sm font-medium">Oda Oluştur</span>
               </button>
             </nav>
@@ -1373,6 +1351,7 @@ export default function ChatView() {
                       maxUsers: channel.maxUsers || 0,
                       isInviteOnly: channel.isInviteOnly || false,
                       isHidden: channel.isHidden || false,
+                      mode: channel.mode || 'social',
                     });
                   }
                   setContextMenu(null);
@@ -1421,7 +1400,7 @@ export default function ChatView() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/10 via-black/20 to-black/30"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
               onClick={() => setRoomModal({ ...roomModal, isOpen: false })}
             >
               <motion.div
@@ -1429,47 +1408,84 @@ export default function ChatView() {
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.96, opacity: 0, y: 12 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="w-full max-w-[420px] rounded-2xl border border-[var(--theme-border)]/30 overflow-hidden"
-                style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 25px 60px rgba(var(--shadow-base),0.4), 0 0 0 1px rgba(var(--theme-accent-rgb), 0.05)' }}
+                className="w-full max-w-[420px] rounded-2xl border border-[var(--theme-accent)]/15 overflow-hidden"
+                style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Top accent line */}
                 <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.3), transparent)` }} />
 
                 {/* Header */}
-                <div className="px-7 pt-7 pb-0 text-center">
+                <div className="px-7 pt-7 pb-4 text-center" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: `rgba(var(--theme-accent-rgb), 0.1)`, boxShadow: `0 0 20px rgba(var(--theme-accent-rgb), 0.08)` }}>
                     {roomModal.type === 'create'
-                      ? <PlusCircle className="text-[var(--theme-accent)]" size={24} />
+                      ? <Sparkles className="text-[var(--theme-accent)]" size={22} />
                       : <Settings className="text-[var(--theme-accent)]" size={24} />
                     }
                   </div>
                   <h3 className="text-lg font-bold text-[var(--theme-text)]">
                     {roomModal.type === 'create' ? 'Yeni Oda Oluştur' : 'Oda Ayarları'}
                   </h3>
-                  <p className="text-[11px] text-[var(--theme-secondary-text)]/50 mt-1.5">
+                  <p className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-1.5">
                     {roomModal.type === 'create' ? 'Arkadaşlarınla konuşmak için bir alan oluştur.' : 'Bu odanın ayarlarını düzenleyin.'}
                   </p>
                 </div>
 
                 {/* Form */}
                 <div className="px-7 pt-5 pb-7">
+                  {/* Room Mode Selection — sadece create modunda */}
+                  {roomModal.type === 'create' && (
+                    <div className="mb-5">
+                      <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Oda Modu</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {ROOM_MODE_LIST.map(m => {
+                          const sel = roomModal.mode === m.id;
+                          const ModeIcon = roomModeIcons[m.id];
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => setRoomModal({ ...roomModal, mode: m.id })}
+                              className={`relative text-left rounded-xl px-3 py-2.5 transition-all duration-150 border active:scale-[0.97] ${
+                                sel
+                                  ? 'border-[var(--theme-accent)]/50'
+                                  : 'border-[var(--theme-border)]/15 hover:border-[var(--theme-border)]/30 hover:scale-[1.01]'
+                              }`}
+                              style={sel ? {
+                                background: `rgba(var(--theme-accent-rgb), 0.1)`,
+                                boxShadow: `0 1px 12px rgba(var(--theme-accent-rgb), 0.15), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.08)`,
+                              } : {
+                                background: 'rgba(var(--glass-tint),0.03)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <ModeIcon size={14} className={sel ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/70'} />
+                                <span className={`text-[12px] font-bold ${sel ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/90'}`}>{m.label}</span>
+                              </div>
+                              <p className={`text-[9px] leading-snug ${sel ? 'text-[var(--theme-accent)]/60' : 'text-[var(--theme-secondary-text)]/50'}`}>{m.ruleSummary}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Group A: Temel bilgiler */}
                   <div className="space-y-3.5">
                     <div>
-                      <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.1em] mb-1.5">Oda İsmi</label>
+                      <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Oda İsmi</label>
                       <input
                         autoFocus
                         type="text"
                         placeholder="ör: Genel Sohbet"
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/25"
+                        className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40"
                         style={{
-                          background: 'var(--theme-bg)',
-                          border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
+                          background: 'rgba(var(--shadow-base),0.15)',
+                          border: '1px solid rgba(var(--glass-tint),0.06)',
                           boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
                         }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1)`; }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.2)'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.06)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.15)'; }}
                         value={roomModal.name}
                         onChange={(e) => setRoomModal({ ...roomModal, name: e.target.value })}
                         onKeyDown={(e) => {
@@ -1480,23 +1496,23 @@ export default function ChatView() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.1em] mb-1.5">Kişi Limiti</label>
+                      <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Kişi Limiti</label>
                       <input
                         type="number"
                         min="0"
                         placeholder="Sınırsız"
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/25 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         style={{
-                          background: 'var(--theme-bg)',
-                          border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
+                          background: 'rgba(var(--shadow-base),0.15)',
+                          border: '1px solid rgba(var(--glass-tint),0.06)',
                           boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
                         }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.3)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06)`; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.1)`; }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.2)'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.06)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.15)'; }}
                         value={roomModal.maxUsers}
                         onChange={(e) => setRoomModal({ ...roomModal, maxUsers: parseInt(e.target.value) || 0 })}
                       />
-                      <p className="text-[9px] text-[var(--theme-secondary-text)]/35 mt-1.5 ml-0.5">Boş veya 0 bırakırsanız sınır olmaz.</p>
+                      <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-1.5 ml-0.5">Boş veya 0 bırakırsanız sınır olmaz.</p>
                     </div>
                   </div>
 
@@ -1508,7 +1524,7 @@ export default function ChatView() {
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1">
                         <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>
-                        <p className="text-[10px] text-[var(--theme-secondary-text)]/40 mt-0.5 leading-snug">Kanal listesinde görünmez, sadece davet ile ulaşılır.</p>
+                        <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Kanal listesinde görünmez, sadece davet ile ulaşılır.</p>
                       </div>
                       <button
                         type="button"
@@ -1523,14 +1539,14 @@ export default function ChatView() {
                         }`}
                         style={roomModal.isHidden ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
                       >
-                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${roomModal.isHidden ? 'left-[22px]' : 'left-[3px]'}`} />
+                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${roomModal.isHidden ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
                       </button>
                     </div>
 
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1">
                         <p className={`text-[13px] font-semibold leading-tight ${roomModal.isHidden ? 'text-[var(--theme-secondary-text)]/40' : 'text-[var(--theme-text)]'}`}>Davetle Giriş</p>
-                        <p className="text-[10px] text-[var(--theme-secondary-text)]/40 mt-0.5 leading-snug">Sadece davet edilen kullanıcılar katılabilir.</p>
+                        <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Sadece davet edilen kullanıcılar katılabilir.</p>
                       </div>
                       <button
                         type="button"
@@ -1545,7 +1561,7 @@ export default function ChatView() {
                         }`}
                         style={roomModal.isInviteOnly ? { backgroundColor: 'var(--theme-accent)', boxShadow: roomModal.isHidden ? 'none' : `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
                       >
-                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${roomModal.isInviteOnly ? 'left-[22px]' : 'left-[3px]'}`} />
+                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${roomModal.isInviteOnly ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
                       </button>
                     </div>
                   </div>
@@ -1554,14 +1570,13 @@ export default function ChatView() {
                   <div className="flex gap-2.5 mt-7">
                     <button
                       onClick={() => setRoomModal({ ...roomModal, isOpen: false })}
-                      className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-secondary-text)]/80 hover:bg-[var(--theme-border)]/8 transition-all"
+                      className="flex-1 px-4 py-2.5 text-[13px] btn-cancel active:scale-[0.97]"
                     >
                       İptal
                     </button>
                     <button
                       onClick={handleSaveRoom}
-                      className="flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all hover:brightness-110"
-                      style={{ backgroundColor: 'var(--theme-accent)', boxShadow: `0 2px 12px rgba(var(--theme-accent-rgb), 0.3)` }}
+                      className="flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold btn-primary active:scale-[0.97]"
                     >
                       {roomModal.type === 'create' ? 'Oda Oluştur' : 'Kaydet'}
                     </button>
@@ -1672,7 +1687,7 @@ export default function ChatView() {
                   <div className="flex gap-3 w-full">
                     <button
                       onClick={() => setPasswordModal(null)}
-                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-sidebar)] text-[var(--theme-secondary-text)] font-bold hover:opacity-80 transition-all"
+                      className="flex-1 px-6 py-3 btn-cancel font-bold active:scale-[0.97]"
                     >
                       İptal
                     </button>
@@ -1682,7 +1697,7 @@ export default function ChatView() {
                           ? handleSetPassword(passwordModal.channelId, passwordInput, passwordRepeatInput)
                           : handleVerifyPassword();
                       }}
-                      className="flex-1 px-6 py-3 rounded-2xl bg-[var(--theme-sidebar)]/50 text-[var(--theme-accent)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white font-bold shadow-lg transition-all"
+                      className="flex-1 px-6 py-3 btn-primary font-bold active:scale-[0.97]"
                     >
                       {passwordModal.type === 'set' ? 'Şifrele' : 'Giriş Yap'}
                     </button>
@@ -1722,14 +1737,24 @@ export default function ChatView() {
               {/* Oda başlığı — sadece mobilde göster, masaüstünde kontroller floating cluster'da */}
               <div className={`relative z-[1] flex items-center justify-between mb-3 sm:mb-6 ${FORCE_MOBILE ? '' : 'lg:hidden'}`}>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
-                    <Volume2 size={18} className="sm:w-5 sm:h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
-                      {channels.find(c => c.id === activeChannel)?.name || 'Sohbet Odası'}
-                    </h2>
-                  </div>
+                  {(() => {
+                    const activeCh = channels.find(c => c.id === activeChannel);
+                    const mc = getRoomModeConfig(activeCh?.mode);
+                    const ModeIcon = roomModeIcons[mc.id] || Volume2;
+                    return (
+                      <>
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0">
+                          <ModeIcon size={18} className="sm:w-5 sm:h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">
+                            {activeCh?.name || 'Sohbet Odası'}
+                          </h2>
+                          <p className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 mt-0.5">{mc.shortHelper}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -1823,7 +1848,6 @@ export default function ChatView() {
                       isVoiceBanned: isMe ? !!currentUser.isVoiceBanned : false,
                       volumeLevel,
                       speakingLevel: speakingLevels[user.name] ?? 0,
-                      statusTimer: isMe ? statusTimer : null,
                       effectiveStatus: getEffectiveStatus(),
                       onClick: (e: React.MouseEvent) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); },
                       onDoubleClick: () => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); },
@@ -1869,6 +1893,25 @@ export default function ChatView() {
                           </div>
 
                           {/* Sohbet penceresi — absolute, kartların altından en alta kadar */}
+                          {/* Room mode: quiet → chat kapalı */}
+                          {(() => {
+                            const activeCh = channels.find(c => c.id === activeChannel);
+                            const modeConfig = getRoomModeConfig(activeCh?.mode);
+                            if (!modeConfig.chatEnabled) {
+                              return (
+                                <div className="absolute left-3 right-3 bottom-4 flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
+                                  <VolumeX size={22} className="text-[var(--theme-secondary-text)] opacity-10 mb-2" />
+                                  <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-25">Bu oda modunda mesajlaşma kapalı</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                          {(() => {
+                            const activeCh = channels.find(c => c.id === activeChannel);
+                            const modeConfig = getRoomModeConfig(activeCh?.mode);
+                            if (!modeConfig.chatEnabled) return null;
+                            return (
                           <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', borderBottom: 'none', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
                             {/* Yazı boyutu ayarı — sağ üst */}
                             <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
@@ -1993,6 +2036,8 @@ export default function ChatView() {
                               )}
                             </div>
                           </div>
+                            );
+                          })()}
 
                         </div>
                       )}
@@ -2105,9 +2150,7 @@ export default function ChatView() {
                             <Headphones size={8} className="text-red-500 shrink-0" />
                           )}
                           {/* Kalıcı durum — speaking göstergesi yok */}
-                          {user.statusText === 'Telefonda' && <PhoneCall size={8} className="text-red-500" />}
-                          {user.statusText === 'Hemen Geleceğim' && <Recycle size={8} className="text-orange-500" />}
-                          <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+                                                                              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
                         </div>
                       </div>
                       {canInvite && (() => {
@@ -2283,8 +2326,6 @@ export default function ChatView() {
           <button
             onClick={() => {
               if (isAdminMuted) return;
-              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
-              if (isSpecialStatus) { handleSetStatus('Aktif'); return; }
               if (isMuted && isDeafened) setIsDeafened(false);
               setIsMuted(!isMuted);
             }}
@@ -2320,8 +2361,6 @@ export default function ChatView() {
         <div className="relative group/hp">
           <button
             onClick={() => {
-              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
-              if (isSpecialStatus) { setIsDeafened(false); return; }
               setIsDeafened(!isDeafened);
             }}
             className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
@@ -2354,10 +2393,51 @@ export default function ChatView() {
         <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
           {isNoiseSuppressionEnabled ? <Shield size={16} /> : <ShieldOff size={16} />}
         </button>
-        {/* PTT tuşu */}
-        <button onClick={() => setIsListeningForKey(true)} className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center btn-haptic text-[10px] font-black whitespace-nowrap ${isListeningForKey ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'}`} title="Bas-Konuş tuşu">
-          {isListeningForKey ? '...' : pttKey}
-        </button>
+        {/* Ses modu butonu — PTT: tuş seçimi, VAD: yeşil "Ses Etkinliği" */}
+        {(() => {
+          const isVad = voiceMode === 'vad';
+          const activeCh = activeChannel ? channels.find(c => c.id === activeChannel) : null;
+          const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
+          const canSwitch = vc ? vc.allowedModes.length > 1 : true;
+
+          return (
+            <div className="relative group/vmode">
+              {isVad ? (
+                /* VAD modu — yeşil gösterge (tıklanamaz) */
+                <div
+                  className="h-10 px-3 rounded-xl flex items-center gap-1.5 text-[10px] font-bold whitespace-nowrap bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                  title="Ses Etkinliği modu aktif"
+                >
+                  <Mic size={13} />
+                  <span>Ses Etkinliği</span>
+                </div>
+              ) : (
+                /* PTT modu — tuş seçim butonu */
+                <button
+                  onClick={() => setIsListeningForKey(true)}
+                  className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center btn-haptic text-[10px] font-black whitespace-nowrap transition-all duration-150 active:scale-[0.97] ${
+                    isListeningForKey
+                      ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse'
+                      : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
+                  }`}
+                  title="Bas-Konuş tuşu — tıkla değiştir"
+                >
+                  {isListeningForKey ? '...' : pttKey}
+                </button>
+              )}
+              {/* Değiştir ikonu — sağ üst, hover'da görünür, şeffaf */}
+              {canSwitch && (
+                <div
+                  onClick={(e) => { e.stopPropagation(); setVoiceMode(isVad ? 'ptt' : 'vad'); }}
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/vmode:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]"
+                  title={isVad ? 'Bas-Konuş\'a geç' : 'Ses Etkinliği\'ne geç'}
+                >
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-text)]"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* Oda kontrolleri — sadece odadayken */}
         {activeChannel && view !== 'settings' && (
           <>
@@ -2611,9 +2691,7 @@ export default function ChatView() {
           {/* Hoparlör */}
           <button
             onClick={() => {
-              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
-              if (isSpecialStatus) setIsDeafened(false);
-              else setIsDeafened(!isDeafened);
+              setIsDeafened(!isDeafened);
             }}
             className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
               isDeafened ? 'bg-red-500/20 text-red-400' : 'text-[var(--theme-secondary-text)]'
@@ -2627,9 +2705,8 @@ export default function ChatView() {
           <button
             onClick={() => {
               if (isAdminMuted) return;
-              const isSpecialStatus = currentUser.statusText === 'Telefonda' || currentUser.statusText === 'Hemen Geleceğim' || currentUser.statusText?.includes('Sonra Geleceğim');
-              if (isSpecialStatus) handleSetStatus('Aktif');
-              else { if (isMuted && isDeafened) setIsDeafened(false); setIsMuted(!isMuted); }
+              if (isMuted && isDeafened) setIsDeafened(false);
+              setIsMuted(!isMuted);
             }}
             className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
               isAdminMuted ? 'bg-orange-600/20 text-orange-400 cursor-not-allowed'
@@ -2680,14 +2757,7 @@ export default function ChatView() {
           <div className="relative flex-1">
             <button
               onClick={() => {
-                const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
-                                        currentUser.statusText === 'Hemen Geleceğim' ||
-                                        currentUser.statusText?.includes('Sonra Geleceğim');
-                if (isSpecialStatus) {
-                  setIsDeafened(false);
-                } else {
-                  setIsDeafened(!isDeafened);
-                }
+                setIsDeafened(!isDeafened);
               }}
               aria-label={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
               aria-pressed={isDeafened}
@@ -2749,18 +2819,11 @@ export default function ChatView() {
             <button
               onClick={() => {
                 if (isAdminMuted) return;
-                const isSpecialStatus = currentUser.statusText === 'Telefonda' ||
-                                        currentUser.statusText === 'Hemen Geleceğim' ||
-                                        currentUser.statusText?.includes('Sonra Geleceğim');
-                if (isSpecialStatus) {
-                  handleSetStatus('Aktif');
-                } else {
-                  const willBeActive = isMuted;
-                  if (willBeActive && isDeafened) {
-                    setIsDeafened(false);
-                  }
-                  setIsMuted(!isMuted);
+                const willBeActive = isMuted;
+                if (willBeActive && isDeafened) {
+                  setIsDeafened(false);
                 }
+                setIsMuted(!isMuted);
               }}
               aria-label={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
               aria-pressed={isMuted}

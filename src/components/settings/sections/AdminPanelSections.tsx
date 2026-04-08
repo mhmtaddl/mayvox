@@ -18,7 +18,7 @@ export function InviteCodeSection() {
         </div>
         <button
           onClick={handleGenerateCode}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--theme-accent)] text-white rounded-lg font-semibold text-[11px] hover:opacity-90 transition-all shadow-md shadow-[var(--theme-accent)]/20 shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 btn-primary font-semibold text-[11px] shrink-0 active:scale-95"
         >
           <LinkIcon size={12} />
           Oluştur

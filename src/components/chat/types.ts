@@ -92,7 +92,6 @@ export interface UserCardProps {
   isVoiceBanned: boolean;
   volumeLevel: number;
   speakingLevel: number;
-  statusTimer: number | null;
   effectiveStatus: string;
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;

@@ -32,7 +32,7 @@ export default function ConfirmModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-gradient-to-b from-black/10 via-black/20 to-black/30"
+          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={onCancel}
         >
           {/* Radial highlight — çok hafif, merkeze dikkat çeker */}
@@ -43,7 +43,8 @@ export default function ConfirmModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.16 }}
-            className="relative w-full max-w-sm bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-2xl overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_14px_40px_rgba(0,0,0,0.35),0_0_60px_rgba(255,220,140,0.04)]"
+            className="relative w-full max-w-sm border border-[var(--theme-border)]/20 rounded-2xl overflow-hidden"
+            style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top glow — modal üstünde çok hafif sıcak ışık */}
@@ -55,7 +56,11 @@ export default function ConfirmModal({
             <div className="flex border-t border-[var(--theme-border)]">
               <button
                 onClick={onCancel}
-                className="flex-1 py-3.5 text-[13px] font-semibold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)]/50 transition-colors"
+                className={`flex-1 py-3.5 text-[13px] font-semibold transition-colors ${
+                  danger
+                    ? 'text-emerald-400 hover:bg-emerald-500/10'
+                    : 'text-red-400 hover:bg-red-500/10'
+                }`}
               >
                 {cancelText}
               </button>

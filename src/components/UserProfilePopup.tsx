@@ -73,8 +73,8 @@ export default function UserProfilePopup({
 
   const isOnline = user.status === 'online';
   const statusText = isOnline ? (user.statusText || 'Aktif') : 'Çevrimdışı';
-  const statusColor = !isOnline ? 'text-white/40' : statusText === 'Aktif' ? 'text-emerald-400' : statusText === 'Telefonda' ? 'text-red-400' : 'text-orange-400';
-  const statusDotColor = !isOnline ? 'bg-white/20' : statusText === 'Aktif' ? 'bg-emerald-500' : statusText === 'Telefonda' ? 'bg-red-500' : 'bg-orange-500';
+  const statusColor = !isOnline ? 'text-white/40' : statusText === 'Aktif' ? 'text-emerald-400' : statusText === 'Pasif' ? 'text-yellow-400' : statusText === 'Duymuyor' ? 'text-red-400' : statusText === 'AFK' ? 'text-violet-400' : 'text-orange-400';
+  const statusDotColor = !isOnline ? 'bg-white/20' : statusText === 'Aktif' ? 'bg-emerald-500' : statusText === 'Pasif' ? 'bg-yellow-500' : statusText === 'Duymuyor' ? 'bg-red-500' : statusText === 'AFK' ? 'bg-violet-500' : 'bg-orange-500';
 
   const hasVersion = !!user.appVersion;
   const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
@@ -108,9 +108,9 @@ export default function UserProfilePopup({
           className="relative"
           style={{
             borderRadius: 18,
-            background: 'var(--popover-bg)',
-            border: `1px solid var(--popover-border)`,
-            boxShadow: 'var(--popover-shadow), inset 0 1px 0 rgba(255,255,255,0.05)',
+            background: 'var(--theme-surface-card)',
+            border: `1px solid var(--theme-surface-card-border)`,
+            boxShadow: '0 16px 48px rgba(var(--shadow-base),0.4), 0 4px 12px rgba(var(--shadow-base),0.2), inset 0 1px 0 rgba(var(--glass-tint),0.05)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
           }}
@@ -148,14 +148,14 @@ export default function UserProfilePopup({
                 {hasImage ? (
                   <img src={user.avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : user.avatar ? (
-                  <span className="text-[28px] font-bold" style={{ color: 'var(--popover-text)', opacity: 0.6 }}>{user.avatar}</span>
+                  <span className="text-[28px] font-bold" style={{ color: 'var(--theme-text)', opacity: 0.6 }}>{user.avatar}</span>
                 ) : (
                   <UserIcon size={36} className="text-white/20" />
                 )}
               </div>
               {/* Status dot — pulse for online */}
               <div className="absolute -bottom-0.5 -right-0.5">
-                <div className={`w-4 h-4 rounded-full ${statusDotColor} ring-2 ring-[var(--popover-bg)]`} />
+                <div className={`w-4 h-4 rounded-full ${statusDotColor} ring-2 ring-[var(--theme-surface-card)]`} />
                 {isOnline && (
                   <div className={`absolute inset-0 rounded-full ${statusDotColor} animate-ping opacity-40`} />
                 )}
@@ -166,7 +166,7 @@ export default function UserProfilePopup({
 
             {/* Name + role */}
             <div className="flex items-center gap-1.5 mb-1">
-              <span className="font-bold text-[16px] leading-tight tracking-wide" style={{ color: 'var(--popover-text)' }}>{formatFullName(user.firstName, user.lastName)}</span>
+              <span className="font-bold text-[16px] leading-tight tracking-wide" style={{ color: 'var(--theme-text)' }}>{formatFullName(user.firstName, user.lastName)}</span>
               {user.isAdmin && <ShieldCheck size={14} className="text-[var(--theme-accent)] shrink-0" strokeWidth={2.5} />}
               {!user.isAdmin && user.isModerator && (
                 <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-3.5 h-3.5 shrink-0"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
@@ -177,35 +177,39 @@ export default function UserProfilePopup({
             <div className="flex items-center gap-2 mb-4">
               <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
                 !isOnline
-                  ? 'text-[var(--popover-text-secondary)]/60 border-[var(--theme-border)]/50 bg-[var(--theme-surface-card)]/40'
+                  ? 'text-[var(--theme-secondary-text)]/60 border-[var(--theme-border)]/50 bg-[var(--theme-surface-card)]/40'
                   : statusText === 'Aktif'
                     ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10'
-                    : statusText === 'Telefonda'
-                      ? 'text-red-400 border-red-500/25 bg-red-500/10'
-                      : 'text-orange-400 border-orange-500/25 bg-orange-500/10'
+                    : statusText === 'Pasif'
+                      ? 'text-yellow-400 border-yellow-500/25 bg-yellow-500/10'
+                      : statusText === 'Duymuyor'
+                        ? 'text-red-400 border-red-500/25 bg-red-500/10'
+                        : statusText === 'AFK'
+                          ? 'text-violet-400 border-violet-500/25 bg-violet-500/10'
+                          : 'text-orange-400 border-orange-500/25 bg-orange-500/10'
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${statusDotColor}`} />
                 {statusText}
               </span>
-              {user.age && <span className="text-[10px] font-medium" style={{ color: 'var(--popover-text-secondary)', opacity: 0.5 }}>{user.age} yaş</span>}
+              {user.age && <span className="text-[10px] font-medium" style={{ color: 'var(--theme-secondary-text)', opacity: 0.5 }}>{user.age} yaş</span>}
             </div>
 
             {/* Meta chips */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 mb-4">
               {user.platform && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--theme-secondary-text)]">
                   {user.platform === 'mobile' ? <Smartphone size={10} /> : <Monitor size={10} />}
                   {user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}
                 </span>
               )}
               {isOnline && user.onlineSince && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--theme-secondary-text)]">
                   <Clock size={9} />
                   {formatOnlineDuration(user.onlineSince)}
                 </span>
               )}
               {!isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--theme-secondary-text)]">
                   <History size={9} />
                   {formatLastSeen(user.lastSeenAt)}
                 </span>
@@ -214,7 +218,7 @@ export default function UserProfilePopup({
                 <span className={`inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${
                   outdated
                     ? 'text-red-400/60 border-red-500/20 bg-red-500/6'
-                    : 'border-[var(--theme-border)]/40 bg-[var(--theme-surface-card)]/40 text-[var(--popover-text-secondary)]/60'
+                    : 'border-[var(--theme-border)]/40 bg-[var(--theme-surface-card)]/40 text-[var(--theme-secondary-text)]/60'
                 }`}>
                   v{user.appVersion}
                 </span>

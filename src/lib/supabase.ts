@@ -149,6 +149,7 @@ export const createChannel = async (channel: {
   is_invite_only: boolean;
   is_hidden: boolean;
   password?: string;
+  mode?: string;
 }) => {
   return await supabase.from('channels').insert(channel);
 };
@@ -159,6 +160,7 @@ export const updateChannel = async (id: string, updates: {
   max_users?: number;
   is_invite_only?: boolean;
   is_hidden?: boolean;
+  mode?: string;
 }) => {
   return await supabase.from('channels').update(updates).eq('id', id);
 };

@@ -60,6 +60,7 @@ type DbProfile = {
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
   is_invite_only?: boolean; is_hidden?: boolean; password?: string;
+  mode?: string;
 };
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
@@ -75,6 +76,8 @@ import { usePttAudio } from './hooks/usePttAudio';
 import { useLiveKitConnection } from './hooks/useLiveKitConnection';
 import { usePresence } from './hooks/usePresence';
 import { useModeration } from './hooks/useModeration';
+import { useDucking } from './hooks/useDucking';
+import { useAutoPresence, type AutoStatus } from './hooks/useAutoPresence';
 
 // LoginSelectionView kaldırıldı — LoginPasswordView ana giriş ekranı
 import LoginCodeView from './views/LoginCodeView';
@@ -91,6 +94,7 @@ import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
 import { warmUpTokenServer } from './lib/livekit';
+import { getRoomModeConfig } from './lib/roomModeConfig';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -385,8 +389,7 @@ export default function App() {
 
   const [userActionMenu, setUserActionMenu] = useState<{ userId: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
-  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-  const [statusTimerInput, setStatusTimerInput] = useState('');
+  // statusMenu / statusTimerInput kaldırıldı — manuel durum özelliği (Telefonda, Hemen Geleceğim vb.) artık yok
   const [roomModal, setRoomModal] = useState<{
     isOpen: boolean;
     type: 'create' | 'edit';
@@ -395,7 +398,8 @@ export default function App() {
     maxUsers: number;
     isInviteOnly: boolean;
     isHidden: boolean;
-  }>({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+    mode: string;
+  }>({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
   const [passwordModal, setPasswordModal] = useState<{ type: 'set' | 'enter'; channelId: string } | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordRepeatInput, setPasswordRepeatInput] = useState('');
@@ -417,7 +421,7 @@ export default function App() {
   const [inviteStatuses, setInviteStatuses] = useState<Record<string, 'pending' | 'accepted' | 'rejected'>>({});
 
   // ── AppState-only state ──────────────────────────────────────────────────
-  const [statusTimer, setStatusTimer] = useState<number | null>(null);
+  // statusTimer kaldırıldı — "X dk Sonra Geleceğim" özelliği artık yok
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginNick, setLoginNick] = useState('');
@@ -464,6 +468,17 @@ export default function App() {
   } = useDevices();
 
   // ── PTT Audio hook ───────────────────────────────────────────────────────
+  // Room mode voice config: izin verilen modları kontrol et, yoksa default'a düş
+  const activeRoomModeConfig = getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode);
+  const effectiveVoiceMode = (() => {
+    if (!activeChannel) return voiceMode;
+    const vc = activeRoomModeConfig.voice;
+    // Kullanıcının mevcut tercihi izin verilenler arasındaysa koru
+    if (vc.allowedModes.includes(voiceMode)) return voiceMode;
+    // Değilse odanın varsayılanına düş
+    return vc.defaultMode;
+  })();
+
   const { isPttPressed, setIsPttPressed: setPttPressed, volumeLevel } = usePttAudio({
     pttKey,
     setPttKey,
@@ -477,10 +492,46 @@ export default function App() {
     noiseThreshold,
     isLowDataMode,
     pttReleaseDelay,
-    voiceMode,
+    voiceMode: effectiveVoiceMode,
     onMicError: (msg) => {
       setToastMsg(msg);
       // auto-dismiss dock useEffect'te yönetiliyor
+    },
+  });
+
+  // ── Auto-Presence hook ───────────────────────────────────────────────────
+  // Tek aktivite kaynağı: auto-presence + auto-leave aynı lastActivityRef'i kullanır.
+  // idleThresholdMs: ayarlardaki autoLeaveMinutes'ten gelir → iki sistem senkron kalır.
+  const autoStatusRef = useRef<AutoStatus>('active');
+  // presenceChannelRef usePresence'tan sonra dolacak — callback lazy olduğundan ref üzerinden erişiyoruz
+  const presenceChannelForAutoRef = useRef<any>(null);
+  const {
+    lastActivityRef: sharedLastActivityRef,
+    recordActivity,
+    recordActivityImmediate,
+    currentAutoStatus,
+  } = useAutoPresence({
+    isLoggedIn: !!currentUser.id,
+    isDeafened,
+    isPttPressed,
+    statusText: currentUser.statusText,
+    // Auto-presence idle'ı auto-leave kick'ten ÖNCE göstermeli:
+    // Threshold'un yarısında "Pasif" görünür, tam threshold'da oda çıkışı olur.
+    idleThresholdMs: Math.floor(autoLeaveMinutes * 60 * 1000 / 2),
+    onStatusChange: (status) => {
+      autoStatusRef.current = status;
+      // Presence payload'ı güncelle — diğer kullanıcılar yeni durumu görsün
+      const ch = presenceChannelForAutoRef.current;
+      if (!ch || !currentUserRef.current.id) return;
+      ch.track({
+        userId: currentUserRef.current.id,
+        appVersion,
+        selfMuted: isMuted,
+        selfDeafened: isDeafened,
+        userName: currentUserRef.current.name,
+        currentRoom: activeChannelRef.current || undefined,
+        autoStatus: status,
+      });
     },
   });
 
@@ -502,6 +553,9 @@ export default function App() {
     onInviteRejected: (inviteeId) => handleInviteRejectedCooldownRef.current(inviteeId),
     onInviteAccepted: (inviteeId) => handleInviteAcceptedRef.current(inviteeId),
   });
+
+  // presenceChannelRef'i auto-presence callback'i için senkronize et
+  presenceChannelForAutoRef.current = presenceChannelRef.current;
 
   // Stable ref so the 5s timer always calls the latest resyncPresence
   const resyncPresenceRef = useRef(resyncPresence);
@@ -532,6 +586,17 @@ export default function App() {
 
   // Keep forward ref current so usePresence always calls the real function
   disconnectLKRef.current = disconnectFromLiveKit;
+
+  // ── Smart Voice Ducking — dominant speaker based ────────────────────────
+  // Room mode config'den ducking parametreleri okunur.
+  useDucking({
+    livekitRoomRef,
+    speakingLevels,
+    userVolumes,
+    duckingConfig: getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).ducking,
+    isConnected: !!activeChannel && !isConnecting,
+    localIdentity: currentUser.name,
+  });
 
   // ── Moderation hook ──────────────────────────────────────────────────────
   const {
@@ -704,6 +769,7 @@ export default function App() {
           isInviteOnly: c.is_invite_only,
           isHidden: c.is_hidden,
           password: c.password || undefined,
+          mode: c.mode || undefined,
         }));
         setChannels([...CHANNELS, ...userChannels]);
       }
@@ -824,7 +890,6 @@ export default function App() {
   // ── Global click listener to close all popups/menus ──────────────────────
   useEffect(() => {
     const handleGlobalClick = () => {
-      setIsStatusMenuOpen(false);
       setContextMenu(null);
       setUserActionMenu(null);
       setShowInputSettings(false);
@@ -834,38 +899,7 @@ export default function App() {
     return () => window.removeEventListener('click', handleGlobalClick);
   }, [setShowInputSettings, setShowOutputSettings]);
 
-  // ── Status timer: side effects when timer reaches 0 ──────────────────────
-  useEffect(() => {
-    if (statusTimer === null) return;
-    const user = currentUserRef.current;
-    if (statusTimer <= 0) {
-      const updatedUser = { ...user, statusText: 'Aktif' };
-      setCurrentUser(updatedUser);
-      setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-      presenceChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'moderation',
-        payload: { userId: user.id, updates: { statusText: 'Aktif' } },
-      });
-      setStatusTimer(null);
-      setIsMuted(false);
-      setIsDeafened(false);
-      return;
-    }
-    const minutes = Math.floor(statusTimer / 60);
-    const seconds = statusTimer % 60;
-    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')} Sonra Geleceğim`;
-    if (user.statusText !== timeStr) {
-      const updatedUser = { ...user, statusText: timeStr };
-      setCurrentUser(updatedUser);
-      setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-      presenceChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'moderation',
-        payload: { userId: user.id, updates: { statusText: timeStr } },
-      });
-    }
-  }, [statusTimer]);
+  // statusTimer effect kaldırıldı — "X dk Sonra Geleceğim" özelliği artık yok
 
   // ── Code timer: clear code when timeLeft hits 0 ──────────────────────────
   useEffect(() => {
@@ -874,10 +908,9 @@ export default function App() {
     }
   }, [timeLeft, generatedCode]);
 
-  // ── TEK 1000ms INTERVAL — status timer + code timer + room deletion ───────
+  // ── TEK 1000ms INTERVAL — code timer + room deletion ──────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
-      setStatusTimer(prev => (prev !== null && prev > 0 ? prev - 1 : prev));
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
 
       setChannels(prevChannels => {
@@ -988,17 +1021,16 @@ export default function App() {
     });
   }, [isDeafened]);
 
-  // ── Auto-leave on idle: kullanıcı konuşmadan belirli süre geçerse kanaldan çıkar ──
+  // ── Auto-leave on idle: kullanıcı belirli süre pasif kalırsa kanaldan çıkar ──
+  // NOT: lastActivity takibi useAutoPresence'ın sharedLastActivityRef'inde.
+  // Bu timer sadece auto-leave mantığını (uyarı + oda çıkışı) çalıştırır.
+  // Auto-presence durumu (Pasif/Aktif/Duymuyor) useAutoPresence tarafından yönetilir.
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
   const idleWarningShownRef = useRef(false);
 
-  // PTT basıldığında (konuşma aktivitesi) idle timer'ı sıfırla + uyarı flag'ini temizle
+  // PTT basıldığında auto-leave uyarı flag'ini temizle (activity shared ref'te zaten güncelleniyor)
   useEffect(() => {
-    if (isPttPressed) {
-      lastActivityRef.current = Date.now();
-      idleWarningShownRef.current = false;
-    }
+    if (isPttPressed) idleWarningShownRef.current = false;
   }, [isPttPressed]);
 
   // Kanal veya ayar değiştiğinde timer'ı yeniden kur
@@ -1006,8 +1038,8 @@ export default function App() {
     if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
     if (!autoLeaveEnabled || !activeChannel) return;
 
-    // Kanal değiştiğinde activity'yi sıfırla
-    lastActivityRef.current = Date.now();
+    // Kanal değiştiğinde activity'yi sıfırla (shared ref üzerinden)
+    recordActivityImmediate();
     idleWarningShownRef.current = false;
 
     const WARNING_SECONDS = 30;
@@ -1015,13 +1047,12 @@ export default function App() {
     const warningMs = thresholdMs - WARNING_SECONDS * 1000;
 
     const checkInterval = setInterval(() => {
-      const elapsed = Date.now() - lastActivityRef.current;
+      const elapsed = Date.now() - sharedLastActivityRef.current;
 
       // 30 saniye uyarısı — aynı idle döngüsünde sadece 1 kez
       if (warningMs > 0 && !idleWarningShownRef.current && elapsed >= warningMs && elapsed < thresholdMs) {
         idleWarningShownRef.current = true;
         setToastMsg('Pasif kaldığınız için kanaldan ayrılmanıza 30 saniye kaldı.');
-        // auto-dismiss dock useEffect'te yönetiliyor
       }
 
       // Otomatik ayrılma
@@ -1041,7 +1072,6 @@ export default function App() {
             payload: { userId: afkUser.id, updates: { statusText: 'AFK' } },
           });
           setToastMsg('Uzun süre konuşmadığınız için kanaldan ayrıldınız.');
-          // auto-dismiss dock useEffect'te yönetiliyor
         });
       }
     }, 10_000);
@@ -1072,17 +1102,20 @@ export default function App() {
 
   const getStatusColor = (statusText: string) => {
     if (statusText === 'Aktif') return 'text-[var(--theme-accent)]';
-    if (statusText === 'Telefonda') return 'text-red-500';
-    if (statusText === 'Hemen Geleceğim') return 'text-orange-500';
-    if (statusText.includes('Sonra Geleceğim')) return 'text-yellow-500';
     if (statusText === 'Dinliyor') return 'text-orange-500';
     if (statusText === 'Sessiz') return 'text-[var(--theme-secondary-text)]';
     if (statusText === 'AFK') return 'text-violet-400';
+    if (statusText === 'Pasif') return 'text-yellow-500';
+    if (statusText === 'Duymuyor') return 'text-red-400';
     return 'text-blue-500';
   };
 
   const getEffectiveStatus = () => {
     if (currentUser.statusText !== 'Aktif') return currentUser.statusText;
+    // Auto-presence durumu
+    const auto = autoStatusRef.current;
+    if (auto === 'deafened') return 'Duymuyor';
+    if (auto === 'idle') return 'Pasif';
     if (isDeafened) return 'Sessiz';
     if (isMuted) return 'Dinliyor';
     return 'Aktif';
@@ -1095,31 +1128,8 @@ export default function App() {
   };
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSetStatus = (text: string, minutes?: number) => {
-    const updatedUser = { ...currentUser, statusText: text };
-    setCurrentUser(updatedUser);
-    setAllUsers(allUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'moderation',
-      payload: { userId: currentUser.id, updates: { statusText: text } },
-    });
-
-    if (text !== 'Aktif') {
-      setIsMuted(true);
-      setIsDeafened(true);
-    } else {
-      setIsMuted(false);
-      setIsDeafened(false);
-    }
-
-    if (minutes) {
-      setStatusTimer(minutes * 60);
-    } else {
-      setStatusTimer(null);
-    }
-    setIsStatusMenuOpen(false);
-  };
+  // handleSetStatus kaldırıldı — manuel durum (Telefonda, Hemen Geleceğim, Sonra Geleceğim) artık yok
+  // Auto-presence (useAutoPresence) otomatik durumu yönetiyor
 
   const handleCopyCode = () => {
     if (generatedCode) {
@@ -1319,6 +1329,7 @@ export default function App() {
         isInviteOnly: roomModal.isInviteOnly,
         isHidden: roomModal.isHidden,
         ownerId: currentUser.id,
+        mode: roomModal.mode,
       };
       const { error: createErr } = await createChannel({
         id: newRoom.id,
@@ -1327,6 +1338,7 @@ export default function App() {
         max_users: newRoom.maxUsers || 0,
         is_invite_only: newRoom.isInviteOnly || false,
         is_hidden: newRoom.isHidden || false,
+        mode: roomModal.mode,
       });
       if (createErr) {
         setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.');
@@ -1337,18 +1349,19 @@ export default function App() {
       presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
       if (view === 'settings') setView('chat');
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
-      const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden };
+      const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
       setChannels(channels.map(c => c.id === roomModal.channelId ? { ...c, ...updates } : c));
       await updateChannel(roomModal.channelId, {
         name: roomModal.name,
         max_users: roomModal.maxUsers,
         is_invite_only: roomModal.isInviteOnly,
         is_hidden: roomModal.isHidden,
+        mode: roomModal.mode,
       });
       presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: roomModal.channelId, updates } });
     }
 
-    setRoomModal({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false });
+    setRoomModal({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
   };
 
   const handleDeleteRoom = async (id: string) => {
@@ -1453,6 +1466,15 @@ export default function App() {
       setActiveChannel(null);
       setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
       setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
+    } else {
+      // Room mode: giriş bildirimi + odanın varsayılan ses modunu uygula
+      const joinedCh = channels.find(c => c.id === channelId);
+      const joinedMode = getRoomModeConfig(joinedCh?.mode);
+      if (joinedMode.pttRequired) {
+        setToastMsg('Bu odada bas-konuş zorunludur.');
+      }
+      // Her giriş odanın default moduna geçer
+      setVoiceMode(joinedMode.voice.defaultMode);
     }
   };
 
@@ -1585,6 +1607,7 @@ export default function App() {
         isInviteOnly: c.is_invite_only,
         isHidden: c.is_hidden,
         password: c.password || undefined,
+        mode: c.mode || undefined,
       }));
       setChannels([...CHANNELS, ...userChannels]);
     }
@@ -1703,7 +1726,7 @@ export default function App() {
   // selfMuted / selfDeafened dahil edilmezse track() bunları siler; her zaman tam payload gönder.
   useEffect(() => {
     if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
   }, [appVersion, currentUser.id]);
 
   // ── Mic / Deafen toggle → presence track güncelle (initial hydrate için)
@@ -1711,13 +1734,13 @@ export default function App() {
   // presenceState() üzerinden doğru audio state'i görmesini sağlar.
   useEffect(() => {
     if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
   }, [isMuted, isDeafened]);
 
   // ── Oda değişince presence'ı güncelle — diğer client'lar oda üyeliğini presence'dan türetir
   useEffect(() => {
     if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined });
+    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
   }, [activeChannel]);
 
   // ── Pencere kapanırken son görülme + kullanım süresi kaydet
@@ -2158,10 +2181,6 @@ export default function App() {
     setUserActionMenu,
     contextMenu,
     setContextMenu,
-    isStatusMenuOpen,
-    setIsStatusMenuOpen,
-    statusTimerInput,
-    setStatusTimerInput,
     roomModal,
     setRoomModal,
     passwordModal,
@@ -2232,8 +2251,6 @@ export default function App() {
     setIsMuted,
     isDeafened,
     setIsDeafened,
-    statusTimer,
-    setStatusTimer,
     generatedCode,
     setGeneratedCode,
     timeLeft,
@@ -2254,7 +2271,6 @@ export default function App() {
     setDisplayName,
     livekitRoomRef,
     presenceChannelRef,
-    handleSetStatus,
     handleCopyCode,
     handleUpdateUserVolume,
     handleUserActionClick,

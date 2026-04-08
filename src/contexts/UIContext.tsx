@@ -9,10 +9,6 @@ export interface UIContextType {
   setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
   contextMenu: { x: number; y: number; channelId: string } | null;
   setContextMenu: (v: { x: number; y: number; channelId: string } | null) => void;
-  isStatusMenuOpen: boolean;
-  setIsStatusMenuOpen: (v: boolean) => void;
-  statusTimerInput: string;
-  setStatusTimerInput: (v: string) => void;
   roomModal: {
     isOpen: boolean;
     type: 'create' | 'edit';
@@ -21,6 +17,7 @@ export interface UIContextType {
     maxUsers: number;
     isInviteOnly: boolean;
     isHidden: boolean;
+    mode: string;
   };
   setRoomModal: React.Dispatch<React.SetStateAction<{
     isOpen: boolean;
@@ -30,6 +27,7 @@ export interface UIContextType {
     maxUsers: number;
     isInviteOnly: boolean;
     isHidden: boolean;
+    mode: string;
   }>>;
   passwordModal: { type: 'set' | 'enter'; channelId: string } | null;
   setPasswordModal: (v: { type: 'set' | 'enter'; channelId: string } | null) => void;

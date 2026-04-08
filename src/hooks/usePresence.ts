@@ -124,7 +124,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number; autoStatus?: string }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -153,6 +153,11 @@ export function usePresence({
         presenceData.filter(p => p.platform).map(p => [p.userId, p.platform as 'mobile' | 'desktop']),
       );
 
+      // Auto-presence durumu: active/idle/deafened → Türkçe statusText
+      const autoStatusMap = new Map(
+        presenceData.filter(p => p.autoStatus).map(p => [p.userId, p.autoStatus!]),
+      );
+
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
@@ -169,14 +174,24 @@ export function usePresence({
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
             platform: platformMap.get(u.id) ?? u.platform,
             status: willBeOnline ? 'online' : 'offline',
-            statusText:
-              u.id === user.id
-                ? u.statusText
-                : willBeOnline
-                  ? u.statusText === 'Çevrimdışı'
-                    ? 'Aktif'
-                    : u.statusText
-                  : 'Çevrimdışı',
+            statusText: (() => {
+              if (u.id === user.id) return u.statusText;
+              if (!willBeOnline) return 'Çevrimdışı';
+              // Sabit durum varsa koru (AFK vb.)
+              const current = u.statusText === 'Çevrimdışı' ? 'Aktif' : (u.statusText || 'Aktif');
+              // Auto-presence: sadece manuel durum yoksa otomatik durumu uygula
+              const autoSt = autoStatusMap.get(u.id);
+              if (autoSt && (current === 'Aktif' || current === 'Pasif' || current === 'Duymuyor')) {
+                if (autoSt === 'idle') return 'Pasif';
+                if (autoSt === 'deafened') return 'Duymuyor';
+                return 'Aktif';
+              }
+              return current;
+            })(),
+            // Auto-presence: remote kullanıcıların otomatik durumu (self hariç — local state yetkili)
+            ...(u.id !== user.id && autoStatusMap.has(u.id) && {
+              autoStatus: autoStatusMap.get(u.id) as 'active' | 'idle' | 'deafened',
+            }),
             // onlineSince: presence payload'dan — her kullanıcının kendi oturum başlangıcı
             onlineSince: nextOnlineSince,
             // Kullanıcı online'dan offline'a geçti: lastSeenAt güncelle (yaklaşım)
@@ -353,7 +368,7 @@ export function usePresence({
         const isMobilePlatform = !!(window as any).Capacitor?.isNativePlatform?.() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         const onlineSince = Date.now();
         console.log('[usePresence] track_payload onlineSince=' + onlineSince);
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop', onlineSince });
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop', onlineSince, autoStatus: 'active' });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.
@@ -387,8 +402,8 @@ export function usePresence({
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number }>();
-    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number }[];
+    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string }>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string }[];
     const onlineIds = new Set(presenceData.map(p => p.userId));
 
     // Build merged version map: fresh presenceState takes priority, cache fills the gaps
@@ -407,16 +422,28 @@ export function usePresence({
     // Only skip if both live state AND cache are empty (truly no data yet)
     if (onlineIds.size === 0 && mergedVersionMap.size === 0) return;
 
+    // Auto-presence durumu
+    const autoStatusMap = new Map(
+      presenceData.filter(p => p.autoStatus).map(p => [p.userId, p.autoStatus!]),
+    );
+
     setAllUsers(prev =>
       prev.map(u => {
         const cachedVersion = mergedVersionMap.get(u.id);
         if (onlineIds.has(u.id)) {
+          const currentStatusText = u.statusText === 'Çevrimdışı' ? 'Aktif' : (u.statusText || 'Aktif');
+          const autoSt = autoStatusMap.get(u.id);
+          let resolvedStatusText = currentStatusText;
+          if (autoSt && (currentStatusText === 'Aktif' || currentStatusText === 'Pasif' || currentStatusText === 'Duymuyor')) {
+            resolvedStatusText = autoSt === 'idle' ? 'Pasif' : autoSt === 'deafened' ? 'Duymuyor' : 'Aktif';
+          }
           return {
             ...u,
             appVersion: cachedVersion ?? u.appVersion,
             status: 'online' as const,
-            statusText: u.statusText === 'Çevrimdışı' ? 'Aktif' : u.statusText,
+            statusText: resolvedStatusText,
             onlineSince: onlineSinceMap.get(u.id) ?? u.onlineSince,
+            ...(autoSt && { autoStatus: autoSt as 'active' | 'idle' | 'deafened' }),
           };
         }
         // Even if not in live onlineIds, apply cached version if available

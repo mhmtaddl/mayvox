@@ -14,10 +14,6 @@ export interface AppStateContextType {
   isDeafened: boolean;
   setIsDeafened: (v: boolean) => void;
 
-  // Status timer
-  statusTimer: number | null;
-  setStatusTimer: React.Dispatch<React.SetStateAction<number | null>>;
-
   // Generated code
   generatedCode: string | null;
   setGeneratedCode: (v: string | null) => void;
@@ -45,7 +41,6 @@ export interface AppStateContextType {
   presenceChannelRef: React.MutableRefObject<ReturnType<typeof supabase.channel> | null>;
 
   // Handlers
-  handleSetStatus: (text: string, minutes?: number) => void;
   handleCopyCode: () => void;
   handleUpdateUserVolume: (userId: string, volume: number) => void;
   handleUserActionClick: (e: React.MouseEvent, userId: string) => void;
