@@ -75,6 +75,30 @@ body {
   z-index: 1;
 }
 
+/* ─── Buton tıklama beyaz kaplama kaldır ─── */
+button:focus-visible,
+button:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: none;
+}
+
+/* ─── Haptic button physics ─── */
+.btn-haptic {
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.btn-haptic:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.18);
+}
+.btn-haptic:active {
+  transform: translateY(0.5px) scale(0.97);
+  box-shadow: 0 0 2px rgba(0,0,0,0.10);
+  transition-duration: 60ms;
+}
+
 /* ─── Floating glass panel system ─── */
 .glass-panel {
   background: var(--panel-bg);
@@ -222,6 +246,20 @@ button, a, input, [role="button"] {
 /* ─── Squircle avatar shape ─── */
 .avatar-squircle {
   border-radius: 22%;
+}
+
+/* ─── Dock notification entry ─── */
+@keyframes dock-notify-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dock-notify-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--theme-accent-rgb), 0.25); }
+  100% { box-shadow: 0 0 0 12px rgba(var(--theme-accent-rgb), 0); }
+}
+@keyframes dock-notify-icon {
+  from { opacity: 0; transform: scale(0.8) rotate(6deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
 /* ─── Update version shimmer ─── */

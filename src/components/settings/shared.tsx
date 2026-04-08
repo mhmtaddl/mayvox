@@ -21,14 +21,14 @@ export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onCha
       role="switch"
       aria-checked={checked}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(); }}
-      className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-all duration-180 focus:outline-none cursor-pointer ${
+      className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-all duration-200 focus:outline-none cursor-pointer active:scale-95 ${
         checked
-          ? 'bg-[var(--theme-accent)]'
+          ? 'bg-[var(--theme-accent)] shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.25)]'
           : 'bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.06)]'
       }`}
     >
-      <span className={`inline-block h-4 w-4 transform rounded-full shadow-sm transition-transform duration-180 ${
-        checked ? 'translate-x-[21px] bg-white' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)]'
+      <span className={`inline-block h-4 w-4 transform rounded-full shadow-md transition-all duration-200 cubic-bezier(0.34,1.56,0.64,1) ${
+        checked ? 'translate-x-[21px] bg-white scale-100' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)] scale-100'
       }`} />
     </button>
   </div>

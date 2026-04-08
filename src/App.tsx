@@ -162,7 +162,7 @@ export default function App() {
   });
   useEffect(() => { localStorage.setItem('noiseThreshold', noiseThreshold.toString()); }, [noiseThreshold]);
 
-  const [pttKey, setPttKey] = useState(() => localStorage.getItem('pttKey') || 'Control');
+  const [pttKey, setPttKey] = useState(() => localStorage.getItem('pttKey') || 'SPACE');
   useEffect(() => { localStorage.setItem('pttKey', pttKey); }, [pttKey]);
 
   const [isListeningForKey, setIsListeningForKey] = useState(false);

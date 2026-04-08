@@ -26,6 +26,9 @@ import {
   ChevronDown,
   Menu,
   Home,
+  Download,
+  AlertCircle,
+  Info,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -596,8 +599,6 @@ export default function ChatView() {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
-      {/* TODO: TEST BUTONU — sonra kaldır */}
-      <button onClick={() => setToastMsg('Bu örnek bir bildirim mesajıdır. Nasıl göründüğüme bakar mısın?')} className="fixed top-3 right-3 z-[9999] px-3 py-1.5 text-[10px] font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-lg">TEST TOAST</button>
       {/* Header — masaüstünde gizli, mobilde görünür */}
       <header className={`${FORCE_MOBILE ? '' : 'lg:hidden'} flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0`}>
         <div className={`flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 ${FORCE_MOBILE ? '' : 'lg:pr-0'} h-14 sm:h-16`}>
@@ -2264,9 +2265,16 @@ export default function ChatView() {
       >
         {toastMsg ? (
           <div
-            className="flex items-center justify-center px-5 h-10 cursor-pointer select-none whitespace-nowrap"
+            className="relative flex items-center justify-center gap-2 px-5 h-10 cursor-pointer select-none whitespace-nowrap"
+            style={{ animation: 'dock-notify-in 180ms ease-out' }}
             onClick={() => setToastMsg(null)}
           >
+            {/* Pulse ring — tek sefer */}
+            <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ animation: 'dock-notify-ring 450ms ease-out forwards' }} />
+            {/* Icon */}
+            <span className="shrink-0 text-[var(--theme-accent)]" style={{ animation: 'dock-notify-icon 180ms ease-out' }}>
+              {toastMsg.includes('indiriliyor') ? <Download size={12} /> : toastMsg.includes('hazır') ? <Check size={12} /> : toastMsg.includes('hata') || toastMsg.includes('Hata') || toastMsg.includes('başarısız') ? <AlertCircle size={12} /> : <Info size={12} />}
+            </span>
             <span className="text-[11px] font-semibold text-[var(--theme-text)]">{toastMsg}</span>
           </div>
         ) : <>
@@ -2280,7 +2288,7 @@ export default function ChatView() {
               if (isMuted && isDeafened) setIsDeafened(false);
               setIsMuted(!isMuted);
             }}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
               isAdminMuted ? 'bg-orange-500/20 text-orange-400 border border-orange-500/25'
               : isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/25'
               : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
@@ -2316,7 +2324,7 @@ export default function ChatView() {
               if (isSpecialStatus) { setIsDeafened(false); return; }
               setIsDeafened(!isDeafened);
             }}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
               isDeafened ? 'bg-red-500/20 text-red-400 border border-red-500/25' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
             }`}
             title={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
@@ -2343,11 +2351,11 @@ export default function ChatView() {
           </AnimatePresence>
         </div>
         {/* Gürültü Susturma */}
-        <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
+        <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
           {isNoiseSuppressionEnabled ? <Shield size={16} /> : <ShieldOff size={16} />}
         </button>
         {/* PTT tuşu */}
-        <button onClick={() => setIsListeningForKey(true)} className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 text-[10px] font-black whitespace-nowrap ${isListeningForKey ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'}`} title="Bas-Konuş tuşu">
+        <button onClick={() => setIsListeningForKey(true)} className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center btn-haptic text-[10px] font-black whitespace-nowrap ${isListeningForKey ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'}`} title="Bas-Konuş tuşu">
           {isListeningForKey ? '...' : pttKey}
         </button>
         {/* Oda kontrolleri — sadece odadayken */}
@@ -2356,7 +2364,7 @@ export default function ChatView() {
             <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
             <button
               onClick={cycleCardStyle}
-              className="w-10 h-10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+              className="w-10 h-10 flex items-center justify-center btn-haptic"
               style={{
                 borderRadius: cardStyle === 'revolt' ? 8 : cardStyle === 'linear' ? 12 : cardStyle === 'apple' ? 14 : 12,
                 background: cardStyle === 'revolt'
@@ -2396,7 +2404,7 @@ export default function ChatView() {
                 )}
               </svg>
             </button>
-            <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white" title="Odadan Ayrıl">
+            <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white" title="Odadan Ayrıl">
               <PhoneOff size={16} />
             </button>
           </>
@@ -2405,7 +2413,7 @@ export default function ChatView() {
         {view === 'settings' && (
           <>
             <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
-            <button onClick={() => setView('chat')} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]" title="Ana Sayfa">
+            <button onClick={() => setView('chat')} className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]" title="Ana Sayfa">
               <Home size={16} />
             </button>
           </>

@@ -85,14 +85,17 @@ export function usePttAudio(params: UsePttAudioParams) {
   useEffect(() => {
     if (!isListeningForKey) return;
     if (window.electronPtt) {
-      window.electronPtt.startListening();
+      // Kısa gecikme — butona tıklama event'inin uiohook tarafından yakalanmasını atla
+      const startTimer = setTimeout(() => {
+        window.electronPtt!.startListening();
+      }, 150);
       window.electronPtt.onKeyAssigned(({ displayName, rawCode }) => {
         setPttKey(displayName);
         if (rawCode) localStorage.setItem('pttRawCode', rawCode);
         setIsListeningForKey(false);
         window.electronPtt!.stopListening();
       });
-      return () => { window.electronPtt!.offKeyAssigned(); window.electronPtt!.stopListening(); };
+      return () => { clearTimeout(startTimer); window.electronPtt!.offKeyAssigned(); window.electronPtt!.stopListening(); };
     }
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault(); e.stopPropagation();
