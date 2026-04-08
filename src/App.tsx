@@ -60,7 +60,7 @@ type DbProfile = {
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
   is_invite_only?: boolean; is_hidden?: boolean; password?: string;
-  mode?: string;
+  mode?: string; speaker_ids?: string[];
 };
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
@@ -469,7 +469,22 @@ export default function App() {
 
   // ── PTT Audio hook ───────────────────────────────────────────────────────
   // Room mode voice config: izin verilen modları kontrol et, yoksa default'a düş
-  const activeRoomModeConfig = getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode);
+  const activeRoomChannel = channels.find(c => c.id === activeChannel);
+  const activeRoomModeConfig = getRoomModeConfig(activeRoomChannel?.mode);
+
+  // Broadcast odada konuşmacı mı dinleyici mi?
+  // speakerIds yoksa ve ownerId varsa → oda sahibi varsayılan konuşmacı
+  // speakerIds yoksa ve ownerId de yoksa (sistem kanalı) → herkes konuşabilir
+  const isBroadcastListener = activeRoomChannel?.mode === 'broadcast' && (() => {
+    const speakers = activeRoomChannel.speakerIds;
+    if (!speakers || speakers.length === 0) {
+      // Hiç speaker atanmamış
+      if (!activeRoomChannel.ownerId) return false; // Sistem kanalı → herkes konuşabilir
+      return activeRoomChannel.ownerId !== currentUser.id;
+    }
+    return !speakers.includes(currentUser.id);
+  })();
+
   const effectiveVoiceMode = (() => {
     if (!activeChannel) return voiceMode;
     const vc = activeRoomModeConfig.voice;
@@ -770,6 +785,7 @@ export default function App() {
           isHidden: c.is_hidden,
           password: c.password || undefined,
           mode: c.mode || undefined,
+          speakerIds: c.speaker_ids || undefined,
         }));
         setChannels([...CHANNELS, ...userChannels]);
       }
@@ -965,7 +981,7 @@ export default function App() {
   // selfMuted / selfDeafened: kullanıcının kendi toggle'ı. Admin mute'tan ayrı.
   useEffect(() => {
     if (!activeChannel) return;
-    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned;
+    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
     presenceChannelRef.current?.send({
       type: 'broadcast',
       event: 'speaking',
@@ -1005,7 +1021,7 @@ export default function App() {
   // ── LiveKit PTT: enable/disable mic based on PTT state ───────────────────
   useEffect(() => {
     if (!livekitRoomRef.current) return;
-    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned;
+    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
     livekitRoomRef.current.localParticipant.setMicrophoneEnabled(canSpeak, {
       echoCancellation: true,
       noiseSuppression: isNoiseSuppressionEnabled,
@@ -1173,6 +1189,38 @@ export default function App() {
     setContextMenu(null);
   };
 
+  // ── Broadcast stage: konuşmacı yönetimi ──────────────────────────────────
+  const handleToggleSpeaker = async (userId: string) => {
+    if (!activeChannel) return;
+    const ch = channels.find(c => c.id === activeChannel);
+    if (!ch || ch.mode !== 'broadcast' || ch.ownerId !== currentUser.id) return;
+
+    const currentSpeakers = ch.speakerIds || [];
+    const isSpeaker = currentSpeakers.includes(userId);
+
+    // Oda sahibi konuşmacı listesinden çıkarılamaz
+    if (isSpeaker && userId === ch.ownerId) return;
+
+    const newSpeakers = isSpeaker
+      ? currentSpeakers.filter(id => id !== userId)
+      : [...currentSpeakers, userId];
+
+    // Optimistic update
+    setChannels(prev => prev.map(c => c.id === activeChannel ? { ...c, speakerIds: newSpeakers } : c));
+
+    // DB persist
+    await updateChannel(activeChannel, { speaker_ids: newSpeakers });
+
+    // Broadcast to other clients
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'channel-update',
+      payload: { action: 'update', channelId: activeChannel, updates: { speakerIds: newSpeakers } },
+    });
+
+    setToastMsg(isSpeaker ? 'Dinleyiciye alındı.' : 'Konuşmacı yapıldı.');
+  };
+
   const handleInviteUser = (userId: string) => {
     // Cooldown guard: ret sonrası 60sn bekleme
     const cooldownUntil = inviteCooldownsRef.current[userId];
@@ -1330,6 +1378,8 @@ export default function App() {
         isHidden: roomModal.isHidden,
         ownerId: currentUser.id,
         mode: roomModal.mode,
+        // Broadcast odada sahibi otomatik konuşmacı
+        speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
       };
       const { error: createErr } = await createChannel({
         id: newRoom.id,
@@ -1339,6 +1389,7 @@ export default function App() {
         is_invite_only: newRoom.isInviteOnly || false,
         is_hidden: newRoom.isHidden || false,
         mode: roomModal.mode,
+        speaker_ids: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
       });
       if (createErr) {
         setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.');
@@ -1472,6 +1523,12 @@ export default function App() {
       const joinedMode = getRoomModeConfig(joinedCh?.mode);
       if (joinedMode.pttRequired) {
         setToastMsg('Bu odada bas-konuş zorunludur.');
+      } else if (joinedCh?.mode === 'broadcast') {
+        const speakers = joinedCh.speakerIds || [];
+        const isSpeaker = speakers.length > 0 ? speakers.includes(currentUser.id) : joinedCh.ownerId === currentUser.id;
+        if (!isSpeaker && joinedCh.ownerId) {
+          setToastMsg('Bu odada dinleyici olarak katıldınız.');
+        }
       }
       // Her giriş odanın default moduna geçer
       setVoiceMode(joinedMode.voice.defaultMode);
@@ -2300,6 +2357,8 @@ export default function App() {
     disconnectFromLiveKit,
     formatTime,
     broadcastModeration,
+    handleToggleSpeaker,
+    isBroadcastListener: !!isBroadcastListener,
     appVersion,
     showReleaseNotes,
     setShowReleaseNotes,

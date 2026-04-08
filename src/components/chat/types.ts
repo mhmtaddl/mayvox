@@ -85,6 +85,8 @@ export interface UserCardProps {
   intensity: number;
   scale: CardScaleConfig;
   adminBorderEffect: boolean;
+  /** Broadcast odada konuşmacı mı */
+  isBroadcastSpeaker?: boolean;
   /** PTT tuşuna basılı mı (sadece isMe=true için anlamlı) */
   isPttPressed: boolean;
   isMuted: boolean;

@@ -148,6 +148,8 @@ export default function ChatView() {
     handleVerifyPassword,
     handleContextMenu,
     handleLogout,
+    handleToggleSpeaker,
+    isBroadcastListener,
     disconnectFromLiveKit,
     presenceChannelRef,
     view,
@@ -186,6 +188,9 @@ export default function ChatView() {
   // ── Mobil drawer state ──
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+
+  // ── Broadcast listener toast throttle ──
+  const listenerToastRef = useRef<number>(0);
 
   // ── Sol sidebar resizable (masaüstü) ──
   const LEFT_SIDEBAR_MIN = 220;
@@ -765,24 +770,51 @@ export default function ChatView() {
                         )}
                       </button>
 
-                      {/* Members List — allUsers üzerinden ID ile resolve */}
+                      {/* Members List — broadcast: speakers first + grouping */}
                       {(() => {
-                        const memberUsers = (channel.members ?? [])
+                        const isBc = channel.mode === 'broadcast';
+                        const speakers = channel.speakerIds || [];
+                        const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
+                        const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
+                        let memberUsers = (channel.members ?? [])
                           .map(id => allUsers.find(u => u.id === id))
                           .filter(Boolean) as typeof allUsers;
                         if (!memberUsers.length) return null;
+                        if (isBc) memberUsers = [...memberUsers].sort((a, b) => (isSpeakerFn(b.id) ? 1 : 0) - (isSpeakerFn(a.id) ? 1 : 0));
+                        let shownSpLabel = false, shownLsLabel = false;
                         return (
                           <div className="pl-9 space-y-0.5 pb-2">
-                            {memberUsers.map(user => (
+                            {memberUsers.map(user => {
+                              const isSp = isBc && isSpeakerFn(user.id);
+                              let groupLabel: string | null = null;
+                              if (hasSpeakers) {
+                                if (isSp && !shownSpLabel) { shownSpLabel = true; groupLabel = 'Konuşmacılar'; }
+                                if (!isSp && !shownLsLabel) { shownLsLabel = true; groupLabel = 'Dinleyiciler'; }
+                              }
+                              return (
+                              <React.Fragment key={user.id}>
+                                {groupLabel && (
+                                  <>
+                                    {groupLabel === 'Dinleyiciler' && (
+                                      <div className="mx-1 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
+                                    )}
+                                    <div className="flex items-center gap-1.5 pt-1 pb-0.5 px-1">
+                                      {groupLabel === 'Konuşmacılar'
+                                        ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" />
+                                        : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />
+                                      }
+                                      <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span>
+                                    </div>
+                                  </>
+                                )}
                               <div
-                                key={user.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (user.id !== currentUser.id) {
                                     handleUserActionClick(e, user.id);
                                   }
                                 }}
-                                className="flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1"
+                                className={`flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1 ${isBc && !isSp ? 'opacity-70' : ''}`}
                               >
                                 <div className="relative shrink-0">
                                   <div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]">
@@ -792,11 +824,17 @@ export default function ChatView() {
                                   </div>
                                   <DeviceBadge platform={user.platform} size={11} className="absolute -bottom-0.5 -right-0.5" />
                                 </div>
-                                <span className="text-[11px] font-medium text-[var(--theme-secondary-text)] truncate flex-1">
+                                <span className={`text-[11px] truncate flex-1 ${isBc && isSp ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-secondary-text)]'}`}>
                                   {formatFullName(user.firstName, user.lastName)} ({user.age})
                                 </span>
+                                {isBc && (isSp
+                                  ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
+                                  : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
+                                )}
                               </div>
-                            ))}
+                              </React.Fragment>
+                              );
+                            })}
                           </div>
                         );
                       })()}
@@ -997,18 +1035,59 @@ export default function ChatView() {
                     )}
                   </button>
 
-                  {/* Members List */}
-                  {channel.members && channel.members.length > 0 && (
+                  {/* Members List — broadcast: speakers first + grouping */}
+                  {channel.members && channel.members.length > 0 && (() => {
+                    const isBc = channel.mode === 'broadcast';
+                    const speakers = channel.speakerIds || [];
+                    const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
+                    const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
+
+                    // Sort: broadcast → speakers first
+                    const sorted = isBc
+                      ? [...channel.members].sort((a, b) => (isSpeakerFn(b) ? 1 : 0) - (isSpeakerFn(a) ? 1 : 0))
+                      : channel.members;
+
+                    let shownSpeakerLabel = false;
+                    let shownListenerLabel = false;
+
+                    return (
                     <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
-                      {channel.members.map((memberId, idx) => {
+                      {sorted.map((memberId, idx) => {
                         const user = allUsers.find(u => u.id === memberId);
+                        const isSp = isBc && user ? isSpeakerFn(user.id) : false;
+
+                        // Group labels
+                        let groupLabel: string | null = null;
+                        if (hasSpeakers && user) {
+                          if (isSp && !shownSpeakerLabel) { shownSpeakerLabel = true; groupLabel = 'Konuşmacılar'; }
+                          if (!isSp && !shownListenerLabel) { shownListenerLabel = true; groupLabel = 'Dinleyiciler'; }
+                        }
+
                         return (
+                          <React.Fragment key={idx}>
+                            {groupLabel && (
+                              <>
+                                {groupLabel === 'Dinleyiciler' && (
+                                  <div className="mx-1.5 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
+                                )}
+                                <div className="flex items-center gap-1.5 pt-1.5 pb-1 px-1.5">
+                                  {groupLabel === 'Konuşmacılar'
+                                    ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" />
+                                    : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />
+                                  }
+                                  <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span>
+                                </div>
+                              </>
+                            )}
                           <div
-                            key={idx}
                             draggable={currentUser.isAdmin}
                             onDragStart={(e) => handleDragStart(e, user?.name || memberId)}
                             onClick={(e) => user && handleUserActionClick(e, user.id)}
-                            className="flex items-center gap-2 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]"
+                            className={`flex items-center gap-2 text-[11px] transition-all duration-150 group/member cursor-pointer py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5 active:scale-[0.98] ${
+                              isBc && isSp
+                                ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
+                                : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
+                            } ${isBc && !isSp ? 'opacity-70' : ''}`}
                           >
                             <div className="relative shrink-0">
                               <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
@@ -1019,14 +1098,20 @@ export default function ChatView() {
                               {user && <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />}
                             </div>
                             <span className="truncate flex-1">{user ? formatFullName(user.firstName, user.lastName) : memberId}</span>
+                            {isBc && user && (isSp
+                              ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
+                              : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
+                            )}
                             {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
                               <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
                             )}
                           </div>
+                          </React.Fragment>
                         );
                       })}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
 
@@ -1125,6 +1210,27 @@ export default function ChatView() {
                   </div>
                 </div>
               )}
+
+              {/* Broadcast: Konuşmacı / Dinleyici toggle — sadece broadcast odada, oda sahibi için */}
+              {(() => {
+                const ch = channels.find(c => c.id === activeChannel);
+                if (!ch || ch.mode !== 'broadcast' || ch.ownerId !== currentUser.id) return null;
+                if (userActionMenu.userId === currentUser.id) return null;
+                const speakers = ch.speakerIds || [];
+                const isSpeaker = speakers.includes(userActionMenu.userId);
+                return (
+                  <button
+                    onClick={() => { handleToggleSpeaker(userActionMenu.userId); setUserActionMenu(null); }}
+                    className={`w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 active:scale-95 ${
+                      isSpeaker
+                        ? 'text-orange-400 bg-orange-500/5 border border-orange-500/15 hover:bg-orange-500/10'
+                        : 'text-emerald-400 bg-emerald-500/5 border border-emerald-500/15 hover:bg-emerald-500/10'
+                    }`}
+                  >
+                    {isSpeaker ? 'Dinleyiciye Al' : 'Konuşmacı Yap'}
+                  </button>
+                );
+              })()}
 
               {activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(userActionMenu.userId) && userActionMenu.userId !== currentUser.id && (() => {
                 const uid = userActionMenu.userId;
@@ -1842,6 +1948,10 @@ export default function ChatView() {
                       intensity: getIntensity(user),
                       scale: scaleConfig,
                       adminBorderEffect,
+                      isBroadcastSpeaker: currentChannel?.mode === 'broadcast' && (() => {
+                        const sp = currentChannel.speakerIds || [];
+                        return sp.length > 0 ? sp.includes(user.id) : currentChannel.ownerId === user.id;
+                      })(),
                       isPttPressed,
                       isMuted: isMe ? isMuted : false,
                       isDeafened: isMe ? isDeafened : false,
@@ -2325,6 +2435,7 @@ export default function ChatView() {
         <div className="relative group/mic">
           <button
             onClick={() => {
+              if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
               if (isAdminMuted) return;
               if (isMuted && isDeafened) setIsDeafened(false);
               setIsMuted(!isMuted);
@@ -2393,10 +2504,10 @@ export default function ChatView() {
         <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
           {isNoiseSuppressionEnabled ? <Shield size={16} /> : <ShieldOff size={16} />}
         </button>
-        {/* Ses modu butonu — PTT: tuş seçimi, VAD: yeşil "Ses Etkinliği" */}
-        {(() => {
+        {/* Ses modu butonu — PTT: tuş seçimi, VAD: yeşil "Ses Etkinliği" — sadece odadayken */}
+        {activeChannel && (() => {
           const isVad = voiceMode === 'vad';
-          const activeCh = activeChannel ? channels.find(c => c.id === activeChannel) : null;
+          const activeCh = channels.find(c => c.id === activeChannel);
           const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
           const canSwitch = vc ? vc.allowedModes.length > 1 : true;
 
@@ -2704,6 +2815,7 @@ export default function ChatView() {
           {/* Mikrofon */}
           <button
             onClick={() => {
+              if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
               if (isAdminMuted) return;
               if (isMuted && isDeafened) setIsDeafened(false);
               setIsMuted(!isMuted);
@@ -2818,7 +2930,8 @@ export default function ChatView() {
           <div className="relative flex-1">
             <button
               onClick={() => {
-                if (isAdminMuted) return;
+                if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
+              if (isAdminMuted) return;
                 const willBeActive = isMuted;
                 if (willBeActive && isDeafened) {
                   setIsDeafened(false);

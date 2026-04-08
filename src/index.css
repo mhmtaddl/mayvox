@@ -225,6 +225,15 @@ button, a, input, [role="button"] {
   transform: translateY(0);
 }
 
+/* ─── Broadcast speaker stage-entry — tek seferlik, soft ─── */
+@keyframes speaker-enter {
+  from { opacity: 0.85; transform: translateY(2px); }
+  to   { opacity: 1;    transform: translateY(-0.5px); }
+}
+.speaker-enter {
+  animation: speaker-enter 220ms ease-out forwards;
+}
+
 /* ─── Cancel button — kırmızı iptal ─── */
 .btn-cancel {
   background: rgba(239, 68, 68, 0.06);

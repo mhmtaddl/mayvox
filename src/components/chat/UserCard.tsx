@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Mic,
   Headphones,
@@ -27,10 +27,35 @@ const IDLE_AVATAR_STYLE: React.CSSProperties = {
   boxShadow: '0 0 0 1px rgba(var(--theme-accent-rgb), 0.05), 0 0 6px rgba(var(--theme-accent-rgb), 0.03)',
 };
 
-const IDLE_CARD_STYLE: React.CSSProperties = {
-  border: '1px solid transparent',
-  borderColor: 'rgba(var(--theme-accent-rgb), 0.08)',
-};
+// Idle border + elevation: rol bazlı ton ayrımı
+// Speaker: saf accent, Admin: warm shift (accent + turuncu), Mod: cool shift (accent + mavi)
+// color-mix() ile tema accent'inden türetilir — hardcoded hex yok
+function getIdleCardStyle(user: { isAdmin?: boolean; isModerator?: boolean }, isBcSpeaker?: boolean): React.CSSProperties {
+  const base: React.CSSProperties = {};
+
+  // Öncelik: speaker > admin > mod > default
+  // Ton ayrımı: speaker = saf accent, admin = warm (turuncu tint), mod = cool (mavi tint)
+  if (isBcSpeaker) {
+    base.border = '1px solid rgba(var(--theme-accent-rgb), 0.25)';
+  } else if (user.isAdmin) {
+    // Warm: accent border + turuncu box-shadow → sıcak otorite hissi
+    base.border = '1px solid rgba(var(--theme-accent-rgb), 0.18)';
+    base.boxShadow = 'inset 0 0 0 0.5px rgba(245, 168, 77, 0.12), 0 0 6px rgba(245, 168, 77, 0.04)';
+  } else if (user.isModerator) {
+    // Cool: accent border + mavi box-shadow → soğuk yardımcı hissi
+    base.border = '1px solid rgba(var(--theme-accent-rgb), 0.14)';
+    base.boxShadow = 'inset 0 0 0 0.5px rgba(120, 150, 255, 0.10), 0 0 6px rgba(120, 150, 255, 0.03)';
+  } else {
+    base.border = '1px solid rgba(var(--theme-accent-rgb), 0.08)';
+  }
+
+  // Elevation: broadcast speaker
+  if (isBcSpeaker) {
+    base.boxShadow = '0 2px 8px rgba(var(--shadow-base), 0.15), 0 1px 3px rgba(var(--shadow-base), 0.08)';
+    base.transform = 'translateY(-0.5px)';
+  }
+  return base;
+}
 
 function UserCardInner({
   user,
@@ -41,6 +66,7 @@ function UserCardInner({
   intensity,
   scale: s,
   adminBorderEffect,
+  isBroadcastSpeaker,
   isPttPressed,
   isMuted,
   isDeafened,
@@ -53,6 +79,18 @@ function UserCardInner({
   onContextMenu,
 }: UserCardProps) {
   const v = computeSpeakingVisuals(isSpeakingActive, intensity, isMe, isDominant);
+
+  // Speaker stage-entry: false→true geçişinde tek seferlik animasyon
+  const prevSpeakerRef = useRef(isBroadcastSpeaker);
+  const [speakerEntering, setSpeakerEntering] = useState(false);
+  useEffect(() => {
+    if (isBroadcastSpeaker && !prevSpeakerRef.current) {
+      setSpeakerEntering(true);
+      const t = setTimeout(() => setSpeakerEntering(false), 250);
+      return () => clearTimeout(t);
+    }
+    prevSpeakerRef.current = isBroadcastSpeaker;
+  }, [isBroadcastSpeaker]);
 
   // Map 5 card scales → 3 equalizer sizes (small/medium/large)
   const scaleStep = s.dense ? 1 : s.icon === 13 ? 2 : 3;
@@ -112,8 +150,8 @@ function UserCardInner({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       className={`rounded-xl ${s.padding} flex items-center ${s.gap} relative group cursor-pointer ${
-        isSpeakingActive ? '' : 'hover:scale-[1.008]'
-      }`}
+        isSpeakingActive ? '' : isBroadcastSpeaker ? 'hover:scale-[1.012] hover:shadow-[0_3px_12px_rgba(var(--shadow-base),0.2)]' : 'hover:scale-[1.008]'
+      } ${speakerEntering ? 'speaker-enter' : ''}`}
       style={isSpeakingActive ? {
         contain: 'layout paint',
         transition: CARD_TRANSITION,
@@ -125,9 +163,10 @@ function UserCardInner({
         boxShadow: cardShadow,
       } : {
         contain: 'layout paint',
+        transition: 'transform 180ms ease, box-shadow 180ms ease',
         background: cardBackground,
         boxShadow: cardShadow,
-        ...IDLE_CARD_STYLE,
+        ...getIdleCardStyle(user, isBroadcastSpeaker),
       }}
     >
       {/* Avatar */}
@@ -242,6 +281,7 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (prev.effectiveStatus !== next.effectiveStatus) return false;
   if (prev.isPttPressed !== next.isPttPressed) return false;
   if (prev.adminBorderEffect !== next.adminBorderEffect) return false;
+  if (prev.isBroadcastSpeaker !== next.isBroadcastSpeaker) return false;
   if (prev.scale !== next.scale) return false;
 
   // User object: compare visual-relevant fields instead of reference

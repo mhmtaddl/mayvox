@@ -49,6 +49,8 @@ export interface VoiceChannel {
   ownerId?: string;
   /** Oda modu: social/gaming/broadcast/quiet — undefined = social (fallback) */
   mode?: string;
+  /** Broadcast odada konuşmacı kullanıcı ID'leri — yoksa ownerId varsayılan konuşmacı */
+  speakerIds?: string[];
 }
 
 export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-password' | 'register-details' | 'chat' | 'settings';

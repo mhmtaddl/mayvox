@@ -70,6 +70,9 @@ export interface AppStateContextType {
   disconnectFromLiveKit: () => Promise<void>;
   formatTime: (seconds: number) => string;
   broadcastModeration: (userId: string, updates: Partial<User>) => void;
+  handleToggleSpeaker: (userId: string) => Promise<void>;
+  /** Mevcut kullanıcı broadcast odada dinleyici mi */
+  isBroadcastListener: boolean;
   appVersion: string;
   showReleaseNotes: boolean;
   setShowReleaseNotes: (v: boolean) => void;
