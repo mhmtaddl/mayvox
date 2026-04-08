@@ -54,7 +54,7 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1001] p-4">
+    <div className="fixed inset-0 bg-gradient-to-b from-black/40 via-black/50 to-black/60 flex items-center justify-center z-[1001] p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

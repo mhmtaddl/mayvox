@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X, Sparkles, Shield, Monitor, Smartphone, Globe } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ReleaseNote } from '../lib/releaseNotes';
 
 interface Props {
@@ -13,7 +14,7 @@ function hasNewFormat(notes: ReleaseNote): boolean {
   return !!(notes.desktop || notes.android || notes.common || notes.admin);
 }
 
-function Section({ icon, title, items }: { icon: React.ReactNode; title: string; items: string[] }) {
+function Section({ icon, title, items, startIndex }: { icon: React.ReactNode; title: string; items: string[]; startIndex: number }) {
   if (!items.length) return null;
   const isNoChange = items.length === 1 && items[0] === 'Bu sürümde değişiklik yok.';
 
@@ -28,10 +29,16 @@ function Section({ icon, title, items }: { icon: React.ReactNode; title: string;
       ) : (
         <ul className="space-y-1.5">
           {items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
+            <motion.li
+              key={i}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2, delay: (startIndex + i) * 0.04 }}
+              className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug"
+            >
               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
               {item}
-            </li>
+            </motion.li>
           ))}
         </ul>
       )}
@@ -52,85 +59,135 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
 
   const useNew = hasNewFormat(notes);
 
+  // Stagger index counter
+  let idx = 0;
+  const nextIdx = (count: number) => { const start = idx; idx += count; return start; };
+
   return (
     <div className="fixed inset-0 z-[150] flex items-end justify-center pb-[88px] popup-overlay" onClick={onClose}>
-      <div
+      <motion.div
         ref={ref}
         onClick={e => e.stopPropagation()}
-        className="w-[85%] max-w-sm max-h-[60vh] flex flex-col overflow-hidden rounded-2xl"
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-[85%] max-w-sm max-h-[60vh] flex overflow-hidden rounded-2xl transition-shadow duration-200 hover:shadow-[0_16px_48px_rgba(0,0,0,0.35),0_0_25px_rgba(var(--theme-accent-rgb),0.08)] hover:border-[rgba(var(--theme-accent-rgb),0.2)]"
         style={{
-          background: 'rgba(var(--theme-bg-rgb), 0.85)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(var(--glass-tint), 0.03)',
+          background: 'linear-gradient(135deg, rgba(var(--theme-bg-rgb), 0.9), rgba(var(--theme-surface-card-rgb, var(--theme-bg-rgb)), 0.85))',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
         }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-[var(--theme-accent)]" />
-            <span className="text-[13px] font-semibold text-[var(--theme-text)]">Sürüm Notları</span>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 transition-opacity">
-            <X size={14} />
-          </button>
-        </div>
+        {/* Left accent bar */}
+        <div className="w-[3px] shrink-0 rounded-l-full bg-[var(--theme-accent)]" />
 
-        {/* İçerik */}
-        <div className="px-4 py-3 overflow-y-auto custom-scrollbar">
-          {useNew ? (
-            <>
-              {notes.desktop && notes.desktop.length > 0 && (
-                <Section icon={<Monitor size={11} className="text-[var(--theme-accent)]" />} title="Desktop" items={notes.desktop} />
-              )}
-              {notes.android && notes.android.length > 0 && (
-                <Section icon={<Smartphone size={11} className="text-[var(--theme-accent)]" />} title="Android" items={notes.android} />
-              )}
-              {notes.common && notes.common.length > 0 && (
-                <Section icon={<Globe size={11} className="text-[var(--theme-accent)]" />} title="Ortak" items={notes.common} />
-              )}
-              {isAdmin && notes.admin && notes.admin.length > 0 && (
-                <Section icon={<Shield size={11} className="text-[var(--theme-accent)]" />} title="Admin" items={notes.admin} />
-              )}
-            </>
-          ) : (
-            <>
-              {notes.title && <p className="text-[11px] font-semibold text-[var(--theme-text)] mb-2">{notes.title}</p>}
-              <ul className="space-y-1.5">
-                {notes.items.map((item, i) => {
-                  if (!item) return <li key={i} className="h-1" />;
-                  if (item.startsWith('—') && item.endsWith('—')) {
-                    return <li key={i} className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide pt-1.5 first:pt-0">{item}</li>;
-                  }
-                  return (
-                    <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
-                      {item}
-                    </li>
-                  );
-                })}
-              </ul>
-              {isAdmin && notes.adminItems && notes.adminItems.length > 0 && (
-                <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(var(--theme-accent-rgb), 0.06)' }}>
-                  <div className="flex items-center gap-1 mb-2">
-                    <Shield size={11} className="text-[var(--theme-accent)]" />
-                    <span className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide">Admin</span>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {notes.adminItems.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug">
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)]/50 shrink-0" />
+        {/* Top radial light */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(ellipse_at_50%_0%,rgba(var(--theme-accent-rgb),0.10),transparent_70%)]" />
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Header */}
+          <div className="relative flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Sparkles size={14} className="text-[var(--theme-accent)]" />
+                <div className="absolute inset-0 blur-[6px] opacity-40 bg-[var(--theme-accent)] rounded-full pointer-events-none" />
+              </div>
+              <span className="text-[13px] font-bold text-[var(--theme-text)] tracking-wide">Sürüm Notları</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-[var(--theme-secondary-text)] opacity-40 hover:opacity-80 transition-all duration-200 hover:rotate-90 hover:scale-110"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* İçerik */}
+          <div className="relative px-4 py-3 overflow-y-auto custom-scrollbar">
+            {useNew ? (
+              <>
+                {notes.desktop && notes.desktop.length > 0 && (
+                  <Section icon={<Monitor size={11} className="text-[var(--theme-accent)]" />} title="Desktop" items={notes.desktop} startIndex={nextIdx(notes.desktop.length)} />
+                )}
+                {notes.android && notes.android.length > 0 && (
+                  <Section icon={<Smartphone size={11} className="text-[var(--theme-accent)]" />} title="Android" items={notes.android} startIndex={nextIdx(notes.android.length)} />
+                )}
+                {notes.common && notes.common.length > 0 && (
+                  <Section icon={<Globe size={11} className="text-[var(--theme-accent)]" />} title="Ortak" items={notes.common} startIndex={nextIdx(notes.common.length)} />
+                )}
+                {isAdmin && notes.admin && notes.admin.length > 0 && (
+                  <Section icon={<Shield size={11} className="text-[var(--theme-accent)]" />} title="Admin" items={notes.admin} startIndex={nextIdx(notes.admin.length)} />
+                )}
+              </>
+            ) : (
+              <>
+                {notes.title && (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-[11px] font-semibold text-[var(--theme-text)] mb-2"
+                  >
+                    {notes.title}
+                  </motion.p>
+                )}
+                <ul className="space-y-1.5">
+                  {notes.items.map((item, i) => {
+                    if (!item) return <li key={i} className="h-1" />;
+                    if (item.startsWith('—') && item.endsWith('—')) {
+                      return (
+                        <motion.li
+                          key={i}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2, delay: i * 0.04 }}
+                          className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide pt-1.5 first:pt-0"
+                        >
+                          {item}
+                        </motion.li>
+                      );
+                    }
+                    return (
+                      <motion.li
+                        key={i}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.2, delay: i * 0.04 }}
+                        className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug"
+                      >
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)] shrink-0" />
                         {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
+                      </motion.li>
+                    );
+                  })}
+                </ul>
+                {isAdmin && notes.adminItems && notes.adminItems.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/[0.06]">
+                    <div className="flex items-center gap-1 mb-2">
+                      <Shield size={11} className="text-[var(--theme-accent)]" />
+                      <span className="text-[10px] font-bold text-[var(--theme-accent)] uppercase tracking-wide">Admin</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {notes.adminItems.map((item, i) => (
+                        <motion.li
+                          key={i}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.2, delay: (notes.items.length + i) * 0.04 }}
+                          className="flex items-start gap-2 text-[11px] text-[var(--theme-text)] opacity-75 leading-snug"
+                        >
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--theme-accent)]/50 shrink-0" />
+                          {item}
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

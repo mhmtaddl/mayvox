@@ -74,7 +74,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4"
+      className="fixed inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/30 flex items-center justify-center z-[200] p-4"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div

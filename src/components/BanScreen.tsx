@@ -30,7 +30,7 @@ export default function BanScreen({ banExpires }: Props) {
   }, [banExpires]);
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-gradient-to-b from-black/50 via-black/60 to-black/70">
       <div className="flex flex-col items-center gap-6 text-center px-8 max-w-sm">
         <div className="relative">
           <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full" />

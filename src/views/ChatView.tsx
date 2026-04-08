@@ -411,6 +411,18 @@ export default function ChatView() {
   // Şifre sıfırlama bildirim baloncuğu
   const [showResetPanel, setShowResetPanel] = useState(false);
   const [vadSliderOpen, setVadSliderOpen] = useState(false);
+
+  // ── Dock toast hover-pause ──
+  const dockToastHoveredRef = useRef(false);
+  useEffect(() => {
+    if (!toastMsg) return;
+    const id = setInterval(() => {
+      if (!dockToastHoveredRef.current) {
+        setToastMsg(null);
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [toastMsg]);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const resetPanelRef = useRef<HTMLDivElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -584,6 +596,8 @@ export default function ChatView() {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
+      {/* TODO: TEST BUTONU — sonra kaldır */}
+      <button onClick={() => setToastMsg('Bu örnek bir bildirim mesajıdır. Nasıl göründüğüme bakar mısın?')} className="fixed top-3 right-3 z-[9999] px-3 py-1.5 text-[10px] font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-lg">TEST TOAST</button>
       {/* Header — masaüstünde gizli, mobilde görünür */}
       <header className={`${FORCE_MOBILE ? '' : 'lg:hidden'} flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0`}>
         <div className={`flex items-center justify-between pl-3 sm:pl-6 pr-2 sm:pr-4 ${FORCE_MOBILE ? '' : 'lg:pr-0'} h-14 sm:h-16`}>
@@ -1015,7 +1029,7 @@ export default function ChatView() {
                             draggable={currentUser.isAdmin}
                             onDragStart={(e) => handleDragStart(e, user?.name || memberId)}
                             onClick={(e) => user && handleUserActionClick(e, user.id)}
-                            className="flex items-center gap-2 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5"
+                            className="flex items-center gap-2 text-[11px] font-medium transition-all duration-150 group/member cursor-pointer text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]"
                           >
                             <div className="relative shrink-0">
                               <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
@@ -1078,21 +1092,47 @@ export default function ChatView() {
         <AnimatePresence>
           {userActionMenu && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.96, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 0.96, filter: 'blur(4px)' }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              onMouseMove={(e) => {
+                const el = e.currentTarget;
+                const rect = el.getBoundingClientRect();
+                el.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+                el.style.setProperty('--my', `${e.clientY - rect.top}px`);
+                el.style.setProperty('--glow-opacity', '1');
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.setProperty('--glow-opacity', '0');
+              }}
               style={{
                 position: 'fixed',
                 top: Math.min(window.innerHeight - 120, userActionMenu.y),
                 left: userActionMenu.x + 10,
-                zIndex: 100
-              }}
-              className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-2 w-48 flex flex-col gap-1"
+                zIndex: 100,
+                '--mx': '50%',
+                '--my': '0%',
+                '--glow-opacity': '0',
+              } as React.CSSProperties}
+              className="relative w-52 rounded-2xl overflow-hidden border border-white/[0.08] p-2.5 flex flex-col gap-1.5 bg-gradient-to-br from-[var(--theme-bg)] to-[var(--theme-surface-card)] shadow-[0_10px_40px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Top radial light (static) */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-[radial-gradient(ellipse_at_50%_0%,rgba(var(--theme-accent-rgb),0.12),transparent_70%)]" />
+
+              {/* Cursor-follow light */}
+              <div
+                className="pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-300"
+                style={{
+                  background: 'radial-gradient(circle 120px at var(--mx) var(--my), rgba(var(--theme-accent-rgb), 0.08), transparent 70%)',
+                  opacity: 'var(--glow-opacity)',
+                }}
+              />
+
               {userActionMenu.userId !== currentUser.id && (
-                <div className={`flex flex-col gap-2 p-2 ${activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(userActionMenu.userId) && userActionMenu.userId !== currentUser.id ? 'border-b border-[var(--theme-border)]' : ''}`}>
-                  <span className="text-[10px] uppercase font-bold text-[var(--theme-secondary-text)]">Ses Ayarı</span>
+                <div className={`relative flex flex-col gap-2 p-2 ${activeChannel && !channels.find(c => c.id === activeChannel)?.members?.includes(userActionMenu.userId) && userActionMenu.userId !== currentUser.id ? 'border-b border-white/[0.06]' : ''}`}>
+                  <span className="text-[9px] uppercase font-bold text-[var(--theme-secondary-text)]/70 tracking-widest">Ses Ayarı</span>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -1100,9 +1140,9 @@ export default function ChatView() {
                       max="99"
                       value={userVolumes[userActionMenu.userId] ?? 50}
                       onChange={(e) => handleUpdateUserVolume(userActionMenu.userId, parseInt(e.target.value))}
-                      className="flex-1 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                      className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)]"
                     />
-                    <span className="text-xs font-bold text-white w-8 text-right">%{userVolumes[userActionMenu.userId] ?? 50}</span>
+                    <span className="text-[11px] font-bold text-[var(--theme-accent)] w-8 text-right tabular-nums">%{userVolumes[userActionMenu.userId] ?? 50}</span>
                   </div>
                 </div>
               )}
@@ -1116,7 +1156,7 @@ export default function ChatView() {
 
                 if (status === 'pending') {
                   return (
-                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg flex items-center gap-2 text-blue-400 cursor-default">
+                    <button disabled className="relative w-full text-left px-3 py-2 text-xs font-bold rounded-xl flex items-center gap-2 text-blue-400 cursor-default bg-blue-500/5 border border-blue-500/10">
                       <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                       Aranıyor...
                     </button>
@@ -1124,14 +1164,14 @@ export default function ChatView() {
                 }
                 if (status === 'accepted') {
                   return (
-                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-emerald-400 cursor-default">
+                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl text-emerald-400 cursor-default bg-emerald-500/5 border border-emerald-500/10">
                       ✓ Kabul Edildi
                     </button>
                   );
                 }
                 if (status === 'rejected') {
                   return (
-                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-red-400 cursor-default">
+                    <button disabled className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl text-red-400 cursor-default bg-red-500/5 border border-red-500/10">
                       ✕ Reddedildi
                     </button>
                   );
@@ -1141,7 +1181,7 @@ export default function ChatView() {
                     <button
                       disabled={onCooldown}
                       onClick={() => { handleInviteUser(uid); setUserActionMenu(null); }}
-                      className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white"
+                      className="w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white active:scale-95 bg-white/[0.03] border border-white/[0.06] hover:border-transparent hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.2)]"
                     >
                       Davet Et
                     </button>
@@ -1165,7 +1205,7 @@ export default function ChatView() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/15 via-black/25 to-black/35"
             >
               <motion.div
                 initial={{ scale: 0.90, opacity: 0, y: 24 }}
@@ -1380,7 +1420,7 @@ export default function ChatView() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/10 via-black/20 to-black/30"
               onClick={() => setRoomModal({ ...roomModal, isOpen: false })}
             >
               <motion.div
@@ -1538,7 +1578,7 @@ export default function ChatView() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/10 via-black/20 to-black/30"
               onClick={() => setPasswordModal(null)}
             >
               <motion.div
@@ -2216,7 +2256,20 @@ export default function ChatView() {
       </div>
 
       {/* ── Masaüstü floating kontroller (fixed, scroll-proof) ── */}
-      <div className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 left-1/2 -translate-x-1/2 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl`} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }}>
+      <div
+        className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 left-1/2 -translate-x-1/2 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`}
+        style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }}
+        onMouseEnter={() => { if (toastMsg) dockToastHoveredRef.current = true; }}
+        onMouseLeave={() => { dockToastHoveredRef.current = false; }}
+      >
+        {toastMsg ? (
+          <div
+            className="flex items-center justify-center px-5 h-10 cursor-pointer select-none whitespace-nowrap"
+            onClick={() => setToastMsg(null)}
+          >
+            <span className="text-[11px] font-semibold text-[var(--theme-text)]">{toastMsg}</span>
+          </div>
+        ) : <>
         {/* Mikrofon + ayar */}
         <div className="relative group/mic">
           <button
@@ -2357,6 +2410,7 @@ export default function ChatView() {
             </button>
           </>
         )}
+        </>}
       </div>
 
       {/* User Profile Popup */}
@@ -2786,9 +2840,35 @@ export default function ChatView() {
           </div>
         </div>
 
-        {/* Middle Section - PTT Indicator */}
+        {/* Middle Section - PTT Indicator / Notification Dock */}
         <div className="flex-1 h-full flex items-center justify-center px-4">
-          <div className="flex items-center gap-4 bg-[rgba(var(--theme-bg-rgb),0.6)] backdrop-blur-xl px-5 py-2.5 rounded-xl border border-[rgba(var(--glass-tint),0.08)] shadow-[inset_0_1px_0_0_rgba(var(--glass-tint),0.04),0_4px_16px_-2px_rgba(var(--theme-glow-rgb),0.08),0_1px_4px_rgba(var(--shadow-base),0.12)]">
+          <div
+            className="flex items-center gap-4 bg-[rgba(var(--theme-bg-rgb),0.6)] backdrop-blur-xl px-5 py-2.5 rounded-xl border border-[rgba(var(--glass-tint),0.08)] shadow-[inset_0_1px_0_0_rgba(var(--glass-tint),0.04),0_4px_16px_-2px_rgba(var(--theme-glow-rgb),0.08),0_1px_4px_rgba(var(--shadow-base),0.12)] min-h-[44px]"
+            onMouseEnter={() => { if (toastMsg) dockToastHoveredRef.current = true; }}
+            onMouseLeave={() => { dockToastHoveredRef.current = false; }}
+          >
+            <AnimatePresence mode="wait">
+              {toastMsg ? (
+                <motion.div
+                  key="dock-toast"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center justify-center gap-2 cursor-pointer select-none w-full"
+                  onClick={() => setToastMsg(null)}
+                >
+                  <span className="text-[11px] font-bold text-[var(--theme-text)] tracking-wide">{toastMsg}</span>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="dock-controls"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center gap-4"
+                >
             <div className="flex items-center gap-2 text-[var(--theme-text)]/90 font-bold text-[10px] uppercase tracking-widest shrink-0">
               <button
                 onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
@@ -2864,6 +2944,9 @@ export default function ChatView() {
                 />
               </div>
             )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

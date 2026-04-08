@@ -19,7 +19,7 @@ interface Props {
   currentAppVersion?: string;
 }
 
-const POPUP_W = 230;
+const POPUP_W = 240;
 const POPUP_H = 340;
 
 const formatOnlineDuration = (onlineSince: number) => {
@@ -85,7 +85,7 @@ export default function UserProfilePopup({
     if (inviteStatus === 'accepted') return <span className="text-xs font-bold text-emerald-400 py-2 block text-center">✓ Kabul Edildi</span>;
     if (inviteStatus === 'rejected') return <span className="text-xs font-bold text-red-400 py-2 block text-center">✕ Reddedildi</span>;
     return (
-      <button disabled={onCooldown} onClick={() => onInvite?.()} className="w-full py-2.5 btn-primary text-[12px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">
+      <button disabled={onCooldown} onClick={() => onInvite?.()} className="w-full py-2.5 btn-primary text-[12px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-transform">
         {onCooldown ? `${cooldownRemaining}s` : 'Odaya Davet Et'}
       </button>
     );
@@ -101,79 +101,129 @@ export default function UserProfilePopup({
         exit={{ opacity: 0, scale: 0.96, y: -4 }}
         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
         style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: POPUP_W }}
-        className="rounded-[20px] overflow-hidden"
+        className="rounded-[20px] overflow-hidden group/card transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="popup-surface" style={{ borderRadius: 18 }}>
-          {/* Top light gradient */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" style={{ borderRadius: '20px 20px 0 0' }} />
+        <div
+          className="relative"
+          style={{
+            borderRadius: 18,
+            background: 'var(--popover-bg)',
+            border: `1px solid var(--popover-border)`,
+            boxShadow: 'var(--popover-shadow), inset 0 1px 0 rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+          }}
+        >
+          {/* Top radial light */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(ellipse_at_50%_0%,rgba(var(--theme-accent-rgb),0.14),transparent_65%)]" />
+          {/* Top edge highlight */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--theme-border)] to-transparent" style={{ borderRadius: '20px 20px 0 0', opacity: 0.5 }} />
+          {/* Hover glow — only on hover */}
+          <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" style={{ boxShadow: '0 0 24px rgba(var(--theme-accent-rgb), 0.08)' }} />
 
-          {/* Profile image area */}
-          <div className="flex flex-col items-center pt-5 pb-3 px-4">
+          {/* Profile area */}
+          <div className="flex flex-col items-center pt-5 pb-3 px-5">
             {/* Avatar */}
             <div className="relative mb-3">
-              <div className="overflow-hidden flex items-center justify-center avatar-squircle" style={{ width: 68, height: 68, border: '1px solid rgba(var(--glass-tint), 0.08)', background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+              {/* Mount ripple — tek seferlik, avatar merkezinden */}
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0.2 }}
+                animate={{ scale: 1.35, opacity: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="pointer-events-none absolute inset-[-12px] rounded-full"
+                style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.18), transparent 70%)' }}
+              />
+              <div
+                className="overflow-hidden flex items-center justify-center avatar-squircle"
+                style={{
+                  width: 72,
+                  height: 72,
+                  border: isOnline ? '2px solid rgba(var(--theme-accent-rgb), 0.35)' : '1px solid rgba(var(--glass-tint), 0.10)',
+                  background: 'rgba(var(--theme-accent-rgb), 0.08)',
+                  boxShadow: isOnline ? '0 0 20px rgba(var(--theme-accent-rgb), 0.15)' : '0 2px 8px rgba(0,0,0,0.15)',
+                  transition: 'border-color 0.3s, box-shadow 0.3s',
+                }}
+              >
                 {hasImage ? (
                   <img src={user.avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : user.avatar ? (
-                  <span className="text-[28px] font-bold text-white/60">{user.avatar}</span>
+                  <span className="text-[28px] font-bold" style={{ color: 'var(--popover-text)', opacity: 0.6 }}>{user.avatar}</span>
                 ) : (
                   <UserIcon size={36} className="text-white/20" />
                 )}
               </div>
-              {/* Status dot */}
-              <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ${statusDotColor} ring-2`} style={{ ringColor: 'rgba(20,20,30,0.8)' }} />
+              {/* Status dot — pulse for online */}
+              <div className="absolute -bottom-0.5 -right-0.5">
+                <div className={`w-4 h-4 rounded-full ${statusDotColor} ring-2 ring-[var(--popover-bg)]`} />
+                {isOnline && (
+                  <div className={`absolute inset-0 rounded-full ${statusDotColor} animate-ping opacity-40`} />
+                )}
+              </div>
               {/* "SEN" badge */}
-              {isMe && <span className="absolute -top-1 -right-1 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)]/60 text-white rounded-full leading-none">SEN</span>}
+              {isMe && <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)] text-white rounded-full leading-none shadow-sm">SEN</span>}
             </div>
 
             {/* Name + role */}
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="font-semibold text-[16px] text-[#F2F2F2] leading-tight">{formatFullName(user.firstName, user.lastName)}</span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="font-bold text-[16px] leading-tight tracking-wide" style={{ color: 'var(--popover-text)' }}>{formatFullName(user.firstName, user.lastName)}</span>
               {user.isAdmin && <ShieldCheck size={14} className="text-[var(--theme-accent)] shrink-0" strokeWidth={2.5} />}
               {!user.isAdmin && user.isModerator && (
                 <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-3.5 h-3.5 shrink-0"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
               )}
             </div>
 
-            {/* Status */}
-            <div className="flex items-center gap-1.5 mb-4">
-              <span className={`text-[12px] font-medium ${statusColor}`}>{statusText}</span>
-              {user.age && <span className="text-[11px] text-white/30">• {user.age} yaşında</span>}
+            {/* Status badge */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                !isOnline
+                  ? 'text-[var(--popover-text-secondary)]/60 border-[var(--theme-border)]/50 bg-[var(--theme-surface-card)]/40'
+                  : statusText === 'Aktif'
+                    ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10'
+                    : statusText === 'Telefonda'
+                      ? 'text-red-400 border-red-500/25 bg-red-500/10'
+                      : 'text-orange-400 border-orange-500/25 bg-orange-500/10'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDotColor}`} />
+                {statusText}
+              </span>
+              {user.age && <span className="text-[10px] font-medium" style={{ color: 'var(--popover-text-secondary)', opacity: 0.5 }}>{user.age} yaş</span>}
             </div>
 
-            {/* Meta row */}
-            <div className="flex items-center gap-3 text-[11px] text-white/50 mb-4">
+            {/* Meta chips */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mb-4">
               {user.platform && (
-                <div className="flex items-center gap-1">
-                  {user.platform === 'mobile' ? <Smartphone size={11} /> : <Monitor size={11} />}
-                  <span>{user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}</span>
-                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                  {user.platform === 'mobile' ? <Smartphone size={10} /> : <Monitor size={10} />}
+                  {user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}
+                </span>
               )}
               {isOnline && user.onlineSince && (
-                <div className="flex items-center gap-1">
-                  <Clock size={10} />
-                  <span>{formatOnlineDuration(user.onlineSince)}</span>
-                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                  <Clock size={9} />
+                  {formatOnlineDuration(user.onlineSince)}
+                </span>
               )}
               {!isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-                <div className="flex items-center gap-1">
-                  <History size={10} />
-                  <span>{formatLastSeen(user.lastSeenAt)}</span>
-                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--popover-text-secondary)]">
+                  <History size={9} />
+                  {formatLastSeen(user.lastSeenAt)}
+                </span>
+              )}
+              {hasVersion && (
+                <span className={`inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                  outdated
+                    ? 'text-red-400/60 border-red-500/20 bg-red-500/6'
+                    : 'border-[var(--theme-border)]/40 bg-[var(--theme-surface-card)]/40 text-[var(--popover-text-secondary)]/60'
+                }`}>
+                  v{user.appVersion}
+                </span>
               )}
             </div>
 
             {/* Invite action */}
             {canInvite && renderInvite()}
           </div>
-
-          {/* Version — bottom right, very subtle */}
-          {hasVersion && (
-            <div className="absolute bottom-2 right-3">
-              <span className={`text-[9px] ${outdated ? 'text-red-400/50' : 'text-white/20'}`}>v{user.appVersion}</span>
-            </div>
-          )}
         </div>
       </motion.div>
     </>

@@ -44,7 +44,6 @@ export function useModeration({
 
   const showError = (msg = 'İşlem başarısız. Yetkiniz olmayabilir.') => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 4000);
   };
 
   const handleMuteUser = async (

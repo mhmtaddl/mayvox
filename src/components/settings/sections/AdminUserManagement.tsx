@@ -1,27 +1,35 @@
-import React, { useState, useMemo } from 'react';
-import { Users, Search, X, Check, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban } from 'lucide-react';
-import { AccordionSection, cardCls } from '../shared';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Users, Search, X, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban } from 'lucide-react';
+import { cardCls } from '../shared';
 import { formatFullName } from '../../../lib/formatName';
 import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
-import type { User } from '../../../types';
+import { useUI } from '../../../contexts/UIContext';
+import ConfirmModal from '../../ConfirmModal';
+
+// ── Confirmation dialog state ──
+type ConfirmAction =
+  | { type: 'delete'; userId: string; userName: string }
+  | { type: 'makeAdmin'; userId: string; userName: string }
+  | { type: 'removeAdmin'; userId: string; userName: string }
+  | { type: 'makeModerator'; userId: string; userName: string }
+  | { type: 'removeModerator'; userId: string; userName: string }
+  | { type: 'mute'; userId: string; userName: string; minutes: number }
+  | { type: 'ban'; userId: string; userName: string; days: number }
+  | { type: 'unmute'; userId: string; userName: string }
+  | { type: 'unban'; userId: string; userName: string }
+  | { type: 'resetPassword'; userId: string; userName: string; email: string };
 
 export default function AdminUserManagement() {
   const { currentUser, allUsers } = useUser();
+  const { setToastMsg } = useUI();
   const {
-    handleMuteUser,
-    handleBanUser,
-    handleUnmuteUser,
-    handleUnbanUser,
-    handleDeleteUser,
-    handleToggleAdmin,
-    handleToggleModerator,
-    passwordResetRequests,
-    handleAdminManualReset,
+    handleMuteUser, handleBanUser, handleUnmuteUser, handleUnbanUser,
+    handleDeleteUser, handleToggleAdmin, handleToggleModerator,
+    passwordResetRequests, handleAdminManualReset,
     appVersion: currentAppVersion,
   } = useAppState();
 
-  // Helper
   const isOutdated = (userVersion: string, appVer: string): boolean => {
     const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
     const [uMaj, uMin, uPat] = parse(userVersion);
@@ -31,20 +39,16 @@ export default function AdminUserManagement() {
     return uPat < aPat;
   };
 
-  // Memoized user lists
-  const otherUsers = useMemo(
-    () => allUsers.filter(u => u.id !== currentUser.id),
-    [allUsers, currentUser.id]
-  );
+  const otherUsers = useMemo(() => allUsers.filter(u => u.id !== currentUser.id), [allUsers, currentUser.id]);
 
-  // Local state
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'moderator' | 'user'>('all');
   const [muteInputs, setMuteInputs] = useState<Record<string, string>>({});
   const [banInputs, setBanInputs] = useState<Record<string, string>>({});
-  const [keyResetConfirm, setKeyResetConfirm] = useState<string | null>(null);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
-  // Filtered user list
   const filteredUsers = useMemo(() => {
     let list = otherUsers;
     if (userRoleFilter === 'admin') list = list.filter(u => u.isAdmin);
@@ -61,51 +65,152 @@ export default function AdminUserManagement() {
     return list;
   }, [otherUsers, userRoleFilter, userSearch]);
 
-  // Stats
   const adminCount = useMemo(() => otherUsers.filter(u => u.isAdmin).length, [otherUsers]);
   const modCount = useMemo(() => otherUsers.filter(u => u.isModerator && !u.isAdmin).length, [otherUsers]);
   const userCount = useMemo(() => otherUsers.filter(u => !u.isAdmin && !u.isModerator).length, [otherUsers]);
 
-  // Role filter tabs
   const roleFilters = [
     { key: 'all' as const, label: 'Tümü', count: otherUsers.length },
     { key: 'admin' as const, label: 'Admin', count: adminCount },
-    { key: 'moderator' as const, label: 'Moderatör', count: modCount },
+    { key: 'moderator' as const, label: 'Mod', count: modCount },
     { key: 'user' as const, label: 'Kullanıcı', count: userCount },
   ];
 
-  return (
-    <AccordionSection icon={<Users size={12} />} title="Kullanıcı Yönetimi">
+  const toast = (msg: string) => { setToastMsg(msg); };
 
-      {/* Search + filter bar (sticky) */}
-      <div className="sticky top-0 z-10 bg-[var(--theme-bg)] pb-3 space-y-3">
-        {/* Search */}
+  // ── Confirm handler ──
+  const handleConfirm = useCallback(async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
+    try {
+      const n = confirmAction.userName;
+      switch (confirmAction.type) {
+        case 'delete':
+          await handleDeleteUser(confirmAction.userId);
+          toast(`${n} silindi`);
+          break;
+        case 'makeAdmin':
+          await handleToggleAdmin(confirmAction.userId);
+          toast(`${n} admin yapıldı`);
+          break;
+        case 'removeAdmin':
+          await handleToggleAdmin(confirmAction.userId);
+          toast(`${n} admin yetkisi kaldırıldı`);
+          break;
+        case 'makeModerator':
+          await handleToggleModerator(confirmAction.userId);
+          toast(`${n} moderatör yapıldı`);
+          break;
+        case 'removeModerator':
+          await handleToggleModerator(confirmAction.userId);
+          toast(`${n} moderatör yetkisi kaldırıldı`);
+          break;
+        case 'mute':
+          await handleMuteUser(confirmAction.userId, confirmAction.minutes);
+          setExpandedUser(null);
+          toast(`${n} ${confirmAction.minutes} dk susturuldu`);
+          break;
+        case 'ban':
+          await handleBanUser(confirmAction.userId, confirmAction.days * 1440);
+          setExpandedUser(null);
+          toast(`${n} ${confirmAction.days} gün yasaklandı`);
+          break;
+        case 'unmute':
+          await handleUnmuteUser(confirmAction.userId);
+          toast(`${n} susturması kaldırıldı`);
+          break;
+        case 'unban':
+          await handleUnbanUser(confirmAction.userId);
+          toast(`${n} yasağı kaldırıldı`);
+          break;
+        case 'resetPassword':
+          await handleAdminManualReset(confirmAction.userId, confirmAction.userName, confirmAction.email);
+          toast(`${n} şifresi sıfırlandı`);
+          break;
+      }
+    } finally {
+      setConfirmLoading(false);
+      setConfirmAction(null);
+    }
+  }, [confirmAction, handleDeleteUser, handleToggleAdmin, handleToggleModerator, handleMuteUser, handleBanUser, handleUnmuteUser, handleUnbanUser]);
+
+  // ── Confirm modal config ──
+  const confirmConfig = useMemo(() => {
+    if (!confirmAction) return null;
+    const n = confirmAction.userName;
+    switch (confirmAction.type) {
+      case 'delete':
+        return { title: 'Kullanıcıyı Sil', description: `${n} adlı kullanıcıyı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`, confirmText: 'Sil', danger: true };
+      case 'makeAdmin':
+        return { title: 'Admin Yetkisi Ver', description: `${n} adlı kullanıcıya admin yetkisi vermek istediğinizden emin misiniz? Bu kullanıcı tüm yönetim işlemlerini yapabilecek.`, confirmText: 'Admin Yap', danger: false };
+      case 'removeAdmin':
+        return { title: 'Admin Yetkisini Kaldır', description: `${n} adlı kullanıcının admin yetkisini kaldırmak istediğinizden emin misiniz?`, confirmText: 'Kaldır', danger: true };
+      case 'makeModerator':
+        return { title: 'Moderatör Yetkisi Ver', description: `${n} adlı kullanıcıya moderatör yetkisi vermek istediğinizden emin misiniz?`, confirmText: 'Moderatör Yap', danger: false };
+      case 'removeModerator':
+        return { title: 'Moderatör Yetkisini Kaldır', description: `${n} adlı kullanıcının moderatör yetkisini kaldırmak istediğinizden emin misiniz?`, confirmText: 'Kaldır', danger: true };
+      case 'mute':
+        return { title: 'Kullanıcıyı Sustur', description: `${n} adlı kullanıcıyı ${confirmAction.minutes} dakika susturmak istediğinizden emin misiniz?`, confirmText: 'Sustur', danger: true };
+      case 'ban':
+        return { title: 'Kullanıcıyı Yasakla', description: `${n} adlı kullanıcıyı ${confirmAction.days} gün yasaklamak istediğinizden emin misiniz?`, confirmText: 'Yasakla', danger: true };
+      case 'unmute':
+        return { title: 'Susturmayı Kaldır', description: `${n} adlı kullanıcının susturmasını kaldırmak istediğinizden emin misiniz?`, confirmText: 'Kaldır', danger: false };
+      case 'unban':
+        return { title: 'Yasağı Kaldır', description: `${n} adlı kullanıcının yasağını kaldırmak istediğinizden emin misiniz?`, confirmText: 'Kaldır', danger: false };
+      case 'resetPassword':
+        return { title: 'Şifre Sıfırla', description: `${n} adlı kullanıcının şifresini sıfırlamak istediğinizden emin misiniz? Bu işlem kullanıcı girişini etkileyebilir.`, confirmText: 'Sıfırla', danger: true };
+    }
+  }, [confirmAction]);
+
+  const IconBtn = ({ onClick, title, icon, className }: { onClick: () => void; title: string; icon: React.ReactNode; className: string }) => (
+    <button onClick={onClick} title={title} className={`flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded transition-all active:scale-90 ${className}`}>
+      {icon}
+    </button>
+  );
+
+  return (
+    <div>
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen={!!confirmAction}
+          title={confirmConfig.title}
+          description={confirmConfig.description}
+          confirmText={confirmConfig.confirmText}
+          cancelText="İptal"
+          onConfirm={handleConfirm}
+          onCancel={() => setConfirmAction(null)}
+          danger={confirmConfig.danger}
+          loading={confirmLoading}
+        />
+      )}
+
+      {/* Search + filter bar */}
+      <div className="space-y-2 md:space-y-3 mb-3 md:mb-4">
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50" size={15} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50" size={14} />
           <input
             type="text"
             placeholder="Kullanıcı ara..."
             value={userSearch}
             onChange={e => setUserSearch(e.target.value)}
-            className="w-full bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-xl pl-10 pr-4 py-2.5 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 focus:border-[var(--theme-accent)] focus:ring-2 focus:ring-[var(--theme-accent)]/10 outline-none transition-all"
+            className="w-full bg-[var(--theme-sidebar)]/40 border border-[var(--theme-border)] rounded-xl pl-9 pr-3 py-1.5 md:pl-10 md:pr-4 md:py-2 text-[11px] md:text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 focus:border-[var(--theme-accent)] focus:ring-2 focus:ring-[var(--theme-accent)]/10 outline-none transition-all"
           />
           {userSearch && (
             <button onClick={() => setUserSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-text)]">
-              <X size={14} />
+              <X size={13} />
             </button>
           )}
         </div>
 
-        {/* Role filter tabs */}
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {roleFilters.map(f => (
             <button
               key={f.key}
               onClick={() => setUserRoleFilter(f.key)}
-              className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+              className={`flex-1 min-w-[60px] py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-all border truncate active:scale-95 ${
                 userRoleFilter === f.key
-                  ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30 shadow-sm shadow-[var(--theme-accent)]/10'
-                  : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)] hover:border-[var(--theme-border)]/80'
+                  ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30'
+                  : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)]'
               }`}
             >
               {f.label} ({f.count})
@@ -113,193 +218,175 @@ export default function AdminUserManagement() {
           ))}
         </div>
 
-        {/* Result count */}
-        <p className="text-[10px] text-[var(--theme-secondary-text)] font-medium">
-          {filteredUsers.length} kullanıcı bulundu
+        <p className="text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] font-medium">
+          {filteredUsers.length} kullanıcı
         </p>
       </div>
 
-      {/* User list — fixed height, inner scroll */}
-      <div className="max-h-[420px] overflow-y-auto rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-sidebar)]/20">
+      {/* User list */}
+      <div className={`${cardCls} max-h-[380px] md:max-h-[420px] xl:max-h-[520px] overflow-y-auto scroll-smooth overscroll-contain`}>
         {filteredUsers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-[var(--theme-secondary-text)]">
-            <Users size={28} className="opacity-30 mb-2" />
-            <p className="text-sm font-medium">Kullanıcı bulunamadı</p>
-            <p className="text-xs opacity-60 mt-1">Arama veya filtreyi değiştirmeyi deneyin</p>
+          <div className="flex flex-col items-center justify-center py-10 text-[var(--theme-secondary-text)]">
+            <Users size={24} className="opacity-30 mb-2" />
+            <p className="text-[12px] font-medium">Kullanıcı bulunamadı</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--theme-border)]">
-            {filteredUsers.map(user => (
-              <div key={user.id} className="flex items-center justify-between px-4 py-3 hover:bg-[var(--theme-accent)]/[0.03] transition-colors group/row">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-9 w-9 avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-xs shrink-0 ring-1 ring-[var(--theme-border)]">
-                    {user.avatar?.startsWith('http')
-                      ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      : user.avatar}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[var(--theme-text)] truncate" title={formatFullName(user.firstName, user.lastName)}>{formatFullName(user.firstName, user.lastName)}</span>
-                      {!user.isAdmin && user.isModerator && (
-                        <span className="shrink-0 w-4 h-4 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                          <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2.5 h-2.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                        </span>
-                      )}
-                      {(() => {
-                        const hasVersion = !!user.appVersion;
-                        const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
-                        return (
-                          <span className={`text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
+            {filteredUsers.map(user => {
+              const isExpanded = expandedUser === user.id;
+              const hasVersion = !!user.appVersion;
+              const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
+
+              return (
+                <div key={user.id} className="px-2.5 py-2 md:px-4 md:py-3 hover:bg-[var(--theme-accent)]/[0.03] transition-colors">
+                  {/* User row — stacked on narrow, inline on wide */}
+                  <div className="flex flex-col xl:flex-row xl:items-center gap-2">
+                    {/* User info */}
+                    <div className="flex items-center gap-2 md:gap-2.5 min-w-0 flex-1">
+                      <div className="h-7 w-7 md:h-8 md:w-8 avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[9px] md:text-[10px] shrink-0 ring-1 ring-[var(--theme-border)]">
+                        {user.avatar?.startsWith('http')
+                          ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          : user.avatar}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1 md:gap-1.5 min-w-0">
+                          <span className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                          {!user.isAdmin && user.isModerator && (
+                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                              <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
+                            </span>
+                          )}
+                          <span className={`text-[7px] md:text-[8px] font-semibold shrink-0 px-1 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
                             {hasVersion ? `v${user.appVersion}` : 'Eski'}
                           </span>
-                        );
-                      })()}
+                        </div>
+                        {(user.isMuted || user.isVoiceBanned) && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {user.isMuted && <span className="text-[7px] md:text-[8px] bg-orange-500/10 text-orange-500 px-1 py-0.5 rounded-full border border-orange-500/20 font-medium">Susturuldu</span>}
+                            {user.isVoiceBanned && <span className="text-[7px] md:text-[8px] bg-red-500/10 text-red-500 px-1 py-0.5 rounded-full border border-red-500/20 font-medium">Yasaklı</span>}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-1.5 mt-1 flex-wrap">
-                      {user.isMuted && <span className="text-[9px] bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded-full border border-orange-500/20 font-medium">Susturuldu</span>}
-                      {user.isVoiceBanned && <span className="text-[9px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded-full border border-red-500/20 font-medium">Konuşma Yasaklı</span>}
+
+                    {/* Action groups — wrap on narrow */}
+                    <div className="flex flex-wrap items-center gap-0.5 shrink-0">
+
+                      {/* Moderasyon */}
+                      <div className="flex items-center gap-0.5">
+                        {user.isMuted ? (
+                          <IconBtn onClick={() => setConfirmAction({ type: 'unmute', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })} title={`Susturmayı kaldır (${Math.ceil((user.muteExpires! - Date.now()) / 60000)} dk)`} icon={<Recycle size={12} />} className="bg-orange-500/15 text-orange-400 hover:bg-orange-500 hover:text-white" />
+                        ) : (
+                          <IconBtn onClick={() => setExpandedUser(isExpanded ? null : user.id)} title="Sustur" icon={<VolumeX size={12} />} className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-orange-500/20 hover:text-orange-400" />
+                        )}
+                        {user.isVoiceBanned ? (
+                          <IconBtn onClick={() => setConfirmAction({ type: 'unban', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })} title={`Yasağı kaldır (${Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))} gün)`} icon={<Recycle size={12} />} className="bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white" />
+                        ) : (
+                          <IconBtn onClick={() => setExpandedUser(isExpanded ? null : user.id)} title="Yasakla" icon={<Ban size={12} />} className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-red-500/20 hover:text-red-400" />
+                        )}
+                      </div>
+
+                      <div className="w-px h-5 bg-[var(--theme-border)]/30 mx-0.5 md:mx-1" />
+
+                      {/* Yetki */}
+                      {currentUser.isPrimaryAdmin && (
+                        <>
+                          <div className="flex items-center gap-0.5">
+                            <IconBtn
+                              onClick={() => setConfirmAction({ type: user.isAdmin ? 'removeAdmin' : 'makeAdmin', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                              title={user.isAdmin ? 'Admin yetkisini kaldır' : 'Admin yap'}
+                              icon={<ShieldCheck size={12} />}
+                              className={user.isAdmin
+                                ? 'bg-orange-500 text-white border border-orange-400 shadow-[0_0_6px_rgba(249,115,22,0.3)] hover:bg-orange-600'
+                                : 'bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)]/60 hover:bg-emerald-500/20 hover:text-emerald-400'
+                              }
+                            />
+                            <IconBtn
+                              onClick={() => setConfirmAction({ type: user.isModerator ? 'removeModerator' : 'makeModerator', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                              title={user.isModerator ? 'Moderatör kaldır' : 'Moderatör yap'}
+                              icon={<svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>}
+                              className={user.isModerator
+                                ? 'bg-violet-500 text-white border border-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.3)] hover:bg-violet-600'
+                                : 'bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)]/60 hover:bg-violet-500/20 hover:text-violet-400'
+                              }
+                            />
+                          </div>
+                          <div className="w-px h-5 bg-[var(--theme-border)]/30 mx-0.5 md:mx-1" />
+                        </>
+                      )}
+
+                      {/* Sistem */}
+                      <div className="flex items-center gap-0.5">
+                        <IconBtn
+                          onClick={() => setConfirmAction({ type: 'resetPassword', userId: user.id, userName: formatFullName(user.firstName, user.lastName), email: user.email || '' })}
+                          title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var!' : 'Şifre sıfırla'}
+                          icon={<KeyRound size={12} />}
+                          className={passwordResetRequests.some(r => r.userId === user.id)
+                            ? 'bg-red-500/15 text-red-500 border border-red-500/25 hover:bg-red-500 hover:text-white'
+                            : 'bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-emerald-500/20 hover:text-emerald-400'
+                          }
+                        />
+                        {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
+                          <IconBtn
+                            onClick={() => setConfirmAction({ type: 'delete', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                            title="Kullanıcıyı sil"
+                            icon={<Trash2 size={12} />}
+                            className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-red-500 hover:text-white"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex gap-3 items-center shrink-0 ml-3">
-                  <div className="flex flex-col gap-1.5">
-                    {/* Susturma */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="relative">
+                  {/* Expanded — Sustur/Ban süresi girişi */}
+                  {isExpanded && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/30">
+                        <VolumeX size={11} className="text-orange-400 shrink-0" />
                         <input
                           type="number"
                           placeholder="dk"
                           value={muteInputs[user.id] || ''}
                           onChange={e => setMuteInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
-                          className="w-14 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-12 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] focus:ring-1 focus:ring-[var(--theme-accent)]/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">dk</span>
+                        <button
+                          onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) setConfirmAction({ type: 'mute', userId: user.id, userName: formatFullName(user.firstName, user.lastName), minutes: m }); }}
+                          className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/15 text-orange-400 hover:bg-orange-500/80 hover:text-white active:scale-95 transition-all"
+                        >
+                          Sustur
+                        </button>
                       </div>
-                      <button
-                        onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) handleMuteUser(user.id, m); }}
-                        title="Sustur"
-                        className="flex items-center justify-center w-7 h-7 bg-[var(--theme-accent)] text-white rounded hover:opacity-90 transition-all"
-                      >
-                        <VolumeX size={13} />
-                      </button>
-                      {user.isMuted && (
-                        <>
-                          <span className="text-[10px] font-mono text-orange-500 font-bold">{Math.ceil((user.muteExpires! - Date.now()) / 60000)}dk</span>
-                          <button onClick={() => handleUnmuteUser(user.id)} title="Susturmayı Kaldır" className="flex items-center justify-center w-7 h-7 bg-orange-500 text-white rounded hover:opacity-90 transition-all">
-                            <Recycle size={13} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    {/* Yasaklama */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="relative">
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/30">
+                        <Ban size={11} className="text-red-400 shrink-0" />
                         <input
                           type="number"
                           placeholder="gün"
                           value={banInputs[user.id] || ''}
                           onChange={e => setBanInputs(prev => ({ ...prev, [user.id]: e.target.value }))}
-                          className="w-14 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-2 py-1 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-12 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] focus:ring-1 focus:ring-[var(--theme-accent)]/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-[var(--theme-secondary-text)] pointer-events-none">gün</span>
+                        <button
+                          onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) setConfirmAction({ type: 'ban', userId: user.id, userName: formatFullName(user.firstName, user.lastName), days: d }); }}
+                          className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 hover:bg-red-500/80 hover:text-white active:scale-95 transition-all"
+                        >
+                          Yasakla
+                        </button>
                       </div>
                       <button
-                        onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) handleBanUser(user.id, d * 1440); }}
-                        title="Yasakla"
-                        className="flex items-center justify-center w-7 h-7 bg-red-500 text-white rounded hover:opacity-90 transition-all"
+                        onClick={() => setExpandedUser(null)}
+                        className="px-2 py-0.5 rounded text-[9px] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors"
                       >
-                        <Ban size={13} />
+                        İptal
                       </button>
-                      {user.isVoiceBanned && (
-                        <>
-                          <span className="text-[10px] font-mono text-red-500 font-bold">{Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))}g</span>
-                          <button onClick={() => handleUnbanUser(user.id)} title="Yasağı Kaldır" className="flex items-center justify-center w-7 h-7 bg-red-500 text-white rounded hover:opacity-90 transition-all">
-                            <Recycle size={13} />
-                          </button>
-                        </>
-                      )}
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 border-l border-[var(--theme-border)]/50 pl-3">
-                    {/* Yetki grubu */}
-                    {currentUser.isPrimaryAdmin && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleToggleAdmin(user.id)}
-                          title={user.isAdmin ? 'Admin Yetkisini Kaldır' : 'Admin Yap'}
-                          className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                            user.isAdmin
-                              ? 'bg-orange-500 text-white border border-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.3)] hover:bg-orange-600'
-                              : 'bg-emerald-500/8 text-emerald-500/60 border border-emerald-500/15 hover:bg-emerald-500/20 hover:text-emerald-500'
-                          }`}
-                        >
-                          <ShieldCheck size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleToggleModerator(user.id)}
-                          title={user.isModerator ? 'Moderatör Yetkisini Kaldır' : 'Moderatör Yap'}
-                          className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                            user.isModerator
-                              ? 'bg-violet-500 text-white border border-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.35)] hover:bg-violet-600'
-                              : 'bg-violet-500/8 text-violet-400/60 border border-violet-500/15 hover:bg-violet-500/20 hover:text-violet-400'
-                          }`}
-                        >
-                          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                        </button>
-                      </div>
-                    )}
-                    {/* Sistem grubu */}
-                    <div className="flex items-center gap-1 border-l border-[var(--theme-border)]/30 pl-2 ml-1">
-                      {keyResetConfirm === user.id ? (
-                        <div className="flex items-center gap-1 p-1 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-lg">
-                          <span className="text-[9px] text-[var(--theme-secondary-text)] px-1">Sıfırla?</span>
-                          <button
-                            onClick={async () => { await handleAdminManualReset(user.id, user.name, user.email || ''); setKeyResetConfirm(null); }}
-                            className="flex items-center justify-center w-6 h-6 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all"
-                            title="Onayla"
-                          >
-                            <Check size={11} />
-                          </button>
-                          <button
-                            onClick={() => setKeyResetConfirm(null)}
-                            className="flex items-center justify-center w-6 h-6 rounded bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
-                            title="İptal"
-                          >
-                            <X size={11} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setKeyResetConfirm(user.id)}
-                          title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var!' : 'Şifre Sıfırla'}
-                          className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                            passwordResetRequests.some(r => r.userId === user.id)
-                              ? 'bg-red-500/15 text-red-500 border border-red-500/25 hover:bg-red-500 hover:text-white'
-                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
-                          }`}
-                        >
-                          <KeyRound size={13} />
-                        </button>
-                      )}
-                      {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          title="Kullanıcıyı Sil"
-                          className="flex items-center justify-center w-7 h-7 bg-red-500/10 text-red-500 border border-red-500/20 rounded hover:bg-red-500 hover:text-white transition-all"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
-    </AccordionSection>
+    </div>
   );
 }

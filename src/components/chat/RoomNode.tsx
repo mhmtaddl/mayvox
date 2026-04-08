@@ -32,6 +32,12 @@ export default function RoomNode({ node, isCenter, cardStyle = 'current' }: Prop
   return (
     <div
       className="cursor-pointer select-none group"
+      style={{
+        opacity: (isMuted && isDeafened) ? 0.55 : isMuted ? 0.7 : 1,
+        filter: (isMuted && isDeafened) ? 'grayscale(0.5)' : 'none',
+        transform: isSpeaking ? 'translateY(-2px)' : 'none',
+        transition: 'opacity 0.2s, filter 0.2s, transform 0.2s',
+      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}

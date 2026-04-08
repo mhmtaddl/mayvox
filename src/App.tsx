@@ -310,7 +310,32 @@ export default function App() {
   }, []);
 
   // ── UI state ─────────────────────────────────────────────────────────────
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastMsg, setToastMsgRaw] = useState<string | null>(null);
+  const toastQueueRef = useRef<string[]>([]);
+  const toastActiveRef = useRef<string | null>(null);
+
+  const setToastMsg = useCallback((msg: string | null) => {
+    if (msg === null) {
+      // Dismiss aktif — sıradakini göster
+      toastActiveRef.current = null;
+      const next = toastQueueRef.current.shift() ?? null;
+      setToastMsgRaw(next);
+      toastActiveRef.current = next;
+      return;
+    }
+    // Dedupe: aktif mesaj veya kuyrukta aynısı varsa atla
+    if (toastActiveRef.current === msg || toastQueueRef.current.includes(msg)) return;
+    // Aktif mesaj yoksa direkt göster
+    if (!toastActiveRef.current) {
+      toastActiveRef.current = msg;
+      setToastMsgRaw(msg);
+    } else {
+      // Kuyruk sınırı 5
+      if (toastQueueRef.current.length < 5) {
+        toastQueueRef.current.push(msg);
+      }
+    }
+  }, []);
   // ── Invite state: ephemeral state + persistent ref (rehydration için) ──
   type InviteData = { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string };
   const [invitationModal, setInvitationModalRaw] = useState<InviteData | null>(null);
@@ -455,7 +480,7 @@ export default function App() {
     voiceMode,
     onMicError: (msg) => {
       setToastMsg(msg);
-      setTimeout(() => setToastMsg(null), 6000);
+      // auto-dismiss dock useEffect'te yönetiliyor
     },
   });
 
@@ -996,7 +1021,7 @@ export default function App() {
       if (warningMs > 0 && !idleWarningShownRef.current && elapsed >= warningMs && elapsed < thresholdMs) {
         idleWarningShownRef.current = true;
         setToastMsg('Pasif kaldığınız için kanaldan ayrılmanıza 30 saniye kaldı.');
-        setTimeout(() => setToastMsg(null), 8000);
+        // auto-dismiss dock useEffect'te yönetiliyor
       }
 
       // Otomatik ayrılma
@@ -1016,7 +1041,7 @@ export default function App() {
             payload: { userId: afkUser.id, updates: { statusText: 'AFK' } },
           });
           setToastMsg('Uzun süre konuşmadığınız için kanaldan ayrıldınız.');
-          setTimeout(() => setToastMsg(null), 5000);
+          // auto-dismiss dock useEffect'te yönetiliyor
         });
       }
     }, 10_000);
@@ -1107,18 +1132,26 @@ export default function App() {
     setUserVolumes(newVolumes);
     localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
 
+    const vol = Math.max(0, Math.min(1, volume / 100));
+
     // LiveKit katılımcısının ses seviyesini gerçek zamanlı uygula
     const user = allUsers.find(u => u.id === userId);
     if (user && livekitRoomRef.current) {
-        const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
+      const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
       const participant = participants.find(p => p.identity === user.name);
       if (participant) {
+        // Yöntem 1: LiveKit track API
         participant.audioTrackPublications.forEach(pub => {
-          if (pub.track instanceof RemoteAudioTrack) {
-            pub.track.setVolume(volume / 100);
+          const t = pub.track ?? pub.audioTrack;
+          if (t && t instanceof RemoteAudioTrack) {
+            t.setVolume(vol);
           }
         });
       }
+      // Yöntem 2: DOM audio element fallback (her zaman çalışır)
+      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => {
+        el.volume = vol;
+      });
     }
   };
 
@@ -1297,7 +1330,7 @@ export default function App() {
       });
       if (createErr) {
         setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.');
-        setTimeout(() => setToastMsg(null), 4000);
+        // auto-dismiss dock useEffect'te yönetiliyor
         return;
       }
       setChannels([...channels, newRoom]);
@@ -1345,7 +1378,7 @@ export default function App() {
     if (error) {
       console.error('Şifre kaydetme hatası:', error);
       setToastMsg('Şifre kaydedilemedi. Lütfen tekrar deneyin.');
-      setTimeout(() => setToastMsg(null), 4000);
+      // auto-dismiss dock useEffect'te yönetiliyor
       return;
     }
     setChannels(channels.map(c => c.id === id ? { ...c, password: 'SET' } : c));
@@ -1835,7 +1868,7 @@ export default function App() {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setToastMsg(data.error ?? 'Şifre sıfırlanamadı');
-      setTimeout(() => setToastMsg(null), 4000);
+      // auto-dismiss dock useEffect'te yönetiliyor
       return;
     }
 
@@ -2432,19 +2465,7 @@ export default function App() {
                     )}
                   </AnimatePresence>
 
-                  {/* Toast bildirimi */}
-                  <AnimatePresence>
-                    {toastMsg && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 40 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 40 }}
-                        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[999] px-5 py-3 rounded-xl bg-[var(--theme-surface)] border border-[var(--theme-border)] text-[var(--theme-text)] text-sm font-bold shadow-2xl"
-                      >
-                        {toastMsg}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {/* Toast bildirimi — dock içinde gösterilir, ayrı popup yok */}
 
                 </>}
                 </div>

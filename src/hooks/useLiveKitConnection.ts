@@ -182,14 +182,19 @@ export function useLiveKitConnection({
         if (track.kind === Track.Kind.Audio) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.setAttribute('data-livekit-audio', 'true');
+          audioEl.setAttribute('data-participant', participant.identity);
           audioEl.muted = isDeafenedRef.current;
           document.body.appendChild(audioEl);
 
           const user = allUsersRef.current.find(u => u.name === participant.identity);
           if (user) {
             const savedVolume = userVolumesRef.current[user.id];
-            if (savedVolume !== undefined && publication.track instanceof RemoteAudioTrack) {
-              publication.track.setVolume(savedVolume / 100);
+            if (savedVolume !== undefined) {
+              // track parametresi burada kesinlikle mevcut
+              if (track instanceof RemoteAudioTrack) {
+                track.setVolume(savedVolume / 100);
+              }
+              audioEl.volume = Math.max(0, Math.min(1, savedVolume / 100));
             }
           }
         }

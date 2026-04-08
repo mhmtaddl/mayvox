@@ -2,29 +2,64 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 // ── Shared CSS classes ──
-export const inputCls = 'w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-xl px-4 py-2.5 text-[13px] focus:border-[var(--theme-accent)]/40 focus:ring-1 focus:ring-[var(--theme-accent)]/8 outline-none transition-all duration-150 text-[var(--theme-input-text)] placeholder:text-[var(--theme-input-placeholder)]';
+export const inputCls = 'w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13px] focus:border-[var(--theme-accent)]/50 focus:ring-2 focus:ring-[var(--theme-accent)]/15 outline-none transition-all duration-150 text-[var(--theme-input-text)] placeholder:text-[var(--theme-input-placeholder)]';
 
 export const labelCls = 'text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]';
 
 export const cardCls = 'bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.15)]';
 
 // ── Toggle switch ──
-export const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(); }}
-    className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-all duration-180 focus:outline-none cursor-pointer ${
-      checked
-        ? 'bg-[var(--theme-accent)]'
-        : 'bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.06)]'
-    }`}
-  >
-    <span className={`inline-block h-4 w-4 transform rounded-full shadow-sm transition-transform duration-180 ${
-      checked ? 'translate-x-[21px] bg-white' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)]'
-    }`} />
-  </button>
+export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onChange: () => void; tooltip?: string }) => (
+  <div className="flex items-center gap-2 shrink-0" title={tooltip}>
+    <span className={`text-[10px] font-bold tracking-wide select-none transition-colors duration-150 ${
+      checked ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40'
+    }`}>
+      {checked ? 'ON' : 'OFF'}
+    </span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(); }}
+      className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-all duration-180 focus:outline-none cursor-pointer ${
+        checked
+          ? 'bg-[var(--theme-accent)]'
+          : 'bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.06)]'
+      }`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full shadow-sm transition-transform duration-180 ${
+        checked ? 'translate-x-[21px] bg-white' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)]'
+      }`} />
+    </button>
+  </div>
+);
+
+// ── Card section wrapper (replaces AccordionSection for 2-col layout) ──
+export const CardSection = ({
+  icon,
+  title,
+  badge,
+  subtitle,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  badge?: React.ReactNode;
+  subtitle?: string;
+  children: React.ReactNode;
+}) => (
+  <section className={cardCls}>
+    <div className="flex items-center gap-2 px-3.5 pt-3 pb-2 md:gap-2.5 md:px-5 md:pt-4 md:pb-3">
+      <span className="text-[var(--theme-accent)] opacity-60">{icon}</span>
+      <span className="text-[9px] md:text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">{title}</span>
+      {badge}
+      <div className="flex-1" />
+      {subtitle && <span className="text-[8px] md:text-[9px] text-[var(--theme-secondary-text)]/50">{subtitle}</span>}
+    </div>
+    <div className="px-3.5 pb-3 md:px-5 md:pb-4">
+      {children}
+    </div>
+  </section>
 );
 
 // ── Section label (non-accordion) ──

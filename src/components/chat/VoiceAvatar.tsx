@@ -45,10 +45,15 @@ function VoiceAvatarInner({
   const micOff = isMe ? isMuted : (!!user.selfMuted || !!user.isMuted);
   const deafened = isMe ? isDeafened : !!user.selfDeafened;
 
+  // PTT-armed: PTT basılı ama speaking henüz aktif değil
+  const isPttArmed = isOwnVoiceActive && !isSpeakingActive;
+
   // Glow
   const glowShadow = isSpeakingActive
     ? `0 0 0 ${2 + v.ringSpread}px rgba(var(--theme-accent-rgb), ${0.2 + intensity * 0.2}), 0 0 ${v.ringGlow * 1.2}px rgba(var(--theme-accent-rgb), ${0.06 + intensity * 0.12})`
-    : 'none';
+    : isPttArmed
+      ? '0 0 0 2px rgba(var(--theme-accent-rgb), 0.15), 0 0 8px rgba(var(--theme-accent-rgb), 0.06)'
+      : 'none';
 
   // Card background
   const cardBg = isSpeakingActive
@@ -63,8 +68,8 @@ function VoiceAvatarInner({
       ? 'rgba(var(--glass-tint), 0.06)'
       : 'rgba(var(--glass-tint), 0.04)';
 
-  // Opacity hierarchy
-  const nodeOpacity = isDominant ? 1 : isSpeakingActive ? 0.95 : 0.82;
+  // Opacity hierarchy — muted users dimmer
+  const nodeOpacity = (micOff && deafened) ? 0.55 : micOff ? 0.7 : isDominant ? 1 : isSpeakingActive ? 0.95 : 0.82;
 
   // Moderator crown SVG
   const modCrown = (
@@ -82,7 +87,11 @@ function VoiceAvatarInner({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      animate={{ opacity: nodeOpacity }}
+      animate={{
+        opacity: nodeOpacity,
+        y: isSpeakingActive ? -2 : 0,
+        filter: micOff && deafened ? 'grayscale(0.5)' : 'grayscale(0)',
+      }}
       className="flex flex-col items-center cursor-pointer group select-none rounded-2xl p-3 pt-4 pb-2.5"
       style={{
         width: cardWidth,
@@ -106,9 +115,11 @@ function VoiceAvatarInner({
             background: 'rgba(var(--theme-accent-rgb), 0.08)',
             border: isSpeakingActive
               ? `2.5px solid rgba(var(--theme-accent-rgb), ${0.5 + intensity * 0.3})`
-              : isMe
-                ? '2px solid rgba(var(--theme-accent-rgb), 0.12)'
-                : '2px solid rgba(var(--glass-tint), 0.06)',
+              : isPttArmed
+                ? '2px solid rgba(var(--theme-accent-rgb), 0.25)'
+                : isMe
+                  ? '2px solid rgba(var(--theme-accent-rgb), 0.12)'
+                  : '2px solid rgba(var(--glass-tint), 0.06)',
             boxShadow: glowShadow,
             transition: 'border-color 0.3s ease, box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease, height 0.3s ease',
           }}
@@ -165,19 +176,23 @@ function VoiceAvatarInner({
           <Monitor size={11} className="text-[var(--theme-secondary-text)] shrink-0" strokeWidth={2} />
         ) : null}
 
-        {/* 2. Headphone */}
-        {deafened ? (
-          <HeadphoneOff size={11} className="text-red-400 shrink-0" />
-        ) : (
-          <Headphones size={11} className="text-[var(--theme-secondary-text)] shrink-0" />
-        )}
+        {/* 2. Headphone — smooth transition */}
+        <span className="shrink-0 transition-all duration-150" style={{ transform: deafened ? 'scale(1.1)' : 'scale(1)' }}>
+          {deafened ? (
+            <HeadphoneOff size={11} className="text-red-400" />
+          ) : (
+            <Headphones size={11} className="text-[var(--theme-secondary-text)]" />
+          )}
+        </span>
 
-        {/* 3. Microphone */}
-        {micOff ? (
-          <MicOff size={11} className="text-red-400 shrink-0" />
-        ) : (
-          <Mic size={11} className="text-[var(--theme-secondary-text)] shrink-0" />
-        )}
+        {/* 3. Microphone — smooth transition */}
+        <span className="shrink-0 transition-all duration-150" style={{ transform: micOff ? 'scale(1.1)' : 'scale(1)' }}>
+          {micOff ? (
+            <MicOff size={11} className="text-red-400" />
+          ) : (
+            <Mic size={11} className="text-[var(--theme-secondary-text)]" />
+          )}
+        </span>
 
         {/* 4. Speaking equalizer */}
         {isSpeakingAny && (

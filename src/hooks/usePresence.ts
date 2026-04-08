@@ -227,7 +227,7 @@ export function usePresence({
     channel.on('broadcast', { event: 'invite-rejected' }, ({ payload }) => {
       if (payload.inviterId === user.id) {
         setToastMsg(`${payload.inviteeName} davetinize icabet etmedi.`);
-        setTimeout(() => setToastMsg(null), 4000);
+        // auto-dismiss dock useEffect'te yönetiliyor
         if (payload.inviteeId) {
           onInviteRejectedRef.current?.(payload.inviteeId);
         }
@@ -239,7 +239,7 @@ export function usePresence({
         setActiveChannel(null);
         disconnectRef.current();
         setToastMsg('Odadan çıkarıldınız.');
-        setTimeout(() => setToastMsg(null), 4000);
+        // auto-dismiss dock useEffect'te yönetiliyor
       }
     });
 

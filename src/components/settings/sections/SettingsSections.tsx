@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Headphones, Mic, AudioLines, Eye } from 'lucide-react';
-import { AccordionSection, Toggle, cardCls } from '../shared';
+import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react';
+import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
@@ -14,19 +14,16 @@ export function AppearanceSection() {
   const { currentUser } = useUser();
 
   return (
-    <AccordionSection icon={<Recycle size={12} />} title="Görünüm">
+    <CardSection icon={<Recycle size={12} />} title="Görünüm">
 
       {/* ═══ RENK PALETLERİ ═══ */}
-      <div className="mb-8">
-        <div className="flex items-baseline justify-between mb-3">
-          <div>
-            <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">Renk Paletleri</p>
-            <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-60 mt-1">Uygulama içi vurgu ve tema renklerini belirler</p>
-          </div>
-          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0 ml-4">{currentTheme.name}</span>
+      <div className="mb-4 md:mb-5">
+        <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-0.5 md:gap-0 mb-2">
+          <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">Renk Paletleri</p>
+          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{currentTheme.name}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 md:gap-2.5">
           {themeOrder.map(key => {
             const theme = themes[key];
             const isSelected = currentTheme.key === key;
@@ -34,7 +31,7 @@ export function AppearanceSection() {
               <button
                 key={key}
                 onClick={() => setCurrentTheme(theme)}
-                className="flex flex-col gap-2 p-3 rounded-2xl text-left transition-all duration-150"
+                className="flex flex-col gap-1.5 p-2 md:p-2.5 rounded-xl text-left transition-all duration-150"
                 style={{
                   background: 'var(--theme-surface-card)',
                   border: isSelected
@@ -46,8 +43,7 @@ export function AppearanceSection() {
                   transform: isSelected ? 'scale(1.02)' : 'scale(1)',
                 }}
               >
-                {/* Preview strip */}
-                <div className="relative w-full h-9 rounded-lg overflow-hidden" style={{ background: theme.background }}>
+                <div className="relative w-full h-7 md:h-8 rounded-lg overflow-hidden" style={{ background: theme.background }}>
                   <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.1)' }} />
                   <div className="absolute inset-0" style={{
                     background: `radial-gradient(ellipse 70% 100% at 25% 85%, ${theme.primary}28, transparent 55%), radial-gradient(ellipse 50% 90% at 80% 15%, ${theme.secondary}20, transparent 50%)`,
@@ -57,11 +53,11 @@ export function AppearanceSection() {
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.secondary, opacity: 0.6 }} />
                   </div>
                 </div>
-                <div className="flex items-center justify-between px-0.5">
-                  <span className="text-[11px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.82)' }}>{theme.name}</span>
+                <div className="flex items-center justify-between px-0.5 min-w-0">
+                  <span className="text-[9px] md:text-[10px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.82)' }}>{theme.name}</span>
                   {isSelected && (
-                    <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: `${theme.primary}20` }}>
-                      <Check size={9} style={{ color: theme.primary }} strokeWidth={3} />
+                    <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0" style={{ background: `${theme.primary}20` }}>
+                      <Check size={8} style={{ color: theme.primary }} strokeWidth={3} />
                     </div>
                   )}
                 </div>
@@ -72,9 +68,9 @@ export function AppearanceSection() {
       </div>
 
       {/* ═══ ARKA PLAN ═══ */}
-      <div className="pt-6 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-        <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em] mb-3">Arka Plan</p>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${backgroundPresets.length}, 1fr)`, gap: 8 }}>
+      <div className="pt-3 md:pt-4 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em] mb-2">Arka Plan</p>
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {backgroundPresets.map(bg => {
             const isActive = activeBackground === bg.id;
             return (
@@ -82,10 +78,10 @@ export function AppearanceSection() {
                 key={bg.id}
                 onClick={() => setActiveBackground(bg.id)}
                 title={bg.name}
-                className="relative overflow-hidden transition-all duration-150"
+                className="relative overflow-hidden transition-all duration-150 flex-1 min-w-[36px] max-w-[56px]"
                 style={{
-                  height: 36,
-                  borderRadius: 10,
+                  height: 28,
+                  borderRadius: 8,
                   background: bg.surface,
                   border: isActive ? '1.5px solid var(--theme-accent)' : '1px solid rgba(255,255,255,0.06)',
                   boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 2px 10px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.18)',
@@ -94,7 +90,7 @@ export function AppearanceSection() {
               >
                 {isActive && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
+                    <Check size={11} style={{ color: '#fff' }} strokeWidth={3} />
                   </div>
                 )}
               </button>
@@ -103,19 +99,16 @@ export function AppearanceSection() {
         </div>
       </div>
 
-      {/* Admin border effect — only visible to admins */}
+      {/* Admin border effect */}
       {currentUser.isAdmin && (
-        <div className={`${cardCls} mt-5`}>
-          <div className="flex items-center gap-4 px-6 py-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
-              <p className="text-xs text-[var(--theme-secondary-text)]/60 mt-0.5">Yönetici avatarlarında hafif parıltı göster.</p>
-            </div>
-            <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} />
+        <div className="flex items-center gap-3 mt-3 md:mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
           </div>
+          <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} tooltip="Admin avatarlarında parlama efekti" />
         </div>
       )}
-    </AccordionSection>
+    </CardSection>
   );
 }
 
@@ -132,52 +125,52 @@ export function SoundsSection() {
     soundInviteVariant, setSoundInviteVariant,
   } = useSettings();
 
+  const soundRows = [
+    { label: 'Giriş / Çıkış', tooltip: 'Odaya giriş/çıkışta ses çalar', category: 'JoinLeave' as const, variant: soundJoinLeaveVariant, setVariant: setSoundJoinLeaveVariant, enabled: soundJoinLeave, setEnabled: setSoundJoinLeave, variants: ['Ses A', 'Ses B'] },
+    { label: 'Mikrofon / Hoparlör', tooltip: 'Mikrofon veya hoparlör kapandığında', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen, variants: ['Ses A', 'Ses B'] },
+    { label: 'Bas-Konuş', tooltip: 'Bas-konuş tuşuna basıldığında', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt, variants: ['Ses A', 'Ses B'] },
+  ];
+
   return (
-    <AccordionSection icon={<Volume2 size={12} />} title="Sesler">
-      <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
-        {([
-          { label: 'Giriş / Çıkış', desc: 'Birisi odaya girip ayrıldığında.', category: 'JoinLeave' as const, variant: soundJoinLeaveVariant, setVariant: setSoundJoinLeaveVariant, enabled: soundJoinLeave, setEnabled: setSoundJoinLeave },
-          { label: 'Mikrofon / Hoparlör', desc: 'Mikrofon veya hoparlör açılıp kapandığında.', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen },
-          { label: 'Bas-Konuş', desc: 'Bas-Konuş tuşuna basılıp bırakıldığında.', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt },
-        ] as const).map(({ label, desc, category, variant, setVariant, enabled, setEnabled }) => (
-          <div key={category} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-6 py-4">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--theme-text)]">{label}</p>
-              <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">{desc}</p>
+    <CardSection icon={<Volume2 size={12} />} title="Sesler" subtitle="Bildirim ve UI sesleri">
+      <div className="divide-y divide-[var(--theme-border)]/50">
+        {soundRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
+          <div key={category} className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 first:pt-0 last:pb-0">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">{label}</p>
             </div>
-            <div className="flex items-center gap-2">
-              {([1, 2] as SoundVariant[]).map(v => (
+            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+              {([1, 2] as SoundVariant[]).map((v, i) => (
                 <button
                   key={v}
                   disabled={!enabled}
                   onClick={() => { setVariant(v); previewSound(category, v); }}
-                  className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
+                  className={`w-[44px] md:w-[48px] py-1 rounded-full text-[9px] md:text-[10px] font-semibold border text-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
                     variant === v && enabled
                       ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
                       : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
                   }`}
                 >
-                  {v === 1 ? 'Ses A' : 'Ses B'}
+                  {variants[i]}
                 </button>
               ))}
+              <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} tooltip={tooltip} />
             </div>
-            <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} />
           </div>
         ))}
 
         {/* Davet Çağrısı */}
-        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-6 py-4">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Birisi sizi odaya davet ettiğinde çalan zil sesi.</p>
+        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 last:pb-0">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
             {([1, 2] as const).map(v => (
               <button
                 key={v}
                 disabled={!soundInvite}
                 onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
-                className={`w-[52px] py-1 rounded-full text-xs font-semibold border text-center transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
+                className={`w-[44px] md:w-[48px] py-1 rounded-full text-[9px] md:text-[10px] font-semibold border text-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
                   soundInviteVariant === v && soundInvite
                     ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
                     : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
@@ -186,11 +179,11 @@ export function SoundsSection() {
                 {v === 1 ? 'Klasik' : 'Yumuşak'}
               </button>
             ))}
+            <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} tooltip="Oda davetinde çalacak zil sesi" />
           </div>
-          <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} />
         </div>
       </div>
-    </AccordionSection>
+    </CardSection>
   );
 }
 
@@ -200,42 +193,40 @@ export function AudioProfileSection() {
   const { setToastMsg } = useUI();
 
   return (
-    <AccordionSection icon={<Volume2 size={12} />} title="Ses Profili">
-      <div className="grid grid-cols-2 gap-3">
+    <CardSection icon={<Volume2 size={12} />} title="Ses Profili">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-2.5">
         {AUDIO_PROFILE_META.map(profile => {
           const isActive = audioProfile === profile.id;
           return (
             <button
               type="button"
               key={profile.id}
-              onClick={() => {
-                setAudioProfile(profile.id);
-              }}
-              className={`flex flex-col gap-2 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${
+              onClick={() => { setAudioProfile(profile.id); setToastMsg(`${profile.label} aktif`); }}
+              className={`flex flex-col gap-1.5 p-2.5 md:p-3 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.97] ${
                 isActive
                   ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-sm shadow-[var(--theme-accent)]/20'
                   : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-accent)]/40 hover:bg-[var(--theme-sidebar)]/60'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-lg leading-none">{profile.icon}</span>
+                <span className="text-base leading-none">{profile.icon}</span>
                 {isActive && (
                   <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0">
                     <Check size={9} className="text-[var(--theme-btn-primary-text)]" />
                   </div>
                 )}
               </div>
-              <p className={`text-sm font-bold leading-tight ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
+              <p className={`text-[11px] md:text-[12px] font-bold leading-tight ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
                 {profile.label}
               </p>
-              <p className="text-[10px] text-[var(--theme-secondary-text)]/80 leading-snug">
+              <p className="text-[9px] text-[var(--theme-secondary-text)]/80 leading-snug">
                 {profile.desc}
               </p>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {profile.tags.map(tag => (
                   <span
                     key={tag}
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none ${
+                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border leading-none ${
                       isActive
                         ? 'border-[var(--theme-accent)]/30 text-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
                         : 'border-[var(--theme-border)] text-[var(--theme-secondary-text)] bg-[var(--theme-bg)]/50'
@@ -250,19 +241,21 @@ export function AudioProfileSection() {
         })}
       </div>
       {audioProfile === 'custom' && (
-        <div className="mt-3 flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-sidebar)]/20">
-          <div className="w-7 h-7 rounded-lg bg-[var(--theme-border)]/40 flex items-center justify-center shrink-0 text-sm">⚙️</div>
+        <div className="mt-3 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-sidebar)]/20">
+          <div className="w-6 h-6 rounded-lg bg-[var(--theme-border)]/40 flex items-center justify-center shrink-0 text-xs">⚙️</div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-[var(--theme-text)]">Özel Ayarlar</p>
-            <p className="text-[10px] text-[var(--theme-secondary-text)]/70 mt-0.5">Manuel ayar değişikliği yapıldı.</p>
+            <p className="text-[11px] font-bold text-[var(--theme-text)]">Özel Ayarlar</p>
+            <p className="text-[9px] text-[var(--theme-secondary-text)]/70 mt-0.5">Manuel ayar değişikliği yapıldı.</p>
           </div>
         </div>
       )}
-    </AccordionSection>
+    </CardSection>
   );
 }
 
-// ── Performans ve Veri ──
+// ── Performans & Ses Motoru (VoiceChannel merged here) ──
+const IDLE_MINUTES_OPTIONS = [5, 10, 15, 30, 60] as const;
+
 export function PerformanceSection() {
   const {
     isLowDataMode, setIsLowDataMode,
@@ -270,9 +263,10 @@ export function PerformanceSection() {
     noiseThreshold, setNoiseThreshold,
     pttReleaseDelay, setPttReleaseDelay,
     setAudioProfile,
+    autoLeaveEnabled, setAutoLeaveEnabled,
+    autoLeaveMinutes, setAutoLeaveMinutes,
   } = useSettings();
 
-  // Gürültü eşiği canlı meter
   const [micAverage, setMicAverage] = useState(0);
   const meterStreamRef = useRef<MediaStream | null>(null);
   const meterAnimRef = useRef<number | null>(null);
@@ -304,7 +298,7 @@ export function PerformanceSection() {
           meterAnimRef.current = requestAnimationFrame(tick);
         };
         tick();
-      } catch { /* mikrofon izni yok, sessizce geç */ }
+      } catch { /* mikrofon izni yok */ }
     };
     start();
     return () => {
@@ -317,36 +311,58 @@ export function PerformanceSection() {
   }, [isNoiseSuppressionEnabled]);
 
   return (
-    <AccordionSection icon={<Zap size={12} />} title="Performans ve Veri">
-      <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
+    <CardSection icon={<Zap size={12} />} title="Performans & Ses Motoru">
+      <div className="space-y-3 md:space-y-0 md:divide-y md:divide-[var(--theme-border)]/50">
 
         {/* Düşük Veri Modu */}
-        <div className="flex items-center gap-4 px-6 py-4">
+        <div className="flex items-center gap-3 md:pb-3">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Düşük Veri Kullanım Modu</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Görsel güncellemeleri kısıtlar, ses kalitesini korur.</p>
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Düşük Veri Modu</p>
           </div>
-          <Toggle checked={isLowDataMode} onChange={() => setIsLowDataMode(!isLowDataMode)} />
+          <Toggle checked={isLowDataMode} onChange={() => setIsLowDataMode(!isLowDataMode)} tooltip="Görsel güncellemeleri kısıtlar, ses kalitesine dokunmaz" />
         </div>
 
-        {/* Gürültü Susturma toggle */}
-        <div className="flex items-center gap-4 px-6 py-4">
+        {/* Gürültü Susturma */}
+        <div className="flex items-center gap-3 md:py-3">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Arka plan sesini filtreler, konuşmayı netleştirir.</p>
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
           </div>
-          <Toggle checked={isNoiseSuppressionEnabled} onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }} />
+          <Toggle checked={isNoiseSuppressionEnabled} onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }} tooltip="Arka plan gürültüsünü filtreler" />
         </div>
 
-        {/* Gürültü Eşiği — sadece aktifken göster */}
+        {/* Boşta Ayrılma */}
+        <div className="md:py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Boşta Ayrılma</p>
+            </div>
+            <Toggle checked={autoLeaveEnabled} onChange={() => setAutoLeaveEnabled(!autoLeaveEnabled)} tooltip="Belirli süre sessiz kalırsan odadan otomatik çıkar" />
+          </div>
+          {autoLeaveEnabled && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {IDLE_MINUTES_OPTIONS.map(m => (
+                <button
+                  key={m}
+                  onClick={() => setAutoLeaveMinutes(m)}
+                  className={`flex-1 min-w-[40px] py-1.5 rounded-lg text-[10px] font-bold transition-all border active:scale-95 ${
+                    autoLeaveMinutes === m
+                      ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30'
+                      : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)]'
+                  }`}
+                >
+                  {m} dk
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Gürültü Eşiği */}
         {isNoiseSuppressionEnabled && (
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-semibold text-[var(--theme-text)]">Gürültü Eşiği</p>
-                <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Yüksek değer daha agresif filtreler.</p>
-              </div>
-              <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[2rem] text-right tabular-nums">{noiseThreshold}</span>
+          <div className="md:py-3">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Eşiği</p>
+              <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">{noiseThreshold}</span>
             </div>
             {(() => {
               const thresholdPct = ((noiseThreshold - 2) / (50 - 2)) * 100;
@@ -355,7 +371,7 @@ export function PerformanceSection() {
               const aboveLeft = thresholdPct;
               const aboveWidth = Math.max(0, micPct - thresholdPct);
               return (
-                <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-3">
+                <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-2">
                   <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${belowWidth}%`, backgroundColor: 'var(--theme-secondary-text)', opacity: 0.5 }} />
                   <div className="absolute top-0 h-full transition-none" style={{ left: `${aboveLeft}%`, width: `${aboveWidth}%`, backgroundColor: 'var(--theme-accent)', opacity: 0.85 }} />
                   <div className="absolute top-0 h-full w-px bg-red-400" style={{ left: `${thresholdPct}%` }} />
@@ -363,76 +379,28 @@ export function PerformanceSection() {
               );
             })()}
             <input type="range" min={2} max={50} value={noiseThreshold} onChange={e => { setNoiseThreshold(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
-            <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+            <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
               <span>Hafif</span><span>Agresif</span>
             </div>
           </div>
         )}
 
         {/* PTT Bırakma Gecikmesi */}
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-sm font-semibold text-[var(--theme-text)]">Bas-Konuş Bırakma Gecikmesi</p>
-              <p className="text-xs text-[var(--theme-secondary-text)] mt-0.5">Kelime sonlarının kesilmesini önler.</p>
-            </div>
-            <span className="text-sm font-bold text-[var(--theme-accent)] min-w-[3.5rem] text-right tabular-nums">
+        <div className="md:pt-3">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">PTT Bırakma Gecikmesi</p>
+            <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">
               {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
             </span>
           </div>
           <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => { setPttReleaseDelay(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
-          <div className="flex justify-between text-[10px] text-[var(--theme-secondary-text)] mt-1">
+          <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
             <span>Kapalı</span><span>500 ms</span>
           </div>
         </div>
 
       </div>
-    </AccordionSection>
-  );
-}
-
-// ── Ses Kanalları ──
-const IDLE_MINUTES_OPTIONS = [5, 10, 15, 30, 60] as const;
-
-export function VoiceChannelSection() {
-  const { autoLeaveEnabled, setAutoLeaveEnabled, autoLeaveMinutes, setAutoLeaveMinutes } = useSettings();
-  return (
-    <AccordionSection icon={<Headphones size={12} />} title="Ses Kanalları">
-      <div className={`${cardCls} divide-y divide-[var(--theme-border)]`}>
-
-        {/* Toggle */}
-        <div className="flex items-center gap-4 px-6 py-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Boşta kalınca kanaldan ayrıl</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">Belirlediğiniz süre boyunca konuşmadan kalırsanız aktif ses kanalından otomatik ayrılırsınız.</p>
-          </div>
-          <Toggle checked={autoLeaveEnabled} onChange={() => setAutoLeaveEnabled(!autoLeaveEnabled)} />
-        </div>
-
-        {/* Süre seçimi */}
-        {autoLeaveEnabled && (
-          <div className="px-6 py-4">
-            <p className="text-sm font-semibold text-[var(--theme-text)] mb-3">Bekleme Süresi</p>
-            <div className="flex gap-2">
-              {IDLE_MINUTES_OPTIONS.map(m => (
-                <button
-                  key={m}
-                  onClick={() => setAutoLeaveMinutes(m)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all border ${
-                    autoLeaveMinutes === m
-                      ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30 shadow-sm shadow-[var(--theme-accent)]/10'
-                      : 'bg-transparent text-[var(--theme-secondary-text)]/60 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)] hover:border-[var(--theme-border)]/80'
-                  }`}
-                >
-                  {m} dk
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-      </div>
-    </AccordionSection>
+    </CardSection>
   );
 }
 
@@ -442,51 +410,41 @@ export function VoiceModeSection() {
   const { voiceMode, setVoiceMode } = useSettings();
 
   const modes = [
-    {
-      id: 'ptt' as const,
-      icon: <Mic size={18} />,
-      label: 'Bas-Konuş',
-      desc: 'Butona basılı tutarak konuş, bırakınca mikrofon kapanır.',
-    },
-    {
-      id: 'vad' as const,
-      icon: <AudioLines size={18} />,
-      label: 'Ses Algılama',
-      desc: 'Konuşmaya başlayınca mikrofon otomatik açılır, susunca kapanır.',
-    },
+    { id: 'ptt' as const, icon: <Mic size={18} />, label: 'Bas-Konuş', desc: 'Butona basılı tutarak konuş.' },
+    { id: 'vad' as const, icon: <AudioLines size={18} />, label: 'Ses Algılama', desc: 'Konuşmayı otomatik algılar.' },
   ];
 
   return (
-    <AccordionSection icon={<Mic size={12} />} title="Mikrofon Modu">
-      <div className="grid grid-cols-2 gap-3">
+    <CardSection icon={<Mic size={12} />} title="Mikrofon Modu">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-2.5">
         {modes.map(m => (
           <button
             key={m.id}
             onClick={() => setVoiceMode(m.id)}
-            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all text-center ${
+            className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-center ${
               voiceMode === m.id
-                ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/8 shadow-sm shadow-[var(--theme-accent)]/10'
+                ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/8'
                 : 'border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-border)]/80'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
               voiceMode === m.id ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]' : 'bg-[var(--theme-border)]/50 text-[var(--theme-secondary-text)]'
             }`}>
               {m.icon}
             </div>
-            <span className={`text-sm font-bold ${voiceMode === m.id ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
+            <span className={`text-[12px] font-bold ${voiceMode === m.id ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
               {m.label}
             </span>
-            <span className="text-[10px] text-[var(--theme-secondary-text)] leading-snug">{m.desc}</span>
+            <span className="text-[9px] text-[var(--theme-secondary-text)] leading-snug">{m.desc}</span>
             {voiceMode === m.id && (
-              <div className="w-5 h-5 rounded-full bg-[var(--theme-accent)] flex items-center justify-center">
-                <Check size={12} className="text-[var(--theme-btn-primary-text)]" strokeWidth={3} />
+              <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center">
+                <Check size={10} className="text-[var(--theme-btn-primary-text)]" strokeWidth={3} />
               </div>
             )}
           </button>
         ))}
       </div>
-    </AccordionSection>
+    </CardSection>
   );
 }
 
@@ -494,18 +452,21 @@ export function VoiceModeSection() {
 export function LastSeenSection() {
   const { showLastSeen, setShowLastSeen } = useSettings();
   return (
-    <AccordionSection icon={<Eye size={12} />} title="Son Görülme">
-      <div className={`${cardCls}`}>
-        <div className="flex items-center gap-4 px-6 py-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-[var(--theme-text)]">Son görülme bilgisini göster</p>
-            <p className="text-xs text-[var(--theme-secondary-text)]/80 mt-0.5">
-              Kapatırsanız kimse sizin son görülme bilginizi göremez ve siz de başkalarının son görülme bilgisini göremezsiniz.
-            </p>
-          </div>
-          <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
+    <CardSection icon={<Eye size={12} />} title="Son Görülme">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Son görülme bilgisini göster</p>
+          <p className="text-[9px] md:text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+            Kapatırsan başkaları da seninkini göremez
+          </p>
         </div>
+        <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} tooltip="Gizlilik ayarı: kapatırsan karşılıklı gizlenir" />
       </div>
-    </AccordionSection>
+    </CardSection>
   );
+}
+
+// ── VoiceChannelSection no longer needed (merged into PerformanceSection) ──
+export function VoiceChannelSection() {
+  return null;
 }

@@ -18,7 +18,7 @@ export default function ForceUpdateOverlay({ state, onDownload, onInstall }: Pro
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-b from-black/40 via-black/50 to-black/60"
     >
       <motion.div
         initial={{ scale: 0.92, opacity: 0 }}
