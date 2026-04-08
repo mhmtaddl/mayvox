@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
+import { Download } from 'lucide-react';
 import { useUpdateController } from '../hooks/useUpdateController';
 import { useUpdateVisibility } from '../hooks/useUpdateVisibility';
 import UpdateStatusIcon from './UpdateStatusIcon';
@@ -8,11 +9,11 @@ import UpdatePopover from './UpdatePopover';
 import ForceUpdateOverlay from './ForceUpdateOverlay';
 import { getReleaseNotes } from '../../../lib/releaseNotes';
 import ReleaseNotesPopover from '../../../components/ReleaseNotesModal';
+import { useUI } from '../../../contexts/UIContext';
 
 interface Props {
   currentVersion: string;
   isAdmin?: boolean;
-  /** App seviyesinden gelen otomatik gösterim isteği (ilk açılış) */
   autoShowNotes?: boolean;
   onNotesShown?: () => void;
 }
@@ -22,6 +23,28 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
   const vis = useUpdateVisibility(state, urgency, currentVersion);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const { setToastMsg } = useUI();
+
+  // ── Phase değişiminde dock notification gönder ──
+  const prevPhaseRef = useRef(state.phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    const next = state.phase;
+    prevPhaseRef.current = next;
+
+    if (prev === next) return;
+
+    // Phase geçişlerine göre dock mesajı
+    if (next === 'available' && prev !== 'available') {
+      setToastMsg(`Yeni sürüm mevcut: v${state.version}`);
+    } else if (next === 'downloading' && prev !== 'downloading') {
+      setToastMsg('Güncelleme indiriliyor...');
+    } else if (next === 'downloaded' && prev !== 'downloaded') {
+      setToastMsg('Güncelleme hazır — yüklemek için tıkla');
+    } else if (next === 'error' && state.error) {
+      setToastMsg(state.error);
+    }
+  }, [state.phase, state.version, state.error, setToastMsg]);
 
   // App'ten gelen otomatik gösterim
   useEffect(() => {
@@ -30,6 +53,7 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
       onNotesShown?.();
     }
   }, [autoShowNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dışına tıklayınca popover kapat
@@ -49,13 +73,15 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
       setPopoverOpen(prev => !prev);
       return;
     }
-    // Normal: release notes
     if (getReleaseNotes(currentVersion)) {
       setShowReleaseNotes(prev => !prev);
     }
   };
 
   const hasUpdate = vis.showUpdateHub;
+
+  // Update aktif mi — download icon + shimmer gösterilecek mi
+  const isUpdateActive = hasUpdate && (state.phase === 'available' || state.phase === 'downloading' || state.phase === 'downloaded');
 
   return (
     <>
@@ -70,24 +96,34 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
                 : 'text-[var(--theme-secondary-text)]/50 cursor-default'
           }`}
         >
-          {/* Progress ring veya status icon */}
+          {/* Progress ring — indirme sırasında */}
           {vis.showProgress ? (
             <UpdateProgressRing progress={state.progress} size={14} stroke={2} />
+          ) : isUpdateActive ? (
+            /* Download icon — update aktifken (scan yerine) */
+            <span className="relative flex items-center justify-center">
+              <Download size={10} className="text-[var(--theme-accent)]" />
+              {state.phase === 'downloaded' && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              )}
+            </span>
           ) : state.phase !== 'idle' && state.phase !== 'up-to-date' ? (
             <UpdateStatusIcon phase={state.phase} size={10} />
           ) : null}
 
-          {/* Badge dot */}
-          {vis.showBadge && !vis.showProgress && (
+          {/* Badge dot — available/downloaded'da pulse */}
+          {vis.showBadge && !vis.showProgress && !isUpdateActive && (
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ backgroundColor: state.phase === 'downloaded' ? '#22c55e' : 'var(--theme-accent)' }} />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ backgroundColor: state.phase === 'downloaded' ? '#22c55e' : 'var(--theme-accent)' }} />
             </span>
           )}
 
-          {/* Label — sadece yüzde veya versiyon, yazı yok */}
+          {/* Label — shimmer efekti update aktifken */}
           {vis.showProgress ? (
             <span>{`%${state.progress}`}</span>
+          ) : isUpdateActive ? (
+            <span className="update-shimmer">{vis.sublabel || `v${state.version}`}</span>
           ) : !vis.showUpdateHub ? (
             <span>{`v${currentVersion}`}</span>
           ) : null}
@@ -107,7 +143,7 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
           )}
         </AnimatePresence>
 
-        {/* Release notes (normal durum) */}
+        {/* Release notes */}
         {showReleaseNotes && getReleaseNotes(currentVersion) && (
           <ReleaseNotesPopover
             version={currentVersion}

@@ -224,6 +224,25 @@ button, a, input, [role="button"] {
   border-radius: 22%;
 }
 
+/* ─── Update version shimmer ─── */
+@keyframes update-shimmer {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+.update-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--theme-accent) 0%,
+    rgba(255,255,255,0.6) 50%,
+    var(--theme-accent) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: update-shimmer 3s ease-in-out infinite;
+}
+
 /* ─── Bell ring animation ─── */
 @keyframes bell-ring {
   0% { transform: rotate(0deg); }
