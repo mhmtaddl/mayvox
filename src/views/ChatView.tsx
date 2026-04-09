@@ -46,6 +46,7 @@ import InviteRequestPanel from '../components/InviteRequestPanel';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import BrandArea from '../components/BrandArea';
 import SocialSearchHub from '../components/SocialSearchHub';
+import FriendsSidebarContent from '../components/FriendsSidebarContent';
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import MobileUpdateHub from '../features/update/components/MobileUpdateHub';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
@@ -77,6 +78,10 @@ export default function ChatView() {
     allUsers,
     getStatusColor,
     getEffectiveStatus,
+    friendIds,
+    isFriend,
+    friendsLoading,
+    incomingRequests,
   } = useUser();
 
   const {
@@ -418,11 +423,6 @@ export default function ChatView() {
   // Profile popup
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
 
-  // Offline users collapse
-  const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
-    const saved = localStorage.getItem('offlineUsersExpanded');
-    return saved !== null ? saved === 'true' : false;
-  });
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
     return saved ? Math.max(1, Math.min(3, parseInt(saved))) : 2;
@@ -527,13 +527,10 @@ export default function ChatView() {
     () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
   );
-  const onlineUsers = useMemo(
-    () => allUsers.filter(u => u.status === 'online'),
-    [allUsers]
-  );
-  const offlineUsers = useMemo(
-    () => allUsers.filter(u => u.status === 'offline'),
-    [allUsers]
+  // Right panel: friends only
+  const friendUsers = useMemo(
+    () => allUsers.filter(u => friendIds.has(u.id)),
+    [allUsers, friendIds]
   );
   const sortedChannelMembers = useMemo(
     () => [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)),
@@ -896,79 +893,22 @@ export default function ChatView() {
               >
                 <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Kullanıcılar</h3>
-                    <span className="text-[10px] bg-[var(--theme-bg)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{allUsers.length}</span>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Arkadaşlar</h3>
+                    <span className="text-[10px] bg-[var(--theme-bg)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{friendUsers.length}</span>
+                    {incomingRequests.length > 0 && (
+                      <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>
+                    )}
                   </div>
                   <button onClick={() => setMobileRightOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors">
                     <X size={18} />
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                  {/* Online */}
-                  <div>
-                    <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-80 uppercase mb-3 px-2">Çevrimiçi — {onlineUsers.length}</p>
-                    <div className="space-y-1">
-                      {onlineUsers.map(user => {
-                        const isMe = user.id === currentUser.id;
-                        return (
-                          <div
-                            key={user.id}
-                            className="flex items-center gap-3 px-2 py-2 rounded-lg transition-colors group hover:bg-[var(--theme-bg)]/50 cursor-pointer"
-                            onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                          >
-                            <div className="relative shrink-0">
-                              <div className="h-9 w-9 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]" style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}>
-                                {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}
-                              </div>
-                              {user.isAdmin && adminBorderEffect && (
-                                <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
-                              )}
-                              <DeviceBadge platform={user.platform} size={13} className="absolute -bottom-0.5 -right-0.5" />
-                            </div>
-                            <div className="flex flex-col flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)}{user.age ? ` (${user.age})` : ''}</span>
-                                {user.isAdmin && (
-                                  <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-                                    <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-                                  </span>
-                                )}
-                                {!user.isAdmin && user.isModerator && (
-                                  <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                    <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
-                                {(isMe ? isDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-                                                                <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {/* Offline */}
-                  <div>
-                    <p className="text-[10px] font-bold text-[var(--theme-text)] opacity-50 uppercase mb-3 px-2">Çevrimdışı — {offlineUsers.length}</p>
-                    <div className="space-y-1">
-                      {offlineUsers.map(user => (
-                        <div
-                          key={user.id}
-                          className="flex items-center gap-3 px-2 py-2 rounded-lg opacity-60 cursor-pointer hover:bg-[var(--theme-bg)]/50"
-                          onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                        >
-                          <div className="h-9 w-9 rounded-full bg-[var(--theme-border)]/30 overflow-hidden flex items-center justify-center text-[var(--theme-secondary-text)] font-bold text-[10px]">
-                            {user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover grayscale" referrerPolicy="no-referrer" /> : user.avatar}
-                          </div>
-                          <span className="text-[13px] text-[var(--theme-secondary-text)] truncate">{formatFullName(user.firstName, user.lastName)}{user.age ? ` (${user.age})` : ''}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <FriendsSidebarContent
+                  variant="mobile"
+                  onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+                  isMuted={isMuted}
+                  isDeafened={isDeafened}
+                />
               </motion.aside>
             </>
           )}
@@ -2198,181 +2138,27 @@ export default function ChatView() {
           <div className="pt-3 pb-1">
             <SocialSearchHub currentUserId={currentUser.id} variant="sidebar" />
           </div>
-          <div className="px-4 pt-2 pb-2 flex items-center justify-between">
-            <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Kullanıcılar</h3>
-            <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{allUsers.length}</span>
+          <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
+              <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
+            </div>
+            {incomingRequests.length > 0 && (
+              <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-            {/* Online */}
-            <div>
-              <div className="flex items-center gap-2 mb-3 px-2">
-                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.14em]">Çevrimiçi</span>
-                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">{onlineUsers.length}</span>
-                <div className="flex-1 h-px bg-[var(--theme-border)]/10" />
-              </div>
-              <div className="space-y-1">
-                {onlineUsers.map(user => {
-                  const isMe = user.id === currentUser.id;
-                  const alreadyInChannel = activeChannel && channels.find(c => c.id === activeChannel)?.members?.includes(user.name);
-                  const canInvite = !isMe && activeChannel && !alreadyInChannel;
-                  return (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-200 group hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer"
-                      onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                    >
-                      <div className="relative shrink-0">
-                        <div
-                          className="h-8 w-8 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
-                          style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
-                        >
-                          {user.avatar?.startsWith('http')
-                            ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            : user.avatar}
-                        </div>
-                        {user.isAdmin && adminBorderEffect && (
-                          <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
-                        )}
-                        <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />
-                      </div>
-                      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
-                          <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)] shrink-0">{user.age}</span>
-                          {user.isAdmin && (
-                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-                              <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-                            </span>
-                          )}
-                          {!user.isAdmin && user.isModerator && (
-                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                              <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1">
-                          {/* Mic / deafen durum ikonları — kalıcı audio state */}
-                          {(isMe ? isMuted : (!!user.selfMuted || !!user.isMuted)) && (
-                            <Mic size={8} className="text-red-500 shrink-0" />
-                          )}
-                          {(isMe ? isDeafened : !!user.selfDeafened) && (
-                            <Headphones size={8} className="text-red-500 shrink-0" />
-                          )}
-                          {/* Kalıcı durum — speaking göstergesi yok */}
-                                                                              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
-                        </div>
-                      </div>
-                      {canInvite && (() => {
-                        const status = inviteStatuses[user.id];
-                        const cooldownUntil = inviteCooldowns[user.id];
-                        const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
-                        const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
-
-                        if (status === 'pending') {
-                          return (
-                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-blue-400 border border-blue-400/30 flex items-center gap-1 bg-blue-500/10">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                              Aranıyor
-                            </span>
-                          );
-                        }
-                        if (status === 'accepted') {
-                          return (
-                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-emerald-400 border border-emerald-400/30 bg-emerald-500/10">
-                              ✓ Kabul
-                            </span>
-                          );
-                        }
-                        if (status === 'rejected') {
-                          return (
-                            <span className="shrink-0 opacity-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-red-400 border border-red-400/30 bg-red-500/10">
-                              ✕ Ret
-                            </span>
-                          );
-                        }
-                        return (
-                          <button
-                            disabled={onCooldown}
-                            onClick={() => handleInviteUser(user.id)}
-                            title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
-                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white border border-[var(--theme-accent)]/30 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            {onCooldown ? `${remaining}s` : 'Davet'}
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Offline */}
-            <div>
-              <button
-                type="button"
-                onClick={() => { const next = !offlineExpanded; setOfflineExpanded(next); localStorage.setItem('offlineUsersExpanded', String(next)); }}
-                className="flex items-center gap-2 w-full mb-3 px-2 hover:opacity-80 transition-opacity cursor-pointer"
-              >
-                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/50 uppercase tracking-[0.14em]">Çevrimdışı</span>
-                <span className="text-[9px] bg-[var(--theme-secondary-text)]/8 text-[var(--theme-secondary-text)]/50 px-2 py-0.5 rounded-full font-bold">{offlineUsers.length}</span>
-                <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
-                <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/40 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
-              </button>
-              {offlineExpanded && <div className="space-y-1">
-                {offlineUsers.map(user => (
-                  <div
-                    key={user.id}
-                    className="flex items-center gap-3 px-2 py-1.5 rounded-lg opacity-50 transition-all duration-200 group hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                  >
-                    <div className="relative">
-                      <div
-                        className="h-8 w-8 overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]"
-                        style={{ borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' }}
-                      >
-                        {user.avatar?.startsWith('http')
-                          ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          : user.avatar}
-                      </div>
-                      <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[13px] font-medium text-[var(--theme-text)] opacity-80 leading-none truncate">{formatFullName(user.firstName, user.lastName)}</span>
-                        <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 shrink-0">{user.age}</span>
-                        {user.isAdmin && (
-                          <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-                            <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-                          </span>
-                        )}
-                        {!user.isAdmin && user.isModerator && (
-                          <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                            <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                          </span>
-                        )}
-                      </div>
-                      {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-                        <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-none mt-0.5 block">
-                          {(() => {
-                            const d = new Date(user.lastSeenAt);
-                            const now = new Date();
-                            const yesterday = new Date(now);
-                            yesterday.setDate(now.getDate() - 1);
-                            const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                            if (d.toDateString() === now.toDateString()) return `Son görülme: Bugün ${time}`;
-                            if (d.toDateString() === yesterday.toDateString()) return `Son görülme: Dün ${time}`;
-                            return `Son görülme: ${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
-                          })()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>}
-            </div>
-          </div>
+          <FriendsSidebarContent
+            variant="desktop"
+            onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+            channels={channels}
+            activeChannel={activeChannel}
+            inviteStatuses={inviteStatuses}
+            inviteCooldowns={inviteCooldowns}
+            handleInviteUser={handleInviteUser}
+            isMuted={isMuted}
+            isDeafened={isDeafened}
+          />
 
           {/* Sağ alt kontroller — Ayarlar, Bildirim Çanı, Çıkış */}
           <div className="shrink-0 px-3 py-3 flex items-center justify-center gap-2">

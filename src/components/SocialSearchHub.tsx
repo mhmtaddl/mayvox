@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, UserPlus, Send } from 'lucide-react';
+import { Search, X, UserPlus, UserMinus, Check, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import { useUser } from '../contexts/UserContext';
+import { useUI } from '../contexts/UIContext';
+import MiniConfirm from './MiniConfirm';
 
 interface SearchResult {
   id: string;
@@ -25,20 +28,94 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend } = useUser();
+  const { setToastMsg } = useUI();
+
+  // Mini confirm state
+  const [confirm, setConfirm] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+    action: 'send' | 'remove' | 'cancel';
+  }>({ isOpen: false, userId: '', userName: '', action: 'send' });
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
   const isCenter = variant === 'center';
 
   const searchUsers = useCallback(async (q: string) => {
-    const t = q.trim();
-    if (!t || t.length < 2) { setResults([]); return; }
+    // Normalize: trim, collapse spaces, strip leading @
+    const raw = q.trim().replace(/\s+/g, ' ').replace(/^@/, '');
+    if (!raw || raw.length < 2) { setResults([]); return; }
+
+    const tokens = raw.toLowerCase().split(' ').filter(Boolean);
+    if (tokens.length === 0) { setResults([]); return; }
+
     setIsSearching(true);
     try {
+      // Fetch broad candidates using first token (catches most relevant results)
+      const first = tokens[0];
+      const orClauses = tokens.length > 1
+        ? tokens.slice(0, 3).flatMap(t => [
+            `first_name.ilike.%${t}%`,
+            `last_name.ilike.%${t}%`,
+            `name.ilike.%${t}%`,
+          ]).join(',')
+        : `first_name.ilike.%${first}%,last_name.ilike.%${first}%,name.ilike.%${first}%`;
+
       const { data } = await supabase
         .from('profiles')
         .select('id, name, first_name, last_name, avatar')
-        .or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%,name.ilike.%${t}%`)
+        .or(orClauses)
         .neq('id', currentUserId)
-        .limit(8);
-      if (data) setResults(data.map(p => ({ id: p.id, name: p.name || '', firstName: p.first_name || '', lastName: p.last_name || '', avatar: p.avatar || '' })));
+        .limit(30); // fetch more, filter+rank client-side
+
+      if (!data) { setResults([]); setIsSearching(false); return; }
+
+      // Client-side multi-token filter + ranking
+      const scored: (SearchResult & { score: number })[] = [];
+      for (const p of data) {
+        const fn = (p.first_name || '').toLowerCase();
+        const ln = (p.last_name || '').toLowerCase();
+        const un = (p.name || '').toLowerCase();
+        const full = `${fn} ${ln}`.trim();
+        const combined = `${fn} ${ln} ${un}`;
+
+        // All tokens must match somewhere in combined text
+        const allMatch = tokens.every(t => combined.includes(t));
+        if (!allMatch) continue;
+
+        // Ranking score (higher = better)
+        let score = 0;
+        const queryLower = raw.toLowerCase();
+
+        // Exact username match
+        if (un === queryLower) score += 100;
+        // Exact full name match
+        if (full === queryLower) score += 90;
+        // Username starts with query
+        if (un.startsWith(queryLower)) score += 60;
+        // Full name starts with query
+        if (full.startsWith(queryLower)) score += 50;
+        // First name starts with first token
+        if (fn.startsWith(tokens[0])) score += 30;
+        // Last name starts with a token
+        if (tokens.some(t => ln.startsWith(t))) score += 20;
+        // Username contains query
+        if (un.includes(queryLower)) score += 10;
+
+        scored.push({
+          id: p.id,
+          name: p.name || '',
+          firstName: p.first_name || '',
+          lastName: p.last_name || '',
+          avatar: p.avatar || '',
+          score,
+        });
+      }
+
+      // Sort by score descending, then alphabetically
+      scored.sort((a, b) => b.score - a.score || a.firstName.localeCompare(b.firstName));
+      setResults(scored.slice(0, 8));
     } catch {}
     setIsSearching(false);
   }, [currentUserId]);
@@ -67,7 +144,106 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const displayName = (r: SearchResult) => `${r.firstName} ${r.lastName}`.trim() || r.name || 'Kullanıcı';
   const initials = (r: SearchResult) => `${(r.firstName || r.name || '?')[0]}${(r.lastName || '')[0] || ''}`.toUpperCase();
 
+  const handleConfirm = async () => {
+    setConfirmLoading(true);
+    try {
+      if (confirm.action === 'send') {
+        const ok = await sendRequest(confirm.userId);
+        setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'İstek gönderilemedi');
+      } else if (confirm.action === 'remove') {
+        const ok = await removeFriend(confirm.userId);
+        setToastMsg(ok ? `${confirm.userName} arkadaşlarından kaldırıldı` : 'İşlem başarısız');
+      } else if (confirm.action === 'cancel') {
+        const ok = await cancelRequest(confirm.userId);
+        setToastMsg(ok ? 'İstek iptal edildi' : 'İşlem başarısız');
+      }
+    } finally {
+      setConfirmLoading(false);
+      setConfirm({ isOpen: false, userId: '', userName: '', action: 'send' });
+    }
+  };
+
+  const handleAccept = async (userId: string, userName: string) => {
+    const ok = await acceptRequest(userId);
+    setToastMsg(ok ? `${userName} artık arkadaşın` : 'İşlem başarısız');
+  };
+
+  const handleReject = async (userId: string) => {
+    const ok = await rejectRequest(userId);
+    setToastMsg(ok ? 'İstek reddedildi' : 'İşlem başarısız');
+  };
+
+  const renderAction = (user: SearchResult) => {
+    const rel = getRelationship(user.id);
+    const name = displayName(user);
+
+    switch (rel) {
+      case 'friend':
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'remove' }); }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            title="Arkadaşı sil"
+          >
+            <UserMinus size={13} />
+          </button>
+        );
+
+      case 'outgoing':
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'cancel' }); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold text-blue-400/60 bg-blue-500/8 border border-blue-400/15 hover:border-blue-400/30 transition-all cursor-pointer"
+            title="İsteği iptal et"
+          >
+            <Clock size={10} />
+            Bekliyor
+          </button>
+        );
+
+      case 'incoming':
+        return (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleAccept(user.id, name); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+              title="Kabul et"
+            >
+              <Check size={14} strokeWidth={2.5} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleReject(user.id); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Reddet"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        );
+
+      default:
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'send' }); }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-50 hover:opacity-90 hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all"
+            title="Arkadaş isteği gönder"
+          >
+            <UserPlus size={13} />
+          </button>
+        );
+    }
+  };
+
+  const getStatusBadge = (userId: string) => {
+    const rel = getRelationship(userId);
+    if (rel === 'friend') return <span className="text-[8px] font-bold text-emerald-400/60 uppercase tracking-wide">Arkadaş</span>;
+    if (rel === 'incoming') return <span className="text-[8px] font-bold text-blue-400/60 uppercase tracking-wide">İstek geldi</span>;
+    if (rel === 'outgoing') return <span className="text-[8px] font-bold text-blue-400/40 uppercase tracking-wide">İstek gönderildi</span>;
+    return null;
+  };
+
   return (
+    <>
     <div ref={containerRef} className={`relative ${isCenter ? 'w-full max-w-[500px] mx-auto' : 'px-3'}`}>
       {/* Input */}
       <div
@@ -86,7 +262,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
-          placeholder={isCenter ? 'Kullanıcı ara, davet et...' : 'Kullanıcı ara...'}
+          placeholder={isCenter ? 'PigeVox\'ta ara...' : 'PigeVox\'ta ara...'}
           className={`flex-1 bg-transparent text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/25 outline-none min-w-0 ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
         />
         {query && (
@@ -131,16 +307,14 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium text-[var(--theme-text)] truncate leading-tight">{displayName(user)}</p>
-                      {user.name && <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-40 truncate">@{user.name}</p>}
+                      <div className="flex items-center gap-1.5">
+                        {user.name && <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-40 truncate">@{user.name}</p>}
+                        {getStatusBadge(user.id)}
+                      </div>
                     </div>
-                    {/* Aksiyonlar */}
+                    {/* Action */}
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-50 hover:opacity-90 hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all" title="Arkadaş ekle">
-                        <UserPlus size={13} />
-                      </button>
-                      <button className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-50 hover:opacity-90 hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all" title="Davet et">
-                        <Send size={12} />
-                      </button>
+                      {renderAction(user)}
                     </div>
                   </div>
                 ))}
@@ -154,5 +328,30 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
         )}
       </AnimatePresence>
     </div>
+
+    {/* Mini confirm */}
+    <MiniConfirm
+      isOpen={confirm.isOpen}
+      title={
+        confirm.action === 'send' ? 'Arkadaş isteği gönder'
+        : confirm.action === 'cancel' ? 'İsteği iptal et'
+        : 'Arkadaşı kaldır'
+      }
+      description={
+        confirm.action === 'send' ? `${confirm.userName} kullanıcısına istek gönderilsin mi?`
+        : confirm.action === 'cancel' ? `${confirm.userName} kullanıcısına gönderilen istek iptal edilsin mi?`
+        : `${confirm.userName} kullanıcısını arkadaşlarından kaldırmak istiyor musun?`
+      }
+      confirmText={
+        confirm.action === 'send' ? 'Gönder'
+        : confirm.action === 'cancel' ? 'İptal et'
+        : 'Kaldır'
+      }
+      onConfirm={handleConfirm}
+      onCancel={() => setConfirm({ isOpen: false, userId: '', userName: '', action: 'send' })}
+      danger={confirm.action === 'remove'}
+      loading={confirmLoading}
+    />
+    </>
   );
 }

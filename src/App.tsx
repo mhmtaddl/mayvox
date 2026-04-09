@@ -78,6 +78,7 @@ import { usePresence } from './hooks/usePresence';
 import { useModeration } from './hooks/useModeration';
 import { useDucking } from './hooks/useDucking';
 import { useAutoPresence, type AutoStatus } from './hooks/useAutoPresence';
+import { useFriends } from './hooks/useFriends';
 
 // LoginSelectionView kaldırıldı — LoginPasswordView ana giriş ekranı
 import LoginCodeView from './views/LoginCodeView';
@@ -266,6 +267,13 @@ export default function App() {
     isPrimaryAdmin: false,
   });
   const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  // ── Friends v2 ───────────────────────────────────────────────────────────
+  const {
+    friendIds, isFriend, getRelationship,
+    sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend,
+    incomingRequests, loading: friendsLoading,
+  } = useFriends(currentUser.id || undefined);
 
   // ── Channel state ────────────────────────────────────────────────────────
   const [channels, setChannels] = useState<VoiceChannel[]>(CHANNELS);
@@ -2217,6 +2225,16 @@ export default function App() {
     getAvatarText,
     getStatusColor,
     getEffectiveStatus,
+    friendIds,
+    isFriend,
+    getRelationship,
+    sendRequest,
+    acceptRequest,
+    rejectRequest,
+    cancelRequest,
+    removeFriend,
+    incomingRequests,
+    friendsLoading,
   };
 
   const channelContextValue: ChannelContextType = {
