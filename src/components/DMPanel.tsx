@@ -285,7 +285,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
           className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col border border-[var(--theme-accent)]/15"
           style={{
-            background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 40%)',
+            background: 'var(--theme-surface-card, var(--theme-bg))',
             boxShadow: '0 32px 80px rgba(var(--shadow-base),0.5), 0 8px 24px rgba(var(--shadow-base),0.25), 0 0 0 1px rgba(var(--glass-tint),0.04)',
             isolation: 'isolate',
           }}
