@@ -209,26 +209,7 @@ export default function UserProfilePopup({
               )}
             </div>
 
-            {/* Status badge */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
-                !isOnline
-                  ? 'text-[var(--theme-secondary-text)]/60 border-[var(--theme-border)]/50 bg-[var(--theme-surface-card)]/40'
-                  : statusText === 'Aktif'
-                    ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10'
-                    : statusText === 'Pasif'
-                      ? 'text-yellow-400 border-yellow-500/25 bg-yellow-500/10'
-                      : statusText === 'Duymuyor'
-                        ? 'text-red-400 border-red-500/25 bg-red-500/10'
-                        : statusText === 'AFK'
-                          ? 'text-violet-400 border-violet-500/25 bg-violet-500/10'
-                          : 'text-orange-400 border-orange-500/25 bg-orange-500/10'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${statusDotColor}`} />
-                {statusText}
-              </span>
-              {user.age && <span className="text-[10px] font-medium" style={{ color: 'var(--theme-secondary-text)', opacity: 0.5 }}>{user.age} yaş</span>}
-            </div>
+            <div className="mb-4" />
 
             {/* Meta chips */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 mb-4">
