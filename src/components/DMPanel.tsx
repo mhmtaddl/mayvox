@@ -5,7 +5,7 @@ import { formatFullName } from '../lib/formatName';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
-import ConfirmModal from './ConfirmModal';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // ── Conversation Item ───────────────────────────────────────────────────
 
@@ -240,7 +240,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; convKey: string; name: string }>({ isOpen: false, convKey: '', name: '' });
+  const { openConfirm } = useConfirm();
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -320,7 +320,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                             allUsers={allUsers}
                             currentUserId={currentUser.id}
                             onClick={() => dm.openConversation(convo.recipientId)}
-                            onDelete={() => setDeleteConfirm({ isOpen: true, convKey: convo.conversationKey, name: n })}
+                            onDelete={() => openConfirm({
+                              title: 'Sohbeti kaldır',
+                              description: `${n} ile olan sohbet listenden kaldırılsın mı? Karşı tarafın listesini etkilemez.`,
+                              confirmText: 'Kaldır',
+                              cancelText: 'İptal',
+                              danger: true,
+                              onConfirm: () => dm.hideConversation(convo.conversationKey),
+                            })}
                           />
                         </div>
                       );
@@ -334,16 +341,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
       )}
     </AnimatePresence>
 
-    <ConfirmModal
-      isOpen={deleteConfirm.isOpen}
-      title="Sohbeti kaldır"
-      description={`${deleteConfirm.name} ile olan sohbet listenden kaldırılsın mı? Karşı tarafın listesini etkilemez.`}
-      confirmText="Kaldır"
-      cancelText="İptal"
-      onConfirm={() => { dm.hideConversation(deleteConfirm.convKey); setDeleteConfirm({ isOpen: false, convKey: '', name: '' }); }}
-      onCancel={() => setDeleteConfirm({ isOpen: false, convKey: '', name: '' })}
-      danger
-    />
     </>
   );
 }

@@ -8,7 +8,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
-import ConfirmModal from './ConfirmModal';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface Props {
   user: User;
@@ -64,7 +64,7 @@ export default function UserProfilePopup({
   const { isFavorite, toggleFavorite } = useFavoriteFriends(currentUser.id || undefined);
   const userIsFav = isFavorite(user.id);
 
-  const [miniConfirm, setMiniConfirm] = useState<{ isOpen: boolean; action: 'send' | 'remove' | 'cancel' }>({ isOpen: false, action: 'send' });
+  const { openConfirm } = useConfirm();
   const [actionLoading, setActionLoading] = useState(false);
 
   const rel = getRelationship(user.id);
@@ -109,23 +109,28 @@ export default function UserProfilePopup({
     setToastMsg(ok ? 'İstek reddedildi' : 'İşlem başarısız');
   };
 
-  const handleMiniConfirm = async () => {
-    setActionLoading(true);
-    try {
-      if (miniConfirm.action === 'send') {
-        const ok = await sendRequest(user.id);
-        setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'İstek gönderilemedi');
-      } else if (miniConfirm.action === 'cancel') {
-        const ok = await cancelRequest(user.id);
-        setToastMsg(ok ? 'İstek iptal edildi' : 'İşlem başarısız');
-      } else {
-        const ok = await removeFriend(user.id);
-        setToastMsg(ok ? `${userName} arkadaşlarından kaldırıldı` : 'İşlem başarısız');
-      }
-    } finally {
-      setActionLoading(false);
-      setMiniConfirm({ isOpen: false, action: 'send' });
-    }
+  const triggerConfirm = (action: 'send' | 'remove' | 'cancel') => {
+    openConfirm({
+      title: action === 'send' ? 'Arkadaş isteği gönder' : action === 'cancel' ? 'İsteği iptal et' : 'Arkadaşı sil',
+      description: action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
+        : action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
+        : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`,
+      confirmText: action === 'send' ? 'Ekle' : action === 'cancel' ? 'İptal et' : 'Sil',
+      cancelText: 'İptal',
+      danger: action === 'remove',
+      onConfirm: async () => {
+        if (action === 'send') {
+          const ok = await sendRequest(user.id);
+          setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'İstek gönderilemedi');
+        } else if (action === 'cancel') {
+          const ok = await cancelRequest(user.id);
+          setToastMsg(ok ? 'İstek iptal edildi' : 'İşlem başarısız');
+        } else {
+          const ok = await removeFriend(user.id);
+          setToastMsg(ok ? `${userName} arkadaşlarından kaldırıldı` : 'İşlem başarısız');
+        }
+      },
+    });
   };
 
 
@@ -297,7 +302,7 @@ export default function UserProfilePopup({
                 {/* Arkadaş sil */}
                 {rel === 'friend' && (
                   <button
-                    onClick={() => setMiniConfirm({ isOpen: true, action: 'remove' })}
+                    onClick={() => triggerConfirm('remove')}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 opacity-40 hover:opacity-100 hover:bg-red-500/8 transition-all duration-150"
                     title="Arkadaşı sil"
                   >
@@ -306,7 +311,7 @@ export default function UserProfilePopup({
                 )}
                 {rel === 'outgoing' && (
                   <button
-                    onClick={() => setMiniConfirm({ isOpen: true, action: 'cancel' })}
+                    onClick={() => triggerConfirm('cancel')}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 opacity-50 hover:opacity-100 hover:bg-blue-500/8 transition-all duration-150"
                     title="İsteği iptal et"
                   >
@@ -335,7 +340,7 @@ export default function UserProfilePopup({
                 )}
                 {!rel && (
                   <button
-                    onClick={() => setMiniConfirm({ isOpen: true, action: 'send' })}
+                    onClick={() => triggerConfirm('send')}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-60 hover:opacity-100 hover:bg-[var(--theme-accent)]/8 transition-all duration-150"
                     title="Arkadaş isteği gönder"
                   >
@@ -349,30 +354,6 @@ export default function UserProfilePopup({
         </div>
       </motion.div>
 
-      {/* Mini confirm for send/remove/cancel */}
-      <ConfirmModal
-        isOpen={miniConfirm.isOpen}
-        title={
-          miniConfirm.action === 'send' ? 'Arkadaş isteği gönder'
-          : miniConfirm.action === 'cancel' ? 'İsteği iptal et'
-          : 'Arkadaşı sil'
-        }
-        description={
-          miniConfirm.action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
-          : miniConfirm.action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-          : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`
-        }
-        confirmText={
-          miniConfirm.action === 'send' ? 'Ekle'
-          : miniConfirm.action === 'cancel' ? 'İptal et'
-          : 'Sil'
-        }
-        cancelText="İptal"
-        onConfirm={handleMiniConfirm}
-        onCancel={() => setMiniConfirm({ isOpen: false, action: 'send' })}
-        danger={miniConfirm.action === 'remove'}
-        loading={actionLoading}
-      />
     </>
   );
 }

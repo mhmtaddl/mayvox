@@ -11,7 +11,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { useFriendGroups, type FriendGroup } from '../hooks/useFriendGroups';
 import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
 import DeviceBadge from './chat/DeviceBadge';
-import ConfirmModal from './ConfirmModal';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type { User } from '../types';
 
 interface Props {
@@ -95,7 +95,7 @@ export default function FriendsSidebarContent({
 
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null);
   const [friendMenu, setFriendMenu] = useState<{ userId: string; userName: string; x: number; y: number } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; groupId: string; groupName: string }>({ isOpen: false, groupId: '', groupName: '' });
+  const { openConfirm } = useConfirm();
 
   useEffect(() => {
     if (creatingGroup && createInputRef.current) createInputRef.current.focus();
@@ -138,10 +138,18 @@ export default function FriendsSidebarContent({
     setRenameValue('');
   };
 
-  const handleDeleteGroup = async () => {
-    const ok = await deleteGroup(deleteConfirm.groupId);
-    if (ok) setToastMsg(`"${deleteConfirm.groupName}" grubu silindi`);
-    setDeleteConfirm({ isOpen: false, groupId: '', groupName: '' });
+  const triggerDeleteGroup = (groupId: string, groupName: string) => {
+    openConfirm({
+      title: 'Grubu sil',
+      description: `"${groupName}" grubunu silmek istiyor musun? Arkadaşların silinmez, sadece grup kaldırılır.`,
+      confirmText: 'Sil',
+      cancelText: 'İptal',
+      danger: true,
+      onConfirm: async () => {
+        const ok = await deleteGroup(groupId);
+        if (ok) setToastMsg(`"${groupName}" grubu silindi`);
+      },
+    });
   };
 
   const handleAcceptRequest = async (userId: string, name: string) => {
@@ -431,7 +439,7 @@ export default function FriendsSidebarContent({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setDeleteConfirm({ isOpen: true, groupId: group.id, groupName: group.name });
+            triggerDeleteGroup(group.id, group.name);
           }}
           className="opacity-0 group-hover/gh:opacity-40 hover:!opacity-100 hover:text-red-400 transition-all w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
           title="Grubu sil"
@@ -612,7 +620,7 @@ export default function FriendsSidebarContent({
               <button
                 onClick={() => {
                   const g = groups.find(g => g.id === groupMenu.groupId);
-                  setDeleteConfirm({ isOpen: true, groupId: groupMenu.groupId, groupName: g?.name || '' });
+                  triggerDeleteGroup(groupMenu.groupId, g?.name || '');
                   setGroupMenu(null);
                 }}
                 className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-red-400 hover:bg-red-500/8 transition-colors"
@@ -701,17 +709,6 @@ export default function FriendsSidebarContent({
         )}
       </AnimatePresence>
 
-      {/* Delete group confirm */}
-      <ConfirmModal
-        isOpen={deleteConfirm.isOpen}
-        title="Grubu sil"
-        description={`"${deleteConfirm.groupName}" grubunu silmek istiyor musun? Arkadaşların silinmez, sadece grup kaldırılır.`}
-        confirmText="Sil"
-        cancelText="İptal"
-        onConfirm={handleDeleteGroup}
-        onCancel={() => setDeleteConfirm({ isOpen: false, groupId: '', groupName: '' })}
-        danger
-      />
     </>
   );
 }

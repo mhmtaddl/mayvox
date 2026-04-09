@@ -96,6 +96,7 @@ import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -2411,6 +2412,7 @@ export default function App() {
   };
 
   return (
+    <ConfirmProvider>
     <SettingsCtx.Provider value={settingsContextValue}>
       <UserContext.Provider value={userContextValue}>
         <ChannelContext.Provider value={channelContextValue}>
@@ -2565,5 +2567,6 @@ export default function App() {
         </ChannelContext.Provider>
       </UserContext.Provider>
     </SettingsCtx.Provider>
+    </ConfirmProvider>
   );
 }

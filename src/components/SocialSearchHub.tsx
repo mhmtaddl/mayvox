@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
-import ConfirmModal from './ConfirmModal';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface SearchResult {
   id: string;
@@ -30,15 +30,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
 
   const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend } = useUser();
   const { setToastMsg } = useUI();
-
-  // Mini confirm state
-  const [confirm, setConfirm] = useState<{
-    isOpen: boolean;
-    userId: string;
-    userName: string;
-    action: 'send' | 'remove' | 'cancel';
-  }>({ isOpen: false, userId: '', userName: '', action: 'send' });
-  const [confirmLoading, setConfirmLoading] = useState(false);
+  const { openConfirm } = useConfirm();
 
   const isCenter = variant === 'center';
 
@@ -144,23 +136,28 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const displayName = (r: SearchResult) => `${r.firstName} ${r.lastName}`.trim() || r.name || 'Kullanıcı';
   const initials = (r: SearchResult) => `${(r.firstName || r.name || '?')[0]}${(r.lastName || '')[0] || ''}`.toUpperCase();
 
-  const handleConfirm = async () => {
-    setConfirmLoading(true);
-    try {
-      if (confirm.action === 'send') {
-        const ok = await sendRequest(confirm.userId);
-        setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'İstek gönderilemedi');
-      } else if (confirm.action === 'remove') {
-        const ok = await removeFriend(confirm.userId);
-        setToastMsg(ok ? `${confirm.userName} arkadaşlarından kaldırıldı` : 'İşlem başarısız');
-      } else if (confirm.action === 'cancel') {
-        const ok = await cancelRequest(confirm.userId);
-        setToastMsg(ok ? 'İstek iptal edildi' : 'İşlem başarısız');
-      }
-    } finally {
-      setConfirmLoading(false);
-      setConfirm({ isOpen: false, userId: '', userName: '', action: 'send' });
-    }
+  const triggerConfirm = (userId: string, userName: string, action: 'send' | 'remove' | 'cancel') => {
+    openConfirm({
+      title: action === 'send' ? 'Arkadaş isteği gönder' : action === 'cancel' ? 'İsteği iptal et' : 'Arkadaşı sil',
+      description: action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
+        : action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
+        : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`,
+      confirmText: action === 'send' ? 'Ekle' : action === 'cancel' ? 'İptal et' : 'Sil',
+      cancelText: 'İptal',
+      danger: action === 'remove',
+      onConfirm: async () => {
+        if (action === 'send') {
+          const ok = await sendRequest(userId);
+          setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'İstek gönderilemedi');
+        } else if (action === 'remove') {
+          const ok = await removeFriend(userId);
+          setToastMsg(ok ? `${userName} arkadaşlarından kaldırıldı` : 'İşlem başarısız');
+        } else {
+          const ok = await cancelRequest(userId);
+          setToastMsg(ok ? 'İstek iptal edildi' : 'İşlem başarısız');
+        }
+      },
+    });
   };
 
   const handleAccept = async (userId: string, userName: string) => {
@@ -181,7 +178,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       case 'friend':
         return (
           <button
-            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'remove' }); }}
+            onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'remove'); }}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
             title="Arkadaşı sil"
           >
@@ -192,7 +189,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       case 'outgoing':
         return (
           <button
-            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'cancel' }); }}
+            onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'cancel'); }}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold text-blue-400/60 bg-blue-500/8 border border-blue-400/15 hover:border-blue-400/30 transition-all cursor-pointer"
             title="İsteği iptal et"
           >
@@ -224,7 +221,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       default:
         return (
           <button
-            onClick={(e) => { e.stopPropagation(); setConfirm({ isOpen: true, userId: user.id, userName: name, action: 'send' }); }}
+            onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'send'); }}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-50 hover:opacity-90 hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all"
             title="Arkadaş isteği gönder"
           >
@@ -329,29 +326,6 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       </AnimatePresence>
     </div>
 
-    <ConfirmModal
-      isOpen={confirm.isOpen}
-      title={
-        confirm.action === 'send' ? 'Arkadaş isteği gönder'
-        : confirm.action === 'cancel' ? 'İsteği iptal et'
-        : 'Arkadaşı sil'
-      }
-      description={
-        confirm.action === 'send' ? `${confirm.userName} kullanıcısına istek gönderilsin mi?`
-        : confirm.action === 'cancel' ? `${confirm.userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-        : `${confirm.userName} kullanıcısını arkadaşlarından silmek istiyor musun?`
-      }
-      confirmText={
-        confirm.action === 'send' ? 'Ekle'
-        : confirm.action === 'cancel' ? 'İptal et'
-        : 'Sil'
-      }
-      cancelText="İptal"
-      onConfirm={handleConfirm}
-      onCancel={() => setConfirm({ isOpen: false, userId: '', userName: '', action: 'send' })}
-      danger={confirm.action === 'remove'}
-      loading={confirmLoading}
-    />
     </>
   );
 }
