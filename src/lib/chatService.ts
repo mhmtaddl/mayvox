@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase';
+import { handleDmMessage, setDmSocket } from './dmService';
 
 export interface ChatMessage {
   id: string;
@@ -148,6 +149,7 @@ export async function connectChat() {
       switch (msg.type) {
         case 'auth_ok': {
           console.log('[chatService] Auth OK, userId:', msg.userId);
+          setDmSocket(socket);
           handlers.onStatusChange?.('connected');
 
           if (currentRoom && socket.readyState === WebSocket.OPEN) {
@@ -189,7 +191,10 @@ export async function connectChat() {
           break;
 
         default:
-          console.log('[chatService] Bilinmeyen mesaj tipi:', msg.type);
+          // DM event'lerini dmService'e yönlendir
+          if (!handleDmMessage(msg)) {
+            console.log('[chatService] Bilinmeyen mesaj tipi:', msg.type);
+          }
       }
     };
 
@@ -229,6 +234,7 @@ export function disconnectChat() {
   console.log('[chatService] disconnectChat()');
   intentionalClose = true;
   clearReconnectTimer();
+  setDmSocket(null);
 
   if (ws) {
     ws.close();
