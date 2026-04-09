@@ -56,6 +56,7 @@ import type { CardScale } from '../components/chat';
 import { type CardStyle, CARD_STYLES, loadCardStyle, saveCardStyle } from '../components/chat/cardStyles';
 import DeviceBadge from '../components/chat/DeviceBadge';
 import ConfirmModal from '../components/ConfirmModal';
+import DMPanel from '../components/DMPanel';
 import { isCapacitor } from '../lib/platform';
 import { Coffee, Gamepad2, Radio, VolumeX } from 'lucide-react';
 import { ROOM_MODE_LIST, getRoomModeConfig, type RoomMode } from '../lib/roomModeConfig';
@@ -422,6 +423,7 @@ export default function ChatView() {
 
   // Profile popup
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
+  const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
 
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
@@ -906,6 +908,7 @@ export default function ChatView() {
                 <FriendsSidebarContent
                   variant="mobile"
                   onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+                  onDM={(userId) => { setDmTargetUserId(userId); setMobileRightOpen(false); }}
                   isMuted={isMuted}
                   isDeafened={isDeafened}
                 />
@@ -2151,6 +2154,7 @@ export default function ChatView() {
           <FriendsSidebarContent
             variant="desktop"
             onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+            onDM={(userId) => setDmTargetUserId(userId)}
             channels={channels}
             activeChannel={activeChannel}
             inviteStatuses={inviteStatuses}
@@ -2416,6 +2420,7 @@ export default function ChatView() {
               position={profilePopup}
               onClose={() => setProfilePopup(null)}
               onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
+              onDM={(userId) => { setDmTargetUserId(userId); setProfilePopup(null); }}
               canInvite={!!canInvite}
               inviteStatus={inviteStatus}
               onCooldown={onCooldown}
@@ -3034,6 +3039,9 @@ export default function ChatView() {
           handleLogout();
         }}
       />
+
+      {/* DM Panel — floating */}
+      <DMPanel openUserId={dmTargetUserId} onOpenHandled={() => setDmTargetUserId(null)} />
     </div>
   );
 }

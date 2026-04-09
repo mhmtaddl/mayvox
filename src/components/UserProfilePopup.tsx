@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star } from 'lucide-react';
+import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare } from 'lucide-react';
 import type { User } from '../types';
 import { isOutdated } from '../features/update/compareVersions';
 import { formatFullName } from '../lib/formatName';
@@ -15,6 +15,7 @@ interface Props {
   position: { x: number; y: number };
   onClose: () => void;
   onInvite?: () => void;
+  onDM?: (userId: string) => void;
   canInvite: boolean;
   inviteStatus?: string;
   onCooldown: boolean;
@@ -52,7 +53,7 @@ const formatTotalUsage = (minutes: number) => {
 };
 
 export default function UserProfilePopup({
-  user, position, onClose, onInvite, canInvite, inviteStatus,
+  user, position, onClose, onInvite, onDM, canInvite, inviteStatus,
   onCooldown, cooldownRemaining, isMe, currentAppVersion,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -341,6 +342,16 @@ export default function UserProfilePopup({
               >
                 <Star size={10} className={userIsFav ? 'fill-amber-400/70' : ''} />
                 {userIsFav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+              </button>
+            )}
+
+            {/* DM — only for accepted friends */}
+            {!isMe && rel === 'friend' && onDM && (
+              <button
+                onClick={() => { onDM(user.id); onClose(); }}
+                className="w-full py-2 mb-1.5 text-[11px] font-semibold flex items-center justify-center gap-1.5 rounded-lg transition-all text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 border border-[var(--theme-accent)]/15"
+              >
+                <MessageSquare size={12} /> Mesaj gönder
               </button>
             )}
 

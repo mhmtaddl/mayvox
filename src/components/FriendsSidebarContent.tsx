@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
-  UserPlus, FolderPlus, MoreHorizontal, Pencil, Trash2, FolderInput, FolderMinus, Star,
+  UserPlus, FolderPlus, MoreHorizontal, Pencil, Trash2, FolderInput, FolderMinus, Star, MessageSquare,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -17,6 +17,7 @@ import type { User } from '../types';
 interface Props {
   variant: 'desktop' | 'mobile';
   onUserClick: (userId: string, x: number, y: number) => void;
+  onDM?: (userId: string) => void;
   // Desktop-specific props
   channels?: any[];
   activeChannel?: string | null;
@@ -28,7 +29,7 @@ interface Props {
 }
 
 export default function FriendsSidebarContent({
-  variant, onUserClick, channels, activeChannel,
+  variant, onUserClick, onDM, channels, activeChannel,
   inviteStatuses = {}, inviteCooldowns = {}, handleInviteUser,
   isMuted: selfMuted, isDeafened: selfDeafened,
 }: Props) {
@@ -634,6 +635,15 @@ export default function FriendsSidebarContent({
                 <Star size={11} className={isFavorite(friendMenu.userId) ? 'text-amber-400 fill-amber-400' : 'text-[var(--theme-secondary-text)]'} />
                 {isFavorite(friendMenu.userId) ? 'Favorilerden çıkar' : 'Favorilere ekle'}
               </button>
+              {/* DM */}
+              {onDM && (
+                <button
+                  onClick={() => { onDM(friendMenu.userId); setFriendMenu(null); }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+                >
+                  <MessageSquare size={11} className="text-[var(--theme-secondary-text)]" /> Mesaj gönder
+                </button>
+              )}
               <div className="h-px mx-2 my-0.5 bg-[var(--theme-border)]/10" />
               {/* Assign to group */}
               {groups.length > 0 && (

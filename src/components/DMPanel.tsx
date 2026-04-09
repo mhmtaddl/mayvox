@@ -221,7 +221,7 @@ function ChatArea({
 
 // ── Main DM Panel ────────────────────────────────────────────────────────
 
-export default function DMPanel() {
+export default function DMPanel({ openUserId, onOpenHandled }: { openUserId?: string | null; onOpenHandled?: () => void }) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
 
@@ -233,11 +233,19 @@ export default function DMPanel() {
   // Request unread count on mount
   useEffect(() => {
     if (currentUser.id) {
-      // Small delay to wait for WS auth
       const timer = setTimeout(() => dm.loadInitial(), 1500);
       return () => clearTimeout(timer);
     }
   }, [currentUser.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // External open trigger (e.g. from profile popup "Mesaj gönder")
+  useEffect(() => {
+    if (openUserId) {
+      dm.setPanelOpen(true);
+      dm.openConversation(openUserId);
+      onOpenHandled?.();
+    }
+  }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
