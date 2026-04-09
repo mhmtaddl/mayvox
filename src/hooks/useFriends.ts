@@ -77,6 +77,44 @@ export function useFriends(currentUserId: string | undefined) {
     return () => { mountedRef.current = false; };
   }, [fetchFriends, fetchRequests]);
 
+  // ── Supabase Realtime — friend_requests + friendships ───────────────────
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase.channel(`friends:${currentUserId}`)
+      // friend_requests tablosu — INSERT/UPDATE/DELETE
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'friend_requests' },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (!row) return;
+          // Bu kullanıcıyla ilgili mi kontrol et
+          const isRelevant = row.sender_id === currentUserId || row.receiver_id === currentUserId;
+          if (!isRelevant) return;
+          // State'i tam yeniden fetch et — en güvenli yol
+          fetchRequests();
+          // Eğer accepted ise friendships da değişmiş olabilir
+          if (row.status === 'accepted') fetchFriends();
+        }
+      )
+      // friendships tablosu — INSERT/DELETE
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'friendships' },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (!row) return;
+          const isRelevant = row.user_low_id === currentUserId || row.user_high_id === currentUserId;
+          if (!isRelevant) return;
+          fetchFriends();
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUserId, fetchFriends, fetchRequests]);
+
   // ── Derived maps ─────────────────────────────────────────────────────────
   const incomingMap = useMemo(() => {
     const m = new Map<string, FriendRequest>();
