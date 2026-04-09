@@ -2174,12 +2174,12 @@ export default function ChatView() {
             <button
               ref={dmToggleRef}
               onClick={() => setDmPanelOpen(prev => !prev)}
-              className={`relative w-10 h-10 flex items-center justify-center transition-all duration-200 ${dmPanelOpen ? 'text-[var(--theme-accent)] scale-110' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
+              className={`relative w-10 h-10 flex items-center justify-center transition-colors duration-200 ${dmPanelOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
               title="Mesajlar"
             >
-              <MessageSquare size={16} className={`transition-transform duration-200 ${dmPanelOpen ? 'scale-95' : ''}`} />
+              <MessageSquare size={16} />
               {dmUnreadCount > 0 && !dmPanelOpen && (
-                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
+                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--theme-accent)] text-white text-[8px] font-bold flex items-center justify-center">
                   {dmUnreadCount > 99 ? '99+' : dmUnreadCount}
                 </span>
               )}

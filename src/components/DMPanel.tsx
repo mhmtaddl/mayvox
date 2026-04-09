@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MessageSquare, ArrowLeft, Send, X } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
 
-// ── Conversation List ────────────────────────────────────────────────────
+// ── Conversation List Item ──────────────────────────────────────────────
 
 function ConversationItem({
   convo, allUsers, currentUserId, onClick,
@@ -23,6 +23,7 @@ function ConversationItem({
   const avatar = user?.avatar || convo.recipientAvatar || '';
   const hasAvatar = avatar?.startsWith('http');
   const initial = (name?.[0] || '?').toUpperCase();
+  const hasUnread = convo.unreadCount > 0;
 
   const timeStr = convo.lastMessageAt
     ? (() => {
@@ -41,21 +42,40 @@ function ConversationItem({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl transition-all hover:bg-[rgba(var(--glass-tint),0.05)] text-left"
+      className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl transition-all text-left group/conv ${
+        hasUnread
+          ? 'bg-[rgba(var(--theme-accent-rgb),0.04)] hover:bg-[rgba(var(--theme-accent-rgb),0.07)]'
+          : 'hover:bg-[rgba(var(--glass-tint),0.04)]'
+      }`}
     >
-      <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-        {hasAvatar
-          ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          : <span className="text-[11px] font-bold text-[var(--theme-accent)] opacity-60">{initial}</span>}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{name}</span>
-          {timeStr && <span className="text-[9px] text-[var(--theme-secondary-text)]/40 shrink-0">{timeStr}</span>}
+      {/* Avatar */}
+      <div className="relative shrink-0">
+        <div
+          className="w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center"
+          style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}
+        >
+          {hasAvatar
+            ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            : <span className="text-[11px] font-bold text-[var(--theme-accent)] opacity-60">{initial}</span>}
         </div>
-        <div className="flex items-center justify-between gap-1 mt-0.5">
-          <span className="text-[10px] text-[var(--theme-secondary-text)]/50 truncate">{convo.lastMessage || 'Henüz mesaj yok'}</span>
-          {convo.unreadCount > 0 && (
+        {/* Online dot — could be wired to presence later */}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className={`text-[12px] font-semibold truncate ${hasUnread ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)] opacity-80'}`}>{name}</span>
+          {timeStr && (
+            <span className={`text-[9px] shrink-0 ${hasUnread ? 'text-[var(--theme-accent)] font-semibold' : 'text-[var(--theme-secondary-text)]/35'}`}>
+              {timeStr}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <span className={`text-[10px] truncate ${hasUnread ? 'text-[var(--theme-text)]/60 font-medium' : 'text-[var(--theme-secondary-text)]/40'}`}>
+            {convo.lastMessage || 'Henüz mesaj yok'}
+          </span>
+          {hasUnread && (
             <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full bg-[var(--theme-accent)] text-white text-[9px] font-bold flex items-center justify-center">
               {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
             </span>
@@ -72,16 +92,16 @@ function MessageBubble({ msg, isOwn }: { msg: DmMessage; isOwn: boolean }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1.5`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
-        className={`max-w-[80%] px-3 py-1.5 rounded-2xl text-[12px] leading-relaxed ${
+        className={`max-w-[78%] px-3 py-[7px] text-[12px] leading-relaxed ${
           isOwn
-            ? 'bg-[var(--theme-accent)] text-white rounded-br-md'
-            : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-text)] rounded-bl-md'
+            ? 'bg-[var(--theme-accent)] text-white rounded-[16px] rounded-br-[4px]'
+            : 'bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-text)] rounded-[16px] rounded-bl-[4px]'
         }`}
       >
         <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-        <span className={`block text-[8px] mt-0.5 ${isOwn ? 'text-white/50 text-right' : 'text-[var(--theme-secondary-text)]/30'}`}>
+        <span className={`block text-[8px] mt-0.5 leading-none ${isOwn ? 'text-white/40 text-right' : 'text-[var(--theme-secondary-text)]/25'}`}>
           {time}
         </span>
       </div>
@@ -110,17 +130,11 @@ function ChatArea({
   const recipientAvatar = recipient?.avatar || '';
   const hasAvatar = recipientAvatar?.startsWith('http');
 
-  // Auto-scroll on new message
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length]);
 
-  // Focus input
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [recipientId]);
+  useEffect(() => { inputRef.current?.focus(); }, [recipientId]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -130,7 +144,6 @@ function ChatArea({
     inputRef.current?.focus();
   };
 
-  // Group messages by date
   const groupedMessages = useMemo(() => {
     const groups: { date: string; msgs: DmMessage[] }[] = [];
     let lastDate = '';
@@ -143,7 +156,6 @@ function ChatArea({
       if (d.toDateString() === now.toDateString()) dateStr = 'Bugün';
       else if (d.toDateString() === yesterday.toDateString()) dateStr = 'Dün';
       else dateStr = `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'long' })} ${d.getFullYear()}`;
-
       if (dateStr !== lastDate) {
         groups.push({ date: dateStr, msgs: [] });
         lastDate = dateStr;
@@ -156,36 +168,51 @@ function ChatArea({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-[var(--theme-border)]/10 shrink-0">
-        <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors">
+      <div
+        className="flex items-center gap-2.5 px-3 py-2.5 shrink-0"
+        style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.05)' }}
+      >
+        <button
+          onClick={onBack}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+        >
           <ArrowLeft size={15} />
         </button>
-        <div className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+        <div
+          className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center"
+          style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}
+        >
           {hasAvatar
             ? <img src={recipientAvatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             : <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-60">{(recipientName[0] || '?').toUpperCase()}</span>}
         </div>
-        <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate">{recipientName}</span>
+        <div className="min-w-0">
+          <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate block">{recipientName}</span>
+        </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <MessageSquare size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesaj yok</p>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+              <MessageSquare size={20} className="text-[var(--theme-accent)] opacity-40" />
+            </div>
+            <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-50">Henüz mesaj yok</p>
             <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-25 mt-1">Bir mesaj göndererek başla</p>
           </div>
         ) : (
           groupedMessages.map(group => (
             <div key={group.date}>
-              <div className="flex items-center gap-2 my-3">
-                <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
-                <span className="text-[8px] font-semibold text-[var(--theme-secondary-text)]/30 uppercase tracking-wider">{group.date}</span>
-                <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
+              <div className="flex items-center gap-3 my-3">
+                <div className="flex-1 h-px bg-[var(--theme-border)]/6" />
+                <span className="text-[8px] font-semibold text-[var(--theme-secondary-text)]/25 uppercase tracking-wider">{group.date}</span>
+                <div className="flex-1 h-px bg-[var(--theme-border)]/6" />
               </div>
               {group.msgs.map(msg => (
-                <div key={msg.id}><MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} /></div>
+                <div key={msg.id}>
+                  <MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} />
+                </div>
               ))}
             </div>
           ))
@@ -193,8 +220,14 @@ function ChatArea({
       </div>
 
       {/* Input */}
-      <div className="shrink-0 px-3 py-2.5 border-t border-[var(--theme-border)]/10">
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+      <div className="shrink-0 px-3 py-2.5" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
+        <div
+          className="flex items-center gap-2 rounded-xl px-3 py-2 transition-colors"
+          style={{
+            background: 'rgba(var(--glass-tint), 0.04)',
+            border: '1px solid rgba(var(--glass-tint), 0.06)',
+          }}
+        >
           <input
             ref={inputRef}
             type="text"
@@ -208,7 +241,7 @@ function ChatArea({
           <button
             onClick={handleSend}
             disabled={!input.trim()}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-20 disabled:cursor-default"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-15 disabled:cursor-default"
           >
             <Send size={14} />
           </button>
@@ -226,26 +259,20 @@ interface DMPanelProps {
   openUserId?: string | null;
   onOpenHandled?: () => void;
   onUnreadChange?: (count: number) => void;
-  /** Mesaj ikonu butonunun ref'i — outside click'te exclude edilir */
   toggleRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, toggleRef }: DMPanelProps) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
-
-  // Propagate unread count changes
-  useEffect(() => {
-    onUnreadChange?.(dm.totalUnread);
-  }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations when panel opens
+  useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (isOpen) dm.loadInitial();
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // External open trigger (e.g. from profile popup "Mesaj gönder")
   useEffect(() => {
     if (openUserId) {
       dm.openConversation(openUserId);
@@ -264,7 +291,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, toggleRef]);
 
   // ESC to close
   useEffect(() => {
@@ -279,19 +306,20 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
       {isOpen && (
         <motion.div
           ref={panelRef}
-          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          initial={{ opacity: 0, y: 10, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.96 }}
-          transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col border border-[var(--theme-accent)]/15"
+          exit={{ opacity: 0, y: 10, scale: 0.97 }}
+          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+          className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col"
           style={{
             background: 'var(--theme-surface-card, var(--theme-bg))',
-            boxShadow: '0 32px 80px rgba(var(--shadow-base),0.5), 0 8px 24px rgba(var(--shadow-base),0.25), 0 0 0 1px rgba(var(--glass-tint),0.04)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.12)',
+            boxShadow: '0 24px 64px rgba(var(--shadow-base),0.5), 0 8px 20px rgba(var(--shadow-base),0.25)',
             isolation: 'isolate',
           }}
         >
           {/* Top accent line */}
-          <div className="h-px shrink-0" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.3), transparent)' }} />
+          <div className="h-px shrink-0" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.25), transparent)' }} />
 
           {dm.activeRecipientId ? (
             <ChatArea
@@ -305,7 +333,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           ) : (
             <>
               {/* Conversation list header */}
-              <div className="px-4 py-3 shrink-0" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
+              <div className="px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.05)' }}>
                 <h3 className="text-[13px] font-bold text-[var(--theme-text)]">Mesajlar</h3>
               </div>
 
@@ -313,12 +341,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {dm.conversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                    <MessageSquare size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                    <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+                      <MessageSquare size={20} className="text-[var(--theme-accent)] opacity-40" />
+                    </div>
+                    <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-50">Henüz mesajın yok</p>
                     <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-25 mt-1">Bir arkadaşına mesaj göndererek başla</p>
                   </div>
                 ) : (
-                  <div className="p-1.5">
+                  <div className="p-1.5 space-y-0.5">
                     {dm.conversations.map(convo => (
                       <div key={convo.conversationKey}>
                         <ConversationItem
