@@ -35,6 +35,7 @@ export type DmEventHandler = {
   onRead?: (convKey: string, readBy: string, readAt: number) => void;
   onUnreadTotal?: (count: number) => void;
   onError?: (message: string) => void;
+  onConnected?: () => void;
 };
 
 // WebSocket reference — chatService'ten paylaşılacak
@@ -47,6 +48,11 @@ export function setDmHandlers(h: DmEventHandler) {
 
 export function setDmSocket(socket: WebSocket | null) {
   ws = socket;
+}
+
+/** chatService auth_ok sonrası çağırır */
+export function notifyDmConnected() {
+  handlers.onConnected?.();
 }
 
 /**

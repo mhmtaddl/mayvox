@@ -6,7 +6,7 @@
  */
 
 import { supabase } from './supabase';
-import { handleDmMessage, setDmSocket } from './dmService';
+import { handleDmMessage, setDmSocket, notifyDmConnected } from './dmService';
 
 export interface ChatMessage {
   id: string;
@@ -150,6 +150,7 @@ export async function connectChat() {
         case 'auth_ok': {
           console.log('[chatService] Auth OK, userId:', msg.userId);
           setDmSocket(socket);
+          notifyDmConnected();
           handlers.onStatusChange?.('connected');
 
           if (currentRoom && socket.readyState === WebSocket.OPEN) {

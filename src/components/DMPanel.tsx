@@ -11,7 +11,6 @@ import type { DmConversation, DmMessage } from '../lib/dmService';
 function ConversationItem({
   convo, allUsers, currentUserId, onClick,
 }: {
-  key?: React.Key;
   convo: DmConversation;
   allUsers: any[];
   currentUserId: string;
@@ -69,7 +68,7 @@ function ConversationItem({
 
 // ── Message Bubble ───────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isOwn }: { key?: React.Key; msg: DmMessage; isOwn: boolean }) {
+function MessageBubble({ msg, isOwn }: { msg: DmMessage; isOwn: boolean }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -186,7 +185,7 @@ function ChatArea({
                 <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
               </div>
               {group.msgs.map(msg => (
-                <MessageBubble key={msg.id} msg={msg} isOwn={msg.senderId === currentUserId} />
+                <React.Fragment key={msg.id}><MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} /></React.Fragment>
               ))}
             </div>
           ))
@@ -230,13 +229,7 @@ export default function DMPanel({ openUserId, onOpenHandled }: { openUserId?: st
     if (dm.panelOpen) dm.loadInitial();
   }, [dm.panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Request unread count on mount
-  useEffect(() => {
-    if (currentUser.id) {
-      const timer = setTimeout(() => dm.loadInitial(), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [currentUser.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Initial load now happens via onConnected callback in useDM — no setTimeout needed
 
   // External open trigger (e.g. from profile popup "Mesaj gönder")
   useEffect(() => {
@@ -313,13 +306,14 @@ export default function DMPanel({ openUserId, onOpenHandled }: { openUserId?: st
                   ) : (
                     <div className="p-1.5">
                       {dm.conversations.map(convo => (
+                        <React.Fragment key={convo.conversationKey}>
                         <ConversationItem
-                          key={convo.conversationKey}
                           convo={convo}
                           allUsers={allUsers}
                           currentUserId={currentUser.id}
                           onClick={() => dm.openConversation(convo.recipientId)}
                         />
+                        </React.Fragment>
                       ))}
                     </div>
                   )}

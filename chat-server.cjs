@@ -105,6 +105,9 @@ const dmStmt = {
     SET last_message = ?, last_message_at = ?
     WHERE conversation_key = ?
   `),
+  // NOTE: race condition riski düşük — SQLite WAL modu tek writer garantisi verir.
+  // Eğer aynı kullanıcı 2 tab'dan eşzamanlı markRead yaparsa, ikisi de başarılı olur
+  // ama unread_count client-side geçici yanlış gösterebilir. V2'de WebSocket ack ile çözülebilir.
   markRead: dmDb.prepare(`
     UPDATE dm_messages
     SET read_at = ?
@@ -143,9 +146,17 @@ function sendToUser(userId, data) {
   const conns = userConnections.get(userId);
   if (!conns) return;
   const payload = JSON.stringify(data);
+  const dead = [];
   for (const c of conns) {
-    if (c.readyState === WebSocket.OPEN) c.send(payload);
+    if (c.readyState === WebSocket.OPEN) {
+      c.send(payload);
+    } else {
+      dead.push(c);
+    }
   }
+  // Cleanup dead sockets
+  for (const d of dead) conns.delete(d);
+  if (conns.size === 0) userConnections.delete(userId);
 }
 
 async function checkFriendship(userA, userB) {
@@ -596,10 +607,11 @@ wss.on('connection', (ws) => {
         }
 
         const convKey = makeDmKey(userId, recipientId);
+        const [userA, userB] = userId < recipientId ? [userId, recipientId] : [recipientId, userId];
 
         // Conversation yoksa oluştur
         const now = Date.now();
-        dmStmt.createConversation.run(convKey, convKey.split(':')[1], convKey.split(':')[2], now);
+        dmStmt.createConversation.run(convKey, userA, userB, now);
 
         // Mesaj geçmişini yükle
         const messages = dmStmt.getMessages.all(convKey);
@@ -654,11 +666,12 @@ wss.on('connection', (ws) => {
         }
 
         const convKey = makeDmKey(userId, recipientId);
+        const [userA, userB] = userId < recipientId ? [userId, recipientId] : [recipientId, userId];
         const now = Date.now();
         const msgId = generateId();
 
         // Conversation yoksa oluştur
-        dmStmt.createConversation.run(convKey, convKey.split(':')[1], convKey.split(':')[2], now);
+        dmStmt.createConversation.run(convKey, userA, userB, now);
 
         // Mesajı kaydet
         dmStmt.insertMessage.run(msgId, convKey, userId, recipientId, text, now);
@@ -702,8 +715,9 @@ wss.on('connection', (ws) => {
         dmStmt.markRead.run(now, convKey, userId);
 
         // Karşı tarafa bildir
-        const parts = convKey.split(':');
-        const otherId = parts[1] === userId ? parts[2] : parts[1];
+        const conv = dmStmt.getConversation.get(convKey);
+        if (!conv) return;
+        const otherId = conv.user_a_id === userId ? conv.user_b_id : conv.user_a_id;
         sendToUser(otherId, {
           type: 'dm:read',
           conversationKey: convKey,

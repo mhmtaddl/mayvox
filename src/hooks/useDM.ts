@@ -106,6 +106,11 @@ export function useDM(currentUserId: string | undefined) {
       onError: (message) => {
         console.warn('[useDM] Error:', message);
       },
+      onConnected: () => {
+        // WS auth tamamlandı — conversations ve unread yükle
+        dmLoadConversations();
+        dmRequestUnreadTotal();
+      },
     });
   }, [currentUserId]);
 
