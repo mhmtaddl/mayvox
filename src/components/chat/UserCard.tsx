@@ -65,7 +65,6 @@ function UserCardInner({
   isDominant,
   intensity,
   scale: s,
-  adminBorderEffect,
   isBroadcastSpeaker,
   isPttPressed,
   isMuted,
@@ -181,10 +180,6 @@ function UserCardInner({
             user.avatar
           )}
         </div>
-        {user.isAdmin && adminBorderEffect && !isSpeakingActive && (
-          <div className="absolute inset-[-2px] rounded-lg ring-[1.5px] ring-[var(--theme-accent)]/25 animate-pulse pointer-events-none" />
-        )}
-
         <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
       </div>
 
@@ -280,7 +275,6 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (prev.isVoiceBanned !== next.isVoiceBanned) return false;
   if (prev.effectiveStatus !== next.effectiveStatus) return false;
   if (prev.isPttPressed !== next.isPttPressed) return false;
-  if (prev.adminBorderEffect !== next.adminBorderEffect) return false;
   if (prev.isBroadcastSpeaker !== next.isBroadcastSpeaker) return false;
   if (prev.scale !== next.scale) return false;
 

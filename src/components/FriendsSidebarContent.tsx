@@ -38,7 +38,7 @@ export default function FriendsSidebarContent({
     incomingRequests, acceptRequest, rejectRequest,
   } = useUser();
   const { setToastMsg } = useUI();
-  const { avatarBorderColor, adminBorderEffect, showLastSeen } = useSettings();
+  const { avatarBorderColor, showLastSeen } = useSettings();
 
   const {
     groups, memberMap, getGroupForFriend,
@@ -239,9 +239,6 @@ export default function FriendsSidebarContent({
               ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               : user.avatar}
           </div>
-          {user.isAdmin && adminBorderEffect && (
-            <div className="absolute inset-[-3px] rounded-full ring-2 ring-[var(--theme-accent)]/50 animate-pulse pointer-events-none" />
-          )}
           <DeviceBadge platform={user.platform} size={isDesktop ? 12 : 13} className="absolute -bottom-0.5 -right-0.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

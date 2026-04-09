@@ -158,8 +158,7 @@ export default function App() {
   const [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabledState] = useState(() => localStorage.getItem('noiseSuppression') !== 'false');
   const setIsNoiseSuppressionEnabled = (v: boolean) => { localStorage.setItem('noiseSuppression', String(v)); setIsNoiseSuppressionEnabledState(v); };
 
-  const [adminBorderEffect, setAdminBorderEffectState] = useState(() => localStorage.getItem('adminBorderEffect') !== 'false');
-  const setAdminBorderEffect = (v: boolean) => { localStorage.setItem('adminBorderEffect', String(v)); setAdminBorderEffectState(v); };
+
 
   const [noiseThreshold, setNoiseThreshold] = useState<number>(() => {
     const saved = localStorage.getItem('noiseThreshold');
@@ -2303,8 +2302,6 @@ export default function App() {
     setSoundInvite,
     soundInviteVariant,
     setSoundInviteVariant,
-    adminBorderEffect,
-    setAdminBorderEffect,
     audioProfile,
     setAudioProfile,
     autoLeaveEnabled,

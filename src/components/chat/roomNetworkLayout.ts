@@ -17,7 +17,6 @@ export interface RoomNodeData {
   isAdmin?: boolean;
   isModerator?: boolean;
   appVersion?: string;
-  adminBorderEffect?: boolean;
   onClick?: (e: any) => void;
   onDoubleClick?: () => void;
   onContextMenu?: (e: any) => void;

@@ -128,7 +128,6 @@ export default function ChatView() {
     avatarBorderColor,
     soundInvite,
     soundInviteVariant,
-    adminBorderEffect,
     voiceMode,
     setVoiceMode,
     audioProfile: _audioProfile,
@@ -1894,7 +1893,6 @@ export default function ChatView() {
                       isDominant: isSpeakingActive && user.id === dominantSpeakerId,
                       intensity: getIntensity(user),
                       scale: scaleConfig,
-                      adminBorderEffect,
                       isBroadcastSpeaker: currentChannel?.mode === 'broadcast' && (() => {
                         const sp = currentChannel.speakerIds || [];
                         return sp.length > 0 ? sp.includes(user.id) : currentChannel.ownerId === user.id;
@@ -1940,7 +1938,6 @@ export default function ChatView() {
                                   isAdmin: user.isAdmin,
                                   isModerator: user.isModerator,
                                   appVersion: user.appVersion,
-                                  adminBorderEffect,
                                   onClick: (e: React.MouseEvent) => { e.stopPropagation(); setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); },
                                   onDoubleClick: () => { if (!isMe && currentUser.isAdmin) handleKickUser(user.id); },
                                   onContextMenu: (e: React.MouseEvent) => { if (!isMe && currentUser.isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) handleKickUser(user.id); } },

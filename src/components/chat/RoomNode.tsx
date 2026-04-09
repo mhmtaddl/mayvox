@@ -14,7 +14,7 @@ interface Props {
 export default function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   const {
     avatar, firstName, lastName, isSpeaking, isMuted, isDeafened,
-    platform, isAdmin, isModerator, adminBorderEffect,
+    platform, isAdmin, isModerator,
     onClick, onDoubleClick, onContextMenu,
   } = node;
 
@@ -94,9 +94,6 @@ export default function RoomNode({ node, isCenter, cardStyle = 'current' }: Prop
             />
           )}
 
-          {isAdmin && adminBorderEffect && !isSpeaking && (
-            <div className="absolute inset-[-2px] ring-1 ring-[var(--theme-accent)]/12 animate-pulse pointer-events-none" style={{ borderRadius: '24%' }} />
-          )}
         </div>
 
         {/* Name + role */}

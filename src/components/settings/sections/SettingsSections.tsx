@@ -3,15 +3,13 @@ import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react
 import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
-import { useUser } from '../../../contexts/UserContext';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
 import { themes, themeOrder, backgroundPresets } from '../../../themes';
 import { isMobile } from '../../../lib/platform';
 
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { currentTheme, setCurrentTheme, adminBorderEffect, setAdminBorderEffect, activeBackground, setActiveBackground } = useSettings();
-  const { currentUser } = useUser();
+  const { currentTheme, setCurrentTheme, activeBackground, setActiveBackground } = useSettings();
 
   return (
     <CardSection icon={<Recycle size={12} />} title="Görünüm">
@@ -99,15 +97,6 @@ export function AppearanceSection() {
         </div>
       </div>
 
-      {/* Admin border effect */}
-      {currentUser.isAdmin && (
-        <div className="flex items-center gap-3 mt-3 md:mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Yönetici Çerçeve Efekti</p>
-          </div>
-          <Toggle checked={adminBorderEffect} onChange={() => setAdminBorderEffect(!adminBorderEffect)} tooltip="Admin avatarlarında parlama efekti" />
-        </div>
-      )}
     </CardSection>
   );
 }

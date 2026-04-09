@@ -89,8 +89,6 @@ export interface SettingsContextType {
   setSoundInvite: (v: boolean) => void;
   soundInviteVariant: 1 | 2;
   setSoundInviteVariant: (v: 1 | 2) => void;
-  adminBorderEffect: boolean;
-  setAdminBorderEffect: (v: boolean) => void;
   audioProfile: AudioProfile;
   setAudioProfile: (v: AudioProfile) => void;
   autoLeaveEnabled: boolean;

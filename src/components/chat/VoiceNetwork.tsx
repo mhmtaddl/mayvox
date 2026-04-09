@@ -37,7 +37,7 @@ function VoiceNode({
   isSpeaking: boolean;
   intensity: number;
 }) {
-  const { user, isMe, isPttPressed, isMuted, isDeafened, isVoiceBanned, adminBorderEffect } = props;
+  const { user, isMe, isPttPressed, isMuted, isDeafened, isVoiceBanned } = props;
   const v = computeSpeakingVisuals(isSpeaking, intensity, isMe, false);
   const micOff = isMe ? isMuted : (!!user.selfMuted || !!user.isMuted);
   const deafened = isMe ? isDeafened : !!user.selfDeafened;
@@ -114,7 +114,7 @@ function CenterNode({
   isSpeaking: boolean;
   intensity: number;
 }) {
-  const { user, isMe, isPttPressed, isMuted, isDeafened, isVoiceBanned, adminBorderEffect } = props;
+  const { user, isMe, isPttPressed, isMuted, isDeafened, isVoiceBanned } = props;
   const v = computeSpeakingVisuals(isSpeaking, intensity, isMe, true);
   const micOff = isMe ? isMuted : (!!user.selfMuted || !!user.isMuted);
   const deafened = isMe ? isDeafened : !!user.selfDeafened;
@@ -174,10 +174,6 @@ function CenterNode({
           />
         )}
 
-        {/* Admin ring */}
-        {user.isAdmin && adminBorderEffect && !isSpeaking && (
-          <div className="absolute inset-[-4px] rounded-full ring-[1.5px] ring-[var(--theme-accent)]/20 animate-pulse pointer-events-none" />
-        )}
       </div>
 
       {/* Name */}

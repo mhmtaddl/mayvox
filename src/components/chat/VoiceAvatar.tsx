@@ -24,7 +24,6 @@ function VoiceAvatarInner({
   isSpeakingActive,
   isDominant,
   intensity,
-  adminBorderEffect,
   isPttPressed,
   isMuted,
   isDeafened,
@@ -133,11 +132,6 @@ function VoiceAvatarInner({
           )}
         </motion.div>
 
-        {/* Admin pulse ring */}
-        {user.isAdmin && adminBorderEffect && !isSpeakingActive && (
-          <div className="absolute inset-[-3px] rounded-full ring-[1.5px] ring-[var(--theme-accent)]/20 animate-pulse pointer-events-none" />
-        )}
-
         {/* Speaking outer pulse ring */}
         {isSpeakingActive && (
           <motion.div
@@ -228,7 +222,6 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (prev.isDeafened !== next.isDeafened) return false;
   if (prev.isVoiceBanned !== next.isVoiceBanned) return false;
   if (prev.isPttPressed !== next.isPttPressed) return false;
-  if (prev.adminBorderEffect !== next.adminBorderEffect) return false;
   const pu = prev.user, nu = next.user;
   if (pu.id !== nu.id) return false;
   if (pu.isSpeaking !== nu.isSpeaking) return false;
