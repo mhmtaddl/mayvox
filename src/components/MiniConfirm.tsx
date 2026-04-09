@@ -63,7 +63,11 @@ export default function MiniConfirm({
             <div className="flex gap-2 px-4 pb-4">
               <button
                 onClick={onCancel}
-                className="flex-1 py-2 text-[11px] font-semibold rounded-lg transition-colors text-red-400 hover:bg-red-500/10"
+                className={`flex-1 py-2 text-[11px] font-semibold rounded-lg transition-colors ${
+                  danger
+                    ? 'text-emerald-400 hover:bg-emerald-500/10'
+                    : 'text-red-400 hover:bg-red-500/10'
+                }`}
               >
                 {cancelText}
               </button>
@@ -73,7 +77,7 @@ export default function MiniConfirm({
                 className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all disabled:opacity-40 ${
                   danger
                     ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20'
-                    : 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/10 hover:bg-[var(--theme-accent)]/20'
+                    : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
                 }`}
               >
                 {loading ? (

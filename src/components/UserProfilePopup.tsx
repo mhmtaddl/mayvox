@@ -139,61 +139,6 @@ export default function UserProfilePopup({
     }
   };
 
-  const renderFriendAction = () => {
-    if (isMe) return null;
-
-    switch (rel) {
-      case 'friend':
-        return (
-          <button
-            onClick={() => setMiniConfirm({ isOpen: true, action: 'remove' })}
-            className="w-full py-2 text-[11px] font-semibold flex items-center justify-center gap-1.5 rounded-lg transition-all text-red-400/70 hover:text-red-400 hover:bg-red-500/8 border border-red-500/15"
-          >
-            <UserMinus size={12} /> Arkadaşı sil
-          </button>
-        );
-
-      case 'outgoing':
-        return (
-          <button
-            onClick={() => setMiniConfirm({ isOpen: true, action: 'cancel' })}
-            className="w-full py-2 text-[11px] font-semibold flex items-center justify-center gap-1.5 rounded-lg transition-all text-blue-400/60 border border-blue-400/15 hover:border-blue-400/30"
-          >
-            <Clock size={11} /> İstek gönderildi
-          </button>
-        );
-
-      case 'incoming':
-        return (
-          <div className="flex gap-2 w-full">
-            <button
-              onClick={handleAccept}
-              disabled={actionLoading}
-              className="flex-1 py-2 text-[11px] font-bold flex items-center justify-center gap-1 rounded-lg transition-all text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/15 disabled:opacity-40"
-            >
-              <Check size={12} strokeWidth={2.5} /> Kabul et
-            </button>
-            <button
-              onClick={handleReject}
-              disabled={actionLoading}
-              className="flex-1 py-2 text-[11px] font-semibold flex items-center justify-center gap-1 rounded-lg transition-all text-red-400/60 hover:text-red-400 hover:bg-red-500/8 border border-red-500/15 disabled:opacity-40"
-            >
-              <X size={12} /> Reddet
-            </button>
-          </div>
-        );
-
-      default:
-        return (
-          <button
-            onClick={() => setMiniConfirm({ isOpen: true, action: 'send' })}
-            className="w-full py-2 text-[11px] font-semibold flex items-center justify-center gap-1.5 rounded-lg transition-all text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 border border-[var(--theme-accent)]/15"
-          >
-            <UserPlus size={12} /> Arkadaş isteği gönder
-          </button>
-        );
-    }
-  };
 
   return (
     <>
@@ -327,36 +272,88 @@ export default function UserProfilePopup({
               )}
             </div>
 
-            {/* Favorite toggle — only for accepted friends */}
-            {!isMe && rel === 'friend' && (
-              <button
-                onClick={async () => {
-                  const ok = await toggleFavorite(user.id);
-                  if (ok) setToastMsg(userIsFav ? `${userName} favorilerden çıkarıldı` : `${userName} favorilere eklendi`);
-                }}
-                className={`w-full py-1.5 mb-1.5 text-[10px] font-medium flex items-center justify-center gap-1.5 rounded-lg transition-all ${
-                  userIsFav
-                    ? 'text-amber-400/70 hover:bg-amber-400/8 border border-amber-400/15'
-                    : 'text-[var(--theme-secondary-text)]/40 hover:text-amber-400/70 hover:bg-amber-400/6 border border-transparent'
-                }`}
-              >
-                <Star size={10} className={userIsFav ? 'fill-amber-400/70' : ''} />
-                {userIsFav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-              </button>
-            )}
+            {/* Quick actions — ikon satırı */}
+            {!isMe && (
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                {/* Favori — sadece arkadaşlar */}
+                {rel === 'friend' && (
+                  <button
+                    onClick={async () => {
+                      const ok = await toggleFavorite(user.id);
+                      if (ok) setToastMsg(userIsFav ? `${userName} favorilerden çıkarıldı` : `${userName} favorilere eklendi`);
+                    }}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                      userIsFav
+                        ? 'text-amber-400 hover:bg-amber-400/10'
+                        : 'text-[var(--theme-secondary-text)] opacity-40 hover:opacity-80 hover:text-amber-400 hover:bg-amber-400/8'
+                    }`}
+                    title={userIsFav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+                  >
+                    <Star size={14} className={userIsFav ? 'fill-current' : ''} />
+                  </button>
+                )}
 
-            {/* DM — only for accepted friends */}
-            {!isMe && rel === 'friend' && onDM && (
-              <button
-                onClick={() => { onDM(user.id); onClose(); }}
-                className="w-full py-2 mb-1.5 text-[11px] font-semibold flex items-center justify-center gap-1.5 rounded-lg transition-all text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 border border-[var(--theme-accent)]/15"
-              >
-                <MessageSquare size={12} /> Mesaj gönder
-              </button>
-            )}
+                {/* DM — sadece arkadaşlar */}
+                {rel === 'friend' && onDM && (
+                  <button
+                    onClick={() => { onDM(user.id); onClose(); }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-60 hover:opacity-100 hover:bg-[var(--theme-accent)]/8 transition-all duration-150"
+                    title="Mesaj gönder"
+                  >
+                    <MessageSquare size={14} />
+                  </button>
+                )}
 
-            {/* Friend action */}
-            {renderFriendAction()}
+                {/* Arkadaş ekle/sil */}
+                {rel === 'friend' && (
+                  <button
+                    onClick={() => setMiniConfirm({ isOpen: true, action: 'remove' })}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 opacity-40 hover:opacity-100 hover:bg-red-500/8 transition-all duration-150"
+                    title="Arkadaşı sil"
+                  >
+                    <UserMinus size={14} />
+                  </button>
+                )}
+                {rel === 'outgoing' && (
+                  <button
+                    onClick={() => setMiniConfirm({ isOpen: true, action: 'cancel' })}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 opacity-50 hover:opacity-100 hover:bg-blue-500/8 transition-all duration-150"
+                    title="İsteği iptal et"
+                  >
+                    <Clock size={14} />
+                  </button>
+                )}
+                {rel === 'incoming' && (
+                  <>
+                    <button
+                      onClick={handleAccept}
+                      disabled={actionLoading}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-30"
+                      title="Kabul et"
+                    >
+                      <Check size={15} strokeWidth={2.5} />
+                    </button>
+                    <button
+                      onClick={handleReject}
+                      disabled={actionLoading}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 opacity-50 hover:opacity-100 hover:bg-red-500/8 transition-all duration-150 disabled:opacity-30"
+                      title="Reddet"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                )}
+                {!rel && (
+                  <button
+                    onClick={() => setMiniConfirm({ isOpen: true, action: 'send' })}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-60 hover:opacity-100 hover:bg-[var(--theme-accent)]/8 transition-all duration-150"
+                    title="Arkadaş isteği gönder"
+                  >
+                    <UserPlus size={14} />
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Invite action */}
             {canInvite && <div className="mt-2">{renderInvite()}</div>}
@@ -370,17 +367,17 @@ export default function UserProfilePopup({
         title={
           miniConfirm.action === 'send' ? 'Arkadaş isteği gönder'
           : miniConfirm.action === 'cancel' ? 'İsteği iptal et'
-          : 'Arkadaşı kaldır'
+          : 'Arkadaşı sil'
         }
         description={
           miniConfirm.action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
           : miniConfirm.action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-          : `${userName} kullanıcısını arkadaşlarından kaldırmak istiyor musun?`
+          : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`
         }
         confirmText={
-          miniConfirm.action === 'send' ? 'Gönder'
+          miniConfirm.action === 'send' ? 'Ekle'
           : miniConfirm.action === 'cancel' ? 'İptal et'
-          : 'Kaldır'
+          : 'Sil'
         }
         onConfirm={handleMiniConfirm}
         onCancel={() => setMiniConfirm({ isOpen: false, action: 'send' })}
