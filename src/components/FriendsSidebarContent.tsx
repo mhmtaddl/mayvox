@@ -267,7 +267,9 @@ export default function FriendsSidebarContent({
           <div className="flex items-center gap-1 mt-0.5">
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-            <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText || 'Aktif')}`}>{user.statusText}</span>
+            {user.statusText && user.statusText !== 'Aktif' && (
+              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText)}`}>{user.statusText}</span>
+            )}
           </div>
         </div>
         {/* Desktop invite button */}
