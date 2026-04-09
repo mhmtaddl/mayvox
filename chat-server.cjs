@@ -108,6 +108,17 @@ const dmStmt = {
     ORDER BY created_at ASC
     LIMIT 200
   `),
+  getMessagesAfterHidden: dmDb.prepare(`
+    SELECT m.* FROM dm_messages m
+    WHERE m.conversation_key = ?
+      AND m.created_at > COALESCE(
+        (SELECT h.hidden_at FROM dm_conversation_hidden h
+         WHERE h.user_id = ? AND h.conversation_key = ?),
+        0
+      )
+    ORDER BY m.created_at ASC
+    LIMIT 200
+  `),
   insertMessage: dmDb.prepare(`
     INSERT INTO dm_messages (id, conversation_key, sender_id, receiver_id, text, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -637,7 +648,7 @@ wss.on('connection', (ws) => {
         dmStmt.createConversation.run(convKey, userA, userB, now);
 
         // Mesaj geçmişini yükle
-        const messages = dmStmt.getMessages.all(convKey);
+        const messages = dmStmt.getMessagesAfterHidden.all(convKey, userId, convKey);
 
         // Okunmamış mesajları okundu işaretle
         dmStmt.markRead.run(now, convKey, userId);
