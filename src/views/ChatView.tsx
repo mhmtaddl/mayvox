@@ -427,6 +427,7 @@ export default function ChatView() {
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+  const dmToggleRef = useRef<HTMLButtonElement>(null);
 
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
@@ -2171,6 +2172,7 @@ export default function ChatView() {
           <div className="shrink-0 px-3 py-3 flex items-center justify-center gap-2">
             {/* Mesaj — DM panel toggle */}
             <button
+              ref={dmToggleRef}
               onClick={() => setDmPanelOpen(prev => !prev)}
               className={`relative w-10 h-10 flex items-center justify-center transition-all duration-200 ${dmPanelOpen ? 'text-[var(--theme-accent)] scale-110' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
               title="Mesajlar"
@@ -3064,6 +3066,7 @@ export default function ChatView() {
         openUserId={dmTargetUserId}
         onOpenHandled={() => setDmTargetUserId(null)}
         onUnreadChange={setDmUnreadCount}
+        toggleRef={dmToggleRef}
       />
     </div>
   );

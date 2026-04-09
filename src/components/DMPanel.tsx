@@ -226,9 +226,11 @@ interface DMPanelProps {
   openUserId?: string | null;
   onOpenHandled?: () => void;
   onUnreadChange?: (count: number) => void;
+  /** Mesaj ikonu butonunun ref'i — outside click'te exclude edilir */
+  toggleRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange }: DMPanelProps) {
+export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, toggleRef }: DMPanelProps) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
 
@@ -255,13 +257,13 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+      const target = e.target as Node;
+      if (panelRef.current?.contains(target)) return;
+      if (toggleRef?.current?.contains(target)) return;
+      onClose();
     };
-    // Delay to avoid catching the same click that opened the panel
-    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 50);
-    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, onClose]);
 
   // ESC to close
@@ -283,9 +285,9 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
           className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col"
           style={{
-            background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)',
-            border: '1px solid rgba(var(--glass-tint), 0.06)',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(var(--glass-tint),0.04)',
+            background: 'var(--theme-bg)',
+            border: '1px solid rgba(var(--glass-tint), 0.08)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(var(--glass-tint),0.04)',
           }}
         >
           {dm.activeRecipientId ? (
