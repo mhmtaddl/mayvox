@@ -105,9 +105,10 @@ const dmStmt = {
     SET last_message = ?, last_message_at = ?
     WHERE conversation_key = ?
   `),
-  // NOTE: race condition riski düşük — SQLite WAL modu tek writer garantisi verir.
-  // Eğer aynı kullanıcı 2 tab'dan eşzamanlı markRead yaparsa, ikisi de başarılı olur
-  // ama unread_count client-side geçici yanlış gösterebilir. V2'de WebSocket ack ile çözülebilir.
+  // NOTE: SQLite WAL seri yazma garantisi verir — DB seviyesinde race yok.
+  // Uygulama seviyesinde: aynı kullanıcı 2 tab'dan eşzamanlı markRead yaparsa,
+  // her iki UPDATE başarılı olur (idempotent, read_at IS NULL koşulu korur).
+  // Client-side unread sayacı geçici yanlış gösterebilir — V2'de ack ile çözülebilir.
   markRead: dmDb.prepare(`
     UPDATE dm_messages
     SET read_at = ?
@@ -149,12 +150,15 @@ function sendToUser(userId, data) {
   const dead = [];
   for (const c of conns) {
     if (c.readyState === WebSocket.OPEN) {
-      c.send(payload);
+      try {
+        c.send(payload);
+      } catch {
+        dead.push(c);
+      }
     } else {
       dead.push(c);
     }
   }
-  // Cleanup dead sockets
   for (const d of dead) conns.delete(d);
   if (conns.size === 0) userConnections.delete(userId);
 }
@@ -712,12 +716,12 @@ wss.on('connection', (ws) => {
 
       try {
         const now = Date.now();
-        dmStmt.markRead.run(now, convKey, userId);
+        const changes = dmStmt.markRead.run(now, convKey, userId);
+        if (changes.changes === 0) return; // hiç güncelleme olmadıysa bildirim gönderme
 
-        // Karşı tarafa bildir
-        const conv = dmStmt.getConversation.get(convKey);
-        if (!conv) return;
-        const otherId = conv.user_a_id === userId ? conv.user_b_id : conv.user_a_id;
+        // convKey = dm:<lowId>:<highId> — otherId hesapla
+        const parts = convKey.split(':');
+        const otherId = parts[1] === userId ? parts[2] : parts[1];
         sendToUser(otherId, {
           type: 'dm:read',
           conversationKey: convKey,

@@ -185,7 +185,7 @@ function ChatArea({
                 <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
               </div>
               {group.msgs.map(msg => (
-                <React.Fragment key={msg.id}><MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} /></React.Fragment>
+                <div key={msg.id}><MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} /></div>
               ))}
             </div>
           ))
@@ -320,14 +320,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 ) : (
                   <div className="p-1.5">
                     {dm.conversations.map(convo => (
-                      <React.Fragment key={convo.conversationKey}>
-                      <ConversationItem
-                        convo={convo}
-                        allUsers={allUsers}
-                        currentUserId={currentUser.id}
-                        onClick={() => dm.openConversation(convo.recipientId)}
-                      />
-                      </React.Fragment>
+                      <div key={convo.conversationKey}>
+                        <ConversationItem
+                          convo={convo}
+                          allUsers={allUsers}
+                          currentUserId={currentUser.id}
+                          onClick={() => dm.openConversation(convo.recipientId)}
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
