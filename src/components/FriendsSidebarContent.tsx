@@ -283,7 +283,7 @@ export default function FriendsSidebarContent({
               disabled={onCooldown}
               onClick={(e) => { e.stopPropagation(); handleInviteUser(user.id); }}
               title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
-              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-white border border-[var(--theme-accent)]/30 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] border border-[var(--theme-accent)]/30 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {onCooldown ? `${remaining}s` : 'Davet'}
             </button>

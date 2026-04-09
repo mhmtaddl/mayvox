@@ -87,8 +87,8 @@ export default function UserProfilePopup({
 
   const isOnline = user.status === 'online';
   const statusText = isOnline ? (user.statusText || 'Aktif') : 'Çevrimdışı';
-  const statusColor = !isOnline ? 'text-white/40' : statusText === 'Aktif' ? 'text-emerald-400' : statusText === 'Pasif' ? 'text-yellow-400' : statusText === 'Duymuyor' ? 'text-red-400' : statusText === 'AFK' ? 'text-violet-400' : 'text-orange-400';
-  const statusDotColor = !isOnline ? 'bg-white/20' : statusText === 'Aktif' ? 'bg-emerald-500' : statusText === 'Pasif' ? 'bg-yellow-500' : statusText === 'Duymuyor' ? 'bg-red-500' : statusText === 'AFK' ? 'bg-violet-500' : 'bg-orange-500';
+  const statusColor = !isOnline ? 'text-[var(--theme-secondary-text)]/50' : statusText === 'Aktif' ? 'text-emerald-400' : statusText === 'Pasif' ? 'text-yellow-400' : statusText === 'Duymuyor' ? 'text-red-400' : statusText === 'AFK' ? 'text-violet-400' : 'text-orange-400';
+  const statusDotColor = !isOnline ? 'bg-[var(--theme-secondary-text)]/30' : statusText === 'Aktif' ? 'bg-emerald-500' : statusText === 'Pasif' ? 'bg-yellow-500' : statusText === 'Duymuyor' ? 'bg-red-500' : statusText === 'AFK' ? 'bg-violet-500' : 'bg-orange-500';
 
   const hasVersion = !!user.appVersion;
   const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
@@ -253,7 +253,7 @@ export default function UserProfilePopup({
                 ) : user.avatar ? (
                   <span className="text-[28px] font-bold" style={{ color: 'var(--theme-text)', opacity: 0.6 }}>{user.avatar}</span>
                 ) : (
-                  <UserIcon size={36} className="text-white/20" />
+                  <UserIcon size={36} className="text-[var(--theme-secondary-text)] opacity-30" />
                 )}
               </div>
               {/* Status dot */}
@@ -263,7 +263,7 @@ export default function UserProfilePopup({
                   <div className={`absolute inset-0 rounded-full ${statusDotColor} animate-ping opacity-40`} />
                 )}
               </div>
-              {isMe && <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-accent)] text-white rounded-full leading-none shadow-sm">SEN</span>}
+              {isMe && <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold px-1.5 py-0.5 bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] rounded-full leading-none shadow-sm">SEN</span>}
             </div>
 
             {/* Name + role */}

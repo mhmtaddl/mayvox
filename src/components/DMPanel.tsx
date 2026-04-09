@@ -68,13 +68,13 @@ function ConversationItem({
         </div>
       </button>
 
-      {/* Delete */}
+      {/* Delete — sağ alt, hover'da görünür */}
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover/conv:opacity-50 hover:!opacity-100 hover:bg-red-500/10 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all duration-150"
+        className="absolute bottom-2.5 right-3 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover/conv:opacity-40 hover:!opacity-100 hover:bg-red-500/10 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all duration-150"
         title="Sohbeti kaldır"
       >
-        <Trash2 size={12} />
+        <Trash2 size={11} />
       </button>
     </div>
   );

@@ -758,7 +758,7 @@ export default function ChatView() {
                         disabled={isConnecting}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group disabled:cursor-not-allowed ${
                           activeChannel === channel.id
-                            ? `bg-[var(--theme-accent)] text-white shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
+                            ? `bg-[var(--theme-accent)] text-[var(--theme-badge-text)] shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}`
                             : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'
                         }`}
                       >
@@ -1212,7 +1212,7 @@ export default function ChatView() {
                     <button
                       disabled={onCooldown}
                       onClick={() => { handleInviteUser(uid); setUserActionMenu(null); }}
-                      className="w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white active:scale-95 bg-white/[0.03] border border-white/[0.06] hover:border-transparent hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.2)]"
+                      className="w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] active:scale-95 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] hover:border-transparent hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.2)]"
                     >
                       Davet Et
                     </button>
@@ -1408,7 +1408,7 @@ export default function ChatView() {
                   }
                   setContextMenu(null);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] rounded-lg transition-colors"
               >
                 <Settings size={14} />
                 Oda Ayarları
@@ -1416,7 +1416,7 @@ export default function ChatView() {
               {channels.find(c => c.id === contextMenu.channelId)?.password ? (
                 <button
                   onClick={() => handleRemovePassword(contextMenu.channelId)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] rounded-lg transition-colors"
                 >
                   <Lock size={14} />
                   Oda Şifresini Kaldır
@@ -1427,7 +1427,7 @@ export default function ChatView() {
                     setPasswordModal({ type: 'set', channelId: contextMenu.channelId });
                     setContextMenu(null);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] rounded-lg transition-colors"
                 >
                   <Lock size={14} />
                   Odayı Şifrele
@@ -2260,7 +2260,7 @@ export default function ChatView() {
                 <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Giriş Cihazı</h4>
                 <div className="space-y-1">
                   {inputDevices.map(device => (
-                    <button key={device.deviceId} onClick={() => { setSelectedInput(device.deviceId); setShowInputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedInput === device.deviceId ? 'bg-[var(--theme-accent)] text-white' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
+                    <button key={device.deviceId} onClick={() => { setSelectedInput(device.deviceId); setShowInputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedInput === device.deviceId ? 'bg-[var(--theme-accent)] text-[var(--theme-badge-text)]' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
                       <span className="truncate">{device.label || `Mikrofon ${device.deviceId.slice(0, 5)}`}</span>
                       {selectedInput === device.deviceId && <Check size={12} className="shrink-0" />}
                     </button>
@@ -2292,7 +2292,7 @@ export default function ChatView() {
                 <h4 className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-widest mb-2">Çıkış Cihazı</h4>
                 <div className="space-y-1">
                   {outputDevices.map(device => (
-                    <button key={device.deviceId} onClick={() => { setSelectedOutput(device.deviceId); setShowOutputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedOutput === device.deviceId ? 'bg-[var(--theme-accent)] text-white' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
+                    <button key={device.deviceId} onClick={() => { setSelectedOutput(device.deviceId); setShowOutputSettings(false); }} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${selectedOutput === device.deviceId ? 'bg-[var(--theme-accent)] text-[var(--theme-badge-text)]' : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]'}`}>
                       <span className="truncate">{device.label || `Hoparlör ${device.deviceId.slice(0, 5)}`}</span>
                       {selectedOutput === device.deviceId && <Check size={12} className="shrink-0" />}
                     </button>
@@ -2716,7 +2716,7 @@ export default function ChatView() {
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
                           selectedOutput === device.deviceId
-                            ? 'bg-[var(--theme-accent)] text-white'
+                            ? 'bg-[var(--theme-accent)] text-[var(--theme-badge-text)]'
                             : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] hover:text-[var(--theme-text)]'
                         }`}
                       >
@@ -2787,7 +2787,7 @@ export default function ChatView() {
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
                           selectedInput === device.deviceId
-                            ? 'bg-[var(--theme-accent)] text-white'
+                            ? 'bg-[var(--theme-accent)] text-[var(--theme-badge-text)]'
                             : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-sidebar)] hover:text-[var(--theme-text)]'
                         }`}
                       >
