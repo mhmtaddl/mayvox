@@ -220,109 +220,117 @@ function ChatArea({
 
 // ── Main DM Panel ────────────────────────────────────────────────────────
 
-export default function DMPanel({ openUserId, onOpenHandled }: { openUserId?: string | null; onOpenHandled?: () => void }) {
+interface DMPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  openUserId?: string | null;
+  onOpenHandled?: () => void;
+  onUnreadChange?: (count: number) => void;
+}
+
+export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange }: DMPanelProps) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
 
+  // Propagate unread count changes
+  useEffect(() => {
+    onUnreadChange?.(dm.totalUnread);
+  }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+  const panelRef = useRef<HTMLDivElement>(null);
+
   // Load conversations when panel opens
   useEffect(() => {
-    if (dm.panelOpen) dm.loadInitial();
-  }, [dm.panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Initial load now happens via onConnected callback in useDM — no setTimeout needed
+    if (isOpen) dm.loadInitial();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // External open trigger (e.g. from profile popup "Mesaj gönder")
   useEffect(() => {
     if (openUserId) {
-      dm.setPanelOpen(true);
       dm.openConversation(openUserId);
       onOpenHandled?.();
     }
   }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Click outside to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    // Delay to avoid catching the same click that opened the panel
+    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 50);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); };
+  }, [isOpen, onClose]);
+
+  // ESC to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
+
   return (
-    <>
-      {/* DM Icon — sağ alt */}
-      <button
-        onClick={() => dm.setPanelOpen(!dm.panelOpen)}
-        className={`fixed bottom-5 right-5 z-[100] w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 shadow-lg ${
-          dm.panelOpen
-            ? 'bg-[var(--theme-accent)] text-white shadow-[var(--theme-accent)]/30'
-            : 'bg-[var(--theme-surface)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:shadow-xl'
-        }`}
-        style={{
-          border: dm.panelOpen ? 'none' : '1px solid rgba(var(--glass-tint), 0.08)',
-          backdropFilter: 'blur(12px)',
-        }}
-      >
-        {dm.panelOpen ? <X size={18} /> : <MessageSquare size={18} />}
-        {!dm.panelOpen && dm.totalUnread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
-            {dm.totalUnread > 99 ? '99+' : dm.totalUnread}
-          </span>
-        )}
-      </button>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          ref={panelRef}
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.96 }}
+          transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+          className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col"
+          style={{
+            background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)',
+            border: '1px solid rgba(var(--glass-tint), 0.06)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(var(--glass-tint),0.04)',
+          }}
+        >
+          {dm.activeRecipientId ? (
+            <ChatArea
+              messages={dm.messages}
+              currentUserId={currentUser.id}
+              recipientId={dm.activeRecipientId}
+              allUsers={allUsers}
+              onSend={dm.sendMessage}
+              onBack={dm.closeConversation}
+            />
+          ) : (
+            <>
+              {/* Conversation list header */}
+              <div className="px-4 py-3 border-b border-[var(--theme-border)]/8 shrink-0">
+                <h3 className="text-[13px] font-bold text-[var(--theme-text)]">Mesajlar</h3>
+              </div>
 
-      {/* Panel */}
-      <AnimatePresence>
-        {dm.panelOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-20 right-5 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col"
-            style={{
-              background: 'var(--theme-surface)',
-              border: '1px solid rgba(var(--glass-tint), 0.08)',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.15)',
-              backdropFilter: 'blur(20px)',
-            }}
-          >
-            {dm.activeRecipientId ? (
-              <ChatArea
-                messages={dm.messages}
-                currentUserId={currentUser.id}
-                recipientId={dm.activeRecipientId}
-                allUsers={allUsers}
-                onSend={dm.sendMessage}
-                onBack={dm.closeConversation}
-              />
-            ) : (
-              <>
-                {/* Conversation list header */}
-                <div className="px-4 py-3 border-b border-[var(--theme-border)]/10 shrink-0">
-                  <h3 className="text-[13px] font-bold text-[var(--theme-text)]">Mesajlar</h3>
-                </div>
-
-                {/* Conversation list */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  {dm.conversations.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                      <MessageSquare size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                      <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
-                      <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-25 mt-1">Bir arkadaşına mesaj göndererek başla</p>
-                    </div>
-                  ) : (
-                    <div className="p-1.5">
-                      {dm.conversations.map(convo => (
-                        <React.Fragment key={convo.conversationKey}>
-                        <ConversationItem
-                          convo={convo}
-                          allUsers={allUsers}
-                          currentUserId={currentUser.id}
-                          onClick={() => dm.openConversation(convo.recipientId)}
-                        />
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+              {/* Conversation list */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {dm.conversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-6">
+                    <MessageSquare size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
+                    <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
+                    <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-25 mt-1">Bir arkadaşına mesaj göndererek başla</p>
+                  </div>
+                ) : (
+                  <div className="p-1.5">
+                    {dm.conversations.map(convo => (
+                      <React.Fragment key={convo.conversationKey}>
+                      <ConversationItem
+                        convo={convo}
+                        allUsers={allUsers}
+                        currentUserId={currentUser.id}
+                        onClick={() => dm.openConversation(convo.recipientId)}
+                      />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

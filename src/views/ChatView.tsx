@@ -29,6 +29,7 @@ import {
   Download,
   AlertCircle,
   Info,
+  MessageSquare,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -424,6 +425,8 @@ export default function ChatView() {
   // Profile popup
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
+  const [dmPanelOpen, setDmPanelOpen] = useState(false);
+  const [dmUnreadCount, setDmUnreadCount] = useState(0);
 
   const [cardScale, setCardScale] = useState<number>(() => {
     const saved = localStorage.getItem('cardScale');
@@ -908,7 +911,7 @@ export default function ChatView() {
                 <FriendsSidebarContent
                   variant="mobile"
                   onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
-                  onDM={(userId) => { setDmTargetUserId(userId); setMobileRightOpen(false); }}
+                  onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
                   isMuted={isMuted}
                   isDeafened={isDeafened}
                 />
@@ -2154,7 +2157,7 @@ export default function ChatView() {
           <FriendsSidebarContent
             variant="desktop"
             onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
-            onDM={(userId) => setDmTargetUserId(userId)}
+            onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }}
             channels={channels}
             activeChannel={activeChannel}
             inviteStatuses={inviteStatuses}
@@ -2164,8 +2167,22 @@ export default function ChatView() {
             isDeafened={isDeafened}
           />
 
-          {/* Sağ alt kontroller — Ayarlar, Bildirim Çanı, Çıkış */}
+          {/* Sağ alt kontroller — Mesaj, Bildirim, Ayarlar, Çıkış */}
           <div className="shrink-0 px-3 py-3 flex items-center justify-center gap-2">
+            {/* Mesaj — DM panel toggle */}
+            <button
+              onClick={() => setDmPanelOpen(prev => !prev)}
+              className={`relative w-10 h-10 flex items-center justify-center transition-all duration-200 ${dmPanelOpen ? 'text-[var(--theme-accent)] scale-110' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
+              title="Mesajlar"
+            >
+              <MessageSquare size={16} className={`transition-transform duration-200 ${dmPanelOpen ? 'scale-95' : ''}`} />
+              {dmUnreadCount > 0 && !dmPanelOpen && (
+                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
+                  {dmUnreadCount > 99 ? '99+' : dmUnreadCount}
+                </span>
+              )}
+            </button>
+
             {/* Ayarlar — hover çark dönme + accent renk */}
             <button
               onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
@@ -2420,7 +2437,7 @@ export default function ChatView() {
               position={profilePopup}
               onClose={() => setProfilePopup(null)}
               onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
-              onDM={(userId) => { setDmTargetUserId(userId); setProfilePopup(null); }}
+              onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setProfilePopup(null); }}
               canInvite={!!canInvite}
               inviteStatus={inviteStatus}
               onCooldown={onCooldown}
@@ -3040,8 +3057,14 @@ export default function ChatView() {
         }}
       />
 
-      {/* DM Panel — floating */}
-      <DMPanel openUserId={dmTargetUserId} onOpenHandled={() => setDmTargetUserId(null)} />
+      {/* DM Panel */}
+      <DMPanel
+        isOpen={dmPanelOpen}
+        onClose={() => setDmPanelOpen(false)}
+        openUserId={dmTargetUserId}
+        onOpenHandled={() => setDmTargetUserId(null)}
+        onUnreadChange={setDmUnreadCount}
+      />
     </div>
   );
 }
