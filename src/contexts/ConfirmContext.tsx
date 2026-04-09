@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 
 interface ConfirmOptions {
   title: string;
@@ -47,8 +48,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConfirmContext.Provider value={{ openConfirm }}>
       {children}
-      {/* Global ConfirmModal — App seviyesinde render */}
-      {state?.isOpen && <GlobalConfirmModal state={state} loading={loading} onConfirm={handleConfirm} onCancel={handleCancel} />}
+      {state?.isOpen && ReactDOM.createPortal(
+        <GlobalConfirmModal state={state} loading={loading} onConfirm={handleConfirm} onCancel={handleCancel} />,
+        document.body
+      )}
     </ConfirmContext.Provider>
   );
 }
@@ -72,28 +75,41 @@ function GlobalConfirmModal({
   }, [onCancel]);
 
   return (
-    <AnimatePresence>
-      {state.isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={onCancel}
-        >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,0.05),transparent_35%)]" />
-
+    <>
+      {/* Overlay */}
+      <AnimatePresence>
+        {state.isOpen && (
           <motion.div
+            key="confirm-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm"
+            onClick={onCancel}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {state.isOpen && (
+          <motion.div
+            key="confirm-modal"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.16 }}
-            className="relative w-full max-w-sm border border-[var(--theme-border)]/20 rounded-2xl overflow-hidden"
-            style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3)' }}
+            className="fixed z-[301] w-[calc(100%-2rem)] max-w-sm rounded-2xl overflow-hidden border border-[var(--theme-border)]/20"
+            style={{
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)',
+              boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3)',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="pointer-events-none absolute inset-x-6 -top-1 h-16 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,230,170,0.07),transparent_70%)]" />
             <div className="p-5">
               <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1.5">{state.title}</h3>
               <p className="text-[12px] text-[var(--theme-secondary-text)] leading-relaxed">{state.description}</p>
@@ -127,8 +143,8 @@ function GlobalConfirmModal({
               </button>
             </div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
