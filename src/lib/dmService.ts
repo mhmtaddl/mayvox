@@ -103,6 +103,10 @@ export function dmSendMessage(recipientId: string, text: string) {
   wsSend({ type: 'dm:send', recipientId, text });
 }
 
+export function dmHideConversation(conversationKey: string) {
+  wsSend({ type: 'dm:hide_conversation', conversationKey });
+}
+
 export function dmMarkRead(conversationKey: string) {
   wsSend({ type: 'dm:mark_read', conversationKey });
 }

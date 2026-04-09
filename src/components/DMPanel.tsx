@@ -1,20 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MessageSquare, ArrowLeft, Send } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
+import MiniConfirm from './MiniConfirm';
 
 // ── Conversation List Item ──────────────────────────────────────────────
 
 function ConversationItem({
-  convo, allUsers, currentUserId, onClick,
+  convo, allUsers, currentUserId, onClick, onDelete,
 }: {
   convo: DmConversation;
   allUsers: any[];
   currentUserId: string;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   const user = allUsers.find((u: any) => u.id === convo.recipientId);
   const name = user
@@ -40,49 +42,51 @@ function ConversationItem({
     : '';
 
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl transition-all text-left group/conv ${
-        hasUnread
-          ? 'bg-[rgba(var(--theme-accent-rgb),0.04)] hover:bg-[rgba(var(--theme-accent-rgb),0.07)]'
-          : 'hover:bg-[rgba(var(--glass-tint),0.04)]'
-      }`}
-    >
-      {/* Avatar */}
-      <div className="relative shrink-0">
-        <div
-          className="w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center"
-          style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}
-        >
+    <div className={`relative rounded-xl transition-all group/conv ${
+      hasUnread
+        ? 'bg-[rgba(var(--theme-accent-rgb),0.04)] hover:bg-[rgba(var(--theme-accent-rgb),0.07)]'
+        : 'hover:bg-[rgba(var(--glass-tint),0.04)]'
+    }`}>
+      <button onClick={onClick} className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left">
+        {/* Avatar */}
+        <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
           {hasAvatar
             ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             : <span className="text-[11px] font-bold text-[var(--theme-accent)] opacity-60">{initial}</span>}
         </div>
-        {/* Online dot — could be wired to presence later */}
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span className={`text-[12px] font-semibold truncate ${hasUnread ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)] opacity-80'}`}>{name}</span>
-          {timeStr && (
-            <span className={`text-[9px] shrink-0 ${hasUnread ? 'text-[var(--theme-accent)] font-semibold' : 'text-[var(--theme-secondary-text)]/35'}`}>
-              {timeStr}
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className={`text-[12px] font-semibold truncate ${hasUnread ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)] opacity-80'}`}>{name}</span>
+            {timeStr && (
+              <span className={`text-[9px] shrink-0 ${hasUnread ? 'text-[var(--theme-accent)] font-semibold' : 'text-[var(--theme-secondary-text)]/35'}`}>
+                {timeStr}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 mt-0.5">
+            <span className={`text-[10px] truncate ${hasUnread ? 'text-[var(--theme-text)]/60 font-medium' : 'text-[var(--theme-secondary-text)]/40'}`}>
+              {convo.lastMessage || 'Henüz mesaj yok'}
             </span>
-          )}
+            {hasUnread && (
+              <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-white shadow-[0_0_0_1px_rgba(0,0,0,0.15)]">
+                {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center justify-between gap-2 mt-0.5">
-          <span className={`text-[10px] truncate ${hasUnread ? 'text-[var(--theme-text)]/60 font-medium' : 'text-[var(--theme-secondary-text)]/40'}`}>
-            {convo.lastMessage || 'Henüz mesaj yok'}
-          </span>
-          {hasUnread && (
-            <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full bg-[var(--theme-accent)] text-white text-[9px] font-bold flex items-center justify-center">
-              {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
-            </span>
-          )}
-        </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Delete — hover'da görünür */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover/conv:opacity-60 hover:!opacity-100 hover:bg-red-500/10 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all"
+        title="Sohbeti kaldır"
+      >
+        <Trash2 size={11} />
+      </button>
+    </div>
   );
 }
 
@@ -91,17 +95,37 @@ function ConversationItem({
 function MessageBubble({ msg, isOwn }: { msg: DmMessage; isOwn: boolean }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
+  // Outgoing bubble: accent renk üzerinde otomatik kontrast
+  const ownBubbleRef = useRef<HTMLDivElement>(null);
+  const [ownTextDark, setOwnTextDark] = useState(false);
+  useEffect(() => {
+    if (!isOwn || !ownBubbleRef.current) return;
+    const bg = getComputedStyle(ownBubbleRef.current).backgroundColor;
+    const m = bg.match(/(\d+)/g);
+    if (m && m.length >= 3) {
+      const [r, g, b] = m.map(Number);
+      // Relative luminance (sRGB simplified)
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      setOwnTextDark(lum > 0.55);
+    }
+  }, [isOwn]);
+
   return (
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
+        ref={isOwn ? ownBubbleRef : undefined}
         className={`max-w-[78%] px-3 py-[7px] text-[12px] leading-relaxed ${
           isOwn
-            ? 'bg-[var(--theme-accent)] text-white rounded-[16px] rounded-br-[4px]'
+            ? 'bg-[var(--theme-accent)] rounded-[16px] rounded-br-[4px]'
             : 'bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-text)] rounded-[16px] rounded-bl-[4px]'
         }`}
+        style={isOwn ? { color: ownTextDark ? '#111' : '#fff' } : undefined}
       >
         <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-        <span className={`block text-[8px] mt-0.5 leading-none ${isOwn ? 'text-white/40 text-right' : 'text-[var(--theme-secondary-text)]/25'}`}>
+        <span
+          className={`block text-[8px] mt-0.5 leading-none ${isOwn ? 'text-right' : 'text-[var(--theme-secondary-text)]/25'}`}
+          style={isOwn ? { opacity: 0.5 } : undefined}
+        >
           {time}
         </span>
       </div>
@@ -266,8 +290,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; convKey: string; name: string }>({ isOpen: false, convKey: '', name: '' });
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Panel kapanınca aktif sohbet görünümünü resetle → tekrar açılınca liste gelsin
+  useEffect(() => {
+    if (!isOpen) dm.resetViewOnClose();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isOpen) dm.loadInitial();
@@ -302,6 +332,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   }, [isOpen, onClose]);
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -349,16 +380,21 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   </div>
                 ) : (
                   <div className="p-1.5 space-y-0.5">
-                    {dm.conversations.map(convo => (
-                      <div key={convo.conversationKey}>
-                        <ConversationItem
-                          convo={convo}
-                          allUsers={allUsers}
-                          currentUserId={currentUser.id}
-                          onClick={() => dm.openConversation(convo.recipientId)}
-                        />
-                      </div>
-                    ))}
+                    {dm.conversations.map(convo => {
+                      const usr = allUsers.find((u: any) => u.id === convo.recipientId);
+                      const nm = usr ? formatFullName(usr.firstName, usr.lastName) : convo.recipientName || 'Kullanıcı';
+                      return (
+                        <div key={convo.conversationKey}>
+                          <ConversationItem
+                            convo={convo}
+                            allUsers={allUsers}
+                            currentUserId={currentUser.id}
+                            onClick={() => dm.openConversation(convo.recipientId)}
+                            onDelete={() => setDeleteConfirm({ isOpen: true, convKey: convo.conversationKey, name: nm })}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -367,5 +403,19 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
         </motion.div>
       )}
     </AnimatePresence>
+
+    <MiniConfirm
+      isOpen={deleteConfirm.isOpen}
+      title="Sohbeti kaldır"
+      description={`${deleteConfirm.name} ile olan sohbet listenden kaldırılsın mı? Karşı tarafın listesini etkilemez.`}
+      confirmText="Kaldır"
+      onConfirm={() => {
+        dm.hideConversation(deleteConfirm.convKey);
+        setDeleteConfirm({ isOpen: false, convKey: '', name: '' });
+      }}
+      onCancel={() => setDeleteConfirm({ isOpen: false, convKey: '', name: '' })}
+      danger
+    />
+    </>
   );
 }

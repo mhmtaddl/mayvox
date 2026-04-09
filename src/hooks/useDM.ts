@@ -6,6 +6,7 @@ import {
   dmSendMessage,
   dmMarkRead,
   dmRequestUnreadTotal,
+  dmHideConversation,
   type DmConversation,
   type DmMessage,
 } from '../lib/dmService';
@@ -163,6 +164,24 @@ export function useDM(currentUserId: string | undefined) {
     closeConversation();
   }, [closeConversation]);
 
+  // Panel kapandığında aktif sohbeti resetle → tekrar açılınca liste gelsin
+  const resetViewOnClose = useCallback(() => {
+    setActiveConvKey(null);
+    setActiveRecipientId(null);
+    setMessages([]);
+  }, []);
+
+  const hideConversation = useCallback((convKey: string) => {
+    dmHideConversation(convKey);
+    setConversations(prev => prev.filter(c => c.conversationKey !== convKey));
+    // Aktif sohbet buysa kapat
+    if (activeConvKey === convKey) {
+      setActiveConvKey(null);
+      setActiveRecipientId(null);
+      setMessages([]);
+    }
+  }, [activeConvKey]);
+
   return {
     conversations,
     activeConvKey,
@@ -175,6 +194,8 @@ export function useDM(currentUserId: string | undefined) {
     openConversation,
     sendMessage,
     closeConversation,
+    resetViewOnClose,
+    hideConversation,
     closePanel,
   };
 }

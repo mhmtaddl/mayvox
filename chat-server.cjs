@@ -68,6 +68,13 @@ dmDb.exec(`
   CREATE INDEX IF NOT EXISTS idx_dm_msg_receiver ON dm_messages(receiver_id, read_at);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_a ON dm_conversations(user_a_id);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_b ON dm_conversations(user_b_id);
+
+  CREATE TABLE IF NOT EXISTS dm_conversation_hidden (
+    user_id TEXT NOT NULL,
+    conversation_key TEXT NOT NULL,
+    hidden_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    PRIMARY KEY (user_id, conversation_key)
+  );
 `);
 
 console.log('[chat-server] SQLite DM DB hazır:', DM_DB_PATH);
@@ -80,7 +87,12 @@ const dmStmt = {
        WHERE m.conversation_key = c.conversation_key
        AND m.receiver_id = ? AND m.read_at IS NULL) as unread_count
     FROM dm_conversations c
-    WHERE c.user_a_id = ? OR c.user_b_id = ?
+    WHERE (c.user_a_id = ? OR c.user_b_id = ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM dm_conversation_hidden h
+        WHERE h.user_id = ? AND h.conversation_key = c.conversation_key
+        AND h.hidden_at >= c.last_message_at
+      )
     ORDER BY c.last_message_at DESC
   `),
   getConversation: dmDb.prepare(`
@@ -117,6 +129,13 @@ const dmStmt = {
   getUnreadCount: dmDb.prepare(`
     SELECT COUNT(*) as count FROM dm_messages
     WHERE receiver_id = ? AND read_at IS NULL
+  `),
+  hideConversation: dmDb.prepare(`
+    INSERT OR REPLACE INTO dm_conversation_hidden (user_id, conversation_key, hidden_at)
+    VALUES (?, ?, ?)
+  `),
+  unhideConversation: dmDb.prepare(`
+    DELETE FROM dm_conversation_hidden WHERE user_id = ? AND conversation_key = ?
   `),
 };
 
@@ -574,7 +593,7 @@ wss.on('connection', (ws) => {
     // ── DM:CONVERSATIONS ─────────────────────────────────────────────────
     if (msg.type === 'dm:conversations') {
       try {
-        const rows = dmStmt.getConversations.all(userId, userId, userId);
+        const rows = dmStmt.getConversations.all(userId, userId, userId, userId);
         // Her konuşma için karşı tarafın profil bilgisini çek
         const convos = [];
         for (const row of rows) {
@@ -741,6 +760,19 @@ wss.on('connection', (ws) => {
         send(ws, { type: 'dm:unread_total', count: row?.count || 0 });
       } catch {
         send(ws, { type: 'dm:unread_total', count: 0 });
+      }
+      return;
+    }
+
+    // ── DM:HIDE_CONVERSATION ─────────────────────────────────────────────
+    if (msg.type === 'dm:hide_conversation') {
+      const convKey = String(msg.conversationKey || '').trim();
+      if (!convKey) return;
+      try {
+        dmStmt.hideConversation.run(userId, convKey, Date.now());
+        send(ws, { type: 'dm:conversation_hidden', conversationKey: convKey });
+      } catch (err) {
+        console.error('[dm] hide_conversation error:', err?.message);
       }
       return;
     }
