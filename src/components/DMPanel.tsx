@@ -283,13 +283,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.96 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col"
+          className="fixed bottom-16 right-3 z-[99] w-[340px] h-[480px] rounded-2xl overflow-hidden flex flex-col border border-[var(--theme-accent)]/15"
           style={{
-            background: 'var(--theme-bg)',
-            border: '1px solid rgba(var(--glass-tint), 0.08)',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(var(--glass-tint),0.04)',
+            background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 85%, var(--theme-bg)) 0%, var(--theme-bg) 100%)',
+            boxShadow: '0 32px 80px rgba(var(--shadow-base),0.5), 0 8px 24px rgba(var(--shadow-base),0.25), 0 0 0 1px rgba(var(--glass-tint),0.04)',
           }}
         >
+          {/* Top accent line */}
+          <div className="h-px shrink-0" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.3), transparent)' }} />
+
           {dm.activeRecipientId ? (
             <ChatArea
               messages={dm.messages}
@@ -302,7 +304,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           ) : (
             <>
               {/* Conversation list header */}
-              <div className="px-4 py-3 border-b border-[var(--theme-border)]/8 shrink-0">
+              <div className="px-4 py-3 shrink-0" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
                 <h3 className="text-[13px] font-bold text-[var(--theme-text)]">Mesajlar</h3>
               </div>
 
