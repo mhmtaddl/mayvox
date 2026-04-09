@@ -1,7 +1,8 @@
 /**
- * PigeVox WebSocket Chat Server v3
+ * PigeVox WebSocket Chat Server v4
  * - Supabase JWT auth
  * - Room-based messaging with persistent history
+ * - DM (Direct Message) with SQLite persistence
  * - Avatar + display name from profiles
  * - 5 min empty room cleanup
  * - Reconnect-safe
@@ -10,6 +11,8 @@
 const { WebSocketServer, WebSocket } = require('ws');
 const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
@@ -28,6 +31,133 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── SQLite for DM ────────────────────────────────────────────────────────
+const Database = require('better-sqlite3');
+const DM_DB_PATH = process.env.DM_DB_PATH || path.join(__dirname, 'data', 'dm.sqlite');
+
+// Ensure data directory exists
+fs.mkdirSync(path.dirname(DM_DB_PATH), { recursive: true });
+
+const dmDb = new Database(DM_DB_PATH);
+dmDb.pragma('journal_mode = WAL');
+dmDb.pragma('foreign_keys = ON');
+
+// Create tables
+dmDb.exec(`
+  CREATE TABLE IF NOT EXISTS dm_conversations (
+    conversation_key TEXT PRIMARY KEY,
+    user_a_id TEXT NOT NULL,
+    user_b_id TEXT NOT NULL,
+    last_message TEXT DEFAULT '',
+    last_message_at INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+  );
+
+  CREATE TABLE IF NOT EXISTS dm_messages (
+    id TEXT PRIMARY KEY,
+    conversation_key TEXT NOT NULL REFERENCES dm_conversations(conversation_key),
+    sender_id TEXT NOT NULL,
+    receiver_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    read_at INTEGER DEFAULT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_dm_msg_conv ON dm_messages(conversation_key, created_at);
+  CREATE INDEX IF NOT EXISTS idx_dm_msg_receiver ON dm_messages(receiver_id, read_at);
+  CREATE INDEX IF NOT EXISTS idx_dm_conv_user_a ON dm_conversations(user_a_id);
+  CREATE INDEX IF NOT EXISTS idx_dm_conv_user_b ON dm_conversations(user_b_id);
+`);
+
+console.log('[chat-server] SQLite DM DB hazır:', DM_DB_PATH);
+
+// Prepared statements
+const dmStmt = {
+  getConversations: dmDb.prepare(`
+    SELECT c.*,
+      (SELECT COUNT(*) FROM dm_messages m
+       WHERE m.conversation_key = c.conversation_key
+       AND m.receiver_id = ? AND m.read_at IS NULL) as unread_count
+    FROM dm_conversations c
+    WHERE c.user_a_id = ? OR c.user_b_id = ?
+    ORDER BY c.last_message_at DESC
+  `),
+  getConversation: dmDb.prepare(`
+    SELECT * FROM dm_conversations WHERE conversation_key = ?
+  `),
+  createConversation: dmDb.prepare(`
+    INSERT OR IGNORE INTO dm_conversations (conversation_key, user_a_id, user_b_id, created_at)
+    VALUES (?, ?, ?, ?)
+  `),
+  getMessages: dmDb.prepare(`
+    SELECT * FROM dm_messages
+    WHERE conversation_key = ?
+    ORDER BY created_at ASC
+    LIMIT 200
+  `),
+  insertMessage: dmDb.prepare(`
+    INSERT INTO dm_messages (id, conversation_key, sender_id, receiver_id, text, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  updateLastMessage: dmDb.prepare(`
+    UPDATE dm_conversations
+    SET last_message = ?, last_message_at = ?
+    WHERE conversation_key = ?
+  `),
+  markRead: dmDb.prepare(`
+    UPDATE dm_messages
+    SET read_at = ?
+    WHERE conversation_key = ? AND receiver_id = ? AND read_at IS NULL
+  `),
+  getUnreadCount: dmDb.prepare(`
+    SELECT COUNT(*) as count FROM dm_messages
+    WHERE receiver_id = ? AND read_at IS NULL
+  `),
+};
+
+function makeDmKey(a, b) {
+  return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`;
+}
+
+function generateId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// userId -> Set<ws> (bir kullanıcının birden fazla bağlantısı olabilir)
+const userConnections = new Map();
+
+function registerUserConnection(userId, ws) {
+  if (!userConnections.has(userId)) userConnections.set(userId, new Set());
+  userConnections.get(userId).add(ws);
+}
+
+function unregisterUserConnection(userId, ws) {
+  const conns = userConnections.get(userId);
+  if (!conns) return;
+  conns.delete(ws);
+  if (conns.size === 0) userConnections.delete(userId);
+}
+
+function sendToUser(userId, data) {
+  const conns = userConnections.get(userId);
+  if (!conns) return;
+  const payload = JSON.stringify(data);
+  for (const c of conns) {
+    if (c.readyState === WebSocket.OPEN) c.send(payload);
+  }
+}
+
+async function checkFriendship(userA, userB) {
+  const [low, high] = userA < userB ? [userA, userB] : [userB, userA];
+  const { data } = await supabase
+    .from('friendships')
+    .select('user_low_id')
+    .eq('user_low_id', low)
+    .eq('user_high_id', high)
+    .maybeSingle();
+  return !!data;
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 const rooms = new Map();          // roomId -> Set<ws>
@@ -218,6 +348,9 @@ wss.on('connection', (ws) => {
         console.log(
           `[chat] Auth OK: ${userName} (${userId}) avatar: ${userAvatar ? 'var' : 'yok'}`
         );
+
+        // Register for DM delivery
+        registerUserConnection(userId, ws);
 
         send(ws, {
           type: 'auth_ok',
@@ -418,10 +551,187 @@ wss.on('connection', (ws) => {
       }
       return;
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DM EVENTS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── DM:CONVERSATIONS ─────────────────────────────────────────────────
+    if (msg.type === 'dm:conversations') {
+      try {
+        const rows = dmStmt.getConversations.all(userId, userId, userId);
+        // Her konuşma için karşı tarafın profil bilgisini çek
+        const convos = [];
+        for (const row of rows) {
+          const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+          convos.push({
+            conversationKey: row.conversation_key,
+            recipientId: otherId,
+            lastMessage: row.last_message,
+            lastMessageAt: row.last_message_at,
+            unreadCount: row.unread_count,
+            createdAt: row.created_at,
+          });
+        }
+        send(ws, { type: 'dm:conversations', conversations: convos });
+      } catch (err) {
+        console.error('[dm] conversations error:', err?.message);
+        send(ws, { type: 'dm:conversations', conversations: [] });
+      }
+      return;
+    }
+
+    // ── DM:OPEN ──────────────────────────────────────────────────────────
+    if (msg.type === 'dm:open') {
+      const recipientId = String(msg.recipientId || '').trim();
+      if (!recipientId || recipientId === userId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz alıcı' });
+      }
+
+      try {
+        // Arkadaşlık kontrolü
+        const friends = await checkFriendship(userId, recipientId);
+        if (!friends) {
+          return send(ws, { type: 'dm:error', message: 'Bu kullanıcıyla arkadaş değilsin' });
+        }
+
+        const convKey = makeDmKey(userId, recipientId);
+
+        // Conversation yoksa oluştur
+        const now = Date.now();
+        dmStmt.createConversation.run(convKey, convKey.split(':')[1], convKey.split(':')[2], now);
+
+        // Mesaj geçmişini yükle
+        const messages = dmStmt.getMessages.all(convKey);
+
+        // Okunmamış mesajları okundu işaretle
+        dmStmt.markRead.run(now, convKey, userId);
+
+        send(ws, {
+          type: 'dm:history',
+          conversationKey: convKey,
+          recipientId,
+          messages: messages.map(m => ({
+            id: m.id,
+            senderId: m.sender_id,
+            text: m.text,
+            createdAt: m.created_at,
+            readAt: m.read_at,
+          })),
+        });
+
+        // Karşı tarafa okundu bilgisi gönder
+        sendToUser(recipientId, {
+          type: 'dm:read',
+          conversationKey: convKey,
+          readBy: userId,
+          readAt: now,
+        });
+      } catch (err) {
+        console.error('[dm] open error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Konuşma açılamadı' });
+      }
+      return;
+    }
+
+    // ── DM:SEND ──────────────────────────────────────────────────────────
+    if (msg.type === 'dm:send') {
+      const recipientId = String(msg.recipientId || '').trim();
+      const text = String(msg.text || '').trim();
+
+      if (!recipientId || recipientId === userId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz alıcı' });
+      }
+      if (!text || text.length > 2000) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
+      }
+
+      try {
+        // Arkadaşlık kontrolü
+        const friends = await checkFriendship(userId, recipientId);
+        if (!friends) {
+          return send(ws, { type: 'dm:error', message: 'Bu kullanıcıyla arkadaş değilsin' });
+        }
+
+        const convKey = makeDmKey(userId, recipientId);
+        const now = Date.now();
+        const msgId = generateId();
+
+        // Conversation yoksa oluştur
+        dmStmt.createConversation.run(convKey, convKey.split(':')[1], convKey.split(':')[2], now);
+
+        // Mesajı kaydet
+        dmStmt.insertMessage.run(msgId, convKey, userId, recipientId, text, now);
+
+        // Son mesajı güncelle
+        const preview = text.length > 100 ? text.slice(0, 100) + '…' : text;
+        dmStmt.updateLastMessage.run(preview, now, convKey);
+
+        const newMsg = {
+          id: msgId,
+          conversationKey: convKey,
+          senderId: userId,
+          senderName: userName,
+          senderAvatar: userAvatar,
+          recipientId,
+          text,
+          createdAt: now,
+        };
+
+        // Gönderene teslim
+        sendToUser(userId, { type: 'dm:new_message', message: newMsg });
+
+        // Alıcıya teslim
+        sendToUser(recipientId, { type: 'dm:new_message', message: newMsg });
+
+        console.log(`[dm] ${userName} → ${recipientId}: ${text.slice(0, 40)}`);
+      } catch (err) {
+        console.error('[dm] send error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj gönderilemedi' });
+      }
+      return;
+    }
+
+    // ── DM:MARK_READ ─────────────────────────────────────────────────────
+    if (msg.type === 'dm:mark_read') {
+      const convKey = String(msg.conversationKey || '').trim();
+      if (!convKey) return;
+
+      try {
+        const now = Date.now();
+        dmStmt.markRead.run(now, convKey, userId);
+
+        // Karşı tarafa bildir
+        const parts = convKey.split(':');
+        const otherId = parts[1] === userId ? parts[2] : parts[1];
+        sendToUser(otherId, {
+          type: 'dm:read',
+          conversationKey: convKey,
+          readBy: userId,
+          readAt: now,
+        });
+      } catch (err) {
+        console.error('[dm] mark_read error:', err?.message);
+      }
+      return;
+    }
+
+    // ── DM:UNREAD_TOTAL ──────────────────────────────────────────────────
+    if (msg.type === 'dm:unread_total') {
+      try {
+        const row = dmStmt.getUnreadCount.get(userId);
+        send(ws, { type: 'dm:unread_total', count: row?.count || 0 });
+      } catch {
+        send(ws, { type: 'dm:unread_total', count: 0 });
+      }
+      return;
+    }
   });
 
   ws.on('close', () => {
     clearTimeout(authTimeout);
+
+    if (userId) unregisterUserConnection(userId, ws);
 
     if (currentRoom) {
       const oldRoom = currentRoom;
