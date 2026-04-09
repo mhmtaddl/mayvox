@@ -66,6 +66,79 @@ function rgbStr(hex: string): string {
   return `${r}, ${g}, ${b}`;
 }
 
+// ── Contrast Guard Utilities ───────────────────────────────────
+
+/**
+ * WCAG 2.1 contrast ratio between two hex colors.
+ * Returns ratio from 1 (identical) to 21 (black/white).
+ */
+export function getContrastRatio(fg: string, bg: string): number {
+  const fgLum = getLuminance(fg) + 0.05;
+  const bgLum = getLuminance(bg) + 0.05;
+  return fgLum > bgLum ? fgLum / bgLum : bgLum / fgLum;
+}
+
+/**
+ * Given a background hex, return a safe foreground hex.
+ * Tries the preferred color first; if contrast is too low, shifts it.
+ * Falls back to pure black/white as last resort.
+ */
+function ensureContrast(fgHex: string, bgHex: string, minRatio = 4.5): string {
+  if (getContrastRatio(fgHex, bgHex) >= minRatio) return fgHex;
+
+  const bgLight = isLightColor(bgHex);
+
+  // Try incremental shift toward high-contrast pole
+  for (let step = 0.1; step <= 0.8; step += 0.1) {
+    const adjusted = bgLight ? darken(fgHex, step) : lighten(fgHex, step);
+    if (getContrastRatio(adjusted, bgHex) >= minRatio) return adjusted;
+  }
+
+  // Fallback — guaranteed readable
+  return bgLight ? '#111111' : '#FFFFFF';
+}
+
+/**
+ * Ensure rgba text has sufficient contrast.
+ * Converts rgba to effective hex on bg, checks, adjusts if needed.
+ */
+function ensureContrastRgba(rgbaColor: string, bgHex: string, minRatio = 4.5): string {
+  // Parse rgba(r,g,b,a) → effective opaque hex on bg
+  const m = rgbaColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (!m) return rgbaColor;
+
+  const [r, g, b] = [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
+  const a = m[4] ? parseFloat(m[4]) : 1;
+  const bgRgb = hexToRgb(bgHex);
+
+  // Blend fg onto bg
+  const blended: [number, number, number] = [
+    r * a + bgRgb[0] * (1 - a),
+    g * a + bgRgb[1] * (1 - a),
+    b * a + bgRgb[2] * (1 - a),
+  ];
+  const effectiveHex = rgbToHex(blended[0], blended[1], blended[2]);
+
+  if (getContrastRatio(effectiveHex, bgHex) >= minRatio) return rgbaColor;
+
+  // Increase alpha to improve contrast
+  const targetFg = rgbToHex(r, g, b);
+  for (let newA = a + 0.1; newA <= 1.0; newA += 0.1) {
+    const newBlended: [number, number, number] = [
+      r * newA + bgRgb[0] * (1 - newA),
+      g * newA + bgRgb[1] * (1 - newA),
+      b * newA + bgRgb[2] * (1 - newA),
+    ];
+    const newEffective = rgbToHex(newBlended[0], newBlended[1], newBlended[2]);
+    if (getContrastRatio(newEffective, bgHex) >= minRatio) {
+      return `rgba(${r},${g},${b},${Math.round(newA * 100) / 100})`;
+    }
+  }
+
+  // Fallback to solid
+  return ensureContrast(targetFg, bgHex, minRatio);
+}
+
 // ── Derived token type ──────────────────────────────────────────
 
 export interface DerivedTokens {
@@ -139,6 +212,10 @@ export interface DerivedTokens {
   // Surface card (settings, modals, dropdowns)
   surfaceCard: string;
   surfaceCardBorder: string;
+
+  // Badge — guaranteed contrast
+  badgeBg: string;
+  badgeText: string;
 }
 
 // ── Main derivation function ────────────────────────────────────
@@ -285,6 +362,40 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
     ? withAlpha('#000000', 0.10)
     : withAlpha('#FFFFFF', 0.08);
 
+  // ── Contrast Guard Pass ──────────────────────────────────────────
+  // Validate critical text/accent tokens against background.
+  // Small text (badges, timestamps) needs higher ratio (≥4.5).
+  // Large text (headings) can use ≥3.0.
+
+  const guardedTextPrimary = typeof textPrimary === 'string' && textPrimary.startsWith('rgba')
+    ? ensureContrastRgba(textPrimary, bgHex, 4.5)
+    : (textPrimary.startsWith('#') ? ensureContrast(textPrimary, bgHex, 4.5) : textPrimary);
+
+  const guardedTextSecondary = typeof textSecondary === 'string' && textSecondary.startsWith('rgba')
+    ? ensureContrastRgba(textSecondary, bgHex, 3.5)
+    : textSecondary;
+
+  const guardedTextMuted = typeof textMuted === 'string' && textMuted.startsWith('rgba')
+    ? ensureContrastRgba(textMuted, bgHex, 3.0)
+    : textMuted;
+
+  const guardedAccentText = accentText.startsWith('#')
+    ? ensureContrast(accentText, bgHex, 3.5)
+    : accentText;
+
+  const guardedInputText = typeof inputBg === 'string' && inputBg.startsWith('rgba')
+    ? (isLight ? ensureContrast('#111111', bgHex, 4.5) : ensureContrastRgba(withAlpha('#FFFFFF', 0.92), bgHex, 4.5))
+    : (isLight ? '#111111' : withAlpha('#FFFFFF', 0.92));
+
+  const guardedInputPlaceholder = isLight
+    ? ensureContrast('#888888', bgHex, 2.5)
+    : ensureContrastRgba(withAlpha('#FFFFFF', 0.38), bgHex, 2.5);
+
+  // Badge text on accent — guaranteed readable
+  const guardedBtnPrimaryText = btnPrimaryText.startsWith('#')
+    ? ensureContrast(btnPrimaryText, btnPrimaryBg.startsWith('#') ? btnPrimaryBg : accentOnBg, 4.5)
+    : btnPrimaryText;
+
   return {
     appBg: bgSurface,
     panelBg: withAlpha(isLight ? '#000000' : '#FFFFFF', isLight ? 0.045 : 0.04),
@@ -293,12 +404,12 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
     cardBgHover,
     cardBgSelected,
 
-    textPrimary,
-    textSecondary,
-    textMuted,
+    textPrimary: guardedTextPrimary,
+    textSecondary: guardedTextSecondary,
+    textMuted: guardedTextMuted,
 
-    iconPrimary: accentText,
-    iconMuted: textMuted,
+    iconPrimary: guardedAccentText,
+    iconMuted: guardedTextMuted,
 
     borderSubtle,
     borderStrong,
@@ -307,7 +418,7 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
     accent: accentOnBg,
     accentSoft,
     accentBorder,
-    accentText,
+    accentText: guardedAccentText,
     accentGlow,
 
     sidebarItemBg,
@@ -316,12 +427,12 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
 
     inputBg,
     inputBorder,
-    inputText: isLight ? '#111111' : withAlpha('#FFFFFF', 0.92),
-    inputPlaceholder: isLight ? '#888888' : withAlpha('#FFFFFF', 0.38),
+    inputText: guardedInputText,
+    inputPlaceholder: guardedInputPlaceholder,
 
     btnPrimaryBg,
     btnPrimaryHover,
-    btnPrimaryText,
+    btnPrimaryText: guardedBtnPrimaryText,
     btnGhostBg,
     btnGhostHover,
     btnGhostText,
@@ -343,6 +454,9 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
 
     surfaceCard,
     surfaceCardBorder,
+
+    badgeBg: accentOnBg,
+    badgeText: ensureContrast('#FFFFFF', accentOnBg, 4.5),
   };
 }
 
@@ -411,6 +525,10 @@ export function applyDerivedTokens(tokens: DerivedTokens) {
   // Surface card
   root.style.setProperty('--theme-surface-card', tokens.surfaceCard);
   root.style.setProperty('--theme-surface-card-border', tokens.surfaceCardBorder);
+
+  // Badge — contrast-safe
+  root.style.setProperty('--theme-badge-bg', tokens.badgeBg);
+  root.style.setProperty('--theme-badge-text', tokens.badgeText);
 
   // Body background
   document.body.style.background = tokens.appBg;

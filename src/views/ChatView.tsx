@@ -2176,7 +2176,7 @@ export default function ChatView() {
             >
               <MessageSquare size={16} />
               {dmUnreadCount > 0 && !dmPanelOpen && (
-                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--theme-accent)] text-white text-[8px] font-bold flex items-center justify-center">
+                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] text-[8px] font-bold flex items-center justify-center">
                   {dmUnreadCount > 99 ? '99+' : dmUnreadCount}
                 </span>
               )}

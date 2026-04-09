@@ -70,7 +70,7 @@ function ConversationItem({
               {convo.lastMessage || 'Henüz mesaj yok'}
             </span>
             {hasUnread && (
-              <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-white shadow-[0_0_0_1px_rgba(0,0,0,0.15)]">
+              <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] shadow-[0_0_0_1px_rgba(0,0,0,0.15)]">
                 {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
               </span>
             )}
