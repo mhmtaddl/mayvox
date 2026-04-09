@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
-  UserPlus, FolderPlus, MoreHorizontal, Pencil, Trash2, FolderInput, FolderMinus, Star, MessageSquare,
+  UserPlus, FolderPlus, MoreHorizontal, Pencil, Trash2, FolderInput, FolderMinus, Star, MessageSquare, PhoneCall,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -281,17 +281,17 @@ export default function FriendsSidebarContent({
           const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
           const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
 
-          if (status === 'pending') return <span className="shrink-0 px-2 py-0.5 rounded-md text-[9px] font-bold text-blue-400 border border-blue-400/30 flex items-center gap-1 bg-blue-500/10"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />Aranıyor</span>;
-          if (status === 'accepted') return <span className="shrink-0 px-2 py-0.5 rounded-md text-[9px] font-bold text-emerald-400 border border-emerald-400/30 bg-emerald-500/10">✓ Kabul</span>;
-          if (status === 'rejected') return <span className="shrink-0 px-2 py-0.5 rounded-md text-[9px] font-bold text-red-400 border border-red-400/30 bg-red-500/10">✕ Ret</span>;
+          if (status === 'pending') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-blue-400 bg-blue-500/10"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /></span>;
+          if (status === 'accepted') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-emerald-400 bg-emerald-500/10"><Check size={12} /></span>;
+          if (status === 'rejected') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-red-400 bg-red-500/10"><X size={12} /></span>;
           return (
             <button
               disabled={onCooldown}
               onClick={(e) => { e.stopPropagation(); handleInviteUser(user.id); }}
               title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
-              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-md text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] border border-[var(--theme-accent)]/30 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              {onCooldown ? `${remaining}s` : 'Davet'}
+              {onCooldown ? <span className="text-[8px] font-bold">{remaining}</span> : <PhoneCall size={13} />}
             </button>
           );
         })()}

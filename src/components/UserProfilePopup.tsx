@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare } from 'lucide-react';
+import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall } from 'lucide-react';
 import type { User } from '../types';
 import { isOutdated } from '../features/update/compareVersions';
 import { formatFullName } from '../lib/formatName';
@@ -94,17 +94,6 @@ export default function UserProfilePopup({
   const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
   const userName = formatFullName(user.firstName, user.lastName);
 
-  const renderInvite = () => {
-    if (!canInvite) return null;
-    if (inviteStatus === 'pending') return <div className="flex items-center gap-2 text-xs font-bold text-blue-400 py-2 justify-center"><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />Aranıyor...</div>;
-    if (inviteStatus === 'accepted') return <span className="text-xs font-bold text-emerald-400 py-2 block text-center">✓ Kabul Edildi</span>;
-    if (inviteStatus === 'rejected') return <span className="text-xs font-bold text-red-400 py-2 block text-center">✕ Reddedildi</span>;
-    return (
-      <button disabled={onCooldown} onClick={() => onInvite?.()} className="w-full py-2.5 btn-primary text-[12px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-transform">
-        {onCooldown ? `${cooldownRemaining}s` : 'Odaya Davet Et'}
-      </button>
-    );
-  };
 
   const handleAccept = async () => {
     setActionLoading(true);
@@ -304,7 +293,27 @@ export default function UserProfilePopup({
                   </button>
                 )}
 
-                {/* Arkadaş ekle/sil */}
+                {/* Odaya davet — sadece arkadaş + aktif oda varsa */}
+                {canInvite && (
+                  inviteStatus === 'pending' ? (
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" /></span>
+                  ) : inviteStatus === 'accepted' ? (
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400"><Check size={14} /></span>
+                  ) : inviteStatus === 'rejected' ? (
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400"><X size={14} /></span>
+                  ) : (
+                    <button
+                      disabled={onCooldown}
+                      onClick={() => onInvite?.()}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 opacity-60 hover:opacity-100 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-20"
+                      title={onCooldown ? `${cooldownRemaining}s` : 'Odaya davet et'}
+                    >
+                      <PhoneCall size={14} />
+                    </button>
+                  )
+                )}
+
+                {/* Arkadaş sil */}
                 {rel === 'friend' && (
                   <button
                     onClick={() => setMiniConfirm({ isOpen: true, action: 'remove' })}
@@ -355,8 +364,6 @@ export default function UserProfilePopup({
               </div>
             )}
 
-            {/* Invite action */}
-            {canInvite && <div className="mt-2">{renderInvite()}</div>}
           </div>
         </div>
       </motion.div>
