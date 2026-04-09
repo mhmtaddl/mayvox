@@ -26,11 +26,16 @@ export function useDM(currentUserId: string | undefined) {
   const activeConvKeyRef = useRef(activeConvKey);
   activeConvKeyRef.current = activeConvKey;
 
+  // Optimistic hide — server confirm gelene kadar client-side filtre
+  const hiddenKeysRef = useRef<Set<string>>(new Set());
+
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
     setDmHandlers({
       onConversations: (convos) => {
-        setConversations(convos);
+        // Optimistic hide filtresi — server henüz hide'ı işlememişse client tarafında filtrele
+        const filtered = convos.filter(c => !hiddenKeysRef.current.has(c.conversationKey));
+        setConversations(filtered);
       },
       onHistory: (convKey, _recipientId, msgs) => {
         if (convKey === activeConvKeyRef.current) {
@@ -38,6 +43,9 @@ export function useDM(currentUserId: string | undefined) {
         }
       },
       onNewMessage: (msg) => {
+        // Yeni mesaj gelirse hidden set'ten kaldır — konuşma tekrar görünsün
+        hiddenKeysRef.current.delete(msg.conversationKey);
+
         // Aktif sohbetteyse mesajları güncelle
         if (msg.conversationKey === activeConvKeyRef.current) {
           setMessages(prev => {
@@ -172,6 +180,7 @@ export function useDM(currentUserId: string | undefined) {
   }, []);
 
   const hideConversation = useCallback((convKey: string) => {
+    hiddenKeysRef.current.add(convKey);
     dmHideConversation(convKey);
     setConversations(prev => prev.filter(c => c.conversationKey !== convKey));
     // Aktif sohbet buysa kapat
