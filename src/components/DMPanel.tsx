@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MessageSquare, ArrowLeft, Send, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
@@ -72,7 +73,7 @@ function ConversationItem({
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
         className="absolute bottom-2.5 right-3 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover/conv:opacity-40 hover:!opacity-100 hover:bg-red-500/10 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all duration-150"
-        title="Sohbeti kaldır"
+        title="Sohbeti sil"
       >
         <Trash2 size={11} />
       </button>
@@ -259,13 +260,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     return () => document.removeEventListener('mousedown', h);
   }, [isOpen, onClose, toggleRef]);
 
-  // ESC
-  useEffect(() => {
-    if (!isOpen) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [isOpen, onClose]);
+  useEscapeKey(onClose, isOpen);
 
   return (
     <>
@@ -321,9 +316,9 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                             currentUserId={currentUser.id}
                             onClick={() => dm.openConversation(convo.recipientId)}
                             onDelete={() => openConfirm({
-                              title: 'Sohbeti kaldır',
-                              description: `${n} ile olan sohbet listenden kaldırılsın mı? Karşı tarafın listesini etkilemez.`,
-                              confirmText: 'Kaldır',
+                              title: 'Sohbeti sil',
+                              description: `${n} ile olan sohbet listenden silinsin mi? Karşı tarafın listesini etkilemez.`,
+                              confirmText: 'Sil',
                               cancelText: 'İptal',
                               danger: true,
                               onConfirm: () => dm.hideConversation(convo.conversationKey),

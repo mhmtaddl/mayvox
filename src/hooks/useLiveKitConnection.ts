@@ -82,6 +82,7 @@ export function useLiveKitConnection({
     const joinAbort = new AbortController();
     const joinTimer = setTimeout(() => joinAbort.abort(), TOTAL_JOIN_TIMEOUT_MS);
 
+    let room: Room | null = null;
     try {
       // Clear ref BEFORE disconnect so the old room's Disconnected handler
       // doesn't see the new room when it fires.
@@ -108,7 +109,7 @@ export function useLiveKitConnection({
 
       // ── AŞAMA 2: Room oluştur + bağlan ──
 
-      const room = new Room({
+      room = new Room({
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: isNoiseSuppressionEnabled,
@@ -281,6 +282,10 @@ export function useLiveKitConnection({
           clearTimeout(reconnectTimeout);
           reconnectTimeout = null;
         }
+        if (speakingThrottleTimer) {
+          clearTimeout(speakingThrottleTimer);
+          speakingThrottleTimer = null;
+        }
         const identity =
           room.localParticipant?.identity || currentUserRef.current.id;
 
@@ -339,6 +344,8 @@ export function useLiveKitConnection({
       return true;
     } catch (err) {
       clearTimeout(joinTimer);
+      // Cleanup: oluşturulan room'u temizle (event listener leak önleme)
+      try { room?.disconnect(); } catch { /* ignore */ }
       const errMsg = (err as Error)?.message ?? '';
       const isTimeout = errMsg.includes('zaman aşımı') || (err as Error)?.name === 'AbortError';
 

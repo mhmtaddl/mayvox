@@ -1,7 +1,7 @@
 import React from 'react';
 import appLogo from '../assets/app-logo.png';
 
-export default function BrandArea() {
+function BrandArea() {
   return (
     <div className="flex items-center justify-center gap-2.5 select-none py-1 w-full group/brand cursor-default">
       {/* Logo — shimmer only */}
@@ -46,3 +46,5 @@ export default function BrandArea() {
     </div>
   );
 }
+
+export default React.memo(BrandArea);

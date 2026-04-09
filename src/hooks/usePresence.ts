@@ -115,7 +115,9 @@ export function usePresence({
 
   const startPresence = (user: User, appVersion?: string) => {
     if (presenceChannelRef.current) {
+      presenceChannelRef.current.untrack();
       presenceChannelRef.current.unsubscribe();
+      presenceChannelRef.current = null;
     }
 
     const channel = supabase.channel('app-presence', {

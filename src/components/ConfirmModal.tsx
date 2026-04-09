@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface Props {
   isOpen: boolean;
@@ -16,13 +17,7 @@ interface Props {
 export default function ConfirmModal({
   isOpen, title, description, confirmText, cancelText, onConfirm, onCancel, danger, loading,
 }: Props) {
-  // ESC ile kapat
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, onCancel]);
+  useEscapeKey(onCancel, isOpen);
 
   return (
     <AnimatePresence>

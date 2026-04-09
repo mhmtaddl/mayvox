@@ -11,7 +11,7 @@ interface Props {
   cardStyle?: CardStyle;
 }
 
-export default function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
+function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   const {
     avatar, firstName, lastName, isSpeaking, isMuted, isDeafened,
     platform, isAdmin, isModerator,
@@ -149,3 +149,27 @@ export default function RoomNode({ node, isCenter, cardStyle = 'current' }: Prop
     </div>
   );
 }
+
+function arePropsEqual(prev: Props, next: Props) {
+  if (prev.isCenter !== next.isCenter) return false;
+  if (prev.cardStyle !== next.cardStyle) return false;
+  const a = prev.node;
+  const b = next.node;
+  return (
+    a.id === b.id &&
+    a.isSpeaking === b.isSpeaking &&
+    a.isMuted === b.isMuted &&
+    a.isDeafened === b.isDeafened &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.scale === b.scale &&
+    a.avatar === b.avatar &&
+    a.firstName === b.firstName &&
+    a.lastName === b.lastName &&
+    a.isAdmin === b.isAdmin &&
+    a.isModerator === b.isModerator &&
+    a.platform === b.platform
+  );
+}
+
+export default React.memo(RoomNode, arePropsEqual);

@@ -97,8 +97,109 @@ import { toTitleCaseTr, formatFullName } from './lib/formatName';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
 import { ConfirmProvider } from './contexts/ConfirmContext';
+import { AppErrorBoundary } from './components/ErrorBoundary';
+import { activatePresence } from './lib/presenceLifecycle';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
+
+function mapDbChannel(c: DbChannel): VoiceChannel {
+  return {
+    id: c.id,
+    name: c.name,
+    userCount: 0,
+    members: [],
+    isSystemChannel: false,
+    ownerId: c.owner_id,
+    maxUsers: c.max_users,
+    isInviteOnly: c.is_invite_only,
+    isHidden: c.is_hidden,
+    password: c.password || undefined,
+    mode: c.mode || undefined,
+    speakerIds: c.speaker_ids || undefined,
+  };
+}
+
+function mapDbProfile(
+  p: DbProfile,
+  knownVersions?: Map<string, string>,
+): User {
+  return {
+    id: p.id,
+    email: p.email || '',
+    name: p.name || '',
+    firstName: p.first_name || p.name || '',
+    lastName: p.last_name || '',
+    age: p.age || 0,
+    avatar: p.avatar || ((p.first_name?.[0] || p.name?.[0] || '?').toUpperCase()),
+    status: 'offline' as const,
+    statusText: 'Çevrimdışı',
+    isAdmin: p.is_admin || false,
+    isPrimaryAdmin: p.is_primary_admin || false,
+    isModerator: p.is_moderator || false,
+    isMuted: p.is_muted || false,
+    isVoiceBanned: p.is_voice_banned || false,
+    appVersion: knownVersions?.get(p.id) || p.app_version,
+    lastSeenAt: p.last_seen_at || undefined,
+    totalUsageMinutes: p.total_usage_minutes || 0,
+    showLastSeen: p.show_last_seen !== false,
+  };
+}
+
+async function loadChannelsFromDb(): Promise<VoiceChannel[]> {
+  const { data } = await getChannels();
+  return data && data.length > 0 ? data.map((c: DbChannel) => mapDbChannel(c)) : [];
+}
+
+function buildOnlineUser(id: string, email: string, profile: DbProfile | null): User {
+  if (profile) {
+    return {
+      id,
+      email,
+      name: profile.name || email,
+      firstName: profile.first_name || email.split('@')[0],
+      lastName: profile.last_name || '',
+      age: profile.age || 18,
+      avatar: profile.avatar || '',
+      status: 'online' as const,
+      statusText: 'Aktif',
+      isAdmin: profile.is_admin || false,
+      isPrimaryAdmin: profile.is_primary_admin || false,
+      isModerator: profile.is_moderator || false,
+      isMuted: profile.is_muted || false,
+      muteExpires: profile.mute_expires || undefined,
+      isVoiceBanned: profile.is_voice_banned || false,
+      banExpires: profile.ban_expires || undefined,
+      mustChangePassword: (profile as any).must_change_password || false,
+      appVersion: profile.app_version || undefined,
+      lastSeenAt: profile.last_seen_at || undefined,
+      totalUsageMinutes: profile.total_usage_minutes || 0,
+      showLastSeen: profile.show_last_seen !== false,
+    };
+  }
+  return {
+    id,
+    name: email,
+    firstName: email.split('@')[0],
+    lastName: '',
+    age: 18,
+    avatar: '',
+    status: 'online' as const,
+    statusText: 'Aktif',
+    isAdmin: false,
+    isPrimaryAdmin: false,
+  };
+}
+
+async function loadOfflineUsers(
+  excludeId: string | undefined,
+  knownVersions: Map<string, string>,
+): Promise<User[]> {
+  const { data } = await getAllProfiles();
+  if (!data) return [];
+  return data
+    .filter((p: DbProfile) => !excludeId || p.id !== excludeId)
+    .map((p: DbProfile) => mapDbProfile(p, knownVersions));
+}
 
 export default function App() {
   // ── Window activity: toggles .window-inactive CSS class on <html> ──
@@ -584,6 +685,8 @@ export default function App() {
   const resyncPresenceRef = useRef(resyncPresence);
   resyncPresenceRef.current = resyncPresence;
 
+  const presenceDeps = { startPresence, resyncPresence, resyncPresenceRef };
+
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
 
@@ -732,41 +835,7 @@ export default function App() {
       const email = session.user.email || '';
       const { data: profile } = await getProfile(session.user.id);
 
-      const restoredUser: User = profile ? {
-        id: session.user.id,
-        email,
-        name: profile.name || email,
-        firstName: profile.first_name || email.split('@')[0],
-        lastName: profile.last_name || '',
-        age: profile.age || 18,
-        avatar: profile.avatar || '',
-        status: 'online',
-        statusText: 'Aktif',
-        isAdmin: profile.is_admin || false,
-        isPrimaryAdmin: profile.is_primary_admin || false,
-        isModerator: profile.is_moderator || false,
-        isMuted: profile.is_muted || false,
-        muteExpires: profile.mute_expires || undefined,
-        isVoiceBanned: profile.is_voice_banned || false,
-        banExpires: profile.ban_expires || undefined,
-        // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
-        appVersion: profile.app_version || undefined,
-        lastSeenAt: profile.last_seen_at || undefined,
-        totalUsageMinutes: profile.total_usage_minutes || 0,
-        showLastSeen: profile.show_last_seen !== false,
-      } : {
-        id: session.user.id,
-        name: email,
-        firstName: email.split('@')[0],
-        lastName: '',
-        age: 18,
-        avatar: '',
-        status: 'online',
-        statusText: 'Aktif',
-        isAdmin: false,
-        isPrimaryAdmin: false,
-      };
-
+      const restoredUser = buildOnlineUser(session.user.id, email, profile);
       if (!restoredUser.avatar) {
         restoredUser.avatar = ((restoredUser.firstName?.[0] || '') + '').toUpperCase() + (restoredUser.age || '');
       }
@@ -779,24 +848,8 @@ export default function App() {
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
 
       // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
-      const { data: savedChannels } = await getChannels();
-      if (savedChannels && savedChannels.length > 0) {
-        const userChannels: VoiceChannel[] = savedChannels.map((c: DbChannel) => ({
-          id: c.id,
-          name: c.name,
-          userCount: 0,
-          members: [],
-          isSystemChannel: false,
-          ownerId: c.owner_id,
-          maxUsers: c.max_users,
-          isInviteOnly: c.is_invite_only,
-          isHidden: c.is_hidden,
-          password: c.password || undefined,
-          mode: c.mode || undefined,
-          speakerIds: c.speaker_ids || undefined,
-        }));
-        setChannels([...CHANNELS, ...userChannels]);
-      }
+      const userChannels = await loadChannelsFromDb();
+      if (userChannels.length > 0) setChannels([...CHANNELS, ...userChannels]);
 
       setChannels((prev) => prev.map((c) => ({
         ...c,
@@ -804,44 +857,16 @@ export default function App() {
       })));
 
       // ── 2. Users yükle
-      const { data: allProfiles } = await getAllProfiles();
-      if (allProfiles) {
+      const offlineUsers = await loadOfflineUsers(undefined, knownVersionsRef.current);
+      if (offlineUsers.length > 0) {
         setAllUsers((prev) => {
           const prevMap = new Map(prev.map((u) => [u.id, u]));
-          const offlineUsers: User[] = allProfiles
-            .filter((p: DbProfile) => !prevMap.has(p.id))
-            .map((p: DbProfile) => ({
-              id: p.id,
-              email: p.email || '',
-              name: p.name || '',
-              firstName: p.first_name || p.name || '',
-              lastName: p.last_name || '',
-              age: p.age || 0,
-              avatar: p.avatar || ((p.first_name?.[0] || p.name?.[0] || '?').toUpperCase()),
-              status: 'offline' as const,
-              statusText: 'Çevrimdışı',
-              isAdmin: p.is_admin || false,
-              isPrimaryAdmin: p.is_primary_admin || false,
-              isModerator: p.is_moderator || false,
-              isMuted: p.is_muted || false,
-              isVoiceBanned: p.is_voice_banned || false,
-              // Presence cache öncelikli; yoksa DB'deki kalıcı versiyon
-              appVersion: knownVersionsRef.current.get(p.id) || p.app_version,
-              lastSeenAt: p.last_seen_at || undefined,
-              totalUsageMinutes: p.total_usage_minutes || 0,
-              showLastSeen: p.show_last_seen !== false,
-            }));
-          return [...prev, ...offlineUsers];
+          return [...prev, ...offlineUsers.filter(u => !prevMap.has(u.id))];
         });
       }
 
-      // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat ──────────────
-      // SUBSCRIBED callback → applyPresenceState → syncRoomMembersFromPresence.
-      // Kanallar zaten yüklendiği için member bilgisi sıfırlanmaz.
-      startPresence(restoredUser, appVersion);
-      resyncPresence();
-      // Fallback: WebSocket bağlantısı geç olabilir. 1.5s sonra tekrar dene.
-      setTimeout(() => resyncPresenceRef.current(), 1500);
+      // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
+      activatePresence(restoredUser, appVersion, presenceDeps);
       startHeartbeat(restoredUser.id);
 
       setView('chat');
@@ -1050,6 +1075,7 @@ export default function App() {
   // Bu timer sadece auto-leave mantığını (uyarı + oda çıkışı) çalıştırır.
   // Auto-presence durumu (Pasif/Aktif/Duymuyor) useAutoPresence tarafından yönetilir.
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastJoinRef = useRef(0);
   const idleWarningShownRef = useRef(false);
 
   // PTT basıldığında auto-leave uyarı flag'ini temizle (activity shared ref'te zaten güncelleniyor)
@@ -1491,6 +1517,10 @@ export default function App() {
   // ── Join helpers ──────────────────────────────────────────────────────────
   // Extracted to avoid duplicating the optimistic join + connect + rollback logic
   const performJoin = async (channelId: string, channelName: string) => {
+    // Client-side join throttle — 2sn cooldown
+    if (Date.now() - lastJoinRef.current < 2000) return;
+    lastJoinRef.current = Date.now();
+    logger.info('Room join', { channelId, channelName, userId: currentUser.id });
     // AFK durumundaysa kanala girince temizle
     if (currentUser.statusText === 'AFK') {
       const activeUser = { ...currentUser, statusText: 'Aktif' };
@@ -1616,109 +1646,14 @@ export default function App() {
     const email = data.user?.email || nick;
     const { data: profile } = await getProfile(userId);
 
-    const loggedInUser: User = profile ? {
-      id: userId,
-      email,
-      name: profile.name || email,
-      firstName: profile.first_name || email.split('@')[0],
-      lastName: profile.last_name || '',
-      age: profile.age || 18,
-      avatar: profile.avatar || '',
-      status: 'online',
-      statusText: 'Aktif',
-      isAdmin: profile.is_admin || false,
-      isPrimaryAdmin: profile.is_primary_admin || false,
-      isModerator: profile.is_moderator || false,
-      isMuted: profile.is_muted || false,
-      muteExpires: profile.mute_expires || undefined,
-      isVoiceBanned: profile.is_voice_banned || false,
-      banExpires: profile.ban_expires || undefined,
-      mustChangePassword: profile.must_change_password || false,
-      // DB'deki kalıcı versiyon — startPresence'da değişip değişmediğini karşılaştırmak için
-      appVersion: profile.app_version || undefined,
-      lastSeenAt: profile.last_seen_at || undefined,
-      totalUsageMinutes: profile.total_usage_minutes || 0,
-      showLastSeen: profile.show_last_seen !== false,
-    } : {
-      id: userId,
-      name: email,
-      firstName: email.split('@')[0],
-      lastName: '',
-      age: 18,
-      avatar: getAvatarText({ firstName: email.split('@')[0], lastName: '', age: 18 } as User),
-      status: 'online',
-      statusText: 'Aktif',
-      isAdmin: false,
-      isPrimaryAdmin: false,
-    };
-
+    const loggedInUser = buildOnlineUser(userId, email, profile);
     if (!loggedInUser.avatar) loggedInUser.avatar = getAvatarText(loggedInUser);
 
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(loggedInUser);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
 
-    // ── 1. Channels yükle (login akışında da gerekli — kullanıcı odaları DB'den gelir)
-    const { data: loginChannels } = await getChannels();
-    if (loginChannels && loginChannels.length > 0) {
-      const userChannels: VoiceChannel[] = loginChannels.map((c: DbChannel) => ({
-        id: c.id,
-        name: c.name,
-        userCount: 0,
-        members: [],
-        isSystemChannel: false,
-        ownerId: c.owner_id,
-        maxUsers: c.max_users,
-        isInviteOnly: c.is_invite_only,
-        isHidden: c.is_hidden,
-        password: c.password || undefined,
-        mode: c.mode || undefined,
-      }));
-      setChannels([...CHANNELS, ...userChannels]);
-    }
-
-    // ── 2. Users yükle
-    const { data: allProfiles } = await getAllProfiles();
-    const offlineUsers: User[] = allProfiles
-      ? allProfiles
-          .filter((p: DbProfile) => p.id !== userId)
-          .map((p: DbProfile) => ({
-            id: p.id,
-            email: p.email || '',
-            name: p.name || '',
-            firstName: p.first_name || p.name || '',
-            lastName: p.last_name || '',
-            age: p.age || 0,
-            avatar: p.avatar || ((p.first_name?.[0] || p.name?.[0] || '?').toUpperCase()),
-            status: 'offline' as const,
-            statusText: 'Çevrimdışı',
-            isAdmin: p.is_admin || false,
-            isPrimaryAdmin: p.is_primary_admin || false,
-            isModerator: p.is_moderator || false,
-            isMuted: p.is_muted || false,
-            isVoiceBanned: p.is_voice_banned || false,
-            appVersion: knownVersionsRef.current.get(p.id),
-            lastSeenAt: p.last_seen_at || undefined,
-            totalUsageMinutes: p.total_usage_minutes || 0,
-            showLastSeen: p.show_last_seen !== false,
-          }))
-      : [];
-
-    setAllUsers(prev => {
-      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
-      return [
-        loggedInUser,
-        ...offlineUsers.map(u => ({
-          ...u,
-          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
-        })),
-      ];
-    });
-
-    // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
-    startPresence(loggedInUser, appVersion);
-    resyncPresence();
-    setTimeout(() => resyncPresenceRef.current(), 1500);
+    await initPostAuth(loggedInUser);
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
     setLoginNick('');
@@ -1759,6 +1694,26 @@ export default function App() {
   };
 
   // last_seen_at heartbeat — crash/force-close'a karşı periyodik DB güncellemesi
+  // Ortak post-auth setup: channels + users yükle, presence başlat
+  const initPostAuth = async (user: User) => {
+    const userChannels = await loadChannelsFromDb();
+    if (userChannels.length > 0) setChannels([...CHANNELS, ...userChannels]);
+
+    const offlineUsers = await loadOfflineUsers(user.id, knownVersionsRef.current);
+    setAllUsers(prev => {
+      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
+      return [
+        user,
+        ...offlineUsers.map(u => ({
+          ...u,
+          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
+        })),
+      ];
+    });
+
+    activatePresence(user, appVersion, presenceDeps);
+  };
+
   const startHeartbeat = (userId: string) => {
     if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     updateLastSeenHeartbeat(userId).catch(() => {});
@@ -2144,66 +2099,7 @@ export default function App() {
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(newUser);
 
-    // ── 1. Channels yükle (kayıt sırasında da mevcut odalar yüklenmeli)
-    const { data: regChannels } = await getChannels();
-    if (regChannels && regChannels.length > 0) {
-      const userChannels: VoiceChannel[] = regChannels.map((c: DbChannel) => ({
-        id: c.id,
-        name: c.name,
-        userCount: 0,
-        members: [],
-        isSystemChannel: false,
-        ownerId: c.owner_id,
-        maxUsers: c.max_users,
-        isInviteOnly: c.is_invite_only,
-        isHidden: c.is_hidden,
-        password: c.password || undefined,
-      }));
-      setChannels([...CHANNELS, ...userChannels]);
-    }
-
-    // ── 2. Users yükle
-    const { data: regAllProfiles } = await getAllProfiles();
-    const regOfflineUsers: User[] = regAllProfiles
-      ? regAllProfiles
-          .filter((p: DbProfile) => p.id !== newUser.id)
-          .map((p: DbProfile) => ({
-            id: p.id,
-            email: p.email || '',
-            name: p.name || '',
-            firstName: p.first_name || p.name || '',
-            lastName: p.last_name || '',
-            age: p.age || 0,
-            avatar: p.avatar || ((p.first_name?.[0] || p.name?.[0] || '?').toUpperCase()),
-            status: 'offline' as const,
-            statusText: 'Çevrimdışı',
-            isAdmin: p.is_admin || false,
-            isPrimaryAdmin: p.is_primary_admin || false,
-            isModerator: p.is_moderator || false,
-            isMuted: p.is_muted || false,
-            isVoiceBanned: p.is_voice_banned || false,
-            appVersion: knownVersionsRef.current.get(p.id),
-            lastSeenAt: p.last_seen_at || undefined,
-            totalUsageMinutes: p.total_usage_minutes || 0,
-            showLastSeen: p.show_last_seen !== false,
-          }))
-      : [];
-
-    setAllUsers(prev => {
-      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
-      return [
-        newUser,
-        ...regOfflineUsers.map(u => ({
-          ...u,
-          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
-        })),
-      ];
-    });
-
-    // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
-    startPresence(newUser, appVersion);
-    resyncPresence();
-    setTimeout(() => resyncPresenceRef.current(), 1500);
+    await initPostAuth(newUser);
     startHeartbeat(newUser.id);
     setView('chat');
     setLoginNick('');
@@ -2412,6 +2308,7 @@ export default function App() {
   };
 
   return (
+    <AppErrorBoundary>
     <ConfirmProvider>
     <SettingsCtx.Provider value={settingsContextValue}>
       <UserContext.Provider value={userContextValue}>
@@ -2568,5 +2465,6 @@ export default function App() {
       </UserContext.Provider>
     </SettingsCtx.Provider>
     </ConfirmProvider>
+    </AppErrorBoundary>
   );
 }

@@ -141,6 +141,11 @@ const dmStmt = {
     SELECT COUNT(*) as count FROM dm_messages
     WHERE receiver_id = ? AND read_at IS NULL
   `),
+  getUnreadBySender: dmDb.prepare(`
+    SELECT sender_id, COUNT(*) as count FROM dm_messages
+    WHERE receiver_id = ? AND read_at IS NULL
+    GROUP BY sender_id
+  `),
   hideConversation: dmDb.prepare(`
     INSERT OR REPLACE INTO dm_conversation_hidden (user_id, conversation_key, hidden_at)
     VALUES (?, ?, ?)
@@ -204,9 +209,35 @@ async function checkFriendship(userA, userB) {
   return !!data;
 }
 
+async function getFriendIds(userId) {
+  const { data } = await supabase
+    .from('friendships')
+    .select('user_low_id, user_high_id')
+    .or(`user_low_id.eq.${userId},user_high_id.eq.${userId}`);
+  if (!data) return new Set();
+  return new Set(data.map(r => r.user_low_id === userId ? r.user_high_id : r.user_low_id));
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 const rooms = new Map();          // roomId -> Set<ws>
 const cleanupTimers = new Map();  // roomId -> timeout
+
+// ── Per-user rate limits ──────────────────────────────────────────────────
+// userId -> { count, resetAt }
+const userChatLimits = new Map();   // room chat: 10 msg / 5s
+const userDmLimits = new Map();     // DM: 8 msg / 10s
+const userJoinLimits = new Map();   // join: 5 / 15s
+
+function checkRateLimit(map, userId, maxCount, windowMs) {
+  const now = Date.now();
+  let entry = map.get(userId);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + windowMs };
+    map.set(userId, entry);
+  }
+  entry.count += 1;
+  return entry.count > maxCount;
+}
 
 // ── HTTP health check ────────────────────────────────────────────────────
 const httpServer = http.createServer((req, res) => {
@@ -424,6 +455,11 @@ wss.on('connection', (ws) => {
       const roomId = String(msg.roomId || '').trim();
       if (!roomId) return;
 
+      // Per-user join rate limit: 5 join / 15 saniye
+      if (checkRateLimit(userJoinLimits, userId, 5, 15000)) {
+        return send(ws, { type: 'error', message: 'Çok hızlı oda değiştiriyorsun, biraz bekle' });
+      }
+
       // Aynı odaya tekrar join
       if (currentRoom === roomId) {
         try {
@@ -496,6 +532,11 @@ wss.on('connection', (ws) => {
       const text = String(msg.text || '').trim();
       if (!text || text.length > 2000) return;
 
+      // Per-user chat rate limit: 10 mesaj / 5 saniye
+      if (checkRateLimit(userChatLimits, userId, 10, 5000)) {
+        return send(ws, { type: 'error', message: 'Çok hızlı mesaj gönderiyorsun, biraz bekle' });
+      }
+
       try {
         const { data, error } = await supabase
           .from('room_messages')
@@ -537,7 +578,7 @@ wss.on('connection', (ws) => {
           type: 'delete',
           messageId: msg.messageId,
         });
-      } catch {}
+      } catch (err) { console.error('[chat] delete error:', err); }
       return;
     }
 
@@ -559,7 +600,7 @@ wss.on('connection', (ws) => {
           messageId: msg.messageId,
           text,
         });
-      } catch {}
+      } catch (err) { console.error('[chat] edit error:', err); }
       return;
     }
 
@@ -579,7 +620,7 @@ wss.on('connection', (ws) => {
         });
 
         console.log(`[chat] ${userName} tüm mesajları sildi: ${currentRoom}`);
-      } catch {}
+      } catch (err) { console.error('[chat] clear error:', err); }
       return;
     }
 
@@ -605,10 +646,13 @@ wss.on('connection', (ws) => {
     if (msg.type === 'dm:conversations') {
       try {
         const rows = dmStmt.getConversations.all(userId, userId, userId, userId);
-        // Her konuşma için karşı tarafın profil bilgisini çek
+        // Aktif arkadaş ID'lerini tek sorguda çek
+        const friendIds = await getFriendIds(userId);
+        // Sadece aktif arkadaşlarla olan konuşmaları döndür
         const convos = [];
         for (const row of rows) {
           const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+          if (!friendIds.has(otherId)) continue;
           convos.push({
             conversationKey: row.conversation_key,
             recipientId: otherId,
@@ -692,6 +736,11 @@ wss.on('connection', (ws) => {
         return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
       }
 
+      // Per-user DM rate limit: 8 mesaj / 10 saniye
+      if (checkRateLimit(userDmLimits, userId, 8, 10000)) {
+        return send(ws, { type: 'dm:error', message: 'Çok hızlı mesaj gönderiyorsun, biraz bekle' });
+      }
+
       try {
         // Arkadaşlık kontrolü
         const friends = await checkFriendship(userId, recipientId);
@@ -767,8 +816,14 @@ wss.on('connection', (ws) => {
     // ── DM:UNREAD_TOTAL ──────────────────────────────────────────────────
     if (msg.type === 'dm:unread_total') {
       try {
-        const row = dmStmt.getUnreadCount.get(userId);
-        send(ws, { type: 'dm:unread_total', count: row?.count || 0 });
+        const rows = dmStmt.getUnreadBySender.all(userId);
+        // Sadece aktif arkadaşlardan gelen okunmamış mesajları say
+        const friendIds = await getFriendIds(userId);
+        let count = 0;
+        for (const row of rows) {
+          if (friendIds.has(row.sender_id)) count += row.count;
+        }
+        send(ws, { type: 'dm:unread_total', count });
       } catch {
         send(ws, { type: 'dm:unread_total', count: 0 });
       }
@@ -806,13 +861,18 @@ wss.on('connection', (ws) => {
   });
 });
 
-// ── Heartbeat ─────────────────────────────────────────────────────────────
+// ── Heartbeat + rate limit cleanup ───────────────────────────────────────
 const heartbeat = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (!ws.isAlive) return ws.terminate();
     ws.isAlive = false;
     ws.ping();
   });
+  // Stale rate limit entry'leri temizle
+  const now = Date.now();
+  for (const [k, v] of userChatLimits) { if (now > v.resetAt) userChatLimits.delete(k); }
+  for (const [k, v] of userDmLimits) { if (now > v.resetAt) userDmLimits.delete(k); }
+  for (const [k, v] of userJoinLimits) { if (now > v.resetAt) userJoinLimits.delete(k); }
 }, 30000);
 
 wss.on('close', () => clearInterval(heartbeat));
@@ -821,3 +881,24 @@ wss.on('close', () => clearInterval(heartbeat));
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[chat-server] :${PORT} hazır (WebSocket v3)`);
 });
+
+// ── Graceful Shutdown ────────────────────────────────────────────────────────
+function gracefulShutdown(signal) {
+  console.log(`[chat-server] ${signal} alındı, kapatılıyor...`);
+  clearInterval(heartbeat);
+  wss.clients.forEach((ws) => {
+    try { ws.close(1001, 'Server shutting down'); } catch {}
+  });
+  wss.close(() => {
+    try { dmDb.close(); } catch {}
+    console.log('[chat-server] SQLite kapatıldı');
+    httpServer.close(() => {
+      console.log('[chat-server] HTTP kapatıldı');
+      process.exit(0);
+    });
+  });
+  setTimeout(() => { process.exit(1); }, 5000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

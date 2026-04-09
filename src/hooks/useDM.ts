@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { logger } from '../lib/logger';
 import {
   setDmHandlers,
   dmLoadConversations,
@@ -134,6 +135,7 @@ export function useDM(currentUserId: string | undefined) {
 
   const openConversation = useCallback((recipientId: string) => {
     if (!currentUserId) return;
+    logger.info('DM open', { recipientId });
     const convKey = currentUserId < recipientId
       ? `dm:${currentUserId}:${recipientId}`
       : `dm:${recipientId}:${currentUserId}`;
@@ -156,9 +158,20 @@ export function useDM(currentUserId: string | undefined) {
     });
   }, [currentUserId, conversations]);
 
+  const lastDmSendRef = useRef(0);
+  const lastDmTextRef = useRef('');
   const sendMessage = useCallback((text: string) => {
     if (!activeRecipientId || !text.trim()) return;
-    dmSendMessage(activeRecipientId, text.trim());
+    const trimmed = text.trim();
+    const now = Date.now();
+    // 500ms throttle
+    if (now - lastDmSendRef.current < 500) return;
+    // Duplicate suppression — aynı mesajı 3sn içinde tekrar gönderme
+    if (trimmed === lastDmTextRef.current && now - lastDmSendRef.current < 3000) return;
+    lastDmSendRef.current = now;
+    lastDmTextRef.current = trimmed;
+    logger.info('DM send', { recipientId: activeRecipientId });
+    dmSendMessage(activeRecipientId, trimmed);
   }, [activeRecipientId]);
 
   const closeConversation = useCallback(() => {

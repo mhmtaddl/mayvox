@@ -18,7 +18,6 @@ const DEFAULT_ORIGINS = [
   'http://localhost',
   'https://localhost',
   'capacitor://localhost',
-  'null',
 ];
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -268,6 +267,17 @@ if (!getSupabaseAnonKey()) missing.push('SUPABASE_ANON_KEY');
 if (!LIVEKIT_URL) missing.push('LIVEKIT_URL (veya LIVEKIT_HOST)');
 if (missing.length) console.warn(`[server] Eksik env: ${missing.join(', ')}`);
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] :${PORT} hazır`);
 });
+
+function gracefulShutdown(signal) {
+  console.log(`[server] ${signal} alındı, kapatılıyor...`);
+  server.close(() => {
+    console.log('[server] HTTP kapatıldı');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 5000);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

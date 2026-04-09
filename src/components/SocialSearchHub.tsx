@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, UserPlus, UserMinus, Check, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -126,12 +127,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen]);
+  useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => `${r.firstName} ${r.lastName}`.trim() || r.name || 'Kullanıcı';
   const initials = (r: SearchResult) => `${(r.firstName || r.name || '?')[0]}${(r.lastName || '')[0] || ''}`.toUpperCase();
@@ -139,9 +135,9 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const triggerConfirm = (userId: string, userName: string, action: 'send' | 'remove' | 'cancel') => {
     openConfirm({
       title: action === 'send' ? 'Arkadaş isteği gönder' : action === 'cancel' ? 'İsteği iptal et' : 'Arkadaşı sil',
-      description: action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
-        : action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-        : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`,
+      description: action === 'send' ? `${userName} kişisine arkadaşlık isteği gönderilsin mi?`
+        : action === 'cancel' ? `${userName} kişisine gönderilen istek iptal edilsin mi?`
+        : `${userName} kişisini arkadaşlarından silmek istiyor musun?`,
       confirmText: action === 'send' ? 'Ekle' : action === 'cancel' ? 'İptal et' : 'Sil',
       cancelText: 'İptal',
       danger: action === 'remove',

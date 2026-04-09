@@ -83,6 +83,8 @@ export function handleDmMessage(msg: any): boolean {
   }
 }
 
+const MAX_DM_LENGTH = 2000;
+
 // ── API ──────────────────────────────────────────────────────────────────
 
 function wsSend(data: Record<string, unknown>) {
@@ -96,18 +98,22 @@ export function dmLoadConversations() {
 }
 
 export function dmOpenConversation(recipientId: string) {
+  if (!recipientId) return;
   wsSend({ type: 'dm:open', recipientId });
 }
 
 export function dmSendMessage(recipientId: string, text: string) {
-  wsSend({ type: 'dm:send', recipientId, text });
+  if (!recipientId || !text) return;
+  wsSend({ type: 'dm:send', recipientId, text: text.slice(0, MAX_DM_LENGTH) });
 }
 
 export function dmHideConversation(conversationKey: string) {
+  if (!conversationKey) return;
   wsSend({ type: 'dm:hide_conversation', conversationKey });
 }
 
 export function dmMarkRead(conversationKey: string) {
+  if (!conversationKey) return;
   wsSend({ type: 'dm:mark_read', conversationKey });
 }
 

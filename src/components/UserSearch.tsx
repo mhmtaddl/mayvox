@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, UserPlus, Send, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface SearchResult {
   id: string;
@@ -75,13 +76,7 @@ export default function UserSearch({ currentUserId }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
-  // Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen]);
+  useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => {
     const full = `${r.firstName} ${r.lastName}`.trim();

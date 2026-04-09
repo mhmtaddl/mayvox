@@ -31,6 +31,9 @@ type ChatEventHandler = {
 const CHAT_WS_URL =
   import.meta.env.VITE_CHAT_WS_URL || 'wss://api.cylksohbet.org/ws/chat';
 
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_RECONNECT_ATTEMPTS = 50;
+
 console.log('[chatService] WS URL:', CHAT_WS_URL);
 
 let ws: WebSocket | null = null;
@@ -39,6 +42,7 @@ let handlers: ChatEventHandler = {};
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let intentionalClose = false;
+let isConnecting = false;
 
 function getReconnectDelay() {
   return Math.min(1000 * Math.pow(2, reconnectAttempt), 15000);
@@ -75,6 +79,11 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
 
   reconnectAttempt += 1;
+  if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
+    console.warn(`[chatService] Max reconnect (${MAX_RECONNECT_ATTEMPTS}) aşıldı, durduruluyor`);
+    handlers.onStatusChange?.('disconnected');
+    return;
+  }
   const delay = getReconnectDelay();
   console.log(`[chatService] Reconnect #${reconnectAttempt}, ${delay}ms sonra`);
 
@@ -105,6 +114,13 @@ export async function connectChat() {
     return;
   }
 
+  // Race guard: getAuthToken() async — iki çağrı aynı anda bu noktayı geçebilir
+  if (isConnecting) {
+    console.log('[chatService] Zaten bağlanma sürecinde, skip');
+    return;
+  }
+  isConnecting = true;
+
   intentionalClose = false;
   clearReconnectTimer();
   handlers.onStatusChange?.('connecting');
@@ -112,6 +128,7 @@ export async function connectChat() {
   const token = await getAuthToken();
   if (!token) {
     console.warn('[chatService] Token yok, bağlantı iptal');
+    isConnecting = false;
     handlers.onStatusChange?.('disconnected');
     return;
   }
@@ -124,6 +141,7 @@ export async function connectChat() {
 
     socket.onopen = () => {
       console.log('[chatService] WS OPEN — auth gönderiliyor');
+      isConnecting = false;
       reconnectAttempt = 0;
 
       if (socket.readyState === WebSocket.OPEN) {
@@ -209,6 +227,7 @@ export async function connectChat() {
         intentionalClose
       );
 
+      isConnecting = false;
       if (ws === socket) {
         ws = null;
       }
@@ -225,6 +244,7 @@ export async function connectChat() {
       console.error('[chatService] WS ERROR:', event);
     };
   } catch (err) {
+    isConnecting = false;
     console.error('[chatService] WebSocket oluşturulamadı:', err);
     handlers.onStatusChange?.('disconnected');
     scheduleReconnect();
@@ -282,11 +302,13 @@ export function sendMessage(text: string) {
   );
 
   if (ws?.readyState === WebSocket.OPEN && currentRoom) {
-    ws.send(JSON.stringify({ type: 'send', text }));
+    const trimmed = text.slice(0, MAX_MESSAGE_LENGTH);
+    ws.send(JSON.stringify({ type: 'send', text: trimmed }));
   }
 }
 
 export function deleteMessage(messageId: string) {
+  if (!messageId) return;
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'delete', messageId }));
   }
@@ -294,7 +316,7 @@ export function deleteMessage(messageId: string) {
 
 export function editMessage(messageId: string, text: string) {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'edit', messageId, text }));
+    ws.send(JSON.stringify({ type: 'edit', messageId, text: text.slice(0, MAX_MESSAGE_LENGTH) }));
   }
 }
 

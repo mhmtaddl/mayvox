@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall } from 'lucide-react';
 import type { User } from '../types';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { isOutdated } from '../features/update/compareVersions';
 import { formatFullName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -73,11 +74,7 @@ export default function UserProfilePopup({
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 16);
   const y = Math.min(position.y - 40, window.innerHeight - POPUP_H - 16);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   useEffect(() => {
     if (!user.onlineSince) return;
@@ -112,9 +109,9 @@ export default function UserProfilePopup({
   const triggerConfirm = (action: 'send' | 'remove' | 'cancel') => {
     openConfirm({
       title: action === 'send' ? 'Arkadaş isteği gönder' : action === 'cancel' ? 'İsteği iptal et' : 'Arkadaşı sil',
-      description: action === 'send' ? `${userName} kullanıcısına istek gönderilsin mi?`
-        : action === 'cancel' ? `${userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-        : `${userName} kullanıcısını arkadaşlarından silmek istiyor musun?`,
+      description: action === 'send' ? `${userName} kişisine arkadaşlık isteği gönderilsin mi?`
+        : action === 'cancel' ? `${userName} kişisine gönderilen istek iptal edilsin mi?`
+        : `${userName} kişisini arkadaşlarından silmek istiyor musun?`,
       confirmText: action === 'send' ? 'Ekle' : action === 'cancel' ? 'İptal et' : 'Sil',
       cancelText: 'İptal',
       danger: action === 'remove',
