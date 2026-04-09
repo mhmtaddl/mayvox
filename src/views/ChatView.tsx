@@ -2165,48 +2165,44 @@ export default function ChatView() {
             isDeafened={isDeafened}
           />
 
-          {/* Sağ alt kontroller — Mesaj, Bildirim, Ayarlar, Çıkış */}
-          <div className="shrink-0 px-3 py-3 flex items-center justify-center gap-2">
-            {/* Mesaj — DM panel toggle */}
+          {/* Sağ alt kontroller */}
+          <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button
               ref={dmToggleRef}
               onClick={() => setDmPanelOpen(prev => !prev)}
-              className={`relative w-10 h-10 flex items-center justify-center transition-colors duration-200 ${dmPanelOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
+              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`}
               title="Mesajlar"
             >
               <MessageSquare size={16} />
               {dmUnreadCount > 0 && !dmPanelOpen && (
-                <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] text-[8px] font-bold flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] text-[9px] font-bold flex items-center justify-center">
                   {dmUnreadCount > 99 ? '99+' : dmUnreadCount}
                 </span>
               )}
             </button>
 
-            {/* Ayarlar — hover çark dönme + accent renk */}
             <button
               onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
-              className={`relative w-10 h-10 flex items-center justify-center transition-colors duration-200 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'}`}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`}
               title="Ayarlar"
             >
               <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
             </button>
 
-            {/* Bildirim çanı — hover sallanma + accent renk */}
             <button
               onClick={() => { /* TODO: bildirim paneli toggle */ }}
-              className="relative w-10 h-10 flex items-center justify-center transition-colors duration-200 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] group/bell"
+              className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)] group/bell"
               title="Bildirimler"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover/bell:animate-[bell-ring_0.5s_ease-in-out]"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full" />
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-amber-500 rounded-full" />
               )}
             </button>
 
-            {/* Çıkış — her zaman kırmızı */}
             <button
               onClick={() => setLogoutConfirmOpen(true)}
-              className="w-10 h-10 flex items-center justify-center transition-colors duration-200 text-red-400 hover:text-red-300"
+              className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8"
               title="Çıkış"
             >
               <Power size={16} />
