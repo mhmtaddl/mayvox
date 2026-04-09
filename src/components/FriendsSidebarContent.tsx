@@ -113,9 +113,15 @@ export default function FriendsSidebarContent({
   }, [groupMenu, friendMenu]);
 
   // ── Handlers ───────────────────────────────────────────────────────────
+  const MAX_GROUPS = 10;
+
   const handleCreateGroup = async () => {
     const name = newGroupName.trim();
     if (!name) { setCreatingGroup(false); return; }
+    if (groups.length >= MAX_GROUPS) {
+      setToastMsg(`En fazla ${MAX_GROUPS} grup oluşturabilirsin`);
+      setCreatingGroup(false); setNewGroupName(''); return;
+    }
     const ok = await createGroup(name);
     if (ok) setToastMsg(`"${name}" grubu oluşturuldu`);
     setNewGroupName('');
@@ -295,11 +301,17 @@ export default function FriendsSidebarContent({
 
   const renderOfflineUser = (user: User) => {
     const fav = isFavorite(user.id);
+    const isMe = user.id === currentUser.id;
     return (
     <div
       key={user.id}
       className={`flex items-center gap-3 ${isDesktop ? 'px-2 py-1.5 rounded-lg' : 'px-2 py-2 rounded-lg'} opacity-50 transition-all duration-200 group hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
+      onContextMenu={(e) => {
+        if (isMe) return;
+        e.preventDefault();
+        setFriendMenu({ userId: user.id, userName: formatFullName(user.firstName, user.lastName), x: e.clientX, y: e.clientY });
+      }}
     >
       <div className="relative">
         <div
@@ -409,9 +421,20 @@ export default function FriendsSidebarContent({
         <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
         <button
           onClick={(e) => { e.stopPropagation(); setGroupMenu({ groupId: group.id, x: e.clientX, y: e.clientY }); }}
-          className="opacity-0 group-hover/gh:opacity-60 hover:!opacity-100 transition-opacity w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
+          className="opacity-25 group-hover/gh:opacity-60 hover:!opacity-100 transition-opacity w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
+          title="Grup ayarları"
         >
           <MoreHorizontal size={11} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeleteConfirm({ isOpen: true, groupId: group.id, groupName: group.name });
+          }}
+          className="opacity-0 group-hover/gh:opacity-40 hover:!opacity-100 hover:text-red-400 transition-all w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
+          title="Grubu sil"
+        >
+          <Trash2 size={10} />
         </button>
       </div>
     );
@@ -463,12 +486,10 @@ export default function FriendsSidebarContent({
             </div>
           )}
 
-          {/* 3. Grouped online friends (+ empty groups as drop targets during drag) */}
+          {/* 3. Friend groups — boş olsa da görünür */}
           {groups.map(group => {
             const entry = groupedOnline.find(g => g.group.id === group.id);
             const users = entry?.users || [];
-            // Hide empty groups unless drag is active
-            if (users.length === 0 && !draggingUserId) return null;
             return (
               <div
                 key={group.id}
@@ -479,7 +500,9 @@ export default function FriendsSidebarContent({
               >
                 {renderGroupHeader(group, users.length)}
                 <div className="space-y-1" style={{ minHeight: draggingUserId && users.length === 0 ? 20 : undefined }}>
-                  {users.map(renderOnlineUser)}
+                  {users.length > 0 ? users.map(renderOnlineUser) : !draggingUserId && (
+                    <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-25 px-2 py-1">Boş grup</p>
+                  )}
                 </div>
               </div>
             );
@@ -541,14 +564,14 @@ export default function FriendsSidebarContent({
                 className="w-full text-[10px] bg-transparent text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 border border-[var(--theme-accent)]/20 rounded-lg px-2.5 py-1.5 outline-none focus:border-[var(--theme-accent)]/40 transition-colors"
               />
             </div>
-          ) : (
+          ) : groups.length < MAX_GROUPS ? (
             <button
               onClick={() => setCreatingGroup(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 mx-2 rounded-lg text-[9px] font-semibold text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)] transition-all"
             >
               <FolderPlus size={10} /> Yeni grup
             </button>
-          )}
+          ) : null}
         </>}
       </div>
 
