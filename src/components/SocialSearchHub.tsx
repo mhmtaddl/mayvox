@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
-import MiniConfirm from './MiniConfirm';
+import ConfirmModal from './ConfirmModal';
 
 interface SearchResult {
   id: string;
@@ -329,24 +329,24 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       </AnimatePresence>
     </div>
 
-    {/* Mini confirm */}
-    <MiniConfirm
+    <ConfirmModal
       isOpen={confirm.isOpen}
       title={
         confirm.action === 'send' ? 'Arkadaş isteği gönder'
         : confirm.action === 'cancel' ? 'İsteği iptal et'
-        : 'Arkadaşı kaldır'
+        : 'Arkadaşı sil'
       }
       description={
         confirm.action === 'send' ? `${confirm.userName} kullanıcısına istek gönderilsin mi?`
         : confirm.action === 'cancel' ? `${confirm.userName} kullanıcısına gönderilen istek iptal edilsin mi?`
-        : `${confirm.userName} kullanıcısını arkadaşlarından kaldırmak istiyor musun?`
+        : `${confirm.userName} kullanıcısını arkadaşlarından silmek istiyor musun?`
       }
       confirmText={
-        confirm.action === 'send' ? 'Gönder'
+        confirm.action === 'send' ? 'Ekle'
         : confirm.action === 'cancel' ? 'İptal et'
-        : 'Kaldır'
+        : 'Sil'
       }
+      cancelText="İptal"
       onConfirm={handleConfirm}
       onCancel={() => setConfirm({ isOpen: false, userId: '', userName: '', action: 'send' })}
       danger={confirm.action === 'remove'}

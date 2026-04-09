@@ -11,7 +11,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { useFriendGroups, type FriendGroup } from '../hooks/useFriendGroups';
 import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
 import DeviceBadge from './chat/DeviceBadge';
-import MiniConfirm from './MiniConfirm';
+import ConfirmModal from './ConfirmModal';
 import type { User } from '../types';
 
 interface Props {
@@ -702,11 +702,12 @@ export default function FriendsSidebarContent({
       </AnimatePresence>
 
       {/* Delete group confirm */}
-      <MiniConfirm
+      <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         title="Grubu sil"
         description={`"${deleteConfirm.groupName}" grubunu silmek istiyor musun? Arkadaşların silinmez, sadece grup kaldırılır.`}
         confirmText="Sil"
+        cancelText="İptal"
         onConfirm={handleDeleteGroup}
         onCancel={() => setDeleteConfirm({ isOpen: false, groupId: '', groupName: '' })}
         danger

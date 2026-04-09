@@ -5,7 +5,7 @@ import { formatFullName } from '../lib/formatName';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
-import MiniConfirm from './MiniConfirm';
+import ConfirmModal from './ConfirmModal';
 
 // ── Conversation Item ───────────────────────────────────────────────────
 
@@ -334,11 +334,12 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
       )}
     </AnimatePresence>
 
-    <MiniConfirm
+    <ConfirmModal
       isOpen={deleteConfirm.isOpen}
       title="Sohbeti kaldır"
       description={`${deleteConfirm.name} ile olan sohbet listenden kaldırılsın mı? Karşı tarafın listesini etkilemez.`}
       confirmText="Kaldır"
+      cancelText="İptal"
       onConfirm={() => { dm.hideConversation(deleteConfirm.convKey); setDeleteConfirm({ isOpen: false, convKey: '', name: '' }); }}
       onCancel={() => setDeleteConfirm({ isOpen: false, convKey: '', name: '' })}
       danger

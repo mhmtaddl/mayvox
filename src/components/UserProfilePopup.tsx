@@ -8,7 +8,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
-import MiniConfirm from './MiniConfirm';
+import ConfirmModal from './ConfirmModal';
 
 interface Props {
   user: User;
@@ -350,7 +350,7 @@ export default function UserProfilePopup({
       </motion.div>
 
       {/* Mini confirm for send/remove/cancel */}
-      <MiniConfirm
+      <ConfirmModal
         isOpen={miniConfirm.isOpen}
         title={
           miniConfirm.action === 'send' ? 'Arkadaş isteği gönder'
@@ -367,6 +367,7 @@ export default function UserProfilePopup({
           : miniConfirm.action === 'cancel' ? 'İptal et'
           : 'Sil'
         }
+        cancelText="İptal"
         onConfirm={handleMiniConfirm}
         onCancel={() => setMiniConfirm({ isOpen: false, action: 'send' })}
         danger={miniConfirm.action === 'remove'}
