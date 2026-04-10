@@ -255,7 +255,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
-          placeholder={isCenter ? 'PigeVox\'ta ara...' : 'PigeVox\'ta ara...'}
+          placeholder="Kullanıcı ara..."
           className={`flex-1 bg-transparent text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/25 outline-none min-w-0 ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
         />
         {query && (

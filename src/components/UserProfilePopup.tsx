@@ -26,7 +26,7 @@ interface Props {
 }
 
 const POPUP_W = 240;
-const POPUP_H = 340;
+const POPUP_H = 300;
 
 const formatOnlineDuration = (onlineSince: number) => {
   const mins = Math.floor((Date.now() - onlineSince) / 60000);
@@ -163,7 +163,7 @@ export default function UserProfilePopup({
           <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" style={{ boxShadow: '0 0 24px rgba(var(--theme-accent-rgb), 0.08)' }} />
 
           {/* Profile area */}
-          <div className="flex flex-col items-center pt-5 pb-3 px-5">
+          <div className="flex flex-col items-center pt-5 pb-2 px-5">
             {/* Avatar */}
             <div className="relative mb-3">
               <motion.div
@@ -211,10 +211,8 @@ export default function UserProfilePopup({
               )}
             </div>
 
-            <div className="mb-4" />
-
             {/* Meta chips */}
-            <div className="flex flex-wrap items-center justify-center gap-1.5 mb-4">
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mb-2 mt-2">
               {user.platform && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--theme-secondary-text)]">
                   {user.platform === 'mobile' ? <Smartphone size={10} /> : <Monitor size={10} />}
@@ -233,6 +231,35 @@ export default function UserProfilePopup({
                   {formatLastSeen(user.lastSeenAt)}
                 </span>
               )}
+              {/* Arkadaş ekle — meta satırında, kompakt */}
+              {!isMe && !rel && (
+                <button
+                  onClick={() => triggerConfirm('send')}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-[var(--theme-border)]/60 bg-[var(--theme-surface-card)]/60 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all"
+                  title="Arkadaş isteği gönder"
+                >
+                  <UserPlus size={11} />
+                </button>
+              )}
+              {!isMe && rel === 'outgoing' && (
+                <button
+                  onClick={() => triggerConfirm('cancel')}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-blue-400/30 bg-blue-500/8 text-blue-400 hover:bg-blue-500/15 transition-all"
+                  title="İsteği iptal et"
+                >
+                  <Clock size={11} />
+                </button>
+              )}
+              {!isMe && rel === 'incoming' && (
+                <button
+                  onClick={handleAccept}
+                  disabled={actionLoading}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-emerald-400/30 bg-emerald-500/8 text-emerald-400 hover:bg-emerald-500/15 transition-all disabled:opacity-30"
+                  title="Kabul et"
+                >
+                  <Check size={11} strokeWidth={2.5} />
+                </button>
+              )}
               {hasVersion && (
                 <span className={`inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${
                   outdated
@@ -246,7 +273,7 @@ export default function UserProfilePopup({
 
             {/* Quick actions — ikon satırı */}
             {!isMe && (
-              <div className="flex items-center justify-center gap-1.5 mb-1">
+              <div className="flex items-center justify-center gap-1.5">
                 {/* Favori — sadece arkadaşlar */}
                 {rel === 'friend' && (
                   <button
@@ -306,42 +333,15 @@ export default function UserProfilePopup({
                     <UserMinus size={14} />
                   </button>
                 )}
-                {rel === 'outgoing' && (
-                  <button
-                    onClick={() => triggerConfirm('cancel')}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-400 opacity-50 hover:opacity-100 hover:bg-blue-500/8 transition-all duration-150"
-                    title="İsteği iptal et"
-                  >
-                    <Clock size={14} />
-                  </button>
-                )}
+                {/* Gelen istek reddi — sadece quick actions'ta (meta'da sadece kabul var) */}
                 {rel === 'incoming' && (
-                  <>
-                    <button
-                      onClick={handleAccept}
-                      disabled={actionLoading}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-30"
-                      title="Kabul et"
-                    >
-                      <Check size={15} strokeWidth={2.5} />
-                    </button>
-                    <button
-                      onClick={handleReject}
-                      disabled={actionLoading}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 opacity-50 hover:opacity-100 hover:bg-red-500/8 transition-all duration-150 disabled:opacity-30"
-                      title="Reddet"
-                    >
-                      <X size={14} />
-                    </button>
-                  </>
-                )}
-                {!rel && (
                   <button
-                    onClick={() => triggerConfirm('send')}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-60 hover:opacity-100 hover:bg-[var(--theme-accent)]/8 transition-all duration-150"
-                    title="Arkadaş isteği gönder"
+                    onClick={handleReject}
+                    disabled={actionLoading}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 opacity-50 hover:opacity-100 hover:bg-red-500/8 transition-all duration-150 disabled:opacity-30"
+                    title="Reddet"
                   >
-                    <UserPlus size={14} />
+                    <X size={14} />
                   </button>
                 )}
               </div>

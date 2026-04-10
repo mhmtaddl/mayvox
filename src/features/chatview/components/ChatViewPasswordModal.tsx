@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock } from 'lucide-react';
 
@@ -27,8 +27,10 @@ export default function ChatViewPasswordModal({
   onVerifyPassword,
   onClose,
 }: Props) {
+  const isSet = passwordModal.type === 'set';
+
   const handleSubmit = () => {
-    if (passwordModal.type === 'set') {
+    if (isSet) {
       if (passwordInput.length === 4 && passwordInput === passwordRepeatInput) {
         onSetPassword(passwordModal.channelId, passwordInput, passwordRepeatInput);
       } else {
@@ -40,95 +42,111 @@ export default function ChatViewPasswordModal({
   };
 
   const handleInputChange = (val: string, setter: (v: string) => void) => {
-    setter(val.replace(/\D/g, ''));
+    setter(val.replace(/\D/g, '').slice(0, 4));
     setPasswordError(false);
   };
+
+  const stopNative = (e: React.MouseEvent) => { e.nativeEvent.stopImmediatePropagation(); e.stopPropagation(); };
+
+  const errorMessage = isSet
+    ? (passwordInput.length === 4 && passwordRepeatInput.length === 4 && passwordInput !== passwordRepeatInput
+        ? 'Şifreler eşleşmiyor!'
+        : 'Lütfen 4 haneli bir sayı giriniz!')
+    : 'Hatalı şifre!';
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/10 via-black/20 to-black/30"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="w-full max-w-sm bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-3xl p-8 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.15 }}
+        className="w-full max-w-[260px] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-3.5 backdrop-blur-xl"
+        onClick={stopNative}
+        onMouseDown={stopNative}
       >
-        <div className="flex flex-col items-center text-center gap-6">
-          <div className="w-16 h-16 bg-[var(--theme-accent)]/20 rounded-2xl flex items-center justify-center">
-            <Lock className="text-[var(--theme-accent)]" size={32} />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-[var(--theme-text)] mb-2">
-              {passwordModal.type === 'set' ? 'Oda Şifrele' : 'Oda Şifreli'}
-            </h3>
-            <p className="text-[var(--theme-secondary-text)] text-sm">
-              {passwordModal.type === 'set'
-                ? 'Lütfen 4 haneli sayısal bir şifre belirleyin.'
-                : 'Bu odaya girmek için 4 haneli şifreyi giriniz.'}
-            </p>
-          </div>
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-2.5">
+          <Lock size={14} className="text-[var(--theme-accent)] shrink-0" />
+          <span className="text-[11px] font-bold text-[var(--theme-text)]">
+            {isSet ? 'Oda Şifrele' : 'Oda Şifreli'}
+          </span>
+        </div>
 
-          <div className="w-full space-y-4">
-            <div className="w-full flex flex-col gap-4">
+        <p className="text-[9px] text-[var(--theme-secondary-text)] mb-3 leading-relaxed">
+          {isSet
+            ? '4 haneli sayısal bir şifre belirleyin.'
+            : 'Bu odaya girmek için şifreyi girin.'}
+        </p>
+
+        {/* Inputs */}
+        <div className={`space-y-2 ${isSet ? 'mb-2' : 'mb-2'}`}>
+          {isSet && (
+            <label className="block text-[8px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.1em]">Şifre</label>
+          )}
+          <input
+            autoFocus
+            type="password"
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="• • • •"
+            className={`w-full bg-[var(--theme-sidebar)] border ${
+              passwordError ? 'border-red-500' : 'border-[var(--theme-border)]'
+            } rounded-lg px-3 py-2 text-center text-base tracking-[0.5em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
+            value={passwordInput}
+            onChange={(e) => handleInputChange(e.target.value, setPasswordInput)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSubmit();
+              if (e.key === 'Escape') onClose();
+            }}
+          />
+
+          {isSet && (
+            <>
+              <label className="block text-[8px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.1em] mt-1">Tekrar</label>
               <input
-                autoFocus
                 type="password"
+                inputMode="numeric"
                 maxLength={4}
                 placeholder="• • • •"
                 className={`w-full bg-[var(--theme-sidebar)] border ${
                   passwordError ? 'border-red-500' : 'border-[var(--theme-border)]'
-                } rounded-2xl px-6 py-4 text-center text-2xl tracking-[1em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
-                value={passwordInput}
-                onChange={(e) => handleInputChange(e.target.value, setPasswordInput)}
+                } rounded-lg px-3 py-2 text-center text-base tracking-[0.5em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
+                value={passwordRepeatInput}
+                onChange={(e) => handleInputChange(e.target.value, setPasswordRepeatInput)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSubmit();
                   if (e.key === 'Escape') onClose();
                 }}
               />
-              {passwordModal.type === 'set' && (
-                <input
-                  type="password"
-                  maxLength={4}
-                  placeholder="• • • •"
-                  className={`w-full bg-[var(--theme-sidebar)] border ${
-                    passwordError ? 'border-red-500' : 'border-[var(--theme-border)]'
-                  } rounded-2xl px-6 py-4 text-center text-2xl tracking-[1em] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-all`}
-                  value={passwordRepeatInput}
-                  onChange={(e) => handleInputChange(e.target.value, setPasswordRepeatInput)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSubmit();
-                    if (e.key === 'Escape') onClose();
-                  }}
-                />
-              )}
-            </div>
-            {passwordError && (
-              <p className="text-red-500 text-xs font-medium animate-bounce">
-                {passwordModal.type === 'set' ? (passwordInput !== passwordRepeatInput ? 'Şifreler eşleşmiyor!' : 'Lütfen 4 haneli bir sayı giriniz!') : 'Hatalı şifre!'}
-              </p>
-            )}
-          </div>
+            </>
+          )}
+        </div>
 
-          <div className="flex gap-3 w-full">
-            <button
-              onClick={onClose}
-              className="flex-1 px-6 py-3 btn-cancel font-bold active:scale-[0.97]"
-            >
-              İptal
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-6 py-3 btn-primary font-bold active:scale-[0.97]"
-            >
-              {passwordModal.type === 'set' ? 'Şifrele' : 'Giriş Yap'}
-            </button>
-          </div>
+        {/* Error */}
+        {passwordError && <p className="text-[9px] text-red-400 font-medium mb-2">{errorMessage}</p>}
+
+        {/* Buttons */}
+        <div className="flex gap-1.5">
+          <button
+            onClick={onClose}
+            className="flex-1 px-2 py-1.5 text-[10px] font-bold text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+          >
+            İptal
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSet ? passwordInput.length !== 4 || passwordRepeatInput.length !== 4 : passwordInput.length !== 4}
+            className="flex-1 px-2 py-1.5 text-[10px] font-bold text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isSet ? 'Şifrele' : 'Giriş Yap'}
+          </button>
         </div>
       </motion.div>
     </motion.div>

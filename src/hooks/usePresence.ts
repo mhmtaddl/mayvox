@@ -253,10 +253,12 @@ export function usePresence({
 
     channel.on('broadcast', { event: 'kick' }, ({ payload }) => {
       if (payload.userId === user.id) {
+        activeChannelRef.current = null;
         setActiveChannel(null);
         disconnectRef.current();
+        // Chat bağlantısını da kes
+        import('../lib/chatService').then(({ leaveRoom }) => leaveRoom());
         setToastMsg('Odadan çıkarıldınız.');
-        // auto-dismiss dock useEffect'te yönetiliyor
       }
     });
 

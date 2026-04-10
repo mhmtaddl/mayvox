@@ -25,14 +25,15 @@ interface Props {
   handleDragOver: (e: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent, channelId: string) => void;
   handleDragStart: (e: React.DragEvent, userName: string) => void;
+  onUserClick: (userId: string, x: number, y: number) => void;
 }
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick }: Props) {
   const { channels, activeChannel, isConnecting } = useChannel();
   const { currentUser, allUsers } = useUser();
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
   const { connectionLevel } = useAudio();
-  const { handleJoinChannel, handleContextMenu, handleUserActionClick, view, appVersion, showReleaseNotes, setShowReleaseNotes } = useAppState();
+  const { handleJoinChannel, handleContextMenu, view, appVersion, showReleaseNotes, setShowReleaseNotes } = useAppState();
 
   const { leftSidebarW, handleSidebarDragStart } = useSidebarResize();
 
@@ -146,7 +147,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                       <div
                         draggable={!!currentUser.isAdmin}
                         onDragStart={(e) => handleDragStart(e, user?.name || memberId)}
-                        onClick={(e) => user && handleUserActionClick(e, user.id)}
+                        onClick={(e) => user && onUserClick(user.id, e.clientX, e.clientY)}
                         className={`flex items-center gap-2 text-[11px] transition-all duration-150 group/member cursor-pointer py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5 active:scale-[0.98] ${
                           isBc && isSp
                             ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'

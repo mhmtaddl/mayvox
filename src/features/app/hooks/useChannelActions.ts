@@ -1,0 +1,285 @@
+/**
+ * useChannelActions — Channel CRUD, invite, kick/move, speaker toggle, password, volume.
+ * Join/leave orchestration (LiveKit + presence) App.tsx'te kalır.
+ */
+import React, { useState, useRef } from 'react';
+import { type RemoteParticipant, RemoteAudioTrack } from 'livekit-client';
+import {
+  updateChannel,
+  createChannel,
+  deleteChannel,
+  setChannelPassword,
+} from '../../../lib/supabase';
+import { formatFullName } from '../../../lib/formatName';
+import type { VoiceChannel, User } from '../../../types';
+
+interface UseChannelActionsOptions {
+  channels: VoiceChannel[];
+  setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
+  activeChannel: string | null;
+  setActiveChannel: (v: string | null) => void;
+  currentUser: User;
+  allUsers: User[];
+  presenceChannelRef: React.MutableRefObject<any>;
+  livekitRoomRef: React.MutableRefObject<any>;
+  // UI
+  roomModal: { isOpen: boolean; type: 'create' | 'edit'; channelId?: string; name: string; maxUsers: number; isInviteOnly: boolean; isHidden: boolean; mode: string };
+  setRoomModal: React.Dispatch<React.SetStateAction<any>>;
+  setContextMenu: (v: null) => void;
+  setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
+  setPasswordModal: (v: { type: 'set' | 'enter'; channelId: string } | null) => void;
+  setPasswordInput: (v: string) => void;
+  setPasswordRepeatInput: (v: string) => void;
+  setPasswordError: (v: boolean) => void;
+  setToastMsg: (v: string | null) => void;
+  userVolumes: Record<string, number>;
+  setUserVolumes: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  view: string;
+  setView: (v: string) => void;
+}
+
+export function useChannelActions({
+  channels, setChannels, activeChannel, setActiveChannel,
+  currentUser, allUsers,
+  presenceChannelRef, livekitRoomRef,
+  roomModal, setRoomModal,
+  setContextMenu, setUserActionMenu,
+  setPasswordModal, setPasswordInput, setPasswordRepeatInput, setPasswordError,
+  setToastMsg,
+  userVolumes, setUserVolumes,
+  view, setView,
+}: UseChannelActionsOptions) {
+
+  // ── Invite cooldown + status state ──
+  const inviteCooldownsRef = useRef<Record<string, number>>({});
+  const [inviteCooldowns, setInviteCooldowns] = useState<Record<string, number>>({});
+  const [inviteStatuses, setInviteStatuses] = useState<Record<string, 'pending' | 'accepted' | 'rejected'>>({});
+
+  // ── User volume ──
+  const handleUpdateUserVolume = (userId: string, volume: number) => {
+    const newVolumes = { ...userVolumes, [userId]: volume };
+    setUserVolumes(newVolumes);
+    localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
+
+    const vol = Math.max(0, Math.min(1, volume / 100));
+    const user = allUsers.find(u => u.id === userId);
+    if (user && livekitRoomRef.current) {
+      const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
+      const participant = participants.find(p => p.identity === user.name);
+      if (participant) {
+        participant.audioTrackPublications.forEach(pub => {
+          const t = pub.track ?? pub.audioTrack;
+          if (t && t instanceof RemoteAudioTrack) t.setVolume(vol);
+        });
+      }
+      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => { el.volume = vol; });
+    }
+  };
+
+  // ── User action menu ──
+  const handleUserActionClick = (e: React.MouseEvent, userId: string) => {
+    e.stopPropagation();
+    if (userId === currentUser.id) return;
+    setUserActionMenu({ userId, x: e.clientX, y: e.clientY });
+    setContextMenu(null);
+  };
+
+  // ── Broadcast speaker toggle ──
+  const handleToggleSpeaker = async (userId: string) => {
+    if (!activeChannel) return;
+    const ch = channels.find(c => c.id === activeChannel);
+    if (!ch || ch.mode !== 'broadcast' || ch.ownerId !== currentUser.id) return;
+
+    const currentSpeakers = ch.speakerIds || [];
+    const isSpeaker = currentSpeakers.includes(userId);
+    if (isSpeaker && userId === ch.ownerId) return;
+
+    const newSpeakers = isSpeaker
+      ? currentSpeakers.filter(id => id !== userId)
+      : [...currentSpeakers, userId];
+
+    setChannels(prev => prev.map(c => c.id === activeChannel ? { ...c, speakerIds: newSpeakers } : c));
+    await updateChannel(activeChannel, { speaker_ids: newSpeakers });
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: activeChannel, updates: { speakerIds: newSpeakers } } });
+    setToastMsg(isSpeaker ? 'Dinleyiciye alındı.' : 'Konuşmacı yapıldı.');
+  };
+
+  // ── Invite ──
+  const handleInviteUser = (userId: string) => {
+    const cooldownUntil = inviteCooldownsRef.current[userId];
+    if (cooldownUntil && Date.now() < cooldownUntil) return;
+
+    const channel = channels.find(c => c.id === activeChannel);
+    if (!channel || !presenceChannelRef.current) return;
+    presenceChannelRef.current.send({
+      type: 'broadcast', event: 'invite',
+      payload: {
+        inviterId: currentUser.id, inviteeId: userId,
+        inviterName: formatFullName(currentUser.firstName, currentUser.lastName),
+        inviterAvatar: currentUser.avatar, roomName: channel.name, roomId: channel.id,
+      },
+    });
+    setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
+    setTimeout(() => { setInviteStatuses(prev => { if (prev[userId] !== 'pending') return prev; const next = { ...prev }; delete next[userId]; return next; }); }, 10_000);
+    setUserActionMenu(null);
+  };
+
+  const handleInviteRejectedCooldown = (inviteeId: string) => {
+    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'rejected' }));
+    setTimeout(() => { setInviteStatuses(prev => { const next = { ...prev }; delete next[inviteeId]; return next; }); }, 2_000);
+    const expiresAt = Date.now() + 60_000;
+    inviteCooldownsRef.current[inviteeId] = expiresAt;
+    setInviteCooldowns(prev => ({ ...prev, [inviteeId]: expiresAt }));
+    setTimeout(() => { setInviteCooldowns(prev => { const next = { ...prev }; delete next[inviteeId]; return next; }); delete inviteCooldownsRef.current[inviteeId]; }, 60_000);
+  };
+
+  const handleInviteAccepted = (inviteeId: string) => {
+    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'accepted' }));
+    setTimeout(() => { setInviteStatuses(prev => { const next = { ...prev }; delete next[inviteeId]; return next; }); }, 2_000);
+  };
+
+  // ── Kick / Move ──
+  // Optimistic UI yok — state yalnızca broadcast/presence sync'ten güncellensin
+
+  const handleKickUser = (userId: string) => {
+    if (!currentUser.isAdmin) return;
+    if (userId === currentUser.id) return;
+
+    const userToKick = allUsers.find(u => u.id === userId);
+    if (!userToKick) return;
+
+    // Sadece event gönder. Local setChannels YAPMA.
+    // Kicked user'ın client'ında: kick event → disconnect + leaveRoom
+    // Diğer herkes: presence sync ile member listesi güncellenir
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'kick',
+      payload: { userId: userToKick.id, userName: userToKick.name },
+    });
+    setUserActionMenu(null);
+  };
+
+  const handleMoveUser = (userName: string, targetChannelId: string) => {
+    if (!currentUser.isAdmin) return;
+    if (userName === currentUser.name) return;
+
+    const movedUser = allUsers.find(u => u.name === userName);
+    if (!movedUser) return;
+
+    const sourceChannel = channels.find(c => c.members?.includes(userName) || c.members?.includes(movedUser.id));
+    if (!sourceChannel || sourceChannel.id === targetChannelId) return;
+
+    const targetChannel = channels.find(c => c.id === targetChannelId);
+    if (!targetChannel) return;
+
+    // Sadece move event gönder. Local setChannels YAPMA.
+    // Hedef user'ın client'ında: move event → disconnect + rejoin(targetChannelId)
+    // Diğer herkes: presence sync ile member listesi güncellenir
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'move',
+      payload: {
+        userId: movedUser.id,
+        userName: movedUser.name,
+        sourceChannelId: sourceChannel.id,
+        targetChannelId,
+      },
+    });
+    setUserActionMenu(null);
+  };
+
+  // ── Room CRUD ──
+  const handleSaveRoom = async () => {
+    if (!roomModal.name.trim()) return;
+
+    if (roomModal.type === 'create') {
+      const userRooms = channels.filter(c => c.ownerId === currentUser.id);
+      if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; }
+      const newRoom: VoiceChannel = {
+        id: Date.now().toString(), name: roomModal.name, userCount: 0, members: [],
+        isSystemChannel: false, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly,
+        isHidden: roomModal.isHidden, ownerId: currentUser.id, mode: roomModal.mode,
+        speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
+      };
+      const { error: createErr } = await createChannel({
+        id: newRoom.id, name: newRoom.name, owner_id: currentUser.id,
+        max_users: newRoom.maxUsers || 0, is_invite_only: newRoom.isInviteOnly || false,
+        is_hidden: newRoom.isHidden || false, mode: roomModal.mode,
+        speaker_ids: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
+      });
+      if (createErr) { setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.'); return; }
+      setChannels(prev => [...prev, newRoom]);
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
+      if (view === 'settings') setView('chat');
+    } else if (roomModal.type === 'edit' && roomModal.channelId) {
+      const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
+      setChannels(prev => prev.map(c => c.id === roomModal.channelId ? { ...c, ...updates } : c));
+      await updateChannel(roomModal.channelId, { name: roomModal.name, max_users: roomModal.maxUsers, is_invite_only: roomModal.isInviteOnly, is_hidden: roomModal.isHidden, mode: roomModal.mode });
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: roomModal.channelId, updates } });
+    }
+    setRoomModal({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
+  };
+
+  const handleDeleteRoom = async (id: string) => {
+    const channel = channels.find(c => c.id === id);
+    if (channel?.isSystemChannel) { setToastMsg('Sistem odaları silinemez.'); return; }
+    setChannels(prev => prev.filter(c => c.id !== id));
+    if (activeChannel === id) setActiveChannel(null);
+    setContextMenu(null);
+    await deleteChannel(id);
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', channelId: id } });
+  };
+
+  const handleRenameRoom = async (id: string, newName: string) => {
+    setChannels(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
+    setContextMenu(null);
+    await updateChannel(id, { name: newName });
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { name: newName } } });
+  };
+
+  // ── Password ──
+  const handleSetPassword = async (id: string, password: string, repeat: string) => {
+    if (password.length !== 4 || isNaN(Number(password))) { setPasswordError(true); return; }
+    if (password !== repeat) { setPasswordError(true); return; }
+    const { error } = await setChannelPassword(id, password);
+    if (error) { console.error('Şifre kaydetme hatası:', error); setToastMsg('Şifre kaydedilemedi. Lütfen tekrar deneyin.'); return; }
+    setChannels(prev => prev.map(c => c.id === id ? { ...c, password: 'SET' } : c));
+    setPasswordModal(null); setPasswordInput(''); setPasswordRepeatInput(''); setPasswordError(false); setContextMenu(null);
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: 'SET' } } });
+  };
+
+  const handleRemovePassword = async (id: string) => {
+    await setChannelPassword(id, null);
+    setChannels(prev => prev.map(c => c.id === id ? { ...c, password: undefined } : c));
+    setContextMenu(null);
+    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: undefined } } });
+  };
+
+  // ── Context menu ──
+  const handleContextMenu = (e: React.MouseEvent, channelId: string) => {
+    if (!currentUser.isAdmin) return;
+    e.preventDefault(); e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, channelId } as any);
+  };
+
+  return {
+    // Invite state (hook owns)
+    inviteCooldowns,
+    inviteStatuses,
+    handleInviteRejectedCooldown,
+    handleInviteAccepted,
+    // Handlers
+    handleUpdateUserVolume,
+    handleUserActionClick,
+    handleToggleSpeaker,
+    handleInviteUser,
+    handleKickUser,
+    handleMoveUser,
+    handleSaveRoom,
+    handleDeleteRoom,
+    handleRenameRoom,
+    handleSetPassword,
+    handleRemovePassword,
+    handleContextMenu,
+  };
+}

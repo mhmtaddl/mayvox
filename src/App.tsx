@@ -10,8 +10,7 @@ import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView, User, VoiceChannel } from './types';
 import { CHANNELS } from './constants';
-import { AppTheme, ThemeKey, themes, defaultThemeKey, backgroundPresets, defaultBackgroundId } from './themes';
-import { getDerivedTokens, applyDerivedTokens } from './lib/adaptiveTheme';
+// Theme types + adaptive theme artık useAppSettings hook'unda
 import {
   signIn,
   signOut,
@@ -22,23 +21,13 @@ import {
   getProfileByUsername,
   getAllProfiles,
   getChannels,
-  createChannel,
-  updateChannel,
   deleteChannel,
   updateUserModeration,
   verifyChannelPassword,
-  setChannelPassword,
   saveInviteCode,
   verifyInviteCodeForEmail,
   useInviteCodeForEmail,
-  getPendingPasswordResets,
-  getAdminInviteRequests,
   getPendingInviteRequests,
-  adminSendInviteCode,
-  adminMarkInviteSent,
-  adminMarkInviteFailed,
-  adminRejectInvite,
-  sendInviteEmail,
   updateActivityOnLogout,
   updateLastSeenHeartbeat,
   updateShowLastSeen,
@@ -46,7 +35,7 @@ import {
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
 import { logger } from './lib/logger';
-import { type AudioCaptureOptions, type RemoteParticipant, RemoteAudioTrack } from 'livekit-client';
+import { type AudioCaptureOptions } from 'livekit-client';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -69,7 +58,7 @@ import { AudioCtx, AudioContextType } from './contexts/AudioContext';
 import { UserContext, UserContextType } from './contexts/UserContext';
 import { ChannelContext, ChannelContextType } from './contexts/ChannelContext';
 import { UIContext, UIContextType } from './contexts/UIContext';
-import { SettingsCtx, SettingsContextType, AUDIO_PRESETS, type AudioProfile } from './contexts/SettingsCtx';
+import { SettingsCtx, SettingsContextType } from './contexts/SettingsCtx';
 
 import { useDevices } from './hooks/useDevices';
 import { usePttAudio } from './hooks/usePttAudio';
@@ -99,6 +88,9 @@ import { getRoomModeConfig } from './lib/roomModeConfig';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import { activatePresence } from './lib/presenceLifecycle';
+import { useAppSettings } from './features/app/hooks/useAppSettings';
+import { useAdminPanel } from './features/app/hooks/useAdminPanel';
+import { useChannelActions } from './features/app/hooks/useChannelActions';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -149,6 +141,7 @@ async function loadChannelsFromDb(): Promise<VoiceChannel[]> {
   const { data } = await getChannels();
   return data && data.length > 0 ? data.map((c: DbChannel) => mapDbChannel(c)) : [];
 }
+
 
 function buildOnlineUser(id: string, email: string, profile: DbProfile | null): User {
   if (profile) {
@@ -218,123 +211,18 @@ export default function App() {
     setPermissionsGranted(true);
   };
 
-  // ── Settings state ───────────────────────────────────────────────────────
-  const [currentTheme, setCurrentTheme] = useState<AppTheme>(() => {
-    const savedKey = localStorage.getItem('themeKey');
-    if (savedKey && themes[savedKey as ThemeKey]) return themes[savedKey as ThemeKey];
-    return themes[defaultThemeKey];
-  });
+  // ── Settings state (useAppSettings hook) ──────────────────────────────
+  const settings = useAppSettings();
+  const {
+    currentTheme, isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold,
+    pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
+    voiceMode, setVoiceMode, pttReleaseDelay, autoLeaveEnabled, autoLeaveMinutes,
+    showLastSeen, setShowLastSeenLocal,
+  } = settings;
 
-  // ── Background preset ──
-  const [activeBackground, setActiveBackgroundState] = useState(() => localStorage.getItem('activeBackground') || defaultBackgroundId);
-  const setActiveBackground = (id: string) => { localStorage.setItem('activeBackground', id); setActiveBackgroundState(id); };
-
-  // ── Adaptive theme — single effect for theme + background ──
-  useEffect(() => {
-    localStorage.setItem('themeKey', currentTheme.key);
-    const preset = backgroundPresets.find(b => b.id === activeBackground) || backgroundPresets[1];
-    const tokens = getDerivedTokens(currentTheme, preset);
-    applyDerivedTokens(tokens);
-
-    // Theme-specific tokens not derived from background
-    const root = document.documentElement;
-    root.style.setProperty('--theme-accent-secondary', currentTheme.secondary);
-    root.style.setProperty('--theme-text-on-primary', currentTheme.textOnPrimary);
-    root.style.setProperty('--theme-text-on-accent', currentTheme.textOnAccent);
-    root.style.setProperty('--theme-success', currentTheme.success);
-    root.style.setProperty('--theme-warning', currentTheme.warning);
-    root.style.setProperty('--theme-danger', currentTheme.danger);
-    root.style.setProperty('--theme-elevated-panel', currentTheme.elevatedPanel);
-    root.style.setProperty('--theme-elevated-panel-hover', currentTheme.elevatedPanelHover);
-    root.style.setProperty('--popover-bg', currentTheme.popoverBg);
-    root.style.setProperty('--popover-border', currentTheme.popoverBorder);
-    root.style.setProperty('--popover-text', currentTheme.popoverText);
-    root.style.setProperty('--popover-text-secondary', currentTheme.popoverTextSecondary);
-    root.style.setProperty('--popover-shadow', currentTheme.popoverShadow);
-    root.style.setProperty('--theme-bg-elevated', currentTheme.backgroundElevated);
-  }, [currentTheme, activeBackground]);
-
-  const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');
-  const setIsLowDataMode = (v: boolean) => { localStorage.setItem('lowDataMode', String(v)); setIsLowDataModeState(v); };
-
-  const [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabledState] = useState(() => localStorage.getItem('noiseSuppression') !== 'false');
-  const setIsNoiseSuppressionEnabled = (v: boolean) => { localStorage.setItem('noiseSuppression', String(v)); setIsNoiseSuppressionEnabledState(v); };
-
-
-
-  const [noiseThreshold, setNoiseThreshold] = useState<number>(() => {
-    const saved = localStorage.getItem('noiseThreshold');
-    return saved ? parseInt(saved) : 15;
-  });
-  useEffect(() => { localStorage.setItem('noiseThreshold', noiseThreshold.toString()); }, [noiseThreshold]);
-
-  const [pttKey, setPttKey] = useState(() => localStorage.getItem('pttKey') || 'SPACE');
-  useEffect(() => { localStorage.setItem('pttKey', pttKey); }, [pttKey]);
-
-  const [isListeningForKey, setIsListeningForKey] = useState(false);
-
-  const [soundJoinLeave, setSoundJoinLeaveState] = useState(() => localStorage.getItem('soundJoinLeave') !== 'false');
-  const setSoundJoinLeave = (v: boolean) => { localStorage.setItem('soundJoinLeave', String(v)); setSoundJoinLeaveState(v); };
-  const [soundJoinLeaveVariant, setSoundJoinLeaveVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundJoinLeaveVariant') || '1') || 1) as 1|2|3);
-  const setSoundJoinLeaveVariant = (v: 1|2|3) => { localStorage.setItem('soundJoinLeaveVariant', String(v)); setSoundJoinLeaveVariantState(v); };
-
-  const [soundMuteDeafen, setSoundMuteDeafenState] = useState(() => localStorage.getItem('soundMuteDeafen') !== 'false');
-  const setSoundMuteDeafen = (v: boolean) => { localStorage.setItem('soundMuteDeafen', String(v)); setSoundMuteDeafenState(v); };
-  const [soundMuteDeafenVariant, setSoundMuteDeafenVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundMuteDeafenVariant') || '1') || 1) as 1|2|3);
-  const setSoundMuteDeafenVariant = (v: 1|2|3) => { localStorage.setItem('soundMuteDeafenVariant', String(v)); setSoundMuteDeafenVariantState(v); };
-
-  const [soundPtt, setSoundPttState] = useState(() => localStorage.getItem('soundPtt') !== 'false');
-  const setSoundPtt = (v: boolean) => { localStorage.setItem('soundPtt', String(v)); setSoundPttState(v); };
-  const [soundPttVariant, setSoundPttVariantState] = useState<1|2|3>(() => (parseInt(localStorage.getItem('soundPttVariant') || '1') || 1) as 1|2|3);
-  const setSoundPttVariant = (v: 1|2|3) => { localStorage.setItem('soundPttVariant', String(v)); setSoundPttVariantState(v); };
-
-  const [soundInvite, setSoundInviteState] = useState(() => localStorage.getItem('soundInvite') !== 'false');
-  const setSoundInvite = (v: boolean) => { localStorage.setItem('soundInvite', String(v)); setSoundInviteState(v); };
-  const [soundInviteVariant, setSoundInviteVariantState] = useState<1|2>(() => (parseInt(localStorage.getItem('soundInviteVariant') || '1') || 1) as 1|2);
-  const setSoundInviteVariant = (v: 1|2) => { localStorage.setItem('soundInviteVariant', String(v)); setSoundInviteVariantState(v); };
-
-  const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
-  const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
-
-  const [pttReleaseDelay, setPttReleaseDelayState] = useState<number>(() => {
-    const saved = localStorage.getItem('pttReleaseDelay');
-    return saved !== null ? parseInt(saved) : 250;
-  });
-  const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
-
-  const [voiceMode, setVoiceModeState] = useState<import('./contexts/SettingsCtx').VoiceMode>(
-    () => (localStorage.getItem('voiceMode') as 'ptt' | 'vad') || 'ptt',
-  );
-  const setVoiceMode = (v: import('./contexts/SettingsCtx').VoiceMode) => { localStorage.setItem('voiceMode', v); setVoiceModeState(v); };
-
-  const [audioProfile, setAudioProfileState] = useState<AudioProfile>(
-    () => (localStorage.getItem('audioProfile') as AudioProfile) || 'clean',
-  );
-  const setAudioProfile = (profile: AudioProfile) => {
-    localStorage.setItem('audioProfile', profile);
-    setAudioProfileState(profile);
-    if (profile !== 'custom') {
-      const p = AUDIO_PRESETS[profile];
-      setIsNoiseSuppressionEnabled(p.noiseSuppression);
-      setNoiseThreshold(p.noiseThreshold);
-      setPttReleaseDelay(p.pttReleaseDelay);
-    }
-  };
-
-  // ── Auto-leave on idle ──────────────────────────────────────────────────
-  const [autoLeaveEnabled, setAutoLeaveEnabledState] = useState(() => localStorage.getItem('autoLeaveEnabled') === 'true');
-  const setAutoLeaveEnabled = (v: boolean) => { localStorage.setItem('autoLeaveEnabled', String(v)); setAutoLeaveEnabledState(v); };
-  const [autoLeaveMinutes, setAutoLeaveMinutesState] = useState<number>(() => {
-    const saved = localStorage.getItem('autoLeaveMinutes');
-    return saved ? parseInt(saved) : 10;
-  });
-  const setAutoLeaveMinutes = (v: number) => { localStorage.setItem('autoLeaveMinutes', String(v)); setAutoLeaveMinutesState(v); };
-
-  // ── Son görülme gizlilik ayarı ────────────────────────────────────────
-  const [showLastSeen, setShowLastSeenState] = useState(() => localStorage.getItem('showLastSeen') !== 'false');
+  // showLastSeen DB sync — hook sadece localStorage yönetir, DB + user state burada
   const setShowLastSeen = (v: boolean) => {
-    localStorage.setItem('showLastSeen', String(v));
-    setShowLastSeenState(v);
+    setShowLastSeenLocal(v);
     if (currentUser.id) {
       updateShowLastSeen(currentUser.id, v).catch(() => {});
       setCurrentUser(prev => ({ ...prev, showLastSeen: v }));
@@ -396,8 +284,7 @@ export default function App() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
-  const [passwordResetRequests, setPasswordResetRequests] = useState<ResetRequest[]>([]);
-  const [inviteRequests, setInviteRequests] = useState<InviteRequest[]>([]);
+  // Admin panel state — hook çağrısı presenceChannelRef'ten sonra (aşağıda)
 
   useEffect(() => {
     const w = window as Window & {
@@ -518,16 +405,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
-  // ── Invite cooldowns: davet reddedilince 60sn bekleme ───────────────────
-  // Ref: senkron guard için; State: UI güncellemesi için
-  const inviteCooldownsRef = useRef<Record<string, number>>({});
-  const [inviteCooldowns, setInviteCooldowns] = useState<Record<string, number>>({});
+  // Invite cooldown + status artık useChannelActions hook'unda
   // Stable ref wrapper'lar — usePresence çağrısı bu fonksiyonlardan önce geldiği için ref gerekir
   const handleInviteRejectedCooldownRef = useRef<(inviteeId: string) => void>(() => {});
   const handleInviteAcceptedRef = useRef<(inviteeId: string) => void>(() => {});
-
-  // Davet durum göstergesi: pending / accepted / rejected (yok = idle)
-  const [inviteStatuses, setInviteStatuses] = useState<Record<string, 'pending' | 'accepted' | 'rejected'>>({});
 
   // ── AppState-only state ──────────────────────────────────────────────────
   // statusTimer kaldırıldı — "X dk Sonra Geleceğim" özelliği artık yok
@@ -681,6 +562,19 @@ export default function App() {
   // presenceChannelRef'i auto-presence callback'i için senkronize et
   presenceChannelForAutoRef.current = presenceChannelRef.current;
 
+  // ── Admin panel hook — reset/invite polling + handlers ──
+  const adminPanel = useAdminPanel({
+    currentUserId: currentUser.id,
+    isAdmin: currentUser.isAdmin || false,
+    isPrimaryAdmin: currentUser.isPrimaryAdmin || false,
+    view,
+    presenceChannelRef,
+    setToastMsg,
+  });
+  const { passwordResetRequests, setPasswordResetRequests, inviteRequests, setInviteRequests } = adminPanel;
+
+  // Channel actions hook çağrısı livekitRoomRef'ten sonra (aşağıda)
+
   // Stable ref so the 5s timer always calls the latest resyncPresence
   const resyncPresenceRef = useRef(resyncPresence);
   resyncPresenceRef.current = resyncPresence;
@@ -712,6 +606,29 @@ export default function App() {
 
   // Keep forward ref current so usePresence always calls the real function
   disconnectLKRef.current = disconnectFromLiveKit;
+
+  // ── Channel actions hook (livekitRoomRef + presenceChannelRef hazır) ──
+  const channelActions = useChannelActions({
+    channels, setChannels, activeChannel, setActiveChannel,
+    currentUser, allUsers,
+    presenceChannelRef, livekitRoomRef,
+    roomModal, setRoomModal,
+    setContextMenu, setUserActionMenu,
+    setPasswordModal, setPasswordInput, setPasswordRepeatInput, setPasswordError,
+    setToastMsg, userVolumes, setUserVolumes,
+    view, setView,
+  });
+  const {
+    inviteCooldowns, inviteStatuses,
+    handleInviteRejectedCooldown, handleInviteAccepted,
+    handleUpdateUserVolume, handleUserActionClick,
+    handleToggleSpeaker, handleInviteUser,
+    handleKickUser, handleMoveUser,
+    handleSaveRoom, handleDeleteRoom, handleRenameRoom,
+    handleSetPassword, handleRemovePassword, handleContextMenu,
+  } = channelActions;
+  handleInviteRejectedCooldownRef.current = handleInviteRejectedCooldown;
+  handleInviteAcceptedRef.current = handleInviteAccepted;
 
   // ── Smart Voice Ducking — dominant speaker based ────────────────────────
   // Room mode config'den ducking parametreleri okunur.
@@ -847,6 +764,7 @@ export default function App() {
       else localStorage.setItem('showLastSeen', 'true');
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
 
+      // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
       // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
       const userChannels = await loadChannelsFromDb();
       if (userChannels.length > 0) setChannels([...CHANNELS, ...userChannels]);
@@ -1187,320 +1105,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateUserVolume = (userId: string, volume: number) => {
-    const newVolumes = { ...userVolumes, [userId]: volume };
-    setUserVolumes(newVolumes);
-    localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
-
-    const vol = Math.max(0, Math.min(1, volume / 100));
-
-    // LiveKit katılımcısının ses seviyesini gerçek zamanlı uygula
-    const user = allUsers.find(u => u.id === userId);
-    if (user && livekitRoomRef.current) {
-      const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
-      const participant = participants.find(p => p.identity === user.name);
-      if (participant) {
-        // Yöntem 1: LiveKit track API
-        participant.audioTrackPublications.forEach(pub => {
-          const t = pub.track ?? pub.audioTrack;
-          if (t && t instanceof RemoteAudioTrack) {
-            t.setVolume(vol);
-          }
-        });
-      }
-      // Yöntem 2: DOM audio element fallback (her zaman çalışır)
-      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => {
-        el.volume = vol;
-      });
-    }
-  };
-
-  const handleUserActionClick = (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation();
-    if (userId === currentUser.id) return;
-
-    setUserActionMenu({ userId, x: e.clientX, y: e.clientY });
-    setContextMenu(null);
-  };
-
-  // ── Broadcast stage: konuşmacı yönetimi ──────────────────────────────────
-  const handleToggleSpeaker = async (userId: string) => {
-    if (!activeChannel) return;
-    const ch = channels.find(c => c.id === activeChannel);
-    if (!ch || ch.mode !== 'broadcast' || ch.ownerId !== currentUser.id) return;
-
-    const currentSpeakers = ch.speakerIds || [];
-    const isSpeaker = currentSpeakers.includes(userId);
-
-    // Oda sahibi konuşmacı listesinden çıkarılamaz
-    if (isSpeaker && userId === ch.ownerId) return;
-
-    const newSpeakers = isSpeaker
-      ? currentSpeakers.filter(id => id !== userId)
-      : [...currentSpeakers, userId];
-
-    // Optimistic update
-    setChannels(prev => prev.map(c => c.id === activeChannel ? { ...c, speakerIds: newSpeakers } : c));
-
-    // DB persist
-    await updateChannel(activeChannel, { speaker_ids: newSpeakers });
-
-    // Broadcast to other clients
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'channel-update',
-      payload: { action: 'update', channelId: activeChannel, updates: { speakerIds: newSpeakers } },
-    });
-
-    setToastMsg(isSpeaker ? 'Dinleyiciye alındı.' : 'Konuşmacı yapıldı.');
-  };
-
-  const handleInviteUser = (userId: string) => {
-    // Cooldown guard: ret sonrası 60sn bekleme
-    const cooldownUntil = inviteCooldownsRef.current[userId];
-    if (cooldownUntil && Date.now() < cooldownUntil) return;
-
-    const channel = channels.find(c => c.id === activeChannel);
-    if (!channel || !presenceChannelRef.current) return;
-    presenceChannelRef.current.send({
-      type: 'broadcast',
-      event: 'invite',
-      payload: {
-        inviterId: currentUser.id,
-        inviteeId: userId,
-        inviterName: formatFullName(currentUser.firstName, currentUser.lastName),
-        inviterAvatar: currentUser.avatar,
-        roomName: channel.name,
-        roomId: channel.id,
-      },
-    });
-    // Davet gönderildi → pending durumuna geç, 10sn sonra otomatik sıfırla
-    setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
-    setTimeout(() => {
-      setInviteStatuses(prev => {
-        if (prev[userId] !== 'pending') return prev;
-        const next = { ...prev };
-        delete next[userId];
-        return next;
-      });
-    }, 10_000);
-    setUserActionMenu(null);
-  };
-
-  const handleInviteRejectedCooldown = (inviteeId: string) => {
-    // Kısa süre "reddedildi" göster, sonra sil (cooldown buton disable'ı devralır)
-    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'rejected' }));
-    setTimeout(() => {
-      setInviteStatuses(prev => {
-        const next = { ...prev };
-        delete next[inviteeId];
-        return next;
-      });
-    }, 2_000);
-    // 60sn cooldown başlat
-    const expiresAt = Date.now() + 60_000;
-    inviteCooldownsRef.current[inviteeId] = expiresAt;
-    setInviteCooldowns(prev => ({ ...prev, [inviteeId]: expiresAt }));
-    setTimeout(() => {
-      setInviteCooldowns(prev => {
-        const next = { ...prev };
-        delete next[inviteeId];
-        return next;
-      });
-      delete inviteCooldownsRef.current[inviteeId];
-    }, 60_000);
-  };
-  handleInviteRejectedCooldownRef.current = handleInviteRejectedCooldown;
-
-  const handleInviteAccepted = (inviteeId: string) => {
-    setInviteStatuses(prev => ({ ...prev, [inviteeId]: 'accepted' }));
-    setTimeout(() => {
-      setInviteStatuses(prev => {
-        const next = { ...prev };
-        delete next[inviteeId];
-        return next;
-      });
-    }, 2_000);
-  };
-  handleInviteAcceptedRef.current = handleInviteAccepted;
-
-  const handleKickUser = (userId: string) => {
-    if (!currentUser.isAdmin) return;
-    const userToKick = allUsers.find(u => u.id === userId);
-    if (!userToKick) return;
-
-    setChannels(prev => prev.map(c => {
-      const otherMembers = c.members?.filter(m => m !== userToKick.name) || [];
-      return { ...c, members: otherMembers, userCount: otherMembers.length };
-    }));
-
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'kick',
-      payload: { userId },
-    });
-  };
-
-  const handleMoveUser = (userName: string, targetChannelId: string) => {
-    if (!currentUser.isAdmin) return;
-
-    const movedUser = allUsers.find(u => u.name === userName);
-    const sourceChannel = channels.find(c => c.members?.includes(userName));
-
-    setChannels(prev => prev.map(c => {
-      const otherMembers = c.members?.filter(m => m !== userName) || [];
-      const isTarget = c.id === targetChannelId;
-      const newMembers = isTarget ? [...otherMembers, userName] : otherMembers;
-      return { ...c, members: newMembers, userCount: newMembers.length };
-    }));
-
-    if (!presenceChannelRef.current) return;
-
-    if (sourceChannel && sourceChannel.id !== targetChannelId) {
-      const newSourceMembers = (sourceChannel.members || []).filter(m => m !== userName);
-      presenceChannelRef.current.send({
-        type: 'broadcast',
-        event: 'channel-update',
-        payload: {
-          action: 'update',
-          channelId: sourceChannel.id,
-          updates: { members: newSourceMembers, userCount: newSourceMembers.length },
-        },
-      });
-    }
-
-    const targetChannel = channels.find(c => c.id === targetChannelId);
-    if (targetChannel) {
-      const newTargetMembers = [...(targetChannel.members || []).filter(m => m !== userName), userName];
-      presenceChannelRef.current.send({
-        type: 'broadcast',
-        event: 'channel-update',
-        payload: {
-          action: 'update',
-          channelId: targetChannelId,
-          updates: { members: newTargetMembers, userCount: newTargetMembers.length },
-        },
-      });
-    }
-
-    if (movedUser) {
-      presenceChannelRef.current.send({
-        type: 'broadcast',
-        event: 'move',
-        payload: { userId: movedUser.id, targetChannelId },
-      });
-    }
-  };
-
-  const handleSaveRoom = async () => {
-    if (!roomModal.name.trim()) return;
-
-    if (roomModal.type === 'create') {
-      const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-      if (userRooms.length >= 2) {
-        alert("Aynı anda en fazla 2 oda oluşturabilirsiniz.");
-        return;
-      }
-      const newRoom: VoiceChannel = {
-        id: Date.now().toString(),
-        name: roomModal.name,
-        userCount: 0,
-        members: [],
-        isSystemChannel: false,
-        maxUsers: roomModal.maxUsers,
-        isInviteOnly: roomModal.isInviteOnly,
-        isHidden: roomModal.isHidden,
-        ownerId: currentUser.id,
-        mode: roomModal.mode,
-        // Broadcast odada sahibi otomatik konuşmacı
-        speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
-      };
-      const { error: createErr } = await createChannel({
-        id: newRoom.id,
-        name: newRoom.name,
-        owner_id: currentUser.id,
-        max_users: newRoom.maxUsers || 0,
-        is_invite_only: newRoom.isInviteOnly || false,
-        is_hidden: newRoom.isHidden || false,
-        mode: roomModal.mode,
-        speaker_ids: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
-      });
-      if (createErr) {
-        setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.');
-        // auto-dismiss dock useEffect'te yönetiliyor
-        return;
-      }
-      setChannels([...channels, newRoom]);
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
-      if (view === 'settings') setView('chat');
-    } else if (roomModal.type === 'edit' && roomModal.channelId) {
-      const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
-      setChannels(channels.map(c => c.id === roomModal.channelId ? { ...c, ...updates } : c));
-      await updateChannel(roomModal.channelId, {
-        name: roomModal.name,
-        max_users: roomModal.maxUsers,
-        is_invite_only: roomModal.isInviteOnly,
-        is_hidden: roomModal.isHidden,
-        mode: roomModal.mode,
-      });
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: roomModal.channelId, updates } });
-    }
-
-    setRoomModal({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
-  };
-
-  const handleDeleteRoom = async (id: string) => {
-    const channel = channels.find(c => c.id === id);
-    if (channel?.isSystemChannel) {
-      alert("Sistem odaları silinemez!");
-      return;
-    }
-    setChannels(channels.filter(c => c.id !== id));
-    if (activeChannel === id) setActiveChannel(null);
-    setContextMenu(null);
-    await deleteChannel(id);
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', channelId: id } });
-  };
-
-  const handleRenameRoom = async (id: string, newName: string) => {
-    setChannels(channels.map(c => c.id === id ? { ...c, name: newName } : c));
-    setContextMenu(null);
-    await updateChannel(id, { name: newName });
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { name: newName } } });
-  };
-
-  const handleSetPassword = async (id: string, password: string, repeat: string) => {
-    if (password.length !== 4 || isNaN(Number(password))) { setPasswordError(true); return; }
-    if (password !== repeat) { setPasswordError(true); return; }
-    const { error } = await setChannelPassword(id, password);
-    if (error) {
-      console.error('Şifre kaydetme hatası:', error);
-      setToastMsg('Şifre kaydedilemedi. Lütfen tekrar deneyin.');
-      // auto-dismiss dock useEffect'te yönetiliyor
-      return;
-    }
-    setChannels(channels.map(c => c.id === id ? { ...c, password: 'SET' } : c));
-    setPasswordModal(null);
-    setPasswordInput('');
-    setPasswordRepeatInput('');
-    setPasswordError(false);
-    setContextMenu(null);
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: 'SET' } } });
-  };
-
-  const handleRemovePassword = async (id: string) => {
-    await setChannelPassword(id, null);
-    setChannels(channels.map(c => c.id === id ? { ...c, password: undefined } : c));
-    setContextMenu(null);
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { password: undefined } } });
-  };
-
-  const handleContextMenu = (e: React.MouseEvent, channelId: string) => {
-    if (!currentUser.isAdmin) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, channelId });
-  };
+  // Channel action handler'ları artık useChannelActions hook'unda
 
   const handleGenerateCode = async () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -1581,12 +1186,12 @@ export default function App() {
     if (!channel) return;
 
     if (!isInvited && channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
-      alert("Bu odaya sadece davetle girilebilir.");
+      setToastMsg('Bu odaya sadece davetle girilebilir.');
       return;
     }
 
     if (!isInvited && channel.maxUsers && channel.maxUsers > 0 && channel.userCount >= channel.maxUsers && activeChannel !== id) {
-      alert(`Bu oda maksimum ${channel.maxUsers} kişi alabilir.`);
+      setToastMsg(`Bu oda maksimum ${channel.maxUsers} kişi alabilir.`);
       return;
     }
 
@@ -1667,29 +1272,7 @@ export default function App() {
 
     // Admin ise bekleyen şifre sıfırlama ve davet isteklerini yükle
     if (loggedInUser.isAdmin || loggedInUser.isPrimaryAdmin) {
-      const { data: pending } = await getPendingPasswordResets();
-      if (pending) {
-        setPasswordResetRequests(pending.map((p: { id: string; name: string; email: string }) => ({
-          userId: p.id,
-          userName: p.name,
-          userEmail: p.email,
-        })));
-      }
-      const adminInvites = await getAdminInviteRequests();
-      if (adminInvites.length > 0) {
-        setInviteRequests(adminInvites.map(r => ({
-          id: r.id,
-          email: r.email,
-          status: r.status as InviteRequest['status'],
-          expiresAt: r.expires_at,
-          rejectionCount: r.rejection_count,
-          blockedUntil: r.blocked_until,
-          permanentlyBlocked: r.permanently_blocked,
-          createdAt: r.created_at,
-          lastSendError: r.last_send_error ?? undefined,
-          sentCode: r.code ?? undefined,
-        })));
-      }
+      adminPanel.loadInitialAdminData();
     }
   };
 
@@ -1780,244 +1363,8 @@ export default function App() {
     };
   }, []);
 
-  // ── Admin: bekleyen şifre sıfırlama isteklerini 15sn'de bir kontrol et
-  useEffect(() => {
-    if (!currentUser.id || (!currentUser.isAdmin && !currentUser.isPrimaryAdmin)) return;
-    if (view !== 'chat' && view !== 'settings') return;
+  // Admin polling + handlers artık useAdminPanel hook'unda
 
-    const poll = async () => {
-      const { data } = await getPendingPasswordResets();
-      if (data) {
-        setPasswordResetRequests(data.map((p: { id: string; name: string; email: string }) => ({
-          userId: p.id,
-          userName: p.name,
-          userEmail: p.email,
-        })));
-      }
-    };
-
-    const interval = setInterval(poll, 15000);
-    return () => clearInterval(interval);
-  }, [currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
-
-  // ── Admin: bekleyen davet talep isteklerini 30sn'de bir kontrol et + Realtime
-  useEffect(() => {
-    if (!currentUser.id || (!currentUser.isAdmin && !currentUser.isPrimaryAdmin)) return;
-    if (view !== 'chat' && view !== 'settings') return;
-
-    const mapRow = (r: {
-      id: string; email: string; status: string; code?: string | null;
-      expires_at: number; created_at: string; rejection_count: number;
-      blocked_until?: number | null; permanently_blocked: boolean;
-      last_send_error?: string | null;
-    }): InviteRequest => ({
-      id: r.id,
-      email: r.email,
-      status: r.status as InviteRequest['status'],
-      expiresAt: r.expires_at,
-      rejectionCount: r.rejection_count,
-      blockedUntil: r.blocked_until,
-      permanentlyBlocked: r.permanently_blocked,
-      createdAt: r.created_at,
-      lastSendError: r.last_send_error ?? undefined,
-      sentCode: r.code ?? undefined,
-    });
-
-    const refreshInvites = async () => {
-      const requests = await getAdminInviteRequests();
-      setInviteRequests(requests.map(mapRow));
-    };
-
-    refreshInvites();
-    const interval = setInterval(refreshInvites, 30000);
-
-    // Supabase Realtime: yeni INSERT ve statusun değiştiği UPDATE'leri anlık al
-    const channel = supabaseClient
-      .channel(`invite-requests-admin-rt-${currentUser.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'invite_requests' },
-        (payload) => {
-          const row = payload.new as {
-            id: string; email: string; status: string; code?: string | null;
-            expires_at: number; created_at: string;
-            last_send_error?: string | null;
-          };
-          setInviteRequests(prev => {
-            if (prev.find(r => r.id === row.id)) return prev;
-            return [...prev, {
-              id: row.id,
-              email: row.email,
-              status: row.status as InviteRequest['status'],
-              expiresAt: row.expires_at,
-              rejectionCount: 0,
-              createdAt: row.created_at,
-              lastSendError: row.last_send_error ?? undefined,
-              sentCode: row.code ?? undefined,
-            }];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'invite_requests' },
-        (payload) => {
-          const row = payload.new as {
-            id: string; status: string; code?: string | null;
-            last_send_error?: string | null; expires_at: number;
-          };
-          // Artık aksiyon gerektirmeyen statüsleri listeden kaldır
-          const actionable = ['pending', 'sending', 'failed'];
-          if (!actionable.includes(row.status)) {
-            setInviteRequests(prev => prev.filter(r => r.id !== row.id));
-          } else {
-            setInviteRequests(prev => prev.map(r =>
-              r.id === row.id
-                ? {
-                    ...r,
-                    status: row.status as InviteRequest['status'],
-                    lastSendError: row.last_send_error ?? undefined,
-                    sentCode: row.code ?? undefined,
-                    expiresAt: row.expires_at,
-                  }
-                : r,
-            ));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      clearInterval(interval);
-      channel.unsubscribe();
-    };
-  }, [currentUser.id, currentUser.isAdmin, currentUser.isPrimaryAdmin, view]);
-
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
-
-  const handleApproveReset = async (req: ResetRequest) => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session?.access_token) return;
-
-    const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ targetUserId: req.userId }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setToastMsg(data.error ?? 'Şifre sıfırlanamadı');
-      // auto-dismiss dock useEffect'te yönetiliyor
-      return;
-    }
-
-    setPasswordResetRequests(prev => prev.filter(r => r.userId !== req.userId));
-
-    // Diğer adminleri bilgilendir
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'password-reset-update',
-      payload: { userId: req.userId },
-    });
-  };
-
-  const handleDismissReset = async (userId: string) => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session?.access_token) return;
-
-    await fetch(`${SERVER_URL}/api/dismiss-password-reset`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ targetUserId: userId }),
-    });
-
-    setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
-
-    presenceChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'password-reset-update',
-      payload: { userId },
-    });
-  };
-
-  const handleAdminManualReset = async (userId: string, userName: string, userEmail: string) => {
-    await handleApproveReset({ userId, userName, userEmail });
-  };
-
-  // ── Admin: Davet kodu gönder
-  const handleSendInviteCode = async (req: InviteRequest): Promise<{ code?: string; error?: string }> => {
-    let optimisticApplied = false;
-    let lockedCode: string | undefined;
-    try {
-      // 1. DB'de atomik kilit: status → 'sending', yeni kod üret
-      const result = await adminSendInviteCode(req.id);
-      if (result.error) {
-        if (result.error === 'invalid_status') return { error: 'Bu talep zaten işleme alınmış.' };
-        return { error: result.error };
-      }
-      if (!result.ok || !result.code) return { error: 'Kod üretilemedi.' };
-      lockedCode = result.code;
-
-      // UI'da hemen 'sending' olarak işaretle (Realtime UPDATE gelmeden önce)
-      setInviteRequests(prev => prev.map(r =>
-        r.id === req.id
-          ? { ...r, status: 'sending' as const, sentCode: lockedCode }
-          : r,
-      ));
-      optimisticApplied = true;
-
-      // 2. E-posta gönder — await ile bekle
-      const emailResult = await sendInviteEmail(req.email, lockedCode, result.expires_at ?? 0);
-
-      if (emailResult.success) {
-        // 3a. Başarılı → 'sent' olarak işaretle, listeden kaldır
-        await adminMarkInviteSent(req.id);
-        setInviteRequests(prev => prev.filter(r => r.id !== req.id));
-        return { code: lockedCode };
-      } else {
-        // 3b. Başarısız → 'failed' olarak kaydet, hata mesajını sakla
-        const errMsg = emailResult.error ?? 'E-posta gönderilemedi';
-        await adminMarkInviteFailed(req.id, errMsg);
-        setInviteRequests(prev => prev.map(r =>
-          r.id === req.id
-            ? { ...r, status: 'failed' as const, lastSendError: errMsg }
-            : r,
-        ));
-        return { code: lockedCode, error: errMsg };
-      }
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'Bilinmeyen hata';
-      // Eğer optimistik 'sending' uygulandıysa ama sonrasında exception fırladıysa
-      // UI'ı 'failed' konumuna al; DB satırı 2 dakika sonra zaten timeout ile failed'a düşer.
-      if (optimisticApplied) {
-        setInviteRequests(prev => prev.map(r =>
-          r.id === req.id
-            ? { ...r, status: 'failed' as const, lastSendError: errMsg }
-            : r,
-        ));
-        if (lockedCode) {
-          adminMarkInviteFailed(req.id, errMsg).catch(() => {});
-        }
-      }
-      return { error: errMsg };
-    }
-  };
-
-  // ── Admin: Daveti reddet
-  const handleRejectInvite = async (req: InviteRequest): Promise<void> => {
-    try {
-      await adminRejectInvite(req.id);
-    } finally {
-      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
-    }
-  };
 
   const handleRegister = async (code: string, nick: string, password: string, repeatPwd: string) => {
     if (!code.trim()) throw new Error('Davet kodunu giriniz!');
@@ -2167,50 +1514,10 @@ export default function App() {
   };
 
   const settingsContextValue: SettingsContextType = {
-    currentTheme,
-    setCurrentTheme,
-    isLowDataMode,
-    setIsLowDataMode,
-    isNoiseSuppressionEnabled,
-    setIsNoiseSuppressionEnabled,
-    noiseThreshold,
-    setNoiseThreshold,
-    pttKey,
-    setPttKey,
-    isListeningForKey,
-    setIsListeningForKey,
-    soundJoinLeave,
-    setSoundJoinLeave,
-    soundJoinLeaveVariant,
-    setSoundJoinLeaveVariant,
-    soundMuteDeafen,
-    setSoundMuteDeafen,
-    soundMuteDeafenVariant,
-    setSoundMuteDeafenVariant,
-    soundPtt,
-    setSoundPtt,
-    soundPttVariant,
-    setSoundPttVariant,
-    avatarBorderColor,
-    setAvatarBorderColor,
-    pttReleaseDelay,
-    setPttReleaseDelay,
-    soundInvite,
-    setSoundInvite,
-    soundInviteVariant,
-    setSoundInviteVariant,
-    audioProfile,
-    setAudioProfile,
-    autoLeaveEnabled,
-    setAutoLeaveEnabled,
-    autoLeaveMinutes,
-    setAutoLeaveMinutes,
-    voiceMode,
-    setVoiceMode,
-    showLastSeen,
+    ...settings,
+    // showLastSeen'in DB sync wrapper'ı — hook'taki setShowLastSeenLocal yerine
+    showLastSeen: settings.showLastSeen,
     setShowLastSeen,
-    activeBackground,
-    setActiveBackground,
   };
 
   const appStateValue: AppStateContextType = {
@@ -2275,12 +1582,12 @@ export default function App() {
     showReleaseNotes,
     setShowReleaseNotes,
     passwordResetRequests,
-    handleApproveReset,
-    handleDismissReset,
-    handleAdminManualReset,
+    handleApproveReset: adminPanel.handleApproveReset,
+    handleDismissReset: adminPanel.handleDismissReset,
+    handleAdminManualReset: adminPanel.handleAdminManualReset,
     inviteRequests,
-    handleSendInviteCode,
-    handleRejectInvite,
+    handleSendInviteCode: adminPanel.handleSendInviteCode,
+    handleRejectInvite: adminPanel.handleRejectInvite,
     inviteCooldowns,
     inviteStatuses,
   };

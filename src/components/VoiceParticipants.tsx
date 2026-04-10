@@ -6,6 +6,8 @@ import type { User } from '../types';
 import type { ChatMessage } from './ChatPanel';
 import ChatPanel from './ChatPanel';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { formatFullName } from '../lib/formatName';
 
 interface Props {
   forceMobile: boolean;
@@ -93,6 +95,7 @@ function VoiceParticipants({
   onScrollToBottom,
   isModerator,
 }: Props) {
+  const { openConfirm } = useConfirm();
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
   useEffect(() => {
@@ -144,7 +147,7 @@ function VoiceParticipants({
       effectiveStatus: getEffectiveStatus(),
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
-      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) onKickUser(user.id); } },
+      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); openConfirm({ title: 'Kullanıcıyı çıkar', description: `${formatFullName(user.firstName, user.lastName)} odadan çıkarılsın mı?`, confirmText: 'Çıkar', cancelText: 'İptal', danger: true, onConfirm: () => onKickUser(user.id) }); } },
     };
   };
 
@@ -168,7 +171,7 @@ function VoiceParticipants({
       appVersion: user.appVersion,
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
-      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); if (confirm(`${user.name} odadan çıkarılsın mı?`)) onKickUser(user.id); } },
+      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); openConfirm({ title: 'Kullanıcıyı çıkar', description: `${formatFullName(user.firstName, user.lastName)} odadan çıkarılsın mı?`, confirmText: 'Çıkar', cancelText: 'İptal', danger: true, onConfirm: () => onKickUser(user.id) }); } },
     };
   });
 

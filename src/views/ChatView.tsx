@@ -133,14 +133,17 @@ export default function ChatView() {
   // ── Drag-drop handlers ──
   const handleDragStart = (e: React.DragEvent, userName: string) => {
     if (!currentUser.isAdmin) { e.preventDefault(); return; }
+    if (userName === currentUser.name) { e.preventDefault(); return; }
     setDraggedUser(userName);
+    e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('userName', userName);
   };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
   const handleDrop = (e: React.DragEvent, channelId: string) => {
     e.preventDefault(); e.stopPropagation();
     const userName = e.dataTransfer.getData('userName') || draggedUser;
-    if (userName) handleMoveUser(userName, channelId);
+    if (!userName || userName === currentUser.name) { setDraggedUser(null); return; }
+    handleMoveUser(userName, channelId);
     setDraggedUser(null);
   };
   const handleDropToRemove = (e: React.DragEvent) => {
@@ -224,7 +227,11 @@ export default function ChatView() {
   }, [setPasswordModal, setContextMenu]);
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
+    <div
+      className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden"
+      onDragOver={currentUser.isAdmin ? handleDragOver : undefined}
+      onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
+    >
       <MobileHeader
         forceMobile={FORCE_MOBILE}
         onOpenLeftDrawer={() => setMobileLeftOpen(true)}
@@ -302,7 +309,7 @@ export default function ChatView() {
                               return (
                               <React.Fragment key={user.id}>
                                 {groupLabel && (<>{groupLabel === 'Dinleyiciler' && <div className="mx-1 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />}<div className="flex items-center gap-1.5 pt-1 pb-0.5 px-1">{groupLabel === 'Konuşmacılar' ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" /> : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />}<span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span></div></>)}
-                                <div onClick={(e) => { e.stopPropagation(); if (user.id !== currentUser.id) handleUserActionClick(e, user.id); }}
+                                <div onClick={(e) => { e.stopPropagation(); if (user.id !== currentUser.id) setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                                   className={`flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1 ${isBc && !isSp ? 'opacity-70' : ''}`}>
                                   <div className="relative shrink-0"><div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]">{user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}</div><DeviceBadge platform={user.platform} size={11} className="absolute -bottom-0.5 -right-0.5" /></div>
                                   <span className={`text-[11px] truncate flex-1 ${isBc && isSp ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-secondary-text)]'}`}>{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
@@ -355,7 +362,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Left Sidebar (masaüstü) ── */}
-        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} />
+        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })} />
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
@@ -393,7 +400,7 @@ export default function ChatView() {
 
         {/* ── Main Content ── */}
         <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02)', border: FORCE_MOBILE ? undefined : '1px solid rgba(var(--glass-tint), 0.03)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%)' }}>
-          <div onDragOver={currentUser.isAdmin ? handleDragOver : undefined} onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
+          <div
             className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${activeChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
           {view === 'settings' ? <SettingsView /> : activeChannel ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -490,7 +497,8 @@ export default function ChatView() {
           const popupUser = allUsers.find(u => u.id === profilePopup.userId);
           if (!popupUser) return null;
           const isMe = popupUser.id === currentUser.id;
-          const alreadyInChannel = activeChannel && channels.find(c => c.id === activeChannel)?.members?.includes(popupUser.name);
+          const activeMembers = activeChannel ? channels.find(c => c.id === activeChannel)?.members : undefined;
+          const alreadyInChannel = activeMembers?.includes(popupUser.id) || activeMembers?.includes(popupUser.name);
           const canInvite = !isMe && !!activeChannel && !alreadyInChannel && popupUser.status === 'online';
           return (
             <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
