@@ -185,7 +185,7 @@ app.post('/api/admin-reset-password', async (req, res) => {
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'PigeVox <onboarding@resend.dev>';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MAYVOX <onboarding@resend.dev>';
 
   const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -230,7 +230,7 @@ app.post('/api/send-invite-email', async (req, res) => {
   if (!email || !code) return res.status(400).json({ error: 'email ve code gerekli' });
 
   const expDate = expiresAt ? new Date(expiresAt).toLocaleString('tr-TR') : '';
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'PigeVox <onboarding@resend.dev>';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MAYVOX <onboarding@resend.dev>';
 
   const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',

@@ -23,5 +23,5 @@ export function openApkDownload(apkUrl?: string, version?: string): boolean {
 
 function buildApkUrl(version: string): string {
   if (!version) return '';
-  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/PigeVox-${version}.apk`;
+  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/MAYVOX-${version}.apk`;
 }

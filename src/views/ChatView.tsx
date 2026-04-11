@@ -33,6 +33,8 @@ import DMPanel from '../components/DMPanel';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
 import MobileHeader from '../components/MobileHeader';
 import VoiceParticipants from '../components/VoiceParticipants';
+import { NotificationBadge, NotificationBell } from '../components/notifications';
+import { useNotificationCenter } from '../hooks/useNotificationCenter';
 
 // Feature imports
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
@@ -47,6 +49,8 @@ import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import { roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
+
+import { listMyServers, searchServers, type Server } from '../lib/serverService';
 
 export default function ChatView() {
   const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests } = useUser();
@@ -97,6 +101,21 @@ export default function ChatView() {
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
   const dmToggleRef = useRef<HTMLButtonElement>(null);
+
+  // ── Sunucu state ──
+  const [serverList, setServerList] = useState<Server[]>([]);
+  const [activeServerId, setActiveServerId] = useState('');
+  useEffect(() => {
+    listMyServers().then(servers => {
+      setServerList(servers);
+      if (servers.length > 0 && !activeServerId) setActiveServerId(servers[0].id);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const activeServerData = serverList.find(s => s.id === activeServerId) ?? serverList[0] ?? null;
+  const hasServer = serverList.length > 0;
+
+  // ── Notification center ──
+  const notifications = useNotificationCenter(dmUnreadCount);
 
   // ── Card style ──
   const [cardScale, setCardScale] = useState<number>(() => {
@@ -362,7 +381,8 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Left Sidebar (masaüstü) ── */}
-        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })} />
+        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+          activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} />
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
@@ -438,6 +458,30 @@ export default function ChatView() {
                   isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom} />
               </div>
             </div>
+          ) : !hasServer ? (
+            /* ── Sunucusuz kullanıcı — onboarding empty state ── */
+            <div className="flex-1 flex flex-col items-center justify-center px-6">
+              <div className="relative mb-8">
+                <div className="absolute inset-[-16px] rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.5), transparent 70%)' }} />
+                <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--theme-accent-rgb), 0.1)' }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)] opacity-70">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="text-[17px] font-bold text-[var(--theme-text)] mb-2 tracking-tight">Bir sohbet sunucusuna katıl</h2>
+              <p className="text-[12px] text-[var(--theme-secondary-text)]/50 max-w-[280px] leading-relaxed text-center mb-8">
+                Davet kodu ile bir sunucuya katılabilir ya da kendi sohbet sunucunu oluşturabilirsin.
+              </p>
+              <div className="flex items-center gap-3">
+                <button className="h-10 px-5 rounded-xl text-[12px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0" style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)', boxShadow: '0 2px 12px rgba(var(--theme-accent-rgb), 0.25)' }}>
+                  Sunucuya Katıl
+                </button>
+                <button className="h-10 px-5 rounded-xl text-[12px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 text-[var(--theme-text)]" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+                  Sunucu Oluştur
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-y-auto">
               <div className="text-center pt-10 pb-2 px-6">
@@ -473,23 +517,26 @@ export default function ChatView() {
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
               className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
               <MessageSquare size={16} />
-              {dmUnreadCount > 0 && !dmPanelOpen && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] text-[9px] font-bold flex items-center justify-center">{dmUnreadCount > 99 ? '99+' : dmUnreadCount}</span>}
+              {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
             </button>
             <button onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
+              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
               <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+              {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
             </button>
-            <button onClick={() => {}} className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)] group/bell" title="Bildirimler">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover/bell:animate-[bell-ring_0.5s_ease-in-out]"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-amber-500 rounded-full" />}
-            </button>
+            <NotificationBell
+              summary={notifications}
+              onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
+              onOpenDM={() => setDmPanelOpen(true)}
+            />
             <button onClick={confirmLogout} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
           </div>
         </aside>
       </div>
 
       {/* ── Desktop Dock — context-consuming, minimal props ── */}
-      <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle} />
+      <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
+        serverList={serverList} activeServerId={activeServerId} onSelectServer={setActiveServerId} />
 
       {/* ── Profile Popup ── */}
       <AnimatePresence>
@@ -513,7 +560,7 @@ export default function ChatView() {
       </AnimatePresence>
 
       {/* ── Mobile Footer — context-consuming, minimal props ── */}
-      <MobileFooter listenerToastRef={listenerToastRef} />
+      <MobileFooter listenerToastRef={listenerToastRef} onOpenBell={() => setMobileRightOpen(true)} />
 
       {/* ── DM Panel ── */}
       <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}

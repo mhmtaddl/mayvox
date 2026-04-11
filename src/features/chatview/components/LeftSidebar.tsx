@@ -8,7 +8,6 @@ import {
   Headphones,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
-import BrandArea from '../../../components/BrandArea';
 import { ConnectionQualityIndicator } from '../../../components/chat';
 import DeviceBadge from '../../../components/chat/DeviceBadge';
 import UpdateVersionHub from '../../update/components/UpdateVersionHub';
@@ -26,9 +25,12 @@ interface Props {
   handleDrop: (e: React.DragEvent, channelId: string) => void;
   handleDragStart: (e: React.DragEvent, userName: string) => void;
   onUserClick: (userId: string, x: number, y: number) => void;
+  activeServerName?: string;
+  activeServerShortName?: string;
+  activeServerAvatarUrl?: string;
 }
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl }: Props) {
   const { channels, activeChannel, isConnecting } = useChannel();
   const { currentUser, allUsers } = useUser();
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
@@ -49,11 +51,35 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         onMouseDown={handleSidebarDragStart}
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-[var(--theme-accent)]/20 active:bg-[var(--theme-accent)]/30 transition-colors"
       />
-      <div className="px-5 pt-4 pb-3 shrink-0">
-        <BrandArea />
+      {/* Brand header — aktif sunucuya göre değişir */}
+      <div className="px-5 pt-4 pb-3 shrink-0 flex items-center gap-3 select-none">
+        {activeServerAvatarUrl ? (
+          <img src={activeServerAvatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-[var(--theme-accent)]/15" draggable={false} />
+        ) : (
+          <div className="w-10 h-10 rounded-xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/15 flex items-center justify-center shrink-0" style={{ filter: 'drop-shadow(0 0 5px rgba(var(--theme-accent-rgb), 0.2))' }}>
+            <span className="text-[13px] font-bold text-[var(--theme-accent)]">{activeServerShortName ?? 'MV'}</span>
+          </div>
+        )}
+        <div className="flex flex-col leading-none min-w-0">
+          <h1 className="text-[15px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">{activeServerName ?? 'MAYVOX'}</h1>
+          <span className="text-[7.5px] font-medium tracking-[0.16em] uppercase text-[var(--theme-secondary-text)]/30 mt-0.5">voice & chat</span>
+        </div>
       </div>
+      <div className="mx-5 h-px mb-3" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
 
       <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
+        {visibleChannels.length === 0 ? (
+          /* Sunucusuz durum — sidebar empty state */
+          <div className="flex-1 flex flex-col items-center justify-center px-2">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }}>
+              <Volume2 size={18} className="text-[var(--theme-secondary-text)]/25" />
+            </div>
+            <p className="text-[10px] text-[var(--theme-secondary-text)]/40 text-center leading-relaxed max-w-[160px]">
+              Bir sohbet sunucusuna katılarak ses kanallarını görüntüleyebilirsin.
+            </p>
+          </div>
+        ) : (
+        <>
         <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-3">
           <Volume2 size={14} className="opacity-60" />
           <span className="uppercase text-[10px] tracking-[0.15em]">Ses Kanalları</span>
@@ -201,6 +227,8 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
             <span className="text-sm font-medium">Oda Oluştur</span>
           </button>
         </nav>
+        </>
+        )}
       </div>
 
       {/* Sol alt kontroller */}

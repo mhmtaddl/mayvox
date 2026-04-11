@@ -60,7 +60,26 @@
       "Bash(sed -i 's/Caylaklar ile Sohbete Doğru/PigeVox ile Sesini Duyur/g' src/views/LoginSelectionView.tsx src/views/LoginPasswordView.tsx src/views/LoginCodeView.tsx src/views/RegisterDetailsView.tsx)",
       "Bash(sed -i 's/Sadece CAYLAKLAR Burada Sohbet Edebilir!//g' src/views/LoginSelectionView.tsx)",
       "Bash(sed -i 's/h-9 w-9 rounded-full bg-\\\\[var\\(--theme-accent\\)\\\\]\\\\/20 overflow-hidden/h-9 w-9 avatar-squircle bg-[var\\(--theme-accent\\)]\\\\/20 overflow-hidden/g' src/components/settings/sections/AdminUserManagement.tsx)",
-      "Bash(sed -i 's/h-16 w-16 rounded-full bg-\\\\[var\\(--theme-accent\\)\\\\]\\\\/20/h-16 w-16 avatar-squircle bg-[var\\(--theme-accent\\)]\\\\/20/g' src/components/settings/sections/AccountSection.tsx)"
+      "Bash(sed -i 's/h-16 w-16 rounded-full bg-\\\\[var\\(--theme-accent\\)\\\\]\\\\/20/h-16 w-16 avatar-squircle bg-[var\\(--theme-accent\\)]\\\\/20/g' src/components/settings/sections/AccountSection.tsx)",
+      "Bash(xargs wc:*)",
+      "Bash(awk '$1 > 300 {print}')",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@types/react/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/react/package.json'\\).version\\)\")",
+      "Bash(node -e \"const p = require.resolve\\('react'\\); const d = require\\('path'\\).dirname\\(p\\); const fs = require\\('fs'\\); console.log\\(fs.existsSync\\(d + '/jsx-runtime.d.ts'\\) ? 'has types' : 'no types'\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/react-error-boundary/package.json'\\).version\\)\")",
+      "Bash(node -c chat-server.cjs)",
+      "Bash(python3 -c ':*)",
+      "Bash(ffprobe -v quiet -print_format json -show_format \"build/gif/myvox_y.gif\")",
+      "Bash(identify -verbose \"build/gif/myvox_y.gif\")",
+      "Bash(ffprobe -v quiet -print_format json -show_streams \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/gif/myvox_y.gif\")",
+      "Bash(xxd \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/gif/myvox_y.gif\")",
+      "Bash(xxd -s 0x310 -l 20 build/gif/myvox_y.gif)",
+      "Bash(dd of=src/assets/splash.gif bs=1 seek=$\\(\\(0x31D\\)\\) count=1 conv=notrunc)",
+      "Bash(xxd:*)",
+      "Bash(ffprobe -v quiet -print_format json -show_format \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/gif/mayvox_giris.gif\")",
+      "Bash(dd of=\"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/src/assets/splash.gif\" bs=1 seek=$\\(\\(0x31D\\)\\) count=1 conv=notrunc)",
+      "Bash(identify \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")",
+      "Bash(ffprobe -v quiet -show_entries stream=width,height -of csv=p=0 \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")"
     ]
   }
 }

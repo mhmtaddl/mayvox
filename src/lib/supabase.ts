@@ -110,6 +110,16 @@ export const updateLastSeenHeartbeat = async (id: string) => {
     .eq('id', id);
 };
 
+// GET USER SETTINGS
+export const getUserSettings = async (userId: string) => {
+  return await supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle();
+};
+
+// UPDATE USER SETTINGS
+export const updateUserSettings = async (userId: string, settings: Record<string, unknown>) => {
+  return await supabase.from('user_settings').upsert({ user_id: userId, ...settings });
+};
+
 // UPDATE USER MODERATION (admin/mute/ban) — server-side admin kontrolü ile
 export const updateUserModeration = async (id: string, updates: {
   is_admin?: boolean;

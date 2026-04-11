@@ -1,5 +1,5 @@
 /**
- * PigeVox DM Service
+ * MAYVOX DM Service
  * - Mevcut chat WebSocket üzerinden dm:* event'leri
  * - Room chat'ten bağımsız
  */

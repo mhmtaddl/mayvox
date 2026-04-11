@@ -1,5 +1,5 @@
 /**
- * PigeVox WebSocket Chat Server v4
+ * MAYVOX WebSocket Chat Server v4
  * - Supabase JWT auth
  * - Room-based messaging with persistent history
  * - DM (Direct Message) with SQLite persistence

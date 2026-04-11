@@ -259,13 +259,13 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
           <div className="relative">
             <div className="absolute inset-[-16px] rounded-full opacity-15 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
             <div className="relative w-28 h-28 overflow-hidden rounded-[22%]">
-              <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
+              <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover" />
             </div>
           </div>
         </div>
 
         <div className="text-center mb-8">
-          <h1 className="text-[#F5F5F5] text-[24px] font-bold tracking-[-0.01em] leading-tight">Bize Katıl</h1>
+          <h1 className="text-[#F5F5F5] text-[24px] font-medium tracking-[-0.01em] leading-tight">Bize Katıl!</h1>
           <p className="text-white/50 mt-2 text-[13px] max-w-[80%] mx-auto">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
         </div>
 

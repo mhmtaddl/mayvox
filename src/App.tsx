@@ -201,6 +201,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
+
   // ── Mobil izin onboarding — her açılışta gerçek izin durumunu kontrol eder ──
   const [permissionsGranted, setPermissionsGranted] = useState(() => {
     if (!isCapacitor()) return true; // Masaüstünde izin akışı yok
@@ -1665,37 +1666,16 @@ export default function App() {
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <AnimatePresence mode="wait">
                       {view === 'loading' && (
-                        <motion.div
-                          key="loading"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex flex-col items-center justify-center min-h-screen bg-[var(--theme-bg)]"
-                        >
-                          <div className="relative mb-6">
-                            <div className="absolute inset-0 bg-[var(--theme-accent)]/20 blur-2xl rounded-full" />
-                            <div className="relative w-16 h-16 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/30 flex items-center justify-center text-[var(--theme-accent)]">
-                              <Mic size={32} />
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5">
-                            {[0, 1, 2].map(i => (
-                              <motion.div
-                                key={i}
-                                className="w-2 h-2 rounded-full bg-[var(--theme-accent)]"
-                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
+                        <motion.div key="loading" exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="min-h-screen bg-[var(--theme-bg)]" />
                       )}
                       {view === 'login-password' && (
-                        <LoginPasswordView
-                          handleLogin={handleLogin}
-                          onForgotPassword={() => setShowForgotPassword(true)}
-                          onGoToRegister={() => setView('login-code')}
-                        />
+                        <motion.div key="login-password" initial={{ opacity: 0.96, scale: 0.995 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.14, ease: 'easeOut' }}>
+                          <LoginPasswordView
+                            handleLogin={handleLogin}
+                            onForgotPassword={() => setShowForgotPassword(true)}
+                            onGoToRegister={() => setView('login-code')}
+                          />
+                        </motion.div>
                       )}
                       {view === 'login-code' && (
                         <LoginCodeView
@@ -1719,7 +1699,11 @@ export default function App() {
                           onGoBack={() => setView('login-password')}
                         />
                       )}
-                      {(view === 'chat' || view === 'settings') && <ChatView />}
+                      {(view === 'chat' || view === 'settings') && (
+                        <motion.div key="chat" initial={{ opacity: 0.96, scale: 0.995 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.14, ease: 'easeOut' }}>
+                          <ChatView />
+                        </motion.div>
+                      )}
                     </AnimatePresence>
                   </div>
 

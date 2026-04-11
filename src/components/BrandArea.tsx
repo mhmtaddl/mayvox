@@ -8,7 +8,7 @@ function BrandArea() {
       <div className="relative w-[44px] h-[44px] shrink-0">
         <img
           src={appLogo}
-          alt="PigeVox"
+          alt="MAYVOX"
           className="relative w-full h-full object-contain group-hover/brand:scale-105 transition-transform duration-300"
         />
         {/* Shimmer sweep */}
@@ -29,11 +29,11 @@ function BrandArea() {
       {/* Text */}
       <div className="flex flex-col leading-none min-w-0">
         <h1 className="text-[20px] tracking-[-0.01em]">
-          <span className="font-extrabold text-[var(--theme-text)] group-hover/brand:text-[var(--theme-accent)] transition-colors duration-300">Pige</span>
-          <span className="font-semibold text-[var(--theme-accent)]">Vox</span>
+          <span className="font-extrabold text-[var(--theme-text)] group-hover/brand:text-[var(--theme-accent)] transition-colors duration-300">MAY</span>
+          <span className="font-semibold text-[var(--theme-accent)]">VOX</span>
         </h1>
         <span className="text-[7.5px] font-medium tracking-[0.18em] uppercase text-[var(--theme-secondary-text)]/30 mt-0.5 group-hover/brand:text-[var(--theme-secondary-text)]/50 transition-colors duration-300">
-          sesini duyur
+          voice & chat
         </span>
       </div>
 

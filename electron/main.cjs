@@ -242,7 +242,7 @@ function getTrayIcon() {
 
 function setupTray(win) {
   tray = new Tray(getTrayIcon());
-  tray.setToolTip("PigeVox");
+  tray.setToolTip("MAYVOX");
 
   // İlk menü oluştur
   updateTrayMenu(win, null);
@@ -285,7 +285,79 @@ ipcMain.on("tray:set-channel", (_e, channelName) => {
   if (win) updateTrayMenu(win, channelName || null);
 });
 
-function createWindow() {
+// ── Splash → Main pencere geçişi ─────────────────────────────────────────────
+// Splash: ayrı HTML, sadece logo + CSS nefes animasyonu. React yüklemez.
+// Main: React uygulaması, show=false ile arka planda yüklenir.
+// Main ready-to-show → splash fade-out (opacity) → splash destroy → main show.
+
+const mainWebPrefs = {
+  preload: path.join(__dirname, "preload.cjs"),
+  contextIsolation: true,
+  nodeIntegration: false,
+  spellcheck: false,
+  backgroundThrottling: false,
+  enableWebSQL: false,
+};
+
+function createSplashWindow() {
+  const splash = new BrowserWindow({
+    width: 148,
+    height: 148,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    center: true,
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  splash.loadFile(path.join(__dirname, "splash.html"));
+  splash.once("ready-to-show", () => splash.show());
+  return splash;
+}
+
+/** Pencere opacity'sini animate et. steps × interval = toplam süre. */
+function animateOpacity(win, from, to, steps, interval) {
+  if (!win || win.isDestroyed()) return Promise.resolve();
+  return new Promise((resolve) => {
+    let current = from;
+    const delta = (to - from) / steps;
+    const tick = () => {
+      current += delta;
+      const done = to > from ? current >= to : current <= to;
+      if (done) {
+        try { win.setOpacity(Math.max(0, Math.min(1, to))); } catch {}
+        resolve();
+        return;
+      }
+      try { win.setOpacity(Math.max(0, Math.min(1, current))); } catch {}
+      setTimeout(tick, interval);
+    };
+    tick();
+  });
+}
+
+/** Splash fade-out + destroy */
+function fadeSplashOut(splash) {
+  if (!splash || splash.isDestroyed()) return Promise.resolve();
+  return animateOpacity(splash, 1, 0, 8, 18).then(() => {
+    if (!splash.isDestroyed()) splash.destroy();
+  });
+}
+
+/** Main window fade-in */
+function fadeMainIn(win) {
+  if (!win || win.isDestroyed()) return Promise.resolve();
+  try { win.setOpacity(0); } catch {}
+  win.show();
+  return animateOpacity(win, 0, 1, 10, 16);
+}
+
+function createMainWindow() {
   const saved = Store.get();
 
   const win = new BrowserWindow({
@@ -295,30 +367,21 @@ function createWindow() {
     y: saved.y,
     minWidth: 1100,
     minHeight: 700,
+    show: false,
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      spellcheck: false,
-      backgroundThrottling: false,
-      enableWebSQL: false,
-    },
+    icon: path.join(__dirname, "../build/icon.ico"),
+    webPreferences: mainWebPrefs,
   });
 
-  // Boyut/konum değişikliklerini kaydet (kapanmadan önce)
   const saveState = () => {
     if (win.isMaximized() || win.isMinimized()) return;
     const { width, height } = win.getBounds();
     const [x, y] = win.getPosition();
     Store.set({ width, height, x, y });
   };
-
   win.on("resize", saveState);
   win.on("move", saveState);
 
-  // X butonuna basıldığında kapat değil, tray'e indir
-  // isQuitting true ise hiçbir şey yapma — pencere normal kapansın (installer/quit akışı)
   win.on("close", (e) => {
     if (isQuitting) {
       logger.info("Window close: quitting mode — pencere kapanacak");
@@ -333,6 +396,14 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
+
+  return win;
+}
+
+function createWindow() {
+  const win = createMainWindow();
+  win.show();
+  return win;
 }
 
 // Renderer'dan gelen log mesajlarını dosyaya yaz
@@ -420,7 +491,7 @@ function setupAutoUpdater(win) {
 
   ipcMain.on("update:install", () => {
     try {
-      const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'PigeVox-update-debug.log');
+      const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log');
       const diag = [
         `[${new Date().toISOString()}] update:install tetiklendi`,
         `execPath: ${process.execPath}`,
@@ -458,11 +529,37 @@ process.on("unhandledRejection", (reason) => {
 
 app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
-  createWindow();
-  const win = BrowserWindow.getAllWindows()[0];
-  setupAutoUpdater(win);
-  setupGlobalPtt(win);
-  setupTray(win);
+
+  // ── Splash + Main paralel başlatma ──
+  // 1. Splash anında açılır (sadece HTML + CSS, çok hızlı)
+  // 2. Main window arka planda React yükler (show: false)
+  // 3. Main ready-to-show → splash fade-out → main show
+  const splash = createSplashWindow();
+  const mainWin = createMainWindow();
+
+  let transitioned = false;
+  function doTransition() {
+    if (transitioned) return;
+    transitioned = true;
+    // Overlap: splash fade-out başlarken main fade-in de başlar
+    // → boş masaüstü asla görünmez
+    fadeSplashOut(splash);
+    if (mainWin && !mainWin.isDestroyed()) fadeMainIn(mainWin);
+  }
+
+  mainWin.once("ready-to-show", () => doTransition());
+
+  // Güvenlik: 12s içinde ready-to-show gelmezse yine de geçiş yap
+  setTimeout(() => {
+    if (!transitioned) {
+      logger.info("Splash timeout — ana pencereye geçiliyor");
+      doTransition();
+    }
+  }, 12000);
+
+  setupAutoUpdater(mainWin);
+  setupGlobalPtt(mainWin);
+  setupTray(mainWin);
 
   // İkinci instance tetiklenirse
   app.on("second-instance", (_event, argv) => {
@@ -474,16 +571,24 @@ app.whenReady().then(() => {
       return;
     }
     // Normal ikinci instance → pencereyi öne getir
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
+    if (mainWin && !mainWin.isDestroyed()) {
+      if (mainWin.isMinimized()) mainWin.restore();
+      mainWin.show();
+      mainWin.focus();
+    } else if (splash && !splash.isDestroyed()) {
+      splash.show();
+      splash.focus();
     }
   });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      // Tüm pencereler kapanmışsa yeni ana pencere aç
+      const win = createMainWindow();
+      win.show();
+      setupAutoUpdater(win);
+      setupGlobalPtt(win);
+      setupTray(win);
     } else {
       BrowserWindow.getAllWindows()[0].show();
     }
@@ -494,12 +599,12 @@ app.whenReady().then(() => {
 // Gerçek çıkış sadece tray > Çıkış ile olur (isQuitting = true).
 // Ama installer/quit modundaysa process sonlansın.
 app.on("window-all-closed", () => {
-  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'PigeVox-update-debug.log'), `[${new Date().toISOString()}] window-all-closed isQuitting=${isQuitting}\n`, 'utf8'); } catch {}
+  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log'), `[${new Date().toISOString()}] window-all-closed isQuitting=${isQuitting}\n`, 'utf8'); } catch {}
   if (isQuitting) app.quit();
 });
 
 app.on("before-quit", () => {
-  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'PigeVox-update-debug.log'), `[${new Date().toISOString()}] before-quit tetiklendi\n`, 'utf8'); } catch {}
+  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log'), `[${new Date().toISOString()}] before-quit tetiklendi\n`, 'utf8'); } catch {}
   isQuitting = true;
   // Native kaynakları erken serbest bırak — installer başlamadan dosya kilitleri kalksın
   if (uIOhook) {
@@ -510,7 +615,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
-  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'PigeVox-update-debug.log'), `[${new Date().toISOString()}] will-quit tetiklendi\n`, 'utf8'); } catch {}
+  try { fs.appendFileSync(path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log'), `[${new Date().toISOString()}] will-quit tetiklendi\n`, 'utf8'); } catch {}
   // before-quit'te temizlenmediyse son şans
   if (uIOhook) {
     try { uIOhook.stop(); } catch {}

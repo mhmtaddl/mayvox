@@ -81,7 +81,7 @@ export default function RegisterDetailsView({
           <div className="relative">
             <div className="absolute inset-[-16px] rounded-full opacity-15 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
             <div className="relative w-28 h-28 overflow-hidden rounded-[22%]">
-              <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
+              <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover" />
             </div>
           </div>
         </div>

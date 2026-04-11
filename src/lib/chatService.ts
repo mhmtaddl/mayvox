@@ -1,5 +1,5 @@
 /**
- * PigeVox WebSocket Chat Service
+ * MAYVOX WebSocket Chat Service
  * - Reconnect-safe
  * - Room-based
  * - Supabase JWT auth

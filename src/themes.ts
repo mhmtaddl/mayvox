@@ -227,7 +227,7 @@ export interface BackgroundPreset {
 }
 
 export const backgroundPresets: BackgroundPreset[] = [
-  { id: "bg-pigevox",       name: "PigeVox",        type: "deep-gradient", surface: "linear-gradient(145deg, #1a0a12, #0d0b1a, #0a0e1a)", dominantHex: "#0d0b1a", isLight: false },
+  { id: "bg-pigevox",       name: "MAYVOX",        type: "deep-gradient", surface: "linear-gradient(145deg, #1a0a12, #0d0b1a, #0a0e1a)", dominantHex: "#0d0b1a", isLight: false },
   { id: "bg-midnight",      name: "Midnight",       type: "solid",         surface: "#0B1220",  dominantHex: "#0B1220",  isLight: false },
   { id: "bg-midnight-depth",name: "Midnight Depth",  type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #111827, #020617)", dominantHex: "#0A1018", isLight: false },
   { id: "bg-emerald-night", name: "Emerald Night",   type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #064E3B, #020617)", dominantHex: "#042E24", isLight: false },

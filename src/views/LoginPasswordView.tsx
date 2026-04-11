@@ -65,14 +65,14 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
             <div className="relative">
               <div className="absolute inset-[-20px] rounded-full opacity-20 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
               <div className="relative w-44 h-44 overflow-hidden rounded-[22%]">
-                <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
+                <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover" />
               </div>
             </div>
           </div>
 
           {/* Title */}
           <div className="text-center mb-8">
-            <h1 className="text-[#F5F5F5] text-[28px] font-bold tracking-[-0.01em] leading-tight">PigeVox ile Sesini Duyur</h1>
+            <h1 className="text-[#F5F5F5] text-[26px] font-medium tracking-[-0.01em] leading-tight"><span className="font-semibold">MV</span> ile sesini duyur..</h1>
             <p className="text-white/50 mt-3 text-[14px] max-w-[80%] mx-auto leading-relaxed">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
           </div>
 

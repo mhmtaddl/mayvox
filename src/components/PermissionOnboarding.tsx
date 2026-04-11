@@ -134,7 +134,7 @@ export default function PermissionOnboarding({ onComplete }: Props) {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 overflow-hidden rounded-2xl shadow-lg shadow-black/30 ring-1 ring-[var(--theme-border)]/30">
-            <img src={appLogo} alt="PigeVox" className="w-full h-full object-cover" />
+            <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover" />
           </div>
         </div>
 

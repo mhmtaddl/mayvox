@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Mic, Settings, Power, Headphones } from 'lucide-react';
+import { Mic, Settings, Power, Headphones, Bell } from 'lucide-react';
 import { ConnectionQualityIndicator } from '../../../components/chat';
+import { NotificationBadge } from '../../../components/notifications';
 import MobileUpdateHub from '../../update/components/MobileUpdateHub';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
@@ -10,13 +11,15 @@ import { useChannel } from '../../../contexts/ChannelContext';
 import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useNotificationCenter } from '../../../hooks/useNotificationCenter';
 import { FORCE_MOBILE } from '../constants';
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
+  onOpenBell?: () => void;
 }
 
-export default function MobileFooter({ listenerToastRef }: Props) {
+export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
   const { currentUser } = useUser();
   const { activeChannel, isConnecting } = useChannel();
   const { setToastMsg } = useUI();
@@ -25,9 +28,10 @@ export default function MobileFooter({ listenerToastRef }: Props) {
   const {
     isMuted, setIsMuted, isDeafened, setIsDeafened,
     isBroadcastListener, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
-    handleLogout, passwordResetRequests, inviteRequests,
+    handleLogout,
   } = useAppState();
   const { openConfirm } = useConfirm();
+  const notifications = useNotificationCenter();
 
   const isAdminMuted = currentUser.isMuted === true;
   const isVoiceBanned = !!currentUser.isVoiceBanned;
@@ -239,7 +243,20 @@ export default function MobileFooter({ listenerToastRef }: Props) {
           <span className="text-[9px] font-bold">{isAdminMuted ? (muteRemaining ?? 'Susturuldu') : isMuted ? 'Kapalı' : 'Mikrofon'}</span>
         </button>
 
-        <div className="flex flex-col items-center gap-0.5 p-2 min-w-[52px]">
+        <button
+          onClick={onOpenBell}
+          className="flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] text-[var(--theme-secondary-text)]"
+        >
+          <span className="relative">
+            <Bell size={18} />
+            {notifications.bellCount > 0 && (
+              <NotificationBadge count={notifications.bellCount} variant="accent" size="sm" className="absolute -top-1 -right-1" />
+            )}
+          </span>
+          <span className="text-[9px] font-bold">Bildirim</span>
+        </button>
+
+        <div className="flex flex-col items-center gap-0.5 p-2 min-w-[44px]">
           <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
           {FORCE_MOBILE && <MobileUpdateHub currentVersion={appVersion} isAdmin={currentUser.isAdmin} autoShowNotes={showReleaseNotes} onNotesShown={() => setShowReleaseNotes(false)} />}
         </div>
@@ -252,8 +269,8 @@ export default function MobileFooter({ listenerToastRef }: Props) {
         >
           <span className="relative">
             <Settings size={18} />
-            {(passwordResetRequests.length > 0 || inviteRequests.length > 0) && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+            {notifications.settingsCount > 0 && (
+              <NotificationBadge count={notifications.settingsCount} variant="amber" size="sm" className="absolute -top-1 -right-1" />
             )}
           </span>
           <span className="text-[9px] font-bold">Ayarlar</span>
