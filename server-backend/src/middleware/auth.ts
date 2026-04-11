@@ -1,14 +1,15 @@
-import { Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { config } from '../config';
-import type { AuthRequest } from '../types';
+
+const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
 
 /**
- * Supabase JWT doğrulama middleware.
- * Authorization: Bearer <token> header'ından token alır,
- * Supabase JWT secret ile doğrular, req.userId'ye Supabase user id koyar.
+ * Supabase auth middleware.
+ * Authorization: Bearer <access_token> header'ından token alır,
+ * supabase.auth.getUser() ile doğrular, req.userId'ye user id koyar.
  */
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Token gerekli' });
@@ -18,16 +19,16 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   const token = header.slice(7);
 
   try {
-    const payload = jwt.verify(token, config.supabaseJwtSecret) as jwt.JwtPayload;
-    const userId = payload.sub;
-    if (!userId) {
-      res.status(401).json({ error: 'Geçersiz token: kullanıcı kimliği bulunamadı' });
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
       return;
     }
-    req.userId = userId;
+
+    (req as any).userId = user.id;
     next();
-  } catch (err) {
-    const message = err instanceof jwt.TokenExpiredError ? 'Token süresi dolmuş' : 'Geçersiz token';
-    res.status(401).json({ error: message });
+  } catch {
+    res.status(401).json({ error: 'Token doğrulama hatası' });
   }
 }

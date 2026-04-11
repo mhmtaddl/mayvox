@@ -23,8 +23,8 @@ app.use((_req, res) => {
 });
 
 // ── Start ──
-app.listen(config.port, () => {
-  console.log(`[MAYVOX Server Backend] :${config.port} üzerinde çalışıyor`);
+app.listen(config.port, config.host, () => {
+  console.log(`[MAYVOX Server Backend] ${config.host}:${config.port} üzerinde çalışıyor`);
 });
 
 // Graceful shutdown

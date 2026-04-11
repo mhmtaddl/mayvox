@@ -449,6 +449,17 @@ export const uploadAvatar = async (userId: string, file: File): Promise<string> 
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
+// UPLOAD SERVER LOGO — Supabase Storage "avatars" bucket'ına sunucu logosu yükler
+export const uploadServerLogo = async (serverId: string, file: File): Promise<string> => {
+  const path = `server-logos/${serverId}/logo`;
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
 // ── Room Chat Messages ──────────────────────────────────────────────────────
 
 /** Odanın mesajlarını getir (son 200) */

@@ -1,4 +1,5 @@
 import { queryOne, queryMany, pool } from '../repositories/db';
+import { getPlanLimits } from '../planConfig';
 import type { Server, ServerResponse, ServerActivity } from '../types';
 import { nanoid } from 'nanoid';
 
@@ -12,11 +13,64 @@ function toShortName(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+/**
+ * Slug üretimi — sunucu adından otomatik.
+ * 1 kelime: ilk 3 harf → tes.mv
+ * 2 kelime: 1. kelimenin ilk harfi + 2. kelimenin ilk 2 harfi → tsu.mv
+ * 3+ kelime: her kelimenin ilk harfi (max 3) → tsb.mv
+ */
+function generateBaseSlug(name: string): string {
+  const words = name.trim().split(/\s+/).slice(0, 3);
+  let base = '';
+  if (words.length === 1) {
+    base = words[0].slice(0, 3);
+  } else if (words.length === 2) {
+    base = words[0][0] + words[1].slice(0, 2);
+  } else {
+    base = words.map(w => w[0]).join('');
+  }
+  return base.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Çakışma çözümü — aynı base slug varsa kelimelerden ek harf alarak uzat.
+ * tes → test → testi → ...
+ * tsu → tsud → tsudo → ...
+ */
+async function resolveUniqueSlug(name: string): Promise<string> {
+  const words = name.trim().split(/\s+/).slice(0, 3).map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const base = generateBaseSlug(name);
+
+  // İlk deneme: base slug
+  let candidate = base;
+  let existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
+  if (!existing) return candidate + '.mv';
+
+  // Çakışma var — kelimelerden ek harf al
+  // Tüm harfleri birleştir ve base'den sonrasını ekle
+  const allChars = words.join('');
+  for (let len = base.length + 1; len <= Math.min(allChars.length, 12); len++) {
+    candidate = allChars.slice(0, len);
+    existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
+    if (!existing) return candidate + '.mv';
+  }
+
+  // Hâlâ çakışıyorsa sayı ekle
+  for (let i = 2; i <= 99; i++) {
+    candidate = base + i;
+    existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
+    if (!existing) return candidate + '.mv';
+  }
+
+  throw new AppError(409, 'Uygun adres bulunamadı, farklı bir isim dene');
+}
+
 function toResponse(server: Server, activity?: ServerActivity | null, role?: string): ServerResponse {
   return {
     id: server.id,
     name: server.name,
     shortName: server.short_name,
+    slug: server.slug,
     avatarUrl: server.avatar_url,
     description: server.description,
     memberCount: activity?.member_count ?? 0,
@@ -25,6 +79,9 @@ function toResponse(server: Server, activity?: ServerActivity | null, role?: str
     level: server.level,
     inviteCode: server.invite_code,
     isPublic: server.is_public,
+    joinPolicy: server.join_policy ?? 'invite_only',
+    motto: server.motto ?? '',
+    plan: server.plan ?? 'free',
     createdAt: server.created_at,
     role,
   };
@@ -46,7 +103,9 @@ export async function listMyServers(userId: string): Promise<ServerResponse[]> {
 }
 
 /** Yeni sunucu oluştur + owner'ı member olarak ekle + varsayılan kanallar */
-export async function createServer(userId: string, name: string, description: string): Promise<ServerResponse> {
+export async function createServer(userId: string, name: string, description: string, isPublic: boolean, motto?: string, plan?: string): Promise<ServerResponse> {
+  const slug = await resolveUniqueSlug(name);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -55,10 +114,13 @@ export async function createServer(userId: string, name: string, description: st
     const shortName = toShortName(name);
 
     // Sunucu oluştur
+    const mottoVal = (motto || '').slice(0, 15);
+    const selectedPlan = (plan === 'pro') ? 'pro' : 'free'; // ultra henüz desteklenmiyor
+    const limits = getPlanLimits(selectedPlan);
     const { rows: [server] } = await client.query<Server>(
-      `INSERT INTO servers (owner_user_id, name, short_name, description, invite_code)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [userId, name, shortName, description, inviteCode]
+      `INSERT INTO servers (owner_user_id, name, short_name, slug, description, invite_code, is_public, motto, plan, capacity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [userId, name, shortName, slug, description, inviteCode, isPublic, mottoVal, selectedPlan, limits.capacity]
     );
 
     // Owner'ı member olarak ekle
@@ -67,11 +129,13 @@ export async function createServer(userId: string, name: string, description: st
       [server.id, userId]
     );
 
-    // Varsayılan kanallar
+    // Varsayılan 4 kanal
     await client.query(
       `INSERT INTO channels (server_id, name, type, position, is_default) VALUES
-       ($1, 'Genel', 'voice', 0, true),
-       ($1, 'Sohbet', 'voice', 1, false)`,
+       ($1, 'Sohbet Muhabbet', 'voice', 0, true),
+       ($1, 'Oyun Takımı', 'voice', 1, false),
+       ($1, 'Yayın Sahnesi', 'voice', 2, false),
+       ($1, 'Sessiz Alan', 'voice', 3, false)`,
       [server.id]
     );
 
@@ -107,57 +171,74 @@ export async function getServer(serverId: string, userId: string): Promise<Serve
   return toResponse(row, { server_id: row.id, member_count: row.member_count, active_count: row.active_count, updated_at: '' }, row.role ?? undefined);
 }
 
-/** Public sunucu arama */
-export async function searchServers(query: string): Promise<ServerResponse[]> {
-  const rows = await queryMany<Server & { member_count: number; active_count: number }>(
-    `SELECT s.*, COALESCE(sa.member_count, 0) as member_count, COALESCE(sa.active_count, 0) as active_count
+/** Public sunucu arama — isim veya slug ile, üyelik durumunu role alanıyla döndür */
+export async function searchServers(query: string, userId: string): Promise<ServerResponse[]> {
+  const q = `%${query}%`;
+  const rows = await queryMany<Server & { member_count: number; active_count: number; role: string | null }>(
+    `SELECT s.*, COALESCE(sa.member_count, 0) as member_count, COALESCE(sa.active_count, 0) as active_count,
+            sm.role
      FROM servers s
      LEFT JOIN server_activity sa ON sa.server_id = s.id
-     WHERE s.is_public = true AND s.name ILIKE $1
+     LEFT JOIN server_members sm ON sm.server_id = s.id AND sm.user_id = $2
+     WHERE s.is_public = true
+       AND (s.name ILIKE $1 OR s.slug ILIKE $1)
      ORDER BY sa.member_count DESC NULLS LAST
      LIMIT 20`,
-    [`%${query}%`]
+    [q, userId]
   );
 
-  return rows.map(r => toResponse(r, { server_id: r.id, member_count: r.member_count, active_count: r.active_count, updated_at: '' }));
+  return rows.map(r => toResponse(r, { server_id: r.id, member_count: r.member_count, active_count: r.active_count, updated_at: '' }, r.role ?? undefined));
 }
 
-/** Davet kodu ile sunucuya katıl */
-export async function joinByInvite(userId: string, code: string): Promise<ServerResponse> {
-  // Sunucuyu invite_code ile bul
-  const server = await queryOne<Server>(
-    `SELECT * FROM servers WHERE invite_code = $1`,
-    [code]
-  );
-  if (!server) throw new AppError(404, 'Geçersiz davet kodu');
+/** Akıllı katılma — davet kodu, slug, ad veya sunucu ID ile */
+export async function joinByInvite(userId: string, input: string): Promise<ServerResponse> {
+  const q = input.trim();
+
+  // 1. Davet kodu ile ara
+  let server = await queryOne<Server>('SELECT * FROM servers WHERE invite_code = $1', [q.toUpperCase()]);
+  let viaInviteCode = !!server;
+
+  // 2. Slug ile ara
+  if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE slug = $1', [q.toLowerCase()]);
+
+  // 3. Slug.mv ile ara
+  if (!server && !q.includes('.')) server = await queryOne<Server>('SELECT * FROM servers WHERE slug = $1', [q.toLowerCase() + '.mv']);
+
+  // 4. Sunucu adı ile ara (tam eşleşme, case-insensitive)
+  if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE LOWER(name) = $1', [q.toLowerCase()]);
+
+  // 5. Sunucu ID ile ara
+  if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE id::text = $1', [q]);
+
+  if (!server) throw new AppError(404, 'Böyle bir davet kodu bulunamadı. Davet kodunu kontrol et veya yeni bir davet kodu edin.');
 
   // Zaten üye mi?
-  const existing = await queryOne<{ id: string }>(
-    `SELECT id FROM server_members WHERE server_id = $1 AND user_id = $2`,
-    [server.id, userId]
-  );
-  if (existing) throw new AppError(409, 'Bu sunucuya zaten üyesin');
+  const existing = await queryOne<{ id: string }>('SELECT id FROM server_members WHERE server_id = $1 AND user_id = $2', [server.id, userId]);
+  if (existing) throw new AppError(409, 'Bu sunucunun zaten üyesisin');
+
+  // Banlı mı?
+  const banned = await queryOne<{ id: string }>('SELECT id FROM server_bans WHERE server_id = $1 AND user_id = $2', [server.id, userId]);
+  if (banned) throw new AppError(403, 'Bu sunucuya erişimin kısıtlanmış');
+
+  // Gizli sunucu + davet kodu olmadan katılma girişimi
+  if (!server.is_public && !viaInviteCode) {
+    throw new AppError(403, 'Bu sunucu yalnızca davet ile katılıma açık');
+  }
+
+  // Davetli-only sunucu + davet kodu olmadan
+  if (server.join_policy === 'invite_only' && !viaInviteCode) {
+    throw new AppError(403, 'Bu sunucuya katılmak için davet kodu gerekiyor');
+  }
 
   // Kapasite kontrolü
-  const activity = await queryOne<{ member_count: number }>(
-    `SELECT member_count FROM server_activity WHERE server_id = $1`,
-    [server.id]
-  );
+  const activity = await queryOne<{ member_count: number }>('SELECT member_count FROM server_activity WHERE server_id = $1', [server.id]);
   if (activity && activity.member_count >= server.capacity) {
-    throw new AppError(403, 'Sunucu kapasitesi dolu');
+    throw new AppError(403, 'Sunucu kapasitesi dolu, şu an katılınamıyor');
   }
 
   // Üye ekle
-  await pool.query(
-    `INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, 'member')`,
-    [server.id, userId]
-  );
-
-  // Aktivite güncelle
-  await pool.query(
-    `UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1`,
-    [server.id]
-  );
+  await pool.query('INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)', [server.id, userId, 'member']);
+  await pool.query('UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1', [server.id]);
 
   const memberCount = (activity?.member_count ?? 0) + 1;
   return toResponse(server, { server_id: server.id, member_count: memberCount, active_count: 0, updated_at: '' }, 'member');
@@ -181,6 +262,16 @@ export async function leaveServer(userId: string, serverId: string): Promise<voi
     `UPDATE server_activity SET member_count = GREATEST(0, member_count - 1), updated_at = now() WHERE server_id = $1`,
     [serverId]
   );
+}
+
+/** Sunucuyu tamamen sil — sadece owner */
+export async function deleteServer(userId: string, serverId: string): Promise<void> {
+  const member = await queryOne<{ role: string }>(
+    'SELECT role FROM server_members WHERE server_id = $1 AND user_id = $2',
+    [serverId, userId]
+  );
+  if (!member || member.role !== 'owner') throw new AppError(403, 'Sadece sunucu sahibi silebilir');
+  await pool.query('DELETE FROM servers WHERE id = $1', [serverId]);
 }
 
 /** Uygulama seviyesinde hata */

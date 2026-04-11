@@ -11,9 +11,10 @@
   "dependencies": {
     "express": "^4.21.0",
     "pg": "^8.13.0",
-    "jsonwebtoken": "^9.0.2",
     "nanoid": "^5.0.7",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "@supabase/supabase-js": "^2.45.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

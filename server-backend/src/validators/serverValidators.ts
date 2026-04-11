@@ -1,11 +1,22 @@
 import { Response } from 'express';
 
-export function validateCreateServer(body: Record<string, unknown>, res: Response): { name: string; description: string } | null {
+export function validateCreateServer(
+  body: Record<string, unknown>,
+  res: Response
+): { name: string; description: string; isPublic: boolean; motto: string; plan: string } | null {
   const name = String(body.name ?? '').trim();
   const description = String(body.description ?? '').trim();
+  const isPublic = body.isPublic !== false;
+  const motto = String(body.motto ?? '').trim().slice(0, 15);
+  const plan = String(body.plan ?? 'free').trim();
 
-  if (!name || name.length < 2 || name.length > 32) {
-    res.status(400).json({ error: 'Sunucu adı 2-32 karakter olmalı' });
+  const words = name.split(/\s+/);
+  if (!name || name.length < 3 || name.length > 15) {
+    res.status(400).json({ error: 'Sunucu adı 3-15 karakter olmalı' });
+    return null;
+  }
+  if (words.length > 3) {
+    res.status(400).json({ error: 'Sunucu adı en fazla 3 kelime olabilir' });
     return null;
   }
   if (description.length > 200) {
@@ -13,7 +24,7 @@ export function validateCreateServer(body: Record<string, unknown>, res: Respons
     return null;
   }
 
-  return { name, description };
+  return { name, description, isPublic, motto, plan };
 }
 
 export function validateJoinServer(body: Record<string, unknown>, res: Response): { code: string } | null {

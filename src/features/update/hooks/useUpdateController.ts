@@ -282,17 +282,32 @@ export function useUpdateController(currentVersion: string): UpdateController {
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // ── Periodic check ──
+  // ── Periodic check (HMR-safe) ──
   useEffect(() => {
     mountedRef.current = true;
 
-    const delay = setTimeout(() => doCheckRef.current(), INITIAL_CHECK_DELAY);
+    // Dev modda update check tamamen devre dışı
+    const isDev = import.meta.env.DEV;
+    if (isDev) {
+      safeSetState(() => ({ ...INITIAL_STATE, phase: 'up-to-date' }));
+      return () => { mountedRef.current = false; };
+    }
+
+    // Production — HMR-safe tek seferlik initial check
+    const win = window as unknown as Record<string, unknown>;
+    const alreadyChecked = !!win.__mayvox_update_checked;
+    win.__mayvox_update_checked = true;
+
+    const delay = alreadyChecked
+      ? undefined
+      : setTimeout(() => doCheckRef.current(), INITIAL_CHECK_DELAY);
+
     const interval = isElectron() ? DESKTOP_CHECK_INTERVAL : ANDROID_CHECK_INTERVAL;
     const timer = setInterval(() => doCheckRef.current(), interval);
 
     return () => {
       mountedRef.current = false;
-      clearTimeout(delay);
+      if (delay) clearTimeout(delay);
       clearInterval(timer);
       clearTimeout(retryTimerRef.current);
     };

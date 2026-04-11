@@ -97,6 +97,10 @@
       {
         "from": "build/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "build/tray-icon.png",
+        "to": "tray-icon.png"
       }
     ]
   }

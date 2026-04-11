@@ -44,7 +44,7 @@ function ConversationItem({
         }`}
       >
         {/* Avatar */}
-        <div className="shrink-0 w-10 h-10 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
+        <div className="shrink-0 w-10 h-10 rounded-[10px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
           {hasAvatar
             ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             : <span className="text-[12px] font-bold text-[var(--theme-accent)] opacity-50">{initial}</span>}
@@ -172,7 +172,7 @@ function ChatArea({
         <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-60 hover:opacity-100 hover:bg-[rgba(var(--glass-tint),0.06)] transition-all duration-150">
           <ArrowLeft size={16} />
         </button>
-        <div className="shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
+        <div className="shrink-0 w-8 h-8 rounded-[10px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
           {hasAvatar
             ? <img src={recipientAvatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             : <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-50">{(recipientName[0] || '?').toUpperCase()}</span>}

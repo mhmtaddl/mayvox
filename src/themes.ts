@@ -2,9 +2,9 @@ export type ThemeKey =
   | "cyanViolet"
   | "emeraldCyan"
   | "violetPink"
-  | "espressoSunlight"
   | "blueYellow"
-  | "midnightBlueBird";
+  | "midnightBlueBird"
+  | "arcticWhite";
 
 export interface AppTheme {
   key: ThemeKey;
@@ -133,31 +133,6 @@ export const themes: Record<ThemeKey, AppTheme> = {
     popoverText: "rgba(255,255,255,0.95)", popoverTextSecondary: "rgba(255,255,255,0.68)",
     popoverShadow: "0 12px 40px rgba(0,0,0,0.45)",
   },
-  espressoSunlight: {
-    key: "espressoSunlight", name: "Espresso – Güneş Işığı",
-    description: "Sıcak, güçlü, premium ve mat.",
-    isLight: false,
-    primary: "#742E10", secondary: "#FAE1B8", accent: "#F3D18D",
-    background: "#140907", backgroundElevated: "#1B0D09",
-    surface: "rgba(255,255,255,0.025)", panel: "rgba(255,255,255,0.04)",
-    panelHover: "rgba(255,255,255,0.06)", panelActive: "rgba(255,255,255,0.075)",
-    borderSubtle: "rgba(250,225,184,0.08)", divider: "rgba(250,225,184,0.045)",
-    glow: "rgba(243,209,141,0.15)",
-    textPrimary: "rgba(255,244,225,0.93)", textSecondary: "rgba(250,225,184,0.74)",
-    textMuted: "rgba(250,225,184,0.44)", textOnPrimary: "#FFF4E1", textOnAccent: "#2D160B",
-    buttonPrimaryBg: "#F3D18D", buttonPrimaryHover: "#F6DCA7", buttonPrimaryText: "#2D160B",
-    buttonGhostBg: "rgba(255,255,255,0.035)", buttonGhostHover: "rgba(255,255,255,0.06)", buttonGhostText: "rgba(255,244,225,0.88)",
-    inputBg: "rgba(255,255,255,0.025)", inputBorder: "rgba(250,225,184,0.08)",
-    inputText: "rgba(255,244,225,0.92)", inputPlaceholder: "rgba(250,225,184,0.38)",
-    success: "#49C98A", warning: "#F1B95F", danger: "#E16C6C",
-    successText: "#E2FFEF", warningText: "#FFF1D4", dangerText: "#FFE7E7",
-    iconPrimary: "#F3D18D", iconSecondary: "rgba(250,225,184,0.72)",
-    selection: "rgba(243,209,141,0.12)", scrollbarThumb: "rgba(243,209,141,0.40)",
-    elevatedPanel: "rgba(255,255,255,0.055)", elevatedPanelHover: "rgba(255,255,255,0.075)",
-    popoverBg: "#1F100B", popoverBorder: "rgba(243,209,141,0.10)",
-    popoverText: "rgba(255,244,225,0.95)", popoverTextSecondary: "rgba(250,225,184,0.70)",
-    popoverShadow: "0 12px 40px rgba(0,0,0,0.48)",
-  },
   blueYellow: {
     key: "blueYellow", name: "Mavi – Sarı",
     description: "Dengeli, kurumsal ama sıcak.",
@@ -208,6 +183,31 @@ export const themes: Record<ThemeKey, AppTheme> = {
     popoverText: "rgba(255,255,255,0.95)", popoverTextSecondary: "rgba(212,232,241,0.70)",
     popoverShadow: "0 12px 40px rgba(0,0,0,0.45)",
   },
+  arcticWhite: {
+    key: "arcticWhite", name: "Arctic White",
+    description: "Aydınlık, temiz ve modern beyaz tema.",
+    isLight: true,
+    primary: "#2563EB", secondary: "#6366F1", accent: "#3B82F6",
+    background: "#F5F7FA", backgroundElevated: "#FFFFFF",
+    surface: "rgba(0,0,0,0.03)", panel: "rgba(0,0,0,0.04)",
+    panelHover: "rgba(0,0,0,0.06)", panelActive: "rgba(0,0,0,0.08)",
+    borderSubtle: "rgba(0,0,0,0.08)", divider: "rgba(0,0,0,0.06)",
+    glow: "rgba(37,99,235,0.12)",
+    textPrimary: "rgba(15,23,42,0.92)", textSecondary: "rgba(51,65,85,0.75)",
+    textMuted: "rgba(100,116,139,0.60)", textOnPrimary: "#FFFFFF", textOnAccent: "#FFFFFF",
+    buttonPrimaryBg: "#2563EB", buttonPrimaryHover: "#3B82F6", buttonPrimaryText: "#FFFFFF",
+    buttonGhostBg: "rgba(0,0,0,0.04)", buttonGhostHover: "rgba(0,0,0,0.07)", buttonGhostText: "rgba(15,23,42,0.85)",
+    inputBg: "rgba(0,0,0,0.03)", inputBorder: "rgba(0,0,0,0.10)",
+    inputText: "rgba(15,23,42,0.90)", inputPlaceholder: "rgba(100,116,139,0.50)",
+    success: "#16A34A", warning: "#D97706", danger: "#DC2626",
+    successText: "#14532D", warningText: "#78350F", dangerText: "#7F1D1D",
+    iconPrimary: "#2563EB", iconSecondary: "rgba(51,65,85,0.65)",
+    selection: "rgba(37,99,235,0.10)", scrollbarThumb: "rgba(37,99,235,0.30)",
+    elevatedPanel: "rgba(0,0,0,0.05)", elevatedPanelHover: "rgba(0,0,0,0.07)",
+    popoverBg: "#FFFFFF", popoverBorder: "rgba(0,0,0,0.08)",
+    popoverText: "rgba(15,23,42,0.92)", popoverTextSecondary: "rgba(51,65,85,0.70)",
+    popoverShadow: "0 12px 40px rgba(0,0,0,0.12)",
+  },
 };
 
 export const defaultThemeKey: ThemeKey = "midnightBlueBird";
@@ -232,9 +232,9 @@ export const backgroundPresets: BackgroundPreset[] = [
   { id: "bg-midnight-depth",name: "Midnight Depth",  type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #111827, #020617)", dominantHex: "#0A1018", isLight: false },
   { id: "bg-emerald-night", name: "Emerald Night",   type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #064E3B, #020617)", dominantHex: "#042E24", isLight: false },
   { id: "bg-crimson-night", name: "Crimson Night",   type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #7F1D1D, #020617)", dominantHex: "#3A1010", isLight: false },
-  { id: "bg-violet-night",  name: "Violet Night",    type: "deep-gradient", surface: "linear-gradient(145deg, #1a0a12, #0d0b1a, #0a0e1a)", dominantHex: "#0d0b1a", isLight: false },
   { id: "bg-amber-night",   name: "Amber Night",     type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #92400E, #020617)", dominantHex: "#4A2208", isLight: false },
-  { id: "bg-royal-blue",    name: "Royal Blue",      type: "deep-gradient", surface: "linear-gradient(135deg, #020617, #1D4ED8, #020617)", dominantHex: "#102A70", isLight: false },
+  { id: "bg-warm-graphite",name: "Warm Graphite",   type: "solid",         surface: "#1A1A1E",  dominantHex: "#1A1A1E",  isLight: false },
+  { id: "bg-purple-mist",  name: "Purple Mist",     type: "deep-gradient", surface: "linear-gradient(145deg, #0A0816, #1A0E2E, #0A0816)", dominantHex: "#120A20", isLight: false },
 ];
 
 export const defaultBackgroundId = "bg-pigevox";
@@ -243,7 +243,7 @@ export const themeOrder: ThemeKey[] = [
   "cyanViolet",
   "emeraldCyan",
   "violetPink",
-  "espressoSunlight",
   "blueYellow",
   "midnightBlueBird",
+  "arcticWhite",
 ];

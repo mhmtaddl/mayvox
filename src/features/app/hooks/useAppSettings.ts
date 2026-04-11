@@ -7,6 +7,11 @@ import { AppTheme, ThemeKey, themes, defaultThemeKey, backgroundPresets, default
 import { getDerivedTokens, applyDerivedTokens } from '../../../lib/adaptiveTheme';
 import { AUDIO_PRESETS, type AudioProfile, type VoiceMode } from '../../../contexts/SettingsCtx';
 
+function hexToRgb(hex: string): string | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? `${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)}` : null;
+}
+
 export function useAppSettings() {
   // ── Tema ──
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(() => {
@@ -41,6 +46,11 @@ export function useAppSettings() {
     root.style.setProperty('--popover-text-secondary', currentTheme.popoverTextSecondary);
     root.style.setProperty('--popover-shadow', currentTheme.popoverShadow);
     root.style.setProperty('--theme-bg-elevated', currentTheme.backgroundElevated);
+    // Plan sistemi için RGB tokenlar
+    const wRgb = hexToRgb(currentTheme.warning);
+    const sRgb = hexToRgb(currentTheme.secondary);
+    if (wRgb) root.style.setProperty('--theme-warning-rgb', wRgb);
+    if (sRgb) root.style.setProperty('--theme-secondary-rgb', sRgb);
   }, [currentTheme, activeBackground]);
 
   // ── Audio / Noise ──

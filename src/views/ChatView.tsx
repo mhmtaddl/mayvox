@@ -50,11 +50,16 @@ import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import { roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 
-import { listMyServers, searchServers, type Server } from '../lib/serverService';
+import type { VoiceChannel } from '../types';
+import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
+import { getPlanVisual } from '../lib/planStyles';
+import ServerSettings from '../components/server/ServerSettings';
+import JoinServerModal from '../components/server/JoinServerModal';
+import DiscoverPanel from '../components/server/DiscoverPanel';
 
 export default function ChatView() {
   const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests } = useUser();
-  const { channels, activeChannel, setActiveChannel, isConnecting, currentChannel, channelMembers } = useChannel();
+  const { channels, setChannels, activeChannel, setActiveChannel, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
     userActionMenu, setUserActionMenu, roomModal, setRoomModal,
@@ -73,6 +78,21 @@ export default function ChatView() {
     passwordResetRequests, inviteRequests, inviteCooldowns, inviteStatuses,
   } = useAppState();
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel } = useAudio();
+
+  const [showDiscover, setShowDiscover] = useState(false);
+
+  // ── Mouse geri tuşu ile ayarlardan / discover'dan çık ──
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        if (view === 'settings') setView('chat');
+        else if (showDiscover) setShowDiscover(false);
+      }
+    };
+    window.addEventListener('mouseup', handler);
+    return () => window.removeEventListener('mouseup', handler);
+  }, [view, setView, showDiscover]);
 
   // ── Chat messages hook ──
   const [chatMuted, setChatMuted] = useState(false);
@@ -105,14 +125,155 @@ export default function ChatView() {
   // ── Sunucu state ──
   const [serverList, setServerList] = useState<Server[]>([]);
   const [activeServerId, setActiveServerId] = useState('');
-  useEffect(() => {
-    listMyServers().then(servers => {
+  const [serverLoading, setServerLoading] = useState(true);
+  const [serverError, setServerError] = useState('');
+  const [serverActionLoading, setServerActionLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createDesc, setCreateDesc] = useState('');
+  const [createPublic, setCreatePublic] = useState(true);
+  const [createMotto, setCreateMotto] = useState('');
+  const [createPlan, setCreatePlan] = useState('free');
+  const [createError, setCreateError] = useState('');
+  // joinCode/joinError artık JoinServerModal içinde yönetiliyor
+  const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
+
+  const refreshServers = useCallback(async () => {
+    try {
+      setServerLoading(true);
+      setServerError('');
+      const servers = await listMyServers();
       setServerList(servers);
       if (servers.length > 0 && !activeServerId) setActiveServerId(servers[0].id);
-    }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (err: any) {
+      setServerError(err.message || 'Sunucu listesi alınamadı');
+    } finally {
+      setServerLoading(false);
+    }
+  }, [activeServerId]);
+
+  useEffect(() => { refreshServers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreateServer = useCallback(async () => {
+    const name = createName.trim();
+    if (!name) return;
+    try {
+      setServerActionLoading(true);
+      setCreateError('');
+      const server = await createServer(name, createDesc.trim(), createPublic, createMotto.trim() || undefined, createPlan);
+      await refreshServers();
+      setActiveServerId(server.id);
+      setShowCreateModal(false);
+      setShowDiscover(false);
+      setCreateName('');
+      setCreateDesc('');
+      setCreateMotto('');
+      setCreatePlan('free');
+      setCreateError('');
+    } catch (err: any) {
+      setCreateError(err.message || 'Sunucu oluşturulamadı');
+    } finally {
+      setServerActionLoading(false);
+    }
+  }, [createName, createDesc, createPublic, createMotto, createPlan, refreshServers]);
+
+  const handleJoinServer = useCallback(async (code: string) => {
+    try {
+      setServerActionLoading(true);
+      const server = await joinServer(code);
+      await refreshServers();
+      setActiveServerId(server.id);
+      setToastMsg('Sunucuya katıldın');
+    } catch (err: unknown) {
+      setToastMsg(err instanceof Error ? err.message : 'Sunucuya katılınamadı');
+    } finally {
+      setServerActionLoading(false);
+    }
+  }, [refreshServers, setToastMsg]);
+
+  const handleLeaveServer = useCallback(async (serverId: string) => {
+    try {
+      setServerActionLoading(true);
+      await leaveServer(serverId);
+      await refreshServers();
+      if (activeServerId === serverId) setActiveServerId('');
+    } catch (err: any) {
+      setToastMsg(err.message || 'Sunucudan ayrılınamadı');
+    } finally {
+      setServerActionLoading(false);
+    }
+  }, [refreshServers, activeServerId, setToastMsg]);
+
   const activeServerData = serverList.find(s => s.id === activeServerId) ?? serverList[0] ?? null;
   const hasServer = serverList.length > 0;
+
+  // ── Sunucu kanalları — instant cache + background refresh ──
+  const channelCacheRef = useRef(new Map<string, VoiceChannel[]>());
+
+  // Sunucu değişirken kanalları cache'e kaydet (member temiz)
+  useEffect(() => {
+    if (!activeServerId) return;
+    return () => {
+      if (activeServerId && channels.length > 0) {
+        channelCacheRef.current.set(activeServerId, channels.map(c => ({ ...c, members: [], userCount: 0 })));
+      }
+    };
+  }, [activeServerId, channels]);
+
+  useEffect(() => {
+    if (!activeServerId) return;
+    let cancelled = false;
+
+    // Cache varsa anında göster + aktif kanala current user inject et
+    const cached = channelCacheRef.current.get(activeServerId);
+    if (cached && cached.length > 0) {
+      const myId = currentUser.id;
+      setChannels(cached.map(c => {
+        if (c.id === activeChannel && myId && !c.members?.includes(myId)) {
+          return { ...c, members: [...(c.members || []), myId], userCount: (c.userCount || 0) + 1 };
+        }
+        return c;
+      }));
+    }
+
+    // API'den güncelle (cache olsa bile fresh data al)
+    (async () => {
+      try {
+        const serverChannels = await getServerChannels(activeServerId);
+        if (cancelled) return;
+        const modeMap: Record<string, string> = { 'Sohbet Muhabbet': 'social', 'Oyun Takımı': 'gaming', 'Yayın Sahnesi': 'broadcast', 'Sessiz Alan': 'quiet' };
+        const SYSTEM_CHANNELS = new Set(['Genel', 'Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
+        setChannels(prev => {
+          const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c]));
+          const myId = currentUser.id;
+          return serverChannels.map(ch => {
+            const existing = prevMap.get(ch.id);
+            let members = existing?.members ?? [];
+            let userCount = existing?.userCount ?? 0;
+            // Aktif kanala current user inject (presence gelene kadar boş görünmesin)
+            if (ch.id === activeChannel && myId && !members.includes(myId)) {
+              members = [...members, myId];
+              userCount = members.length;
+            }
+            return {
+              id: ch.id,
+              name: ch.name,
+              userCount,
+              members,
+              isSystemChannel: SYSTEM_CHANNELS.has(ch.name),
+              mode: modeMap[ch.name] ?? 'social',
+            };
+          });
+        });
+      } catch {
+        if (!cancelled && !channelCacheRef.current.has(activeServerId)) {
+          setChannels([]);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeServerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Notification center ──
   const notifications = useNotificationCenter(dmUnreadCount);
@@ -382,7 +543,9 @@ export default function ChatView() {
 
         {/* ── Left Sidebar (masaüstü) ── */}
         <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
-          activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} />
+          activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
+          activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
+          onShowDiscover={() => setShowDiscover(true)} />
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
@@ -421,8 +584,13 @@ export default function ChatView() {
         {/* ── Main Content ── */}
         <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02)', border: FORCE_MOBILE ? undefined : '1px solid rgba(var(--glass-tint), 0.03)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%)' }}>
           <div
-            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${activeChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
-          {view === 'settings' ? <SettingsView /> : activeChannel ? (
+            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
+          {view === 'settings' ? <SettingsView /> : showDiscover ? (
+            <DiscoverPanel activeServerId={activeServerId}
+              onJoinSuccess={() => { refreshServers(); setShowDiscover(false); }}
+              onCreateServer={() => setShowCreateModal(true)}
+              onJoinModal={() => setShowJoinModal(true)} />
+          ) : currentChannel ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
                 <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4) 0%, transparent 65%)` }} />
@@ -458,30 +626,18 @@ export default function ChatView() {
                   isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom} />
               </div>
             </div>
-          ) : !hasServer ? (
-            /* ── Sunucusuz kullanıcı — onboarding empty state ── */
-            <div className="flex-1 flex flex-col items-center justify-center px-6">
-              <div className="relative mb-8">
-                <div className="absolute inset-[-16px] rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.5), transparent 70%)' }} />
-                <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--theme-accent-rgb), 0.1)' }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)] opacity-70">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                </div>
-              </div>
-              <h2 className="text-[17px] font-bold text-[var(--theme-text)] mb-2 tracking-tight">Bir sohbet sunucusuna katıl</h2>
-              <p className="text-[12px] text-[var(--theme-secondary-text)]/50 max-w-[280px] leading-relaxed text-center mb-8">
-                Davet kodu ile bir sunucuya katılabilir ya da kendi sohbet sunucunu oluşturabilirsin.
-              </p>
-              <div className="flex items-center gap-3">
-                <button className="h-10 px-5 rounded-xl text-[12px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0" style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)', boxShadow: '0 2px 12px rgba(var(--theme-accent-rgb), 0.25)' }}>
-                  Sunucuya Katıl
-                </button>
-                <button className="h-10 px-5 rounded-xl text-[12px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 text-[var(--theme-text)]" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
-                  Sunucu Oluştur
-                </button>
-              </div>
+          ) : serverLoading ? (
+            /* ── Sunucu yükleniyor ── */
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin" />
             </div>
+          ) : !hasServer ? (
+            /* ── Sunucu Keşfet paneli ── */
+            <DiscoverPanel activeServerId={activeServerId}
+              onJoinSuccess={refreshServers}
+              onCreateServer={() => setShowCreateModal(true)}
+              onJoinModal={() => setShowJoinModal(true)}
+            />
           ) : (
             <div className="flex-1 flex flex-col overflow-y-auto">
               <div className="text-center pt-10 pb-2 px-6">
@@ -536,7 +692,110 @@ export default function ChatView() {
 
       {/* ── Desktop Dock — context-consuming, minimal props ── */}
       <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
-        serverList={serverList} activeServerId={activeServerId} onSelectServer={setActiveServerId} />
+        serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
+        onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
+        onShowCreateModal={() => setShowCreateModal(true)} />
+
+      {/* ── Sunucuya Katıl Modal (global) ── */}
+      {showJoinModal && <JoinServerModal
+        onClose={() => setShowJoinModal(false)}
+        onSuccess={refreshServers}
+      />}
+
+      {/* ── Sunucu Oluştur Modal (global) ── */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setShowCreateModal(false); setCreateError(''); }}>
+          <div className="w-[380px] max-w-[90vw] rounded-2xl p-5 overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-5">Sunucu Oluştur</h3>
+            <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-1.5">Sunucu Adı <span className="normal-case font-normal">(en fazla 3 kelime)</span></label>
+            <input value={createName} onChange={e => { const v = e.target.value; if (v.trim().split(/\s+/).length <= 3 || v.length < createName.length) setCreateName(v); }} placeholder="Benim Sunucum" maxLength={15} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-1" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
+            {previewSlug(createName) && (
+              <div className="text-[10px] text-[var(--theme-accent)]/60 mb-3 pl-0.5">Adres: <span className="font-semibold">{previewSlug(createName)}</span></div>
+            )}
+            {!previewSlug(createName) && <div className="mb-3" />}
+            <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-1.5">Açıklama</label>
+            <input value={createDesc} onChange={e => setCreateDesc(e.target.value)} placeholder="Kısa bir açıklama (opsiyonel)" maxLength={200} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-3" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
+            <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-1.5">Motto</label>
+            <input value={createMotto} onChange={e => setCreateMotto(e.target.value.slice(0, 15))} placeholder="Gece tayfa burada" maxLength={15} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-3" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
+            {/* Plan seçimi */}
+            <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Plan</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { id: 'free', name: 'Free', sub: '100 kullanıcı • 6 oda', disabled: false },
+                { id: 'pro', name: 'Pro', sub: '240 kullanıcı • 8 oda', disabled: false },
+                { id: 'ultra', name: 'Ultra', sub: 'Yakında', disabled: true },
+              ] as const).map(p => {
+                const sel = createPlan === p.id;
+                const pv = getPlanVisual(p.id);
+                return (
+                  <button key={p.id} type="button" disabled={p.disabled}
+                    onClick={() => !p.disabled && setCreatePlan(p.id)}
+                    className={`p-2.5 rounded-xl text-center transition-all ${p.disabled ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
+                    style={sel ? { background: pv.selectBg, border: `1px solid ${pv.selectBorder}` } : { background: 'rgba(var(--glass-tint),0.04)', border: '1px solid rgba(var(--glass-tint),0.06)' }}>
+                    <div className="text-[11px] font-bold" style={{ color: sel ? pv.selectText : 'var(--theme-text)' }}>{p.name}</div>
+                    <div className="text-[8px] text-[var(--theme-secondary-text)]/40 mt-0.5">{p.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Plan detayı — seçili planın altında açılır */}
+            <div className="mt-2 mb-4 rounded-xl overflow-hidden transition-all" style={{
+              background: getPlanVisual(createPlan).bg,
+              border: `1px solid ${getPlanVisual(createPlan).border}`,
+            }}>
+              <div className="p-3">
+                {createPlan === 'pro' && <div className="text-[9px] font-bold mb-2" style={{ color: getPlanVisual('pro').accent }}>+140 kullanıcı kapasitesi</div>}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  {(createPlan === 'free' ? [
+                    '4 sistem odası (20 kişi)', '2 özel oda (10 kişi)', 'Toplam 100 kullanıcı', 'Standart ses kalitesi',
+                  ] : createPlan === 'pro' ? [
+                    '4 sistem odası (40 kişi)', '4 özel oda (20 kişi)', 'Toplam 240 kullanıcı', 'Yüksek ses kalitesi', 'Daha düşük gecikme', 'Pro rozeti',
+                  ] : [
+                    'Pro özellikleri ×2', 'En düşük gecikme', 'Öncelikli performans', 'Premium görünüm',
+                  ]).map(f => (
+                    <div key={f} className="flex items-center gap-1.5">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ color: createPlan !== 'free' ? getPlanVisual(createPlan).accent : undefined }}
+                        className={`shrink-0 ${createPlan === 'free' ? 'text-[var(--theme-secondary-text)]/30' : ''}`}><polyline points="20 6 9 17 4 12" /></svg>
+                      <span className={`text-[9px] leading-tight ${createPlan !== 'free' ? 'text-[var(--theme-text)] opacity-70' : 'text-[var(--theme-text)] opacity-45'}`}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <label className="flex items-center gap-2.5 cursor-pointer mb-4 select-none">
+              <button type="button" onClick={() => setCreatePublic(!createPublic)} className={`w-8 h-[18px] rounded-full transition-colors duration-150 relative ${createPublic ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}>
+                <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform duration-150 ${createPublic ? 'left-[16px]' : 'left-[2px]'}`} />
+              </button>
+              <span className="text-[11px] text-[var(--theme-text)]">Herkese açık sunucu</span>
+            </label>
+            {createError && <div className="text-[10px] text-red-400 mb-3 px-1">{createError}</div>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowCreateModal(false); setCreateError(''); }} className="h-9 px-4 rounded-lg text-[11px] font-semibold text-[var(--theme-secondary-text)]" style={{ background: 'rgba(var(--glass-tint), 0.06)' }}>İptal</button>
+              <button onClick={handleCreateServer} disabled={!createName.trim() || serverActionLoading} className="h-9 px-4 rounded-lg text-[11px] font-semibold disabled:opacity-40" style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)' }}>
+                {serverActionLoading ? 'Oluşturuluyor...' : 'Oluştur'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Global Toast — dock'un tam üstünde, ortasında ── */}
+      {toastMsg && (
+        <div className="fixed z-[500] pointer-events-none" style={{ bottom: '68px', left: 'calc(50% + 8px)', transform: 'translateX(-50%)' }}>
+          <div className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-[var(--theme-text)] pointer-events-auto cursor-pointer"
+            onClick={() => setToastMsg(null)}
+            style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.92)', border: '1px solid rgba(var(--theme-accent-rgb), 0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', backdropFilter: 'blur(16px)' }}>
+            {toastMsg}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sunucu Ayarları ── */}
+      {settingsServerId && (
+        <ServerSettings serverId={settingsServerId} onClose={() => setSettingsServerId(null)} onServerUpdated={refreshServers}
+          onServerDeleted={() => { setSettingsServerId(null); setActiveServerId(''); refreshServers(); }} />
+      )}
 
       {/* ── Profile Popup ── */}
       <AnimatePresence>

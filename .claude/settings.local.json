@@ -79,7 +79,9 @@
       "Bash(ffprobe -v quiet -print_format json -show_format \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/gif/mayvox_giris.gif\")",
       "Bash(dd of=\"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/src/assets/splash.gif\" bs=1 seek=$\\(\\(0x31D\\)\\) count=1 conv=notrunc)",
       "Bash(identify \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")",
-      "Bash(ffprobe -v quiet -show_entries stream=width,height -of csv=p=0 \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")"
+      "Bash(ffprobe -v quiet -show_entries stream=width,height -of csv=p=0 \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")",
+      "Bash(ssh:*)",
+      "Bash(curl:*)"
     ]
   }
 }

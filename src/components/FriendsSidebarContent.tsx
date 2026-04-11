@@ -325,7 +325,7 @@ export default function FriendsSidebarContent({
     >
       <div className="relative">
         <div
-          className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'border-2 avatar-squircle' : 'rounded-full bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
+          className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'border-2 avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           style={isDesktop ? { borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' } : undefined}
         >
           {user.avatar?.startsWith('http')

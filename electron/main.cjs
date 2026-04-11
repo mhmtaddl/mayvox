@@ -228,13 +228,21 @@ const Store = (() => {
 })();
 
 function getTrayIcon() {
+  // icon.ico aslında PNG formatında — .png uzantısıyla okut
   const candidates = [
-    path.join(__dirname, "../build/icon.ico"),
-    path.join(process.resourcesPath || "", "icon.ico"),
+    path.join(__dirname, "../build/tray-icon.png"),
+    path.join(process.resourcesPath || "", "tray-icon.png"),
   ];
   for (const p of candidates) {
     try {
-      if (fs.existsSync(p)) return nativeImage.createFromPath(p);
+      if (!fs.existsSync(p)) continue;
+      const buf = fs.readFileSync(p);
+      const img = nativeImage.createFromBuffer(buf);
+      if (img.isEmpty()) continue;
+      const size = img.getSize();
+      const side = Math.min(size.width, size.height);
+      const square = img.crop({ x: Math.floor((size.width - side) / 2), y: 0, width: side, height: side });
+      return square.resize({ width: 16, height: 16, quality: "best" });
     } catch {}
   }
   return nativeImage.createEmpty();

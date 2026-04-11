@@ -6,6 +6,8 @@ import {
   Timer,
   Radio,
   Headphones,
+  Settings,
+  Compass,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
 import { ConnectionQualityIndicator } from '../../../components/chat';
@@ -28,9 +30,14 @@ interface Props {
   activeServerName?: string;
   activeServerShortName?: string;
   activeServerAvatarUrl?: string;
+  activeServerMotto?: string;
+  activeServerRole?: string;
+  activeServerPublic?: boolean;
+  onShowSettings?: () => void;
+  onShowDiscover?: () => void;
 }
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, onShowSettings, onShowDiscover }: Props) {
   const { channels, activeChannel, isConnecting } = useChannel();
   const { currentUser, allUsers } = useUser();
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
@@ -51,38 +58,48 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         onMouseDown={handleSidebarDragStart}
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-[var(--theme-accent)]/20 active:bg-[var(--theme-accent)]/30 transition-colors"
       />
-      {/* Brand header — aktif sunucuya göre değişir */}
-      <div className="px-5 pt-4 pb-3 shrink-0 flex items-center gap-3 select-none">
+      {/* ── A. Marka / Sunucu Header ── */}
+      <div className="px-5 pt-5 pb-3.5 shrink-0 flex items-center gap-3.5 select-none group/header">
         {activeServerAvatarUrl ? (
-          <img src={activeServerAvatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-[var(--theme-accent)]/15" draggable={false} />
+          <img src={activeServerAvatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.1)]" style={{ border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }} draggable={false} />
         ) : (
-          <div className="w-10 h-10 rounded-xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/15 flex items-center justify-center shrink-0" style={{ filter: 'drop-shadow(0 0 5px rgba(var(--theme-accent-rgb), 0.2))' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(var(--theme-accent-rgb),0.08)]"
+            style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.06))', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
             <span className="text-[13px] font-bold text-[var(--theme-accent)]">{activeServerShortName ?? 'MV'}</span>
           </div>
         )}
-        <div className="flex flex-col leading-none min-w-0">
-          <h1 className="text-[15px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">{activeServerName ?? 'MAYVOX'}</h1>
-          <span className="text-[7.5px] font-medium tracking-[0.16em] uppercase text-[var(--theme-secondary-text)]/30 mt-0.5">voice & chat</span>
+        <div className="flex flex-col leading-none min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">{activeServerName ?? 'MAYVOX'}</h1>
+            {activeServerPublic === false && <Lock size={10} className="text-[var(--theme-secondary-text)]/35 shrink-0" />}
+          </div>
+          <span className="text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerMotto || 'voice & chat'}</span>
         </div>
+        {onShowSettings && (activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod') && (
+          <button onClick={onShowSettings} title="Sunucu Ayarları"
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
+            <Settings size={13} />
+          </button>
+        )}
       </div>
-      <div className="mx-5 h-px mb-3" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
+      <div className="mx-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.07), transparent)' }} />
 
-      <div className="px-5 pb-5 flex flex-col flex-1 min-h-0">
+      <div className="px-5 pt-4 pb-4 flex flex-col flex-1 min-h-0">
         {visibleChannels.length === 0 ? (
           /* Sunucusuz durum — sidebar empty state */
           <div className="flex-1 flex flex-col items-center justify-center px-2">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }}>
-              <Volume2 size={18} className="text-[var(--theme-secondary-text)]/25" />
+              <Volume2 size={18} className="text-[var(--theme-secondary-text)]/20" />
             </div>
-            <p className="text-[10px] text-[var(--theme-secondary-text)]/40 text-center leading-relaxed max-w-[160px]">
+            <p className="text-[10px] text-[var(--theme-secondary-text)]/35 text-center leading-relaxed max-w-[160px]">
               Bir sohbet sunucusuna katılarak ses kanallarını görüntüleyebilirsin.
             </p>
           </div>
         ) : (
         <>
-        <div className="flex items-center gap-2.5 text-[var(--theme-secondary-text)] font-extrabold mb-3">
-          <Volume2 size={14} className="opacity-60" />
-          <span className="uppercase text-[10px] tracking-[0.15em]">Ses Kanalları</span>
+        <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] mb-3">
+          <Volume2 size={13} className="opacity-40" />
+          <span className="uppercase text-[9px] tracking-[0.18em] font-bold opacity-40">Ses Kanalları</span>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
@@ -94,7 +111,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, channel.id)}
                 disabled={isConnecting}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group disabled:cursor-not-allowed ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group disabled:cursor-not-allowed active:scale-[0.97] active:duration-75 ${
                   activeChannel === channel.id
                     ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
                     : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
@@ -170,32 +187,44 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             </div>
                           </>
                         )}
-                      <div
-                        draggable={!!currentUser.isAdmin}
-                        onDragStart={(e) => handleDragStart(e, user?.name || memberId)}
-                        onClick={(e) => user && onUserClick(user.id, e.clientX, e.clientY)}
-                        className={`flex items-center gap-2 text-[11px] transition-all duration-150 group/member cursor-pointer py-1 px-1.5 rounded-lg hover:bg-[var(--theme-accent)]/5 active:scale-[0.98] ${
-                          isBc && isSp
-                            ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
-                            : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
-                        } ${isBc && !isSp ? 'opacity-70' : ''}`}
-                      >
-                        <div className="relative shrink-0">
-                          <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
-                            {user?.avatar?.startsWith('http')
-                              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              : user?.avatar || '?'}
-                          </div>
-                          {user && <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />}
+                      {/* Crossfade: placeholder ↔ real user */}
+                      <div className="relative h-7">
+                        {/* Placeholder layer */}
+                        <div className={`absolute inset-0 flex items-center gap-2 py-1 px-1.5 transition-opacity duration-150 ${user ? 'opacity-0' : 'opacity-40'}`}>
+                          <div className="h-5 w-5 rounded-[6px] bg-[rgba(var(--glass-tint),0.08)] shrink-0" />
+                          <div className="h-2.5 w-16 rounded bg-[rgba(var(--glass-tint),0.06)]" />
                         </div>
-                        <span className="truncate flex-1">{user ? formatFullName(user.firstName, user.lastName) : memberId}</span>
-                        {isBc && user && (isSp
-                          ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
-                          : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
-                        )}
-                        {user && userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
-                          <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
-                        )}
+                        {/* Real user layer */}
+                        <div
+                          draggable={!!currentUser.isAdmin && !!user}
+                          onDragStart={(e) => user && handleDragStart(e, user.name || memberId)}
+                          onClick={(e) => user && onUserClick(user.id, e.clientX, e.clientY)}
+                          className={`absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
+                            isBc && isSp
+                              ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
+                              : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
+                          ) : ''} ${isBc && !isSp && user ? 'opacity-70' : ''}`}
+                          style={{ opacity: user ? undefined : 0, transform: user ? 'scale(1)' : 'scale(0.98)', transition: 'opacity 150ms ease-out, transform 150ms ease-out' }}
+                        >
+                          {user && <>
+                            <div className="relative shrink-0">
+                              <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
+                                {user.avatar?.startsWith('http')
+                                  ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  : user.avatar || '?'}
+                              </div>
+                              <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />
+                            </div>
+                            <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
+                            {isBc && (isSp
+                              ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
+                              : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
+                            )}
+                            {userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
+                              <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
+                            )}
+                          </>}
+                        </div>
                       </div>
                       </React.Fragment>
                     );
@@ -231,17 +260,29 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         )}
       </div>
 
-      {/* Sol alt kontroller */}
-      <div className="shrink-0 px-4 py-3 flex items-center justify-center gap-3">
-        {appVersion && (
-          <UpdateVersionHub
-            currentVersion={appVersion}
-            isAdmin={!!currentUser.isAdmin}
-            autoShowNotes={showReleaseNotes}
-            onNotesShown={() => setShowReleaseNotes(false)}
-          />
+      {/* ── C. Alt Navigation + Sistem ── */}
+      <div className="shrink-0 px-4 pb-3">
+        <div className="h-px mb-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
+
+        {/* Keşfet */}
+        {onShowDiscover && (
+          <button onClick={onShowDiscover} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.05)] transition-all duration-150 mb-1.5 active:scale-[0.98]">
+            <Compass size={14} className="text-[var(--theme-accent)] opacity-50" /> Topluluk Keşfet
+          </button>
         )}
-        <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+
+        {/* Sistem durumu */}
+        <div className="flex items-center justify-center gap-3 px-1 py-1.5 rounded-xl" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
+          {appVersion && (
+            <UpdateVersionHub
+              currentVersion={appVersion}
+              isAdmin={!!currentUser.isAdmin}
+              autoShowNotes={showReleaseNotes}
+              onNotesShown={() => setShowReleaseNotes(false)}
+            />
+          )}
+          <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+        </div>
       </div>
     </aside>
   );

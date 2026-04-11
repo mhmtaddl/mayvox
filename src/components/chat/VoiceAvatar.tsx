@@ -107,7 +107,7 @@ function VoiceAvatarInner({
         <motion.div
           animate={{ scale: scaleVal }}
           transition={SCALE_SPRING}
-          className="rounded-full overflow-hidden flex items-center justify-center"
+          className="rounded-[12px] overflow-hidden flex items-center justify-center"
           style={{
             width: avatarSize,
             height: avatarSize,
@@ -137,7 +137,7 @@ function VoiceAvatarInner({
           <motion.div
             animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.15, 0.4] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute inset-[-5px] rounded-full pointer-events-none"
+            className="absolute inset-[-5px] rounded-[16px] pointer-events-none"
             style={{ border: '2px solid rgba(var(--theme-accent-rgb), 0.2)' }}
           />
         )}

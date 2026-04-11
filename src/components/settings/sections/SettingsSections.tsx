@@ -15,13 +15,13 @@ export function AppearanceSection() {
     <CardSection icon={<Recycle size={12} />} title="Görünüm">
 
       {/* ═══ RENK PALETLERİ ═══ */}
-      <div className="mb-4 md:mb-5">
-        <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-0.5 md:gap-0 mb-2">
-          <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">Renk Paletleri</p>
-          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{currentTheme.name}</span>
+      <div className="mb-5 md:mb-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Renk Paletleri</p>
+          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-60 shrink-0">{currentTheme.name}</span>
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 md:gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           {themeOrder.map(key => {
             const theme = themes[key];
             const isSelected = currentTheme.key === key;
@@ -33,10 +33,10 @@ export function AppearanceSection() {
                 style={{
                   background: 'var(--theme-surface-card)',
                   border: isSelected
-                    ? '1.5px solid var(--theme-accent)'
-                    : '1px solid rgba(255,255,255,0.06)',
+                    ? '2px solid var(--theme-accent)'
+                    : '1px solid rgba(var(--glass-tint), 0.06)',
                   boxShadow: isSelected
-                    ? '0 0 0 1px var(--theme-accent), 0 4px 16px rgba(0,0,0,0.3)'
+                    ? '0 0 0 1px var(--theme-accent), 0 0 12px rgba(var(--theme-accent-rgb), 0.12), 0 4px 16px rgba(0,0,0,0.25)'
                     : '0 1px 6px rgba(0,0,0,0.18)',
                   transform: isSelected ? 'scale(1.02)' : 'scale(1)',
                 }}
@@ -66,9 +66,9 @@ export function AppearanceSection() {
       </div>
 
       {/* ═══ ARKA PLAN ═══ */}
-      <div className="pt-3 md:pt-4 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-        <p className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em] mb-2">Arka Plan</p>
-        <div className="flex flex-wrap gap-1.5 md:gap-2">
+      <div className="pt-4 md:pt-5" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
+        <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em] mb-3">Arka Plan</p>
+        <div className="grid grid-cols-8 gap-2">
           {backgroundPresets.map(bg => {
             const isActive = activeBackground === bg.id;
             return (
@@ -76,19 +76,17 @@ export function AppearanceSection() {
                 key={bg.id}
                 onClick={() => setActiveBackground(bg.id)}
                 title={bg.name}
-                className="relative overflow-hidden transition-all duration-150 flex-1 min-w-[36px] max-w-[56px]"
+                className="relative overflow-hidden transition-all duration-150 aspect-square rounded-xl"
                 style={{
-                  height: 28,
-                  borderRadius: 8,
                   background: bg.surface,
-                  border: isActive ? '1.5px solid var(--theme-accent)' : '1px solid rgba(255,255,255,0.06)',
-                  boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 2px 10px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.18)',
-                  transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                  border: isActive ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.08)',
+                  boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 0 12px rgba(var(--theme-accent-rgb), 0.15)' : '0 1px 4px rgba(0,0,0,0.18)',
+                  transform: isActive ? 'scale(1.02)' : 'scale(1)',
                 }}
               >
                 {isActive && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Check size={11} style={{ color: '#fff' }} strokeWidth={3} />
+                    <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
                   </div>
                 )}
               </button>

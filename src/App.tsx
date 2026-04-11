@@ -266,7 +266,7 @@ export default function App() {
   } = useFriends(currentUser.id || undefined);
 
   // ── Channel state ────────────────────────────────────────────────────────
-  const [channels, setChannels] = useState<VoiceChannel[]>(CHANNELS);
+  const [channels, setChannels] = useState<VoiceChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -765,15 +765,8 @@ export default function App() {
       else localStorage.setItem('showLastSeen', 'true');
       setIsMuted(restoredUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
 
-      // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
-      // ── 1. Channels yükle (presence'dan ÖNCE — aksi hâlde setChannels member bilgisini sıfırlar)
-      const userChannels = await loadChannelsFromDb();
-      if (userChannels.length > 0) setChannels([...CHANNELS, ...userChannels]);
-
-      setChannels((prev) => prev.map((c) => ({
-        ...c,
-        members: (c.members || []).filter((m) => m !== 'Kullanıcı 1'),
-      })));
+      // ── 1. Channels — sunucu seçilince ChatView'dan yüklenecek (server-scoped)
+      // Eski global kanal yükleme devre dışı — sunucu izolasyonu için
 
       // ── 2. Users yükle
       const offlineUsers = await loadOfflineUsers(undefined, knownVersionsRef.current);
@@ -1280,8 +1273,7 @@ export default function App() {
   // last_seen_at heartbeat — crash/force-close'a karşı periyodik DB güncellemesi
   // Ortak post-auth setup: channels + users yükle, presence başlat
   const initPostAuth = async (user: User) => {
-    const userChannels = await loadChannelsFromDb();
-    if (userChannels.length > 0) setChannels([...CHANNELS, ...userChannels]);
+    // Channels sunucu seçilince ChatView'dan yüklenir (server-scoped)
 
     const offlineUsers = await loadOfflineUsers(user.id, knownVersionsRef.current);
     setAllUsers(prev => {
