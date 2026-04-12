@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, Lock, Trash2, ShieldCheck } from 'lucide-react';
+import { Settings, Lock, Trash2, ShieldCheck, Users } from 'lucide-react';
 import { verifyChannelPassword } from '../../../lib/supabase';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -23,6 +23,7 @@ interface Props {
   onSetPassword: (channelId: string) => void;
   onRemovePassword: (channelId: string) => void;
   onDeleteRoom: (channelId: string) => void;
+  onManageAccess?: (channelId: string) => void;
   onClose: () => void;
 }
 
@@ -33,6 +34,7 @@ export default function ChatViewContextMenu({
   onSetPassword,
   onRemovePassword,
   onDeleteRoom,
+  onManageAccess,
   onClose,
 }: Props) {
   const channel = channels.find(c => c.id === contextMenu.channelId);
@@ -185,6 +187,15 @@ export default function ChatViewContextMenu({
         Oda Ayarları
         {isPasswordProtected && <Lock size={10} className="ml-auto opacity-40" />}
       </button>
+      {!isSystem && (channel?.isInviteOnly || channel?.isHidden) && onManageAccess && (
+        <button
+          onClick={() => { onManageAccess(contextMenu.channelId); onClose(); }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] rounded-lg transition-colors"
+        >
+          <Users size={14} />
+          Erişim Yönet
+        </button>
+      )}
       {!isSystem && (
         <>
           {channel?.password ? (

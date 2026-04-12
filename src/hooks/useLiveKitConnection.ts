@@ -22,6 +22,7 @@ interface Props {
   presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
+  activeServerIdRef: React.MutableRefObject<string>;
   connectionLostRef: React.MutableRefObject<boolean>;
   isDeafenedRef: React.MutableRefObject<boolean>;
   isNoiseSuppressionEnabled: boolean;
@@ -42,6 +43,7 @@ export function useLiveKitConnection({
   presenceChannelRef,
   currentUserRef,
   activeChannelRef,
+  activeServerIdRef,
   connectionLostRef,
   isDeafenedRef,
   isNoiseSuppressionEnabled,
@@ -100,6 +102,8 @@ export function useLiveKitConnection({
       const token = await getLiveKitToken(
         channelId,
         currentUserRef.current.name,
+        activeServerIdRef.current,
+        channelId,
       );
 
       const tokenMs = Math.round(performance.now() - t0);

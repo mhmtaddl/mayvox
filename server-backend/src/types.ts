@@ -41,7 +41,30 @@ export interface Channel {
   type: 'voice' | 'text';
   position: number;
   is_default: boolean;
+  owner_id: string | null;
+  max_users: number | null;
+  is_invite_only: boolean;
+  is_hidden: boolean;
+  mode: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface ChannelResponse {
+  id: string;
+  serverId: string;
+  name: string;
+  description: string;
+  type: 'voice' | 'text';
+  position: number;
+  isDefault: boolean;
+  ownerId: string | null;
+  maxUsers: number | null;
+  isInviteOnly: boolean;
+  isHidden: boolean;
+  mode: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ServerInvite {

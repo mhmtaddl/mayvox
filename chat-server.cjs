@@ -239,12 +239,83 @@ function checkRateLimit(map, userId, maxCount, windowMs) {
   return entry.count > maxCount;
 }
 
-// ── HTTP health check ────────────────────────────────────────────────────
+// ── Internal notify secret (server-backend → chat-server) ────────────────
+const INTERNAL_NOTIFY_SECRET = process.env.INTERNAL_NOTIFY_SECRET || '';
+if (!INTERNAL_NOTIFY_SECRET) {
+  console.warn('[chat-server] INTERNAL_NOTIFY_SECRET tanımsız — /internal/notify-user devre dışı, invite realtime push ÇALIŞMAYACAK (frontend polling fallback ile güncellenecek).');
+} else {
+  console.log('[chat-server] internal notify AKTİF (secret yüklü).');
+}
+
+// /internal/* endpoint'leri sadece loopback'ten (server-backend aynı host) erişilebilir olsun.
+// Defense-in-depth: nginx dış erişimi kesse bile kod seviyesinde ikinci kilit.
+function isLoopbackRequest(req) {
+  const addr = req.socket && req.socket.remoteAddress;
+  if (!addr) return false;
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+}
+
+// ── HTTP: health + internal notify ───────────────────────────────────────
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health') {
     const conns = [...rooms.values()].reduce((sum, set) => sum + set.size, 0);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', rooms: rooms.size, connections: conns }));
+    return;
+  }
+
+  // Tüm /internal/* yolu için loopback-only guard (defense-in-depth).
+  if (req.url && req.url.startsWith('/internal/')) {
+    if (!isLoopbackRequest(req)) {
+      const from = req.socket && req.socket.remoteAddress;
+      console.warn(`[chat-server] /internal/* non-loopback erişim reddedildi, remote=${from}`);
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'forbidden' }));
+      return;
+    }
+  }
+
+  // Internal: diğer servislerden (server-backend) kullanıcıya WS push.
+  // Body: { userId: string, payload: object } — sadece shared secret ile çağrılabilir.
+  if (req.method === 'POST' && req.url === '/internal/notify-user') {
+    if (!INTERNAL_NOTIFY_SECRET) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'internal_notify_disabled' }));
+      return;
+    }
+    const provided = req.headers['x-internal-secret'];
+    if (provided !== INTERNAL_NOTIFY_SECRET) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+      if (raw.length > 16_384) {
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(raw || '{}');
+        const userId = typeof body.userId === 'string' ? body.userId : '';
+        const payload = body.payload && typeof body.payload === 'object' ? body.payload : null;
+        if (!userId || !payload || typeof payload.type !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'bad_request' }));
+          return;
+        }
+        const conns = userConnections.get(userId);
+        const delivered = conns ? conns.size : 0;
+        sendToUser(userId, payload);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, delivered }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid_json' }));
+      }
+    });
     return;
   }
 

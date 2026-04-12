@@ -44,6 +44,53 @@ let reconnectAttempt = 0;
 let intentionalClose = false;
 let isConnecting = false;
 
+// ── Invite event bus ──
+// Backend'den gelen `invite:*` WS mesajlarını dinleyen subscribe'lara dağıtır.
+// Birden fazla subscriber'a izin verir (test edilebilirlik + hook remount safety).
+export interface InviteEvent {
+  type: 'invite:new' | 'invite:removed';
+  inviteId?: string;
+  serverId?: string;
+  reason?: 'accepted' | 'declined' | 'cancelled';
+}
+type InviteEventHandler = (event: InviteEvent) => void;
+const inviteSubscribers = new Set<InviteEventHandler>();
+
+export function subscribeInviteEvents(handler: InviteEventHandler): () => void {
+  inviteSubscribers.add(handler);
+  return () => { inviteSubscribers.delete(handler); };
+}
+
+function dispatchInviteEvent(msg: unknown): boolean {
+  if (!msg || typeof msg !== 'object') return false;
+  const type = (msg as { type?: unknown }).type;
+  if (typeof type !== 'string' || !type.startsWith('invite:')) return false;
+  const event = msg as InviteEvent;
+  for (const h of inviteSubscribers) {
+    try { h(event); } catch (err) { console.warn('[chatService] invite subscriber error:', err); }
+  }
+  return true;
+}
+
+// ── Connection status event bus ──
+// setChatHandlers() tek global subscriber (room/mesaj handler'ı). Ama birden çok
+// modül (ör. useIncomingInvites) reconnect olaylarını izlemek isteyebilir:
+// bu bus override yerine ek subscriber destekler.
+type ConnectionStatusHandler = (status: ChatStatus) => void;
+const statusSubscribers = new Set<ConnectionStatusHandler>();
+
+export function subscribeConnectionStatus(handler: ConnectionStatusHandler): () => void {
+  statusSubscribers.add(handler);
+  return () => { statusSubscribers.delete(handler); };
+}
+
+function emitStatus(status: ChatStatus): void {
+  handlers.onStatusChange?.(status);
+  for (const h of statusSubscribers) {
+    try { h(status); } catch (err) { console.warn('[chatService] status subscriber error:', err); }
+  }
+}
+
 function getReconnectDelay() {
   return Math.min(1000 * Math.pow(2, reconnectAttempt), 15000);
 }
@@ -81,7 +128,7 @@ function scheduleReconnect() {
   reconnectAttempt += 1;
   if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
     console.warn(`[chatService] Max reconnect (${MAX_RECONNECT_ATTEMPTS}) aşıldı, durduruluyor`);
-    handlers.onStatusChange?.('disconnected');
+    emitStatus('disconnected');
     return;
   }
   const delay = getReconnectDelay();
@@ -123,13 +170,13 @@ export async function connectChat() {
 
   intentionalClose = false;
   clearReconnectTimer();
-  handlers.onStatusChange?.('connecting');
+  emitStatus('connecting');
 
   const token = await getAuthToken();
   if (!token) {
     console.warn('[chatService] Token yok, bağlantı iptal');
     isConnecting = false;
-    handlers.onStatusChange?.('disconnected');
+    emitStatus('disconnected');
     return;
   }
 
@@ -169,7 +216,7 @@ export async function connectChat() {
           console.log('[chatService] Auth OK, userId:', msg.userId);
           setDmSocket(socket);
           notifyDmConnected();
-          handlers.onStatusChange?.('connected');
+          emitStatus('connected');
 
           if (currentRoom && socket.readyState === WebSocket.OPEN) {
             console.log('[chatService] Auth sonrası join:', currentRoom);
@@ -181,7 +228,7 @@ export async function connectChat() {
         case 'auth_error': {
           console.error('[chatService] Auth HATA:', msg.message);
           intentionalClose = true;
-          handlers.onStatusChange?.('disconnected');
+          emitStatus('disconnected');
           break;
         }
 
@@ -210,6 +257,8 @@ export async function connectChat() {
           break;
 
         default:
+          // Invite event'lerini bus'a ilet
+          if (dispatchInviteEvent(msg)) break;
           // DM event'lerini dmService'e yönlendir
           if (!handleDmMessage(msg)) {
             console.log('[chatService] Bilinmeyen mesaj tipi:', msg.type);
@@ -233,10 +282,10 @@ export async function connectChat() {
       }
 
       if (!intentionalClose) {
-        handlers.onStatusChange?.('reconnecting');
+        emitStatus('reconnecting');
         scheduleReconnect();
       } else {
-        handlers.onStatusChange?.('disconnected');
+        emitStatus('disconnected');
       }
     };
 
@@ -246,7 +295,7 @@ export async function connectChat() {
   } catch (err) {
     isConnecting = false;
     console.error('[chatService] WebSocket oluşturulamadı:', err);
-    handlers.onStatusChange?.('disconnected');
+    emitStatus('disconnected');
     scheduleReconnect();
   }
 }
@@ -263,7 +312,7 @@ export function disconnectChat() {
   }
 
   currentRoom = null;
-  handlers.onStatusChange?.('disconnected');
+  emitStatus('disconnected');
 }
 
 export function joinRoom(roomId: string) {

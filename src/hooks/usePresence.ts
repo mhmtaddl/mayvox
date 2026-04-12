@@ -7,6 +7,10 @@ import type { User, VoiceChannel } from '../types';
 interface Props {
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
+  /** Kullanıcının aktif olarak gezdiği sunucu ID'si — presence payload'ına her track'te eklenir. */
+  activeServerIdRef: React.MutableRefObject<string>;
+  /** Kanal sırası token'ı — reorder broadcast'ı geldiğinde remote token ile senkron tut. */
+  channelOrderTokenRef: React.MutableRefObject<string | null>;
   disconnectFromLiveKit: () => Promise<void>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setCurrentUser: React.Dispatch<React.SetStateAction<User>>;
@@ -31,6 +35,8 @@ interface Props {
 export function usePresence({
   currentUserRef,
   activeChannelRef,
+  activeServerIdRef,
+  channelOrderTokenRef,
   disconnectFromLiveKit,
   setAllUsers,
   setCurrentUser,
@@ -71,15 +77,22 @@ export function usePresence({
   // Yeni bağlanan veya broadcast'i kaçıran client'lar için presence
   // state'inden oda üyeliklerini türetiyoruz — bu stateful ve güvenilir.
   const syncRoomMembersFromPresence = (
-    presenceData: Array<{ currentRoom?: string; userId?: string }>,
+    presenceData: Array<{ currentRoom?: string; userId?: string; serverId?: string }>,
   ) => {
+    // Server-level izolasyon: sadece aktif sunucudaki kullanıcıları bu sunucunun
+    // kanal member listelerine dağıt. Channel ID'leri UUID olduğu için normalde
+    // çakışma olmaz — ama server filtresi defense-in-depth ve yanlış popülasyonu
+    // (başka sunucudan gelen üye yabancı kanala düşmez) engeller.
+    const myServerId = activeServerIdRef.current;
     const roomMembers = new Map<string, string[]>();
     for (const p of presenceData) {
-      if (p.currentRoom && p.userId) {
-        const list = roomMembers.get(p.currentRoom) || [];
-        if (!list.includes(p.userId)) list.push(p.userId);
-        roomMembers.set(p.currentRoom, list);
-      }
+      if (!p.currentRoom || !p.userId) continue;
+      // Eğer aktif sunucu belirli ise ve presence'ta serverId farklı ise atla.
+      // serverId tanımsızsa (eski client) esnek davran — dahil et.
+      if (myServerId && p.serverId && p.serverId !== myServerId) continue;
+      const list = roomMembers.get(p.currentRoom) || [];
+      if (!list.includes(p.userId)) list.push(p.userId);
+      roomMembers.set(p.currentRoom, list);
     }
 
     const myId = currentUserRef.current.id;
@@ -126,7 +139,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number; autoStatus?: string }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number; autoStatus?: string; serverId?: string }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -160,6 +173,11 @@ export function usePresence({
         presenceData.filter(p => p.autoStatus).map(p => [p.userId, p.autoStatus!]),
       );
 
+      // Kullanıcının aktif sunucu ID'si — server-level izolasyon için
+      const serverIdMap = new Map(
+        presenceData.filter(p => p.serverId).map(p => [p.userId, p.serverId!]),
+      );
+
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
@@ -175,6 +193,7 @@ export function usePresence({
             ...u,
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
             platform: platformMap.get(u.id) ?? u.platform,
+            serverId: serverIdMap.get(u.id) ?? u.serverId,
             status: willBeOnline ? 'online' : 'offline',
             statusText: (() => {
               if (u.id === user.id) return u.statusText;
@@ -325,6 +344,33 @@ export function usePresence({
         setActiveChannel(prev =>
           prev === payload.channelId ? null : prev,
         );
+      } else if (payload.action === 'reorder') {
+        // Kanal sıralama güncellemesi — local position map + token senkronu.
+        const updates = Array.isArray(payload.updates) ? payload.updates : [];
+        if (updates.length === 0) return;
+        const positionById = new Map<string, number>();
+        for (const u of updates) {
+          if (u && typeof u.id === 'string' && typeof u.position === 'number') {
+            positionById.set(u.id, u.position);
+          }
+        }
+        setChannels(prev => {
+          const next = prev.map(c => {
+            const p = positionById.get(c.id);
+            return p !== undefined ? { ...c, position: p } : c;
+          });
+          // Deterministic sort: position ASC, tie-break by id ASC
+          next.sort((a, b) => {
+            if (a.position !== b.position) return a.position - b.position;
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+          });
+          return next;
+        });
+        // Broadcast payload yeni orderToken taşıyorsa bizim cihazın token'ını güncelle
+        // — aksi hâlde bu client'ın sonraki reorder'ı stale token ile 409 alır.
+        if (typeof payload.orderToken === 'string' || payload.orderToken === null) {
+          channelOrderTokenRef.current = payload.orderToken;
+        }
       } else if (payload.action === 'update') {
         setChannels(prev =>
           prev.map(c => {
@@ -372,7 +418,7 @@ export function usePresence({
         const isMobilePlatform = !!(window as any).Capacitor?.isNativePlatform?.() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         const onlineSince = Date.now();
         console.log('[usePresence] track_payload onlineSince=' + onlineSince);
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop', onlineSince, autoStatus: 'active' });
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, serverId: activeServerIdRef.current || undefined, platform: isMobilePlatform ? 'mobile' : 'desktop', onlineSince, autoStatus: 'active' });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.

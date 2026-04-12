@@ -50,6 +50,7 @@ export interface AppStateContextType {
   handleSaveRoom: () => Promise<void>;
   handleDeleteRoom: (id: string) => Promise<void>;
   handleRenameRoom: (id: string, newName: string) => Promise<void>;
+  handleReorderChannels: (orderedIds: string[]) => Promise<void>;
   handleSetPassword: (id: string, password: string, repeat: string) => Promise<void>;
   handleRemovePassword: (id: string) => Promise<void>;
   handleJoinChannel: (id: string, isInvited?: boolean) => Promise<void>;

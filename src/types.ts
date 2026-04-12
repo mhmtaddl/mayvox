@@ -33,7 +33,11 @@ export interface User {
   showLastSeen?: boolean;
   /** Auto-presence durumu: active/idle/deafened — otomatik tespit edilir */
   autoStatus?: 'active' | 'idle' | 'deafened';
+  /** Kullanıcının presence'ta bildirdiği aktif sunucu ID'si — server-level izolasyon için. */
+  serverId?: string;
 }
+
+// VoiceChannel.position eklendi — drag reorder için sıralama anahtarı.
 
 export interface VoiceChannel {
   id: string;
@@ -51,6 +55,8 @@ export interface VoiceChannel {
   mode?: string;
   /** Broadcast odada konuşmacı kullanıcı ID'leri — yoksa ownerId varsayılan konuşmacı */
   speakerIds?: string[];
+  /** Sıralama pozisyonu — backend'den her zaman gelir, drag-reorder ile güncellenir */
+  position: number;
 }
 
 export type AppView = 'loading' | 'login-selection' | 'login-code' | 'login-password' | 'register-details' | 'chat' | 'settings';

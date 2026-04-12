@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { UserPlus, MessageSquare, Download, AtSign, ChevronRight } from 'lucide-react';
+import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
 import type { NotificationSummary, NotifItem, NotifKind } from '../../hooks/useNotificationCenter';
 
@@ -9,6 +9,7 @@ interface Props {
   onOpenFriendRequests?: () => void;
   onOpenDM?: () => void;
   onOpenUpdate?: () => void;
+  onOpenInvites?: () => void;
 }
 
 // ── Kind → ikon eşlemesi ──
@@ -17,6 +18,7 @@ const KIND_ICON: Record<NotifKind, React.ReactNode> = {
   message: <MessageSquare size={15} strokeWidth={1.8} />,
   system: <Download size={15} strokeWidth={1.8} />,
   mention: <AtSign size={15} strokeWidth={1.8} />,
+  invite: <Mail size={15} strokeWidth={1.8} />,
 };
 
 // ── Priority → sol çizgi rengi (çok hafif) ──
@@ -26,7 +28,7 @@ const PRIORITY_ACCENT = {
   low: 'bg-transparent',
 } as const;
 
-export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate }: Props) {
+export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites }: Props) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -69,11 +71,12 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
       friends: onOpenFriendRequests,
       dm: onOpenDM,
       update: onOpenUpdate,
+      invites: onOpenInvites,
     };
     const handler = map[item.key];
     if (!handler) return undefined;
     return () => { handler(); setOpen(false); };
-  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate]);
+  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites]);
 
   return (
     <div className="relative">

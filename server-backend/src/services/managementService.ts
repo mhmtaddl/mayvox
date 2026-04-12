@@ -3,6 +3,7 @@ import type { Server, ServerMember, ServerInvite, ServerBan, MemberResponse, Inv
 import { nanoid } from 'nanoid';
 import { AppError } from './serverService';
 import { supabase } from '../supabaseClient';
+import { notifyClient } from './realtimeNotify';
 
 // ── Yetki kontrol ──
 
@@ -209,6 +210,9 @@ export async function sendUserInvite(serverId: string, userId: string, targetUse
     'INSERT INTO server_user_invites (server_id, invited_user_id, invited_by) VALUES ($1, $2, $3)',
     [serverId, targetUserId, userId]
   );
+
+  // Realtime push — alıcının tüm aktif cihazlarına.
+  void notifyClient(targetUserId, { type: 'invite:new', serverId });
 }
 
 /** Sunucudan gönderilmiş bekleyen davetleri listele */
@@ -239,11 +243,20 @@ export async function listSentInvites(serverId: string, userId: string): Promise
 /** Bekleyen daveti iptal et */
 export async function cancelUserInvite(serverId: string, userId: string, inviteId: string): Promise<void> {
   await requireRole(serverId, userId, 'admin');
+  const target = await queryOne<{ invited_user_id: string }>(
+    'SELECT invited_user_id FROM server_user_invites WHERE id = $1 AND server_id = $2',
+    [inviteId, serverId]
+  );
   const result = await pool.query(
     "UPDATE server_user_invites SET status = 'cancelled', responded_at = now() WHERE id = $1 AND server_id = $2 AND status = 'pending'",
     [inviteId, serverId]
   );
   if (result.rowCount === 0) throw new AppError(404, 'Davet bulunamadı');
+
+  // Alıcının cihazlarında satır kaybolsun.
+  if (target?.invited_user_id) {
+    void notifyClient(target.invited_user_id, { type: 'invite:removed', inviteId, reason: 'cancelled' });
+  }
 }
 
 /** Kullanıcının gelen davetlerini listele */
@@ -308,6 +321,9 @@ export async function acceptInvite(userId: string, inviteId: string): Promise<vo
   }
 
   await pool.query("UPDATE server_user_invites SET status = 'accepted', responded_at = now() WHERE id = $1", [inviteId]);
+
+  // Multi-device sync — bu kullanıcının diğer cihazlarında invite satırı kaybolsun.
+  void notifyClient(userId, { type: 'invite:removed', inviteId, reason: 'accepted' });
 }
 
 /** Daveti reddet */
@@ -321,6 +337,9 @@ export async function declineInvite(userId: string, inviteId: string): Promise<v
   if (invite.status !== 'pending') throw new AppError(400, 'Bu davet artık geçerli değil');
 
   await pool.query("UPDATE server_user_invites SET status = 'declined', responded_at = now() WHERE id = $1", [inviteId]);
+
+  // Multi-device sync — diğer cihazlarda da satır kaybolsun.
+  void notifyClient(userId, { type: 'invite:removed', inviteId, reason: 'declined' });
 }
 
 // ── Davetler ──

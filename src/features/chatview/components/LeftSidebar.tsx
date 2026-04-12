@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import {
   Volume2,
   Lock,
@@ -38,14 +38,39 @@ interface Props {
 }
 
 export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, onShowSettings, onShowDiscover }: Props) {
-  const { channels, activeChannel, isConnecting } = useChannel();
+  const { channels, activeChannel, isConnecting, activeServerId } = useChannel();
   const { currentUser, allUsers } = useUser();
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
   const { connectionLevel } = useAudio();
-  const { handleJoinChannel, handleContextMenu, view, appVersion, showReleaseNotes, setShowReleaseNotes } = useAppState();
+  const { handleJoinChannel, handleContextMenu, handleReorderChannels, view, appVersion, showReleaseNotes, setShowReleaseNotes } = useAppState();
+
+  // ── Channel drag-reorder state (local) ──
+  const CHANNEL_DRAG_MIME = 'mayvox/channel';
+  const [draggingChannelId, setDraggingChannelId] = useState<string | null>(null);
+  const [dropTargetChannelId, setDropTargetChannelId] = useState<string | null>(null);
+  const [dropBefore, setDropBefore] = useState(false);
+
+  const clearDragState = useCallback(() => {
+    setDraggingChannelId(null);
+    setDropTargetChannelId(null);
+    setDropBefore(false);
+  }, []);
+
+  // Reorder sırasında scroll pozisyonunu koru — uzun listede jump'ı önler.
+  const channelScrollRef = useRef<HTMLElement>(null);
+  const pendingScrollRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current != null && channelScrollRef.current) {
+      channelScrollRef.current.scrollTop = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+    }
+  }, [channels]);
 
   const { leftSidebarW, handleSidebarDragStart } = useSidebarResize();
 
+  // Backend zaten hidden kanalları filtreliyor (authoritative). Client filtresi sadece
+  // defans amaçlı: backend bir an eski veriyi döndürürse kullanıcının ownerId/admin/active
+  // kanalı yine de görünür kalsın.
   const visibleChannels = useMemo(
     () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
@@ -102,16 +127,79 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           <span className="uppercase text-[9px] tracking-[0.18em] font-bold opacity-40">Ses Kanalları</span>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
-          {visibleChannels.map(channel => (
+        <nav ref={channelScrollRef} className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
+          {visibleChannels.map(channel => {
+            const canReorderThis = !!currentUser.isAdmin && !channel.isSystemChannel;
+            const isDragging = draggingChannelId === channel.id;
+            const isDropTarget = dropTargetChannelId === channel.id && draggingChannelId && draggingChannelId !== channel.id;
+            return (
             <div key={channel.id} className="space-y-1">
               <button
+                draggable={canReorderThis}
+                onDragStart={(e) => {
+                  if (!canReorderThis) return;
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData(CHANNEL_DRAG_MIME, channel.id);
+                  setDraggingChannelId(channel.id);
+                }}
+                onDragEnd={clearDragState}
                 onClick={() => handleJoinChannel(channel.id)}
                 onContextMenu={(e) => handleContextMenu(e, channel.id)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, channel.id)}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes(CHANNEL_DRAG_MIME)) {
+                    if (channel.isSystemChannel) return; // sistem kanalları drop hedefi değil
+                    if (draggingChannelId === channel.id) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    const before = e.clientY < rect.top + rect.height / 2;
+                    if (dropTargetChannelId !== channel.id || dropBefore !== before) {
+                      setDropTargetChannelId(channel.id);
+                      setDropBefore(before);
+                    }
+                    return;
+                  }
+                  handleDragOver(e);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.dataTransfer.types.includes(CHANNEL_DRAG_MIME)) return;
+                  if (dropTargetChannelId === channel.id) setDropTargetChannelId(null);
+                }}
+                onDrop={(e) => {
+                  const dragId = e.dataTransfer.getData(CHANNEL_DRAG_MIME);
+                  if (dragId) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearDragState();
+                    if (!activeServerId || dragId === channel.id || channel.isSystemChannel) return;
+                    // Sıralamayı yeniden üret: kaynakt kanalı hedefin önüne/arkasına yerleştir
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    const placeBefore = e.clientY < rect.top + rect.height / 2;
+                    const baseOrder = channels.map(c => c.id).filter(id => id !== dragId);
+                    const targetIdx = baseOrder.indexOf(channel.id);
+                    if (targetIdx < 0) return;
+                    const insertAt = placeBefore ? targetIdx : targetIdx + 1;
+                    baseOrder.splice(insertAt, 0, dragId);
+                    // Scroll pozisyonunu snapshot et — useLayoutEffect commit sonrası restore eder.
+                    pendingScrollRef.current = channelScrollRef.current?.scrollTop ?? null;
+                    void handleReorderChannels(baseOrder);
+                    return;
+                  }
+                  handleDrop(e, channel.id);
+                }}
                 disabled={isConnecting}
+                style={
+                  isDropTarget
+                    ? {
+                        boxShadow: dropBefore
+                          ? 'inset 0 2px 0 0 var(--theme-accent)'
+                          : 'inset 0 -2px 0 0 var(--theme-accent)',
+                      }
+                    : undefined
+                }
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group disabled:cursor-not-allowed active:scale-[0.97] active:duration-75 ${
+                  isDragging ? 'opacity-40 ' : ''
+                }${
                   activeChannel === channel.id
                     ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
                     : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
@@ -121,6 +209,15 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                   {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={16} className="opacity-70" />; })()}
                   {channel.password && (
                     <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
+                      <Lock size={8} className="text-white" />
+                    </div>
+                  )}
+                  {!channel.password && channel.isInviteOnly && (
+                    <div
+                      className="absolute -top-1 -right-1 rounded-full p-0.5 border border-[var(--theme-border)]"
+                      style={{ background: 'rgba(var(--theme-accent-rgb), 0.7)' }}
+                      title="Özel kanal"
+                    >
                       <Lock size={8} className="text-white" />
                     </div>
                   )}
@@ -233,7 +330,8 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 );
               })()}
             </div>
-          ))}
+          );
+          })}
 
           {/* Oda Oluştur */}
           <button

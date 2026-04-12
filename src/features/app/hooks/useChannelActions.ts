@@ -4,12 +4,15 @@
  */
 import React, { useState, useRef } from 'react';
 import { type RemoteParticipant, RemoteAudioTrack } from 'livekit-client';
+import { setChannelPassword } from '../../../lib/supabase';
 import {
-  updateChannel,
-  createChannel,
-  deleteChannel,
-  setChannelPassword,
-} from '../../../lib/supabase';
+  createServerChannel,
+  updateServerChannel,
+  deleteServerChannel,
+  reorderServerChannels,
+  getServerChannels,
+  ApiError,
+} from '../../../lib/serverService';
 import { formatFullName } from '../../../lib/formatName';
 import type { VoiceChannel, User } from '../../../types';
 
@@ -18,6 +21,8 @@ interface UseChannelActionsOptions {
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
   activeChannel: string | null;
   setActiveChannel: (v: string | null) => void;
+  activeServerId: string;
+  channelOrderTokenRef: React.MutableRefObject<string | null>;
   currentUser: User;
   allUsers: User[];
   presenceChannelRef: React.MutableRefObject<any>;
@@ -40,6 +45,8 @@ interface UseChannelActionsOptions {
 
 export function useChannelActions({
   channels, setChannels, activeChannel, setActiveChannel,
+  activeServerId,
+  channelOrderTokenRef,
   currentUser, allUsers,
   presenceChannelRef, livekitRoomRef,
   roomModal, setRoomModal,
@@ -98,8 +105,8 @@ export function useChannelActions({
       ? currentSpeakers.filter(id => id !== userId)
       : [...currentSpeakers, userId];
 
+    // Konuşmacı listesi — presence broadcast ile sync, DB persistence yok (transient role).
     setChannels(prev => prev.map(c => c.id === activeChannel ? { ...c, speakerIds: newSpeakers } : c));
-    await updateChannel(activeChannel, { speaker_ids: newSpeakers });
     presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: activeChannel, updates: { speakerIds: newSpeakers } } });
     setToastMsg(isSpeaker ? 'Dinleyiciye alındı.' : 'Konuşmacı yapıldı.');
   };
@@ -190,32 +197,58 @@ export function useChannelActions({
 
   // ── Room CRUD ──
   const handleSaveRoom = async () => {
-    if (!roomModal.name.trim()) return;
+    const trimmedName = roomModal.name.trim();
+    if (!trimmedName) return;
+    if (!activeServerId) { setToastMsg('Önce bir sunucu seç.'); return; }
 
     if (roomModal.type === 'create') {
       const userRooms = channels.filter(c => c.ownerId === currentUser.id);
       if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; }
-      const newRoom: VoiceChannel = {
-        id: Date.now().toString(), name: roomModal.name, userCount: 0, members: [],
-        isSystemChannel: false, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly,
-        isHidden: roomModal.isHidden, ownerId: currentUser.id, mode: roomModal.mode,
-        speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
-      };
-      const { error: createErr } = await createChannel({
-        id: newRoom.id, name: newRoom.name, owner_id: currentUser.id,
-        max_users: newRoom.maxUsers || 0, is_invite_only: newRoom.isInviteOnly || false,
-        is_hidden: newRoom.isHidden || false, mode: roomModal.mode,
-        speaker_ids: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
-      });
-      if (createErr) { setToastMsg('Oda oluşturulamadı. Lütfen tekrar deneyin.'); return; }
-      setChannels(prev => [...prev, newRoom]);
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
-      if (view === 'settings') setView('chat');
+      try {
+        const created = await createServerChannel(activeServerId, {
+          name: trimmedName,
+          mode: roomModal.mode,
+          maxUsers: roomModal.maxUsers || null,
+          isInviteOnly: roomModal.isInviteOnly,
+          isHidden: roomModal.isHidden,
+        });
+        const newRoom: VoiceChannel = {
+          id: created.id, name: created.name, userCount: 0, members: [],
+          isSystemChannel: created.isDefault,
+          maxUsers: created.maxUsers ?? undefined,
+          isInviteOnly: created.isInviteOnly,
+          isHidden: created.isHidden,
+          ownerId: created.ownerId ?? undefined,
+          mode: created.mode ?? roomModal.mode,
+          speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
+          position: created.position,
+        };
+        setChannels(prev => prev.some(c => c.id === newRoom.id) ? prev : [...prev, newRoom]);
+        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
+        if (view === 'settings') setView('chat');
+      } catch (err) {
+        setToastMsg(err instanceof Error ? err.message : 'Oda oluşturulamadı. Lütfen tekrar deneyin.');
+        return;
+      }
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
-      const updates = { name: roomModal.name, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
-      setChannels(prev => prev.map(c => c.id === roomModal.channelId ? { ...c, ...updates } : c));
-      await updateChannel(roomModal.channelId, { name: roomModal.name, max_users: roomModal.maxUsers, is_invite_only: roomModal.isInviteOnly, is_hidden: roomModal.isHidden, mode: roomModal.mode });
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: roomModal.channelId, updates } });
+      const channelId = roomModal.channelId;
+      const updates = { name: trimmedName, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
+      const prevSnapshot = channels;
+      setChannels(prev => prev.map(c => c.id === channelId ? { ...c, ...updates } : c));
+      try {
+        await updateServerChannel(activeServerId, channelId, {
+          name: trimmedName,
+          mode: roomModal.mode,
+          maxUsers: roomModal.maxUsers || null,
+          isInviteOnly: roomModal.isInviteOnly,
+          isHidden: roomModal.isHidden,
+        });
+        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId, updates } });
+      } catch (err) {
+        setChannels(prevSnapshot);
+        setToastMsg(err instanceof Error ? err.message : 'Oda güncellenemedi.');
+        return;
+      }
     }
     setRoomModal({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
   };
@@ -223,18 +256,108 @@ export function useChannelActions({
   const handleDeleteRoom = async (id: string) => {
     const channel = channels.find(c => c.id === id);
     if (channel?.isSystemChannel) { setToastMsg('Sistem odaları silinemez.'); return; }
+    if (!activeServerId) { setToastMsg('Sunucu bilgisi bulunamadı.'); return; }
+    const prevSnapshot = channels;
+    const wasActive = activeChannel === id;
     setChannels(prev => prev.filter(c => c.id !== id));
-    if (activeChannel === id) setActiveChannel(null);
+    if (wasActive) setActiveChannel(null);
     setContextMenu(null);
-    await deleteChannel(id);
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', channelId: id } });
+    try {
+      await deleteServerChannel(activeServerId, id);
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', channelId: id } });
+    } catch (err) {
+      setChannels(prevSnapshot);
+      if (wasActive) setActiveChannel(id);
+      setToastMsg(err instanceof Error ? err.message : 'Oda silinemedi.');
+    }
   };
 
   const handleRenameRoom = async (id: string, newName: string) => {
-    setChannels(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
+    const trimmed = newName.trim();
+    if (!trimmed || !activeServerId) { setContextMenu(null); return; }
+    const prevSnapshot = channels;
+    setChannels(prev => prev.map(c => c.id === id ? { ...c, name: trimmed } : c));
     setContextMenu(null);
-    await updateChannel(id, { name: newName });
-    presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { name: newName } } });
+    try {
+      await updateServerChannel(activeServerId, id, { name: trimmed });
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { name: trimmed } } });
+    } catch (err) {
+      setChannels(prevSnapshot);
+      setToastMsg(err instanceof Error ? err.message : 'Oda yeniden adlandırılamadı.');
+    }
+  };
+
+  // ── Reorder (drag & drop) ──
+  const reorderInFlightRef = useRef(false);
+  const handleReorderChannels = async (orderedIds: string[]) => {
+    if (!activeServerId) return;
+    if (reorderInFlightRef.current) return;
+    const prevSnapshot = channels;
+    const serverIdAtStart = activeServerId;
+
+    const byId = new Map(channels.map(c => [c.id, c]));
+    const ordered: VoiceChannel[] = [];
+    for (const id of orderedIds) {
+      const c = byId.get(id);
+      if (c) { ordered.push(c); byId.delete(id); }
+    }
+    byId.forEach(c => ordered.push(c));
+
+    const updates = ordered.map((c, index) => ({ id: c.id, position: index }));
+    const next = ordered.map((c, index) => ({ ...c, position: index }));
+
+    const changed = next.some((c, i) => prevSnapshot[i]?.id !== c.id);
+    if (!changed) return;
+
+    setChannels(next);
+    reorderInFlightRef.current = true;
+    try {
+      const token = channelOrderTokenRef.current;
+      const result = await reorderServerChannels(serverIdAtStart, updates, token);
+      channelOrderTokenRef.current = result.orderToken;
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'channel-update',
+        payload: { action: 'reorder', updates, orderToken: result.orderToken },
+      });
+    } catch (err) {
+      setChannels(prevSnapshot);
+      if (err instanceof ApiError && err.status === 409) {
+        // Stale ordering → fresh data çek, token'ı yenile.
+        setToastMsg('Kanal sırası başka bir yönetici tarafından değiştirildi. Liste yenilendi.');
+        try {
+          const fresh = await getServerChannels(serverIdAtStart);
+          if (activeServerId === serverIdAtStart) {
+            channelOrderTokenRef.current = fresh.orderToken;
+            setChannels(prev => {
+              const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c] as const));
+              return fresh.channels.map(ch => {
+                const ex = prevMap.get(ch.id);
+                return {
+                  id: ch.id,
+                  name: ch.name,
+                  userCount: ex?.userCount ?? 0,
+                  members: ex?.members ?? [],
+                  isSystemChannel: ch.isDefault,
+                  mode: ch.mode ?? ex?.mode ?? 'social',
+                  maxUsers: ch.maxUsers ?? undefined,
+                  isInviteOnly: ch.isInviteOnly,
+                  isHidden: ch.isHidden,
+                  ownerId: ch.ownerId ?? undefined,
+                  position: ch.position,
+                  speakerIds: ex?.speakerIds,
+                  password: ex?.password,
+                };
+              });
+            });
+          }
+        } catch { /* refetch hata verirse toast zaten atıldı */ }
+      } else {
+        setToastMsg(err instanceof Error ? err.message : 'Sıralama kaydedilemedi');
+      }
+    } finally {
+      reorderInFlightRef.current = false;
+    }
   };
 
   // ── Password ──
@@ -278,6 +401,7 @@ export function useChannelActions({
     handleSaveRoom,
     handleDeleteRoom,
     handleRenameRoom,
+    handleReorderChannels,
     handleSetPassword,
     handleRemovePassword,
     handleContextMenu,

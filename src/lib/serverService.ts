@@ -102,14 +102,21 @@ async function authHeaders(): Promise<Record<string, string>> {
     : { 'Content-Type': 'application/json' };
 }
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers: { ...headers, ...init?.headers } });
-  if (res.status === 401) throw new Error('Oturum süresi dolmuş, tekrar giriş yap');
+  if (res.status === 401) throw new ApiError(401, 'Oturum süresi dolmuş, tekrar giriş yap');
   if (res.status === 204) return undefined as T;
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `İstek başarısız (${res.status})`);
+    throw new ApiError(res.status, body.error || `İstek başarısız (${res.status})`);
   }
   return res.json();
 }
@@ -154,17 +161,112 @@ export async function searchServers(query: string): Promise<DiscoverServer[]> {
 
 export interface ServerChannel {
   id: string;
-  server_id: string;
+  serverId: string;
   name: string;
   description: string;
   type: 'voice' | 'text';
   position: number;
-  is_default: boolean;
-  created_at: string;
+  isDefault: boolean;
+  ownerId: string | null;
+  maxUsers: number | null;
+  isInviteOnly: boolean;
+  isHidden: boolean;
+  mode: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export async function getServerChannels(serverId: string): Promise<ServerChannel[]> {
-  return apiFetch<ServerChannel[]>(`/servers/${serverId}/channels`);
+export interface ChannelCreatePayload {
+  name: string;
+  mode?: string | null;
+  maxUsers?: number | null;
+  isInviteOnly?: boolean;
+  isHidden?: boolean;
+  description?: string;
+}
+
+export interface ChannelUpdatePayload {
+  name?: string;
+  mode?: string | null;
+  maxUsers?: number | null;
+  isInviteOnly?: boolean;
+  isHidden?: boolean;
+  description?: string;
+}
+
+export interface ChannelListPayload {
+  channels: ServerChannel[];
+  orderToken: string | null;
+}
+
+export async function getServerChannels(serverId: string): Promise<ChannelListPayload> {
+  return apiFetch<ChannelListPayload>(`/servers/${serverId}/channels`);
+}
+
+export async function createServerChannel(serverId: string, payload: ChannelCreatePayload): Promise<ServerChannel> {
+  return apiFetch<ServerChannel>(`/servers/${serverId}/channels`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateServerChannel(serverId: string, channelId: string, payload: ChannelUpdatePayload): Promise<ServerChannel> {
+  return apiFetch<ServerChannel>(`/servers/${serverId}/channels/${channelId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteServerChannel(serverId: string, channelId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/channels/${channelId}`, { method: 'DELETE' });
+}
+
+export async function reorderServerChannels(
+  serverId: string,
+  updates: Array<{ id: string; position: number }>,
+  orderToken: string | null,
+): Promise<ChannelListPayload> {
+  return apiFetch<ChannelListPayload>(`/servers/${serverId}/channels/reorder`, {
+    method: 'PATCH',
+    body: JSON.stringify({ updates, orderToken }),
+  });
+}
+
+// ── Kanal erişim yönetimi ──
+
+export interface ChannelAccessEntry {
+  userId: string;
+  userName: string;
+  grantedBy: string;
+  createdAt: string;
+}
+
+export interface ChannelAccessSummary {
+  canSee: boolean;
+  canJoin: boolean;
+  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found';
+}
+
+export async function getChannelAccess(serverId: string, channelId: string): Promise<ChannelAccessEntry[]> {
+  const res = await apiFetch<{ entries: ChannelAccessEntry[] }>(`/servers/${serverId}/channels/${channelId}/access`);
+  return res.entries;
+}
+
+export async function grantChannelAccess(serverId: string, channelId: string, userId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/channels/${channelId}/access`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function revokeChannelAccess(serverId: string, channelId: string, userId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/channels/${channelId}/access/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function checkChannelAccess(serverId: string, channelId: string): Promise<ChannelAccessSummary> {
+  return apiFetch<ChannelAccessSummary>(`/servers/${serverId}/channels/${channelId}/access/check`);
 }
 
 // ── Sunucu yönetimi ──

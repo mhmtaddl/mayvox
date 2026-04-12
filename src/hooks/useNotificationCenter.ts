@@ -4,7 +4,7 @@ import { useAppState } from '../contexts/AppStateContext';
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
-export type NotifKind = 'social' | 'message' | 'system' | 'mention';
+export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite';
 export type NotifPriority = 'high' | 'medium' | 'low';
 
 export interface NotifItem {
@@ -27,6 +27,7 @@ export interface NotificationSummary {
   friendRequestCount: number;
   dmUnreadCount: number;
   updateActionable: boolean;
+  inviteReceivedCount: number;
 
   inviteRequestCount: number;
   passwordResetCount: number;
@@ -48,6 +49,7 @@ export interface NotificationSummary {
 export function useNotificationCenter(
   dmUnreadCount: number = 0,
   updateActionable: boolean = false,
+  inviteReceivedCount: number = 0,
 ): NotificationSummary {
   const { incomingRequests, currentUser } = useUser();
   const { inviteRequests, passwordResetRequests } = useAppState();
@@ -56,7 +58,7 @@ export function useNotificationCenter(
     const isAdmin = !!(currentUser.isAdmin || currentUser.isPrimaryAdmin);
 
     const friendRequestCount = incomingRequests.length;
-    const bellCount = friendRequestCount + dmUnreadCount + (updateActionable ? 1 : 0);
+    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + (updateActionable ? 1 : 0);
 
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
@@ -89,6 +91,18 @@ export function useNotificationCenter(
       });
     }
 
+    if (inviteReceivedCount > 0) {
+      items.push({
+        key: 'invites',
+        kind: 'invite',
+        priority: 'medium',
+        label: 'Sunucu davetleri',
+        detail: inviteReceivedCount === 1 ? 'Bekleyen 1 davet var' : `Bekleyen ${inviteReceivedCount} davet var`,
+        count: inviteReceivedCount,
+        isActionable: true,
+      });
+    }
+
     if (updateActionable) {
       items.push({
         key: 'update',
@@ -110,6 +124,7 @@ export function useNotificationCenter(
       friendRequestCount,
       dmUnreadCount,
       updateActionable,
+      inviteReceivedCount,
       inviteRequestCount,
       passwordResetCount,
       isAdmin,
@@ -119,6 +134,7 @@ export function useNotificationCenter(
     incomingRequests.length,
     dmUnreadCount,
     updateActionable,
+    inviteReceivedCount,
     inviteRequests.length,
     passwordResetRequests.length,
     currentUser.isAdmin,

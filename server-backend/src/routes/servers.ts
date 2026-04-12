@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth';
 import { validateCreateServer, validateJoinServer } from '../validators/serverValidators';
 import * as serverService from '../services/serverService';
 import * as channelService from '../services/channelService';
+import * as channelAccessService from '../services/channelAccessService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 
@@ -91,6 +92,130 @@ router.post('/:id/leave', async (req: Request, res: Response) => {
 router.get('/:id/channels', async (req: Request, res: Response) => {
   try { res.json(await channelService.listChannels(req.params.id as string, (req as any).userId)); }
   catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/channels — kanal oluştur (admin+) */
+router.post('/:id/channels', async (req: Request, res: Response) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const channel = await channelService.createChannel(
+      req.params.id as string,
+      (req as any).userId,
+      {
+        name: body.name,
+        mode: body.mode,
+        maxUsers: body.maxUsers,
+        isInviteOnly: body.isInviteOnly,
+        isHidden: body.isHidden,
+        description: body.description,
+      }
+    );
+    res.status(201).json(channel);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PATCH /servers/:id/channels/reorder — kanal sırasını toplu güncelle (admin+) */
+router.patch('/:id/channels/reorder', async (req: Request, res: Response) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const updates = Array.isArray(body.updates) ? body.updates : [];
+    const expectedToken = typeof body.orderToken === 'string' ? body.orderToken : null;
+    const result = await channelService.reorderChannels(
+      req.params.id as string,
+      (req as any).userId,
+      updates,
+      expectedToken,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PATCH /servers/:id/channels/:channelId — kanal güncelle (admin+) */
+router.patch('/:id/channels/:channelId', async (req: Request, res: Response) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const channel = await channelService.updateChannel(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.channelId as string,
+      {
+        name: body.name,
+        mode: body.mode,
+        maxUsers: body.maxUsers,
+        isInviteOnly: body.isInviteOnly,
+        isHidden: body.isHidden,
+        description: body.description,
+      }
+    );
+    res.json(channel);
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/channels/:channelId — kanal sil (admin+, sistem kanalları hariç) */
+router.delete('/:id/channels/:channelId', async (req: Request, res: Response) => {
+  try {
+    await channelService.deleteChannel(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.channelId as string
+    );
+    res.status(204).end();
+  } catch (err) { handleError(res, err); }
+});
+
+// ── Kanal erişim yönetimi (hidden / invite-only) ──
+
+/** GET /servers/:id/channels/:channelId/access — erişim verilmiş kullanıcılar (admin+) */
+router.get('/:id/channels/:channelId/access', async (req: Request, res: Response) => {
+  try {
+    const result = await channelAccessService.listChannelAccess(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/access — kanal erişimi ver (admin+) */
+router.post('/:id/channels/:channelId/access', async (req: Request, res: Response) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const targetUserId = typeof body.userId === 'string' ? body.userId : '';
+    if (!targetUserId) { res.status(400).json({ error: 'userId gerekli' }); return; }
+    await channelAccessService.grantChannelAccess(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+      targetUserId,
+    );
+    res.status(204).end();
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/channels/:channelId/access/:userId — kanal erişimini kaldır (admin+) */
+router.delete('/:id/channels/:channelId/access/:userId', async (req: Request, res: Response) => {
+  try {
+    await channelAccessService.revokeChannelAccess(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+      req.params.userId as string,
+    );
+    res.status(204).end();
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/channels/:channelId/access/check — kullanıcı join edebilir mi? */
+router.get('/:id/channels/:channelId/access/check', async (req: Request, res: Response) => {
+  try {
+    const summary = await channelAccessService.evaluateChannelAccess(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+    );
+    res.json(summary);
+  } catch (err) { handleError(res, err); }
 });
 
 // ── Üye yönetimi ──

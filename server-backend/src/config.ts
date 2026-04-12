@@ -7,6 +7,8 @@ export const config = {
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map(s => s.trim()),
+  chatServerUrl: process.env.CHAT_SERVER_URL || 'http://127.0.0.1:10001',
+  internalNotifySecret: process.env.INTERNAL_NOTIFY_SECRET || '',
 };
 
 if (!config.databaseUrl) throw new Error('DATABASE_URL is required');

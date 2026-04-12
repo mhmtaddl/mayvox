@@ -107,26 +107,114 @@ const roomService = LIVEKIT_URL
   ? new RoomServiceClient(LIVEKIT_URL, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET)
   : null;
 
+// Backend access-check endpoint'i — token server tek başına karar vermez,
+// kanal erişim kararı canonical olarak server-backend'de evaluate edilir.
+const SERVER_BACKEND_URL = (process.env.SERVER_BACKEND_URL || 'http://127.0.0.1:4001').replace(/\/$/, '');
+
+// Per-user token rate limit — auth sonrası userId bazlı sliding window.
+// Normal reconnect + join davranışı sorunsuz, brute-force spam bloklanır.
+// IP-based tokenLimiter'ın üstüne ikinci katman.
+const USER_TOKEN_WINDOW_MS = 60_000;
+const USER_TOKEN_MAX = 12;
+const userTokenLimits = new Map(); // userId -> { count, resetAt }
+
+function checkUserTokenLimit(userId) {
+  const now = Date.now();
+  let entry = userTokenLimits.get(userId);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + USER_TOKEN_WINDOW_MS };
+    userTokenLimits.set(userId, entry);
+  }
+  entry.count += 1;
+  return entry.count <= USER_TOKEN_MAX;
+}
+
+// Basit GC — expired entry'leri 5 dk'da bir temizle.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of userTokenLimits) {
+    if (now > v.resetAt) userTokenLimits.delete(k);
+  }
+}, 5 * 60_000).unref?.();
+
+async function checkChannelAccess(serverId, channelId, authHeader) {
+  const url = `${SERVER_BACKEND_URL}/servers/${encodeURIComponent(serverId)}/channels/${encodeURIComponent(channelId)}/access/check`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+      signal: ctrl.signal,
+    });
+    if (!resp.ok) {
+      return { ok: false, status: resp.status };
+    }
+    const data = await resp.json();
+    return { ok: true, summary: data };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 app.post('/livekit-token', tokenLimiter, async (req, res) => {
   const user = await verifyAuth(req, res);
   if (!user) return;
 
-  const { roomName } = req.body;
-  if (!roomName) return res.status(400).json({ error: 'roomName gerekli' });
+  // Per-user rate limit — auth sonrası ikinci katman.
+  if (!checkUserTokenLimit(user.id)) {
+    console.warn(`[livekit-token] rate-limited user=${user.id}`);
+    return res.status(429).json({ error: 'Çok fazla istek, biraz bekleyin.' });
+  }
+
+  const { roomName, serverId, channelId } = req.body || {};
+  if (!roomName || typeof roomName !== 'string') {
+    console.warn(`[livekit-token] malformed user=${user.id} reason=missing-roomName`);
+    return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
+  }
+
+  // Private channel enforcement — serverId + channelId zorunlu, fail closed.
+  if (!serverId || typeof serverId !== 'string' || !channelId || typeof channelId !== 'string') {
+    console.warn(`[livekit-token] malformed user=${user.id} reason=missing-ids roomName=${roomName}`);
+    return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
+  }
+
+  // Strict consistency: roomName canonical olarak channelId olmalı.
+  if (roomName !== channelId) {
+    console.warn(`[livekit-token] id-mismatch user=${user.id} server=${serverId} roomName=${roomName} channelId=${channelId}`);
+    return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
+  }
+
+  const authHeader = req.headers.authorization;
+  const check = await checkChannelAccess(serverId, channelId, authHeader);
+  if (!check.ok) {
+    console.warn(`[livekit-token] access-check-failed user=${user.id} server=${serverId} channel=${channelId} status=${check.status || '-'} err=${check.error || '-'}`);
+    return res.status(503).json({ error: 'Erişim doğrulanamadı, tekrar deneyin.' });
+  }
+  const summary = check.summary || {};
+  if (!summary.canJoin) {
+    const reason = summary.reason || 'unknown';
+    console.warn(`[livekit-token] denied user=${user.id} server=${serverId} channel=${channelId} reason=${reason}`);
+    let msg = 'Bu kanala erişim yetkin yok.';
+    if (reason === 'invite-only') msg = 'Bu özel kanal yalnızca davetlilere açık.';
+    else if (reason === 'not-member') msg = 'Bu sunucunun üyesi değilsin.';
+    return res.status(403).json({ error: msg, reason });
+  }
 
   // Tek-oda kuralı: kullanıcı başka bir odadaysa oradan çıkar
   if (roomService) try {
     const rooms = await roomService.listRooms();
     for (const room of rooms) {
-      if (room.name === roomName) continue; // Aynı oda — LiveKit kendi DUPLICATE_IDENTITY'sini halleder
+      if (room.name === roomName) continue;
       const participants = await roomService.listParticipants(room.name);
       if (participants.some(p => p.identity === user.id)) {
         await roomService.removeParticipant(room.name, user.id);
       }
     }
   } catch (e) {
-    // Temizlik başarısız olursa token üretimini engelleme
-    console.warn('Room cleanup failed:', e.message);
+    console.warn(`[livekit-token] cleanup-failed user=${user.id} err=${e && e.message ? e.message : e}`);
   }
 
   const at = new AccessToken(

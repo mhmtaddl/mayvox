@@ -35,6 +35,9 @@ import MobileHeader from '../components/MobileHeader';
 import VoiceParticipants from '../components/VoiceParticipants';
 import { NotificationBadge, NotificationBell } from '../components/notifications';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
+import { useIncomingInvites } from '../hooks/useIncomingInvites';
+import IncomingInvitesModal from '../components/server/IncomingInvitesModal';
+import ChannelAccessModal from '../components/server/ChannelAccessModal';
 
 // Feature imports
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
@@ -59,7 +62,7 @@ import DiscoverPanel from '../components/server/DiscoverPanel';
 
 export default function ChatView() {
   const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests } = useUser();
-  const { channels, setChannels, activeChannel, setActiveChannel, isConnecting, currentChannel, channelMembers } = useChannel();
+  const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
     userActionMenu, setUserActionMenu, roomModal, setRoomModal,
@@ -123,8 +126,8 @@ export default function ChatView() {
   const dmToggleRef = useRef<HTMLButtonElement>(null);
 
   // ── Sunucu state ──
+  // activeServerId artık ChannelContext'ten geliyor — presence/server-izolasyon için global paylaşılıyor.
   const [serverList, setServerList] = useState<Server[]>([]);
-  const [activeServerId, setActiveServerId] = useState('');
   const [serverLoading, setServerLoading] = useState(true);
   const [serverError, setServerError] = useState('');
   const [serverActionLoading, setServerActionLoading] = useState(false);
@@ -240,10 +243,12 @@ export default function ChatView() {
     // API'den güncelle (cache olsa bile fresh data al)
     (async () => {
       try {
-        const serverChannels = await getServerChannels(activeServerId);
+        const payload = await getServerChannels(activeServerId);
         if (cancelled) return;
-        const modeMap: Record<string, string> = { 'Sohbet Muhabbet': 'social', 'Oyun Takımı': 'gaming', 'Yayın Sahnesi': 'broadcast', 'Sessiz Alan': 'quiet' };
-        const SYSTEM_CHANNELS = new Set(['Genel', 'Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
+        const serverChannels = payload.channels;
+        channelOrderTokenRef.current = payload.orderToken;
+        const nameModeMap: Record<string, string> = { 'Sohbet Muhabbet': 'social', 'Oyun Takımı': 'gaming', 'Yayın Sahnesi': 'broadcast', 'Sessiz Alan': 'quiet' };
+        const validIds = new Set(serverChannels.map(ch => ch.id));
         setChannels(prev => {
           const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c]));
           const myId = currentUser.id;
@@ -251,7 +256,6 @@ export default function ChatView() {
             const existing = prevMap.get(ch.id);
             let members = existing?.members ?? [];
             let userCount = existing?.userCount ?? 0;
-            // Aktif kanala current user inject (presence gelene kadar boş görünmesin)
             if (ch.id === activeChannel && myId && !members.includes(myId)) {
               members = [...members, myId];
               userCount = members.length;
@@ -261,22 +265,36 @@ export default function ChatView() {
               name: ch.name,
               userCount,
               members,
-              isSystemChannel: SYSTEM_CHANNELS.has(ch.name),
-              mode: modeMap[ch.name] ?? 'social',
+              isSystemChannel: ch.isDefault,
+              mode: ch.mode ?? nameModeMap[ch.name] ?? 'social',
+              maxUsers: ch.maxUsers ?? undefined,
+              isInviteOnly: ch.isInviteOnly,
+              isHidden: ch.isHidden,
+              ownerId: ch.ownerId ?? undefined,
+              position: ch.position,
             };
           });
         });
+        if (activeChannel && !validIds.has(activeChannel)) {
+          setActiveChannel(null);
+        }
       } catch {
         if (!cancelled && !channelCacheRef.current.has(activeServerId)) {
           setChannels([]);
+          if (activeChannel) setActiveChannel(null);
         }
       }
     })();
     return () => { cancelled = true; };
   }, [activeServerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Gelen sunucu davetleri ──
+  const incomingInvites = useIncomingInvites();
+  const [invitesModalOpen, setInvitesModalOpen] = useState(false);
+  const [accessModalChannelId, setAccessModalChannelId] = useState<string | null>(null);
+
   // ── Notification center ──
-  const notifications = useNotificationCenter(dmUnreadCount);
+  const notifications = useNotificationCenter(dmUnreadCount, false, incomingInvites.invites.length);
 
   // ── Card style ──
   const [cardScale, setCardScale] = useState<number>(() => {
@@ -563,7 +581,9 @@ export default function ChatView() {
           {contextMenu && (
             <ChatViewContextMenu contextMenu={contextMenu} channels={channels} onEditRoom={handleEditRoom}
               onSetPassword={handleSetPasswordModal} onRemovePassword={handleRemovePassword}
-              onDeleteRoom={handleDeleteRoom} onClose={() => setContextMenu(null)} />
+              onDeleteRoom={handleDeleteRoom}
+              onManageAccess={(id) => setAccessModalChannelId(id)}
+              onClose={() => setContextMenu(null)} />
           )}
         </AnimatePresence>
         <AnimatePresence>
@@ -684,6 +704,7 @@ export default function ChatView() {
               summary={notifications}
               onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
               onOpenDM={() => setDmPanelOpen(true)}
+              onOpenInvites={() => setInvitesModalOpen(true)}
             />
             <button onClick={confirmLogout} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
           </div>
@@ -701,6 +722,34 @@ export default function ChatView() {
         onClose={() => setShowJoinModal(false)}
         onSuccess={refreshServers}
       />}
+
+      {/* ── Kanal Erişim Modal ── */}
+      {accessModalChannelId && activeServerId && (() => {
+        const ch = channels.find(c => c.id === accessModalChannelId);
+        if (!ch) return null;
+        return (
+          <ChannelAccessModal
+            open={true}
+            onClose={() => setAccessModalChannelId(null)}
+            serverId={activeServerId}
+            channelId={accessModalChannelId}
+            channelName={ch.name}
+          />
+        );
+      })()}
+
+      {/* ── Gelen Sunucu Davetleri Modal ── */}
+      <IncomingInvitesModal
+        open={invitesModalOpen}
+        onClose={() => setInvitesModalOpen(false)}
+        invites={incomingInvites.invites}
+        loading={incomingInvites.loading}
+        error={incomingInvites.error}
+        onAccept={incomingInvites.acceptInvite}
+        onDecline={incomingInvites.declineInvite}
+        onAccepted={(inv) => { refreshServers(); setToastMsg(`${inv.serverName} sunucusuna katıldın`); }}
+        onDeclined={() => setToastMsg('Davet reddedildi')}
+      />
 
       {/* ── Sunucu Oluştur Modal (global) ── */}
       {showCreateModal && (

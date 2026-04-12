@@ -31,6 +31,8 @@ export const warmUpTokenServer = () => {
 export const getLiveKitToken = async (
   roomName: string,
   participantName: string,
+  serverId: string,
+  channelId: string,
   onStatus?: (msg: string) => void,
 ): Promise<string> => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -44,7 +46,7 @@ export const getLiveKitToken = async (
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ roomName, participantName }),
+    body: JSON.stringify({ roomName, participantName, serverId, channelId }),
   };
 
   let lastError: Error | null = null;
@@ -81,11 +83,25 @@ export const getLiveKitToken = async (
         continue;
       }
 
-      if (res.status === 401 || res.status === 403) {
+      const parseErrorMsg = (fallback: string): string => {
+        try {
+          const j = JSON.parse(rawText);
+          if (j && typeof j.error === 'string' && j.error.length > 0) return j.error;
+        } catch { /* default */ }
+        return fallback;
+      };
+
+      if (res.status === 401) {
         throw new Error('Oturumunuz geçersiz, lütfen tekrar giriş yapın.');
       }
+      if (res.status === 400) {
+        throw new Error(parseErrorMsg('Kanal bilgisi geçersiz.'));
+      }
+      if (res.status === 403) {
+        throw new Error(parseErrorMsg('Bu kanala erişim yetkin yok.'));
+      }
       if (res.status === 429) {
-        throw new Error('Çok fazla istek gönderildi, lütfen biraz bekleyin.');
+        throw new Error(parseErrorMsg('Çok fazla istek gönderildi, lütfen biraz bekleyin.'));
       }
       if (res.status >= 500) {
         throw new Error('Ses sunucusu şu an yanıt vermiyor, lütfen tekrar deneyin.');

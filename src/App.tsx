@@ -34,6 +34,7 @@ import {
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
+import { checkChannelAccess } from './lib/serverService';
 import { logger } from './lib/logger';
 import { type AudioCaptureOptions } from 'livekit-client';
 
@@ -108,6 +109,7 @@ function mapDbChannel(c: DbChannel): VoiceChannel {
     password: c.password || undefined,
     mode: c.mode || undefined,
     speakerIds: c.speaker_ids || undefined,
+    position: 0,
   };
 }
 
@@ -268,6 +270,7 @@ export default function App() {
   // ── Channel state ────────────────────────────────────────────────────────
   const [channels, setChannels] = useState<VoiceChannel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
+  const [activeServerId, setActiveServerId] = useState<string>('');
   const [isConnecting, setIsConnecting] = useState(false);
 
   const currentChannel = useMemo(
@@ -432,6 +435,12 @@ export default function App() {
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
+
+  const activeServerIdRef = useRef(activeServerId);
+  useEffect(() => { activeServerIdRef.current = activeServerId; }, [activeServerId]);
+
+  // Kanal sırası optimistic concurrency token — backend listChannels / reorder ile senkron.
+  const channelOrderTokenRef = useRef<string | null>(null);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
   const allUsersRef = useRef(allUsers);
@@ -536,6 +545,7 @@ export default function App() {
         selfDeafened: isDeafened,
         userName: currentUserRef.current.name,
         currentRoom: activeChannelRef.current || undefined,
+        serverId: activeServerIdRef.current || undefined,
         autoStatus: status,
       });
     },
@@ -545,6 +555,8 @@ export default function App() {
   const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
+    activeServerIdRef,
+    channelOrderTokenRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
     setAllUsers,
     setCurrentUser,
@@ -589,6 +601,7 @@ export default function App() {
     presenceChannelRef,
     currentUserRef,
     activeChannelRef,
+    activeServerIdRef,
     connectionLostRef,
     isDeafenedRef,
     isNoiseSuppressionEnabled,
@@ -611,6 +624,8 @@ export default function App() {
   // ── Channel actions hook (livekitRoomRef + presenceChannelRef hazır) ──
   const channelActions = useChannelActions({
     channels, setChannels, activeChannel, setActiveChannel,
+    activeServerId,
+    channelOrderTokenRef,
     currentUser, allUsers,
     presenceChannelRef, livekitRoomRef,
     roomModal, setRoomModal,
@@ -625,7 +640,7 @@ export default function App() {
     handleUpdateUserVolume, handleUserActionClick,
     handleToggleSpeaker, handleInviteUser,
     handleKickUser, handleMoveUser,
-    handleSaveRoom, handleDeleteRoom, handleRenameRoom,
+    handleSaveRoom, handleDeleteRoom, handleRenameRoom, handleReorderChannels,
     handleSetPassword, handleRemovePassword, handleContextMenu,
   } = channelActions;
   handleInviteRejectedCooldownRef.current = handleInviteRejectedCooldown;
@@ -1173,14 +1188,37 @@ export default function App() {
   };
 
   const handleJoinChannel = async (id: string, isInvited: boolean = false) => {
-    // Ayarlar ekranındaysa sohbet ekranına dön
     if (view === 'settings') setView('chat');
 
     const channel = channels.find(c => c.id === id);
     if (!channel) return;
 
-    if (!isInvited && channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
-      setToastMsg('Bu odaya sadece davetle girilebilir.');
+    // Backend canonical access check — private kanallar için gerçek doğrulama.
+    if (!isInvited && activeChannel !== id && activeServerId && (channel.isInviteOnly || channel.isHidden)) {
+      try {
+        const summary = await checkChannelAccess(activeServerId, id);
+        if (!summary.canJoin) {
+          if (summary.reason === 'hidden') {
+            setToastMsg('Bu kanala erişim yetkin yok.');
+          } else if (summary.reason === 'invite-only') {
+            setToastMsg('Bu özel kanal yalnızca davetlilere açık.');
+          } else if (summary.reason === 'not-member' || summary.reason === 'not-found') {
+            setToastMsg('Bu kanala erişim yetkin yok.');
+          } else {
+            setToastMsg('Bu kanala erişim yetkin yok.');
+          }
+          return;
+        }
+      } catch {
+        // Ağ hatası: güvenli taraf — eski client-side kontrolle devam et
+        if (channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
+          setToastMsg('Bu özel kanal yalnızca davetlilere açık.');
+          return;
+        }
+      }
+    } else if (!isInvited && channel.isInviteOnly && !currentUser.isAdmin && channel.ownerId !== currentUser.id) {
+      // Fallback sync check (aktif kanal hariç)
+      setToastMsg('Bu özel kanal yalnızca davetlilere açık.');
       return;
     }
 
@@ -1318,26 +1356,39 @@ export default function App() {
     setInviteRequests([]);
   };
 
-  // ── appVersion IPC async geldikten sonra presence'ı güncelle
-  // selfMuted / selfDeafened dahil edilmezse track() bunları siler; her zaman tam payload gönder.
-  useEffect(() => {
-    if (!appVersion || !currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
-  }, [appVersion, currentUser.id]);
+  // ── Presence track — tek merkez, tek payload, burst coalesce ──────────────
+  // Supabase track() çağrısı her değişimde (mute/deafen/oda/sunucu/versiyon)
+  // tam payload'u yeniden basar. Aynı commit'te birden fazla dep değişirse
+  // 50ms micro-debounce ile tek track paketinde birleşir — network smooth.
+  const trackPresence = useCallback(() => {
+    if (!presenceChannelRef.current || !currentUser.id) return;
+    presenceChannelRef.current.track({
+      userId: currentUser.id,
+      appVersion,
+      selfMuted: isMuted,
+      selfDeafened: isDeafened,
+      userName: currentUser.name,
+      currentRoom: activeChannel || undefined,
+      serverId: activeServerId || undefined,
+      autoStatus: autoStatusRef.current,
+    });
+  }, [currentUser.id, currentUser.name, appVersion, isMuted, isDeafened, activeChannel, activeServerId, presenceChannelRef]);
 
-  // ── Mic / Deafen toggle → presence track güncelle (initial hydrate için)
-  // Speaking broadcast anlık değişimi yayar; bu effect yeni açılan client'ların
-  // presenceState() üzerinden doğru audio state'i görmesini sağlar.
+  const trackDebounceRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
-  }, [isMuted, isDeafened]);
-
-  // ── Oda değişince presence'ı güncelle — diğer client'lar oda üyeliğini presence'dan türetir
-  useEffect(() => {
-    if (!currentUser.id || !presenceChannelRef.current) return;
-    presenceChannelRef.current.track({ userId: currentUser.id, appVersion, selfMuted: isMuted, selfDeafened: isDeafened, userName: currentUser.name, currentRoom: activeChannel || undefined, autoStatus: autoStatusRef.current });
-  }, [activeChannel]);
+    if (!appVersion) return;
+    if (trackDebounceRef.current) window.clearTimeout(trackDebounceRef.current);
+    trackDebounceRef.current = window.setTimeout(() => {
+      trackDebounceRef.current = null;
+      trackPresence();
+    }, 50);
+    return () => {
+      if (trackDebounceRef.current) {
+        window.clearTimeout(trackDebounceRef.current);
+        trackDebounceRef.current = null;
+      }
+    };
+  }, [trackPresence, appVersion]);
 
   // ── Pencere kapanırken son görülme + kullanım süresi kaydet
   useEffect(() => {
@@ -1478,6 +1529,9 @@ export default function App() {
     setChannels,
     activeChannel,
     setActiveChannel,
+    activeServerId,
+    setActiveServerId,
+    channelOrderTokenRef,
     isConnecting,
     currentChannel,
     channelMembers,
@@ -1549,6 +1603,7 @@ export default function App() {
     handleSaveRoom,
     handleDeleteRoom,
     handleRenameRoom,
+    handleReorderChannels,
     handleSetPassword,
     handleRemovePassword,
     handleJoinChannel,

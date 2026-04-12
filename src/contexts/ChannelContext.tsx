@@ -6,6 +6,11 @@ export interface ChannelContextType {
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
   activeChannel: string | null;
   setActiveChannel: React.Dispatch<React.SetStateAction<string | null>>;
+  /** Şu an aktif sunucu ID — presence payload'ına ve server-level filtrelere beslenir. */
+  activeServerId: string;
+  setActiveServerId: React.Dispatch<React.SetStateAction<string>>;
+  /** Kanal sırası için optimistic concurrency token (max updated_at). Reorder'da gönderilir. */
+  channelOrderTokenRef: React.MutableRefObject<string | null>;
   isConnecting: boolean;
   currentChannel: VoiceChannel | undefined;
   channelMembers: User[];

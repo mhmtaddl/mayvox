@@ -25,6 +25,14 @@ app.use((_req, res) => {
 // ── Start ──
 app.listen(config.port, config.host, () => {
   console.log(`[MAYVOX Server Backend] ${config.host}:${config.port} üzerinde çalışıyor`);
+
+  // Realtime invite bridge sağlık kontrolü — production'da sessiz degrade olmasın.
+  const rtReady = !!config.internalNotifySecret;
+  if (rtReady) {
+    console.log(`[realtime] bridge AKTİF → ${config.chatServerUrl} (invite push etkin)`);
+  } else {
+    console.warn('[realtime] bridge DEVRE DIŞI — INTERNAL_NOTIFY_SECRET tanımlı değil. Invite push çalışmayacak; frontend sadece polling ile güncellenecek.');
+  }
 });
 
 // Graceful shutdown

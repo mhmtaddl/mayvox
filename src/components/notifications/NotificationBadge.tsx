@@ -32,7 +32,7 @@ export default function NotificationBadge({ count, mode = 'count', variant = 'ac
     return <span className={`${dotSize} ${colors.split(' ')[0]} rounded-full block ${className}`} />;
   }
 
-  const label = count > 9 ? '9+' : String(count);
+  const label = count > 99 ? '99+' : String(count);
   const sizeClass = size === 'sm'
     ? 'min-w-[16px] h-[16px] text-[9px] px-1'
     : 'min-w-[18px] h-[18px] text-[10px] px-1.5';
