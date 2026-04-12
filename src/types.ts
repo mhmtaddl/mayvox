@@ -35,7 +35,17 @@ export interface User {
   autoStatus?: 'active' | 'idle' | 'deafened';
   /** Kullanıcının presence'ta bildirdiği aktif sunucu ID'si — server-level izolasyon için. */
   serverId?: string;
+  /**
+   * Sunucu oluşturma yetki planı — rol bağımsız, admin tarafından per-user set edilir.
+   *   'none'  → oluşturamaz
+   *   'free'  → yalnızca free plan
+   *   'pro'   → free + pro
+   *   'ultra' → tüm planlar
+   */
+  serverCreationPlan?: ServerCreationPlan;
 }
+
+export type ServerCreationPlan = 'none' | 'free' | 'pro' | 'ultra';
 
 // VoiceChannel.position eklendi — drag reorder için sıralama anahtarı.
 

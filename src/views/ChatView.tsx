@@ -41,6 +41,8 @@ import VoiceParticipants from '../components/VoiceParticipants';
 import { NotificationBadge, NotificationBell } from '../components/notifications';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
 import { useIncomingInvites } from '../hooks/useIncomingInvites';
+import { useJoinRequestNotifications } from '../hooks/useJoinRequestNotifications';
+import { useMyPendingJoinRequests } from '../hooks/useMyPendingJoinRequests';
 import IncomingInvitesModal from '../components/server/IncomingInvitesModal';
 import ChannelAccessModal from '../components/server/ChannelAccessModal';
 
@@ -61,6 +63,7 @@ import { Coffee } from 'lucide-react';
 import type { VoiceChannel } from '../types';
 import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
 import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
+import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
 import { getPlanVisual } from '../lib/planStyles';
 import ServerSettings from '../components/server/ServerSettings';
 import JoinServerModal from '../components/server/JoinServerModal';
@@ -182,6 +185,15 @@ export default function ChatView() {
         // (kullanıcı zaten modal içinden serverName görür; agresif switch etmiyoruz).
         void serverId;
       },
+      onJoinRequestClick: (serverId) => {
+        // Admin çanında "yeni başvuru" toast'ına tıklayınca: sunucu ayarları → Başvurular sekmesi.
+        setSettingsInitialTab('requests');
+        setSettingsServerId(serverId);
+      },
+      onJoinRequestAcceptedClick: (serverId) => {
+        // "Başvurun kabul edildi" toast'ına tıklayınca sunucuya geç.
+        setActiveServerId(serverId);
+      },
     });
   }, []);
 
@@ -201,6 +213,7 @@ export default function ChatView() {
   const [createError, setCreateError] = useState('');
   // joinCode/joinError artık JoinServerModal içinde yönetiliyor
   const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'bans' | 'audit' | undefined>(undefined);
 
   const refreshServers = useCallback(async () => {
     try {
@@ -270,6 +283,8 @@ export default function ChatView() {
 
   const activeServerData = serverList.find(s => s.id === activeServerId) ?? serverList[0] ?? null;
   const hasServer = serverList.length > 0;
+  // App-level rol + 0 sahip sunucu → sunucu oluşturma butonları görünür.
+  const canCreateServer = canUserCreateServer(currentUser, serverList);
 
   // ── Sunucu kanalları — instant cache + background refresh ──
   const channelCacheRef = useRef(new Map<string, VoiceChannel[]>());
@@ -350,11 +365,22 @@ export default function ChatView() {
 
   // ── Gelen sunucu davetleri ──
   const incomingInvites = useIncomingInvites();
+  // ── Sunucu adminleri için katılma başvurusu bildirimleri +
+  //    başvuran kullanıcıya kabul/red sonuç bildirimi ──
+  useJoinRequestNotifications({ onMembershipChanged: () => { void refreshServers(); } });
   const [invitesModalOpen, setInvitesModalOpen] = useState(false);
   const [accessModalChannelId, setAccessModalChannelId] = useState<string | null>(null);
 
+  // ── Sunucu admin başvuru özeti ──
+  const myPendingJoinRequests = useMyPendingJoinRequests();
+
   // ── Notification center ──
-  const notifications = useNotificationCenter(dmUnreadCount, false, incomingInvites.invites.length);
+  const notifications = useNotificationCenter(
+    dmUnreadCount,
+    false,
+    incomingInvites.invites.length,
+    myPendingJoinRequests.items.map(it => ({ serverId: it.serverId, serverName: it.serverName, pendingCount: it.pendingCount })),
+  );
 
   // ── Card style ──
   const [cardScale, setCardScale] = useState<number>(() => {
@@ -631,7 +657,7 @@ export default function ChatView() {
         <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
           activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
-          onShowDiscover={() => setShowDiscover(true)} />
+          onShowDiscover={() => setShowDiscover(true)} onLeaveServer={handleLeaveServer} />
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
@@ -675,8 +701,9 @@ export default function ChatView() {
             className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
           {view === 'settings' ? <SettingsView /> : showDiscover ? (
             <DiscoverPanel activeServerId={activeServerId}
+              canCreate={canCreateServer}
               onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
-              onCreateServer={() => setShowCreateModal(true)}
+              onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
               onJoinModal={() => setShowJoinModal(true)} />
           ) : currentChannel ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -722,8 +749,9 @@ export default function ChatView() {
           ) : !hasServer ? (
             /* ── Sunucu Keşfet paneli ── */
             <DiscoverPanel activeServerId={activeServerId}
+              canCreate={canCreateServer}
               onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
-              onCreateServer={() => setShowCreateModal(true)}
+              onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
               onJoinModal={() => setShowJoinModal(true)}
             />
           ) : (
@@ -773,6 +801,8 @@ export default function ChatView() {
               onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
               onOpenDM={() => setDmPanelOpen(true)}
               onOpenInvites={() => setInvitesModalOpen(true)}
+              onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
+              onOpenServer={(sid) => setActiveServerId(sid)}
             />
             <button onClick={confirmLogout} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
           </div>
@@ -783,7 +813,7 @@ export default function ChatView() {
       <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
         serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
         onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
-        onShowCreateModal={() => setShowCreateModal(true)} />
+        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer} />
 
       {/* ── Sunucuya Katıl Modal (global) ── */}
       {showJoinModal && <JoinServerModal
@@ -877,25 +907,45 @@ export default function ChatView() {
             })()}
             {/* Plan seçimi */}
             <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Plan</label>
+            {(() => {
+              // Plan erişimi tamamen user.serverCreationPlan üzerinden. Rol baktığımız
+              // eski kural kaldırıldı — admin default ultra olsa da öyle kontrol etmiyoruz.
+              const tier = currentUser.serverCreationPlan ?? 'none';
+              const TIER_RANK: Record<string, number> = { none: 0, free: 1, pro: 2, ultra: 3 };
+              const allow = (p: 'free' | 'pro' | 'ultra') => TIER_RANK[p] <= TIER_RANK[tier];
+              const planOptions = [
+                { id: 'free' as const,  name: 'Free',  sub: '100 kullanıcı • 6 oda',     disabled: !allow('free') },
+                { id: 'pro' as const,   name: 'Pro',   sub: '240 kullanıcı • 8 oda',     disabled: !allow('pro') },
+                { id: 'ultra' as const, name: 'Ultra', sub: 'Premium, limitler ×2',      disabled: !allow('ultra') },
+              ];
+              // Seçili plan kullanıcıya kapalı hale geldiyse ilk izinliye düşür.
+              if (planOptions.find(p => p.id === createPlan)?.disabled) {
+                const firstAllowed = planOptions.find(p => !p.disabled)?.id;
+                if (firstAllowed) setTimeout(() => setCreatePlan(firstAllowed), 0);
+              }
+              return (
             <div className="grid grid-cols-3 gap-2">
-              {([
-                { id: 'free', name: 'Free', sub: '100 kullanıcı • 6 oda', disabled: false },
-                { id: 'pro', name: 'Pro', sub: '240 kullanıcı • 8 oda', disabled: false },
-                { id: 'ultra', name: 'Ultra', sub: 'Yakında', disabled: true },
-              ] as const).map(p => {
+              {planOptions.map(p => {
                 const sel = createPlan === p.id;
                 const pv = getPlanVisual(p.id);
                 return (
                   <button key={p.id} type="button" disabled={p.disabled}
                     onClick={() => !p.disabled && setCreatePlan(p.id)}
-                    className={`p-2.5 rounded-xl text-center transition-all ${p.disabled ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
+                    title={p.disabled ? 'Bu plan için yetkin yok' : p.name}
+                    aria-disabled={p.disabled}
+                    className={`relative p-2.5 rounded-xl text-center transition-all ${p.disabled ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
                     style={sel ? { background: pv.selectBg, border: `1px solid ${pv.selectBorder}` } : { background: 'rgba(var(--glass-tint),0.04)', border: '1px solid rgba(var(--glass-tint),0.06)' }}>
                     <div className="text-[11px] font-bold" style={{ color: sel ? pv.selectText : 'var(--theme-text)' }}>{p.name}</div>
                     <div className="text-[8px] text-[var(--theme-secondary-text)]/40 mt-0.5">{p.sub}</div>
+                    {p.disabled && (
+                      <span className="absolute top-1 right-1.5 text-[7px] font-bold uppercase tracking-wider text-[var(--theme-secondary-text)]/60">Kilitli</span>
+                    )}
                   </button>
                 );
               })}
             </div>
+              );
+            })()}
             {/* Plan detayı — seçili planın altında açılır */}
             <div className="mt-2 mb-4 rounded-xl overflow-hidden transition-all" style={{
               background: getPlanVisual(createPlan).bg,
@@ -943,8 +993,9 @@ export default function ChatView() {
 
       {/* ── Sunucu Ayarları ── */}
       {settingsServerId && (
-        <ServerSettings serverId={settingsServerId} onClose={() => setSettingsServerId(null)} onServerUpdated={refreshServers}
-          onServerDeleted={() => { setSettingsServerId(null); setActiveServerId(''); refreshServers(); }} />
+        <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={refreshServers}
+          onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers(); }}
+          initialTab={settingsInitialTab} />
       )}
 
       {/* ── Profile Popup ── */}

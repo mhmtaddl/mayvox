@@ -12,6 +12,9 @@ import {
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
+import { buildAudioCaptureOptions } from '../lib/audioConstraints';
+import { AUDIO_FLAGS } from '../lib/audioFlags';
+import { RNNoiseTrackProcessor } from '../lib/audio/rnnoiseProcessor';
 import { playSound } from '../lib/sounds';
 import type { User, VoiceChannel } from '../types';
 
@@ -26,6 +29,8 @@ interface Props {
   connectionLostRef: React.MutableRefObject<boolean>;
   isDeafenedRef: React.MutableRefObject<boolean>;
   isNoiseSuppressionEnabled: boolean;
+  /** 0..100 RNNoise strength — user slider */
+  noiseSuppressionStrength: number;
   selectedInput: string;
   selectedOutput: string;
   setConnectionLevel: (v: number) => void;
@@ -47,6 +52,7 @@ export function useLiveKitConnection({
   connectionLostRef,
   isDeafenedRef,
   isNoiseSuppressionEnabled,
+  noiseSuppressionStrength,
   selectedInput,
   selectedOutput,
   setConnectionLevel,
@@ -61,10 +67,19 @@ export function useLiveKitConnection({
 }: Props) {
   const livekitRoomRef = useRef<Room | null>(null);
   const isConnectingRef = useRef(false);
+  /** Aktif RNNoise processor — strength slider anlık değişimi için. */
+  const activeRnnoiseProcessorRef = useRef<RNNoiseTrackProcessor | null>(null);
 
   const disconnectFromLiveKit = async () => {
     setIsConnecting(false);
     isConnectingRef.current = false;
+    // RNNoise processor'u disconnect'ten önce destroy et — aksi halde AudioContext
+    // orphan kalır, yeni join'de paralel graph = echo.
+    if (activeRnnoiseProcessorRef.current) {
+      try { await activeRnnoiseProcessorRef.current.destroy(); } catch { /* no-op */ }
+      activeRnnoiseProcessorRef.current = null;
+      console.log('[rnnoise] destroyed');
+    }
     if (livekitRoomRef.current) {
       await livekitRoomRef.current.disconnect();
       livekitRoomRef.current = null;
@@ -113,13 +128,16 @@ export function useLiveKitConnection({
 
       // ── AŞAMA 2: Room oluştur + bağlan ──
 
+      // RNNoise aktifse Chromium native NS'yi kapat (double-processing fix).
+      // Kullanıcı NS toggle'ı AÇIK ise RNNoise devrededir; KAPALI ise native NS aktif.
+      const rnnoiseActive = isNoiseSuppressionEnabled;
       room = new Room({
-        audioCaptureDefaults: {
-          echoCancellation: true,
+        audioCaptureDefaults: buildAudioCaptureOptions({
           noiseSuppression: isNoiseSuppressionEnabled,
-          autoGainControl: isNoiseSuppressionEnabled,
-          deviceId: selectedInput || undefined,
-        },
+          autoGainControl: true,
+          rnnoiseActive,
+          deviceId: selectedInput,
+        }),
         audioOutput: {
           deviceId: selectedOutput || undefined,
         },
@@ -346,6 +364,94 @@ export function useLiveKitConnection({
 
       await room.localParticipant.setMicrophoneEnabled(false);
 
+      // ── RNNoise processor attach (user-controlled, idempotent) ──
+      // ECHO/DUPLICATE FIX: multi-attach engellemesi + eski processor destroy.
+      // Invariant'lar:
+      //   1) Tek aktif processor referansı (activeRnnoiseProcessorRef)
+      //   2) Aynı track ID için ikinci attach reddedilir
+      //   3) Yeni attach öncesi eski processor destroy edilir
+      //   4) Paralel attach race'i promise-lock ile tek yola indirilir
+      const userEnabled = isNoiseSuppressionEnabled;
+      const devForced = AUDIO_FLAGS.RNNOISE_ENABLED;
+      const shouldAttach = userEnabled || devForced;
+      activeRnnoiseProcessorRef.current = null;
+      let attachedTrackId: string | null = null;
+      let attachInFlight: Promise<void> | null = null;
+
+      if (shouldAttach) {
+        console.log('[rnnoise] simple mode active');
+        const strengthNorm = Math.max(0, Math.min(1, noiseSuppressionStrength / 100));
+
+        const attachRnnoise = async (trackPub: unknown) => {
+          if (attachInFlight) { try { await attachInFlight; } catch { /* no-op */ } }
+          const pub = trackPub as { audioTrack?: { setProcessor?: (p: unknown) => Promise<void>; mediaStreamTrack?: MediaStreamTrack } };
+          const audioTrack = pub?.audioTrack;
+          if (!audioTrack?.setProcessor || !audioTrack.mediaStreamTrack) return;
+          const trackId = audioTrack.mediaStreamTrack.id;
+          if (attachedTrackId === trackId && activeRnnoiseProcessorRef.current) return;
+
+          attachInFlight = (async () => {
+            try {
+              const old = activeRnnoiseProcessorRef.current;
+              if (old) {
+                try { await old.destroy(); } catch { /* no-op */ }
+                activeRnnoiseProcessorRef.current = null;
+                console.log('[rnnoise] destroyed');
+              }
+              const proc = new RNNoiseTrackProcessor();
+              (proc as unknown as { initialStrength?: number }).initialStrength = strengthNorm;
+              await audioTrack.setProcessor!(proc);
+              activeRnnoiseProcessorRef.current = proc;
+              attachedTrackId = trackId;
+              proc.setStrength(strengthNorm);
+              console.log('[rnnoise] attached');
+            } catch (err) {
+              console.warn('[rnnoise] fallback triggered:', err);
+            }
+          })();
+          await attachInFlight;
+          attachInFlight = null;
+        };
+
+        const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+        if (micPub) void attachRnnoise(micPub);
+        room.localParticipant.on('localTrackPublished', (pub) => {
+          const anyPub = pub as unknown as { source?: unknown };
+          if (anyPub.source !== Track.Source.Microphone) return;
+          void attachRnnoise(pub);
+        });
+        room.localParticipant.on('localTrackUnpublished', (pub) => {
+          const anyPub = pub as unknown as { source?: unknown; audioTrack?: { mediaStreamTrack?: MediaStreamTrack } };
+          if (anyPub.source !== Track.Source.Microphone) return;
+          const unpubId = anyPub.audioTrack?.mediaStreamTrack?.id ?? null;
+          if (attachedTrackId && attachedTrackId === unpubId) {
+            attachedTrackId = null;
+            const old = activeRnnoiseProcessorRef.current;
+            if (old) { void old.destroy(); activeRnnoiseProcessorRef.current = null; console.log('[rnnoise] destroyed'); }
+          }
+        });
+      }
+
+      // ── Audio baseline log (Seviye 1 foundation) ──
+      // RNNoise entegrasyonundan ÖNCEKİ ses pipeline metriklerini kaydeder;
+      // sonra A/B karşılaştırma yapılabilsin. Prod'da da zararsız: tek log satırı.
+      try {
+        const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+        const s = mic?.audioTrack?.mediaStreamTrack?.getSettings();
+        logger.info('[audio-baseline]', {
+          channelId,
+          joinMs: totalMs,
+          tokenMs,
+          connectMs,
+          sampleRate: s?.sampleRate,
+          channelCount: s?.channelCount,
+          echoCancellation: s?.echoCancellation,
+          noiseSuppression: s?.noiseSuppression,
+          autoGainControl: s?.autoGainControl,
+          deviceId: s?.deviceId,
+        });
+      } catch { /* baseline best-effort */ }
+
       isConnectingRef.current = false;
       clearTimeout(joinTimer);
       return true;
@@ -371,5 +477,13 @@ export function useLiveKitConnection({
     }
   };
 
-  return { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit };
+  /** Runtime strength update — slider değişince App'ten çağrılır. */
+  const updateNoiseStrength = (strength0to100: number) => {
+    const proc = activeRnnoiseProcessorRef.current;
+    if (!proc) return;
+    const norm = Math.max(0, Math.min(1, strength0to100 / 100));
+    proc.setStrength(norm);
+  };
+
+  return { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit, updateNoiseStrength };
 }

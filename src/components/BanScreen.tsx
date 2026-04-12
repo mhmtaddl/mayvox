@@ -30,12 +30,9 @@ export default function BanScreen({ banExpires }: Props) {
   }, [banExpires]);
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-gradient-to-b from-black/50 via-black/60 to-black/70">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.72)' }}>
       <div className="flex flex-col items-center gap-6 text-center px-8 max-w-sm">
-        <div className="relative">
-          <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full" />
-          <ShieldBan size={64} className="relative text-red-500" />
-        </div>
+        <ShieldBan size={64} className="text-red-500" />
 
         <div>
           <h1 className="text-xl font-bold text-[var(--theme-btn-primary-text)] mb-2">

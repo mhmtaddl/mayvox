@@ -72,6 +72,33 @@ function dispatchInviteEvent(msg: unknown): boolean {
   return true;
 }
 
+// ── Server event bus ──
+// server:* prefix'li WS mesajlarını (join_request:new vs.) dağıtır.
+export interface ServerEvent {
+  type: string;
+  serverId?: string;
+  requesterId?: string;
+  [k: string]: unknown;
+}
+type ServerEventHandler = (event: ServerEvent) => void;
+const serverSubscribers = new Set<ServerEventHandler>();
+
+export function subscribeServerEvents(handler: ServerEventHandler): () => void {
+  serverSubscribers.add(handler);
+  return () => { serverSubscribers.delete(handler); };
+}
+
+function dispatchServerEvent(msg: unknown): boolean {
+  if (!msg || typeof msg !== 'object') return false;
+  const type = (msg as { type?: unknown }).type;
+  if (typeof type !== 'string' || !type.startsWith('server:')) return false;
+  const event = msg as ServerEvent;
+  for (const h of serverSubscribers) {
+    try { h(event); } catch (err) { console.warn('[chatService] server subscriber error:', err); }
+  }
+  return true;
+}
+
 // ── Connection status event bus ──
 // setChatHandlers() tek global subscriber (room/mesaj handler'ı). Ama birden çok
 // modül (ör. useIncomingInvites) reconnect olaylarını izlemek isteyebilir:
@@ -259,6 +286,8 @@ export async function connectChat() {
         default:
           // Invite event'lerini bus'a ilet
           if (dispatchInviteEvent(msg)) break;
+          // server:* event'leri (join_request:new vs.)
+          if (dispatchServerEvent(msg)) break;
           // DM event'lerini dmService'e yönlendir
           if (!handleDmMessage(msg)) {
             console.log('[chatService] Bilinmeyen mesaj tipi:', msg.type);

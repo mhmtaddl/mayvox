@@ -135,6 +135,14 @@ export const updateUserModeration = async (id: string, updates: {
   });
 };
 
+// Admin → diğer kullanıcının server_creation_plan değerini değiştirir (RPC).
+export const setServerCreationPlan = async (targetUserId: string, newPlan: 'none' | 'free' | 'pro' | 'ultra') => {
+  return await supabase.rpc('set_server_creation_plan', {
+    target_user_id: targetUserId,
+    new_plan: newPlan,
+  });
+};
+
 // UPDATE AUTH EMAIL
 export const updateUserEmail = async (email: string) => {
   return await supabase.auth.updateUser({ email });

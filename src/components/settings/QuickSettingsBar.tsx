@@ -1,12 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Mic, Volume2, AudioLines, Radio, Palette, MoreHorizontal } from 'lucide-react';
+import { AudioLines, Palette, MoreHorizontal } from 'lucide-react';
 import { Toggle } from './shared';
-import { useSettings, AUDIO_PROFILE_META } from '../../contexts/SettingsCtx';
+import { useSettings } from '../../contexts/SettingsCtx';
 
 export default function QuickSettingsBar() {
   const {
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
-    audioProfile, setAudioProfile,
     currentTheme,
   } = useSettings();
 
@@ -39,10 +38,6 @@ export default function QuickSettingsBar() {
     return () => ro.disconnect();
   }, []);
 
-  const activeProfile = AUDIO_PROFILE_META.find(p => p.id === audioProfile);
-  const profileLabel = activeProfile ? activeProfile.label : 'Özel';
-  const profileIcon = activeProfile ? activeProfile.icon : '⚙️';
-
   const items = [
     {
       key: 'noise',
@@ -52,17 +47,8 @@ export default function QuickSettingsBar() {
           <span className="text-[10px] font-semibold text-[var(--theme-text)] truncate">Susturma</span>
           <Toggle
             checked={isNoiseSuppressionEnabled}
-            onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }}
+            onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
           />
-        </div>
-      ),
-    },
-    {
-      key: 'profile',
-      content: (
-        <div className="flex items-center gap-1 md:gap-1.5 min-w-0 cursor-default" title="Aktif ses profili">
-          <span className="text-sm leading-none shrink-0">{profileIcon}</span>
-          <span className="text-[10px] font-semibold text-[var(--theme-accent)] truncate">{profileLabel}</span>
         </div>
       ),
     },

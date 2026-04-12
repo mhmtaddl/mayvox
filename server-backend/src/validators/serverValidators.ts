@@ -28,9 +28,11 @@ export function validateCreateServer(
 }
 
 export function validateJoinServer(body: Record<string, unknown>, res: Response): { code: string } | null {
-  const code = String(body.code ?? '').trim().toUpperCase();
-  if (!code || code.length < 4 || code.length > 12) {
-    res.status(400).json({ error: 'Geçerli bir davet kodu gir' });
+  // code: davet kodu (4-12), slug (.mv dahil), sunucu adı, sunucu UUID (36) — hepsi tolere edilir.
+  // joinByInvite akıllı çözümleme yapar (upper/lower gerektiği gibi uygular).
+  const code = String(body.code ?? '').trim();
+  if (!code || code.length < 3 || code.length > 128) {
+    res.status(400).json({ error: 'Geçerli bir davet kodu, slug veya sunucu adı gir' });
     return null;
   }
   return { code };

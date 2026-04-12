@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Lock } from 'lucide-react';
 
@@ -54,20 +55,27 @@ export default function ChatViewPasswordModal({
         : 'Lütfen 4 haneli bir sayı giriniz!')
     : 'Hatalı şifre!';
 
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]"
+      transition={{ duration: 0.14 }}
+      className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.72)' }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.15 }}
-        className="w-full max-w-[260px] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl shadow-2xl p-3.5 backdrop-blur-xl"
+        exit={{ opacity: 0, scale: 0.97 }}
+        transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+        className="w-full max-w-[260px] rounded-xl p-3.5"
+        style={{
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+        }}
         onClick={stopNative}
         onMouseDown={stopNative}
       >
@@ -149,6 +157,7 @@ export default function ChatViewPasswordModal({
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

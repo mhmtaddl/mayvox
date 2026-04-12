@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useAppState } from '../contexts/AppStateContext';
+import {
+  getInformationalSnapshot,
+  subscribeInformational,
+  type InformationalItem,
+} from '../features/notifications/informationalStore';
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
-export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite';
+export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite' | 'joinRequest';
 export type NotifPriority = 'high' | 'medium' | 'low';
 
 export interface NotifItem {
@@ -15,6 +20,8 @@ export interface NotifItem {
   detail: string;
   count: number;
   isActionable: boolean;
+  /** joinRequest türü için hangi sunucuya gidileceği */
+  serverId?: string;
 }
 
 // ── Priority sıralama ağırlıkları ──
@@ -28,6 +35,7 @@ export interface NotificationSummary {
   dmUnreadCount: number;
   updateActionable: boolean;
   inviteReceivedCount: number;
+  joinRequestCount: number;
 
   inviteRequestCount: number;
   passwordResetCount: number;
@@ -36,6 +44,12 @@ export interface NotificationSummary {
 
   /** Sıralanmış bildirim öğeleri (priority desc) */
   items: NotifItem[];
+}
+
+export interface JoinRequestSource {
+  serverId: string;
+  serverName: string;
+  pendingCount: number;
 }
 
 /**
@@ -50,15 +64,23 @@ export function useNotificationCenter(
   dmUnreadCount: number = 0,
   updateActionable: boolean = false,
   inviteReceivedCount: number = 0,
+  joinRequestSources: JoinRequestSource[] = [],
 ): NotificationSummary {
   const { incomingRequests, currentUser } = useUser();
   const { inviteRequests, passwordResetRequests } = useAppState();
+  const informational = useSyncExternalStore<InformationalItem[]>(
+    subscribeInformational,
+    getInformationalSnapshot,
+    getInformationalSnapshot,
+  );
 
   return useMemo(() => {
     const isAdmin = !!(currentUser.isAdmin || currentUser.isPrimaryAdmin);
 
     const friendRequestCount = incomingRequests.length;
-    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + (updateActionable ? 1 : 0);
+    const joinRequestCount = joinRequestSources.reduce((s, it) => s + it.pendingCount, 0);
+    const informationalCount = informational.length;
+    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + joinRequestCount + informationalCount + (updateActionable ? 1 : 0);
 
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
@@ -103,6 +125,35 @@ export function useNotificationCenter(
       });
     }
 
+    for (const src of joinRequestSources) {
+      if (src.pendingCount <= 0) continue;
+      items.push({
+        key: `joinreq:${src.serverId}`,
+        kind: 'joinRequest',
+        priority: 'medium',
+        label: src.serverName || 'Sunucu başvurusu',
+        detail: src.pendingCount === 1 ? '1 yeni katılma başvurusu' : `${src.pendingCount} yeni katılma başvurusu`,
+        count: src.pendingCount,
+        isActionable: true,
+        serverId: src.serverId,
+      });
+    }
+
+    // Informational (aksiyon gerektirmeyen) item'lar — çan açılınca temizlenecek.
+    for (const info of informational) {
+      const kind: NotifKind = 'invite'; // görsel: mevcut 'invite' tonunda render et
+      items.push({
+        key: `info:${info.key}`,
+        kind,
+        priority: 'low',
+        label: info.label,
+        detail: info.detail,
+        count: 1,
+        isActionable: !!info.serverId,
+        serverId: info.serverId,
+      });
+    }
+
     if (updateActionable) {
       items.push({
         key: 'update',
@@ -125,6 +176,7 @@ export function useNotificationCenter(
       dmUnreadCount,
       updateActionable,
       inviteReceivedCount,
+      joinRequestCount,
       inviteRequestCount,
       passwordResetCount,
       isAdmin,
@@ -135,6 +187,8 @@ export function useNotificationCenter(
     dmUnreadCount,
     updateActionable,
     inviteReceivedCount,
+    joinRequestSources,
+    informational,
     inviteRequests.length,
     passwordResetRequests.length,
     currentUser.isAdmin,

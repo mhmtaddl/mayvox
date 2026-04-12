@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { AppTheme, ThemeKey, themes, defaultThemeKey, backgroundPresets, defaultBackgroundId } from '../../../themes';
 import { getDerivedTokens, applyDerivedTokens } from '../../../lib/adaptiveTheme';
-import { AUDIO_PRESETS, type AudioProfile, type VoiceMode } from '../../../contexts/SettingsCtx';
+import { type VoiceMode } from '../../../contexts/SettingsCtx';
 
 function hexToRgb(hex: string): string | null {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -60,11 +60,32 @@ export function useAppSettings() {
   const [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabledState] = useState(() => localStorage.getItem('noiseSuppression') !== 'false');
   const setIsNoiseSuppressionEnabled = (v: boolean) => { localStorage.setItem('noiseSuppression', String(v)); setIsNoiseSuppressionEnabledState(v); };
 
+  // VAD internal threshold — UI yok, default 15.
   const [noiseThreshold, setNoiseThreshold] = useState<number>(() => {
     const saved = localStorage.getItem('noiseThreshold');
     return saved ? parseInt(saved) : 15;
   });
   useEffect(() => { localStorage.setItem('noiseThreshold', noiseThreshold.toString()); }, [noiseThreshold]);
+
+  // RNNoise strength 0..100 — kullanıcı slider'ı.
+  // Migration: eski audioProfile preset'leri varsa strength'e map.
+  const [noiseSuppressionStrength, setNoiseSuppressionStrengthState] = useState<number>(() => {
+    const saved = localStorage.getItem('noiseSuppressionStrength');
+    if (saved !== null) {
+      const n = parseInt(saved);
+      return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 75));
+    }
+    // Backward-compat: eski audioProfile preset'ine göre başlangıç strength
+    const oldProfile = localStorage.getItem('audioProfile');
+    if (oldProfile === 'natural') return 30;
+    if (oldProfile === 'broadcast' || oldProfile === 'noisy') return 90;
+    return 75; // default (clean / custom / yok)
+  });
+  const setNoiseSuppressionStrength = (v: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(v)));
+    localStorage.setItem('noiseSuppressionStrength', String(clamped));
+    setNoiseSuppressionStrengthState(clamped);
+  };
 
   // ── PTT ──
   const [pttKey, setPttKey] = useState(() => localStorage.getItem('pttKey') || 'SPACE');
@@ -83,20 +104,9 @@ export function useAppSettings() {
   );
   const setVoiceMode = (v: VoiceMode) => { localStorage.setItem('voiceMode', v); setVoiceModeState(v); };
 
-  // ── Audio profile ──
-  const [audioProfile, setAudioProfileState] = useState<AudioProfile>(
-    () => (localStorage.getItem('audioProfile') as AudioProfile) || 'clean',
-  );
-  const setAudioProfile = (profile: AudioProfile) => {
-    localStorage.setItem('audioProfile', profile);
-    setAudioProfileState(profile);
-    if (profile !== 'custom') {
-      const p = AUDIO_PRESETS[profile];
-      setIsNoiseSuppressionEnabled(p.noiseSuppression);
-      setNoiseThreshold(p.noiseThreshold);
-      setPttReleaseDelay(p.pttReleaseDelay);
-    }
-  };
+  // Audio profile preset sistemi kaldırıldı (v2).
+  // Eski localStorage key 'audioProfile' varsa dokunmuyoruz — migration sadece
+  // strength için yukarıda yapıldı. Kaldırma: `localStorage.removeItem('audioProfile')`.
 
   // ── Ses bildirimleri ──
   const [soundJoinLeave, setSoundJoinLeaveState] = useState(() => localStorage.getItem('soundJoinLeave') !== 'false');
@@ -160,11 +170,11 @@ export function useAppSettings() {
     isLowDataMode, setIsLowDataMode,
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
     noiseThreshold, setNoiseThreshold,
+    noiseSuppressionStrength, setNoiseSuppressionStrength,
     pttKey, setPttKey,
     isListeningForKey, setIsListeningForKey,
     pttReleaseDelay, setPttReleaseDelay,
     voiceMode, setVoiceMode,
-    audioProfile, setAudioProfile,
     soundJoinLeave, setSoundJoinLeave,
     soundJoinLeaveVariant, setSoundJoinLeaveVariant,
     soundMuteDeafen, setSoundMuteDeafen,

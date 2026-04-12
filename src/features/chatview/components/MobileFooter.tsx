@@ -24,7 +24,7 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
   const { activeChannel, isConnecting } = useChannel();
   const { setToastMsg } = useUI();
   const { isPttPressed, setIsPttPressed, volumeLevel, connectionLevel } = useAudio();
-  const { voiceMode, noiseThreshold, setNoiseThreshold, setAudioProfile } = useSettings();
+  const { voiceMode, noiseThreshold, setNoiseThreshold } = useSettings();
   const {
     isMuted, setIsMuted, isDeafened, setIsDeafened,
     isBroadcastListener, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
@@ -144,7 +144,7 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
                     min={5}
                     max={50}
                     value={noiseThreshold}
-                    onChange={(e) => { setNoiseThreshold(parseInt(e.target.value)); setAudioProfile('custom'); }}
+                    onChange={(e) => setNoiseThreshold(parseInt(e.target.value))}
                     className="flex-1 h-1 accent-emerald-400 rounded-full"
                   />
                   <span className="text-[10px] text-emerald-400 font-bold w-5 text-right shrink-0">{noiseThreshold}</span>

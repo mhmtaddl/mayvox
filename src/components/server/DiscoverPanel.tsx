@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Users, Hash } from 'lucide-react';
-import { searchServers, joinServer, type DiscoverServer } from '../../lib/serverService';
+import { searchServers, joinServer, createJoinRequest, type DiscoverServer } from '../../lib/serverService';
+import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
 
 const MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
@@ -10,28 +11,17 @@ function fmtSince(raw: string): string {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-// 9 mock sunucu — discover ekranı dolu görünsün
-const MOCK_SERVERS: (DiscoverServer & { plan?: string })[] = [
-  { id: 'm1', name: 'Gece Tayfa', shortName: 'GT', description: 'Gece gezmelerinin adresi', motto: 'Uyumak yasak', memberCount: 87, capacity: 100, createdAt: '2025-11-01', plan: 'free' },
-  { id: 'm2', name: 'Kod Atölyesi', shortName: 'KA', description: 'Yazılım ve teknoloji sohbetleri', motto: 'Build & Ship', memberCount: 156, capacity: 240, createdAt: '2025-08-15', plan: 'pro' },
-  { id: 'm3', name: 'Müzik Evi', shortName: 'ME', description: 'Canlı müzik dinle, paylaş', memberCount: 64, capacity: 100, createdAt: '2026-01-20', plan: 'free' },
-  { id: 'm4', name: 'Oyun Dünyası', shortName: 'OD', description: 'Valorant, CS2, LoL takım bul', motto: 'GG WP', memberCount: 203, capacity: 240, createdAt: '2025-06-10', plan: 'pro' },
-  { id: 'm5', name: 'Sanat Köşesi', shortName: 'SK', description: 'Dijital sanat ve tasarım', memberCount: 42, capacity: 100, createdAt: '2026-02-01', plan: 'free' },
-  { id: 'm6', name: 'Spor Kulübü', shortName: 'SP', description: 'Maç izle, skor takip et', memberCount: 91, capacity: 100, createdAt: '2025-09-05', plan: 'ultra' },
-  { id: 'm7', name: 'Film Severler', shortName: 'FS', description: 'Film ve dizi önerileri', motto: 'Lights Camera', memberCount: 38, capacity: 100, createdAt: '2026-03-12', plan: 'free' },
-  { id: 'm8', name: 'Girişimciler', shortName: 'GR', description: 'Startup ve iş fikirleri', memberCount: 127, capacity: 240, createdAt: '2025-07-22', plan: 'pro' },
-  { id: 'm9', name: 'Podcast Hub', shortName: 'PH', description: 'Podcast kayıt ve yayın', memberCount: 55, capacity: 100, createdAt: '2026-01-08', plan: 'free' },
-];
-
 interface Props {
   /** serverId — katılım sonrası veya mevcut üye olunan sunucuya geçiş için parent'a iletilir. */
   onJoinSuccess: (serverId: string) => void;
   onCreateServer: () => void;
   onJoinModal: () => void;
   activeServerId?: string;
+  /** App-level rol + 0 aktif sahip sunucu yoksa false — CTA gizlenir. */
+  canCreate?: boolean;
 }
 
-export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinModal, activeServerId }: Props) {
+export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinModal, activeServerId, canCreate = true }: Props) {
   const [query, setQuery] = useState('');
   const [apiServers, setApiServers] = useState<DiscoverServer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,36 +45,61 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Gerçek sunucular + mock (gerçek yoksa mock göster)
-  const servers = query.trim()
-    ? apiServers
-    : apiServers.length > 0
-      ? [...apiServers, ...MOCK_SERVERS.filter(m => !apiServers.some(a => a.id === m.id))].slice(0, 9)
-      : MOCK_SERVERS;
+  // Başvuru kabul/red → kartın badge'ini (Yanıt Bekleniyor / Üyesin) refresh et.
+  useEffect(() => {
+    const unsub = subscribeServerEvents((event: ServerEvent) => {
+      if (typeof event.type !== 'string') return;
+      if (event.type !== 'server:join_request:accepted' && event.type !== 'server:join_request:rejected') return;
+      const seq = ++seqRef.current;
+      (async () => {
+        try {
+          const data = await searchServers(query.trim());
+          if (seq !== seqRef.current) return;
+          setApiServers(data);
+        } catch { /* no-op */ }
+      })();
+    });
+    return () => { unsub(); };
+  }, [query]);
+
+  // Sadece gerçek sunucular — mock'lar kaldırıldı.
+  const servers = apiServers;
 
   const handleJoin = async (serverId: string) => {
-    if (serverId.startsWith('m')) { showToast('Bu bir örnek sunucudur'); return; }
     try {
       setJoining(serverId);
       await joinServer(serverId);
       showToast('Sunucuya katıldın');
-      // Parent artık bu serverId'yi active yapıp discover'ı kapatır → odaya direkt gider.
       onJoinSuccess(serverId);
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Katılınamadı');
     } finally { setJoining(null); }
   };
 
-  // Zaten üye olunan sunucu kartına tıklayınca sunucuya geç (aksiyon butonu değil kart üstü).
+  // Davetli sunucu → başvuru gönder (davet kodu değil).
+  const handleRequest = async (serverId: string) => {
+    try {
+      setJoining(serverId);
+      await createJoinRequest(serverId);
+      showToast('İsteğiniz iletildi.');
+      // Local state: kartı anında 'Yanıt Bekleniyor' yap — full refresh yok.
+      setApiServers(prev => prev.map(s => s.id === serverId ? { ...s, myJoinRequestStatus: 'pending' } : s));
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Başvuru gönderilemedi');
+    } finally { setJoining(null); }
+  };
+
+  const isFrictionless = (s: DiscoverServer) =>
+    s.isPublic === true && (s.joinPolicy === 'open' || !s.joinPolicy);
+
+  // Zaten üye olunan sunucu kartına tıklayınca sunucuya geç.
   const handleCardClick = (s: DiscoverServer) => {
-    if (isMock(s)) { showToast('Bu bir örnek sunucudur'); return; }
     if (!isMember(s)) return;
     onJoinSuccess(s.id);
   };
 
   const isMember = (s: DiscoverServer) => !!s.role;
   const isActive = (s: DiscoverServer) => s.id === activeServerId;
-  const isMock = (s: DiscoverServer) => s.id.startsWith('m');
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto px-4 py-5 lg:px-8 lg:py-6">
@@ -172,17 +187,32 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
 
                   {/* 3. Meta + Aksiyon */}
                   <div className="relative flex items-center justify-between">
-                    <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-30">{s.memberCount} üye</span>
+                    <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-30">
+                      {s.memberCount} üye · Katılım: {isFrictionless(s) ? 'Açık' : 'Davetli'}
+                    </span>
                     {active ? (
                       <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', color: 'var(--theme-accent)' }}>Açık</span>
                     ) : member ? (
-                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/35">Üyesin</span>
-                    ) : (
+                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/35">Üyesiniz</span>
+                    ) : s.myJoinRequestStatus === 'pending' ? (
+                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', color: 'var(--theme-accent)', border: '1px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
+                        Yanıt Bekleniyor
+                      </span>
+                    ) : isFrictionless(s) ? (
                       <button onClick={() => handleJoin(s.id)} disabled={isJoining}
                         className="join-btn h-7 px-3.5 rounded-lg text-[11px] font-medium flex items-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
                         style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.12)', color: 'var(--theme-text)' }}>
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
                         {isJoining ? '...' : 'Katıl'}
+                      </button>
+                    ) : (
+                      <button onClick={() => handleRequest(s.id)} disabled={isJoining}
+                        className="h-7 px-3.5 rounded-lg text-[11px] font-medium flex items-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
+                        style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1px solid rgba(var(--theme-accent-rgb), 0.18)', color: 'var(--theme-accent)' }}
+                        title="Bu sunucuya başvuru gönder — yönetici onayı gerekir">
+                        {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
+                        {isJoining ? '...' : 'İstek Gönder'}
                       </button>
                     )}
                   </div>
@@ -192,25 +222,27 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
           </div>
         )}
 
-        {/* Oluştur CTA */}
-        <div className="rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] group"
-          onClick={onCreateServer}
-          style={{ background: 'rgba(var(--glass-tint), 0.035)', border: '1px solid rgba(var(--glass-tint), 0.07)' }}>
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.06))' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)]">
-              <rect x="3" y="3" width="18" height="18" rx="4" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
+        {/* Oluştur CTA — yalnız app-level yetkili + 0 sahip sunucu varsa */}
+        {canCreate && (
+          <div className="rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] group"
+            onClick={onCreateServer}
+            style={{ background: 'rgba(var(--glass-tint), 0.035)', border: '1px solid rgba(var(--glass-tint), 0.07)' }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.06))' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)]">
+                <rect x="3" y="3" width="18" height="18" rx="4" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-semibold text-[var(--theme-text)] group-hover:text-[var(--theme-accent)] transition-colors">Kendi topluluğunu oluştur</div>
+              <div className="text-[9px] text-[var(--theme-secondary-text)] opacity-35 mt-0.5">Sunucunu kur, arkadaşlarını davet et ve odalarını yönet.</div>
+            </div>
+            <div className="h-7 px-3.5 rounded-lg text-[10px] font-bold flex items-center shrink-0"
+              style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1px solid rgba(var(--theme-accent-rgb), 0.1)', color: 'var(--theme-accent)' }}>
+              Sunucu Oluştur
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold text-[var(--theme-text)] group-hover:text-[var(--theme-accent)] transition-colors">Kendi topluluğunu oluştur</div>
-            <div className="text-[9px] text-[var(--theme-secondary-text)] opacity-35 mt-0.5">Sunucunu kur, arkadaşlarını davet et ve odalarını yönet.</div>
-          </div>
-          <div className="h-7 px-3.5 rounded-lg text-[10px] font-bold flex items-center shrink-0"
-            style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1px solid rgba(var(--theme-accent-rgb), 0.1)', color: 'var(--theme-accent)' }}>
-            Sunucu Oluştur
-          </div>
-        </div>
+        )}
       </div>
 
       {toast && (

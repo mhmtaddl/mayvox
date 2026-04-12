@@ -12,7 +12,9 @@
  */
 html.window-inactive .mv-breath,
 html.window-inactive .mv-idle-glow,
-html.window-inactive .mv-speaker-pulse {
+html.window-inactive .mv-speaker-pulse,
+html.window-inactive .mv-brand-wave-l,
+html.window-inactive .mv-brand-wave-r {
   animation-play-state: paused !important;
 }
 
@@ -113,4 +115,54 @@ html[data-user-speaking="true"] .mv-pressable:hover {
   outline: none;
   box-shadow: 0 0 0 2px rgba(var(--theme-accent-rgb, 99,102,241), 0.35);
   transition: box-shadow 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ── 10) MAYVOX brand "listening" — kulaklık ikonundan yayılan sessiz ses ─
+ * İki yan (sol/sağ) arc — düşük genlikli pulse, aksan rengi. Battery-safe:
+ * sadece opacity + scale transform, composite-only, GPU-friendly.
+ * Sadece logo görünür durumdayken (no-server state) mount edilir.
+ * Staggered timing → gerçekçi "both ears" hissi.
+ */
+@keyframes mv-brand-wave {
+  0%   { transform: translateY(-50%) scale(0.55); opacity: 0; }
+  18%  { opacity: 0.55; }
+  55%  { opacity: 0.25; }
+  100% { transform: translateY(-50%) scale(1.35); opacity: 0; }
+}
+.mv-brand-wave-l,
+.mv-brand-wave-r {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 12px;
+  pointer-events: none;
+  color: var(--theme-accent);
+  animation: mv-brand-wave 1.8s cubic-bezier(0.25, 0.8, 0.4, 1) infinite;
+  will-change: transform, opacity;
+  transform-origin: center;
+}
+.mv-brand-wave-l { left: -6px; }
+.mv-brand-wave-r { right: -6px; animation-delay: 0.9s; }
+/* Büyük varyant — login/register gibi 44×44 rem (176px) logolar için. */
+.mv-brand-wave-lg { width: 26px; height: 40px; }
+.mv-brand-wave-lg.mv-brand-wave-l { left: -18px; }
+.mv-brand-wave-lg.mv-brand-wave-r { right: -18px; }
+@media (prefers-reduced-motion: reduce) {
+  .mv-brand-wave-l, .mv-brand-wave-r { animation: none; opacity: 0.35; }
+}
+
+/* Logo kendisi — ses dalgalarıyla senkron hafif nefes alma.
+ * Dalganın peak'i ile logonun peak'i eşleşsin diye aynı 1.8s süre. */
+@keyframes mv-brand-breath {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+.mv-brand-breath {
+  animation: mv-brand-breath 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: transform;
+  transform-origin: center;
+}
+html.window-inactive .mv-brand-breath { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .mv-brand-breath { animation: none; }
 }

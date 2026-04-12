@@ -63,6 +63,7 @@ export interface AppStateContextType {
   handleDeleteUser: (userId: string) => void;
   handleToggleAdmin: (userId: string) => Promise<void>;
   handleToggleModerator: (userId: string) => Promise<void>;
+  handleSetServerCreationPlan: (userId: string, newPlan: 'none' | 'free' | 'pro' | 'ultra') => Promise<void>;
   handleGenerateCode: () => Promise<void>;
   handleLogin: (nick: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;

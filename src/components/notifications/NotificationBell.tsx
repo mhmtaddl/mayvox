@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight } from 'lucide-react';
+import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
 import type { NotificationSummary, NotifItem, NotifKind } from '../../hooks/useNotificationCenter';
+import { clearAllInformational, removeInformational } from '../../features/notifications/informationalStore';
 
 interface Props {
   summary: NotificationSummary;
@@ -10,6 +11,9 @@ interface Props {
   onOpenDM?: () => void;
   onOpenUpdate?: () => void;
   onOpenInvites?: () => void;
+  onOpenJoinRequest?: (serverId: string) => void;
+  /** Informational "kabul edildin" bildirimi tıklanınca sunucuya geç. */
+  onOpenServer?: (serverId: string) => void;
 }
 
 // ── Kind → ikon eşlemesi ──
@@ -19,6 +23,7 @@ const KIND_ICON: Record<NotifKind, React.ReactNode> = {
   system: <Download size={15} strokeWidth={1.8} />,
   mention: <AtSign size={15} strokeWidth={1.8} />,
   invite: <Mail size={15} strokeWidth={1.8} />,
+  joinRequest: <UserCheck size={15} strokeWidth={1.8} />,
 };
 
 // ── Priority → sol çizgi rengi (çok hafif) ──
@@ -28,7 +33,7 @@ const PRIORITY_ACCENT = {
   low: 'bg-transparent',
 } as const;
 
-export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites }: Props) {
+export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenJoinRequest, onOpenServer }: Props) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -37,16 +42,23 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
   const seenRef = useRef<Set<string>>(new Set());
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(new Set());
 
-  // Panel açıldığında mevcut item'ları seen olarak işaretle
+  // Panel açıldığında seen snapshot'ı güncelle; KAPANDIĞINDA okundu sayılıp temizle.
+  // Açılış anında temizlersek kullanıcı okumaya vakit bulamadan siliniyor — yanlıştı.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
     if (open) {
-      // Açılış anında mevcut seen set'ini snapshot olarak al
       setSeenSnapshot(new Set(seenRef.current));
-      // Kısa gecikme sonra mevcut item'ları seen'e ekle (bir sonraki açılışta etki eder)
-      const timer = setTimeout(() => {
-        summary.items.forEach(item => seenRef.current.add(item.key));
-      }, 600);
-      return () => clearTimeout(timer);
+      wasOpenRef.current = true;
+      return;
+    }
+    // open → closed geçişi:
+    if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      // Görülen item'ları seen set'ine ekle (sonraki açılışta "yeni" olarak görünmesin).
+      summary.items.forEach(item => seenRef.current.add(item.key));
+      // Informational kayıtları temizle (aksiyon gerektirmez, çana bakmak okundu demektir).
+      // Aksiyon tipi item'lar KAYNAĞA bağlı olarak kendiliğinden düşer — onları temizleme.
+      clearAllInformational();
     }
   }, [open, summary.items]);
 
@@ -67,6 +79,21 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
   // ── Callback resolver ──
   const getOnClick = useCallback((item: NotifItem): (() => void) | undefined => {
     if (!item.isActionable) return undefined;
+    // Informational "kabul edildin" kayıtları: key `info:joinreq-accepted:<sid>` ile gelir.
+    if (item.key.startsWith('info:joinreq-accepted:') && item.serverId && onOpenServer) {
+      const sid = item.serverId;
+      const infoKey = item.key.slice('info:'.length);
+      return () => { onOpenServer(sid); removeInformational(infoKey); setOpen(false); };
+    }
+    if (item.key.startsWith('info:joinreq-rejected:')) {
+      const infoKey = item.key.slice('info:'.length);
+      return () => { removeInformational(infoKey); setOpen(false); };
+    }
+    // joinRequest: her sunucu için ayrı item, serverId ile sunucu ayarlarına git
+    if (item.kind === 'joinRequest' && item.serverId && onOpenJoinRequest) {
+      const sid = item.serverId;
+      return () => { onOpenJoinRequest(sid); setOpen(false); };
+    }
     const map: Record<string, (() => void) | undefined> = {
       friends: onOpenFriendRequests,
       dm: onOpenDM,
@@ -76,7 +103,7 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     const handler = map[item.key];
     if (!handler) return undefined;
     return () => { handler(); setOpen(false); };
-  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites]);
+  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenJoinRequest, onOpenServer]);
 
   return (
     <div className="relative">

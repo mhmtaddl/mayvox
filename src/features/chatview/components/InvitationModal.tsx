@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { PhoneCall, PhoneOff } from 'lucide-react';
 
@@ -17,20 +18,26 @@ interface Props {
 }
 
 export default function InvitationModal({ data, onAccept, onDecline }: Props) {
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gradient-to-b from-black/15 via-black/25 to-black/35"
+      transition={{ duration: 0.14 }}
+      className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.72)' }}
     >
       <motion.div
-        initial={{ scale: 0.90, opacity: 0, y: 24 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.90, opacity: 0, y: 24 }}
+        initial={{ scale: 0.97, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.97, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-        className="w-full max-w-xs overflow-hidden rounded-3xl shadow-2xl border border-white/10"
-        style={{ background: 'linear-gradient(160deg, #0f1623 0%, var(--theme-bg) 60%)' }}
+        className="w-full max-w-xs overflow-hidden rounded-3xl"
+        style={{
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+        }}
       >
         {/* Header */}
         <div className="pt-10 pb-7 px-8 text-center">
@@ -136,6 +143,7 @@ export default function InvitationModal({ data, onAccept, onDecline }: Props) {
           </div>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

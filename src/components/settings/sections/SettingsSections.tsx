@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react';
 import { CardSection, Toggle, cardCls } from '../shared';
-import { useSettings, AUDIO_PROFILE_META } from '../../../contexts/SettingsCtx';
+import { useSettings } from '../../../contexts/SettingsCtx';
 import { useUI } from '../../../contexts/UIContext';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
 import { themes, themeOrder, backgroundPresets } from '../../../themes';
@@ -174,70 +174,11 @@ export function SoundsSection() {
   );
 }
 
-// ── Ses Profili ──
+// ── Ses Profili (kaldırıldı — preset sistemi bitti) ──
+// Backward-compat: SettingsView'deki <AudioProfileSection /> kullanımını
+// kırmamak için null döndüren boş component export edildi.
 export function AudioProfileSection() {
-  const { audioProfile, setAudioProfile } = useSettings();
-  const { setToastMsg } = useUI();
-
-  return (
-    <CardSection icon={<Volume2 size={12} />} title="Ses Profili">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-2.5">
-        {AUDIO_PROFILE_META.map(profile => {
-          const isActive = audioProfile === profile.id;
-          return (
-            <button
-              type="button"
-              key={profile.id}
-              onClick={() => { setAudioProfile(profile.id); setToastMsg(`${profile.label} aktif`); }}
-              className={`flex flex-col gap-1.5 p-2.5 md:p-3 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.97] ${
-                isActive
-                  ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-sm shadow-[var(--theme-accent)]/20'
-                  : 'border-[var(--theme-border)] bg-[var(--theme-sidebar)]/30 hover:border-[var(--theme-accent)]/40 hover:bg-[var(--theme-sidebar)]/60'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-base leading-none">{profile.icon}</span>
-                {isActive && (
-                  <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center shrink-0">
-                    <Check size={9} className="text-[var(--theme-btn-primary-text)]" />
-                  </div>
-                )}
-              </div>
-              <p className={`text-[11px] md:text-[12px] font-bold leading-tight ${isActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
-                {profile.label}
-              </p>
-              <p className="text-[9px] text-[var(--theme-secondary-text)]/80 leading-snug">
-                {profile.desc}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {profile.tags.map(tag => (
-                  <span
-                    key={tag}
-                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border leading-none ${
-                      isActive
-                        ? 'border-[var(--theme-accent)]/30 text-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
-                        : 'border-[var(--theme-border)] text-[var(--theme-secondary-text)] bg-[var(--theme-bg)]/50'
-                    }`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {audioProfile === 'custom' && (
-        <div className="mt-3 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-sidebar)]/20">
-          <div className="w-6 h-6 rounded-lg bg-[var(--theme-border)]/40 flex items-center justify-center shrink-0 text-xs">⚙️</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-[var(--theme-text)]">Özel Ayarlar</p>
-            <p className="text-[9px] text-[var(--theme-secondary-text)]/70 mt-0.5">Manuel ayar değişikliği yapıldı.</p>
-          </div>
-        </div>
-      )}
-    </CardSection>
-  );
+  return null;
 }
 
 // ── Performans & Ses Motoru (VoiceChannel merged here) ──
@@ -247,9 +188,8 @@ export function PerformanceSection() {
   const {
     isLowDataMode, setIsLowDataMode,
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
-    noiseThreshold, setNoiseThreshold,
+    noiseSuppressionStrength, setNoiseSuppressionStrength,
     pttReleaseDelay, setPttReleaseDelay,
-    setAudioProfile,
     autoLeaveEnabled, setAutoLeaveEnabled,
     autoLeaveMinutes, setAutoLeaveMinutes,
   } = useSettings();
@@ -314,7 +254,7 @@ export function PerformanceSection() {
           <div className="flex-1 min-w-0">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
           </div>
-          <Toggle checked={isNoiseSuppressionEnabled} onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }} tooltip="Arka plan gürültüsünü filtreler" />
+          <Toggle checked={isNoiseSuppressionEnabled} onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} tooltip="Arka plan gürültüsünü filtreler" />
         </div>
 
         {/* Boşta Ayrılma — zorunlu, sadece süre seçilir (5-60 dk) */}
@@ -342,33 +282,22 @@ export function PerformanceSection() {
           </div>
         </div>
 
-        {/* Gürültü Eşiği */}
-        {isNoiseSuppressionEnabled && (
-          <div className="md:py-3">
-            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
-              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Eşiği</p>
-              <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">{noiseThreshold}</span>
-            </div>
-            {(() => {
-              const thresholdPct = ((noiseThreshold - 2) / (50 - 2)) * 100;
-              const micPct = Math.min(100, (micAverage / 50) * 100);
-              const belowWidth = Math.min(micPct, thresholdPct);
-              const aboveLeft = thresholdPct;
-              const aboveWidth = Math.max(0, micPct - thresholdPct);
-              return (
-                <div className="relative h-2 rounded-full bg-[var(--theme-bg)] border border-[var(--theme-border)] overflow-hidden mb-2">
-                  <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${belowWidth}%`, backgroundColor: 'var(--theme-secondary-text)', opacity: 0.5 }} />
-                  <div className="absolute top-0 h-full transition-none" style={{ left: `${aboveLeft}%`, width: `${aboveWidth}%`, backgroundColor: 'var(--theme-accent)', opacity: 0.85 }} />
-                  <div className="absolute top-0 h-full w-px bg-red-400" style={{ left: `${thresholdPct}%` }} />
-                </div>
-              );
-            })()}
-            <input type="range" min={2} max={50} value={noiseThreshold} onChange={e => { setNoiseThreshold(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
-            <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
-              <span>Hafif</span><span>Agresif</span>
-            </div>
+        {/* Gürültü Temizleme Gücü — RNNoise strength 0-100 */}
+        <div className={`md:py-3 transition-opacity ${isNoiseSuppressionEnabled ? '' : 'opacity-40 pointer-events-none'}`}>
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Temizleme Gücü</p>
+            <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">%{noiseSuppressionStrength}</span>
           </div>
-        )}
+          <input
+            type="range" min={0} max={100} value={noiseSuppressionStrength}
+            onChange={e => setNoiseSuppressionStrength(Number(e.target.value))}
+            disabled={!isNoiseSuppressionEnabled}
+            className="w-full accent-[var(--theme-accent)]"
+          />
+          <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
+            <span>Hafif</span><span>Agresif</span>
+          </div>
+        </div>
 
         {/* PTT Bırakma Gecikmesi */}
         <div className="md:pt-3">
@@ -378,7 +307,7 @@ export function PerformanceSection() {
               {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
             </span>
           </div>
-          <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => { setPttReleaseDelay(Number(e.target.value)); setAudioProfile('custom'); }} className="w-full accent-[var(--theme-accent)]" />
+          <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => setPttReleaseDelay(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
           <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
             <span>Kapalı</span><span>500 ms</span>
           </div>

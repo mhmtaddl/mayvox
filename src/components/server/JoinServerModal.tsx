@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Hash } from 'lucide-react';
 import { joinServer, acceptInviteLink, type Server } from '../../lib/serverService';
@@ -55,19 +56,23 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
 
   const isDisabled = !code.trim() || state === 'checking' || state === 'submitting' || state === 'valid';
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[400] flex items-center justify-center" style={{ background: 'rgba(0, 0, 0, 0.72)' }} onClick={onClose}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={MV_SPRING.gentle}
-        className="w-[400px] max-w-[92vw] rounded-2xl overflow-hidden mv-depth" onClick={e => e.stopPropagation()}
-        style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.97)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
+        className="w-[400px] max-w-[92vw] rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+        }}>
 
         {/* Header */}
         <div className="px-6 pt-6 pb-3 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform hover:scale-[1.03]"
-            style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.18), rgba(var(--theme-accent-rgb), 0.08))', boxShadow: '0 0 16px rgba(var(--theme-accent-rgb), 0.08) inset' }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(var(--theme-accent-rgb), 0.10)' }}>
             <Hash size={20} className="text-[var(--theme-accent)]" />
           </div>
           <div className="flex-1">
@@ -147,6 +152,7 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
           </motion.button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }

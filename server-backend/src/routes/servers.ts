@@ -8,6 +8,7 @@ import * as inviteLinkService from '../services/inviteLinkService';
 import { getServerAccessContext } from '../services/accessContextService';
 import { listAuditLog } from '../services/auditLogService';
 import { listServerRoles } from '../services/roleListService';
+import * as joinRequestService from '../services/serverJoinRequestService';
 import { getServerOverview } from '../services/serverOverviewService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
@@ -120,6 +121,51 @@ router.get('/:id/roles', async (req: Request, res: Response) => {
   try {
     const rows = await listServerRoles(req.params.id as string, (req as any).userId);
     res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+/** ── Join request akışı (invite-only sunucular) ── */
+
+router.post('/:id/join-requests', async (req: Request, res: Response) => {
+  try {
+    await joinRequestService.createJoinRequest((req as any).userId, req.params.id as string);
+    res.status(201).json({ ok: true });
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/my/pending-join-requests-summary', async (req: Request, res: Response) => {
+  try {
+    const items = await joinRequestService.listMyPendingRequestsSummary((req as any).userId);
+    res.json(items);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/join-requests', async (req: Request, res: Response) => {
+  try {
+    const includeHistory = req.query.history === '1';
+    const rows = await joinRequestService.listJoinRequests(req.params.id as string, (req as any).userId, { includeHistory });
+    res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/join-requests/pending-count', async (req: Request, res: Response) => {
+  try {
+    const count = await joinRequestService.countPendingRequests(req.params.id as string, (req as any).userId);
+    res.json({ count });
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/join-requests/:rid/accept', async (req: Request, res: Response) => {
+  try {
+    await joinRequestService.acceptJoinRequest(req.params.id as string, (req as any).userId, req.params.rid as string);
+    res.status(204).end();
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/join-requests/:rid/reject', async (req: Request, res: Response) => {
+  try {
+    await joinRequestService.rejectJoinRequest(req.params.id as string, (req as any).userId, req.params.rid as string);
+    res.status(204).end();
   } catch (err) { handleError(res, err); }
 });
 

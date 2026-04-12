@@ -41,6 +41,8 @@ export interface DiscoverServer {
   plan?: string;
   createdAt?: string;
   role?: string;
+  /** Kullanıcının bu sunucu için en son başvuru durumu. */
+  myJoinRequestStatus?: 'pending' | 'accepted' | 'rejected' | null;
 }
 
 export interface ServerMember {
@@ -147,6 +149,50 @@ export async function createServer(name: string, description: string, isPublic: 
 
 export async function joinServer(code: string): Promise<Server> {
   return apiFetch<Server>('/servers/join', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+// ── Join request (invite-only sunucu başvuru akışı) ──
+
+export interface JoinRequestListItem {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+export async function createJoinRequest(serverId: string): Promise<void> {
+  await apiFetch<{ ok: boolean }>(`/servers/${serverId}/join-requests`, { method: 'POST' });
+}
+
+export async function listJoinRequests(serverId: string, includeHistory = false): Promise<JoinRequestListItem[]> {
+  const qs = includeHistory ? '?history=1' : '';
+  return apiFetch<JoinRequestListItem[]>(`/servers/${serverId}/join-requests${qs}`);
+}
+
+export async function acceptJoinRequest(serverId: string, requestId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/join-requests/${requestId}/accept`, { method: 'POST' });
+}
+
+export async function rejectJoinRequest(serverId: string, requestId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/join-requests/${requestId}/reject`, { method: 'POST' });
+}
+
+export async function countPendingJoinRequests(serverId: string): Promise<number> {
+  const r = await apiFetch<{ count: number }>(`/servers/${serverId}/join-requests/pending-count`);
+  return r.count ?? 0;
+}
+
+export interface MyPendingJoinRequestsSummaryItem {
+  serverId: string;
+  serverName: string;
+  serverAvatar: string | null;
+  pendingCount: number;
+}
+export async function listMyPendingJoinRequestsSummary(): Promise<MyPendingJoinRequestsSummaryItem[]> {
+  return apiFetch<MyPendingJoinRequestsSummaryItem[]>('/servers/my/pending-join-requests-summary');
 }
 
 export async function leaveServer(serverId: string): Promise<void> {

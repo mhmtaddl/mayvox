@@ -36,7 +36,7 @@ import {
 import { playSound } from './lib/sounds';
 import { checkChannelAccess, getServerAccessContext, type ServerAccessContext } from './lib/serverService';
 import { logger } from './lib/logger';
-import { type AudioCaptureOptions } from 'livekit-client';
+import { buildAudioCaptureOptions } from './lib/audioConstraints';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -46,6 +46,7 @@ type DbProfile = {
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
   app_version?: string; last_seen_at?: string; total_usage_minutes?: number;
   show_last_seen?: boolean;
+  server_creation_plan?: 'none' | 'free' | 'pro' | 'ultra';
 };
 type DbChannel = {
   id: string; name: string; owner_id?: string; max_users?: number;
@@ -136,7 +137,17 @@ function mapDbProfile(
     lastSeenAt: p.last_seen_at || undefined,
     totalUsageMinutes: p.total_usage_minutes || 0,
     showLastSeen: p.show_last_seen !== false,
+    serverCreationPlan: resolveServerCreationPlan(p),
   };
+}
+
+function resolveServerCreationPlan(p: { server_creation_plan?: string; is_admin?: boolean; is_primary_admin?: boolean }): 'none' | 'free' | 'pro' | 'ultra' {
+  const raw = p.server_creation_plan;
+  if (raw === 'free' || raw === 'pro' || raw === 'ultra' || raw === 'none') return raw;
+  // DB değeri yok/eski → admin/primary admin için 'ultra' fallback (migration da aynı UPDATE'i
+  // uygular; bu frontend fallback, migration öncesi session'lar için guard).
+  if (p.is_admin || p.is_primary_admin) return 'ultra';
+  return 'none';
 }
 
 async function loadChannelsFromDb(): Promise<VoiceChannel[]> {
@@ -169,6 +180,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       lastSeenAt: profile.last_seen_at || undefined,
       totalUsageMinutes: profile.total_usage_minutes || 0,
       showLastSeen: profile.show_last_seen !== false,
+      serverCreationPlan: resolveServerCreationPlan(profile),
     };
   }
   return {
@@ -217,7 +229,7 @@ export default function App() {
   // ── Settings state (useAppSettings hook) ──────────────────────────────
   const settings = useAppSettings();
   const {
-    currentTheme, isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold,
+    currentTheme, isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold, noiseSuppressionStrength,
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
     voiceMode, setVoiceMode, pttReleaseDelay, autoLeaveEnabled, autoLeaveMinutes,
     showLastSeen, setShowLastSeenLocal,
@@ -613,7 +625,7 @@ export default function App() {
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
 
-  const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit } = useLiveKitConnection({
+  const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit, updateNoiseStrength } = useLiveKitConnection({
     presenceChannelRef,
     currentUserRef,
     activeChannelRef,
@@ -621,6 +633,7 @@ export default function App() {
     connectionLostRef,
     isDeafenedRef,
     isNoiseSuppressionEnabled,
+    noiseSuppressionStrength,
     selectedInput,
     selectedOutput,
     setConnectionLevel,
@@ -683,6 +696,7 @@ export default function App() {
     handleDeleteUser,
     handleToggleAdmin,
     handleToggleModerator,
+    handleSetServerCreationPlan,
   } = useModeration({
     currentUser,
     allUsers,
@@ -1001,13 +1015,22 @@ export default function App() {
   useEffect(() => {
     if (!livekitRoomRef.current) return;
     const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
-    livekitRoomRef.current.localParticipant.setMicrophoneEnabled(canSpeak, {
-      echoCancellation: true,
-      noiseSuppression: isNoiseSuppressionEnabled,
-      autoGainControl: isNoiseSuppressionEnabled,
-      deviceId: selectedInput || undefined,
-    } satisfies AudioCaptureOptions).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
+    livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
+      canSpeak,
+      buildAudioCaptureOptions({
+        noiseSuppression: isNoiseSuppressionEnabled,
+        autoGainControl: true,
+        // RNNoise aktifse native NS kapatılır (double-processing fix).
+        rnnoiseActive: isNoiseSuppressionEnabled,
+        deviceId: selectedInput,
+      }),
+    ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
   }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput]);
+
+  // ── RNNoise strength live update — slider değişince worklet'e postla ──
+  useEffect(() => {
+    updateNoiseStrength(noiseSuppressionStrength);
+  }, [noiseSuppressionStrength, updateNoiseStrength]);
 
   // ── Deafen: mute all remote audio elements ────────────────────────────────
   useEffect(() => {
@@ -1636,6 +1659,7 @@ export default function App() {
     handleDeleteUser,
     handleToggleAdmin,
     handleToggleModerator,
+    handleSetServerCreationPlan,
     handleGenerateCode,
     handleLogin,
     handleLogout,

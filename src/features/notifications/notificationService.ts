@@ -81,6 +81,9 @@ export interface NotifContext {
 export interface NotifHandlers {
   onDmClick?: (recipientId: string, conversationKey: string) => void;
   onInviteClick?: (inviteId: string, serverId: string | null) => void;
+  onJoinRequestClick?: (serverId: string) => void;
+  /** Başvuru kabul edildi → sunucuyu aç (switch) */
+  onJoinRequestAcceptedClick?: (serverId: string) => void;
 }
 
 export interface InviteNotif {
@@ -364,6 +367,99 @@ export function handleDmMessage(msg: DmMessage) {
   }, decision);
 }
 
+export interface JoinRequestNotif {
+  requestId?: string;
+  serverId: string;
+  serverName?: string | null;
+  serverAvatar?: string | null;
+  requesterId?: string | null;
+  requesterName?: string | null;
+}
+
+export function handleJoinRequest(req: JoinRequestNotif) {
+  const fp = `joinreq:${req.serverId}:${req.requestId ?? req.requesterId ?? Date.now()}`;
+  if (hasSeen(fp)) return;
+  markSeen(fp);
+
+  // Policy engine'ı 'invite' kind üzerinden tüketir (mimari değişmez).
+  const decision = decideNotification(
+    { intent: 'invite', sourceId: req.requesterId ?? undefined, subjectId: req.serverId, createdAt: Date.now() },
+    buildPolicyContext(),
+    buildStats(),
+  );
+  if (!decision.shouldNotify) return;
+
+  const title = req.serverName || 'Katılma başvurusu';
+  const body = req.requesterName
+    ? `${req.requesterName} sunucuna katılmak istiyor`
+    : 'Yeni katılma başvurusu';
+
+  dispatchDecision({
+    id: `joinreq-${req.serverId}-${nextSeq++}`,
+    kind: 'invite',
+    priority: decision.effectivePriority,
+    avatar: req.serverAvatar ?? null,
+    title,
+    body,
+    createdAt: Date.now(),
+    data: { intent: 'joinRequest', serverId: req.serverId, inviteId: req.requestId ?? '' },
+  }, decision);
+}
+
+export interface JoinRequestResultNotif {
+  serverId: string;
+  serverName?: string | null;
+  serverAvatar?: string | null;
+}
+
+export function handleJoinRequestAccepted(r: JoinRequestResultNotif) {
+  const fp = `joinreq-accepted:${r.serverId}`;
+  if (hasSeen(fp)) return;
+  markSeen(fp);
+
+  const decision = decideNotification(
+    { intent: 'invite', sourceId: undefined, subjectId: r.serverId, createdAt: Date.now() },
+    buildPolicyContext(),
+    buildStats(),
+  );
+  if (!decision.shouldNotify) return;
+
+  dispatchDecision({
+    id: `joinreq-acc-${r.serverId}-${nextSeq++}`,
+    kind: 'invite',
+    priority: decision.effectivePriority,
+    avatar: r.serverAvatar ?? null,
+    title: r.serverName || 'Başvurun kabul edildi',
+    body: r.serverName ? `${r.serverName} sunucusuna katıldın` : 'Başvurun kabul edildi — sunucuya katıldın',
+    createdAt: Date.now(),
+    data: { intent: 'joinRequestAccepted', serverId: r.serverId },
+  }, decision);
+}
+
+export function handleJoinRequestRejected(r: JoinRequestResultNotif) {
+  const fp = `joinreq-rejected:${r.serverId}`;
+  if (hasSeen(fp)) return;
+  markSeen(fp);
+
+  const decision = decideNotification(
+    { intent: 'invite', sourceId: undefined, subjectId: r.serverId, createdAt: Date.now() },
+    buildPolicyContext(),
+    buildStats(),
+  );
+  if (!decision.shouldNotify) return;
+
+  dispatchDecision({
+    id: `joinreq-rej-${r.serverId}-${nextSeq++}`,
+    kind: 'invite',
+    priority: decision.effectivePriority,
+    avatar: r.serverAvatar ?? null,
+    title: r.serverName || 'Başvurun reddedildi',
+    body: r.serverName ? `${r.serverName} sunucusu başvurunu reddetti` : 'Başvurun reddedildi',
+    createdAt: Date.now(),
+    data: { intent: 'joinRequestRejected', serverId: r.serverId },
+  }, decision);
+}
+
 export function handleInvite(inv: InviteNotif) {
   const fp = `invite:${inv.id}`;
   if (hasSeen(fp)) return;
@@ -473,6 +569,14 @@ export function handleClick(toast: ToastItem) {
       const recipientId = String(toast.data.recipientId ?? '');
       const convKey = String(toast.data.conversationKey ?? '');
       if (recipientId) handlers.onDmClick?.(recipientId, convKey);
+    } else if (toast.data.intent === 'joinRequest') {
+      const serverId = toast.data.serverId ? String(toast.data.serverId) : '';
+      if (serverId) handlers.onJoinRequestClick?.(serverId);
+    } else if (toast.data.intent === 'joinRequestAccepted') {
+      const serverId = toast.data.serverId ? String(toast.data.serverId) : '';
+      if (serverId) handlers.onJoinRequestAcceptedClick?.(serverId);
+    } else if (toast.data.intent === 'joinRequestRejected') {
+      /* no-op: bilgilendirme, aksiyon yok */
     } else {
       const inviteId = String(toast.data.inviteId ?? '');
       const serverId = toast.data.serverId ? String(toast.data.serverId) : null;

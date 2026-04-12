@@ -6,8 +6,7 @@ import {
   Check,
   Headphones,
   PhoneOff,
-  Shield,
-  ShieldOff,
+  AudioLines,
   Home,
   Download,
   AlertCircle,
@@ -39,6 +38,8 @@ interface Props {
   onJoinServer: (code: string) => Promise<void>;
   onLeaveServer: (serverId: string) => Promise<void>;
   onShowCreateModal: () => void;
+  /** App-level rol + 0 sahip sunucu varsa true; değilse + buton gizlenir. */
+  canCreateServer?: boolean;
 }
 
 export default function DesktopDock({
@@ -52,6 +53,7 @@ export default function DesktopDock({
   onJoinServer,
   onLeaveServer,
   onShowCreateModal,
+  canCreateServer = true,
 }: Props) {
   const { toastMsg, setToastMsg } = useUI();
   const { currentUser } = useUser();
@@ -387,13 +389,15 @@ export default function DesktopDock({
           </AnimatePresence>
         </div>
 
-        {/* Sunucu oluştur — modern ikon */}
-        <button onClick={() => onShowCreateModal()} title="Sunucu oluştur"
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-100 border bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-emerald-500/8 hover:text-emerald-400 hover:border-emerald-500/15">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="4" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
-          </svg>
-        </button>
+        {/* Sunucu oluştur — yalnız app-level yetkili + 0 sahip sunucu varsa */}
+        {canCreateServer && (
+          <button onClick={() => onShowCreateModal()} title="Sunucu oluştur"
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-100 border bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-emerald-500/8 hover:text-emerald-400 hover:border-emerald-500/15">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="4" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+          </button>
+        )}
 
       </div>
       <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
@@ -465,9 +469,29 @@ export default function DesktopDock({
           )}
         </AnimatePresence>
       </div>
-      {/* Gürültü Susturma */}
-      <button onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)} className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${isNoiseSuppressionEnabled ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'}`} title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}>
-        {isNoiseSuppressionEnabled ? <Shield size={16} /> : <ShieldOff size={16} />}
+      {/* Gürültü Susturma — AudioLines (ses dalgası) ikonu; kalkan yerine anlamlı */}
+      <button
+        onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
+        className={`relative w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
+          isNoiseSuppressionEnabled
+            ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
+            : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'
+        }`}
+        title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}
+      >
+        <AudioLines size={16} />
+        {/* OFF state görsel işaret: ince diagonal strike — "filtre kapalı" hissi */}
+        {!isNoiseSuppressionEnabled && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <span
+              className="block w-[22px] h-[1.5px] rotate-45"
+              style={{ background: 'currentColor', opacity: 0.55 }}
+            />
+          </span>
+        )}
       </button>
       {/* Ses modu butonu */}
       {activeChannel && (() => {

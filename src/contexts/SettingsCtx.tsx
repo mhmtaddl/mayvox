@@ -1,60 +1,15 @@
 import React, { createContext, useContext } from 'react';
 import { AppTheme } from '../themes';
 
-export type AudioProfile = 'clean' | 'broadcast' | 'natural' | 'noisy' | 'custom';
+// Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
 
-export interface AudioPreset {
-  noiseSuppression: boolean;
-  noiseThreshold: number;
-  pttReleaseDelay: number;
-}
-
-export const AUDIO_PRESETS: Record<Exclude<AudioProfile, 'custom'>, AudioPreset> = {
-  clean:     { noiseSuppression: true,  noiseThreshold: 15, pttReleaseDelay: 150 },
-  broadcast: { noiseSuppression: true,  noiseThreshold: 35, pttReleaseDelay: 300 },
-  natural:   { noiseSuppression: false, noiseThreshold: 5,  pttReleaseDelay: 100 },
-  noisy:     { noiseSuppression: true,  noiseThreshold: 42, pttReleaseDelay: 350 },
-};
-
-export interface AudioProfileMeta {
-  id: Exclude<AudioProfile, 'custom'>;
-  icon: string;
-  label: string;
-  desc: string;
-  tags: string[];
-}
-
-export const AUDIO_PROFILE_META: AudioProfileMeta[] = [
-  {
-    id: 'clean',
-    icon: '🎙️',
-    label: 'Temiz Ses',
-    desc: 'Dengeli filtre, günlük kullanım için ideal.',
-    tags: ['Gürültü susturma', 'Orta eşik'],
-  },
-  {
-    id: 'broadcast',
-    icon: '🎧',
-    label: 'Yayıncı Modu',
-    desc: 'Maksimum filtre, en temiz ses kalitesi.',
-    tags: ['Agresif filtre', 'Uzun gecikme'],
-  },
-  {
-    id: 'natural',
-    icon: '🗣️',
-    label: 'Doğal Ses',
-    desc: 'Minimum işlem, ham ve doğal ses.',
-    tags: ['Filtre kapalı', 'Düşük gecikme'],
-  },
-  {
-    id: 'noisy',
-    icon: '🔇',
-    label: 'Gürültülü Ortam',
-    desc: 'Kafe ve dış ortam için yüksek baskılama.',
-    tags: ['Yüksek eşik', 'Arka plan filtreli'],
-  },
-];
+/**
+ * Noise suppression modeli (v2 — preset sistemi kaldırıldı):
+ *  - `isNoiseSuppressionEnabled`: üst bardan toggle; true ise RNNoise aktif
+ *  - `noiseSuppressionStrength`: 0..100 slider; 0 bypass, 100 tam RNNoise
+ *  - `noiseThreshold`: internal VAD eşiği; UI'da yok, default 15
+ */
 
 export interface SettingsContextType {
   currentTheme: AppTheme;
@@ -63,6 +18,10 @@ export interface SettingsContextType {
   setIsLowDataMode: (v: boolean) => void;
   isNoiseSuppressionEnabled: boolean;
   setIsNoiseSuppressionEnabled: (v: boolean) => void;
+  /** 0..100 — RNNoise dry/wet mix. 0 bypass, 100 full denoise. */
+  noiseSuppressionStrength: number;
+  setNoiseSuppressionStrength: (v: number) => void;
+  /** VAD sessizlik eşiği — UI yok, internal. */
   noiseThreshold: number;
   setNoiseThreshold: (v: number) => void;
   pttKey: string;
@@ -89,8 +48,6 @@ export interface SettingsContextType {
   setSoundInvite: (v: boolean) => void;
   soundInviteVariant: 1 | 2;
   setSoundInviteVariant: (v: 1 | 2) => void;
-  audioProfile: AudioProfile;
-  setAudioProfile: (v: AudioProfile) => void;
   autoLeaveEnabled: boolean;
   setAutoLeaveEnabled: (v: boolean) => void;
   autoLeaveMinutes: number;

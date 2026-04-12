@@ -1,4 +1,5 @@
 import { queryOne, queryMany, pool } from '../repositories/db';
+import { supabase } from '../supabaseClient';
 import { getPlanLimits } from '../planConfig';
 import type { Server, ServerResponse, ServerActivity } from '../types';
 import { nanoid } from 'nanoid';
@@ -98,8 +99,43 @@ export async function createServer(userId: string, name: string, description: st
   const trimmedName = name.trim();
   if (!trimmedName) throw new AppError(400, 'Sunucu adı boş olamaz');
 
+  // ── Plan-based creation guard ──
+  // Rol sistemi artık sunucu açmaya karışmaz. Tek kaynak: profiles.server_creation_plan.
+  //   'none'  → 403
+  //   'free'  → yalnızca free
+  //   'pro'   → free + pro
+  //   'ultra' → tüm planlar
+  // Admin kullanıcılar migration sırasında 'ultra' set edilir; sonradan override edilebilir.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('server_creation_plan, is_admin, is_primary_admin')
+    .eq('id', userId)
+    .maybeSingle();
+  const rawTier = profile?.server_creation_plan as string | undefined;
+  const userTier: 'none' | 'free' | 'pro' | 'ultra' =
+    rawTier === 'free' || rawTier === 'pro' || rawTier === 'ultra' || rawTier === 'none'
+      ? rawTier
+      : (profile?.is_admin || profile?.is_primary_admin ? 'ultra' : 'none');
+  if (userTier === 'none') {
+    throw new AppError(403, 'Sunucu oluşturma yetkin yok');
+  }
+  const requestedPlan: 'free' | 'pro' | 'ultra' =
+    plan === 'pro' ? 'pro' : plan === 'ultra' ? 'ultra' : 'free';
+  const TIER_RANK: Record<string, number> = { none: 0, free: 1, pro: 2, ultra: 3 };
+  if (TIER_RANK[requestedPlan] > TIER_RANK[userTier]) {
+    throw new AppError(403, `${requestedPlan.toUpperCase()} plan için yetkin yok (mevcut: ${userTier.toUpperCase()})`);
+  }
+
+  // ── Ownership limit: plan'dan bağımsız, kullanıcı başına 1 aktif sahip sunucu ──
+  const owned = await queryOne<{ c: string }>(
+    `SELECT COUNT(*)::text AS c FROM servers WHERE owner_user_id = $1`,
+    [userId]
+  );
+  if (parseInt(owned?.c ?? '0', 10) >= 1) {
+    throw new AppError(409, 'Aynı anda en fazla 1 sunucunun sahibi olabilirsin. Mevcut sunucunu silince yeni bir tane açabilirsin.');
+  }
+
   // Duplicate name guard — GLOBAL unique, case-insensitive.
-  // Pre-check + UNIQUE INDEX on LOWER(name) ile çift katman.
   const dup = await queryOne<{ id: string }>(
     `SELECT id FROM servers WHERE LOWER(name) = LOWER($1) LIMIT 1`,
     [trimmedName]
@@ -117,12 +153,15 @@ export async function createServer(userId: string, name: string, description: st
 
     // Sunucu oluştur
     const mottoVal = (motto || '').slice(0, 15);
-    const selectedPlan = (plan === 'pro') ? 'pro' : 'free'; // ultra henüz desteklenmiyor
+    const selectedPlan = requestedPlan;
     const limits = getPlanLimits(selectedPlan);
+    // Default join_policy: public sunucu → 'open' (frictionless join);
+    // private sunucu → 'invite_only' (davet şart).
+    const defaultJoinPolicy = isPublic ? 'open' : 'invite_only';
     const { rows: [server] } = await client.query<Server>(
-      `INSERT INTO servers (owner_user_id, name, short_name, slug, description, invite_code, is_public, motto, plan, capacity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [userId, name, shortName, slug, description, inviteCode, isPublic, mottoVal, selectedPlan, limits.capacity]
+      `INSERT INTO servers (owner_user_id, name, short_name, slug, description, invite_code, is_public, motto, plan, capacity, join_policy)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [userId, name, shortName, slug, description, inviteCode, isPublic, mottoVal, selectedPlan, limits.capacity, defaultJoinPolicy]
     );
 
     // Owner'ı member olarak ekle
@@ -186,12 +225,15 @@ export async function getServer(serverId: string, userId: string): Promise<Serve
   return toResponse(row, { server_id: row.id, member_count: row.member_count, active_count: row.active_count, updated_at: '' }, row.role ?? undefined);
 }
 
-/** Public sunucu arama — isim veya slug ile, üyelik durumunu role alanıyla döndür */
+/** Public sunucu arama — isim/slug ile. myJoinRequestStatus: user'ın pending/accepted/rejected başvurusu varsa döner. */
 export async function searchServers(query: string, userId: string): Promise<ServerResponse[]> {
   const q = `%${query}%`;
-  const rows = await queryMany<Server & { member_count: number; active_count: number; role: string | null }>(
+  const rows = await queryMany<Server & { member_count: number; active_count: number; role: string | null; my_request_status: string | null }>(
     `SELECT s.*, COALESCE(sa.member_count, 0) as member_count, COALESCE(sa.active_count, 0) as active_count,
-            sm.role
+            sm.role,
+            (SELECT jr.status FROM server_join_requests jr
+             WHERE jr.server_id = s.id AND jr.user_id = $2::uuid
+             ORDER BY (jr.status = 'pending') DESC, jr.created_at DESC LIMIT 1) AS my_request_status
      FROM servers s
      LEFT JOIN server_activity sa ON sa.server_id = s.id
      LEFT JOIN server_members sm ON sm.server_id = s.id AND sm.user_id = $2
@@ -202,27 +244,55 @@ export async function searchServers(query: string, userId: string): Promise<Serv
     [q, userId]
   );
 
-  return rows.map(r => toResponse(r, { server_id: r.id, member_count: r.member_count, active_count: r.active_count, updated_at: '' }, r.role ?? undefined));
+  return rows.map(r => {
+    const resp = toResponse(r, { server_id: r.id, member_count: r.member_count, active_count: r.active_count, updated_at: '' }, r.role ?? undefined);
+    (resp as ServerResponse & { myJoinRequestStatus?: string | null }).myJoinRequestStatus = r.my_request_status ?? null;
+    return resp;
+  });
 }
 
 /** Akıllı katılma — davet kodu, slug, ad veya sunucu ID ile */
 export async function joinByInvite(userId: string, input: string): Promise<ServerResponse> {
   const q = input.trim();
 
-  // 1. Davet kodu ile ara
-  let server = await queryOne<Server>('SELECT * FROM servers WHERE invite_code = $1', [q.toUpperCase()]);
-  let viaInviteCode = !!server;
+  // 1. `server_invites` tablosundaki davet kodu (admin panelinden oluşturulan) ile ara
+  //    — aktif, süresi dolmamış, kullanım limitini aşmamış invite
+  let server: Server | null = null;
+  let viaInviteCode = false;
+  let serverInviteId: string | null = null;
+  const inviteRow = await queryOne<{ id: string; server_id: string; max_uses: number | null; used_count: number; expires_at: string | null; is_active: boolean }>(
+    `SELECT id, server_id, max_uses, used_count, expires_at, is_active
+     FROM server_invites
+     WHERE code = $1 AND is_active = true
+       AND (expires_at IS NULL OR expires_at > now())
+       AND (max_uses IS NULL OR used_count < max_uses)
+     LIMIT 1`,
+    [q.toUpperCase()]
+  );
+  if (inviteRow) {
+    server = await queryOne<Server>('SELECT * FROM servers WHERE id = $1', [inviteRow.server_id]);
+    if (server) {
+      viaInviteCode = true;
+      serverInviteId = inviteRow.id;
+    }
+  }
 
-  // 2. Slug ile ara
+  // 2. `servers.invite_code` (legacy per-server fixed code)
+  if (!server) {
+    server = await queryOne<Server>('SELECT * FROM servers WHERE invite_code = $1', [q.toUpperCase()]);
+    if (server) viaInviteCode = true;
+  }
+
+  // 3. Slug ile ara
   if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE slug = $1', [q.toLowerCase()]);
 
-  // 3. Slug.mv ile ara
+  // 4. Slug.mv ile ara
   if (!server && !q.includes('.')) server = await queryOne<Server>('SELECT * FROM servers WHERE slug = $1', [q.toLowerCase() + '.mv']);
 
-  // 4. Sunucu adı ile ara (tam eşleşme, case-insensitive)
+  // 5. Sunucu adı ile ara (tam eşleşme, case-insensitive)
   if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE LOWER(name) = $1', [q.toLowerCase()]);
 
-  // 5. Sunucu ID ile ara
+  // 6. Sunucu ID ile ara
   if (!server) server = await queryOne<Server>('SELECT * FROM servers WHERE id::text = $1', [q]);
 
   if (!server) throw new AppError(404, 'Böyle bir davet kodu bulunamadı. Davet kodunu kontrol et veya yeni bir davet kodu edin.');
@@ -235,13 +305,14 @@ export async function joinByInvite(userId: string, input: string): Promise<Serve
   const banned = await queryOne<{ id: string }>('SELECT id FROM server_bans WHERE server_id = $1 AND user_id = $2', [server.id, userId]);
   if (banned) throw new AppError(403, 'Bu sunucuya erişimin kısıtlanmış');
 
-  // Gizli sunucu + davet kodu olmadan katılma girişimi
-  if (!server.is_public && !viaInviteCode) {
-    throw new AppError(403, 'Bu sunucu yalnızca davet ile katılıma açık');
-  }
-
-  // Davetli-only sunucu + davet kodu olmadan
-  if (server.join_policy === 'invite_only' && !viaInviteCode) {
+  // Frictionless join kuralı:
+  //   visibility=public (is_public=true) AND join_policy='open' → davet gerekmez
+  //   Diğer her durumda davet kodu şart.
+  const isFrictionless = server.is_public === true && server.join_policy === 'open';
+  if (!isFrictionless && !viaInviteCode) {
+    if (!server.is_public) {
+      throw new AppError(403, 'Bu sunucu yalnızca davet ile katılıma açık');
+    }
     throw new AppError(403, 'Bu sunucuya katılmak için davet kodu gerekiyor');
   }
 
@@ -275,6 +346,13 @@ export async function joinByInvite(userId: string, input: string): Promise<Serve
       [server.id]
     );
     await assignSystemRoleToMember(client, server.id, userId, 'member');
+    // server_invites usage increment — idempotent ON CONFLICT yok; zaten FOR UPDATE lock'u tuttu.
+    if (serverInviteId) {
+      await client.query(
+        'UPDATE server_invites SET used_count = used_count + 1 WHERE id = $1',
+        [serverInviteId]
+      );
+    }
     await client.query('COMMIT');
     newMemberCount = currentCount + 1;
   } catch (err) {

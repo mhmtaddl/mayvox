@@ -29,7 +29,7 @@
     justify-content: center;
   }
 
-  /* Çok hafif glow — PNG arkasında derinlik */
+  /* Arkada hafif glow — derinlik için, abartısız */
   .mark::before {
     content: '';
     position: absolute;
@@ -40,14 +40,30 @@
     pointer-events: none;
   }
 
-  .logo {
-    width: 120px;
-    height: 120px;
-    object-fit: contain;
-    position: relative;
-    z-index: 1;
-    animation: breathe 2.5s ease-in-out infinite;
+  /* 5 frame üst üste — sadece aktif olanın opacity'si 1, diğerleri 0.
+   * Scale logo kutusunda (.mark) uygulanıyor — tüm frame'ler tek solukta büyüyüp küçülüyor,
+   * frame switch sırasında zıplama yaşanmıyor.
+   */
+  /* Bir nefes = bir frame. Peak'te (scale=max) JS frame swap yapar,
+   * böylece her büyüme-küçülme sonunda yeni frame gelir. */
+  .mark {
+    animation: breathe 1400ms ease-in-out infinite;
   }
+
+  .frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 260ms ease-in-out;
+    will-change: opacity;
+  }
+  .frame.active { opacity: 1; }
+
+  /* Fallback — bütün JS/frame yüklenmezse ilk frame yine görünür */
+  .frame:first-child:not(.active) { opacity: 1; }
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -56,7 +72,7 @@
 
   @keyframes breathe {
     0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.03); }
+    50%      { transform: scale(1.07); }
   }
 
   @keyframes glowPulse {
@@ -66,8 +82,40 @@
 </style>
 </head>
 <body>
-  <div class="mark">
-    <img class="logo" src="splash-logo.png" alt="MAYVOX" draggable="false">
+  <div class="mark" id="mark">
+    <img class="frame active" src="splash-frame-0.png" alt="" draggable="false">
+    <img class="frame"        src="splash-frame-1.png" alt="" draggable="false">
+    <img class="frame"        src="splash-frame-2.png" alt="" draggable="false">
+    <img class="frame"        src="splash-frame-3.png" alt="" draggable="false">
+    <img class="frame"        src="splash-frame-4.png" alt="" draggable="false">
   </div>
+  <script>
+    // 5 frame rotasyonu — 1 nefes = 1 frame (1400ms döngü).
+    // Peak'te (scale max, cycle'ın %50'si = 700ms) frame swap yapılır;
+    // büyüyüp küçülürken sakin kalır, zirvede yeni frame belirir.
+    // Fast preload'da kullanıcı ilk frame'i görür ve sorunsuz kapanır;
+    // yavaş load'da 5 frame akıcı loop eder. Toplam bir tam tur ≈ 7s.
+    (function () {
+      var frames = document.querySelectorAll('.frame');
+      if (!frames || frames.length < 2) return;
+      var idx = 0;
+      var CYCLE_MS = 1400;
+      var swap = function () {
+        var prev = idx;
+        idx = (idx + 1) % frames.length;
+        frames[prev].classList.remove('active');
+        frames[idx].classList.add('active');
+      };
+      // İlk swap breath'in peak'inde (yarıda); sonra her cycle başında.
+      var kickoff = setTimeout(function () {
+        swap();
+        interval = setInterval(swap, CYCLE_MS);
+      }, CYCLE_MS / 2);
+      var interval = null;
+      var cleanup = function () { clearTimeout(kickoff); if (interval) clearInterval(interval); };
+      window.addEventListener('pagehide', cleanup);
+      window.addEventListener('beforeunload', cleanup);
+    })();
+  </script>
 </body>
 </html>

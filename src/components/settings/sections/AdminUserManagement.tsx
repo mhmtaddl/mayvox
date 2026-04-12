@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Users, Search, X, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban } from 'lucide-react';
+import { Users, Search, X, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban, Server } from 'lucide-react';
 import { cardCls } from '../shared';
 import { formatFullName } from '../../../lib/formatName';
 import { useUser } from '../../../contexts/UserContext';
@@ -26,9 +26,26 @@ export default function AdminUserManagement() {
   const {
     handleMuteUser, handleBanUser, handleUnmuteUser, handleUnbanUser,
     handleDeleteUser, handleToggleAdmin, handleToggleModerator,
+    handleSetServerCreationPlan,
     passwordResetRequests, handleAdminManualReset,
     appVersion: currentAppVersion,
   } = useAppState();
+
+  // ── Server creation plan cycle ──
+  const PLAN_CYCLE: Array<'none' | 'free' | 'pro' | 'ultra'> = ['none', 'free', 'pro', 'ultra'];
+  const PLAN_LABEL: Record<'none' | 'free' | 'pro' | 'ultra', string> = { none: '—', free: 'F', pro: 'P', ultra: 'U' };
+  const PLAN_STYLE: Record<'none' | 'free' | 'pro' | 'ultra', string> = {
+    none: 'bg-[var(--theme-border)]/15 text-[var(--theme-secondary-text)]/60',
+    free: 'bg-slate-500/15 text-slate-300 border border-slate-500/30',
+    pro: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+    ultra: 'bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30',
+  };
+  const cyclePlan = async (userId: string, current: 'none' | 'free' | 'pro' | 'ultra') => {
+    const idx = PLAN_CYCLE.indexOf(current);
+    const next = PLAN_CYCLE[(idx + 1) % PLAN_CYCLE.length];
+    await handleSetServerCreationPlan(userId, next);
+    setToastMsg(`Sunucu oluşturma yetkisi: ${next.toUpperCase()}`);
+  };
 
   const isOutdated = (userVersion: string, appVer: string): boolean => {
     const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
@@ -259,6 +276,22 @@ export default function AdminUserManagement() {
                           <span className={`text-[7px] md:text-[8px] font-semibold shrink-0 px-1 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
                             {hasVersion ? `v${user.appVersion}` : 'Eski'}
                           </span>
+                          {(() => {
+                            const p = (user.serverCreationPlan ?? 'none') as 'none' | 'free' | 'pro' | 'ultra';
+                            if (p === 'none') return null;
+                            const style = p === 'free'
+                              ? { background: 'rgba(148,163,184,0.10)', color: 'rgb(203,213,225)', border: '1px solid rgba(148,163,184,0.25)' }
+                              : p === 'pro'
+                              ? { background: 'rgba(245,158,11,0.10)', color: 'rgb(251,191,36)', border: '1px solid rgba(245,158,11,0.28)' }
+                              : { background: 'rgba(217,70,239,0.10)', color: 'rgb(232,121,249)', border: '1px solid rgba(217,70,239,0.28)' };
+                            return (
+                              <span title={`Sunucu oluşturma: ${p.toUpperCase()}`}
+                                className="text-[7px] md:text-[8px] font-bold shrink-0 px-1 py-0.5 rounded-full leading-none"
+                                style={style}>
+                                {p === 'free' ? 'F' : p === 'pro' ? 'P' : 'U'}
+                              </span>
+                            );
+                          })()}
                         </div>
                         {(user.isMuted || user.isVoiceBanned) && (
                           <div className="flex flex-wrap gap-1 mt-0.5">
@@ -314,6 +347,24 @@ export default function AdminUserManagement() {
                           <div className="w-px h-5 bg-[var(--theme-border)]/30 mx-0.5 md:mx-1" />
                         </>
                       )}
+
+                      {/* Sunucu oluşturma planı — cycle (NONE → F → P → U → NONE) */}
+                      {(currentUser.isPrimaryAdmin || currentUser.isAdmin) && (() => {
+                        const plan = (user.serverCreationPlan ?? 'none') as 'none' | 'free' | 'pro' | 'ultra';
+                        return (
+                          <>
+                            <button
+                              onClick={() => cyclePlan(user.id, plan)}
+                              title={`Sunucu oluşturma: ${plan.toUpperCase()} — tıklayıp sırala`}
+                              className={`flex items-center gap-1 h-7 md:h-8 px-1.5 rounded transition-all active:scale-90 ${PLAN_STYLE[plan]}`}
+                            >
+                              <Server size={10} className="shrink-0" />
+                              <span className="text-[9px] font-bold leading-none">{PLAN_LABEL[plan]}</span>
+                            </button>
+                            <div className="w-px h-5 bg-[var(--theme-border)]/30 mx-0.5 md:mx-1" />
+                          </>
+                        );
+                      })()}
 
                       {/* Sistem */}
                       <div className="flex items-center gap-0.5">

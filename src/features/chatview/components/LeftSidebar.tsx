@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Volume2,
   Lock,
@@ -8,10 +9,12 @@ import {
   Headphones,
   Settings,
   Compass,
+  Power,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
 import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
 import { ConnectionQualityIndicator } from '../../../components/chat';
+import appLogo from '../../../assets/dock-logo-mv_tr.png';
 import DeviceBadge from '../../../components/chat/DeviceBadge';
 import UpdateVersionHub from '../../update/components/UpdateVersionHub';
 import { useChannel } from '../../../contexts/ChannelContext';
@@ -37,10 +40,13 @@ interface Props {
   activeServerPlan?: string | null;
   onShowSettings?: () => void;
   onShowDiscover?: () => void;
+  onLeaveServer?: (serverId: string) => Promise<void>;
 }
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
   const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const canReorderChannels = accessContext?.flags.canReorderChannels ?? false;
   const canCreateChannel = accessContext?.flags.canCreateChannel ?? false;
   const canManageServer = accessContext?.flags.canManageServer ?? false;
@@ -96,25 +102,81 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
       <div className="px-5 pt-5 pb-3.5 shrink-0 flex items-center gap-3.5 select-none group/header">
         {activeServerAvatarUrl ? (
           <img src={activeServerAvatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.1)]" style={{ border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }} draggable={false} />
-        ) : (
+        ) : activeServerShortName ? (
           <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(var(--theme-accent-rgb),0.08)]"
             style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.06))', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
-            <span className="text-[13px] font-bold text-[var(--theme-accent)]">{activeServerShortName ?? 'MV'}</span>
+            <span className="text-[13px] font-bold text-[var(--theme-accent)]">{activeServerShortName}</span>
+          </div>
+        ) : (
+          <div className="relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(var(--theme-accent-rgb),0.08)]"
+            style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.10), rgba(var(--theme-accent-rgb), 0.04))', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
+            {/* Kulaklıktan yayılan sessiz ses — sol + sağ arc, premium idle */}
+            <svg className="mv-brand-wave-l" viewBox="0 0 8 12" fill="none" aria-hidden="true">
+              <path d="M6 2 C 3 4, 3 8, 6 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+              <path d="M3 3.2 C 1.3 5, 1.3 7, 3 8.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.65" />
+            </svg>
+            <svg className="mv-brand-wave-r" viewBox="0 0 8 12" fill="none" aria-hidden="true">
+              <path d="M2 2 C 5 4, 5 8, 2 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+              <path d="M5 3.2 C 6.7 5, 6.7 7, 5 8.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.65" />
+            </svg>
+            <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover rounded-[inherit] mv-brand-breath" draggable={false}
+              onError={e => {
+                const img = e.currentTarget;
+                img.style.display = 'none';
+                const fb = document.createElement('span');
+                fb.className = 'text-[13px] font-bold text-[var(--theme-accent)]';
+                fb.textContent = 'MV';
+                img.parentElement?.appendChild(fb);
+              }} />
           </div>
         )}
         <div className="flex flex-col leading-none min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h1 className="text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">{activeServerName ?? 'MAYVOX'}</h1>
+            <h1 className="text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">
+              {(() => {
+                // Marka rengi uyumu: ikinci kelime (veya MAYVOX'ta "VOX") accent renginde.
+                const raw = activeServerName ?? 'MAYVOX';
+                const spaceIdx = raw.indexOf(' ');
+                if (spaceIdx > 0) {
+                  const first = raw.slice(0, spaceIdx);
+                  const rest = raw.slice(spaceIdx + 1);
+                  return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
+                }
+                // Tek kelime → sadece MAYVOX için "MAY" + accent "VOX" split'i uygula.
+                if (raw.toUpperCase() === 'MAYVOX') {
+                  return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
+                }
+                return raw;
+              })()}
+            </h1>
             {activeServerPublic === false && <Lock size={10} className="text-[var(--theme-secondary-text)]/35 shrink-0" />}
           </div>
           <span className="text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerMotto || 'voice & chat'}</span>
         </div>
-        {onShowSettings && (canManageServer || activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod') && (
-          <button onClick={onShowSettings} title="Sunucu Ayarları"
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
-            <Settings size={13} />
-          </button>
-        )}
+        {activeServerId && (() => {
+          // SUNUCU ROLÜ tek belirleyici — app-level admin (canManageServer flag) kasten
+          // dikkate alınmaz; bu buton sunucu-içi yetki içindir.
+          //   owner / admin / mod   → Ayarlar ikonu
+          //   member (veya tanımsız) → Ayrıl (Power) ikonu
+          const hasServerStaffRole = activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod';
+          if (hasServerStaffRole && onShowSettings) {
+            return (
+              <button onClick={onShowSettings} title="Sunucu Ayarları"
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
+                <Settings size={13} />
+              </button>
+            );
+          }
+          if (onLeaveServer) {
+            return (
+              <button onClick={() => setLeaveConfirmOpen(true)} title="Sunucudan Ayrıl"
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150">
+                <Power size={13} />
+              </button>
+            );
+          }
+          return null;
+        })()}
       </div>
       <div className="mx-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.07), transparent)' }} />
 
@@ -398,6 +460,35 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
         </div>
       </div>
+
+      {/* Sunucudan Ayrıl onay modalı — portal ile body'ye; aside'in backdrop-filter'ı
+          fixed elementlere containing block olur, aksi halde modal panel içinde kalır. */}
+      {leaveConfirmOpen && activeServerId && onLeaveServer && createPortal(
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => !leaving && setLeaveConfirmOpen(false)}>
+          <div className="w-[340px] rounded-2xl p-5" onClick={e => e.stopPropagation()} style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.97)', border: '1px solid rgba(239,68,68,0.12)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+            <h3 className="text-[13px] font-bold text-red-400 mb-1">Sunucudan Ayrıl</h3>
+            <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mb-4">
+              <strong className="text-[var(--theme-text)]">{activeServerName}</strong> sunucusundan ayrılmak istediğinden emin misin? Tekrar katılmak için davet gerekir.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setLeaveConfirmOpen(false)} disabled={leaving}
+                className="h-8 px-3 rounded-lg text-[10px] font-semibold text-[var(--theme-secondary-text)]" style={{ background: 'rgba(var(--glass-tint), 0.06)' }}>Vazgeç</button>
+              <button
+                onClick={async () => {
+                  if (!activeServerId || !onLeaveServer) return;
+                  setLeaving(true);
+                  try { await onLeaveServer(activeServerId); setLeaveConfirmOpen(false); }
+                  finally { setLeaving(false); }
+                }}
+                disabled={leaving}
+                className="h-8 px-3 rounded-lg text-[10px] font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                {leaving ? 'Ayrılıyor...' : 'Ayrıl'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </aside>
   );
 }

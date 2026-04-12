@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Lock, Plus, Search, UserMinus, X, AlertCircle, Inbox, Link2, Check } from 'lucide-react';
 import Avatar from '../ui/Avatar';
@@ -132,19 +133,19 @@ export default function ChannelAccessModal({ open, onClose, serverId, channelId,
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[400] flex items-center justify-center" style={{ background: 'rgba(0, 0, 0, 0.72)' }} onClick={onClose}>
       <motion.div
-        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.14, ease: [0.2, 0, 0, 1] }}
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
         className="w-[480px] max-w-[92vw] rounded-2xl overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
         style={{
           maxHeight: 'min(80vh, 700px)',
-          background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.97)',
-          border: '1px solid rgba(var(--glass-tint), 0.1)',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
         }}
       >
         <div className="px-6 pt-6 pb-3 flex items-center gap-4 shrink-0">
@@ -309,7 +310,8 @@ export default function ChannelAccessModal({ open, onClose, serverId, channelId,
           </div>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

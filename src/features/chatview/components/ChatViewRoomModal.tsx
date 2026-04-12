@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Sparkles, Settings } from 'lucide-react';
 import { ROOM_MODE_LIST } from '../../../lib/roomModeConfig';
@@ -23,22 +24,27 @@ interface Props {
 }
 
 export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave }: Props) {
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      transition={{ duration: 0.14 }}
+      className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.72)' }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.96, opacity: 0, y: 12 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.96, opacity: 0, y: 12 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="w-full max-w-[420px] rounded-2xl border border-[var(--theme-accent)]/15 overflow-hidden"
-        style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
+        initial={{ scale: 0.97, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.97, opacity: 0 }}
+        transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+        className="w-full max-w-[420px] rounded-2xl overflow-hidden"
+        style={{
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top accent line */}
@@ -212,6 +218,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
           </div>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

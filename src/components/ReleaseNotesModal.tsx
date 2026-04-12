@@ -71,18 +71,15 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
         initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-[85%] max-w-sm max-h-[60vh] flex overflow-hidden rounded-2xl transition-shadow duration-200 hover:shadow-[0_16px_48px_rgba(0,0,0,0.35),0_0_25px_rgba(var(--theme-accent-rgb),0.08)] hover:border-[rgba(var(--theme-accent-rgb),0.2)]"
+        className="relative w-[85%] max-w-sm max-h-[60vh] flex overflow-hidden rounded-2xl"
         style={{
-          background: 'linear-gradient(135deg, rgba(var(--theme-bg-rgb), 0.9), rgba(var(--theme-surface-card-rgb, var(--theme-bg-rgb)), 0.85))',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
         }}
       >
         {/* Left accent bar */}
         <div className="w-[3px] shrink-0 rounded-l-full bg-[var(--theme-accent)]" />
-
-        {/* Top radial light */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(ellipse_at_50%_0%,rgba(var(--theme-accent-rgb),0.10),transparent_70%)]" />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Header */}

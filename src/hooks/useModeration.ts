@@ -5,6 +5,7 @@ import {
   deleteUser,
   signOut,
   toggleUserModerator,
+  setServerCreationPlan as setServerCreationPlanRpc,
 } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import type { User } from '../types';
@@ -156,6 +157,16 @@ export function useModeration({
     broadcastModeration(userId, updates);
   };
 
+  const handleSetServerCreationPlan = async (userId: string, newPlan: 'none' | 'free' | 'pro' | 'ultra'): Promise<void> => {
+    if (!currentUser.isPrimaryAdmin && !currentUser.isAdmin) return;
+    if (!isSupabaseUser(userId)) return;
+    const { data, error } = await setServerCreationPlanRpc(userId, newPlan);
+    if (error || rpcError(data)) { showError(); return; }
+    logger.info('Moderation: set-server-creation-plan', { by: currentUser.id, target: userId, newPlan });
+    setAllUsers(prev => prev.map(u => (u.id === userId ? { ...u, serverCreationPlan: newPlan } : u)));
+    broadcastModeration(userId, { serverCreationPlan: newPlan });
+  };
+
   const handleToggleModerator = async (userId: string): Promise<void> => {
     if (!currentUser.isPrimaryAdmin) return;
     const targetUser = allUsers.find(u => u.id === userId);
@@ -182,5 +193,6 @@ export function useModeration({
     handleDeleteUser,
     handleToggleAdmin,
     handleToggleModerator,
+    handleSetServerCreationPlan,
   };
 }
