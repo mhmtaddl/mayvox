@@ -2,9 +2,10 @@ import { queryMany, queryOne, pool } from '../repositories/db';
 import type { Channel, ChannelResponse } from '../types';
 import { AppError } from './serverService';
 import { filterVisibleChannels } from './channelAccessService';
-import { getServerAccessContext, assertCapability, assertPlanAllows, invalidateAccessContextForServer } from './accessContextService';
+import { getServerAccessContext, assertCapability, invalidateAccessContextForServer } from './accessContextService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
+import { assertLimit } from './planService';
 
 // ── Sabitler ──
 const NAME_MIN = 1;
@@ -121,7 +122,14 @@ export async function createChannel(
 ): Promise<ChannelResponse> {
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.CHANNEL_CREATE, 'Kanal oluşturmak için yetkin yok');
-  assertPlanAllows(ctx, 'channel.create');
+
+  // Plan enforcement — tek source of truth: assertLimit (canlı COUNT).
+  // Önceki assertPlanAllows (resolver flag'ine dayalı yaklaşık kontrol) kaldırıldı;
+  // capability flag'i UI hint olarak kalıyor ama mutation authority sadece assertLimit.
+  await assertLimit(serverId, 'channel.create', userId);
+  if (input.isHidden || input.isInviteOnly) {
+    await assertLimit(serverId, 'privateChannel.create', userId);
+  }
 
   const name = normalizeName(input.name);
   const mode = normalizeMode(input.mode);

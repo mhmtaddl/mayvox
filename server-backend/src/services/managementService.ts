@@ -8,6 +8,7 @@ import { assignSystemRoleToMember } from './roleSeedService';
 import { getServerAccessContext, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
+import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 
 // ── Yetki kontrol ──
 
@@ -358,10 +359,44 @@ export async function acceptInvite(userId: string, inviteId: string): Promise<vo
     [invite.server_id, userId]
   );
   if (!existing) {
-    await pool.query('INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)', [invite.server_id, userId, 'member']);
-    await assignSystemRoleToMember(pool, invite.server_id, userId, 'member');
+    // Race overshoot guard: transactional + servers row FOR UPDATE.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const capRow = await client.query<{ member_count: number; capacity: number }>(
+        `SELECT COALESCE(sa.member_count, 0) AS member_count, s.capacity
+         FROM servers s LEFT JOIN server_activity sa ON sa.server_id = s.id
+         WHERE s.id = $1 FOR UPDATE OF s`,
+        [invite.server_id]
+      );
+      const c = capRow.rows[0];
+      if (c) {
+        const plan = await getServerPlan(invite.server_id);
+        const maxMembers = getPlanLimits(plan).maxMembers;
+        const effectiveLimit = Math.min(c.capacity, maxMembers);
+        if (c.member_count >= effectiveLimit) {
+          await client.query('ROLLBACK');
+          await emitLimitHit(invite.server_id, userId, 'server.join', plan, c.member_count, effectiveLimit);
+          throw new AppError(403, 'Sunucu kapasitesi dolu');
+        }
+      }
+      await client.query(
+        'INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)',
+        [invite.server_id, userId, 'member']
+      );
+      await client.query(
+        'UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1',
+        [invite.server_id]
+      );
+      await assignSystemRoleToMember(client, invite.server_id, userId, 'member');
+      await client.query('COMMIT');
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* no-op */ }
+      throw err instanceof AppError ? err : new AppError(500, 'Davet kabul edilemedi');
+    } finally {
+      client.release();
+    }
     invalidateAccessContext(userId, invite.server_id);
-    await pool.query('UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1', [invite.server_id]);
   }
 
   await pool.query("UPDATE server_user_invites SET status = 'accepted', responded_at = now() WHERE id = $1", [inviteId]);

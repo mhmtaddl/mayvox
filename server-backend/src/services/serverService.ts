@@ -3,6 +3,7 @@ import { getPlanLimits } from '../planConfig';
 import type { Server, ServerResponse, ServerActivity } from '../types';
 import { nanoid } from 'nanoid';
 import { seedSystemRolesForServer, assignSystemRoleToMember } from './roleSeedService';
+import { getServerPlan, getPlanLimits as getPlanLimitsV2, emitLimitHit } from './planService';
 
 function generateInviteCode(): string {
   return nanoid(8).toUpperCase();
@@ -236,20 +237,46 @@ export async function joinByInvite(userId: string, input: string): Promise<Serve
     throw new AppError(403, 'Bu sunucuya katılmak için davet kodu gerekiyor');
   }
 
-  // Kapasite kontrolü
-  const activity = await queryOne<{ member_count: number }>('SELECT member_count FROM server_activity WHERE server_id = $1', [server.id]);
-  if (activity && activity.member_count >= server.capacity) {
-    throw new AppError(403, 'Sunucu kapasitesi dolu, şu an katılınamıyor');
+  // Kapasite kontrolü + insert — transactional + FOR UPDATE ile race overshoot guard.
+  const client = await pool.connect();
+  let newMemberCount = 0;
+  try {
+    await client.query('BEGIN');
+    const capRow = await client.query<{ member_count: number }>(
+      `SELECT COALESCE(member_count, 0) AS member_count FROM server_activity
+       WHERE server_id = $1`,
+      [server.id]
+    );
+    // servers satırı lock'la — eş zamanlı join'ler serileşir.
+    await client.query('SELECT 1 FROM servers WHERE id = $1 FOR UPDATE', [server.id]);
+    const currentCount = capRow.rows[0]?.member_count ?? 0;
+    const plan = await getServerPlan(server.id);
+    const maxMembers = getPlanLimitsV2(plan).maxMembers;
+    const effectiveLimit = Math.min(server.capacity, maxMembers);
+    if (currentCount >= effectiveLimit) {
+      await client.query('ROLLBACK');
+      await emitLimitHit(server.id, userId, 'server.join', plan, currentCount, effectiveLimit);
+      throw new AppError(403, 'Sunucu kapasitesi dolu, şu an katılınamıyor');
+    }
+    await client.query(
+      'INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)',
+      [server.id, userId, 'member']
+    );
+    await client.query(
+      'UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1',
+      [server.id]
+    );
+    await assignSystemRoleToMember(client, server.id, userId, 'member');
+    await client.query('COMMIT');
+    newMemberCount = currentCount + 1;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* no-op */ }
+    throw err instanceof AppError ? err : new AppError(500, 'Sunucuya katılınamadı');
+  } finally {
+    client.release();
   }
 
-  // Üye ekle
-  await pool.query('INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)', [server.id, userId, 'member']);
-  await pool.query('UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1', [server.id]);
-  // Capability foundation: member sistem rolüne bağla
-  await assignSystemRoleToMember(pool, server.id, userId, 'member');
-
-  const memberCount = (activity?.member_count ?? 0) + 1;
-  return toResponse(server, { server_id: server.id, member_count: memberCount, active_count: 0, updated_at: '' }, 'member');
+  return toResponse(server, { server_id: server.id, member_count: newMemberCount, active_count: 0, updated_at: '' }, 'member');
 }
 
 /** Sunucudan ayrıl */

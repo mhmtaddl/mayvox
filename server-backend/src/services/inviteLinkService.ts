@@ -5,6 +5,7 @@ import { getServerAccessContext, assertCapability, invalidateAccessContext } fro
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
 import { assignSystemRoleToMember } from './roleSeedService';
+import { assertLimit, getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 
 const TOKEN_BYTES = 24;            // 192-bit entropy
 const TOKEN_BUF_BASE64URL_LEN = 32; // base64url(24 byte) = 32 karakter
@@ -118,6 +119,9 @@ export async function createInviteLink(
 ): Promise<InviteLinkCreateResponse> {
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.INVITE_CREATE, 'Davet bağlantısı oluşturmak için yetkin yok');
+
+  // Plan enforcement — günlük link invite limiti (mutation öncesi).
+  await assertLimit(serverId, 'invite.createLink', userId);
 
   // Validation
   if (input.scope !== 'server' && input.scope !== 'channel') {
@@ -324,17 +328,24 @@ export async function acceptInviteLink(userId: string, rawTokenInput: string): P
       if (existing.rows[0]) {
         alreadyApplied = true;
       } else {
-        // Kapasite kontrolü
+        // Kapasite kontrolü: Math.min(servers.capacity, plan.maxMembers).
+        // Race overshoot guard: servers row FOR UPDATE — concurrent join'ler serileşir.
         const cap = await client.query<{ member_count: number; capacity: number }>(
           `SELECT COALESCE(sa.member_count, 0) AS member_count, s.capacity
            FROM servers s LEFT JOIN server_activity sa ON sa.server_id = s.id
-           WHERE s.id = $1`,
+           WHERE s.id = $1 FOR UPDATE OF s`,
           [row.server_id]
         );
         const c = cap.rows[0];
-        if (c && c.member_count >= c.capacity) {
-          await client.query('ROLLBACK');
-          throw new AppError(403, 'Sunucu kapasitesi dolu');
+        if (c) {
+          const plan = await getServerPlan(row.server_id);
+          const maxMembers = getPlanLimits(plan).maxMembers;
+          const effectiveLimit = Math.min(c.capacity, maxMembers);
+          if (c.member_count >= effectiveLimit) {
+            await emitLimitHit(row.server_id, userId, 'server.join', plan, c.member_count, effectiveLimit);
+            await client.query('ROLLBACK');
+            throw new AppError(403, 'Sunucu kapasitesi dolu');
+          }
         }
         // ON CONFLICT DO NOTHING — race koşulunda duplicate INSERT hata üretmesin.
         const ins = await client.query(
