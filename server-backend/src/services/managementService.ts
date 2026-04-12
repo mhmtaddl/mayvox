@@ -4,6 +4,10 @@ import { nanoid } from 'nanoid';
 import { AppError } from './serverService';
 import { supabase } from '../supabaseClient';
 import { notifyClient } from './realtimeNotify';
+import { assignSystemRoleToMember } from './roleSeedService';
+import { getServerAccessContext, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
+import { CAPABILITIES } from '../capabilities';
+import { logAction } from './auditLogService';
 
 // ── Yetki kontrol ──
 
@@ -28,7 +32,10 @@ export async function updateServer(
   userId: string,
   updates: { name?: string; description?: string; slug?: string; isPublic?: boolean; joinPolicy?: string; capacity?: number; motto?: string; avatarUrl?: string }
 ): Promise<void> {
-  await requireRole(serverId, userId, 'admin');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.SERVER_MANAGE, 'Sunucu ayarlarını değiştirmek için yetkin yok');
+  // Plan vb. değişiklik tüm members'ın flag'lerini etkiler — tüm cache invalidate.
+  invalidateAccessContextForServer(serverId);
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -99,7 +106,8 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
 }
 
 export async function kickMember(serverId: string, userId: string, targetUserId: string): Promise<void> {
-  const role = await requireRole(serverId, userId, 'mod');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.MEMBER_KICK, 'Üye atmak için yetkin yok');
   if (userId === targetUserId) throw new AppError(400, 'Kendini atamazsın');
 
   const target = await queryOne<{ role: string }>(
@@ -108,28 +116,56 @@ export async function kickMember(serverId: string, userId: string, targetUserId:
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
 
+  // Hierarchy: legacy baseRole üzerinden karşılaştır — mevcut semantiği koru.
   const hierarchy: Record<string, number> = { owner: 4, admin: 3, mod: 2, member: 1 };
-  if ((hierarchy[target.role] ?? 0) >= (hierarchy[role] ?? 0)) {
+  const callerRank = hierarchy[ctx.membership.baseRole ?? 'member'] ?? 0;
+  if ((hierarchy[target.role] ?? 0) >= callerRank) {
     throw new AppError(403, 'Kendi seviyendeki veya üstündeki kullanıcıyı atamazsın');
   }
 
   await pool.query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
   await pool.query('UPDATE server_activity SET member_count = GREATEST(0, member_count - 1), updated_at = now() WHERE server_id = $1', [serverId]);
+  invalidateAccessContext(targetUserId, serverId);
+  await logAction({
+    serverId, actorId: userId, action: 'member.kick',
+    resourceType: 'member', resourceId: targetUserId,
+    metadata: { targetRole: target.role },
+  });
 }
 
 export async function changeRole(serverId: string, userId: string, targetUserId: string, newRole: string): Promise<void> {
-  await requireRole(serverId, userId, 'owner');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.ROLE_MANAGE, 'Rol değiştirmek için yetkin yok');
   if (userId === targetUserId) throw new AppError(400, 'Kendi rolünü değiştiremezsin');
   if (newRole === 'owner') throw new AppError(400, 'Owner rolü atanamaz');
   if (!['admin', 'mod', 'member'].includes(newRole)) throw new AppError(400, 'Geçersiz rol');
 
-  const target = await queryOne<{ id: string }>(
-    'SELECT id FROM server_members WHERE server_id = $1 AND user_id = $2',
+  const target = await queryOne<{ id: string; role: string }>(
+    'SELECT id, role FROM server_members WHERE server_id = $1 AND user_id = $2',
     [serverId, targetUserId]
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
 
   await pool.query('UPDATE server_members SET role = $1 WHERE server_id = $2 AND user_id = $3', [newRole, serverId, targetUserId]);
+
+  // member_roles'ı da senkronla: eski sistem rolünü kaldır, yeniyi ekle
+  const legacyToSystem: Record<string, 'admin' | 'moderator' | 'member'> = { admin: 'admin', mod: 'moderator', member: 'member' };
+  const targetSysRole = legacyToSystem[newRole];
+  if (targetSysRole) {
+    await pool.query(
+      `DELETE FROM member_roles WHERE server_id = $1 AND user_id = $2
+       AND role_id IN (SELECT id FROM roles WHERE server_id = $1 AND is_system = true)`,
+      [serverId, targetUserId]
+    );
+    await assignSystemRoleToMember(pool, serverId, targetUserId, targetSysRole);
+  }
+
+  invalidateAccessContext(targetUserId, serverId);
+  await logAction({
+    serverId, actorId: userId, action: 'role.change',
+    resourceType: 'member', resourceId: targetUserId,
+    metadata: { from: target.role, to: newRole },
+  });
 }
 
 // ── Banlar ──
@@ -183,7 +219,8 @@ export async function unbanMember(serverId: string, userId: string, targetUserId
 
 /** Kullanıcıya sunucu daveti gönder */
 export async function sendUserInvite(serverId: string, userId: string, targetUserId: string): Promise<void> {
-  await requireRole(serverId, userId, 'admin');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.INVITE_CREATE, 'Davet göndermek için yetkin yok');
 
   // Zaten üye mi?
   const existing = await queryOne<{ id: string }>(
@@ -213,6 +250,10 @@ export async function sendUserInvite(serverId: string, userId: string, targetUse
 
   // Realtime push — alıcının tüm aktif cihazlarına.
   void notifyClient(targetUserId, { type: 'invite:new', serverId });
+  await logAction({
+    serverId, actorId: userId, action: 'invite.create',
+    resourceType: 'user-invite', resourceId: targetUserId,
+  });
 }
 
 /** Sunucudan gönderilmiş bekleyen davetleri listele */
@@ -242,7 +283,8 @@ export async function listSentInvites(serverId: string, userId: string): Promise
 
 /** Bekleyen daveti iptal et */
 export async function cancelUserInvite(serverId: string, userId: string, inviteId: string): Promise<void> {
-  await requireRole(serverId, userId, 'admin');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.INVITE_REVOKE, 'Daveti iptal etmek için yetkin yok');
   const target = await queryOne<{ invited_user_id: string }>(
     'SELECT invited_user_id FROM server_user_invites WHERE id = $1 AND server_id = $2',
     [inviteId, serverId]
@@ -317,6 +359,8 @@ export async function acceptInvite(userId: string, inviteId: string): Promise<vo
   );
   if (!existing) {
     await pool.query('INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)', [invite.server_id, userId, 'member']);
+    await assignSystemRoleToMember(pool, invite.server_id, userId, 'member');
+    invalidateAccessContext(userId, invite.server_id);
     await pool.query('UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1', [invite.server_id]);
   }
 
@@ -368,7 +412,8 @@ export async function createInvite(
   maxUses: number | null,
   expiresInHours: number | null
 ): Promise<InviteResponse> {
-  await requireRole(serverId, userId, 'admin');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.INVITE_CREATE, 'Davet kodu oluşturmak için yetkin yok');
 
   const code = nanoid(8).toUpperCase();
   const expiresAt = expiresInHours ? new Date(Date.now() + expiresInHours * 3600000).toISOString() : null;
@@ -392,10 +437,15 @@ export async function createInvite(
 }
 
 export async function deleteInvite(serverId: string, userId: string, inviteId: string): Promise<void> {
-  await requireRole(serverId, userId, 'admin');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.INVITE_REVOKE, 'Davet silmek için yetkin yok');
   const result = await pool.query(
     'DELETE FROM server_invites WHERE id = $1 AND server_id = $2',
     [inviteId, serverId]
   );
   if (result.rowCount === 0) throw new AppError(404, 'Davet bulunamadı');
+  await logAction({
+    serverId, actorId: userId, action: 'invite.revoke',
+    resourceType: 'invite', resourceId: inviteId,
+  });
 }

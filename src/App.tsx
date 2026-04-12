@@ -34,7 +34,7 @@ import {
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
-import { checkChannelAccess } from './lib/serverService';
+import { checkChannelAccess, getServerAccessContext, type ServerAccessContext } from './lib/serverService';
 import { logger } from './lib/logger';
 import { type AudioCaptureOptions } from 'livekit-client';
 
@@ -441,6 +441,22 @@ export default function App() {
 
   // Kanal sırası optimistic concurrency token — backend listChannels / reorder ile senkron.
   const channelOrderTokenRef = useRef<string | null>(null);
+
+  // Capability foundation: aktif sunucudaki kullanıcı context'i.
+  const [accessContext, setAccessContext] = useState<ServerAccessContext | null>(null);
+  useEffect(() => {
+    if (!activeServerId || !currentUser.id) { setAccessContext(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctx = await getServerAccessContext(activeServerId);
+        if (!cancelled) setAccessContext(ctx);
+      } catch {
+        if (!cancelled) setAccessContext(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeServerId, currentUser.id]);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
   const allUsersRef = useRef(allUsers);
@@ -1532,6 +1548,7 @@ export default function App() {
     activeServerId,
     setActiveServerId,
     channelOrderTokenRef,
+    accessContext,
     isConnecting,
     currentChannel,
     channelMembers,

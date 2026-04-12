@@ -4,6 +4,8 @@ import { validateCreateServer, validateJoinServer } from '../validators/serverVa
 import * as serverService from '../services/serverService';
 import * as channelService from '../services/channelService';
 import * as channelAccessService from '../services/channelAccessService';
+import * as inviteLinkService from '../services/inviteLinkService';
+import { getServerAccessContext } from '../services/accessContextService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 
@@ -86,6 +88,14 @@ router.post('/join', async (req: Request, res: Response) => {
 router.post('/:id/leave', async (req: Request, res: Response) => {
   try { await serverService.leaveServer((req as any).userId, req.params.id as string); res.status(204).end(); }
   catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/access-context — kullanıcının bu sunucudaki tam yetki context'i */
+router.get('/:id/access-context', async (req: Request, res: Response) => {
+  try {
+    const ctx = await getServerAccessContext((req as any).userId, req.params.id as string);
+    res.json(ctx);
+  } catch (err) { handleError(res, err); }
 });
 
 /** GET /servers/:id/channels */
@@ -297,6 +307,52 @@ router.post('/:id/invites', async (req: Request, res: Response) => {
 router.delete('/:id/invites/:inviteId', async (req: Request, res: Response) => {
   try { await mgmt.deleteInvite(req.params.id as string, (req as any).userId, req.params.inviteId as string); res.json({ ok: true }); }
   catch (err) { handleError(res, err); }
+});
+
+// ── Invite V2: link invite'lar ──
+
+/** POST /servers/:id/invite-links — yeni link invite oluştur (capability gated) */
+router.post('/:id/invite-links', async (req: Request, res: Response) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const result = await inviteLinkService.createInviteLink(
+      req.params.id as string,
+      (req as any).userId,
+      {
+        scope: body.scope,
+        channelId: body.channelId ?? null,
+        expiresInHours: body.expiresInHours ?? null,
+        maxUses: body.maxUses ?? null,
+      }
+    );
+    res.status(201).json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/invite-links — aktif/geçmiş link invite listesi */
+router.get('/:id/invite-links', async (req: Request, res: Response) => {
+  try {
+    const channelId = typeof req.query.channelId === 'string' ? req.query.channelId : undefined;
+    const includeInactive = req.query.includeInactive === '1';
+    const rows = await inviteLinkService.listInviteLinks(
+      req.params.id as string,
+      (req as any).userId,
+      { channelId, includeInactive }
+    );
+    res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/invite-links/:inviteId — iptal */
+router.delete('/:id/invite-links/:inviteId', async (req: Request, res: Response) => {
+  try {
+    await inviteLinkService.revokeInviteLink(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.inviteId as string
+    );
+    res.status(204).end();
+  } catch (err) { handleError(res, err); }
 });
 
 function handleError(res: Response, err: unknown) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Hash } from 'lucide-react';
-import { joinServer, type Server } from '../../lib/serverService';
+import { joinServer, acceptInviteLink, type Server } from '../../lib/serverService';
 
 interface Props {
   onClose: () => void;
@@ -8,6 +8,14 @@ interface Props {
 }
 
 type CodeState = 'idle' | 'checking' | 'valid' | 'invalid' | 'submitting';
+
+// V2 token: base64url 24 byte → ~32 karakter (28-40 arası tolere).
+// Legacy kod: nanoid(8) alphanumeric uppercase.
+function looksLikeV2Token(raw: string): boolean {
+  // URL gelirse son segmenti al
+  const last = raw.includes('/') ? raw.split('/').filter(Boolean).pop() ?? raw : raw;
+  return last.length >= 28 && /^[A-Za-z0-9_-]+$/.test(last);
+}
 
 export default function JoinServerModal({ onClose, onSuccess }: Props) {
   const [code, setCode] = useState('');
@@ -24,11 +32,18 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
 
     try {
       setState('submitting');
-      const server = await joinServer(trimmed);
-      setJoinedName(server.name);
-      setState('valid');
-      // Kısa gösterim sonrası kapat
-      setTimeout(() => { onSuccess(); onClose(); }, 800);
+      if (looksLikeV2Token(trimmed)) {
+        // V2 link invite akışı
+        const result = await acceptInviteLink(trimmed);
+        setJoinedName(result.alreadyApplied ? 'Zaten erişim var' : 'Davet kabul edildi');
+        setState('valid');
+        setTimeout(() => { onSuccess(); onClose(); }, 800);
+      } else {
+        const server = await joinServer(trimmed);
+        setJoinedName(server.name);
+        setState('valid');
+        setTimeout(() => { onSuccess(); onClose(); }, 800);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Bir hata oluştu';
       setError(msg);
@@ -64,9 +79,14 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
           }`} style={{ background: 'rgba(var(--glass-tint), 0.05)', border: state === 'invalid' ? '1px solid rgba(239,68,68,0.15)' : state === 'valid' ? '1px solid rgba(16,185,129,0.15)' : '1px solid rgba(var(--glass-tint), 0.1)' }}>
             <Hash size={15} className="text-[var(--theme-secondary-text)] opacity-40 shrink-0" />
             <input value={code}
-              onChange={e => { setCode(e.target.value.toUpperCase()); if (state === 'invalid') { setState('idle'); setError(''); } }}
+              onChange={e => {
+                // V2 token case-sensitive; legacy 8-char kod uppercase — length'e göre normalize.
+                const v = e.target.value;
+                setCode(v.length <= 10 ? v.toUpperCase() : v);
+                if (state === 'invalid') { setState('idle'); setError(''); }
+              }}
               onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') onClose(); }}
-              placeholder="Davet kodunu gir"
+              placeholder="Davet kodu veya linkini yapıştır"
               className="flex-1 bg-transparent text-[14px] font-mono tracking-widest text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/22 placeholder:tracking-normal placeholder:font-sans outline-none" autoFocus />
             {(state === 'checking' || state === 'submitting') && <div className="w-4 h-4 border-2 border-[var(--theme-accent)]/25 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
           </div>

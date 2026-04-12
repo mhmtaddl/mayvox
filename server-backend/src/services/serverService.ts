@@ -2,6 +2,7 @@ import { queryOne, queryMany, pool } from '../repositories/db';
 import { getPlanLimits } from '../planConfig';
 import type { Server, ServerResponse, ServerActivity } from '../types';
 import { nanoid } from 'nanoid';
+import { seedSystemRolesForServer, assignSystemRoleToMember } from './roleSeedService';
 
 function generateInviteCode(): string {
   return nanoid(8).toUpperCase();
@@ -145,6 +146,11 @@ export async function createServer(userId: string, name: string, description: st
       [server.id]
     );
 
+    // Sistem rollerini + capability'leri seed et (capability foundation)
+    await seedSystemRolesForServer(client, server.id);
+    // Owner'ı owner rolüne bağla
+    await assignSystemRoleToMember(client, server.id, userId, 'owner');
+
     await client.query('COMMIT');
 
     return toResponse(server, { server_id: server.id, member_count: 1, active_count: 0, updated_at: '' }, 'owner');
@@ -239,6 +245,8 @@ export async function joinByInvite(userId: string, input: string): Promise<Serve
   // Üye ekle
   await pool.query('INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)', [server.id, userId, 'member']);
   await pool.query('UPDATE server_activity SET member_count = member_count + 1, updated_at = now() WHERE server_id = $1', [server.id]);
+  // Capability foundation: member sistem rolüne bağla
+  await assignSystemRoleToMember(pool, server.id, userId, 'member');
 
   const memberCount = (activity?.member_count ?? 0) + 1;
   return toResponse(server, { server_id: server.id, member_count: memberCount, active_count: 0, updated_at: '' }, 'member');

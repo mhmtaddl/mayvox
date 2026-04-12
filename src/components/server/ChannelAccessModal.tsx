@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Lock, Plus, Search, UserMinus, X, AlertCircle, Inbox } from 'lucide-react';
+import { Lock, Plus, Search, UserMinus, X, AlertCircle, Inbox, Link2, Check } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import {
@@ -8,6 +8,7 @@ import {
   grantChannelAccess,
   revokeChannelAccess,
   getMembers,
+  createInviteLink,
   type ChannelAccessEntry,
   type ServerMember,
 } from '../../lib/serverService';
@@ -27,6 +28,9 @@ export default function ChannelAccessModal({ open, onClose, serverId, channelId,
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<Record<string, 'grant' | 'revoke' | undefined>>({});
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [linkPending, setLinkPending] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEscapeKey(onClose, open);
 
@@ -79,6 +83,37 @@ export default function ChannelAccessModal({ open, onClose, serverId, channelId,
       setError(e instanceof Error ? e.message : 'Erişim verilemedi');
     } finally {
       setRowPending(userId, undefined);
+    }
+  };
+
+  const handleCreateLink = async () => {
+    if (linkPending) return;
+    setLinkPending(true);
+    setError('');
+    try {
+      const res = await createInviteLink(serverId, {
+        scope: 'channel',
+        channelId,
+        expiresInHours: 24 * 7,
+        maxUses: 25,
+      });
+      setLinkToken(res.token);
+      setLinkCopied(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Davet linki oluşturulamadı');
+    } finally {
+      setLinkPending(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!linkToken) return;
+    try {
+      await navigator.clipboard.writeText(linkToken);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1800);
+    } catch {
+      // clipboard fail edebilir (perms) — token zaten ekranda görünüyor
     }
   };
 
@@ -144,6 +179,45 @@ export default function ChannelAccessModal({ open, onClose, serverId, channelId,
         )}
 
         <div className="px-4 pb-4 overflow-y-auto flex-1">
+          {/* Davet linki — V2 */}
+          <div className="mb-3 p-2.5 rounded-xl"
+            style={{ background: 'rgba(var(--theme-accent-rgb), 0.05)', border: '1px solid rgba(var(--theme-accent-rgb), 0.12)' }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Link2 size={12} className="text-[var(--theme-accent)]/70" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--theme-accent)]/70">
+                Davet Linki
+              </span>
+              <span className="text-[9px] text-[var(--theme-secondary-text)]/40 ml-auto">7 gün · 25 kullanım</span>
+            </div>
+            {!linkToken ? (
+              <button
+                onClick={handleCreateLink}
+                disabled={linkPending}
+                className="w-full h-8 rounded-lg text-[11px] font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98]"
+                style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)' }}
+              >
+                {linkPending ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Link2 size={12} strokeWidth={2.2} />}
+                <span>{linkPending ? 'Oluşturuluyor' : 'Davet Linki Oluştur'}</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 px-2.5 h-8 rounded-lg flex items-center"
+                  style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}
+                >
+                  <span className="text-[10px] font-mono text-[var(--theme-text)]/80 truncate select-all">{linkToken}</span>
+                </div>
+                <button
+                  onClick={handleCopyLink}
+                  className="h-8 px-2.5 rounded-lg text-[10.5px] font-bold flex items-center gap-1.5 transition-all hover:brightness-110 active:scale-[0.97]"
+                  style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)' }}
+                >
+                  {linkCopied ? <><Check size={11} strokeWidth={2.5} /><span>Kopyalandı</span></> : <><Link2 size={11} strokeWidth={2.2} /><span>Kopyala</span></>}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Arama */}
           <div className="mb-3 flex items-center h-9 px-3 gap-2 rounded-xl"
             style={{ background: 'rgba(var(--glass-tint), 0.05)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}

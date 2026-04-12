@@ -38,7 +38,14 @@ interface Props {
 }
 
 export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, onShowSettings, onShowDiscover }: Props) {
-  const { channels, activeChannel, isConnecting, activeServerId } = useChannel();
+  const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
+  const canReorderChannels = accessContext?.flags.canReorderChannels ?? false;
+  const canCreateChannel = accessContext?.flags.canCreateChannel ?? false;
+  const canManageServer = accessContext?.flags.canManageServer ?? false;
+  const canMoveMembers = accessContext?.flags.canMoveMembers ?? false;
+  // Server-specific fallback: accessContext henüz yüklenmediyse (ilk render),
+  // listMyServers'dan gelen activeServerRole'ü kullan — global currentUser.isAdmin yerine.
+  const serverAdminFallback = activeServerRole === 'owner' || activeServerRole === 'admin';
   const { currentUser, allUsers } = useUser();
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
   const { connectionLevel } = useAudio();
@@ -100,7 +107,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           </div>
           <span className="text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerMotto || 'voice & chat'}</span>
         </div>
-        {onShowSettings && (activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod') && (
+        {onShowSettings && (canManageServer || activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod') && (
           <button onClick={onShowSettings} title="Sunucu Ayarları"
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
             <Settings size={13} />
@@ -129,7 +136,8 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
 
         <nav ref={channelScrollRef} className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
           {visibleChannels.map(channel => {
-            const canReorderThis = !!currentUser.isAdmin && !channel.isSystemChannel;
+            // Capability-driven: resolver falsy iken legacy isAdmin fallback.
+            const canReorderThis = (canReorderChannels || serverAdminFallback) && !channel.isSystemChannel;
             const isDragging = draggingChannelId === channel.id;
             const isDropTarget = dropTargetChannelId === channel.id && draggingChannelId && draggingChannelId !== channel.id;
             return (
@@ -293,7 +301,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                         </div>
                         {/* Real user layer */}
                         <div
-                          draggable={!!currentUser.isAdmin && !!user}
+                          draggable={(canMoveMembers || serverAdminFallback) && !!user}
                           onDragStart={(e) => user && handleDragStart(e, user.name || memberId)}
                           onClick={(e) => user && onUserClick(user.id, e.clientX, e.clientY)}
                           className={`absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
@@ -333,26 +341,28 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           );
           })}
 
-          {/* Oda Oluştur */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-              if (userRooms.length >= 2) {
-                setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
-                return;
-              }
-              setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
-              channels.filter(c => c.ownerId === currentUser.id).length >= 2
-                ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
-                : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
-            }`}
-          >
-            <Sparkles size={15} />
-            <span className="text-sm font-medium">Oda Oluştur</span>
-          </button>
+          {/* Oda Oluştur — capability-gated */}
+          {(canCreateChannel || serverAdminFallback) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const userRooms = channels.filter(c => c.ownerId === currentUser.id);
+                if (userRooms.length >= 2) {
+                  setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
+                  return;
+                }
+                setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                channels.filter(c => c.ownerId === currentUser.id).length >= 2
+                  ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
+                  : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
+              }`}
+            >
+              <Sparkles size={15} />
+              <span className="text-sm font-medium">Oda Oluştur</span>
+            </button>
+          )}
         </nav>
         </>
         )}

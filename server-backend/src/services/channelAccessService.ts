@@ -1,6 +1,9 @@
 import { queryMany, queryOne, pool } from '../repositories/db';
 import { AppError } from './serverService';
 import { supabase } from '../supabaseClient';
+import { getServerAccessContext, assertCapability } from './accessContextService';
+import { CAPABILITIES } from '../capabilities';
+import { logAction } from './auditLogService';
 
 const MANAGE_ROLES = new Set(['owner', 'admin']);
 
@@ -116,10 +119,8 @@ export async function listChannelAccess(
   channelId: string,
   callerId: string,
 ): Promise<AccessListResult> {
-  const callerRole = await fetchMemberRole(serverId, callerId);
-  if (!callerRole || !MANAGE_ROLES.has(callerRole)) {
-    throw new AppError(403, 'Kanal erişim listesini görmek için yetkin yok');
-  }
+  const ctx = await getServerAccessContext(callerId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_UPDATE, 'Kanal erişim listesini görmek için yetkin yok');
   const channel = await fetchChannel(serverId, channelId);
   if (!channel) throw new AppError(404, 'Kanal bulunamadı');
 
@@ -148,10 +149,8 @@ export async function grantChannelAccess(
   callerId: string,
   targetUserId: string,
 ): Promise<void> {
-  const callerRole = await fetchMemberRole(serverId, callerId);
-  if (!callerRole || !MANAGE_ROLES.has(callerRole)) {
-    throw new AppError(403, 'Kanal erişimi yönetmek için yetkin yok');
-  }
+  const ctx = await getServerAccessContext(callerId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_UPDATE, 'Kanal erişimi yönetmek için yetkin yok');
   const channel = await fetchChannel(serverId, channelId);
   if (!channel) throw new AppError(404, 'Kanal bulunamadı');
   if (!channel.is_hidden && !channel.is_invite_only) {
@@ -167,6 +166,11 @@ export async function grantChannelAccess(
      ON CONFLICT (channel_id, user_id) DO NOTHING`,
     [channelId, targetUserId, callerId]
   );
+  await logAction({
+    serverId, actorId: callerId, action: 'channel.access.grant',
+    resourceType: 'channel', resourceId: channelId,
+    metadata: { targetUserId },
+  });
 }
 
 export async function revokeChannelAccess(
@@ -175,10 +179,8 @@ export async function revokeChannelAccess(
   callerId: string,
   targetUserId: string,
 ): Promise<void> {
-  const callerRole = await fetchMemberRole(serverId, callerId);
-  if (!callerRole || !MANAGE_ROLES.has(callerRole)) {
-    throw new AppError(403, 'Kanal erişimi yönetmek için yetkin yok');
-  }
+  const ctx = await getServerAccessContext(callerId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_UPDATE, 'Kanal erişimi yönetmek için yetkin yok');
   const channel = await fetchChannel(serverId, channelId);
   if (!channel) throw new AppError(404, 'Kanal bulunamadı');
 
@@ -186,4 +188,9 @@ export async function revokeChannelAccess(
     'DELETE FROM channel_access WHERE channel_id = $1 AND user_id = $2',
     [channelId, targetUserId]
   );
+  await logAction({
+    serverId, actorId: callerId, action: 'channel.access.revoke',
+    resourceType: 'channel', resourceId: channelId,
+    metadata: { targetUserId },
+  });
 }

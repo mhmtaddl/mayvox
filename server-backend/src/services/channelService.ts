@@ -2,6 +2,9 @@ import { queryMany, queryOne, pool } from '../repositories/db';
 import type { Channel, ChannelResponse } from '../types';
 import { AppError } from './serverService';
 import { filterVisibleChannels } from './channelAccessService';
+import { getServerAccessContext, assertCapability, assertPlanAllows, invalidateAccessContextForServer } from './accessContextService';
+import { CAPABILITIES } from '../capabilities';
+import { logAction } from './auditLogService';
 
 // ── Sabitler ──
 const NAME_MIN = 1;
@@ -9,7 +12,6 @@ const NAME_MAX = 30;
 const MAX_USERS_MIN = 2;
 const MAX_USERS_MAX = 50;
 const ALLOWED_MODES = new Set(['social', 'gaming', 'broadcast', 'quiet']);
-const MANAGE_ROLES = new Set(['owner', 'admin']);
 
 export interface ChannelCreateInput {
   name: string;
@@ -73,17 +75,7 @@ function normalizeMaxUsers(raw: unknown): number | null {
   return n;
 }
 
-async function requireManageRole(serverId: string, userId: string): Promise<string> {
-  const member = await queryOne<{ role: string }>(
-    'SELECT role FROM server_members WHERE server_id = $1 AND user_id = $2',
-    [serverId, userId]
-  );
-  if (!member) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
-  if (!MANAGE_ROLES.has(member.role)) {
-    throw new AppError(403, 'Kanal yönetmek için yetkin yok');
-  }
-  return member.role;
-}
+// requireManageRole legacy helper kaldırıldı — capability resolver + assertCapability kullanılıyor.
 
 export interface ChannelListResult {
   channels: ChannelResponse[];
@@ -127,7 +119,9 @@ export async function createChannel(
   userId: string,
   input: ChannelCreateInput,
 ): Promise<ChannelResponse> {
-  await requireManageRole(serverId, userId);
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_CREATE, 'Kanal oluşturmak için yetkin yok');
+  assertPlanAllows(ctx, 'channel.create');
 
   const name = normalizeName(input.name);
   const mode = normalizeMode(input.mode);
@@ -158,8 +152,14 @@ export async function createChannel(
   );
   if (!row) throw new AppError(500, 'Kanal oluşturulamadı');
 
-  // currentTotal değişkenini ileride plan limit kontrolü için kullanmak üzere burada tutuyoruz.
   void currentTotal;
+  // channel_count değişti → flag hesabı etkilenir, cache'i server-wide invalidate et.
+  invalidateAccessContextForServer(serverId);
+  await logAction({
+    serverId, actorId: userId, action: 'channel.create',
+    resourceType: 'channel', resourceId: row.id,
+    metadata: { name: row.name, isInviteOnly, isHidden },
+  });
   return toResponse(row);
 }
 
@@ -170,7 +170,8 @@ export async function updateChannel(
   channelId: string,
   input: ChannelUpdateInput,
 ): Promise<ChannelResponse> {
-  await requireManageRole(serverId, userId);
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_UPDATE, 'Kanal güncellemek için yetkin yok');
 
   const existing = await queryOne<Channel>(
     'SELECT * FROM channels WHERE id = $1 AND server_id = $2',
@@ -210,6 +211,11 @@ export async function updateChannel(
   const sql = `UPDATE channels SET ${sets.join(', ')} WHERE id = $${i++} AND server_id = $${i++} RETURNING *`;
   const row = await queryOne<Channel>(sql, values);
   if (!row) throw new AppError(500, 'Kanal güncellenemedi');
+  await logAction({
+    serverId, actorId: userId, action: 'channel.update',
+    resourceType: 'channel', resourceId: row.id,
+    metadata: { changed: Object.keys(input) },
+  });
   return toResponse(row);
 }
 
@@ -220,7 +226,8 @@ export async function reorderChannels(
   updates: Array<{ id: string; position: number }>,
   expectedOrderToken: string | null,
 ): Promise<ChannelListResult> {
-  await requireManageRole(serverId, userId);
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_REORDER, 'Kanal sıralamak için yetkin yok');
 
   if (!Array.isArray(updates) || updates.length === 0) {
     throw new AppError(400, 'Sıralama boş olamaz');
@@ -276,6 +283,13 @@ export async function reorderChannels(
       [ids, positions, serverId]
     );
 
+    // Audit log aynı transaction içinde — fail olursa ROLLBACK ile reorder da iptal.
+    await logAction({
+      serverId, actorId: userId, action: 'channel.reorder',
+      resourceType: 'server', resourceId: serverId,
+      metadata: { count: updates.length },
+    }, client);
+
     await client.query('COMMIT');
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch { /* no-op */ }
@@ -298,10 +312,11 @@ export async function deleteChannel(
   userId: string,
   channelId: string,
 ): Promise<void> {
-  await requireManageRole(serverId, userId);
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_DELETE, 'Kanal silmek için yetkin yok');
 
-  const existing = await queryOne<{ is_default: boolean }>(
-    'SELECT is_default FROM channels WHERE id = $1 AND server_id = $2',
+  const existing = await queryOne<{ is_default: boolean; name: string }>(
+    'SELECT is_default, name FROM channels WHERE id = $1 AND server_id = $2',
     [channelId, serverId]
   );
   if (!existing) throw new AppError(404, 'Kanal bulunamadı');
@@ -312,4 +327,10 @@ export async function deleteChannel(
     [channelId, serverId]
   );
   if (result.rowCount === 0) throw new AppError(404, 'Kanal bulunamadı');
+  invalidateAccessContextForServer(serverId);
+  await logAction({
+    serverId, actorId: userId, action: 'channel.delete',
+    resourceType: 'channel', resourceId: channelId,
+    metadata: { name: existing.name },
+  });
 }

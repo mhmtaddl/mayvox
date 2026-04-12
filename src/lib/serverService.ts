@@ -269,6 +269,122 @@ export async function checkChannelAccess(serverId: string, channelId: string): P
   return apiFetch<ChannelAccessSummary>(`/servers/${serverId}/channels/${channelId}/access/check`);
 }
 
+// ── Capability foundation: server access context ──
+
+import type { Capability } from './capabilities';
+
+export interface ServerAccessContext {
+  userId: string;
+  serverId: string;
+  membership: {
+    exists: boolean;
+    isOwner: boolean;
+    baseRole: string | null;
+  };
+  roles: Array<{ id: string; name: string; priority: number }>;
+  capabilities: Capability[];
+  plan: { type: string };
+  limits: { maxChannels?: number; maxMembers?: number; maxInvites?: number };
+  flags: {
+    canCreateChannel: boolean;
+    canUpdateChannel: boolean;
+    canDeleteChannel: boolean;
+    canReorderChannels: boolean;
+    canManageServer: boolean;
+    canCreateInvite: boolean;
+    canRevokeInvite: boolean;
+    canJoinPrivateChannel: boolean;
+    canViewPrivateChannel: boolean;
+    canMoveMembers: boolean;
+    canKickMembers: boolean;
+    canManageRoles: boolean;
+  };
+}
+
+export async function getServerAccessContext(serverId: string): Promise<ServerAccessContext> {
+  return apiFetch<ServerAccessContext>(`/servers/${serverId}/access-context`);
+}
+
+export function hasCapability(ctx: ServerAccessContext | null, cap: Capability): boolean {
+  return !!ctx && ctx.capabilities.includes(cap);
+}
+
+// ── Invite V2: link invite'lar ──
+
+export type InviteScope = 'server' | 'channel';
+export type InviteLinkState = 'active' | 'expired' | 'revoked' | 'exhausted';
+
+export interface InviteLinkResponse {
+  id: string;
+  serverId: string;
+  channelId: string | null;
+  scope: InviteScope;
+  createdBy: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  usedCount: number;
+  revokedAt: string | null;
+  createdAt: string;
+  state: InviteLinkState;
+}
+
+export interface InviteLinkCreateResponse extends InviteLinkResponse {
+  token: string;
+}
+
+export interface InviteLinkCreatePayload {
+  scope: InviteScope;
+  channelId?: string | null;
+  expiresInHours?: number | null;
+  maxUses?: number | null;
+}
+
+export interface InviteLinkPreview {
+  valid: boolean;
+  serverId?: string;
+  serverName?: string;
+  scope?: InviteScope;
+  channelId?: string | null;
+  channelName?: string | null;
+}
+
+export interface InviteAcceptResult {
+  scope: InviteScope;
+  serverId: string;
+  channelId: string | null;
+  alreadyApplied: boolean;
+}
+
+export async function createInviteLink(serverId: string, payload: InviteLinkCreatePayload): Promise<InviteLinkCreateResponse> {
+  return apiFetch<InviteLinkCreateResponse>(`/servers/${serverId}/invite-links`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listInviteLinks(serverId: string, opts: { channelId?: string; includeInactive?: boolean } = {}): Promise<InviteLinkResponse[]> {
+  const qs = new URLSearchParams();
+  if (opts.channelId) qs.set('channelId', opts.channelId);
+  if (opts.includeInactive) qs.set('includeInactive', '1');
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiFetch<InviteLinkResponse[]>(`/servers/${serverId}/invite-links${suffix}`);
+}
+
+export async function revokeInviteLink(serverId: string, inviteId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/invite-links/${inviteId}`, { method: 'DELETE' });
+}
+
+export async function previewInviteLink(token: string): Promise<InviteLinkPreview> {
+  return apiFetch<InviteLinkPreview>(`/invite-links/preview?token=${encodeURIComponent(token)}`);
+}
+
+export async function acceptInviteLink(token: string): Promise<InviteAcceptResult> {
+  return apiFetch<InviteAcceptResult>(`/invite-links/accept`, {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
 // ── Sunucu yönetimi ──
 
 export async function getServerDetails(serverId: string): Promise<Server> {

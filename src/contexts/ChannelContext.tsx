@@ -1,5 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { VoiceChannel, User } from '../types';
+import type { ServerAccessContext } from '../lib/serverService';
 
 export interface ChannelContextType {
   channels: VoiceChannel[];
@@ -11,6 +12,8 @@ export interface ChannelContextType {
   setActiveServerId: React.Dispatch<React.SetStateAction<string>>;
   /** Kanal sırası için optimistic concurrency token (max updated_at). Reorder'da gönderilir. */
   channelOrderTokenRef: React.MutableRefObject<string | null>;
+  /** Aktif sunucudaki kullanıcının capability context'i — backend'ten fetch edilir. */
+  accessContext: ServerAccessContext | null;
   isConnecting: boolean;
   currentChannel: VoiceChannel | undefined;
   channelMembers: User[];
