@@ -196,6 +196,12 @@ export async function banMember(serverId: string, userId: string, targetUserId: 
      ON CONFLICT (server_id, user_id) DO UPDATE SET reason = $3, banned_by = $4, created_at = now()`,
     [serverId, targetUserId, reason, userId]
   );
+  invalidateAccessContext(targetUserId, serverId);
+  await logAction({
+    serverId, actorId: userId, action: 'member.ban',
+    resourceType: 'member', resourceId: targetUserId,
+    metadata: { reason: reason?.slice(0, 200), targetRole: target?.role ?? null },
+  });
 }
 
 export async function listBans(serverId: string, userId: string): Promise<BanResponse[]> {
@@ -216,6 +222,10 @@ export async function unbanMember(serverId: string, userId: string, targetUserId
   await requireRole(serverId, userId, 'mod');
   const result = await pool.query('DELETE FROM server_bans WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
   if (result.rowCount === 0) throw new AppError(404, 'Ban kaydı bulunamadı');
+  await logAction({
+    serverId, actorId: userId, action: 'member.unban',
+    resourceType: 'member', resourceId: targetUserId,
+  });
 }
 
 /** Kullanıcıya sunucu daveti gönder */

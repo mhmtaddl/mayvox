@@ -9,15 +9,21 @@ import { assertLimit, getServerPlan, getPlanLimits, emitLimitHit } from './planS
 
 const TOKEN_BYTES = 24;            // 192-bit entropy
 const TOKEN_BUF_BASE64URL_LEN = 32; // base64url(24 byte) = 32 karakter
-const MAX_USES_CAP = 1000;
-const MAX_EXPIRES_DAYS = 365;
+const MAX_USES_CAP = 100;
+const MAX_EXPIRES_DAYS = 30;
+const DEFAULT_EXPIRES_DAYS = 7;
+const DEFAULT_MAX_USES = 25;
 
 export type InviteScope = 'server' | 'channel';
 
 export interface InviteLinkInput {
   scope: InviteScope;
   channelId?: string | null;
+  /** Tercih edilen yeni alan. Verilmezse default DEFAULT_EXPIRES_DAYS uygulanır. */
+  expiresInDays?: number | null;
+  /** Geriye uyumluluk — eski UI çağrıları. expiresInDays verilmediyse kullanılır. */
   expiresInHours?: number | null;
+  /** Verilmezse default DEFAULT_MAX_USES uygulanır. */
   maxUses?: number | null;
 }
 
@@ -140,21 +146,32 @@ export async function createInviteLink(
     channelId = input.channelId;
   }
 
-  let expiresAt: string | null = null;
-  if (input.expiresInHours !== undefined && input.expiresInHours !== null) {
+  // Süre çözümlemesi: expiresInDays > expiresInHours > default.
+  // Sağlanmazsa default; sağlanırsa 30 günlük cap'e kadar kabul.
+  let expiresHours: number;
+  if (input.expiresInDays !== undefined && input.expiresInDays !== null) {
+    const d = Number(input.expiresInDays);
+    if (!Number.isFinite(d) || d <= 0) throw new AppError(400, 'Geçersiz süre');
+    if (d > MAX_EXPIRES_DAYS) throw new AppError(400, `Süre en fazla ${MAX_EXPIRES_DAYS} gün olabilir`);
+    expiresHours = d * 24;
+  } else if (input.expiresInHours !== undefined && input.expiresInHours !== null) {
     const h = Number(input.expiresInHours);
     if (!Number.isFinite(h) || h <= 0) throw new AppError(400, 'Geçersiz süre');
-    const maxHours = MAX_EXPIRES_DAYS * 24;
-    if (h > maxHours) throw new AppError(400, `Süre en fazla ${MAX_EXPIRES_DAYS} gün olabilir`);
-    expiresAt = new Date(Date.now() + h * 3600_000).toISOString();
+    if (h > MAX_EXPIRES_DAYS * 24) throw new AppError(400, `Süre en fazla ${MAX_EXPIRES_DAYS} gün olabilir`);
+    expiresHours = h;
+  } else {
+    expiresHours = DEFAULT_EXPIRES_DAYS * 24;
   }
+  const expiresAt: string = new Date(Date.now() + expiresHours * 3600_000).toISOString();
 
-  let maxUses: number | null = null;
+  let maxUses: number;
   if (input.maxUses !== undefined && input.maxUses !== null) {
     const n = Number(input.maxUses);
     if (!Number.isInteger(n) || n <= 0) throw new AppError(400, 'Geçersiz kullanım limiti');
     if (n > MAX_USES_CAP) throw new AppError(400, `Kullanım limiti en fazla ${MAX_USES_CAP}`);
     maxUses = n;
+  } else {
+    maxUses = DEFAULT_MAX_USES;
   }
 
   const rawToken = generateInviteToken();

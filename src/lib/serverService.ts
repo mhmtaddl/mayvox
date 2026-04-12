@@ -385,6 +385,62 @@ export async function acceptInviteLink(token: string): Promise<InviteAcceptResul
   });
 }
 
+// ── Admin Panel: audit / roles / overview ──
+
+export interface AuditLogItem {
+  id: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ServerRoleSummary {
+  id: string;
+  name: string;
+  priority: number;
+  isSystem: boolean;
+  capabilities: string[];
+  memberCount: number;
+}
+
+export interface ServerOverview {
+  serverId: string;
+  plan: string;
+  limits: {
+    maxChannels: number;
+    maxMembers: number;
+    maxPrivateChannels: number;
+    maxInviteLinksPerDay: number;
+  };
+  counts: {
+    members: number;
+    channels: number;
+    privateChannels: number;
+    activeInviteLinks: number;
+    inviteLinksLast24h: number;
+  };
+}
+
+export async function getAuditLog(serverId: string, opts: { limit?: number; action?: string } = {}): Promise<AuditLogItem[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set('limit', String(opts.limit));
+  if (opts.action) qs.set('action', opts.action);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiFetch<AuditLogItem[]>(`/servers/${serverId}/audit-log${suffix}`);
+}
+
+export async function getServerRoles(serverId: string): Promise<ServerRoleSummary[]> {
+  return apiFetch<ServerRoleSummary[]>(`/servers/${serverId}/roles`);
+}
+
+export async function getServerOverview(serverId: string): Promise<ServerOverview> {
+  return apiFetch<ServerOverview>(`/servers/${serverId}/overview`);
+}
+
 // ── Sunucu yönetimi ──
 
 export async function getServerDetails(serverId: string): Promise<Server> {

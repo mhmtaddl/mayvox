@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Save, Trash2, Plus, Copy, UserX, Ban, Camera, Crown, Zap, Star, Search, MoreHorizontal, Shield, ChevronDown } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Save, Trash2, Plus, Copy, UserX, Ban, Camera, Crown, Zap, Star, Search, MoreHorizontal, Shield, ChevronDown, Link2, ScrollText, Gauge } from 'lucide-react';
 import {
   type Server, type ServerMember, type ServerInvite, type ServerBan, type SentInvite,
   getServerDetails, updateServer, getMembers, kickMember, changeRole, banMember,
@@ -8,14 +8,13 @@ import {
 } from '../../lib/serverService';
 import { uploadServerLogo, supabase } from '../../lib/supabase';
 import AvatarCropModal from '../AvatarCropModal';
+import { useChannel } from '../../contexts/ChannelContext';
+import OverviewTab from './settings/OverviewTab';
+import RolesTab from './settings/RolesTab';
+import InviteLinksTab from './settings/InviteLinksTab';
+import AuditTab from './settings/AuditTab';
 
-type Tab = 'general' | 'members' | 'invites' | 'bans';
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'general', label: 'Genel', icon: <Settings size={13} /> },
-  { id: 'members', label: 'Üyeler', icon: <Users size={13} /> },
-  { id: 'invites', label: 'Davetler', icon: <Mail size={13} /> },
-  { id: 'bans', label: 'Yasaklar', icon: <ShieldOff size={13} /> },
-];
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'invite-links' | 'bans' | 'audit';
 
 const ROLE_TR: Record<string, string> = { owner: 'Sahip', admin: 'Yönetici', mod: 'Moderatör', member: 'Üye' };
 const ROLE_CLS: Record<string, string> = { owner: 'bg-amber-500/12 text-amber-400', admin: 'bg-blue-500/12 text-blue-400', mod: 'bg-purple-500/12 text-purple-400', member: 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/45' };
@@ -55,6 +54,10 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const [server, setServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+  const { accessContext } = useChannel();
+  // Aynı serverId ise accessContext'in flag'lerini kullan; farklı server settings açıldıysa
+  // capability fallback server.role üzerinden (legacy baseRole).
+  const sameServerCtx = accessContext && accessContext.serverId === serverId ? accessContext : null;
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); }, []);
 
@@ -74,6 +77,23 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
   const canEdit = server.role === 'owner' || server.role === 'admin';
   const isOwner = server.role === 'owner';
+  // Capability gates — aynı server context varsa flag, yoksa legacy role fallback
+  const canManageServer = sameServerCtx?.flags.canManageServer ?? (server.role === 'owner' || server.role === 'admin');
+  const canCreateInvite = sameServerCtx?.flags.canCreateInvite ?? (server.role === 'owner' || server.role === 'admin');
+  const canRevokeInvite = sameServerCtx?.flags.canRevokeInvite ?? (server.role === 'owner' || server.role === 'admin' || server.role === 'mod');
+  const canKickMembers = sameServerCtx?.flags.canKickMembers ?? (server.role === 'owner' || server.role === 'admin' || server.role === 'mod');
+
+  // Tabs dinamik — capability'ye göre görünür
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'general', label: 'Genel', icon: <Settings size={13} /> },
+    ...(canManageServer ? [{ id: 'overview' as Tab, label: 'Özet', icon: <Gauge size={13} /> }] : []),
+    ...(canKickMembers ? [{ id: 'members' as Tab, label: 'Üyeler', icon: <Users size={13} /> }] : []),
+    ...(canManageServer ? [{ id: 'roles' as Tab, label: 'Roller', icon: <Shield size={13} /> }] : []),
+    ...(canCreateInvite || canRevokeInvite ? [{ id: 'invites' as Tab, label: 'Davetler', icon: <Mail size={13} /> }] : []),
+    ...(canCreateInvite || canRevokeInvite ? [{ id: 'invite-links' as Tab, label: 'Linkler', icon: <Link2 size={13} /> }] : []),
+    ...(canKickMembers ? [{ id: 'bans' as Tab, label: 'Yasaklar', icon: <ShieldOff size={13} /> }] : []),
+    ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
+  ];
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -92,9 +112,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/30 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"><X size={17} /></button>
         </div>
         {/* Tabs */}
-        <div className="flex gap-1 px-8 py-2.5 border-b border-[rgba(var(--glass-tint),0.04)]">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all ${tab === t.id ? 'bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`}>
+        <div className="flex gap-1 px-8 py-2.5 border-b border-[rgba(var(--glass-tint),0.04)] overflow-x-auto custom-scrollbar">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all shrink-0 ${tab === t.id ? 'bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`}>
               {t.icon} {t.label}
             </button>
           ))}
@@ -105,9 +125,13 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             onSave={async u => { try { await updateServer(serverId, u); await loadServer(); onServerUpdated(); showToast('Kaydedildi'); } catch (e: any) { showToast(e.message); } }}
             onDelete={async () => { try { await deleteServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
             showToast={showToast} />}
-          {tab === 'members' && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
-          {tab === 'invites' && <InvitesTab serverId={serverId} showToast={showToast} />}
-          {tab === 'bans' && <BansTab serverId={serverId} showToast={showToast} />}
+          {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} />}
+          {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
+          {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
+          {tab === 'invites' && (canCreateInvite || canRevokeInvite) && <InvitesTab serverId={serverId} showToast={showToast} />}
+          {tab === 'invite-links' && (canCreateInvite || canRevokeInvite) && <InviteLinksTab serverId={serverId} canCreate={canCreateInvite} canRevoke={canRevokeInvite} />}
+          {tab === 'bans' && canKickMembers && <BansTab serverId={serverId} showToast={showToast} />}
+          {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
         </div>
         {toast && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-[11px] font-semibold text-[var(--theme-text)] z-50" style={{ background: 'rgba(var(--theme-accent-rgb), 0.15)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)', backdropFilter: 'blur(12px)' }}>{toast}</div>}
       </div>

@@ -6,6 +6,9 @@ import * as channelService from '../services/channelService';
 import * as channelAccessService from '../services/channelAccessService';
 import * as inviteLinkService from '../services/inviteLinkService';
 import { getServerAccessContext } from '../services/accessContextService';
+import { listAuditLog } from '../services/auditLogService';
+import { listServerRoles } from '../services/roleListService';
+import { getServerOverview } from '../services/serverOverviewService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 
@@ -95,6 +98,36 @@ router.get('/:id/access-context', async (req: Request, res: Response) => {
   try {
     const ctx = await getServerAccessContext((req as any).userId, req.params.id as string);
     res.json(ctx);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/audit-log — admin audit feed (SERVER_MANAGE) */
+router.get('/:id/audit-log', async (req: Request, res: Response) => {
+  try {
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
+    const action = typeof req.query.action === 'string' ? req.query.action : undefined;
+    const rows = await listAuditLog(
+      req.params.id as string,
+      (req as any).userId,
+      { limit: Number.isFinite(limit) ? limit : undefined, action },
+    );
+    res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/roles — built-in roles + effective capabilities */
+router.get('/:id/roles', async (req: Request, res: Response) => {
+  try {
+    const rows = await listServerRoles(req.params.id as string, (req as any).userId);
+    res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/overview — plan + counts vs limits (admin summary) */
+router.get('/:id/overview', async (req: Request, res: Response) => {
+  try {
+    const data = await getServerOverview(req.params.id as string, (req as any).userId);
+    res.json(data);
   } catch (err) { handleError(res, err); }
 });
 
