@@ -498,8 +498,8 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
       >
         <p className="text-sm text-[var(--theme-text)] mb-4">Bu öğeyi silmek istediğinize emin misiniz?</p>
         <div className="flex justify-end gap-2.5">
-          <button type="button" onClick={onClose} className="px-4 py-1.5 btn-cancel text-xs active:scale-[0.97]">İptal</button>
-          <button type="button" disabled={loading} onClick={onConfirm} className="px-4 py-1.5 btn-cancel text-xs font-bold active:scale-[0.97] disabled:opacity-40">
+          <button type="button" onClick={onClose} className="px-4 py-1.5 text-xs font-semibold rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors active:scale-[0.97]">İptal</button>
+          <button type="button" disabled={loading} onClick={onConfirm} className="px-4 py-1.5 text-xs font-bold rounded-lg text-red-400 hover:bg-red-500/10 transition-colors active:scale-[0.97] disabled:opacity-40">
             {loading ? 'Siliniyor...' : 'Sil'}
           </button>
         </div>

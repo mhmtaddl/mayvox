@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -9,6 +9,55 @@ import type { DmConversation, DmMessage } from '../lib/dmService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
 import { MV_PRESS } from '../lib/signature';
+
+// ── Lightweight emoji picker ─────────────────────────────────────────────
+// Dependency yok; manuel curated set. 8 kolon × 5 satır = 40 emoji.
+const EMOJI_SET = [
+  '😀','😁','😂','🤣','😊','😍','🥰','😘',
+  '😎','🤔','🙄','😅','😇','🤗','🤭','😏',
+  '😢','😭','😤','😡','🤯','🥳','🎉','🔥',
+  '❤️','💔','💯','👍','👎','👏','🙌','🙏',
+  '✨','⭐','💫','☕','🎵','🎮','⚡','✅',
+];
+
+function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (ev: MouseEvent) => {
+      if (ref.current && !ref.current.contains(ev.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [onClose]);
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+      transition={{ duration: 0.15 }}
+      className="absolute bottom-[56px] right-4 z-20 p-2 rounded-xl backdrop-blur-xl mv-depth"
+      style={{
+        background: 'var(--theme-surface-card, rgba(20,20,28,0.94))',
+        border: '1px solid rgba(var(--theme-accent-rgb), 0.12)',
+        width: '232px',
+      }}
+    >
+      <div className="grid grid-cols-8 gap-0.5">
+        {EMOJI_SET.map(em => (
+          <button
+            key={em}
+            onClick={() => onPick(em)}
+            className="w-6.5 h-6.5 rounded hover:bg-[rgba(var(--glass-tint),0.08)] text-[16px] leading-none flex items-center justify-center transition-colors"
+            style={{ width: 26, height: 26 }}
+          >
+            {em}
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 // ── Conversation Item ───────────────────────────────────────────────────
 
@@ -147,6 +196,7 @@ function ChatArea({
   const [sending, setSending] = useState(false);
   const [nearBottom, setNearBottomState] = useState(true);
   const [showJump, setShowJump] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMsgLenRef = useRef(0);
@@ -360,6 +410,14 @@ function ChatArea({
             className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none disabled:opacity-50"
             disabled={sending && !input}
           />
+          <button
+            onClick={() => setEmojiOpen(o => !o)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors"
+            title="Emoji"
+            aria-label="Emoji seç"
+          >
+            <Smile size={15} />
+          </button>
           <motion.button
             {...(canSend ? MV_PRESS : {})}
             onClick={handleSend}
@@ -373,6 +431,14 @@ function ChatArea({
             }
           </motion.button>
         </div>
+        <AnimatePresence>
+          {emojiOpen && (
+            <EmojiPicker
+              onPick={(em) => { setInput(v => v + em); inputRef.current?.focus(); }}
+              onClose={() => setEmojiOpen(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -317,31 +317,29 @@ export function PerformanceSection() {
           <Toggle checked={isNoiseSuppressionEnabled} onChange={() => { setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled); setAudioProfile('custom'); }} tooltip="Arka plan gürültüsünü filtreler" />
         </div>
 
-        {/* Boşta Ayrılma */}
+        {/* Boşta Ayrılma — zorunlu, sadece süre seçilir (5-60 dk) */}
         <div className="md:py-3">
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Boşta Ayrılma</p>
+              <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-0.5">Kaynak yönetimi için zorunlu. 5–60 dakika arası seç.</p>
             </div>
-            <Toggle checked={autoLeaveEnabled} onChange={() => setAutoLeaveEnabled(!autoLeaveEnabled)} tooltip="Belirli süre sessiz kalırsan odadan otomatik çıkar" />
           </div>
-          {autoLeaveEnabled && (
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {IDLE_MINUTES_OPTIONS.map(m => (
-                <button
-                  key={m}
-                  onClick={() => setAutoLeaveMinutes(m)}
-                  className={`flex-1 min-w-[40px] py-1.5 rounded-lg text-[10px] font-bold transition-all border active:scale-95 ${
-                    autoLeaveMinutes === m
-                      ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30'
-                      : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)]'
-                  }`}
-                >
-                  {m} dk
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {IDLE_MINUTES_OPTIONS.map(m => (
+              <button
+                key={m}
+                onClick={() => { setAutoLeaveMinutes(m); if (!autoLeaveEnabled) setAutoLeaveEnabled(true); }}
+                className={`flex-1 min-w-[40px] py-1.5 rounded-lg text-[10px] font-bold transition-all border active:scale-95 ${
+                  autoLeaveMinutes === m
+                    ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30'
+                    : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)]'
+                }`}
+              >
+                {m} dk
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Gürültü Eşiği */}

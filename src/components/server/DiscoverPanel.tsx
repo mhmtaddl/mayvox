@@ -24,7 +24,8 @@ const MOCK_SERVERS: (DiscoverServer & { plan?: string })[] = [
 ];
 
 interface Props {
-  onJoinSuccess: () => void;
+  /** serverId — katılım sonrası veya mevcut üye olunan sunucuya geçiş için parent'a iletilir. */
+  onJoinSuccess: (serverId: string) => void;
   onCreateServer: () => void;
   onJoinModal: () => void;
   activeServerId?: string;
@@ -67,10 +68,18 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
       setJoining(serverId);
       await joinServer(serverId);
       showToast('Sunucuya katıldın');
-      onJoinSuccess();
+      // Parent artık bu serverId'yi active yapıp discover'ı kapatır → odaya direkt gider.
+      onJoinSuccess(serverId);
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Katılınamadı');
     } finally { setJoining(null); }
+  };
+
+  // Zaten üye olunan sunucu kartına tıklayınca sunucuya geç (aksiyon butonu değil kart üstü).
+  const handleCardClick = (s: DiscoverServer) => {
+    if (isMock(s)) { showToast('Bu bir örnek sunucudur'); return; }
+    if (!isMember(s)) return;
+    onJoinSuccess(s.id);
   };
 
   const isMember = (s: DiscoverServer) => !!s.role;
@@ -128,8 +137,11 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
               const plan = (s as DiscoverServer & { plan?: string }).plan ?? 'free';
               const pv = getPlanVisual(plan);
               const isUltra = plan === 'ultra';
+              const clickable = member || active;
               return (
-                <div key={s.id} className={`group/c relative rounded-xl p-4 transition-all duration-200 hover:-translate-y-[2px] ${active ? 'ring-1 ring-[var(--theme-accent)]/12' : ''} ${isUltra ? 'ultra-card' : ''}`}
+                <div key={s.id}
+                  onClick={clickable ? () => handleCardClick(s) : undefined}
+                  className={`group/c relative rounded-xl p-4 transition-all duration-200 hover:-translate-y-[2px] ${active ? 'ring-1 ring-[var(--theme-accent)]/12' : ''} ${isUltra ? 'ultra-card' : ''} ${clickable ? 'cursor-pointer' : ''}`}
                   style={{ background: active ? 'rgba(var(--theme-accent-rgb), 0.025)' : pv.bg, border: `1px solid ${active ? 'rgba(var(--theme-accent-rgb), 0.1)' : pv.border}` }}>
 
 

@@ -211,15 +211,18 @@ export function useLiveKitConnection({
         }
       });
 
-      room.on(RoomEvent.ParticipantConnected, () => {
+      room.on(RoomEvent.ParticipantConnected, (participant) => {
         updateMembers();
         syncUsers();
-        playSound('join');
+        // Duplicate-notification fix: self-join için ayrı bir playSound ('join')
+        // zaten başarılı connect sonrasında tetiklenir (aşağıda). isLocal participant
+        // için burada tekrar ses çalmaz.
+        if (!participant?.isLocal) playSound('join');
       });
-      room.on(RoomEvent.ParticipantDisconnected, () => {
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
         updateMembers();
         syncUsers();
-        playSound('leave');
+        if (!participant?.isLocal) playSound('leave');
       });
 
       // ─── Throttled speaker levels (~30fps) ───────────────────

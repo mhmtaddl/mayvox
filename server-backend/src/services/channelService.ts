@@ -329,6 +329,11 @@ export async function deleteChannel(
   );
   if (!existing) throw new AppError(404, 'Kanal bulunamadı');
   if (existing.is_default) throw new AppError(403, 'Sistem kanalları silinemez');
+  // Task #18 defense-in-depth: is_default drift olursa bile isim bazlı koruma.
+  const SYSTEM_ROOM_NAMES = new Set(['Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
+  if (SYSTEM_ROOM_NAMES.has(existing.name)) {
+    throw new AppError(403, 'Sistem kanalları silinemez');
+  }
 
   const result = await pool.query(
     'DELETE FROM channels WHERE id = $1 AND server_id = $2',

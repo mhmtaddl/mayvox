@@ -123,14 +123,29 @@ export function useAppSettings() {
   const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
   const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
 
-  // ── Auto-leave ──
-  const [autoLeaveEnabled, setAutoLeaveEnabledState] = useState(() => localStorage.getItem('autoLeaveEnabled') === 'true');
-  const setAutoLeaveEnabled = (v: boolean) => { localStorage.setItem('autoLeaveEnabled', String(v)); setAutoLeaveEnabledState(v); };
+  // ── Auto-leave — ZORUNLU (v4 policy) ──
+  // Kullanıcı kaptamaz; yalnızca 5-60 dk aralığında süre seçer. Backward-compat:
+  // eski localStorage "false" değeri sessizce true'ya yükseltilir.
+  const [autoLeaveEnabled, setAutoLeaveEnabledState] = useState(() => {
+    localStorage.setItem('autoLeaveEnabled', 'true');
+    return true;
+  });
+  const setAutoLeaveEnabled = (_v: boolean) => {
+    // Hard-lock: disable edilemez.
+    localStorage.setItem('autoLeaveEnabled', 'true');
+    setAutoLeaveEnabledState(true);
+  };
   const [autoLeaveMinutes, setAutoLeaveMinutesState] = useState<number>(() => {
     const saved = localStorage.getItem('autoLeaveMinutes');
-    return saved ? parseInt(saved) : 10;
+    const n = saved ? parseInt(saved) : 10;
+    // Range clamp 5-60
+    return Math.max(5, Math.min(60, Number.isFinite(n) ? n : 10));
   });
-  const setAutoLeaveMinutes = (v: number) => { localStorage.setItem('autoLeaveMinutes', String(v)); setAutoLeaveMinutesState(v); };
+  const setAutoLeaveMinutes = (v: number) => {
+    const clamped = Math.max(5, Math.min(60, v));
+    localStorage.setItem('autoLeaveMinutes', String(clamped));
+    setAutoLeaveMinutesState(clamped);
+  };
 
   // ── Son görülme (sadece localStorage — DB sync App.tsx'te yapılır) ──
   const [showLastSeen, setShowLastSeenState] = useState(() => localStorage.getItem('showLastSeen') !== 'false');

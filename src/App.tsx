@@ -909,8 +909,11 @@ export default function App() {
         let hasChanges = false;
         const channelsToDelete: string[] = [];
 
+        // Task #18 defense-in-depth: is_default flag drift olursa name fallback'i.
+        const SYSTEM_ROOM_NAMES = new Set(['Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
         const nextChannels = prevChannels.map(channel => {
           if (channel.isSystemChannel) return channel;
+          if (SYSTEM_ROOM_NAMES.has(channel.name)) return channel; // hard fallback
 
           const isEmpty = !channel.members || channel.members.length === 0;
 

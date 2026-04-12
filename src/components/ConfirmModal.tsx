@@ -27,23 +27,28 @@ export default function ConfirmModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          // Flat, premium backdrop: tek katman solid dim. Radial highlight + backdrop-blur
+          // kombinasyonu altındaki accent/glass katmanlarıyla banding + merkez glow patlaması
+          // yaratıyordu; kaldırıldı. Sade siyah overlay kullanılır.
+          className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0, 0, 0, 0.88)' }}
           onClick={onCancel}
         >
-          {/* Radial highlight — çok hafif, merkeze dikkat çeker */}
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,0.05),transparent_35%)]" />
-
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.16 }}
-            className="relative w-full max-w-sm border border-[var(--theme-border)]/20 rounded-2xl overflow-hidden"
-            style={{ background: 'linear-gradient(180deg, var(--theme-surface) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3)' }}
+            className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              // Premium-flat: accent tint yok, yüksek spread shadow yok.
+              // Tema bağımsız solid card + ince nötr kenar + hafif tek katman gölge.
+              background: 'var(--theme-surface-card, var(--theme-bg))',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top glow — modal üstünde çok hafif sıcak ışık */}
-            <div className="pointer-events-none absolute inset-x-6 -top-1 h-16 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,230,170,0.07),transparent_70%)]" />
             <div className="p-5">
               <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1.5">{title}</h3>
               <p className="text-[12px] text-[var(--theme-secondary-text)] leading-relaxed">{description}</p>

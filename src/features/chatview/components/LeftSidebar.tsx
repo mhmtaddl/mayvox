@@ -10,6 +10,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
+import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
 import { ConnectionQualityIndicator } from '../../../components/chat';
 import DeviceBadge from '../../../components/chat/DeviceBadge';
 import UpdateVersionHub from '../../update/components/UpdateVersionHub';
@@ -33,11 +34,12 @@ interface Props {
   activeServerMotto?: string;
   activeServerRole?: string;
   activeServerPublic?: boolean;
+  activeServerPlan?: string | null;
   onShowSettings?: () => void;
   onShowDiscover?: () => void;
 }
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, onShowSettings, onShowDiscover }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover }: Props) {
   const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
   const canReorderChannels = accessContext?.flags.canReorderChannels ?? false;
   const canCreateChannel = accessContext?.flags.canCreateChannel ?? false;
@@ -342,19 +344,22 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           })}
 
           {/* Oda Oluştur — capability-gated */}
-          {(canCreateChannel || serverAdminFallback) && (
+          {(canCreateChannel || serverAdminFallback) && (() => {
+            const userRoomCount = channels.filter(c => c.ownerId === currentUser.id).length;
+            const roomLimit = getUserRoomLimit(activeServerPlan);
+            const atLimit = userRoomCount >= roomLimit;
+            return (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-                if (userRooms.length >= 2) {
-                  setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.');
+                if (atLimit) {
+                  setToastMsg(roomLimitMessage(activeServerPlan));
                   return;
                 }
                 setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
-                channels.filter(c => c.ownerId === currentUser.id).length >= 2
+                atLimit
                   ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
                   : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
               }`}
@@ -362,7 +367,8 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
               <Sparkles size={15} />
               <span className="text-sm font-medium">Oda Oluştur</span>
             </button>
-          )}
+            );
+          })()}
         </nav>
         </>
         )}

@@ -127,13 +127,17 @@ export async function listMyServers(): Promise<Server[]> {
   return apiFetch<Server[]>('/servers/my');
 }
 
+/**
+ * Frontend slug preview — backend generateBaseSlug ile paralel.
+ * Max 6 karakter, lowercase ASCII, TR harfler normalize.
+ * Çakışma durumunda backend numerik suffix ekler (preview görünmez).
+ */
 export function previewSlug(name: string): string {
-  const words = name.trim().split(/\s+/).slice(0, 3).map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''));
-  if (words.length === 0 || !words[0]) return '';
-  let base = '';
-  if (words.length === 1) base = words[0].slice(0, 3);
-  else if (words.length === 2) base = words[0][0] + words[1].slice(0, 2);
-  else base = words.map(w => w[0] || '').join('');
+  const cleaned = name.trim().toLowerCase()
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '');
+  const base = cleaned.slice(0, 6);
   return base ? base + '.mv' : '';
 }
 

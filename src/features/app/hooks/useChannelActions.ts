@@ -14,6 +14,7 @@ import {
   ApiError,
 } from '../../../lib/serverService';
 import { formatFullName } from '../../../lib/formatName';
+import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
 import type { VoiceChannel, User } from '../../../types';
 
 interface UseChannelActionsOptions {
@@ -22,6 +23,8 @@ interface UseChannelActionsOptions {
   activeChannel: string | null;
   setActiveChannel: (v: string | null) => void;
   activeServerId: string;
+  /** Aktif sunucunun planı — kullanıcı oda limiti mesajı ve enforcement için. */
+  activeServerPlan?: string | null;
   channelOrderTokenRef: React.MutableRefObject<string | null>;
   currentUser: User;
   allUsers: User[];
@@ -45,7 +48,7 @@ interface UseChannelActionsOptions {
 
 export function useChannelActions({
   channels, setChannels, activeChannel, setActiveChannel,
-  activeServerId,
+  activeServerId, activeServerPlan,
   channelOrderTokenRef,
   currentUser, allUsers,
   presenceChannelRef, livekitRoomRef,
@@ -203,7 +206,8 @@ export function useChannelActions({
 
     if (roomModal.type === 'create') {
       const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-      if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; }
+      const roomLimit = getUserRoomLimit(activeServerPlan);
+      if (userRooms.length >= roomLimit) { setToastMsg(roomLimitMessage(activeServerPlan)); return; }
       try {
         const created = await createServerChannel(activeServerId, {
           name: trimmedName,

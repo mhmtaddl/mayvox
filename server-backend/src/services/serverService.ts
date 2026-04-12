@@ -15,53 +15,42 @@ function toShortName(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+const SLUG_MAX = 6;
+
 /**
- * Slug üretimi — sunucu adından otomatik.
- * 1 kelime: ilk 3 harf → tes.mv
- * 2 kelime: 1. kelimenin ilk harfi + 2. kelimenin ilk 2 harfi → tsu.mv
- * 3+ kelime: her kelimenin ilk harfi (max 3) → tsb.mv
+ * Slug üretimi — sunucu adından otomatik, max 6 karakter.
+ * İsimdeki tüm boşluklar/özel karakterler atılır, lowercase ASCII'ye çevrilir,
+ * ilk 6 karakter alınır. Boş kalırsa "mv" fallback.
  */
-function generateBaseSlug(name: string): string {
-  const words = name.trim().split(/\s+/).slice(0, 3);
-  let base = '';
-  if (words.length === 1) {
-    base = words[0].slice(0, 3);
-  } else if (words.length === 2) {
-    base = words[0][0] + words[1].slice(0, 2);
-  } else {
-    base = words.map(w => w[0]).join('');
-  }
-  return base.toLowerCase().replace(/[^a-z0-9]/g, '');
+export function generateBaseSlug(name: string): string {
+  const cleaned = name.trim().toLowerCase()
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '');
+  const base = cleaned.slice(0, SLUG_MAX);
+  return base || 'mv';
 }
 
 /**
- * Çakışma çözümü — aynı base slug varsa kelimelerden ek harf alarak uzat.
- * tes → test → testi → ...
- * tsu → tsud → tsudo → ...
+ * Çakışma çözümü — deterministic numeric suffix.
+ *   base, base1, base2, base3, ... , base999
+ * Base max 6 karakter (generateBaseSlug tarafından). Suffix tam olarak base'in
+ * sonuna eklenir; base kısaltılmaz. Kullanıcı kuralı:
+ *   "sunucu adresinin sonuna 1 sayısı yazılsın, sonra 2, sonra 3..."
+ * Örn: base = "oyuncu" (6ch) → "oyuncu", "oyuncu1", "oyuncu2", ...
  */
 async function resolveUniqueSlug(name: string): Promise<string> {
-  const words = name.trim().split(/\s+/).slice(0, 3).map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''));
   const base = generateBaseSlug(name);
 
   // İlk deneme: base slug
-  let candidate = base;
-  let existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
-  if (!existing) return candidate + '.mv';
+  const existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [base + '.mv']);
+  if (!existing) return base + '.mv';
 
-  // Çakışma var — kelimelerden ek harf al
-  // Tüm harfleri birleştir ve base'den sonrasını ekle
-  const allChars = words.join('');
-  for (let len = base.length + 1; len <= Math.min(allChars.length, 12); len++) {
-    candidate = allChars.slice(0, len);
-    existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
-    if (!existing) return candidate + '.mv';
-  }
-
-  // Hâlâ çakışıyorsa sayı ekle
-  for (let i = 2; i <= 99; i++) {
-    candidate = base + i;
-    existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
-    if (!existing) return candidate + '.mv';
+  // Çakışma — base'e numerik suffix ekle (base kısaltılmaz).
+  for (let i = 1; i <= 999; i++) {
+    const candidate = base + String(i);
+    const dup = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1', [candidate + '.mv']);
+    if (!dup) return candidate + '.mv';
   }
 
   throw new AppError(409, 'Uygun adres bulunamadı, farklı bir isim dene');
@@ -106,7 +95,18 @@ export async function listMyServers(userId: string): Promise<ServerResponse[]> {
 
 /** Yeni sunucu oluştur + owner'ı member olarak ekle + varsayılan kanallar */
 export async function createServer(userId: string, name: string, description: string, isPublic: boolean, motto?: string, plan?: string): Promise<ServerResponse> {
-  const slug = await resolveUniqueSlug(name);
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new AppError(400, 'Sunucu adı boş olamaz');
+
+  // Duplicate name guard — GLOBAL unique, case-insensitive.
+  // Pre-check + UNIQUE INDEX on LOWER(name) ile çift katman.
+  const dup = await queryOne<{ id: string }>(
+    `SELECT id FROM servers WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+    [trimmedName]
+  );
+  if (dup) throw new AppError(409, 'Bu isimde bir sunucu zaten mevcut');
+
+  const slug = await resolveUniqueSlug(trimmedName);
 
   const client = await pool.connect();
   try {
@@ -131,13 +131,15 @@ export async function createServer(userId: string, name: string, description: st
       [server.id, userId]
     );
 
-    // Varsayılan 4 kanal
+    // Varsayılan 4 sistem kanalı — HEPSİ is_default=true; auto-delete'ten korunur.
+    // Task #18 bug fix: daha önce sadece ilk kanal default'tu, diğer 3'ü boş kalınca
+    // frontend auto-delete timer'ı ile siliniyordu.
     await client.query(
-      `INSERT INTO channels (server_id, name, type, position, is_default) VALUES
-       ($1, 'Sohbet Muhabbet', 'voice', 0, true),
-       ($1, 'Oyun Takımı', 'voice', 1, false),
-       ($1, 'Yayın Sahnesi', 'voice', 2, false),
-       ($1, 'Sessiz Alan', 'voice', 3, false)`,
+      `INSERT INTO channels (server_id, name, type, position, is_default, mode) VALUES
+       ($1, 'Sohbet Muhabbet', 'voice', 0, true, 'social'),
+       ($1, 'Oyun Takımı',    'voice', 1, true, 'gaming'),
+       ($1, 'Yayın Sahnesi',  'voice', 2, true, 'broadcast'),
+       ($1, 'Sessiz Alan',    'voice', 3, true, 'quiet')`,
       [server.id]
     );
 
@@ -157,6 +159,12 @@ export async function createServer(userId: string, name: string, description: st
     return toResponse(server, { server_id: server.id, member_count: 1, active_count: 0, updated_at: '' }, 'owner');
   } catch (err) {
     await client.query('ROLLBACK');
+    // Race condition: UNIQUE INDEX `servers_name_unique_idx` pg error 23505 atar.
+    // Pre-check'te yakalanmayan eş zamanlı create denemelerinde AppError 409 dönüş.
+    const pgErr = err as { code?: string; constraint?: string };
+    if (pgErr?.code === '23505' && pgErr?.constraint === 'servers_name_unique_idx') {
+      throw new AppError(409, 'Bu isimde bir sunucu zaten mevcut');
+    }
     throw err;
   } finally {
     client.release();

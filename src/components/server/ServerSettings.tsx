@@ -159,8 +159,14 @@ function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, showToast }: {
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [logoLoading, setLogoLoading] = useState(false);
 
-  // Otomatik slug — sunucu adından türetilir
-  const autoSlug = name.trim().toLowerCase().replace(/[çÇ]/g,'c').replace(/[ğĞ]/g,'g').replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[şŞ]/g,'s').replace(/[üÜ]/g,'u').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  // Otomatik slug — backend `generateBaseSlug` ile paralel: max 6 karakter, no hyphen.
+  // Not: gerçek çakışma suffix'ini (1, 2, 3...) yalnız backend kararlaştırır; bu preview
+  // sadece base'i gösterir.
+  const autoSlug = name.trim().toLowerCase()
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 6);
 
   const dirty = name !== server.name || desc !== server.description || motto !== (server.motto ?? '') || isPublic !== (server.isPublic ?? true) || joinPolicy !== (server.joinPolicy ?? 'invite_only');
 
@@ -195,12 +201,20 @@ function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, showToast }: {
             </div>
             <div className="flex-1 min-w-0 space-y-2.5">
               <Fld label="Sunucu Adı" off={!canEdit}><input value={name} onChange={e => setName(e.target.value)} maxLength={15} disabled={!canEdit} className={IC} /></Fld>
-              {/* Otomatik adres — badge kart */}
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.04)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)' }}>
-                <span className="text-[8px] font-bold text-[var(--theme-secondary-text)]/30 uppercase tracking-widest shrink-0">Adres</span>
-                <span className="text-[12px] font-mono font-semibold text-[var(--theme-accent)]/70 flex-1 truncate">{autoSlug || '...'}<span className="opacity-50">.mv</span></span>
-                <button onClick={() => { navigator.clipboard.writeText(autoSlug + '.mv'); showToast('Adres kopyalandı'); }} className="text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] transition-colors shrink-0"><Copy size={11} /></button>
-              </div>
+              {/* Otomatik adres — badge kart.
+                  İsim değiştirilmediyse gerçek DB slug'ı (suffix dahil); değişmişse preview. */}
+              {(() => {
+                const nameChanged = name.trim() !== server.name;
+                const realSlug = (server.slug || '').replace(/\.mv$/, '');
+                const shown = nameChanged ? autoSlug : (realSlug || autoSlug);
+                return (
+                  <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.04)', border: '1px solid rgba(var(--theme-accent-rgb), 0.08)' }}>
+                    <span className="text-[8px] font-bold text-[var(--theme-secondary-text)]/30 uppercase tracking-widest shrink-0">Adres</span>
+                    <span className="text-[12px] font-mono font-semibold text-[var(--theme-accent)]/70 flex-1 truncate">{shown || '...'}<span className="opacity-50">.mv</span>{nameChanged && <span className="opacity-40 ml-1">(önizleme)</span>}</span>
+                    <button onClick={() => { navigator.clipboard.writeText((shown || '') + '.mv'); showToast('Adres kopyalandı'); }} className="text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] transition-colors shrink-0"><Copy size={11} /></button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -220,13 +234,7 @@ function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, showToast }: {
 
         {/* ── Sağ: Davet + Bilgi + Premium ── */}
         <div className="space-y-4">
-          {/* Davet kodu */}
-          <Sec title="Davet Kodu">
-            <div className="flex items-center gap-3 p-3.5 rounded-xl" style={{ background: 'rgba(var(--glass-tint), 0.03)', border: '1px solid rgba(var(--glass-tint), 0.05)' }}>
-              <span className="text-[14px] font-mono font-bold text-[var(--theme-text)] tracking-[0.15em] flex-1">{server.inviteCode}</span>
-              <button onClick={() => { navigator.clipboard.writeText(server.inviteCode ?? ''); showToast('Davet kodu kopyalandı'); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[var(--theme-accent)] bg-[var(--theme-accent)]/8 hover:bg-[var(--theme-accent)]/15 transition-colors"><Copy size={12} /> Kopyala</button>
-            </div>
-          </Sec>
+          {/* Davet kodu bölümü kaldırıldı — "Linkler" sekmesi altında Invite V2 var (tek kaynak). */}
 
           {/* Bilgiler */}
           <Sec title="Sunucu Bilgileri">

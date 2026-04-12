@@ -60,6 +60,7 @@ import { Coffee } from 'lucide-react';
 
 import type { VoiceChannel } from '../types';
 import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
+import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { getPlanVisual } from '../lib/planStyles';
 import ServerSettings from '../components/server/ServerSettings';
 import JoinServerModal from '../components/server/JoinServerModal';
@@ -88,6 +89,15 @@ export default function ChatView() {
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel } = useAudio();
 
   const [showDiscover, setShowDiscover] = useState(false);
+
+  // ── Task #4: kanal seçildiğinde merkez panel zorla chat view'e geçer ──
+  // Kullanıcı "Topluluklara Katıl"dayken (veya settings'teyken) herhangi bir
+  // oda/kanal'a tıklarsa merkez panel o odanın sayfasına geçmelidir.
+  useEffect(() => {
+    if (!activeChannel) return;
+    if (showDiscover) setShowDiscover(false);
+    if (view === 'settings') setView('chat');
+  }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mouse geri tuşu ile ayarlardan / discover'dan çık ──
   useEffect(() => {
@@ -572,10 +582,18 @@ export default function ChatView() {
                   ))}
                 </nav>
                 <div className="p-4 border-t border-[var(--theme-border)]">
-                  <button onClick={(e) => { e.stopPropagation(); const userRooms = channels.filter(c => c.ownerId === currentUser.id); if (userRooms.length >= 2) { setToastMsg('Aynı anda en fazla 2 oda oluşturabilirsiniz.'); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' }); setMobileLeftOpen(false); }}
-                    className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${channels.filter(c => c.ownerId === currentUser.id).length >= 2 ? 'bg-gray-500 cursor-not-allowed opacity-50' : 'bg-[var(--theme-accent)] hover:opacity-90'}`}>
+                  {(() => {
+                    const activePlan = serverList.find(s => s.id === activeServerId)?.plan;
+                    const roomLimit = getUserRoomLimit(activePlan);
+                    const userRoomCount = channels.filter(c => c.ownerId === currentUser.id).length;
+                    const atLimit = userRoomCount >= roomLimit;
+                    return (
+                  <button onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' }); setMobileLeftOpen(false); }}
+                    className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${atLimit ? 'bg-gray-500 cursor-not-allowed opacity-50' : 'bg-[var(--theme-accent)] hover:opacity-90'}`}>
                     <Sparkles size={15} />Oda Oluştur
                   </button>
+                    );
+                  })()}
                 </div>
               </motion.aside>
             </>
@@ -612,7 +630,7 @@ export default function ChatView() {
         {/* ── Left Sidebar (masaüstü) ── */}
         <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
-          activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
+          activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
           onShowDiscover={() => setShowDiscover(true)} />
 
         {/* ── Popover / Modal layers ── */}
@@ -657,7 +675,7 @@ export default function ChatView() {
             className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
           {view === 'settings' ? <SettingsView /> : showDiscover ? (
             <DiscoverPanel activeServerId={activeServerId}
-              onJoinSuccess={() => { refreshServers(); setShowDiscover(false); }}
+              onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
               onCreateServer={() => setShowCreateModal(true)}
               onJoinModal={() => setShowJoinModal(true)} />
           ) : currentChannel ? (
@@ -704,7 +722,7 @@ export default function ChatView() {
           ) : !hasServer ? (
             /* ── Sunucu Keşfet paneli ── */
             <DiscoverPanel activeServerId={activeServerId}
-              onJoinSuccess={refreshServers}
+              onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
               onCreateServer={() => setShowCreateModal(true)}
               onJoinModal={() => setShowJoinModal(true)}
             />
@@ -820,6 +838,43 @@ export default function ChatView() {
             <input value={createDesc} onChange={e => setCreateDesc(e.target.value)} placeholder="Kısa bir açıklama (opsiyonel)" maxLength={200} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-3" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
             <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-1.5">Motto</label>
             <input value={createMotto} onChange={e => setCreateMotto(e.target.value.slice(0, 15))} placeholder="Gece tayfa burada" maxLength={15} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-3" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
+            {/* ── Live server preview ── */}
+            {(createName.trim() || createMotto.trim()) && (() => {
+              const pv = getPlanVisual(createPlan);
+              const planLimit = createPlan === 'free' ? 100 : createPlan === 'pro' ? 240 : 480;
+              const displayName = createName.trim() || 'Sunucum';
+              const displayInitial = (displayName[0] || '?').toUpperCase();
+              return (
+                <div className="mb-3 p-3 rounded-xl" style={{ background: pv.bg, border: `1px solid ${pv.border}` }}>
+                  <div className="text-[8px] font-bold mb-2 uppercase tracking-wider" style={{ color: pv.accent, opacity: 0.7 }}>Önizleme</div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-[15px] font-bold" style={{ background: pv.selectBg, border: `1px solid ${pv.selectBorder}`, color: pv.selectText }}>
+                      {displayInitial}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-bold text-[var(--theme-text)] truncate">{displayName}</span>
+                        {createPlan !== 'free' && (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0" style={{ background: pv.selectBg, color: pv.selectText, border: `1px solid ${pv.selectBorder}` }}>
+                            {createPlan}
+                          </span>
+                        )}
+                      </div>
+                      {createMotto.trim() && (
+                        <div className="text-[10px] text-[var(--theme-secondary-text)] opacity-70 truncate mt-0.5">"{createMotto.trim()}"</div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Kapasite hissi — mini bar */}
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.08)' }}>
+                      <div className="h-full" style={{ width: `${createPlan === 'free' ? 20 : createPlan === 'pro' ? 48 : 96}%`, background: pv.accent, opacity: 0.6 }} />
+                    </div>
+                    <span className="text-[9px] tabular-nums text-[var(--theme-secondary-text)] opacity-55 shrink-0">{planLimit} kullanıcı</span>
+                  </div>
+                </div>
+              );
+            })()}
             {/* Plan seçimi */}
             <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Plan</label>
             <div className="grid grid-cols-3 gap-2">
@@ -883,16 +938,8 @@ export default function ChatView() {
         </div>
       )}
 
-      {/* ── Global Toast — dock'un tam üstünde, ortasında ── */}
-      {toastMsg && (
-        <div className="fixed z-[500] pointer-events-none" style={{ bottom: '68px', left: 'calc(50% + 8px)', transform: 'translateX(-50%)' }}>
-          <div className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-[var(--theme-text)] pointer-events-auto cursor-pointer"
-            onClick={() => setToastMsg(null)}
-            style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.92)', border: '1px solid rgba(var(--theme-accent-rgb), 0.15)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', backdropFilter: 'blur(16px)' }}>
-            {toastMsg}
-          </div>
-        </div>
-      )}
+      {/* Task #10: Tek-düze bildirim — `toastMsg` yalnız DesktopDock içinde
+          (buton alanında) render edilir. Burada ikinci kopya kaldırıldı. */}
 
       {/* ── Sunucu Ayarları ── */}
       {settingsServerId && (
