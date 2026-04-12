@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MessageSquare, ArrowLeft, Send, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -7,6 +7,8 @@ import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
 import type { DmConversation, DmMessage } from '../lib/dmService';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
+import { MV_PRESS } from '../lib/signature';
 
 // ── Conversation Item ───────────────────────────────────────────────────
 
@@ -127,28 +129,121 @@ function MessageBubble({ msg, isOwn }: { msg: DmMessage; isOwn: boolean }) {
 // ── Chat Area ───────────────────────────────────────────────────────────
 
 function ChatArea({
-  messages, currentUserId, recipientId, allUsers, onSend, onBack,
+  messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
+  onSend, onTyping, onBack, onNearBottomChange,
 }: {
   messages: DmMessage[];
   currentUserId: string;
   recipientId: string;
   allUsers: any[];
+  loadingHistory: boolean;
+  typingFrom: string | null;
   onSend: (text: string) => void;
+  onTyping: () => void;
   onBack: () => void;
+  onNearBottomChange?: (near: boolean) => void;
 }) {
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [nearBottom, setNearBottomState] = useState(true);
+  const [showJump, setShowJump] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevMsgLenRef = useRef(0);
+  const prevRecipientRef = useRef(recipientId);
+  const lastOwnMsgIdRef = useRef<string | null>(null);
 
   const recipient = allUsers.find((u: any) => u.id === recipientId);
   const recipientName = recipient ? formatFullName(recipient.firstName, recipient.lastName) : 'Kullanıcı';
   const recipientAvatar = recipient?.avatar || '';
   const hasAvatar = recipientAvatar?.startsWith('http');
 
-  useEffect(() => { scrollRef.current && (scrollRef.current.scrollTop = scrollRef.current.scrollHeight); }, [messages.length]);
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    else el.scrollTop = el.scrollHeight;
+    setShowJump(false);
+    setNearBottomState(true);
+    onNearBottomChange?.(true);
+  }, [onNearBottomChange]);
+
+  // Thread değişince reset + dipe in
+  useEffect(() => {
+    prevMsgLenRef.current = 0;
+    lastOwnMsgIdRef.current = null;
+    setShowJump(false);
+    setNearBottomState(true);
+    prevRecipientRef.current = recipientId;
+  }, [recipientId]);
+
+  // Initial history veya thread ilk render'da dipe in
+  useEffect(() => {
+    if (loadingHistory) return;
+    if (prevMsgLenRef.current === 0 && messages.length > 0) {
+      scheduleScroll(() => scrollToBottom(false));
+    }
+  }, [loadingHistory, messages.length, scrollToBottom]);
+
+  // Yeni mesaj geldi — akıllı davran
+  useEffect(() => {
+    const prev = prevMsgLenRef.current;
+    const curr = messages.length;
+    if (curr > prev && prev > 0) {
+      const latest = messages[curr - 1];
+      const isOwn = latest.senderId === currentUserId;
+      // Kendi mesajımsa veya tabandaydık → auto-scroll
+      if (isOwn || nearBottom) {
+        scheduleScroll(() => scrollToBottom(prev > 0));
+        // Kendi mesaj echo geldi → sending state düşür
+        if (isOwn && latest.id !== lastOwnMsgIdRef.current) {
+          lastOwnMsgIdRef.current = latest.id;
+          setSending(false);
+        }
+      } else {
+        // Yukarıdayız, karşıdan geldi → badge göster, scroll'u bozma
+        setShowJump(true);
+      }
+    }
+    prevMsgLenRef.current = curr;
+  }, [messages, currentUserId, nearBottom, scrollToBottom]);
+
   useEffect(() => { inputRef.current?.focus(); }, [recipientId]);
 
-  const handleSend = () => { const t = input.trim(); if (!t) return; onSend(t); setInput(''); inputRef.current?.focus(); };
+  // Safety: sending 4s'den uzun sürerse düşür (echo gelmedi bile)
+  useEffect(() => {
+    if (!sending) return;
+    const t = setTimeout(() => setSending(false), 4000);
+    return () => clearTimeout(t);
+  }, [sending]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const near = isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight, 100);
+    setNearBottomState(prev => {
+      if (prev !== near) onNearBottomChange?.(near);
+      return near;
+    });
+    if (near) setShowJump(false);
+  }, [onNearBottomChange]);
+
+  const handleSend = () => {
+    if (sending) return; // in-flight guard
+    const t = input.trim();
+    if (!t) return;
+    setSending(true);
+    onSend(t);
+    setInput('');
+    inputRef.current?.focus();
+    // Kendi gönderimimiz → dipe in
+    scheduleScroll(() => scrollToBottom(true));
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (e.target.value.length > 0) onTyping();
+  };
 
   const grouped = useMemo(() => {
     const g: { date: string; msgs: DmMessage[] }[] = [];
@@ -165,6 +260,9 @@ function ChatArea({
     return g;
   }, [messages]);
 
+  const typingActive = typingFrom === recipientId;
+  const canSend = input.trim().length > 0 && !sending;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -177,12 +275,33 @@ function ChatArea({
             ? <img src={recipientAvatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             : <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-50">{(recipientName[0] || '?').toUpperCase()}</span>}
         </div>
-        <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate">{recipientName}</span>
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{recipientName}</span>
+          <AnimatePresence>
+            {typingActive && (
+              <motion.span
+                key="typing-hdr"
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="text-[10px] text-[var(--theme-accent)] opacity-70 leading-tight"
+              >
+                yazıyor…
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar">
-        {messages.length === 0 ? (
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
+        {loadingHistory ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />
+            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Yükleniyor…</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <MessageSquare size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
             <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesaj yok</p>
@@ -200,6 +319,28 @@ function ChatArea({
         ))}
       </div>
 
+      {/* Jump-to-bottom affordance */}
+      <AnimatePresence>
+        {showJump && (
+          <motion.button
+            key="jump"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => scrollToBottom(true)}
+            className="absolute right-4 bottom-[78px] z-10 flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[10px] font-semibold text-[var(--theme-text-on-accent,#000)] transition-transform hover:scale-[1.03] active:scale-[0.97]"
+            style={{
+              background: 'var(--theme-accent)',
+              boxShadow: '0 4px 12px rgba(var(--shadow-base),0.35)',
+            }}
+          >
+            <ChevronDown size={11} />
+            Yeni mesaj
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Input */}
       <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
         <div className="flex items-center gap-2 rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}>
@@ -207,19 +348,30 @@ function ChatArea({
             ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            onChange={handleInputChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (canSend) handleSend();
+              }
+            }}
             placeholder="Mesaj yaz..."
             maxLength={2000}
-            className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
+            className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none disabled:opacity-50"
+            disabled={sending && !input}
           />
-          <button
+          <motion.button
+            {...(canSend ? MV_PRESS : {})}
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!canSend}
+            aria-busy={sending}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors duration-150 disabled:opacity-15"
           >
-            <Send size={15} />
-          </button>
+            {sending
+              ? <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin" />
+              : <Send size={15} />
+            }
+          </motion.button>
         </div>
       </div>
     </div>
@@ -234,16 +386,19 @@ interface DMPanelProps {
   openUserId?: string | null;
   onOpenHandled?: () => void;
   onUnreadChange?: (count: number) => void;
+  onActiveConvKeyChange?: (key: string | null) => void;
+  onNearBottomChange?: (near: boolean) => void;
   toggleRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, toggleRef }: DMPanelProps) {
+export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const panelRef = useRef<HTMLDivElement>(null);
   const { openConfirm } = useConfirm();
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openUserId) { dm.openConversation(openUserId); onOpenHandled?.(); } }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -285,8 +440,12 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               currentUserId={currentUser.id}
               recipientId={dm.activeRecipientId}
               allUsers={allUsers}
+              loadingHistory={dm.loadingHistory}
+              typingFrom={dm.typingFrom}
               onSend={dm.sendMessage}
+              onTyping={dm.emitTyping}
               onBack={dm.closeConversation}
+              onNearBottomChange={onNearBottomChange}
             />
           ) : (
             <>

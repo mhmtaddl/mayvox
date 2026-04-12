@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('electronApp', {
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),
 });
 
+// Notification attention bridge — BrowserWindow.flashFrame
+// Renderer → main: flash frame toggle; main focus olayında otomatik stop eder.
+contextBridge.exposeInMainWorld('electronNotify', {
+  flashFrame: (on) => ipcRenderer.send('notify:flash', !!on),
+});
+
 // Global PTT (bas-konuş) API — main process uiohook-napi kullanır,
 // böylece uygulama arka plandayken / odak başka yerdeyken de çalışır.
 contextBridge.exposeInMainWorld('electronPtt', {

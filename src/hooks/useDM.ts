@@ -8,9 +8,13 @@ import {
   dmMarkRead,
   dmRequestUnreadTotal,
   dmHideConversation,
+  dmEmitTyping,
   type DmConversation,
   type DmMessage,
 } from '../lib/dmService';
+import { TYPING_CLEAR_MS, TYPING_EMIT_THROTTLE_MS, shouldEmitTyping } from '../lib/dmUxLogic';
+import { handleDmMessage as notifyDmMessage } from '../features/notifications/notificationService';
+import { subscribeConnectionStatus } from '../lib/chatService';
 
 /**
  * useDM — DM state yönetimi.
@@ -23,6 +27,10 @@ export function useDM(currentUserId: string | undefined) {
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [typingFrom, setTypingFrom] = useState<string | null>(null);
+  const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingEmitAtRef = useRef(0);
 
   const activeConvKeyRef = useRef(activeConvKey);
   activeConvKeyRef.current = activeConvKey;
@@ -41,11 +49,18 @@ export function useDM(currentUserId: string | undefined) {
       onHistory: (convKey, _recipientId, msgs) => {
         if (convKey === activeConvKeyRef.current) {
           setMessages(msgs);
+          setLoadingHistory(false);
         }
       },
       onNewMessage: (msg) => {
         // Yeni mesaj gelirse hidden set'ten kaldır — konuşma tekrar görünsün
         hiddenKeysRef.current.delete(msg.conversationKey);
+
+        // Yeni mesaj geldiyse "yazıyor" yanılsamasını anında temizle.
+        if (msg.conversationKey === activeConvKeyRef.current && msg.senderId !== currentUserId) {
+          setTypingFrom(null);
+          if (typingClearTimerRef.current) { clearTimeout(typingClearTimerRef.current); typingClearTimerRef.current = null; }
+        }
 
         // Aktif sohbetteyse mesajları güncelle
         if (msg.conversationKey === activeConvKeyRef.current) {
@@ -99,6 +114,11 @@ export function useDM(currentUserId: string | undefined) {
         if (msg.senderId !== currentUserId && msg.conversationKey !== activeConvKeyRef.current) {
           setTotalUnread(prev => prev + 1);
         }
+
+        // Notification service — context filter'ı içeride (self-exclude, same-conv exclude).
+        if (msg.senderId !== currentUserId) {
+          try { notifyDmMessage(msg); } catch { /* no-op */ }
+        }
       },
       onRead: (convKey, _readBy, _readAt) => {
         // Aktif sohbetteki mesajları güncelle
@@ -112,6 +132,14 @@ export function useDM(currentUserId: string | undefined) {
       },
       onUnreadTotal: (count) => {
         setTotalUnread(count);
+      },
+      onTyping: (convKey, fromUserId) => {
+        // Sadece aktif sohbette ve karşı taraftan gelen typing'i göster.
+        if (convKey !== activeConvKeyRef.current) return;
+        if (fromUserId === currentUserId) return;
+        setTypingFrom(fromUserId);
+        if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+        typingClearTimerRef.current = setTimeout(() => setTypingFrom(null), TYPING_CLEAR_MS);
       },
       onError: (message) => {
         console.warn('[useDM] Error:', message);
@@ -131,6 +159,23 @@ export function useDM(currentUserId: string | undefined) {
     dmRequestUnreadTotal();
   }, [currentUserId]);
 
+  // Reconnect recovery — WS yeniden bağlandığında conversation + unread'i senkronize et.
+  // İlk 'connected' transition'ı atlanır (zaten onConnected tetikliyor).
+  // Gerçek reconnect'te: conversation listesi ve unread total canonical fetch.
+  // notificationService fingerprint dedupe sayesinde eski mesajlar için toast üretilmez.
+  useEffect(() => {
+    if (!currentUserId) return;
+    let seenConnected = false;
+    const unsub = subscribeConnectionStatus((status) => {
+      if (status !== 'connected') return;
+      if (!seenConnected) { seenConnected = true; return; }
+      // Gerçek reconnect
+      dmLoadConversations();
+      dmRequestUnreadTotal();
+    });
+    return unsub;
+  }, [currentUserId]);
+
   // ── Actions ────────────────────────────────────────────────────────────
 
   const openConversation = useCallback((recipientId: string) => {
@@ -143,6 +188,8 @@ export function useDM(currentUserId: string | undefined) {
     setActiveConvKey(convKey);
     setActiveRecipientId(recipientId);
     setMessages([]);
+    setLoadingHistory(true);
+    setTypingFrom(null);
     setPanelOpen(true);
 
     dmOpenConversation(recipientId);
@@ -178,6 +225,23 @@ export function useDM(currentUserId: string | undefined) {
     setActiveConvKey(null);
     setActiveRecipientId(null);
     setMessages([]);
+    setTypingFrom(null);
+    setLoadingHistory(false);
+    if (typingClearTimerRef.current) { clearTimeout(typingClearTimerRef.current); typingClearTimerRef.current = null; }
+  }, []);
+
+  // Debounced typing emit — aktif sohbet olmadan NO-OP.
+  const emitTyping = useCallback(() => {
+    if (!activeRecipientId) return;
+    const now = Date.now();
+    if (!shouldEmitTyping(lastTypingEmitAtRef.current, now)) return;
+    lastTypingEmitAtRef.current = now;
+    dmEmitTyping(activeRecipientId);
+  }, [activeRecipientId]);
+
+  // Unmount cleanup — kalıntı typing state olmasın.
+  useEffect(() => () => {
+    if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
   }, []);
 
   const closePanel = useCallback(() => {
@@ -211,13 +275,19 @@ export function useDM(currentUserId: string | undefined) {
     messages,
     totalUnread,
     panelOpen,
+    loadingHistory,
+    typingFrom,
     setPanelOpen,
     loadInitial,
     openConversation,
     sendMessage,
+    emitTyping,
     closeConversation,
     resetViewOnClose,
     hideConversation,
     closePanel,
   };
 }
+
+// Re-export for consumers
+export { TYPING_EMIT_THROTTLE_MS } from '../lib/dmUxLogic';

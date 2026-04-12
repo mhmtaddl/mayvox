@@ -2,6 +2,7 @@ import './lib/supabase';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import './lib/signature/signature.css';
 import { logger } from './lib/logger';
 
 // ── Global error handlers ─────────────────────────────────────────────────────

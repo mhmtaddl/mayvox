@@ -6,6 +6,7 @@ import {
   type UserInvite,
 } from '../lib/serverService';
 import { subscribeInviteEvents, subscribeConnectionStatus, type InviteEvent } from '../lib/chatService';
+import { handleInvite as notifyInvite } from '../features/notifications/notificationService';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -40,6 +41,9 @@ export function useIncomingInvites(): UseIncomingInvitesApi {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const inFlightRef = useRef(false);
+  // Bildirilmiş davet ID'leri — ilk yükleme sessiz; sonraki fetch'lerde sadece yeni olanlara toast.
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+  const firstLoadDoneRef = useRef(false);
 
   const load = useCallback(async (isInitial: boolean) => {
     if (inFlightRef.current) return;
@@ -54,6 +58,28 @@ export function useIncomingInvites(): UseIncomingInvitesApi {
       if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setInvites(data);
       setError('');
+
+      // Notification: ilk yüklemede SESSİZ (mevcut state toast spam yapmasın).
+      // Sonraki fetch'lerde sadece notifiedIds'de OLMAYAN yeni davetler bildirilir.
+      if (firstLoadDoneRef.current) {
+        for (const inv of data) {
+          if (notifiedIdsRef.current.has(inv.id)) continue;
+          notifiedIdsRef.current.add(inv.id);
+          try {
+            notifyInvite({
+              id: inv.id,
+              serverId: inv.serverId,
+              serverName: inv.serverName,
+              inviterId: inv.invitedBy,
+              inviterName: inv.invitedByName,
+              inviterAvatar: null,
+            });
+          } catch { /* no-op */ }
+        }
+      } else {
+        data.forEach(inv => notifiedIdsRef.current.add(inv.id));
+        firstLoadDoneRef.current = true;
+      }
     } catch (e) {
       if (!mountedRef.current || requestId !== requestIdRef.current) return;
       const msg = e instanceof Error ? e.message : 'Davetler yüklenemedi';
@@ -101,16 +127,22 @@ export function useIncomingInvites(): UseIncomingInvitesApi {
       }
     });
 
-    // Reconnect senkronu: WS disconnect/reconnecting iken emit edilen event'ler kaçmış
-    // olabilir. 'connected' transition'ı geldiğinde canonical fetch yap.
-    // İlk 'connected' skip edilir çünkü mount'ta zaten load(true) çalıştı.
+    // ── EXPLICIT reconnect recovery ─────────────────────────────────────
+    // WS disconnect sırasında invite:new event'leri kaçmış olabilir.
+    // Gerçek reconnect'te canonical fetch yapılır; `notifiedIdsRef` Set sayesinde:
+    //   - Daha önce bildirilmiş ID'ler re-toast ATMAZ (idempotent).
+    //   - Yalnızca gerçekten yeni ID'ler notification filter + dedupe akışından geçer.
+    // İlk 'connected' skip edilir (mount'ta zaten load(true) çalıştı).
     let seenConnected = false;
+    const reloadAfterReconnect = () => {
+      if (!mountedRef.current) return;
+      void load(false);
+    };
     const unsubscribeStatus = subscribeConnectionStatus((status) => {
       if (!mountedRef.current) return;
       if (status !== 'connected') return;
       if (!seenConnected) { seenConnected = true; return; }
-      // Gerçek reconnect — missed events için canonical fetch.
-      void load(false);
+      reloadAfterReconnect();
     });
 
     return () => {

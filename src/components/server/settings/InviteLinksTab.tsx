@@ -7,6 +7,7 @@ import {
   type InviteLinkResponse,
   type InviteLinkCreateResponse,
 } from '../../../lib/serverService';
+import UpgradeHint, { isPlanLimitError } from './UpgradeHint';
 
 interface Props {
   serverId: string;
@@ -101,11 +102,14 @@ export default function InviteLinksTab({ serverId, canCreate, canRevoke }: Props
   return (
     <div className="flex flex-col gap-3">
       {error && (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg text-[11px] text-red-400/85"
-          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.1)' }}
-        >
-          <AlertCircle size={12} />
-          <span className="truncate">{error}</span>
+        <div>
+          <div className="flex items-center gap-2 p-2.5 rounded-lg text-[11px] text-red-400/85"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.1)' }}
+          >
+            <AlertCircle size={12} />
+            <span className="truncate">{error}</span>
+          </div>
+          {isPlanLimitError(error) && <UpgradeHint compact />}
         </div>
       )}
 

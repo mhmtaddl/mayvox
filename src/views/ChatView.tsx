@@ -30,6 +30,11 @@ import { type CardStyle, loadCardStyle, saveCardStyle } from '../components/chat
 import DeviceBadge from '../components/chat/DeviceBadge';
 import { useConfirm } from '../contexts/ConfirmContext';
 import DMPanel from '../components/DMPanel';
+import ToastContainer from '../features/notifications/ToastContainer';
+import { useNotificationContextSync } from '../features/notifications/useNotificationContextSync';
+import { registerHandlers as registerNotifHandlers } from '../features/notifications/notificationService';
+import { useIsUserSpeaking } from '../features/notifications/useIsUserSpeaking';
+import { useWindowActivity } from '../hooks/useWindowActivity';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
 import MobileHeader from '../components/MobileHeader';
 import VoiceParticipants from '../components/VoiceParticipants';
@@ -123,7 +128,52 @@ export default function ChatView() {
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+  const [activeDmConvKey, setActiveDmConvKey] = useState<string | null>(null);
+  const [dmAtBottom, setDmAtBottom] = useState(true);
   const dmToggleRef = useRef<HTMLButtonElement>(null);
+
+  // ── Notification system v3 context sync ──
+  const isAppFocused = useWindowActivity();
+  // Real isUserSpeaking — speakingLevels[me] threshold + 400ms hold hysteresis.
+  const isUserSpeaking = useIsUserSpeaking(currentUser.id || null, speakingLevels);
+
+  // v4 voice-first polish: UI konuşurken sakinleşsin (CSS `html[data-user-speaking]` gate).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isUserSpeaking) document.documentElement.setAttribute('data-user-speaking', 'true');
+    else document.documentElement.removeAttribute('data-user-speaking');
+    return () => { document.documentElement.removeAttribute('data-user-speaking'); };
+  }, [isUserSpeaking]);
+  useNotificationContextSync({
+    currentUserId: currentUser.id || null,
+    isAppFocused,
+    dmPanelOpen,
+    activeDmConvKey,
+    dmAtBottom,
+    activeServerId,
+    // v3 voice-first signals — canlı state'lerden bağlı.
+    isInVoiceRoom: !!currentChannel,
+    isPttActive: isPttPressed,
+    isMuted,
+    isDeafened,
+    isUserSpeaking,
+    // mode: NORMAL default; user settings geldiğinde buraya bağlanır.
+  });
+  useEffect(() => {
+    registerNotifHandlers({
+      onDmClick: (recipientId /*, conversationKey */) => {
+        setDmTargetUserId(recipientId);
+        setDmPanelOpen(true);
+      },
+      onInviteClick: (_inviteId, serverId) => {
+        // Gelen davetler modal'ını aç — kullanıcı accept/decline yapabilsin.
+        setInvitesModalOpen(true);
+        // Sunucu context'i varsa fokuslamak için active server'ı geçirme
+        // (kullanıcı zaten modal içinden serverName görür; agresif switch etmiyoruz).
+        void serverId;
+      },
+    });
+  }, []);
 
   // ── Sunucu state ──
   // activeServerId artık ChannelContext'ten geliyor — presence/server-izolasyon için global paylaşılıyor.
@@ -754,7 +804,11 @@ export default function ChatView() {
       {/* ── Sunucu Oluştur Modal (global) ── */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setShowCreateModal(false); setCreateError(''); }}>
-          <div className="w-[380px] max-w-[90vw] rounded-2xl p-5 overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26, mass: 1.0 }}
+            className="w-[380px] max-w-[90vw] rounded-2xl p-5 overflow-hidden mv-depth" onClick={e => e.stopPropagation()} style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
             <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-5">Sunucu Oluştur</h3>
             <label className="block text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-1.5">Sunucu Adı <span className="normal-case font-normal">(en fazla 3 kelime)</span></label>
             <input value={createName} onChange={e => { const v = e.target.value; if (v.trim().split(/\s+/).length <= 3 || v.length < createName.length) setCreateName(v); }} placeholder="Benim Sunucum" maxLength={15} className="w-full h-10 px-3 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none mb-1" style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.1)' }} />
@@ -821,11 +875,11 @@ export default function ChatView() {
             {createError && <div className="text-[10px] text-red-400 mb-3 px-1">{createError}</div>}
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowCreateModal(false); setCreateError(''); }} className="h-9 px-4 rounded-lg text-[11px] font-semibold text-[var(--theme-secondary-text)]" style={{ background: 'rgba(var(--glass-tint), 0.06)' }}>İptal</button>
-              <button onClick={handleCreateServer} disabled={!createName.trim() || serverActionLoading} className="h-9 px-4 rounded-lg text-[11px] font-semibold disabled:opacity-40" style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)' }}>
+              <button onClick={handleCreateServer} disabled={!createName.trim() || serverActionLoading} className="h-9 px-4 rounded-lg text-[11px] font-semibold disabled:opacity-40 mv-pressable" style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)' }}>
                 {serverActionLoading ? 'Oluşturuluyor...' : 'Oluştur'}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
@@ -872,7 +926,11 @@ export default function ChatView() {
 
       {/* ── DM Panel ── */}
       <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}
-        onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount} toggleRef={dmToggleRef} />
+        onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount}
+        onActiveConvKeyChange={setActiveDmConvKey} onNearBottomChange={setDmAtBottom} toggleRef={dmToggleRef} />
+
+      {/* ── Notification toast stack (top-right portal) ── */}
+      <ToastContainer />
     </div>
   );
 }

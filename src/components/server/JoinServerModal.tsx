@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { Hash } from 'lucide-react';
 import { joinServer, acceptInviteLink, type Server } from '../../lib/serverService';
+import { MV_PRESS, MV_SPRING } from '../../lib/signature';
 
 interface Props {
   onClose: () => void;
@@ -55,7 +57,11 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-[400px] max-w-[92vw] rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={MV_SPRING.gentle}
+        className="w-[400px] max-w-[92vw] rounded-2xl overflow-hidden mv-depth" onClick={e => e.stopPropagation()}
         style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.97)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
 
         {/* Header */}
@@ -132,13 +138,15 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
             style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
             İptal
           </button>
-          <button onClick={handleSubmit} disabled={isDisabled}
-            className="h-10 px-6 rounded-xl text-[13px] font-bold disabled:opacity-25 flex items-center gap-2 transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+          <motion.button
+            {...(isDisabled ? {} : MV_PRESS)}
+            onClick={handleSubmit} disabled={isDisabled}
+            className="h-10 px-6 rounded-xl text-[13px] font-bold disabled:opacity-25 flex items-center gap-2 transition-colors duration-150 hover:brightness-110"
             style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)', boxShadow: '0 4px 16px rgba(var(--theme-accent-rgb), 0.2)' }}>
             {state === 'submitting' ? 'Katılıyor...' : 'Doğrula ve Katıl'}
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

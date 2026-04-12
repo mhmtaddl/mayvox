@@ -198,15 +198,32 @@ function sendToUser(userId, data) {
   if (conns.size === 0) userConnections.delete(userId);
 }
 
+// Fail-closed: geçersiz/boş/self-pair → false.
+// Schema verification: dönen satır beklenen pair ile eşleşmezse false
+// (zehirlenmiş satır veya schema drift DM kapısını açamasın).
 async function checkFriendship(userA, userB) {
-  const [low, high] = userA < userB ? [userA, userB] : [userB, userA];
-  const { data } = await supabase
-    .from('friendships')
-    .select('user_low_id')
-    .eq('user_low_id', low)
-    .eq('user_high_id', high)
-    .maybeSingle();
-  return !!data;
+  if (typeof userA !== 'string' || typeof userB !== 'string') return false;
+  const a = userA.trim(), b = userB.trim();
+  if (!a || !b || a === b) return false;
+  const [low, high] = a < b ? [a, b] : [b, a];
+  try {
+    const { data, error } = await supabase
+      .from('friendships')
+      .select('user_low_id, user_high_id')
+      .eq('user_low_id', low)
+      .eq('user_high_id', high)
+      .maybeSingle();
+    if (error) {
+      console.warn('[dm] friendship query error:', error.message);
+      return false;
+    }
+    if (!data || typeof data !== 'object') return false;
+    if (data.user_low_id !== low || data.user_high_id !== high) return false;
+    return true;
+  } catch (err) {
+    console.warn('[dm] friendship exception:', err?.message);
+    return false;
+  }
 }
 
 async function getFriendIds(userId) {
@@ -227,6 +244,41 @@ const cleanupTimers = new Map();  // roomId -> timeout
 const userChatLimits = new Map();   // room chat: 10 msg / 5s
 const userDmLimits = new Map();     // DM: 8 msg / 10s
 const userJoinLimits = new Map();   // join: 5 / 15s
+const userTypingLimits = new Map(); // DM typing relay: 5 / 10s (burst guard)
+
+// Typing-only friendship cache — SADECE dm:typing relay'inde kullanılır.
+// DM send/open kendi sağlam checkFriendship akışını korur (stale sonuca izin yok).
+// Typing ephemeral; 8 sn stale tolerable — tipik arkadaşlık kaldırma etkisi gecikir ama
+// DM send her seferinde DB'ye düştüğü için gerçek kapı kapalı kalır.
+const typingFriendCache = new Map(); // canonicalKey -> { ok: boolean, expiresAt: number }
+const TYPING_FRIEND_TTL_MS = 8_000;
+
+async function checkFriendshipForTyping(userA, userB) {
+  if (typeof userA !== 'string' || typeof userB !== 'string') return false;
+  const a = userA.trim(), b = userB.trim();
+  if (!a || !b || a === b) return false;
+  const [low, high] = a < b ? [a, b] : [b, a];
+  const key = `${low}|${high}`;
+  const now = Date.now();
+  const hit = typingFriendCache.get(key);
+  if (hit && hit.expiresAt > now) return hit.ok;
+  // Miss → canonical DB yolu; hata fail-closed.
+  const ok = await checkFriendship(a, b);
+  typingFriendCache.set(key, { ok, expiresAt: now + TYPING_FRIEND_TTL_MS });
+  return ok;
+}
+
+// Duplicate-send guard: aynı kullanıcı + aynı text ~500ms içinde tekrarlanırsa yoksay.
+// Çift click / tuşta takılma gibi frontend pürüzleri sunucuda sabitlenir.
+const userLastDm = new Map();       // userId -> { text, at }
+const DM_DUP_WINDOW_MS = 500;
+
+function isDuplicateDm(userId, text, now) {
+  const last = userLastDm.get(userId);
+  if (!last) return false;
+  if (last.text !== text) return false;
+  return now - last.at < DM_DUP_WINDOW_MS;
+}
 
 function checkRateLimit(map, userId, maxCount, windowMs) {
   const now = Date.now();
@@ -239,8 +291,69 @@ function checkRateLimit(map, userId, maxCount, windowMs) {
   return entry.count > maxCount;
 }
 
-// ── Internal notify secret (server-backend → chat-server) ────────────────
+// ── Internal notify secret (server-backend ↔ chat-server) ────────────────
 const INTERNAL_NOTIFY_SECRET = process.env.INTERNAL_NOTIFY_SECRET || '';
+const SERVER_BACKEND_URL = process.env.SERVER_BACKEND_URL || 'http://127.0.0.1:10002';
+
+// ── Profile cache (name/avatar) — DM enrichment için ─────────────────────
+// TTL 60 sn; batch fetch. Bellekte, Redis yok.
+const profileCache = new Map(); // userId -> { name, avatar, expiresAt }
+const PROFILE_TTL_MS = 60_000;
+
+async function getProfiles(userIds) {
+  const now = Date.now();
+  const result = new Map();
+  const miss = [];
+  for (const id of userIds) {
+    const hit = profileCache.get(id);
+    if (hit && hit.expiresAt > now) {
+      result.set(id, { name: hit.name, avatar: hit.avatar });
+    } else {
+      miss.push(id);
+    }
+  }
+  if (miss.length > 0) {
+    try {
+      const { data } = await supabase.from('profiles').select('id, name, avatar').in('id', miss);
+      if (data) {
+        for (const p of data) {
+          const entry = { name: p.name ?? '', avatar: p.avatar ?? null, expiresAt: now + PROFILE_TTL_MS };
+          profileCache.set(p.id, entry);
+          result.set(p.id, { name: entry.name, avatar: entry.avatar });
+        }
+      }
+    } catch (err) {
+      console.warn('[dm] profile enrich failed:', err?.message);
+    }
+  }
+  return result;
+}
+
+// ── Audit bridge: chat-server → server-backend ──
+// Fire-and-forget. Audit başarısızsa DM devam eder — best-effort.
+// METADATA-ONLY: mesaj gövdesi (body/text) ASLA audit'e gönderilmez.
+async function auditDm({ actorId, action, resourceType, resourceId, metadata }) {
+  if (!INTERNAL_NOTIFY_SECRET) return;
+  if (typeof action !== 'string' || !action.startsWith('dm.')) return;
+  try {
+    const resp = await fetch(`${SERVER_BACKEND_URL}/internal/audit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFY_SECRET,
+      },
+      body: JSON.stringify({ actorId, action, resourceType, resourceId, metadata }),
+      // AbortSignal timeout — DM akışını bloklamasın.
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!resp.ok && resp.status !== 204) {
+      console.warn(`[audit] ${action} → HTTP ${resp.status}`);
+    }
+  } catch (err) {
+    // Audit best-effort; DM işlemi geri alınmaz.
+    console.warn(`[audit] ${action} bridge error:`, err?.message);
+  }
+}
 if (!INTERNAL_NOTIFY_SECRET) {
   console.warn('[chat-server] INTERNAL_NOTIFY_SECRET tanımsız — /internal/notify-user devre dışı, invite realtime push ÇALIŞMAYACAK (frontend polling fallback ile güncellenecek).');
 } else {
@@ -720,19 +833,29 @@ wss.on('connection', (ws) => {
         // Aktif arkadaş ID'lerini tek sorguda çek
         const friendIds = await getFriendIds(userId);
         // Sadece aktif arkadaşlarla olan konuşmaları döndür
-        const convos = [];
+        const filtered = [];
+        const otherIds = [];
         for (const row of rows) {
           const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
           if (!friendIds.has(otherId)) continue;
-          convos.push({
+          filtered.push({ row, otherId });
+          otherIds.push(otherId);
+        }
+        // Server-side enrichment: name/avatar — frontend ayrıca resolve etmesin.
+        const profiles = otherIds.length > 0 ? await getProfiles(otherIds) : new Map();
+        const convos = filtered.map(({ row, otherId }) => {
+          const p = profiles.get(otherId);
+          return {
             conversationKey: row.conversation_key,
             recipientId: otherId,
+            recipientName: p?.name || '',
+            recipientAvatar: p?.avatar ?? null,
             lastMessage: row.last_message,
             lastMessageAt: row.last_message_at,
             unreadCount: row.unread_count,
             createdAt: row.created_at,
-          });
-        }
+          };
+        });
         send(ws, { type: 'dm:conversations', conversations: convos });
       } catch (err) {
         console.error('[dm] conversations error:', err?.message);
@@ -768,17 +891,26 @@ wss.on('connection', (ws) => {
         // Okunmamış mesajları okundu işaretle
         dmStmt.markRead.run(now, convKey, userId);
 
+        // Sender enrichment — tarihsel mesajlar için sender adı/avatarı (batch, cached).
+        const senderIds = [...new Set(messages.map(m => m.sender_id))];
+        const senderProfiles = senderIds.length > 0 ? await getProfiles(senderIds) : new Map();
+
         send(ws, {
           type: 'dm:history',
           conversationKey: convKey,
           recipientId,
-          messages: messages.map(m => ({
-            id: m.id,
-            senderId: m.sender_id,
-            text: m.text,
-            createdAt: m.created_at,
-            readAt: m.read_at,
-          })),
+          messages: messages.map(m => {
+            const p = senderProfiles.get(m.sender_id);
+            return {
+              id: m.id,
+              senderId: m.sender_id,
+              senderName: p?.name || '',
+              senderAvatar: p?.avatar ?? null,
+              text: m.text,
+              createdAt: m.created_at,
+              readAt: m.read_at,
+            };
+          }),
         });
 
         // Karşı tarafa okundu bilgisi gönder
@@ -812,6 +944,13 @@ wss.on('connection', (ws) => {
         return send(ws, { type: 'dm:error', message: 'Çok hızlı mesaj gönderiyorsun, biraz bekle' });
       }
 
+      // Duplicate-send guard — çift ENTER / rapid click sessizce yutulur.
+      const nowForDup = Date.now();
+      if (isDuplicateDm(userId, text, nowForDup)) {
+        return; // sessiz no-op, kullanıcı hata görmez
+      }
+      userLastDm.set(userId, { text, at: nowForDup });
+
       try {
         // Arkadaşlık kontrolü
         const friends = await checkFriendship(userId, recipientId);
@@ -824,8 +963,9 @@ wss.on('connection', (ws) => {
         const now = Date.now();
         const msgId = generateId();
 
-        // Conversation yoksa oluştur
-        dmStmt.createConversation.run(convKey, userA, userB, now);
+        // Conversation yoksa oluştur — created audit'i için rowCount bak.
+        const createRes = dmStmt.createConversation.run(convKey, userA, userB, now);
+        const conversationCreated = createRes && createRes.changes > 0;
 
         // Mesajı kaydet
         dmStmt.insertMessage.run(msgId, convKey, userId, recipientId, text, now);
@@ -852,10 +992,57 @@ wss.on('connection', (ws) => {
         sendToUser(recipientId, { type: 'dm:new_message', message: newMsg });
 
         console.log(`[dm] ${userName} → ${recipientId}: ${text.slice(0, 40)}`);
+
+        // Audit — fire-and-forget, metadata-only, message body ASLA yazılmaz.
+        if (conversationCreated) {
+          void auditDm({
+            actorId: userId,
+            action: 'dm.conversation.create',
+            resourceType: 'dm_conversation',
+            resourceId: convKey,
+            metadata: { recipientId, createdAt: now },
+          });
+        }
+        void auditDm({
+          actorId: userId,
+          action: 'dm.message.send',
+          resourceType: 'dm_message',
+          resourceId: msgId,
+          metadata: {
+            conversationKey: convKey,
+            recipientId,
+            textLength: text.length,
+            conversationCreated: !!conversationCreated,
+          },
+        });
       } catch (err) {
         console.error('[dm] send error:', err?.message);
         send(ws, { type: 'dm:error', message: 'Mesaj gönderilemedi' });
       }
+      return;
+    }
+
+    // ── DM:TYPING (ephemeral, no persistence, no audit) ──────────────────
+    if (msg.type === 'dm:typing') {
+      const recipientId = String(msg.recipientId || '').trim();
+      if (!recipientId || recipientId === userId) return;
+
+      // Lightweight rate limit — client zaten debounce ediyor (tipik 2.5s).
+      // 5 event / 10 sn üst sınırı burst koruması.
+      if (!userTypingLimits) return; // defensive (init order)
+      if (checkRateLimit(userTypingLimits, userId, 5, 10_000)) return; // sessiz drop
+
+      // Friendship gate — stalker typing spam önlensin.
+      // Typing-only 8s cache: yüksek trafikte DB'yi yormaz; send/open hâlâ sağlam DB check yapar.
+      const friends = await checkFriendshipForTyping(userId, recipientId);
+      if (!friends) return;
+
+      const convKey = makeDmKey(userId, recipientId);
+      sendToUser(recipientId, {
+        type: 'dm:typing',
+        conversationKey: convKey,
+        fromUserId: userId,
+      });
       return;
     }
 
@@ -864,14 +1051,20 @@ wss.on('connection', (ws) => {
       const convKey = String(msg.conversationKey || '').trim();
       if (!convKey) return;
 
+      // Membership invariant: convKey canonical format + userId pair'de olmalı.
+      // Bozuk/spoofed key → sessiz no-op (fail-closed).
+      const parts = convKey.split(':');
+      if (parts.length !== 3 || parts[0] !== 'dm' || !parts[1] || !parts[2]) return;
+      if (parts[1] >= parts[2] || parts[1] === parts[2]) return; // canonical order zorunlu
+      const otherId = parts[1] === userId ? parts[2] : (parts[2] === userId ? parts[1] : null);
+      if (!otherId) return; // user convKey'de değil → spoof reddi
+
       try {
         const now = Date.now();
+        // SQL receiver_id = userId koşulu ikinci savunma katmanı.
         const changes = dmStmt.markRead.run(now, convKey, userId);
         if (changes.changes === 0) return; // hiç güncelleme olmadıysa bildirim gönderme
 
-        // convKey = dm:<lowId>:<highId> — otherId hesapla
-        const parts = convKey.split(':');
-        const otherId = parts[1] === userId ? parts[2] : parts[1];
         sendToUser(otherId, {
           type: 'dm:read',
           conversationKey: convKey,

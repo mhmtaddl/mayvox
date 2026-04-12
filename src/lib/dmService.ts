@@ -23,9 +23,9 @@ export interface DmConversation {
   lastMessageAt: number;
   unreadCount: number;
   createdAt: number;
-  // Client-side enriched
+  // Server-side enrichment (chat-server profiles cache). Yoksa client fallback.
   recipientName?: string;
-  recipientAvatar?: string;
+  recipientAvatar?: string | null;
 }
 
 export type DmEventHandler = {
@@ -34,6 +34,7 @@ export type DmEventHandler = {
   onNewMessage?: (msg: DmMessage) => void;
   onRead?: (convKey: string, readBy: string, readAt: number) => void;
   onUnreadTotal?: (count: number) => void;
+  onTyping?: (convKey: string, fromUserId: string) => void;
   onError?: (message: string) => void;
   onConnected?: () => void;
 };
@@ -74,6 +75,9 @@ export function handleDmMessage(msg: any): boolean {
       return true;
     case 'dm:unread_total':
       handlers.onUnreadTotal?.(msg.count ?? 0);
+      return true;
+    case 'dm:typing':
+      handlers.onTyping?.(msg.conversationKey, msg.fromUserId);
       return true;
     case 'dm:error':
       handlers.onError?.(msg.message || 'DM hatası');
@@ -119,4 +123,11 @@ export function dmMarkRead(conversationKey: string) {
 
 export function dmRequestUnreadTotal() {
   wsSend({ type: 'dm:unread_total' });
+}
+
+// Ephemeral typing event — client-side debounce önerilir.
+// chat-server sadece relay + friendship gate + burst rate limit uygular.
+export function dmEmitTyping(recipientId: string) {
+  if (!recipientId) return;
+  wsSend({ type: 'dm:typing', recipientId });
 }

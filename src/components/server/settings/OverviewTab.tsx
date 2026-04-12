@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Crown, Users, Hash, Lock, Link2, AlertCircle } from 'lucide-react';
 import { getServerOverview, type ServerOverview } from '../../../lib/serverService';
+import UpgradeHint from './UpgradeHint';
 
 interface Props {
   serverId: string;
@@ -42,6 +43,14 @@ export default function OverviewTab({ serverId }: Props) {
   }
   if (!data) return <div className="text-[11px] text-[var(--theme-secondary-text)]/40 py-8 text-center">Yükleniyor...</div>;
 
+  const pctOf = (c: number, l: number) => (l > 0 ? (c / l) * 100 : 0);
+  const nearLimit =
+    pctOf(data.counts.members, data.limits.maxMembers) >= 80 ||
+    pctOf(data.counts.channels, data.limits.maxChannels) >= 80 ||
+    pctOf(data.counts.privateChannels, data.limits.maxPrivateChannels) >= 80 ||
+    pctOf(data.counts.inviteLinksLast24h, data.limits.maxInviteLinksPerDay) >= 80;
+  const showUpgrade = data.plan === 'free' && nearLimit;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
@@ -65,6 +74,8 @@ export default function OverviewTab({ serverId }: Props) {
         <span>Aktif davet linki:</span>
         <span className="font-semibold text-[var(--theme-text)]/80">{data.counts.activeInviteLinks}</span>
       </div>
+
+      {showUpgrade && <UpgradeHint />}
     </div>
   );
 }

@@ -421,6 +421,17 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
 
+// Notification attention — renderer'dan flash toggle.
+// Focus alındığında Electron otomatik stop eder; yine de explicit off da destekli.
+ipcMain.on("notify:flash", (event, on) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) win.flashFrame(!!on);
+  } catch (err) {
+    logger.warn?.("[notify] flashFrame error: " + (err?.message || err));
+  }
+});
+
 // ── Auto-updater ───────────────────────────────────────────────────────────
 function setupAutoUpdater(win) {
   if (isDev) return;
