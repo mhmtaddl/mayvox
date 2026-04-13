@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Mic,
+  MicOff,
   Settings,
   Check,
   Headphones,
+  HeadphoneOff,
   PhoneOff,
   AudioLines,
   Home,
@@ -16,6 +18,7 @@ import {
   X,
   Users,
 } from 'lucide-react';
+import VoiceControlButton from './VoiceControlButton';
 import { type CardStyle, CARD_STYLES } from '../../../components/chat/cardStyles';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import { useAudio } from '../../../contexts/AudioContext';
@@ -404,22 +407,19 @@ export default function DesktopDock({
       </>}
       {/* Mikrofon + ayar */}
       <div className="relative group/mic">
-        <button
+        <VoiceControlButton
+          active={!isMuted}
+          icon={Mic}
+          offIcon={MicOff}
+          override={isAdminMuted ? 'warning' : null}
           onClick={() => {
             if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
             if (isAdminMuted) return;
             if (isMuted && isDeafened) setIsDeafened(false);
             setIsMuted(!isMuted);
           }}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
-            isAdminMuted ? 'bg-orange-500/20 text-orange-400 border border-orange-500/25'
-            : isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/25'
-            : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
-          }`}
           title={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
-        >
-          <Mic size={16} />
-        </button>
+        />
         <div onClick={(e) => { e.stopPropagation(); setShowInputSettings(!showInputSettings); setShowOutputSettings(false); }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/mic:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]">
           <Settings size={8} className="text-[var(--theme-text)]" />
         </div>
@@ -441,15 +441,13 @@ export default function DesktopDock({
       </div>
       {/* Kulaklık + ayar */}
       <div className="relative group/hp">
-        <button
+        <VoiceControlButton
+          active={!isDeafened}
+          icon={Headphones}
+          offIcon={HeadphoneOff}
           onClick={() => setIsDeafened(!isDeafened)}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
-            isDeafened ? 'bg-red-500/20 text-red-400 border border-red-500/25' : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
-          }`}
           title={isDeafened ? 'Sağırlığı kaldır' : 'Hoparlörü kapat'}
-        >
-          <Headphones size={16} />
-        </button>
+        />
         <div onClick={(e) => { e.stopPropagation(); setShowOutputSettings(!showOutputSettings); setShowInputSettings(false); }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/hp:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]">
           <Settings size={8} className="text-[var(--theme-text)]" />
         </div>

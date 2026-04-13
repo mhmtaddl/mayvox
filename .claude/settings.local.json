@@ -81,7 +81,28 @@
       "Bash(identify \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")",
       "Bash(ffprobe -v quiet -show_entries stream=width,height -of csv=p=0 \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/build/acilis.png\")",
       "Bash(ssh:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(echo \"FRONT_EXIT=$?\")",
+      "Bash(echo \"BACK_EXIT=$?\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const p='src/lib/chatService.ts'; let s=fs.readFileSync\\(p,'utf8'\\); const before=s.match\\(/handlers\\\\.onStatusChange\\\\?\\\\.\\\\\\(/g\\)?.length||0; s=s.replace\\(/handlers\\\\.onStatusChange\\\\?\\\\.\\\\\\(/g,'emitStatus\\('\\); const after=s.match\\(/emitStatus\\\\\\(/g\\)?.length||0; fs.writeFileSync\\(p,s\\); console.log\\('replaced',before,'→ emitStatus calls now',after\\);\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node -c \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/chat-server.cjs\")",
+      "Bash(node -c \"D:/4. PROJELER/4. CYLKSOHBET/caylaklar-sesli-sohbet/server.cjs\")",
+      "Bash(npx vitest:*)",
+      "Bash(echo \"BACK=$?\")",
+      "Bash(echo \"FRONT=$?\")",
+      "Bash(node -c electron/main.cjs)",
+      "Bash(node -c electron/preload.cjs)",
+      "Bash(awk 'NR==797,NR==900 {print NR\": \"$0}' src/views/ChatView.tsx)",
+      "Bash(scp -o ServerAliveInterval=60 -r dist/* root@46.225.99.185:/opt/mayvox-server-backend/dist/)",
+      "Bash(cp build/giris/giris.png electron/splash-frame-0.png)",
+      "Bash(cp build/giris/giris1.png electron/splash-frame-1.png)",
+      "Bash(cp build/giris/giris2.png electron/splash-frame-2.png)",
+      "Bash(cp build/giris/giris3.png electron/splash-frame-3.png)",
+      "Bash(cp build/giris/giris4.png electron/splash-frame-4.png)",
+      "Skill(update-config)",
+      "Bash(node:*)",
+      "Bash(powershell:*)"
     ]
   }
 }

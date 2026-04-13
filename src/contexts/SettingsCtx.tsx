@@ -1,5 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { AppTheme } from '../themes';
+import type { ThemePackId } from '../lib/themePacks';
 
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
@@ -11,7 +12,15 @@ export type VoiceMode = 'ptt' | 'vad';
  *  - `noiseThreshold`: internal VAD eşiği; UI'da yok, default 15
  */
 
+export type AppearanceMode = 'themePack' | 'custom';
+
 export interface SettingsContextType {
+  /** Mutual exclusion: aynı anda yalnız bir mod aktif. */
+  appearanceMode: AppearanceMode;
+  setAppearanceMode: (m: AppearanceMode) => void;
+  /** Tek-paket tema seçimi (normal kullanıcı). 6 sabit pack'ten biri. */
+  themePackId: ThemePackId;
+  setThemePackId: (id: ThemePackId) => void;
   currentTheme: AppTheme;
   setCurrentTheme: (v: AppTheme) => void;
   isLowDataMode: boolean;

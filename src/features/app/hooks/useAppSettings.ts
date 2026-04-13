@@ -6,22 +6,52 @@ import { useState, useEffect } from 'react';
 import { AppTheme, ThemeKey, themes, defaultThemeKey, backgroundPresets, defaultBackgroundId } from '../../../themes';
 import { getDerivedTokens, applyDerivedTokens } from '../../../lib/adaptiveTheme';
 import { type VoiceMode } from '../../../contexts/SettingsCtx';
+import { THEME_PACKS, DEFAULT_THEME_PACK_ID, getThemePack, applyThemePack, type ThemePackId } from '../../../lib/themePacks';
 
 function hexToRgb(hex: string): string | null {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return m ? `${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)}` : null;
 }
 
+export type AppearanceMode = 'themePack' | 'custom';
+
 export function useAppSettings() {
-  // ── Tema ──
-  const [currentTheme, setCurrentTheme] = useState<AppTheme>(() => {
+  // ── Appearance Mode (mutual exclusion: themePack ↔ custom) ──
+  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>(() => {
+    const saved = localStorage.getItem('appearanceMode');
+    return saved === 'custom' ? 'custom' : 'themePack';
+  });
+  const setAppearanceMode = (m: AppearanceMode) => {
+    localStorage.setItem('appearanceMode', m);
+    setAppearanceModeState(m);
+  };
+
+  // ── Theme Pack (yeni — normal kullanıcı için tek seçim) ──
+  const [themePackId, setThemePackIdState] = useState<ThemePackId>(() => {
+    const saved = localStorage.getItem('themePack') as ThemePackId | null;
+    if (saved && THEME_PACKS.find(p => p.id === saved)) return saved;
+    return DEFAULT_THEME_PACK_ID;
+  });
+  /** Theme pack seçimi → mode otomatik 'themePack'a geçer (mutual exclusion). */
+  const setThemePackId = (id: ThemePackId) => {
+    localStorage.setItem('themePack', id);
+    setThemePackIdState(id);
+    setAppearanceMode('themePack');
+  };
+
+  // ── Tema (legacy palette) ──
+  const [currentTheme, setCurrentThemeState] = useState<AppTheme>(() => {
     const savedKey = localStorage.getItem('themeKey');
     if (savedKey && themes[savedKey as ThemeKey]) return themes[savedKey as ThemeKey];
     return themes[defaultThemeKey];
   });
+  /** Legacy palette seçimi → mode 'custom'a geçer. */
+  const setCurrentTheme = (t: AppTheme) => {
+    setCurrentThemeState(t);
+    setAppearanceMode('custom');
+  };
 
-  // ── Background preset ──
-  // Migration: eski 'bg-purple-mist' → yeni 'bg-slate-mist' (premium two-tone)
+  // ── Background preset (legacy) ──
   const [activeBackground, setActiveBackgroundState] = useState(() => {
     const saved = localStorage.getItem('activeBackground');
     if (saved === 'bg-purple-mist') {
@@ -30,16 +60,84 @@ export function useAppSettings() {
     }
     return saved || defaultBackgroundId;
   });
-  const setActiveBackground = (id: string) => { localStorage.setItem('activeBackground', id); setActiveBackgroundState(id); };
+  /** Legacy background seçimi → mode 'custom'a geçer. */
+  const setActiveBackground = (id: string) => {
+    localStorage.setItem('activeBackground', id);
+    setActiveBackgroundState(id);
+    setAppearanceMode('custom');
+  };
 
-  // ── Adaptive theme — single effect for theme + background ──
+  // ── Apply effect — TEK efekt, mode'a göre dallanır (çakışma yok) ──
   useEffect(() => {
+    if (appearanceMode === 'themePack') {
+      applyThemePack(getThemePack(themePackId));
+      return;
+    }
+    // Custom mode — legacy palette + background sistemi
     localStorage.setItem('themeKey', currentTheme.key);
     const preset = backgroundPresets.find(b => b.id === activeBackground) || backgroundPresets[1];
     const tokens = getDerivedTokens(currentTheme, preset);
     applyDerivedTokens(tokens);
 
     const root = document.documentElement;
+
+    // ── SURFACE ISOLATION (Critical) ──
+    // Legacy adaptiveTheme background dominant'tan surface tokens türetiyor,
+    // bu da kırmızı/turuncu bg seçildiğinde modal/panel/popover'a renk sızmasına
+    // neden oluyor. Surface katmanını background'tan tamamen ayır:
+    //   body → background (raw, kullanıcı seçimi)
+    //   modal/panel/popover/card → nötr glass tone (background'a bağımsız)
+    const isLight = !!currentTheme.isLight;
+    const surfaceFamily = isLight ? {
+      surface: 'rgba(15,23,42,0.04)',
+      surfaceHover: 'rgba(15,23,42,0.07)',
+      surfaceActive: 'rgba(15,23,42,0.10)',
+      border: 'rgba(15,23,42,0.10)',
+      popoverBg: 'rgba(255,255,255,0.96)',
+      popoverBorder: 'rgba(15,23,42,0.10)',
+      popoverText: 'rgba(15,23,42,0.92)',
+      popoverTextSec: 'rgba(15,23,42,0.65)',
+      popoverShadow: '0 12px 40px rgba(0,0,0,0.18)',
+      inputBg: 'rgba(15,23,42,0.04)',
+      inputBorder: 'rgba(15,23,42,0.12)',
+    } : {
+      surface: 'rgba(255,255,255,0.04)',
+      surfaceHover: 'rgba(255,255,255,0.07)',
+      surfaceActive: 'rgba(255,255,255,0.10)',
+      border: 'rgba(255,255,255,0.07)',
+      popoverBg: 'rgba(10,14,26,0.96)',
+      popoverBorder: 'rgba(255,255,255,0.10)',
+      popoverText: 'rgba(232,236,244,0.95)',
+      popoverTextSec: 'rgba(232,236,244,0.65)',
+      popoverShadow: '0 12px 40px rgba(0,0,0,0.55)',
+      inputBg: 'rgba(255,255,255,0.04)',
+      inputBorder: 'rgba(255,255,255,0.10)',
+    };
+    // Kart / panel / surface
+    root.style.setProperty('--theme-surface', surfaceFamily.surface);
+    root.style.setProperty('--theme-surface-card', surfaceFamily.surface);
+    root.style.setProperty('--theme-surface-card-border', surfaceFamily.border);
+    root.style.setProperty('--theme-panel', surfaceFamily.surface);
+    root.style.setProperty('--theme-panel-hover', surfaceFamily.surfaceHover);
+    root.style.setProperty('--theme-panel-active', surfaceFamily.surfaceActive);
+    root.style.setProperty('--theme-elevated-panel', surfaceFamily.surface);
+    root.style.setProperty('--theme-elevated-panel-hover', surfaceFamily.surfaceHover);
+    root.style.setProperty('--theme-bg-elevated', surfaceFamily.surface);
+    root.style.setProperty('--theme-border', surfaceFamily.border);
+    // Popover (modal, dropdown)
+    root.style.setProperty('--popover-bg', surfaceFamily.popoverBg);
+    root.style.setProperty('--popover-border', surfaceFamily.popoverBorder);
+    root.style.setProperty('--popover-text', surfaceFamily.popoverText);
+    root.style.setProperty('--popover-text-secondary', surfaceFamily.popoverTextSec);
+    root.style.setProperty('--popover-shadow', surfaceFamily.popoverShadow);
+    root.style.setProperty('--theme-popover-bg', surfaceFamily.popoverBg);
+    root.style.setProperty('--theme-popover-border', surfaceFamily.popoverBorder);
+    // Input
+    root.style.setProperty('--theme-input-bg', surfaceFamily.inputBg);
+    root.style.setProperty('--theme-input-border', surfaceFamily.inputBorder);
+    // glass-tint sabit nötr — surface'lar yine glass-tint kullansa bile background sızmaz
+    root.style.setProperty('--glass-tint', isLight ? '15, 23, 42' : '255, 255, 255');
+
     root.style.setProperty('--theme-accent-secondary', currentTheme.secondary);
     root.style.setProperty('--theme-text-on-primary', currentTheme.textOnPrimary);
     root.style.setProperty('--theme-text-on-accent', currentTheme.textOnAccent);
@@ -54,12 +152,11 @@ export function useAppSettings() {
     root.style.setProperty('--popover-text-secondary', currentTheme.popoverTextSecondary);
     root.style.setProperty('--popover-shadow', currentTheme.popoverShadow);
     root.style.setProperty('--theme-bg-elevated', currentTheme.backgroundElevated);
-    // Plan sistemi için RGB tokenlar
     const wRgb = hexToRgb(currentTheme.warning);
     const sRgb = hexToRgb(currentTheme.secondary);
     if (wRgb) root.style.setProperty('--theme-warning-rgb', wRgb);
     if (sRgb) root.style.setProperty('--theme-secondary-rgb', sRgb);
-  }, [currentTheme, activeBackground]);
+  }, [appearanceMode, themePackId, currentTheme, activeBackground]);
 
   // ── Audio / Noise ──
   const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');
@@ -173,6 +270,8 @@ export function useAppSettings() {
   };
 
   return {
+    appearanceMode, setAppearanceMode,
+    themePackId, setThemePackId,
     currentTheme, setCurrentTheme,
     activeBackground, setActiveBackground,
     isLowDataMode, setIsLowDataMode,

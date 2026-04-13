@@ -3,6 +3,25 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Theme Pack tokens — Tailwind utility'leri ile kullanılabilir (bg-bg, text-text-primary, vs.) */
+  --color-bg: var(--bg);
+  --color-bg-soft: var(--bg-soft);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-border: var(--border);
+  --color-border-focus: var(--border-focus);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-on-accent: var(--text-on-accent);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 }
 
 :root {
@@ -378,6 +397,13 @@ button, a, input, [role="button"] {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(2px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Kızıl temada mic/headphone OFF → nötr gri (kırmızı-üstü-kırmızı önle) ─── */
+[data-theme-pack="crimson"] .voice-ctrl-off {
+  background: rgba(var(--glass-tint), 0.07) !important;
+  color: var(--theme-secondary-text) !important;
+  border-color: rgba(var(--glass-tint), 0.15) !important;
 }
 
 /* ─── Performance: window inactive → tüm animasyonları durdur ─── */

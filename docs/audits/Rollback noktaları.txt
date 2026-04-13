@@ -1,0 +1,7 @@
+Geri dönüş noktası oluşturuldu:
+
+  - Tag: rollback/pre-audit-fixes
+  - Commit: 9ab63a2
+  - Mesaj: fix: confirm modal tam ortada — portal + fixed transform center
+
+  Herhangi bir sorun olursa git reset --hard rollback/pre-audit-fixes ile bu noktaya dönebilirsin.

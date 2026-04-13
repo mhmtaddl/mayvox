@@ -58,11 +58,11 @@ export default function AppChrome() {
         height: TITLEBAR_HEIGHT,
         WebkitAppRegion: 'drag',
         background: focused
-          ? 'linear-gradient(180deg, rgba(15,22,40,0.92) 0%, rgba(8,12,24,0.78) 100%)'
-          : 'linear-gradient(180deg, rgba(10,14,28,0.85) 0%, rgba(6,10,20,0.70) 100%)',
-        borderBottom: '1px solid rgba(var(--theme-accent-rgb, 99,102,241), 0.10)',
+          ? 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.92) 0%, rgba(var(--theme-bg-rgb), 0.78) 100%)'
+          : 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.85) 0%, rgba(var(--theme-bg-rgb), 0.68) 100%)',
+        borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.10)',
         boxShadow: focused
-          ? 'inset 0 1px 0 rgba(var(--theme-accent-rgb, 99,102,241), 0.10), 0 1px 0 rgba(0,0,0,0.35)'
+          ? 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.10), 0 1px 0 rgba(0,0,0,0.35)'
           : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         backdropFilter: 'blur(18px) saturate(140%)',
         transition: 'background 200ms ease, box-shadow 200ms ease',
@@ -75,7 +75,7 @@ export default function AppChrome() {
           className="absolute inset-0 pointer-events-none overflow-hidden"
           style={{
             background:
-              'radial-gradient(ellipse 220px 28px at 50% 0%, rgba(var(--theme-accent-rgb, 99,102,241), 0.12), transparent 70%)',
+              'radial-gradient(ellipse 220px 28px at 50% 0%, rgba(var(--theme-accent-rgb), 0.12), transparent 70%)',
             mixBlendMode: 'screen',
           }}
         />
@@ -122,9 +122,9 @@ function BrandMark({ focused }: { focused: boolean }) {
     <div
       className="relative w-5 h-5 rounded-md flex items-center justify-center"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb, 99,102,241),0.22), rgba(var(--theme-accent-rgb, 99,102,241),0.06))',
-        border: '1px solid rgba(var(--theme-accent-rgb, 99,102,241), 0.30)',
-        boxShadow: focused ? '0 0 10px rgba(var(--theme-accent-rgb, 99,102,241), 0.30), inset 0 1px 0 rgba(255,255,255,0.06)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+        background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22), rgba(var(--theme-accent-rgb),0.06))',
+        border: '1px solid rgba(var(--theme-accent-rgb), 0.30)',
+        boxShadow: focused ? '0 0 10px rgba(var(--theme-accent-rgb), 0.30), inset 0 1px 0 rgba(255,255,255,0.06)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         transition: 'box-shadow 200ms ease',
       }}
     >
@@ -150,12 +150,12 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
   const isDanger = tone === 'danger';
 
   const baseBg = hover
-    ? (isDanger ? 'rgba(239,68,68,0.22)' : 'rgba(255,255,255,0.08)')
+    ? (isDanger ? 'rgba(239,68,68,0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)')
     : 'rgba(255,255,255,0.025)';
   const border = hover
-    ? (isDanger ? 'rgba(239,68,68,0.40)' : 'rgba(var(--theme-accent-rgb, 99,102,241), 0.30)')
+    ? (isDanger ? 'rgba(239,68,68,0.40)' : 'rgba(var(--theme-accent-rgb), 0.30)')
     : 'rgba(255,255,255,0.05)';
-  const color = hover && isDanger ? '#fff' : 'rgba(var(--theme-text-rgb, 220,232,255), 0.85)';
+  const color = hover && isDanger ? '#fff' : 'var(--theme-text)';
 
   return (
     <button
@@ -172,7 +172,7 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
         boxShadow: hover
           ? (isDanger
               ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 0 12px rgba(239,68,68,0.30)'
-              : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(var(--theme-accent-rgb, 99,102,241), 0.18)')
+              : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(var(--theme-accent-rgb), 0.18)')
           : 'inset 0 1px 0 rgba(255,255,255,0.02)',
       }}
     >

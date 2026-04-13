@@ -1,62 +1,74 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react';
+import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye, Sparkles, ChevronDown } from 'lucide-react';
 import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
+import { useUser } from '../../../contexts/UserContext';
 import { useUI } from '../../../contexts/UIContext';
 import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
 import { themes, themeOrder, backgroundPresets } from '../../../themes';
+import { THEME_PACKS, getThemePack } from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
 
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { currentTheme, setCurrentTheme, activeBackground, setActiveBackground } = useSettings();
+  const { appearanceMode, themePackId, setThemePackId, currentTheme, setCurrentTheme, activeBackground, setActiveBackground } = useSettings();
+  const { currentUser } = useUser();
+  const isAdvanced = !!(currentUser.isAdmin || currentUser.isPrimaryAdmin || currentUser.isModerator);
+  const [advancedOpen, setAdvancedOpen] = useState(appearanceMode === 'custom');
+  const activePack = getThemePack(themePackId);
+  const isThemePackMode = appearanceMode === 'themePack';
+  const isCustomMode = appearanceMode === 'custom';
 
   return (
     <CardSection icon={<Recycle size={12} />} title="Görünüm">
 
-      {/* ═══ RENK PALETLERİ ═══ */}
-      <div className="mb-5 md:mb-6">
+      {/* ═══ THEME PACKS ═══ */}
+      <div className="mb-1">
         <div className="flex items-baseline justify-between mb-3">
-          <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Renk Paletleri</p>
-          <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-60 shrink-0">{currentTheme.name}</span>
+          <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Tema Paketleri</p>
+          {isThemePackMode ? (
+            <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
+          ) : (
+            <span className="text-[10px] font-medium text-[var(--theme-secondary-text)]/55 shrink-0">Özel mod aktif</span>
+          )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5">
-          {themeOrder.map(key => {
-            const theme = themes[key];
-            const isSelected = currentTheme.key === key;
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2.5 ${isCustomMode ? 'opacity-55' : ''}`}>
+          {THEME_PACKS.map(pack => {
+            // Mutual exclusion — sadece themePack modundayken seçili görünür
+            const isSelected = isThemePackMode && themePackId === pack.id;
             return (
               <button
-                key={key}
-                onClick={() => setCurrentTheme(theme)}
-                className="flex flex-col gap-1.5 p-2 md:p-2.5 rounded-xl text-left transition-all duration-150"
+                key={pack.id}
+                onClick={() => setThemePackId(pack.id)}
+                className="group relative flex flex-col gap-2 p-2.5 rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
                 style={{
-                  background: 'var(--theme-surface-card)',
+                  background: 'rgba(255,255,255,0.03)',
                   border: isSelected
-                    ? '2px solid var(--theme-accent)'
-                    : '1px solid rgba(var(--glass-tint), 0.06)',
+                    ? '2px solid var(--accent, #6366F1)'
+                    : '1px solid rgba(255,255,255,0.06)',
                   boxShadow: isSelected
-                    ? '0 0 0 1px var(--theme-accent), 0 0 12px rgba(var(--theme-accent-rgb), 0.12), 0 4px 16px rgba(0,0,0,0.25)'
-                    : '0 1px 6px rgba(0,0,0,0.18)',
-                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                    ? '0 0 0 1px var(--accent, #6366F1), 0 4px 16px rgba(0,0,0,0.25)'
+                    : '0 1px 4px rgba(0,0,0,0.18)',
                 }}
               >
-                <div className="relative w-full h-7 md:h-8 rounded-lg overflow-hidden" style={{ background: theme.background }}>
-                  <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.1)' }} />
-                  <div className="absolute inset-0" style={{
-                    background: `radial-gradient(ellipse 70% 100% at 25% 85%, ${theme.primary}28, transparent 55%), radial-gradient(ellipse 50% 90% at 80% 15%, ${theme.secondary}20, transparent 50%)`,
-                  }} />
+                {/* Preview gradient */}
+                <div
+                  className="relative w-full h-9 rounded-lg overflow-hidden"
+                  style={{ background: `linear-gradient(135deg, ${pack.previewFrom} 0%, ${pack.previewTo} 100%)` }}
+                >
+                  <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 30%, rgba(255,255,255,0.06), transparent 60%)` }} />
                   <div className="absolute bottom-1 right-1.5 flex gap-1">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.primary, opacity: 0.9 }} />
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.secondary, opacity: 0.6 }} />
+                    <span className="w-2 h-2 rounded-full" style={{ background: pack.accent, boxShadow: `0 0 6px ${pack.accent}66` }} />
+                    <span className="w-2 h-2 rounded-full" style={{ background: pack.success, opacity: 0.7 }} />
                   </div>
                 </div>
-                <div className="flex items-center justify-between px-0.5 min-w-0">
-                  <span className="text-[9px] md:text-[10px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.82)' }}>{theme.name}</span>
+                <div className="flex items-center justify-between gap-1 min-w-0">
+                  <span className={`text-[10.5px] font-semibold truncate ${isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary,rgba(255,255,255,0.78))]'}`}>{pack.name}</span>
                   {isSelected && (
-                    <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0" style={{ background: `${theme.primary}20` }}>
-                      <Check size={8} style={{ color: theme.primary }} strokeWidth={3} />
-                    </div>
+                    <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: pack.accentSoft }}>
+                      <Check size={9} style={{ color: pack.accent }} strokeWidth={3} />
+                    </span>
                   )}
                 </div>
               </button>
@@ -65,35 +77,106 @@ export function AppearanceSection() {
         </div>
       </div>
 
-      {/* ═══ ARKA PLAN ═══ */}
-      <div className="pt-4 md:pt-5" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
-        <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em] mb-3">Arka Plan</p>
-        <div className="grid grid-cols-8 gap-2">
-          {backgroundPresets.map(bg => {
-            const isActive = activeBackground === bg.id;
-            return (
-              <button
-                key={bg.id}
-                onClick={() => setActiveBackground(bg.id)}
-                title={bg.name}
-                className="relative overflow-hidden transition-all duration-150 aspect-square rounded-xl"
-                style={{
-                  background: bg.surface,
-                  border: isActive ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.08)',
-                  boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 0 12px rgba(var(--theme-accent-rgb), 0.15)' : '0 1px 4px rgba(0,0,0,0.18)',
-                  transform: isActive ? 'scale(1.02)' : 'scale(1)',
-                }}
-              >
-                {isActive && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
-                  </div>
-                )}
-              </button>
-            );
-          })}
+      {/* ═══ ADVANCED CUSTOMIZATION (admin/mod only) ═══ */}
+      {isAdvanced && (
+        <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+          <button
+            onClick={() => setAdvancedOpen(v => !v)}
+            className="w-full flex items-center justify-between text-left mb-2"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={11} className="text-[var(--theme-accent)]/70" />
+              <span className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Gelişmiş Özelleştirme</span>
+              <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--theme-accent)]/70 px-1.5 py-0.5 rounded bg-[var(--theme-accent)]/10">admin</span>
+            </div>
+            <ChevronDown size={13} className={`text-[var(--theme-secondary-text)]/60 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {advancedOpen && (
+            <div className="space-y-5">
+              {/* Mod uyarısı — themePack modundayken custom selections highlight YOK */}
+              <div className={`text-[10.5px] px-3 py-2 rounded-lg ${isCustomMode
+                ? 'bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/25 text-[var(--theme-accent)]'
+                : 'bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)] text-[var(--theme-secondary-text)]/75'}`}>
+                {isCustomMode
+                  ? 'Özel mod aktif — yukarıdaki tema paketleri devre dışı.'
+                  : 'Tema paketi aktif — özel ayarlar pasif. Aşağıdan herhangi birine tıklayarak özel moda geç.'}
+              </div>
+
+              {/* Renk Paletleri (legacy) */}
+              <div>
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/75 uppercase tracking-[0.14em]">Renk Paleti</p>
+                  {isCustomMode && (
+                    <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-60 shrink-0">{currentTheme.name}</span>
+                  )}
+                </div>
+                <div className={`grid grid-cols-3 gap-2 ${isThemePackMode ? 'opacity-55' : ''}`}>
+                  {themeOrder.map(key => {
+                    const theme = themes[key];
+                    // Mutual exclusion — sadece custom modundayken seçili görünür
+                    const isSelected = isCustomMode && currentTheme.key === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setCurrentTheme(theme)}
+                        className="flex flex-col gap-1.5 p-2 rounded-lg text-left transition-all duration-150"
+                        style={{
+                          background: 'var(--theme-surface-card)',
+                          border: isSelected ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.06)',
+                          boxShadow: isSelected ? '0 0 0 1px var(--theme-accent), 0 0 8px rgba(var(--theme-accent-rgb), 0.12)' : '0 1px 4px rgba(0,0,0,0.15)',
+                        }}
+                      >
+                        <div className="relative w-full h-6 rounded overflow-hidden" style={{ background: theme.background }}>
+                          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.1)' }} />
+                          <div className="absolute bottom-0.5 right-1 flex gap-0.5">
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.secondary, opacity: 0.7 }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between min-w-0">
+                          <span className="text-[9px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.78)' }}>{theme.name}</span>
+                          {isSelected && <Check size={8} className="shrink-0" style={{ color: theme.primary }} strokeWidth={3} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Arka Plan (legacy) */}
+              <div>
+                <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/75 uppercase tracking-[0.14em] mb-2">Arka Plan</p>
+                <div className={`grid grid-cols-8 gap-2 ${isThemePackMode ? 'opacity-55' : ''}`}>
+                  {backgroundPresets.map(bg => {
+                    // Mutual exclusion — sadece custom modundayken seçili görünür
+                    const isActive = isCustomMode && activeBackground === bg.id;
+                    return (
+                      <button
+                        key={bg.id}
+                        onClick={() => setActiveBackground(bg.id)}
+                        title={bg.name}
+                        className="relative overflow-hidden transition-all duration-150 aspect-square rounded-lg"
+                        style={{
+                          background: bg.surface,
+                          border: isActive ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.08)',
+                          boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 0 8px rgba(var(--theme-accent-rgb), 0.15)' : '0 1px 4px rgba(0,0,0,0.18)',
+                        }}
+                      >
+                        {isActive && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
     </CardSection>
   );
@@ -127,7 +210,7 @@ export function SoundsSection() {
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">{label}</p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-              {([1, 2] as SoundVariant[]).map((v, i) => (
+              {(variants.map((_, i) => (i + 1) as SoundVariant)).map((v, i) => (
                 <button
                   key={v}
                   disabled={!enabled}
