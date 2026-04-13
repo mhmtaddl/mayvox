@@ -1,5 +1,5 @@
 {
-  "name": "caylaklar-sesli-sohbet",
+  "name": "mayvox",
   "private": true,
   "version": "1.7.14",
   "type": "module",
@@ -92,7 +92,7 @@
     "publish": {
       "provider": "github",
       "owner": "mhmtaddl",
-      "repo": "caylaklar-sesli-sohbet"
+      "repo": "mayvox"
     },
     "extraResources": [
       {

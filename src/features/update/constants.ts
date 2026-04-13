@@ -23,4 +23,4 @@ export const APK_REDIRECT_COOLDOWN = 30_000;
 
 /** GitHub repo bilgisi */
 export const GITHUB_OWNER = 'mhmtaddl';
-export const GITHUB_REPO = 'caylaklar-sesli-sohbet';
+export const GITHUB_REPO = 'mayvox';
