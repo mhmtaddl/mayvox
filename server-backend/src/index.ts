@@ -5,6 +5,7 @@ import { pool } from './repositories/db';
 import serverRoutes from './routes/servers';
 import inviteLinkRoutes from './routes/inviteLinks';
 import internalRoutes from './routes/internal';
+import adminRoutes from './routes/admin';
 import { assertCapabilitySyncOnStartup } from './services/capabilitySyncService';
 
 const app = express();
@@ -21,6 +22,7 @@ app.get('/health', (_req, res) => {
 app.use('/servers', serverRoutes);
 app.use('/invite-links', inviteLinkRoutes);
 app.use('/internal', internalRoutes);
+app.use('/admin', adminRoutes);
 
 // ── 404 ──
 app.use((_req, res) => {

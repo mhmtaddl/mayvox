@@ -5,10 +5,11 @@ export interface PlanLimits {
   customRoomSize: number;
 }
 
+// FINAL plan limits (2026-04-13) — bkz. services/planService.ts PLAN_CONFIG (canonical kaynak).
 export const PLANS: Record<string, PlanLimits> = {
-  free: { capacity: 100, systemRoomSize: 20, customRooms: 2, customRoomSize: 10 },
-  pro:  { capacity: 240, systemRoomSize: 40, customRooms: 4, customRoomSize: 20 },
-  ultra:{ capacity: 480, systemRoomSize: 80, customRooms: 8, customRoomSize: 40 },
+  free:  { capacity: 100,  systemRoomSize: 15, customRooms: 2,  customRoomSize: 20 },
+  pro:   { capacity: 250,  systemRoomSize: 25, customRooms: 5,  customRoomSize: 30 },
+  ultra: { capacity: 1000, systemRoomSize: 35, customRooms: 16, customRoomSize: 50 },
 };
 
 export function getPlanLimits(plan: string): PlanLimits {

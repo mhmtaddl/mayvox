@@ -3,6 +3,7 @@ import type { Channel, ChannelResponse } from '../types';
 import { AppError } from './serverService';
 import { filterVisibleChannels } from './channelAccessService';
 import { getServerAccessContext, assertCapability, invalidateAccessContextForServer } from './accessContextService';
+import { invalidateServerOverview } from './serverOverviewService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
 import { assertLimit } from './planService';
@@ -127,9 +128,9 @@ export async function createChannel(
   // Önceki assertPlanAllows (resolver flag'ine dayalı yaklaşık kontrol) kaldırıldı;
   // capability flag'i UI hint olarak kalıyor ama mutation authority sadece assertLimit.
   await assertLimit(serverId, 'channel.create', userId);
-  if (input.isHidden || input.isInviteOnly) {
-    await assertLimit(serverId, 'privateChannel.create', userId);
-  }
+  // Ürün modeli: kullanıcı oluşturduğu HER oda "özel oda" sayılır (is_default=false);
+  // kapasitesi maxPrivateChannels (Free 2 / Pro 5 / Ultra 16). Erişim bayrağından bağımsız.
+  await assertLimit(serverId, 'privateChannel.create', userId);
 
   const name = normalizeName(input.name);
   const mode = normalizeMode(input.mode);
@@ -163,6 +164,7 @@ export async function createChannel(
   void currentTotal;
   // channel_count değişti → flag hesabı etkilenir, cache'i server-wide invalidate et.
   invalidateAccessContextForServer(serverId);
+  invalidateServerOverview(serverId);
   await logAction({
     serverId, actorId: userId, action: 'channel.create',
     resourceType: 'channel', resourceId: row.id,
@@ -224,6 +226,8 @@ export async function updateChannel(
     resourceType: 'channel', resourceId: row.id,
     metadata: { changed: Object.keys(input) },
   });
+  // Visibility değişebilir → overview private/public sayımları stale olmasın.
+  invalidateServerOverview(serverId);
   return toResponse(row);
 }
 
@@ -341,6 +345,7 @@ export async function deleteChannel(
   );
   if (result.rowCount === 0) throw new AppError(404, 'Kanal bulunamadı');
   invalidateAccessContextForServer(serverId);
+  invalidateServerOverview(serverId);
   await logAction({
     serverId, actorId: userId, action: 'channel.delete',
     resourceType: 'channel', resourceId: channelId,

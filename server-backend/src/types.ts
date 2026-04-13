@@ -114,6 +114,10 @@ export interface ServerResponse {
   plan: string;
   createdAt: string;
   role?: string;
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  bannedReason?: string | null;
+  bannedBy?: string | null;
 }
 
 export interface MemberResponse {

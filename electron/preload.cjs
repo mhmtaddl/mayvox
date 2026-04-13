@@ -52,6 +52,21 @@ contextBridge.exposeInMainWorld('electronNotify', {
   flashFrame: (on) => ipcRenderer.send('notify:flash', !!on),
 });
 
+// ── Custom MayVox window controls (frameless chrome) ──
+contextBridge.exposeInMainWorld('electronWindow', {
+  minimize: () => ipcRenderer.send('window:minimize'),
+  maximizeRestore: () => ipcRenderer.send('window:maximize-restore'),
+  close: () => ipcRenderer.send('window:close'),
+  isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  isFocused: () => ipcRenderer.invoke('window:is-focused'),
+  /** Pencere durumu değişimlerini dinle (maximize/unmaximize/focus/blur) */
+  onState: (cb) => {
+    ipcRenderer.removeAllListeners('window:state');
+    ipcRenderer.on('window:state', (_e, data) => cb(data));
+  },
+  offState: () => ipcRenderer.removeAllListeners('window:state'),
+});
+
 // Global PTT (bas-konuş) API — main process uiohook-napi kullanır,
 // böylece uygulama arka plandayken / odak başka yerdeyken de çalışır.
 contextBridge.exposeInMainWorld('electronPtt', {

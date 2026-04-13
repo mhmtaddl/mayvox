@@ -24,7 +24,15 @@ export interface ChannelAccessEntry {
 export interface ChannelAccessSummary {
   canSee: boolean;
   canJoin: boolean;
-  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found';
+  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found' | 'server-banned';
+}
+
+async function isServerBanned(serverId: string): Promise<boolean> {
+  const row = await queryOne<{ is_banned: boolean }>(
+    'SELECT is_banned FROM servers WHERE id = $1',
+    [serverId],
+  );
+  return !!row?.is_banned;
 }
 
 async function fetchChannel(serverId: string, channelId: string): Promise<{ id: string; server_id: string; owner_id: string | null; is_hidden: boolean; is_invite_only: boolean } | null> {
@@ -61,6 +69,13 @@ export async function evaluateChannelAccess(
 
   const role = await fetchMemberRole(serverId, userId);
   if (!role) return { canSee: false, canJoin: false, reason: 'not-member' };
+
+  // Restricted mode: sunucu banlıysa kanalı görebilir ama join edemez.
+  // Sistem yönetici override'ı YOK; sistem admini de aynı kuralı uygular
+  // (zaten /admin route'larını kullanır).
+  if (await isServerBanned(serverId)) {
+    return { canSee: true, canJoin: false, reason: 'server-banned' };
+  }
 
   if (MANAGE_ROLES.has(role)) {
     return { canSee: true, canJoin: true, reason: 'server-admin' };

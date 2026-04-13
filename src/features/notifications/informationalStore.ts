@@ -17,7 +17,7 @@
  * Not: process içi bellek. Sayfa reload'unda silinir (bilinçli — toast'la simetrik davranış).
  */
 
-export type InformationalKind = 'joinRequestAccepted' | 'joinRequestRejected' | 'generic';
+export type InformationalKind = 'joinRequestAccepted' | 'joinRequestRejected' | 'serverRestricted' | 'serverUnrestricted' | 'generic';
 
 export interface InformationalItem {
   /** Tekil anahtar — aynı key gelirse mevcut item güncellenir (duplicate engeli). */

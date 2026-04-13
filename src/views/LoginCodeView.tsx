@@ -231,7 +231,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
     && !permanentlyBlocked;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
+    <div className="flex flex-col items-center justify-center min-h-full h-full p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.07]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4), transparent 70%)' }} />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.05]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)' }} />

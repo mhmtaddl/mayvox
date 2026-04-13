@@ -58,6 +58,7 @@ async function resolveUniqueSlug(name: string): Promise<string> {
 }
 
 function toResponse(server: Server, activity?: ServerActivity | null, role?: string): ServerResponse {
+  const s = server as Server & { is_banned?: boolean; banned_at?: string | null; banned_reason?: string | null; banned_by?: string | null };
   return {
     id: server.id,
     name: server.name,
@@ -76,6 +77,10 @@ function toResponse(server: Server, activity?: ServerActivity | null, role?: str
     plan: server.plan ?? 'free',
     createdAt: server.created_at,
     role,
+    isBanned: !!s.is_banned,
+    bannedAt: s.banned_at ?? null,
+    bannedReason: s.banned_reason ?? null,
+    bannedBy: s.banned_by ?? null,
   };
 }
 
@@ -238,6 +243,7 @@ export async function searchServers(query: string, userId: string): Promise<Serv
      LEFT JOIN server_activity sa ON sa.server_id = s.id
      LEFT JOIN server_members sm ON sm.server_id = s.id AND sm.user_id = $2
      WHERE s.is_public = true
+       AND COALESCE(s.is_banned, false) = false
        AND (s.name ILIKE $1 OR s.slug ILIKE $1)
      ORDER BY sa.member_count DESC NULLS LAST
      LIMIT 20`,
@@ -304,6 +310,11 @@ export async function joinByInvite(userId: string, input: string): Promise<Serve
   // Banlı mı?
   const banned = await queryOne<{ id: string }>('SELECT id FROM server_bans WHERE server_id = $1 AND user_id = $2', [server.id, userId]);
   if (banned) throw new AppError(403, 'Bu sunucuya erişimin kısıtlanmış');
+
+  // Sunucu sistem yönetimi tarafından kısıtlanmış mı? (restricted mode — yeni join engeli)
+  if ((server as Server & { is_banned?: boolean }).is_banned) {
+    throw new AppError(423, 'Bu sunucu şu anda yeni üye kabul etmiyor (sistem kısıtlaması).');
+  }
 
   // Frictionless join kuralı:
   //   visibility=public (is_public=true) AND join_policy='open' → davet gerekmez

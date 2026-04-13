@@ -26,5 +26,9 @@ export default defineConfig(() => {
       // HMR ayarın aynen kalıyor
       hmr: process.env.DISABLE_HMR !== 'true',
     },
+
+    // RNNoise WASM + AudioWorklet asset support (POC).
+    // Feature flag default OFF olduğundan build etkisi yok; hazır.
+    assetsInclude: ['**/*.wasm'],
   };
 });

@@ -377,9 +377,30 @@ function createMainWindow() {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
+    // ── Custom MayVox chrome — premium frameless ──
+    // Native title bar gizli; renderer içinde AppChrome bileşeni drag region + window
+    // controls sağlar. Resize/snap davranışı OS tarafından korunur.
+    frame: false,
+    titleBarStyle: "hidden",
+    backgroundColor: "#060a14",
     icon: path.join(__dirname, "../build/icon.ico"),
     webPreferences: mainWebPrefs,
   });
+
+  // ── Window state changes → renderer'a duyur (maximize ikon güncellemesi) ──
+  const sendWinState = () => {
+    try {
+      win.webContents.send("window:state", {
+        maximized: win.isMaximized(),
+        focused: win.isFocused(),
+      });
+    } catch { /* no-op */ }
+  };
+  win.on("maximize", sendWinState);
+  win.on("unmaximize", sendWinState);
+  win.on("focus", sendWinState);
+  win.on("blur", sendWinState);
+  win.webContents.on("did-finish-load", sendWinState);
 
   const saveState = () => {
     if (win.isMaximized() || win.isMinimized()) return;
@@ -420,6 +441,33 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
+
+// ── Custom MayVox window controls ──
+function withWin(event, fn) {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) fn(win);
+  } catch (err) {
+    logger.warn?.("[window] control error: " + (err?.message || err));
+  }
+}
+ipcMain.on("window:minimize", (e) => withWin(e, (w) => w.minimize()));
+ipcMain.on("window:maximize-restore", (e) => withWin(e, (w) => {
+  if (w.isMaximized()) w.unmaximize(); else w.maximize();
+}));
+ipcMain.on("window:close", (e) => withWin(e, (w) => w.close()));
+ipcMain.handle("window:is-maximized", (e) => {
+  try {
+    const w = BrowserWindow.fromWebContents(e.sender) || BrowserWindow.getAllWindows()[0];
+    return !!(w && !w.isDestroyed() && w.isMaximized());
+  } catch { return false; }
+});
+ipcMain.handle("window:is-focused", (e) => {
+  try {
+    const w = BrowserWindow.fromWebContents(e.sender) || BrowserWindow.getAllWindows()[0];
+    return !!(w && !w.isDestroyed() && w.isFocused());
+  } catch { return true; }
+});
 
 // Notification attention — renderer'dan flash toggle.
 // Focus alındığında Electron otomatik stop eder; yine de explicit off da destekli.

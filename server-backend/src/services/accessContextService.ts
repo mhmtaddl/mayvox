@@ -43,6 +43,8 @@ export interface ServerAccessContext {
   plan: { type: string };
   limits: AccessLimits;
   flags: AccessFlags;
+  /** Server system admin tarafından kısıtlanmış (restricted mode) — görünüm açık, oda join kapalı. */
+  isBanned: boolean;
 }
 
 interface MembershipRow {
@@ -51,6 +53,7 @@ interface MembershipRow {
   channel_count: number;
   member_count: number;
   owner_user_id: string;
+  is_banned: boolean;
 }
 
 /**
@@ -135,6 +138,7 @@ export async function getServerAccessContext(
         sm.role AS role,
         s.plan AS plan,
         s.owner_user_id AS owner_user_id,
+        COALESCE(s.is_banned, false) AS is_banned,
         COALESCE((SELECT COUNT(*) FROM channels WHERE server_id = s.id), 0)::int AS channel_count,
         COALESCE((SELECT COUNT(*) FROM server_members WHERE server_id = s.id), 0)::int AS member_count
      FROM server_members sm
@@ -148,6 +152,10 @@ export async function getServerAccessContext(
     accessCache.set(key, { ctx, expiresAt: Date.now() + ACCESS_CACHE_TTL_MS });
     return ctx;
   }
+
+  // NOT: is_banned hard throw DEĞİL. Restricted mode: sunucu görünür, sadece
+  // oda join / voice connect gibi aktif eylemler engellenir. Specific route'lar
+  // assertServerNotBanned() ile kendini korur.
 
   // 2) Roles + capabilities — tek JOIN ile (N+1 yok)
   const roleCapRows = await queryMany<{
@@ -206,6 +214,7 @@ export async function getServerAccessContext(
     plan: { type: planType },
     limits,
     flags: computeFlags(capSet, limits, membership.channel_count),
+    isBanned: !!membership.is_banned,
   };
 
   accessCache.set(key, { ctx, expiresAt: Date.now() + ACCESS_CACHE_TTL_MS });
@@ -223,6 +232,7 @@ function emptyContext(userId: string, serverId: string): ServerAccessContext {
     plan: { type: 'free' },
     limits,
     flags: computeFlags(new Set(), limits, 0),
+    isBanned: false,
   };
 }
 
@@ -264,6 +274,21 @@ export function assertCapability(ctx: ServerAccessContext, cap: Capability, msg?
   assertServerMember(ctx);
   if (!hasCapability(ctx, cap)) {
     throw new AppError(403, msg || 'Bu işlem için yetkin yok');
+  }
+}
+
+/**
+ * Restricted-mode guard — oda join / voice connect / mesajlaşma gibi AKTİF eylemler
+ * banlı sunucuda blokluysa çağır. Tarama / sunucu görünümü gibi pasif path'lerde ÇAĞIRMA.
+ */
+export function assertServerNotBanned(ctx: ServerAccessContext, msg?: string): void {
+  if (ctx.isBanned) {
+    const err = new AppError(
+      423,
+      msg || 'Bu sunucu sistem yönetimi tarafından geçici olarak kısıtlandı. Odalara giriş kapalı.',
+    );
+    (err as any).reason = 'server-banned';
+    throw err;
   }
 }
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck } from 'lucide-react';
+import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck, ShieldAlert } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
 import type { NotificationSummary, NotifItem, NotifKind } from '../../hooks/useNotificationCenter';
 import { clearAllInformational, removeInformational } from '../../features/notifications/informationalStore';
@@ -24,6 +24,7 @@ const KIND_ICON: Record<NotifKind, React.ReactNode> = {
   mention: <AtSign size={15} strokeWidth={1.8} />,
   invite: <Mail size={15} strokeWidth={1.8} />,
   joinRequest: <UserCheck size={15} strokeWidth={1.8} />,
+  restriction: <ShieldAlert size={15} strokeWidth={1.8} className="text-orange-400" />,
 };
 
 // ── Priority → sol çizgi rengi (çok hafif) ──
@@ -88,6 +89,12 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     if (item.key.startsWith('info:joinreq-rejected:')) {
       const infoKey = item.key.slice('info:'.length);
       return () => { removeInformational(infoKey); setOpen(false); };
+    }
+    // Restriction informational items — sunucuya geç + bildirimi sil.
+    if ((item.key.startsWith('info:restricted:') || item.key.startsWith('info:unrestricted:')) && item.serverId && onOpenServer) {
+      const sid = item.serverId;
+      const infoKey = item.key.slice('info:'.length);
+      return () => { onOpenServer(sid); removeInformational(infoKey); setOpen(false); };
     }
     // joinRequest: her sunucu için ayrı item, serverId ile sunucu ayarlarına git
     if (item.kind === 'joinRequest' && item.serverId && onOpenJoinRequest) {

@@ -8,6 +8,7 @@ declare const __APP_VERSION__: string;
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import AppChrome from './components/AppChrome';
 import { AppView, User, VoiceChannel } from './types';
 import { CHANNELS } from './constants';
 // Theme types + adaptive theme artık useAppSettings hook'unda
@@ -1230,10 +1231,22 @@ export default function App() {
   };
 
   const handleJoinChannel = async (id: string, isInvited: boolean = false) => {
+    // Her tıklamada navigasyon: settings'ten dön + discover varsa kapat.
     if (view === 'settings') setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:goto-chat'));
 
     const channel = channels.find(c => c.id === id);
     if (!channel) return;
+
+    // Aynı odadaysak sadece görünüm chat'e döner; tekrar join akışı tetiklenmez.
+    if (activeChannel === id) return;
+
+    // Restricted mode: sunucu sistem tarafından kısıtlandıysa oda/sesli bağlantı reddedilir.
+    // Sunucu görünümü açık kalır; sadece aktif eylemler bloklanır.
+    if (accessContext?.isBanned) {
+      setToastMsg('Bu sunucu sistem yönetimi tarafından kısıtlandı. Odalara giriş kapalı.');
+      return;
+    }
 
     // Backend canonical access check — private kanallar için gerçek doğrulama.
     if (!isInvited && activeChannel !== id && activeServerId && (channel.isInviteOnly || channel.isHidden)) {
@@ -1715,7 +1728,9 @@ export default function App() {
           <UIContext.Provider value={uiContextValue}>
             <AppStateContext.Provider value={appStateValue}>
               <AudioCtx.Provider value={audioValue}>
-                <div className="font-sans selection:bg-blue-500/30">
+                <div className="font-sans selection:bg-blue-500/30 mv-app-shell">
+                  {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
+                  <AppChrome />
                   {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}
                   {!permissionsGranted ? (
                     <PermissionOnboarding onComplete={handlePermissionsComplete} />
@@ -1754,7 +1769,7 @@ export default function App() {
                       </span>
                     </div>
                   )}
-                  <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div className="mv-app-main" style={{ position: 'relative', zIndex: 1 }}>
                     <AnimatePresence mode="wait">
                       {view === 'loading' && (
                         <motion.div key="loading" exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="min-h-screen bg-[var(--theme-bg)]" />

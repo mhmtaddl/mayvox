@@ -5,11 +5,11 @@
 
 export type PlanKey = 'free' | 'pro' | 'ultra';
 
-/** Kullanıcı başına aynı anda açık oda sayısı (kendi oluşturduğu). */
+/** Plan başına özel oda sayısı — planLimits.ts kanonik değerlerle senkron. */
 export const USER_ROOM_LIMIT: Record<PlanKey, number> = {
   free: 2,
-  pro: 4,
-  ultra: 8,
+  pro: 5,
+  ultra: 16,
 };
 
 export function getUserRoomLimit(plan: string | undefined | null): number {

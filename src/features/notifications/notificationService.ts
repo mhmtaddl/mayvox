@@ -460,6 +460,67 @@ export function handleJoinRequestRejected(r: JoinRequestResultNotif) {
   }, decision);
 }
 
+// ── Server restriction notifications ──
+// Top-right toast'a düşer; bell tarafına ayrıca pushInformational yapılır (caller).
+export interface ServerRestrictionNotif {
+  serverId: string;
+  serverName: string | null;
+  serverAvatar: string | null;
+  reason?: string | null;
+}
+
+export function handleServerRestricted(p: ServerRestrictionNotif) {
+  const fp = `srv-restricted:${p.serverId}`;
+  if (hasSeen(fp)) return;
+  markSeen(fp);
+
+  const decision = decideNotification(
+    { intent: 'invite', sourceId: undefined, subjectId: p.serverId, createdAt: Date.now() },
+    buildPolicyContext(),
+    buildStats(),
+  );
+  if (!decision.shouldNotify) return;
+
+  dispatchDecision({
+    id: `srv-restricted-${p.serverId}-${nextSeq++}`,
+    kind: 'invite',
+    priority: decision.effectivePriority,
+    avatar: p.serverAvatar ?? null,
+    title: p.serverName || 'Sunucu kısıtlandı',
+    body: p.serverName
+      ? `${p.serverName} geçici olarak kısıtlandı — odalara erişim kapatıldı`
+      : 'Sunucu geçici olarak kısıtlandı — odalara erişim kapatıldı',
+    createdAt: Date.now(),
+    data: { intent: 'serverRestricted', serverId: p.serverId },
+  }, decision);
+}
+
+export function handleServerUnrestricted(p: ServerRestrictionNotif) {
+  const fp = `srv-unrestricted:${p.serverId}`;
+  if (hasSeen(fp)) return;
+  markSeen(fp);
+
+  const decision = decideNotification(
+    { intent: 'invite', sourceId: undefined, subjectId: p.serverId, createdAt: Date.now() },
+    buildPolicyContext(),
+    buildStats(),
+  );
+  if (!decision.shouldNotify) return;
+
+  dispatchDecision({
+    id: `srv-unrestricted-${p.serverId}-${nextSeq++}`,
+    kind: 'invite',
+    priority: decision.effectivePriority,
+    avatar: p.serverAvatar ?? null,
+    title: p.serverName || 'Sunucu tekrar aktif',
+    body: p.serverName
+      ? `${p.serverName} tekrar aktif — odalara ve sesli kanallara erişim açıldı`
+      : 'Sunucu tekrar aktif — odalara erişim açıldı',
+    createdAt: Date.now(),
+    data: { intent: 'serverUnrestricted', serverId: p.serverId },
+  }, decision);
+}
+
 export function handleInvite(inv: InviteNotif) {
   const fp = `invite:${inv.id}`;
   if (hasSeen(fp)) return;

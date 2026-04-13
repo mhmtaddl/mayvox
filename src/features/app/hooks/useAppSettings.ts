@@ -21,7 +21,15 @@ export function useAppSettings() {
   });
 
   // ── Background preset ──
-  const [activeBackground, setActiveBackgroundState] = useState(() => localStorage.getItem('activeBackground') || defaultBackgroundId);
+  // Migration: eski 'bg-purple-mist' → yeni 'bg-slate-mist' (premium two-tone)
+  const [activeBackground, setActiveBackgroundState] = useState(() => {
+    const saved = localStorage.getItem('activeBackground');
+    if (saved === 'bg-purple-mist') {
+      localStorage.setItem('activeBackground', 'bg-slate-mist');
+      return 'bg-slate-mist';
+    }
+    return saved || defaultBackgroundId;
+  });
   const setActiveBackground = (id: string) => { localStorage.setItem('activeBackground', id); setActiveBackgroundState(id); };
 
   // ── Adaptive theme — single effect for theme + background ──

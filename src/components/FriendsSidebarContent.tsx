@@ -1,17 +1,15 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
-  UserPlus, FolderPlus, MoreHorizontal, Pencil, Trash2, FolderInput, FolderMinus, Star, MessageSquare, PhoneCall,
+  UserPlus, Star, MessageSquare, PhoneCall, Server as ServerIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
-import { useFriendGroups, type FriendGroup } from '../hooks/useFriendGroups';
 import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
 import DeviceBadge from './chat/DeviceBadge';
-import { useConfirm } from '../contexts/ConfirmContext';
 import type { User } from '../types';
 
 interface Props {
@@ -26,12 +24,15 @@ interface Props {
   handleInviteUser?: (userId: string) => void;
   isMuted?: boolean;
   isDeafened?: boolean;
+  /** Map id→name for "şu anda X sunucusunda" indicator under online friends */
+  servers?: { id: string; name: string }[];
 }
 
 export default function FriendsSidebarContent({
   variant, onUserClick, onDM, channels, activeChannel,
   inviteStatuses = {}, inviteCooldowns = {}, handleInviteUser,
   isMuted: selfMuted, isDeafened: selfDeafened,
+  servers = [],
 }: Props) {
   const {
     currentUser, allUsers, friendIds, friendsLoading, getStatusColor,
@@ -40,43 +41,27 @@ export default function FriendsSidebarContent({
   const { setToastMsg } = useUI();
   const { avatarBorderColor, showLastSeen } = useSettings();
 
-  const {
-    groups, memberMap, getGroupForFriend,
-    createGroup, renameGroup, deleteGroup, assignToGroup, removeFromGroup,
-  } = useFriendGroups(currentUser.id || undefined);
-
   const { favoriteIds, isFavorite, toggleFavorite } = useFavoriteFriends(currentUser.id || undefined);
+
+  const serverNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of servers) m.set(s.id, s.name);
+    return m;
+  }, [servers]);
 
   // ── Derived lists ──────────────────────────────────────────────────────
   const friendUsers = useMemo(() => allUsers.filter(u => friendIds.has(u.id)), [allUsers, friendIds]);
   const onlineUsers = useMemo(() => friendUsers.filter(u => u.status === 'online'), [friendUsers]);
   const offlineUsers = useMemo(() => friendUsers.filter(u => u.status === 'offline'), [friendUsers]);
 
-  // Online favorites — exclusive section, not duplicated elsewhere
   const onlineFavorites = useMemo(
     () => onlineUsers.filter(u => favoriteIds.has(u.id)),
     [onlineUsers, favoriteIds]
   );
-  const nonFavoriteOnline = useMemo(
+  const onlineRest = useMemo(
     () => onlineUsers.filter(u => !favoriteIds.has(u.id)),
     [onlineUsers, favoriteIds]
   );
-
-  // Group online users by their assigned group (excluding favorites)
-  const groupedOnline = useMemo(() => {
-    const result: { group: FriendGroup; users: User[] }[] = [];
-    for (const g of groups) {
-      const members = memberMap.get(g.id);
-      if (!members || members.size === 0) continue;
-      const users = nonFavoriteOnline.filter(u => members.has(u.id));
-      if (users.length > 0) result.push({ group: g, users });
-    }
-    return result;
-  }, [groups, memberMap, nonFavoriteOnline]);
-
-  const ungroupedOnline = useMemo(() => {
-    return nonFavoriteOnline.filter(u => !getGroupForFriend(u.id));
-  }, [nonFavoriteOnline, getGroupForFriend]);
 
   // ── Offline collapse ───────────────────────────────────────────────────
   const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
@@ -84,73 +69,15 @@ export default function FriendsSidebarContent({
     return saved !== null ? saved === 'true' : false;
   });
 
-  // ── Group management state ─────────────────────────────────────────────
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
-  const createInputRef = useRef<HTMLInputElement>(null);
-
-  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const renameInputRef = useRef<HTMLInputElement>(null);
-
-  const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null);
+  // ── Friend context menu (favorite + DM) ────────────────────────────────
   const [friendMenu, setFriendMenu] = useState<{ userId: string; userName: string; x: number; y: number } | null>(null);
-  const { openConfirm } = useConfirm();
 
   useEffect(() => {
-    if (creatingGroup && createInputRef.current) createInputRef.current.focus();
-  }, [creatingGroup]);
-  useEffect(() => {
-    if (renamingGroupId && renameInputRef.current) renameInputRef.current.focus();
-  }, [renamingGroupId]);
-
-  // Close menus on outside click
-  useEffect(() => {
-    if (!groupMenu && !friendMenu) return;
-    const handler = () => { setGroupMenu(null); setFriendMenu(null); };
+    if (!friendMenu) return;
+    const handler = () => setFriendMenu(null);
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
-  }, [groupMenu, friendMenu]);
-
-  // ── Handlers ───────────────────────────────────────────────────────────
-  const MAX_GROUPS = 10;
-
-  const handleCreateGroup = async () => {
-    const name = newGroupName.trim();
-    if (!name) { setCreatingGroup(false); return; }
-    if (groups.length >= MAX_GROUPS) {
-      setToastMsg(`En fazla ${MAX_GROUPS} grup oluşturabilirsin`);
-      setCreatingGroup(false); setNewGroupName(''); return;
-    }
-    const ok = await createGroup(name);
-    if (ok) setToastMsg(`"${name}" grubu oluşturuldu`);
-    setNewGroupName('');
-    setCreatingGroup(false);
-  };
-
-  const handleRenameGroup = async () => {
-    if (!renamingGroupId) return;
-    const name = renameValue.trim();
-    if (!name) { setRenamingGroupId(null); return; }
-    const ok = await renameGroup(renamingGroupId, name);
-    if (ok) setToastMsg('Grup adı güncellendi');
-    setRenamingGroupId(null);
-    setRenameValue('');
-  };
-
-  const triggerDeleteGroup = (groupId: string, groupName: string) => {
-    openConfirm({
-      title: 'Grubu sil',
-      description: `"${groupName}" grubunu silmek istiyor musun? Arkadaşların silinmez, sadece grup kaldırılır.`,
-      confirmText: 'Sil',
-      cancelText: 'İptal',
-      danger: true,
-      onConfirm: async () => {
-        const ok = await deleteGroup(groupId);
-        if (ok) setToastMsg(`"${groupName}" grubu silindi`);
-      },
-    });
-  };
+  }, [friendMenu]);
 
   const handleAcceptRequest = async (userId: string, name: string) => {
     const ok = await acceptRequest(userId);
@@ -164,79 +91,15 @@ export default function FriendsSidebarContent({
 
   const isDesktop = variant === 'desktop';
 
-  // ── Drag & drop state (desktop only) ───────────────────────────────────
-  const [draggingUserId, setDraggingUserId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null); // groupId or '__ungrouped__'
-
-  const handleDragStart = (e: React.DragEvent, userId: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', userId);
-    // Slight delay so the drag image renders first
-    requestAnimationFrame(() => setDraggingUserId(userId));
-  };
-
-  const handleDragEnd = () => {
-    setDraggingUserId(null);
-    setDropTarget(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dropTarget !== targetId) setDropTarget(targetId);
-  };
-
-  const handleDragLeave = (e: React.DragEvent, targetId: string) => {
-    // Only clear if actually leaving the container (not entering a child)
-    const related = e.relatedTarget as Node | null;
-    if (related && (e.currentTarget as Node).contains(related)) return;
-    if (dropTarget === targetId) setDropTarget(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    const userId = e.dataTransfer.getData('text/plain');
-    setDraggingUserId(null);
-    setDropTarget(null);
-    if (!userId) return;
-
-    if (targetId === '__ungrouped__') {
-      // Remove from any group
-      const currentGroup = getGroupForFriend(userId);
-      if (!currentGroup) return; // already ungrouped, no-op
-      const ok = await removeFromGroup(userId);
-      if (ok) {
-        const user = onlineUsers.find(u => u.id === userId);
-        if (user) setToastMsg(`${formatFullName(user.firstName, user.lastName)} gruptan çıkarıldı`);
-      }
-    } else {
-      // Assign to group
-      const currentGroup = getGroupForFriend(userId);
-      if (currentGroup === targetId) return; // already in this group, no-op
-      const group = groups.find(g => g.id === targetId);
-      const ok = await assignToGroup(userId, targetId);
-      if (ok && group) {
-        const user = onlineUsers.find(u => u.id === userId);
-        if (user) setToastMsg(`${formatFullName(user.firstName, user.lastName)} → ${group.name}`);
-      }
-    }
-  };
-
-  const dropHighlightClass = 'ring-1 ring-[var(--theme-accent)]/20 bg-[rgba(var(--theme-accent-rgb),0.03)]';
-
   // ── Render user item ───────────────────────────────────────────────────
   const renderOnlineUser = (user: User) => {
     const isMe = user.id === currentUser.id;
-
-    const isDragging = draggingUserId === user.id;
+    const userServerName = !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
 
     return (
       <div
         key={user.id}
-        className={`flex items-center gap-3 ${isDesktop ? 'px-2.5 py-2 rounded-xl' : 'px-2 py-2 rounded-lg'} transition-all duration-200 group hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer ${isDragging ? 'opacity-40 scale-[0.97]' : ''}`}
-        draggable={isDesktop && !isMe}
-        onDragStart={isDesktop && !isMe ? (e) => handleDragStart(e, user.id) : undefined}
-        onDragEnd={isDesktop ? handleDragEnd : undefined}
+        className={`flex items-center gap-3 ${isDesktop ? 'px-2.5 py-2 rounded-xl' : 'px-2 py-2 rounded-lg'} transition-all duration-200 group hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer`}
         onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
         onContextMenu={(e) => {
           if (isMe) return;
@@ -279,6 +142,26 @@ export default function FriendsSidebarContent({
               <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText)}`}>{user.statusText}</span>
             )}
           </div>
+          {userServerName && (
+            <div className="flex items-center gap-1 mt-0.5 min-w-0">
+              <ServerIcon size={8} className="text-[var(--theme-accent)]/60 shrink-0" />
+              <span className="text-[9.5px] font-semibold truncate text-[var(--theme-text)]/85">
+                {(() => {
+                  const raw = userServerName;
+                  const spaceIdx = raw.indexOf(' ');
+                  if (spaceIdx > 0) {
+                    const first = raw.slice(0, spaceIdx);
+                    const rest = raw.slice(spaceIdx + 1);
+                    return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
+                  }
+                  if (raw.toUpperCase() === 'MAYVOX') {
+                    return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
+                  }
+                  return raw;
+                })()}
+              </span>
+            </div>
+          )}
         </div>
         {/* Desktop invite button */}
         {isDesktop && handleInviteUser && (() => {
@@ -407,49 +290,6 @@ export default function FriendsSidebarContent({
   };
 
   // ── Group section header ───────────────────────────────────────────────
-  const renderGroupHeader = (group: FriendGroup, count: number) => {
-    if (renamingGroupId === group.id) {
-      return (
-        <div className="flex items-center gap-1.5 mb-2 px-2">
-          <input
-            ref={renameInputRef}
-            type="text"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRenameGroup(); if (e.key === 'Escape') setRenamingGroupId(null); }}
-            onBlur={handleRenameGroup}
-            className="flex-1 text-[9px] font-bold uppercase tracking-[0.14em] bg-transparent text-[var(--theme-text)] border-b border-[var(--theme-accent)]/30 outline-none px-0.5 py-0.5"
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-2 mb-2 px-2 group/gh">
-        <span className="text-[9px] font-bold text-[var(--theme-accent)]/50 uppercase tracking-[0.14em]">{group.name}</span>
-        <span className="text-[9px] bg-[var(--theme-accent)]/6 text-[var(--theme-accent)]/40 px-1.5 py-0.5 rounded-full font-bold">{count}</span>
-        <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
-        <button
-          onClick={(e) => { e.stopPropagation(); setGroupMenu({ groupId: group.id, x: e.clientX, y: e.clientY }); }}
-          className="opacity-25 group-hover/gh:opacity-60 hover:!opacity-100 transition-opacity w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
-          title="Grup ayarları"
-        >
-          <MoreHorizontal size={11} />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            triggerDeleteGroup(group.id, group.name);
-          }}
-          className="opacity-0 group-hover/gh:opacity-40 hover:!opacity-100 hover:text-red-400 transition-all w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)]"
-          title="Grubu sil"
-        >
-          <Trash2 size={10} />
-        </button>
-      </div>
-    );
-  };
-
   const hasContent = friendUsers.length > 0 || incomingRequests.length > 0;
 
   return (
@@ -496,45 +336,16 @@ export default function FriendsSidebarContent({
             </div>
           )}
 
-          {/* 3. Friend groups — boş olsa da görünür */}
-          {groups.map(group => {
-            const entry = groupedOnline.find(g => g.group.id === group.id);
-            const users = entry?.users || [];
-            return (
-              <div
-                key={group.id}
-                onDragOver={isDesktop ? (e) => handleDragOver(e, group.id) : undefined}
-                onDragLeave={isDesktop ? (e) => handleDragLeave(e, group.id) : undefined}
-                onDrop={isDesktop ? (e) => handleDrop(e, group.id) : undefined}
-                className={`rounded-lg transition-all duration-150 ${draggingUserId && dropTarget === group.id ? dropHighlightClass : ''}`}
-              >
-                {renderGroupHeader(group, users.length)}
-                <div className="space-y-1" style={{ minHeight: draggingUserId && users.length === 0 ? 20 : undefined }}>
-                  {users.length > 0 ? users.map(renderOnlineUser) : !draggingUserId && (
-                    <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-25 px-2 py-1">Boş grup</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* 3. Ungrouped online friends */}
-          {(ungroupedOnline.length > 0 || (draggingUserId && groups.length > 0)) && (
-            <div
-              onDragOver={isDesktop ? (e) => handleDragOver(e, '__ungrouped__') : undefined}
-              onDragLeave={isDesktop ? (e) => handleDragLeave(e, '__ungrouped__') : undefined}
-              onDrop={isDesktop ? (e) => handleDrop(e, '__ungrouped__') : undefined}
-              className={`rounded-lg transition-all duration-150 ${draggingUserId && dropTarget === '__ungrouped__' ? dropHighlightClass : ''}`}
-            >
+          {/* 3. Online friends (non-favorites) */}
+          {onlineRest.length > 0 && (
+            <div>
               <div className="flex items-center gap-2 mb-2 px-2">
-                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.14em]">
-                  {groups.length > 0 ? 'Diğer' : 'Çevrimiçi'}
-                </span>
-                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">{ungroupedOnline.length}</span>
+                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.14em]">Çevrimiçi</span>
+                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">{onlineRest.length}</span>
                 <div className="flex-1 h-px bg-[var(--theme-border)]/10" />
               </div>
-              <div className="space-y-1" style={{ minHeight: draggingUserId ? 24 : undefined }}>
-                {ungroupedOnline.map(renderOnlineUser)}
+              <div className="space-y-1">
+                {onlineRest.map(renderOnlineUser)}
               </div>
             </div>
           )}
@@ -560,77 +371,8 @@ export default function FriendsSidebarContent({
             </div>
           )}
 
-          {/* New group: inline input or create button */}
-          {creatingGroup ? (
-            <div className="px-2">
-              <input
-                ref={createInputRef}
-                type="text"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); if (e.key === 'Escape') { setCreatingGroup(false); setNewGroupName(''); } }}
-                onBlur={handleCreateGroup}
-                placeholder="Grup adı..."
-                className="w-full text-[10px] bg-transparent text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 border border-[var(--theme-accent)]/20 rounded-lg px-2.5 py-1.5 outline-none focus:border-[var(--theme-accent)]/40 transition-colors"
-              />
-            </div>
-          ) : groups.length < MAX_GROUPS ? (
-            <button
-              onClick={() => setCreatingGroup(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 mx-2 rounded-lg text-[9px] font-semibold text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)] transition-all"
-            >
-              <FolderPlus size={10} /> Yeni grup
-            </button>
-          ) : null}
         </>}
       </div>
-
-
-      {/* Group context menu */}
-      <AnimatePresence>
-        {groupMenu && (
-          <>
-            <div className="fixed inset-0 z-[200]" onClick={() => setGroupMenu(null)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.1 }}
-              className="fixed z-[201] py-1 rounded-lg overflow-hidden min-w-[140px]"
-              style={{
-                top: groupMenu.y,
-                left: Math.min(groupMenu.x, window.innerWidth - 160),
-                background: 'rgba(var(--theme-bg-rgb), 0.95)',
-                backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(var(--glass-tint), 0.08)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-              }}
-            >
-              <button
-                onClick={() => {
-                  const g = groups.find(g => g.id === groupMenu.groupId);
-                  setRenameValue(g?.name || '');
-                  setRenamingGroupId(groupMenu.groupId);
-                  setGroupMenu(null);
-                }}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
-              >
-                <Pencil size={11} className="text-[var(--theme-secondary-text)]" /> Yeniden adlandır
-              </button>
-              <button
-                onClick={() => {
-                  const g = groups.find(g => g.id === groupMenu.groupId);
-                  triggerDeleteGroup(groupMenu.groupId, g?.name || '');
-                  setGroupMenu(null);
-                }}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-red-400 hover:bg-red-500/8 transition-colors"
-              >
-                <Trash2 size={11} /> Grubu sil
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Friend context menu (right-click) */}
       <AnimatePresence>
@@ -672,36 +414,6 @@ export default function FriendsSidebarContent({
                   className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
                 >
                   <MessageSquare size={11} className="text-[var(--theme-secondary-text)]" /> Mesaj gönder
-                </button>
-              )}
-              <div className="h-px mx-2 my-0.5 bg-[var(--theme-border)]/10" />
-              {/* Assign to group */}
-              {groups.length > 0 && (
-                <div className="px-3 py-1 text-[9px] font-bold text-[var(--theme-secondary-text)]/40 uppercase tracking-wider">Gruba taşı</div>
-              )}
-              {groups.map(g => (
-                <button
-                  key={g.id}
-                  onClick={async () => {
-                    const ok = await assignToGroup(friendMenu.userId, g.id);
-                    if (ok) setToastMsg(`${friendMenu.userName} → ${g.name}`);
-                    setFriendMenu(null);
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
-                >
-                  <FolderInput size={11} className="text-[var(--theme-secondary-text)]" /> {g.name}
-                </button>
-              ))}
-              {getGroupForFriend(friendMenu.userId) && (
-                <button
-                  onClick={async () => {
-                    const ok = await removeFromGroup(friendMenu.userId);
-                    if (ok) setToastMsg(`${friendMenu.userName} gruptan çıkarıldı`);
-                    setFriendMenu(null);
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-orange-400 hover:bg-orange-500/8 transition-colors"
-                >
-                  <FolderMinus size={11} /> Gruptan çıkar
                 </button>
               )}
             </motion.div>

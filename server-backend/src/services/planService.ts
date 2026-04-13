@@ -25,30 +25,45 @@ export interface PlanLimitSet {
   maxMembers: number;
   maxPrivateChannels: number;
   maxInviteLinksPerDay: number;
+  /** Sabit sistem odası sayısı (tüm planlarda 4) */
+  systemRooms: number;
+  /** Sistem odasındaki maksimum kişi sayısı */
+  systemRoomCapacity: number;
+  /** Özel odadaki maksimum kişi sayısı */
+  privateRoomCapacity: number;
 }
 
 /**
- * Plan config — explicit tier'lar. Ultra artık dedicated (silent pro downgrade yok).
- * Bilinmeyen plan değerleri normalize'da 'free'e düşer — log ile görünür.
+ * FINAL plan config (2026-04-13). Ultra dedicated tier.
+ * Sayılar: ürün spec'i — değiştirilince frontend `src/lib/planLimits.ts` da güncellenmeli.
  */
 export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
   free: {
-    maxChannels: 10,
-    maxMembers: 50,
-    maxPrivateChannels: 3,
+    maxMembers: 100,
+    systemRooms: 4,
+    maxPrivateChannels: 2,
+    systemRoomCapacity: 15,
+    privateRoomCapacity: 20,
+    maxChannels: 4 + 2,                  // sistem + özel = toplam kanal
     maxInviteLinksPerDay: 20,
   },
   pro: {
-    maxChannels: 100,
-    maxMembers: 500,
-    maxPrivateChannels: 50,
-    maxInviteLinksPerDay: 500,
+    maxMembers: 250,
+    systemRooms: 4,
+    maxPrivateChannels: 5,
+    systemRoomCapacity: 25,
+    privateRoomCapacity: 30,
+    maxChannels: 4 + 5,
+    maxInviteLinksPerDay: 100,
   },
   ultra: {
-    maxChannels: 500,
-    maxMembers: 2000,
-    maxPrivateChannels: 200,
-    maxInviteLinksPerDay: 2000,
+    maxMembers: 1000,
+    systemRooms: 4,
+    maxPrivateChannels: 16,
+    systemRoomCapacity: 35,
+    privateRoomCapacity: 50,
+    maxChannels: 4 + 16,
+    maxInviteLinksPerDay: 500,
   },
 };
 
@@ -117,9 +132,11 @@ export async function checkLimit(serverId: string, type: LimitType): Promise<Lim
       break;
     }
     case 'privateChannel.create': {
+      // Ürün modeli: "özel oda" = kullanıcı oluşturulmuş custom oda (is_default=false).
+      // Erişim bayrağı (is_hidden/is_invite_only) ayrı konsept; kapasite ile karıştırma.
       const r = await queryOne<{ c: string }>(
         `SELECT COUNT(*)::text AS c FROM channels
-         WHERE server_id = $1 AND (is_hidden = true OR is_invite_only = true)`,
+         WHERE server_id = $1 AND COALESCE(is_default, false) = false`,
         [serverId],
       );
       current = parseInt(r?.c ?? '0', 10);

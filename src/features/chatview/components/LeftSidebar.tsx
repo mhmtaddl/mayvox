@@ -269,7 +269,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                       }
                     : undefined
                 }
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group disabled:cursor-not-allowed active:scale-[0.97] active:duration-75 ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${
                   isDragging ? 'opacity-40 ' : ''
                 }${
                   activeChannel === channel.id

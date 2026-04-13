@@ -23,6 +23,11 @@ export interface Server {
   motto?: string;
   plan?: string;
   role?: string;
+  /** Sistem yönetimi tarafından kısıtlanmış sunucu — görünüm açık, oda/sesli erişim kapalı. */
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  bannedReason?: string | null;
+  bannedBy?: string | null;
 }
 
 export interface DiscoverServer {
@@ -349,6 +354,7 @@ export interface ServerAccessContext {
     canKickMembers: boolean;
     canManageRoles: boolean;
   };
+  isBanned?: boolean;
 }
 
 export async function getServerAccessContext(serverId: string): Promise<ServerAccessContext> {

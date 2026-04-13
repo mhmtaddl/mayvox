@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, ShieldCheck } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 
 // ── Components ──
@@ -9,10 +9,19 @@ import { AppearanceSection, SoundsSection, AudioProfileSection, PerformanceSecti
 import AdminUserManagement from '../components/settings/sections/AdminUserManagement';
 import { InviteCodeSection, InviteRequestsSection } from '../components/settings/sections/AdminPanelSections';
 import PermissionSection from '../components/settings/sections/PermissionSection';
+import SystemServersPanel from '../components/settings/sections/SystemServersPanel';
+import ManagementUsersPanel from '../components/settings/sections/ManagementUsersPanel';
+
+type AdminSubTab = 'users' | 'servers';
 
 export default function SettingsView() {
   const { currentUser } = useUser();
   const [activeTab, setActiveTab] = useState<'settings' | 'admin'>('settings');
+  const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
+
+  const showServersSub = !!currentUser.isPrimaryAdmin;
+  // Primary admin yetkisi kaybolursa safe default'a dön
+  const effectiveSub: AdminSubTab = adminSub === 'servers' && !showServersSub ? 'users' : adminSub;
 
   return (
     <div className="w-full max-w-[1100px] mx-auto pb-28 px-2 md:px-4 xl:px-6">
@@ -89,12 +98,63 @@ export default function SettingsView() {
       {/* ── Yönetim Tab ── */}
       {currentUser.isAdmin && activeTab === 'admin' && (
         <div className="space-y-4 md:space-y-5 xl:space-y-6">
-          <AdminUserManagement />
-          {/* Davet bölümü — alt blok */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-4 pt-2 border-t border-[var(--theme-border)]/30">
-            <InviteCodeSection />
-            <InviteRequestsSection />
+          {/* Yönetim başlık — hiyerarşi: Ayarlar → Yönetim → [subsection] */}
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-[13px] md:text-[14px] font-bold text-[var(--theme-text)] tracking-tight">Yönetim</h3>
+            <span className="text-[10px] md:text-[11px] text-[var(--theme-secondary-text)]/60">
+              {effectiveSub === 'users' ? '/ Kullanıcılar' : '/ Sunucular'}
+            </span>
           </div>
+
+          {/* Alt-sekme seçici */}
+          {(() => {
+            const subTabs: { key: AdminSubTab; icon: React.ReactNode; label: string; visible: boolean }[] = [
+              { key: 'users', icon: <Users size={12} />, label: 'Kullanıcılar', visible: true },
+              { key: 'servers', icon: <Server size={12} />, label: 'Sunucular', visible: showServersSub },
+            ];
+            const visible = subTabs.filter(t => t.visible);
+            return (
+              <div className={`grid gap-1 p-1 bg-[var(--theme-surface-card)] rounded-xl ${visible.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {visible.map(tab => {
+                  const isActive = effectiveSub === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setAdminSub(tab.key)}
+                      className={`flex items-center gap-1.5 justify-center min-w-0 py-1.5 rounded-lg text-[11px] md:text-[12px] font-semibold transition-all duration-150 truncate ${
+                        isActive
+                          ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)] border border-[rgba(var(--theme-accent-rgb),0.25)]'
+                          : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(255,255,255,0.02)]'
+                      }`}
+                    >
+                      {tab.icon}
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Alt-sekme içeriği — tek seferde tek içerik render edilir */}
+          {effectiveSub === 'users' && (
+            <div className="space-y-4 md:space-y-5 xl:space-y-6">
+              {/* Yeni ölçeklenebilir panel — server-side pagination, filtreler, plan yönetimi */}
+              {currentUser.isPrimaryAdmin ? (
+                <ManagementUsersPanel />
+              ) : (
+                <AdminUserManagement />
+              )}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-4 pt-2 border-t border-[var(--theme-border)]/30">
+                <InviteCodeSection />
+                <InviteRequestsSection />
+              </div>
+            </div>
+          )}
+
+          {effectiveSub === 'servers' && showServersSub && (
+            <SystemServersPanel />
+          )}
         </div>
       )}
 

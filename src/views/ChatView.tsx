@@ -26,6 +26,8 @@ import SocialSearchHub from '../components/SocialSearchHub';
 import FriendsSidebarContent from '../components/FriendsSidebarContent';
 import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
 import { dismissInviteNotification } from '../lib/notifications';
+import { handleServerRestricted, handleServerUnrestricted } from '../features/notifications/notificationService';
+import { pushInformational } from '../features/notifications/informationalStore';
 import { type CardStyle, loadCardStyle, saveCardStyle } from '../components/chat/cardStyles';
 import DeviceBadge from '../components/chat/DeviceBadge';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -45,6 +47,7 @@ import { useJoinRequestNotifications } from '../hooks/useJoinRequestNotification
 import { useMyPendingJoinRequests } from '../hooks/useMyPendingJoinRequests';
 import IncomingInvitesModal from '../components/server/IncomingInvitesModal';
 import ChannelAccessModal from '../components/server/ChannelAccessModal';
+import RestrictedServerScreen from '../components/RestrictedServerScreen';
 
 // Feature imports
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
@@ -65,6 +68,7 @@ import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getS
 import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
 import { getPlanVisual } from '../lib/planStyles';
+import { PLAN_LIMITS, PLAN_TAGLINE, planFeatureList, type PlanKey } from '../lib/planLimits';
 import ServerSettings from '../components/server/ServerSettings';
 import JoinServerModal from '../components/server/JoinServerModal';
 import DiscoverPanel from '../components/server/DiscoverPanel';
@@ -93,14 +97,23 @@ export default function ChatView() {
 
   const [showDiscover, setShowDiscover] = useState(false);
 
-  // ── Task #4: kanal seçildiğinde merkez panel zorla chat view'e geçer ──
-  // Kullanıcı "Topluluklara Katıl"dayken (veya settings'teyken) herhangi bir
-  // oda/kanal'a tıklarsa merkez panel o odanın sayfasına geçmelidir.
+  // ── Kanal seçildiğinde merkez panel zorla chat view'e geçer ──
+  // Hem activeChannel değiştiğinde, hem de App.tsx'in 'mayvox:goto-chat' event'inde
+  // (aynı odaya tekrar tıklama dahil) discover/settings kapatılır.
   useEffect(() => {
     if (!activeChannel) return;
     if (showDiscover) setShowDiscover(false);
     if (view === 'settings') setView('chat');
   }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onGoto = () => {
+      setShowDiscover(false);
+      if (view === 'settings') setView('chat');
+    };
+    window.addEventListener('mayvox:goto-chat', onGoto);
+    return () => window.removeEventListener('mayvox:goto-chat', onGoto);
+  }, [view, setView]);
 
   // ── Mouse geri tuşu ile ayarlardan / discover'dan çık ──
   useEffect(() => {
@@ -229,7 +242,79 @@ export default function ChatView() {
     }
   }, [activeServerId]);
 
+  // ── Restriction state transition notifications ──
+  // İlk render = sadece baseline doldur, toast atma. Sonraki listler arasında
+  // gerçek transition (false→true / true→false) yakalanırsa premium bildirim ver.
+  const restrictionStateRef = useRef<Map<string, boolean> | null>(null);
+  useEffect(() => {
+    if (serverList.length === 0) return;
+    const prev = restrictionStateRef.current;
+    const next = new Map<string, boolean>();
+    for (const s of serverList) next.set(s.id, !!s.isBanned);
+
+    if (prev === null) {
+      // İlk sync — bildirim üretme.
+      restrictionStateRef.current = next;
+      return;
+    }
+
+    for (const s of serverList) {
+      const before = prev.get(s.id);
+      const now = !!s.isBanned;
+      if (before === undefined || before === now) continue;
+
+      if (now) {
+        // Aktif → kısıtlandı
+        const inAffectedRoom = activeServerId === s.id && !!activeChannel;
+        if (inAffectedRoom) {
+          // LiveKit'i temiz kapat ki UI tutarlı kalsın.
+          void disconnectFromLiveKit();
+          setActiveChannel(null);
+        }
+        // Top-right premium toast
+        handleServerRestricted({ serverId: s.id, serverName: s.name, serverAvatar: s.avatarUrl ?? null });
+        // Bell informational item
+        pushInformational({
+          key: `restricted:${s.id}`,
+          kind: 'serverRestricted',
+          label: s.name || 'Sunucu kısıtlandı',
+          detail: 'Odalara ve sesli kanallara erişim kapatıldı',
+          serverId: s.id,
+          serverAvatar: s.avatarUrl ?? null,
+          createdAt: Date.now(),
+        });
+      } else {
+        // Kısıtlama kaldırıldı
+        handleServerUnrestricted({ serverId: s.id, serverName: s.name, serverAvatar: s.avatarUrl ?? null });
+        pushInformational({
+          key: `unrestricted:${s.id}`,
+          kind: 'serverUnrestricted',
+          label: s.name || 'Sunucu tekrar aktif',
+          detail: 'Odalara ve sesli kanallara erişim açıldı',
+          serverId: s.id,
+          serverAvatar: s.avatarUrl ?? null,
+          createdAt: Date.now(),
+        });
+      }
+    }
+
+    restrictionStateRef.current = next;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverList]);
+
   useEffect(() => { refreshServers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Periyodik sunucu listesi yenileme — restriction state transition tespiti için.
+  // 45 sn aralık: idle pencerede çok pahalı değil, kısıtlama olunca <1 dk içinde toast.
+  useEffect(() => {
+    const onFocus = () => { void refreshServers(); };
+    window.addEventListener('focus', onFocus);
+    const id = window.setInterval(() => { void refreshServers(); }, 45_000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(id);
+    };
+  }, [refreshServers]);
 
   const handleCreateServer = useCallback(async () => {
     const name = createName.trim();
@@ -512,7 +597,7 @@ export default function ChatView() {
 
   return (
     <div
-      className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden"
+      className="flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden"
       onDragOver={currentUser.isAdmin ? handleDragOver : undefined}
       onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
     >
@@ -566,15 +651,18 @@ export default function ChatView() {
                   </div>
                   <button onClick={() => setMobileLeftOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors"><X size={18} /></button>
                 </div>
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
-                  {visibleChannels.map(channel => (
+                <nav className={`flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar ${serverList.find(s => s.id === activeServerId)?.isBanned ? 'opacity-75' : ''}`} onClick={() => setContextMenu(null)}>
+                  {visibleChannels.map(channel => {
+                    const serverBanned = !!serverList.find(s => s.id === activeServerId)?.isBanned;
+                    return (
                     <div key={channel.id} className="space-y-1">
                       <button onClick={() => { handleJoinChannel(channel.id); setMobileLeftOpen(false); }} disabled={isConnecting}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group disabled:cursor-not-allowed ${activeChannel === channel.id ? `bg-[var(--theme-accent)] text-[var(--theme-badge-text)] shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}` : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'}`}>
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${activeChannel === channel.id ? `bg-[var(--theme-accent)] text-[var(--theme-badge-text)] shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}` : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'} ${serverBanned ? 'opacity-60' : ''}`}>
                         {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={15} className="shrink-0 opacity-70" />; })()}
                         <span className="font-semibold truncate min-w-0" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
-                        {channel.password && <Lock size={12} className="shrink-0 ml-auto opacity-50" />}
-                        {(channel.userCount ?? 0) > 0 && <span className={`text-[10px] font-bold ml-auto shrink-0 ${activeChannel === channel.id ? 'text-white/60' : 'text-[var(--theme-secondary-text)]/50'}`}>{channel.userCount}</span>}
+                        {serverBanned && <Lock size={12} className="shrink-0 ml-auto opacity-70 text-orange-400" />}
+                        {!serverBanned && channel.password && <Lock size={12} className="shrink-0 ml-auto opacity-50" />}
+                        {!serverBanned && (channel.userCount ?? 0) > 0 && <span className={`text-[10px] font-bold ml-auto shrink-0 ${activeChannel === channel.id ? 'text-white/60' : 'text-[var(--theme-secondary-text)]/50'}`}>{channel.userCount}</span>}
                       </button>
                       {(() => {
                         const isBc = channel.mode === 'broadcast'; const speakers = channel.speakerIds || [];
@@ -605,7 +693,8 @@ export default function ChatView() {
                         );
                       })()}
                     </div>
-                  ))}
+                    );
+                  })}
                 </nav>
                 <div className="p-4 border-t border-[var(--theme-border)]">
                   {(() => {
@@ -647,7 +736,7 @@ export default function ChatView() {
                   </div>
                   <button onClick={() => setMobileRightOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors"><X size={18} /></button>
                 </div>
-                <FriendsSidebarContent variant="mobile" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })} onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }} isMuted={isMuted} isDeafened={isDeafened} />
+                <FriendsSidebarContent variant="mobile" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })} onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }} isMuted={isMuted} isDeafened={isDeafened} servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
               </motion.aside>
             </>
           )}
@@ -657,7 +746,7 @@ export default function ChatView() {
         <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
           activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
-          onShowDiscover={() => setShowDiscover(true)} onLeaveServer={handleLeaveServer} />
+          onShowDiscover={() => { setView('chat'); setShowDiscover(true); }} onLeaveServer={handleLeaveServer} />
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
@@ -697,8 +786,24 @@ export default function ChatView() {
 
         {/* ── Main Content ── */}
         <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02)', border: FORCE_MOBILE ? undefined : '1px solid rgba(var(--glass-tint), 0.03)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%)' }}>
+          {(() => {
+            const activeSrv = serverList.find(s => s.id === activeServerId);
+            // Restricted mode: settings/discover dışındaki tüm akışlarda merkezi panel
+            // restriction ekranıyla DEĞİŞTİRİLİR (boş-state UI'sı görünmez).
+            if (activeSrv?.isBanned && view !== 'settings' && !showDiscover) {
+              return (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <RestrictedServerScreen
+                    serverName={activeSrv.name}
+                    isOwner={activeSrv.role === 'owner'}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div
-            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`}`}>
+            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover) ? 'hidden' : ''}`}>
           {view === 'settings' ? <SettingsView /> : showDiscover ? (
             <DiscoverPanel activeServerId={activeServerId}
               canCreate={canCreateServer}
@@ -784,7 +889,8 @@ export default function ChatView() {
           </div>
           <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
             onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }} channels={channels} activeChannel={activeChannel}
-            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} isMuted={isMuted} isDeafened={isDeafened} />
+            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} isMuted={isMuted} isDeafened={isDeafened}
+            servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
           <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
               className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
@@ -871,7 +977,7 @@ export default function ChatView() {
             {/* ── Live server preview ── */}
             {(createName.trim() || createMotto.trim()) && (() => {
               const pv = getPlanVisual(createPlan);
-              const planLimit = createPlan === 'free' ? 100 : createPlan === 'pro' ? 240 : 480;
+              const planLimit = PLAN_LIMITS[createPlan as PlanKey].maxMembers;
               const displayName = createName.trim() || 'Sunucum';
               const displayInitial = (displayName[0] || '?').toUpperCase();
               return (
@@ -898,7 +1004,7 @@ export default function ChatView() {
                   {/* Kapasite hissi — mini bar */}
                   <div className="mt-2.5 flex items-center gap-2">
                     <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.08)' }}>
-                      <div className="h-full" style={{ width: `${createPlan === 'free' ? 20 : createPlan === 'pro' ? 48 : 96}%`, background: pv.accent, opacity: 0.6 }} />
+                      <div className="h-full" style={{ width: `${createPlan === 'free' ? 20 : createPlan === 'pro' ? 50 : 100}%`, background: pv.accent, opacity: 0.6 }} />
                     </div>
                     <span className="text-[9px] tabular-nums text-[var(--theme-secondary-text)] opacity-55 shrink-0">{planLimit} kullanıcı</span>
                   </div>
@@ -914,9 +1020,9 @@ export default function ChatView() {
               const TIER_RANK: Record<string, number> = { none: 0, free: 1, pro: 2, ultra: 3 };
               const allow = (p: 'free' | 'pro' | 'ultra') => TIER_RANK[p] <= TIER_RANK[tier];
               const planOptions = [
-                { id: 'free' as const,  name: 'Free',  sub: '100 kullanıcı • 6 oda',     disabled: !allow('free') },
-                { id: 'pro' as const,   name: 'Pro',   sub: '240 kullanıcı • 8 oda',     disabled: !allow('pro') },
-                { id: 'ultra' as const, name: 'Ultra', sub: 'Premium, limitler ×2',      disabled: !allow('ultra') },
+                { id: 'free' as const,  name: 'Free',  sub: '100 üye · 6 oda',         disabled: !allow('free') },
+                { id: 'pro' as const,   name: 'Pro',   sub: '250 üye · 9 oda',         disabled: !allow('pro') },
+                { id: 'ultra' as const, name: 'Ultra', sub: '1000 üye · 20 oda',       disabled: !allow('ultra') },
               ];
               // Seçili plan kullanıcıya kapalı hale geldiyse ilk izinliye düşür.
               if (planOptions.find(p => p.id === createPlan)?.disabled) {
@@ -952,15 +1058,9 @@ export default function ChatView() {
               border: `1px solid ${getPlanVisual(createPlan).border}`,
             }}>
               <div className="p-3">
-                {createPlan === 'pro' && <div className="text-[9px] font-bold mb-2" style={{ color: getPlanVisual('pro').accent }}>+140 kullanıcı kapasitesi</div>}
+                <div className="text-[9px] font-bold mb-2" style={{ color: getPlanVisual(createPlan).accent }}>{PLAN_TAGLINE[createPlan as PlanKey]}</div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  {(createPlan === 'free' ? [
-                    '4 sistem odası (20 kişi)', '2 özel oda (10 kişi)', 'Toplam 100 kullanıcı', 'Standart ses kalitesi',
-                  ] : createPlan === 'pro' ? [
-                    '4 sistem odası (40 kişi)', '4 özel oda (20 kişi)', 'Toplam 240 kullanıcı', 'Yüksek ses kalitesi', 'Daha düşük gecikme', 'Pro rozeti',
-                  ] : [
-                    'Pro özellikleri ×2', 'En düşük gecikme', 'Öncelikli performans', 'Premium görünüm',
-                  ]).map(f => (
+                  {planFeatureList(createPlan as PlanKey).map(f => (
                     <div key={f} className="flex items-center gap-1.5">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                         style={{ color: createPlan !== 'free' ? getPlanVisual(createPlan).accent : undefined }}

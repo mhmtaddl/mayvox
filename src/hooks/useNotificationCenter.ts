@@ -9,7 +9,7 @@ import {
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
-export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite' | 'joinRequest';
+export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite' | 'joinRequest' | 'restriction';
 export type NotifPriority = 'high' | 'medium' | 'low';
 
 export interface NotifItem {
@@ -141,7 +141,10 @@ export function useNotificationCenter(
 
     // Informational (aksiyon gerektirmeyen) item'lar — çan açılınca temizlenecek.
     for (const info of informational) {
-      const kind: NotifKind = 'invite'; // görsel: mevcut 'invite' tonunda render et
+      const kind: NotifKind =
+        info.kind === 'serverRestricted' || info.kind === 'serverUnrestricted'
+          ? 'restriction'
+          : 'invite'; // görsel: mevcut 'invite' tonunda render et
       items.push({
         key: `info:${info.key}`,
         kind,

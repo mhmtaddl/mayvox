@@ -25,6 +25,11 @@ export interface ServerOverview {
 const OVERVIEW_TTL_MS = 10_000;
 const overviewCache = new Map<string, { data: ServerOverview; expiresAt: number }>();
 
+/** Mutation sonrası çağrılır — channel/invite/member değişikliklerinde stale veri kalmasın. */
+export function invalidateServerOverview(serverId: string): void {
+  overviewCache.delete(serverId);
+}
+
 /**
  * Admin overview — plan + counts vs limits. Tek query batch'de 4 COUNT birleştirilir.
  * Capability: SERVER_MANAGE (admin+).
@@ -50,7 +55,7 @@ export async function getServerOverview(serverId: string, callerId: string): Pro
     `SELECT
        (SELECT COUNT(*)::text FROM server_members WHERE server_id = $1) AS members,
        (SELECT COUNT(*)::text FROM channels WHERE server_id = $1) AS channels,
-       (SELECT COUNT(*)::text FROM channels WHERE server_id = $1 AND (is_hidden = true OR is_invite_only = true)) AS private_channels,
+       (SELECT COUNT(*)::text FROM channels WHERE server_id = $1 AND COALESCE(is_default, false) = false) AS private_channels,
        (SELECT COUNT(*)::text FROM server_invite_links
           WHERE server_id = $1
             AND revoked_at IS NULL
