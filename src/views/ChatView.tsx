@@ -907,6 +907,7 @@ export default function ChatView() {
               onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
               onOpenDM={() => setDmPanelOpen(true)}
               onOpenInvites={() => setInvitesModalOpen(true)}
+              onOpenAdminInviteRequests={() => setView('settings')}
               onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
               onOpenServer={(sid) => setActiveServerId(sid)}
             />

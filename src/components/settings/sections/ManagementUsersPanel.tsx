@@ -180,7 +180,7 @@ export default function ManagementUsersPanel() {
       case 'unban':
         return { title: 'Yasağı Kaldır', description: `${n} sesli yasağı kaldırılacak.`, confirmText: 'Kaldır', danger: false };
       case 'resetPassword':
-        return { title: 'Şifre Sıfırla', description: `${rowConfirm.user.email || 'Email yok'} e-posta adresine şifre sıfırlama maili gönderilecek.`, confirmText: 'Sıfırla', danger: false };
+        return { title: 'Şifre Sıfırla', description: `${rowConfirm.user.email || 'Email yok'} adresine geçici parola gönderilecek. Kullanıcı bu parolayla giriş yapınca yeni parola belirlemesi istenecek.`, confirmText: 'Sıfırla', danger: false };
     }
   }, [rowConfirm]);
 
@@ -233,11 +233,22 @@ export default function ManagementUsersPanel() {
             setToastMsg('Email yok, şifre sıfırlama maili gönderilemedi');
             break;
           }
-          const { error } = await supabase.auth.resetPasswordForEmail(u.email);
-          if (error) {
-            setToastMsg(`Şifre sıfırlama maili gönderilemedi: ${error.message}`);
+          const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            setToastMsg('Oturum bulunamadı');
+            break;
+          }
+          const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ targetUserId: u.id }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            setToastMsg(data.error ?? 'Şifre sıfırlama maili gönderilemedi');
           } else {
-            setToastMsg(`${u.email} adresine şifre sıfırlama maili gönderildi`);
+            setToastMsg(`${u.email} adresine geçici parola gönderildi`);
           }
           break;
         }
@@ -1064,7 +1075,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
               <DetailButton
                 icon={<KeyRound size={13} />}
                 label="Şifre Sıfırla"
-                description={`${user.email} adresine sıfırlama maili otomatik gönderilir`}
+                description={`${user.email} adresine geçici parola gönderilir`}
                 tone="warning"
                 onClick={() => onAction({ type: 'resetPassword', user })}
               />

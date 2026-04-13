@@ -56,8 +56,8 @@ export interface JoinRequestSource {
  * useNotificationCenter — bildirim sayılarını ve item listesini merkezden hesaplar.
  *
  * Kurallar:
- * - Ayarlar badge = sadece admin bildirimler (inviteRequests + passwordResetRequests)
- * - Çan badge = kullanıcıya gelen kişisel bildirimler (friend + DM + update)
+ * - Ayarlar badge = yok (tüm bildirimler çanda)
+ * - Çan badge = kişisel + admin bildirimler (friend + DM + update + admin invite talepleri)
  * - Item listesi priority'ye göre sıralı döner
  */
 export function useNotificationCenter(
@@ -80,11 +80,10 @@ export function useNotificationCenter(
     const friendRequestCount = incomingRequests.length;
     const joinRequestCount = joinRequestSources.reduce((s, it) => s + it.pendingCount, 0);
     const informationalCount = informational.length;
-    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + joinRequestCount + informationalCount + (updateActionable ? 1 : 0);
-
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
-    const settingsCount = inviteRequestCount + passwordResetCount;
+    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + joinRequestCount + informationalCount + inviteRequestCount + (updateActionable ? 1 : 0);
+    const settingsCount = 0;
 
     // ── Item listesi oluştur ──
     const items: NotifItem[] = [];
@@ -154,6 +153,18 @@ export function useNotificationCenter(
         count: 1,
         isActionable: !!info.serverId,
         serverId: info.serverId,
+      });
+    }
+
+    if (inviteRequestCount > 0) {
+      items.push({
+        key: 'admin-invite-requests',
+        kind: 'invite',
+        priority: 'medium',
+        label: inviteRequestCount === 1 ? 'Üyelik talebi' : 'Üyelik talepleri',
+        detail: inviteRequestCount === 1 ? '1 yeni üyelik talebi' : `${inviteRequestCount} yeni üyelik talebi`,
+        count: inviteRequestCount,
+        isActionable: true,
       });
     }
 

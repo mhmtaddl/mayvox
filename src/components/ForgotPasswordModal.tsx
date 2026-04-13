@@ -104,9 +104,9 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 className="flex flex-col items-center gap-3 py-4 text-center"
               >
                 <CheckCircle2 size={40} className="text-emerald-500" />
-                <p className="text-sm font-bold text-[var(--theme-text)]">İstek Gönderildi!</p>
+                <p className="text-sm font-bold text-[var(--theme-text)]">E-posta Gönderildi!</p>
                 <p className="text-xs text-[var(--theme-secondary-text)]">
-                  Yöneticiler bilgilendirildi. Onay verildikten sonra e-posta adresinize yeni parola gönderilecek.
+                  E-posta adresinize yeni parola gönderildi. Spam klasörünü de kontrol etmeyi unutmayınız.
                 </p>
                 <button
                   onClick={onClose}
@@ -118,7 +118,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
             ) : (
               <motion.div key="form" className="space-y-4">
                 <p className="text-xs text-[var(--theme-secondary-text)]">
-                  Kayıtlı kullanıcı adınızı veya e-posta adresinizi girin. Yönetici onayladığında yeni parolanız e-posta ile gönderilecektir.
+                  Kayıtlı kullanıcı adınızı veya e-posta adresinizi girin. Geçici parolanız hemen e-posta ile gönderilecektir.
                 </p>
 
                 <div className="space-y-1.5">

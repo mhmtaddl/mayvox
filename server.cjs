@@ -242,13 +242,41 @@ app.post('/api/check-user', checkUserLimiter, async (req, res) => {
   res.json({ exists: true, userId: data.id, name: data.name });
 });
 
-// ── Şifre sıfırlama isteği ────────────────────────────────────────────────
+// ── Şifre sıfırlama isteği (self-service, direkt mail) ───────────────────
 app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId gerekli' });
-  const { error } = await createAdminClient()
-    .from('profiles').update({ password_reset_requested: true }).eq('id', userId);
-  if (error) return res.status(500).json({ error: 'İstek kaydedilemedi' });
+  if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış' });
+
+  const admin = createAdminClient();
+  const { data: target } = await admin
+    .from('profiles').select('name, email').eq('id', userId).single();
+  if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+  const tempPassword = generateTempPassword();
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
+  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: fromEmail, reply_to: replyToEmail, to: [target.email], subject: 'MayVox — Geçici Parolanız',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Şifre sıfırlama talebiniz alındı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Bu parola ile giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen bizimle iletişime geçin.</p></div>`,
+    }),
+  });
+  if (!emailRes.ok) {
+    console.error('[self-reset] E-posta gönderilemedi:', await emailRes.text().catch(() => ''));
+    return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
+  }
+
+  const { error: updateError } = await admin.auth.admin.updateUserById(userId, { password: tempPassword });
+  if (updateError) {
+    console.error('[self-reset] Auth güncelleme hatası:', updateError.message);
+    return res.status(500).json({ error: 'Şifre güncellenemedi, lütfen tekrar deneyin.' });
+  }
+
+  await admin.from('profiles').update({ must_change_password: true, password_reset_requested: false }).eq('id', userId);
   res.json({ success: true });
 });
 
@@ -273,14 +301,15 @@ app.post('/api/admin-reset-password', async (req, res) => {
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MAYVOX <onboarding@resend.dev>';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
+  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
 
   const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: fromEmail, to: [target.email], subject: 'Caylaklar — Geçici Parolanız',
-      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">Caylaklar</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">cylksohbet.org</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Parolanız bir yönetici tarafından sıfırlandı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen yöneticinizle iletişime geçin.</p></div>`,
+      from: fromEmail, reply_to: replyToEmail, to: [target.email], subject: 'MayVox — Geçici Parolanız',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Parolanız bir yönetici tarafından sıfırlandı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen yöneticinizle iletişime geçin.</p></div>`,
     }),
   });
   if (!emailRes.ok) {
@@ -318,14 +347,15 @@ app.post('/api/send-invite-email', async (req, res) => {
   if (!email || !code) return res.status(400).json({ error: 'email ve code gerekli' });
 
   const expDate = expiresAt ? new Date(expiresAt).toLocaleString('tr-TR') : '';
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MAYVOX <onboarding@resend.dev>';
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
+  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
 
   const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: fromEmail, to: [email], subject: 'Caylaklar — Davet Kodunuz',
-      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">Caylaklar</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">cylksohbet.org</p><p>Merhaba,</p><p>Davet kodunuz hazır!</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Davet Kodu</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${code}</span>${expDate ? `<p style="margin:12px 0 0;font-size:12px;color:#64748b;">Son geçerlilik: ${expDate}</p>` : ''}</div><p style="color:#94a3b8;font-size:13px;">Bu kodu yalnızca siz kullanabilirsiniz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
+      from: fromEmail, reply_to: replyToEmail, to: [email], subject: 'MayVox — Davet Kodunuz',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>Davet kodunuz hazır!</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Davet Kodu</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${code}</span>${expDate ? `<p style="margin:12px 0 0;font-size:12px;color:#64748b;">Son geçerlilik: ${expDate}</p>` : ''}</div><p style="color:#94a3b8;font-size:13px;">Bu kodu yalnızca siz kullanabilirsiniz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
     }),
   });
   if (!emailRes.ok) {

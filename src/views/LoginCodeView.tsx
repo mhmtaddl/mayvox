@@ -106,9 +106,9 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
     return () => clearInterval(id);
   }, [requestId, requestState]);
 
-  // expires_at sayacı (pending/approved)
+  // expires_at sayacı (sadece approved — pending'de süre yok)
   useEffect(() => {
-    if (!expiresAt || !['pending', 'approved'].includes(requestState)) {
+    if (!expiresAt || requestState !== 'approved') {
       setSecondsLeft(0);
       return;
     }
@@ -116,7 +116,6 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
       const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
       const s = Math.floor(remaining / 1000);
       setSecondsLeft(s);
-      if (s <= 0 && requestState === 'pending') setRequestState('expired');
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -302,7 +301,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">DAVET KODU</label>
-              {['pending', 'approved'].includes(requestState) && expiresAt && secondsLeft > 0 && (
+              {requestState === 'approved' && expiresAt && secondsLeft > 0 && (
                 <motion.span
                   key={secondsLeft}
                   className={`text-xs font-black tabular-nums flex items-center gap-1 ${
@@ -374,8 +373,8 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                       transition={{ repeat: Infinity, duration: 14, ease: 'linear' }}
                       className="flex whitespace-nowrap text-[11px] text-[var(--theme-accent)] font-medium px-3"
                     >
-                      <span className="mr-10">⏳&nbsp;&nbsp;Admin tarafından e-postanıza kod gönderilmesi bekleniyor...</span>
-                      <span className="mr-10">⏳&nbsp;&nbsp;Admin tarafından e-postanıza kod gönderilmesi bekleniyor...</span>
+                      <span className="mr-10">⏳&nbsp;&nbsp;Üyeliğiniz onay aşamasındadır. Admin onay verince kodunuz e-postanıza gönderilecek...</span>
+                      <span className="mr-10">⏳&nbsp;&nbsp;Üyeliğiniz onay aşamasındadır. Admin onay verince kodunuz e-postanıza gönderilecek...</span>
                     </motion.div>
                   </div>
                   <button

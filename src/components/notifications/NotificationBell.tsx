@@ -11,6 +11,7 @@ interface Props {
   onOpenDM?: () => void;
   onOpenUpdate?: () => void;
   onOpenInvites?: () => void;
+  onOpenAdminInviteRequests?: () => void;
   onOpenJoinRequest?: (serverId: string) => void;
   /** Informational "kabul edildin" bildirimi tıklanınca sunucuya geç. */
   onOpenServer?: (serverId: string) => void;
@@ -34,7 +35,7 @@ const PRIORITY_ACCENT = {
   low: 'bg-transparent',
 } as const;
 
-export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenJoinRequest, onOpenServer }: Props) {
+export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer }: Props) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -106,11 +107,12 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
       dm: onOpenDM,
       update: onOpenUpdate,
       invites: onOpenInvites,
+      'admin-invite-requests': onOpenAdminInviteRequests,
     };
     const handler = map[item.key];
     if (!handler) return undefined;
     return () => { handler(); setOpen(false); };
-  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenJoinRequest, onOpenServer]);
+  }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer]);
 
   return (
     <div className="relative">

@@ -1,12 +1,13 @@
 // Supabase Edge Function: send-invite-email
 // Deploy: supabase functions deploy send-invite-email
-// Secrets: supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL=noreply@yourdomain.com
+// Secrets: supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL=no-reply@mayvox.com
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'noreply@caylaklar.com';
-const APP_NAME = 'Caylaklar Sesli Sohbet';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'MayVox <no-reply@mayvox.com>';
+const REPLY_TO = Deno.env.get('REPLY_TO') ?? 'support@mayvox.com';
+const APP_NAME = 'MayVox';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,6 +69,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
+        reply_to: REPLY_TO,
         to: email,
         subject: `${APP_NAME} — Davet Kodunuz`,
         html: htmlBody,
