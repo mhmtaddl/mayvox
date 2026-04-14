@@ -360,6 +360,31 @@ export const sendInviteEmail = async (
   }
 };
 
+// SEND REJECTION EMAIL via token server
+export const sendRejectionEmail = async (
+  email: string,
+  reason?: string,
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { success: false, error: 'Oturum bulunamadı' };
+    const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL as string;
+    const res = await fetch(`${tokenServerUrl}/api/send-rejection-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ email, reason }),
+    });
+    if (res.ok) return { success: true };
+    const body = await res.json().catch(() => ({}));
+    return { success: false, error: body?.error ?? `HTTP ${res.status}` };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Ağ hatası' };
+  }
+};
+
 // ADMIN: KODU GÖNDERILDI OLARAK İŞARETLE
 export const adminMarkInviteSent = async (requestId: string): Promise<{ ok?: boolean; error?: string }> => {
   const { data, error } = await supabase.rpc('admin_mark_invite_sent', { p_request_id: requestId });

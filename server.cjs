@@ -365,6 +365,37 @@ app.post('/api/send-invite-email', async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Admin: red e-postası (başvuru reddedildiğinde) ────────────────────────
+app.post('/api/send-rejection-email', async (req, res) => {
+  const user = await verifyAdmin(req, res);
+  if (!user) return;
+  if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış' });
+
+  const { email, reason } = req.body;
+  if (!email) return res.status(400).json({ error: 'email gerekli' });
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
+  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
+
+  const reasonBlock = reason
+    ? `<div style="background:#22223a;border-left:3px solid #7c3aed;border-radius:6px;padding:14px 16px;margin:20px 0;"><p style="margin:0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1.5px;">Not</p><p style="margin:6px 0 0;color:#cbd5e1;font-size:14px;line-height:1.6;">${String(reason).replace(/[<>]/g, '')}</p></div>`
+    : '';
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: fromEmail, reply_to: replyToEmail, to: [email], subject: 'MayVox — Başvurunuz Hakkında',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>MayVox erken erişim başvurunuz için teşekkür ederiz.</p><p style="color:#cbd5e1;">Şu an için başvurunuzu kabul edemiyoruz. Erken erişim sınırlı sayıda kullanıcıya açıldığı için tüm başvuruları karşılayamıyoruz.</p>${reasonBlock}<p style="color:#cbd5e1;">İleride yeniden başvuruda bulunabilirsiniz; kontenjan açıldığında tekrar değerlendirilir.</p><p style="color:#94a3b8;font-size:13px;margin-top:24px;">Sizi MayVox'ta ağırlamayı umuyoruz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
+    }),
+  });
+  if (!emailRes.ok) {
+    console.error('[reject] E-posta hatası:', await emailRes.text().catch(() => ''));
+    return res.status(500).json({ error: 'E-posta gönderilemedi' });
+  }
+  res.json({ success: true });
+});
+
 // ── must_change_password temizle ──────────────────────────────────────────
 app.post('/api/clear-must-change-password', async (req, res) => {
   const user = await verifyAuth(req, res);

@@ -11,6 +11,7 @@ import {
   adminMarkInviteFailed,
   adminRejectInvite,
   sendInviteEmail,
+  sendRejectionEmail,
   supabase as supabaseClient,
 } from '../../../lib/supabase';
 import type { ResetRequest } from '../../../components/PasswordResetPanel';
@@ -226,7 +227,14 @@ export function useAdminPanel({
   };
 
   const handleRejectInvite = async (req: InviteRequest): Promise<void> => {
-    try { await adminRejectInvite(req.id); } finally { setInviteRequests(prev => prev.filter(r => r.id !== req.id)); }
+    try {
+      await adminRejectInvite(req.id);
+      // Red e-postası — başarısız olursa sessizce devam (DB'de zaten rejected)
+      const mail = await sendRejectionEmail(req.email);
+      if (!mail.success) console.warn('[reject] Red e-postası gönderilemedi:', mail.error);
+    } finally {
+      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+    }
   };
 
   // Login sonrası initial load için
