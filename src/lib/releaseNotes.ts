@@ -13,6 +13,13 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.2': {
+    title: 'v2.0.2',
+    items: [],
+    desktop: [
+      'Güncelleme bildirimi artık sol altta versiyon alanının yerinde inline olarak çıkıyor — "İndir / Kur / Yeniden Dene" butonu aynı kutucuğun içinde görünüyor, ayrı açılır pencere gelmiyor.',
+    ],
+  },
   '2.0.1': {
     title: 'v2.0.1',
     items: [],

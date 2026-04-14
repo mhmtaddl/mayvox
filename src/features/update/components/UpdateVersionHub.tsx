@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AnimatePresence } from 'motion/react';
 import { Download } from 'lucide-react';
 import { useUpdateController } from '../hooks/useUpdateController';
 import { useUpdateVisibility } from '../hooks/useUpdateVisibility';
 import UpdateStatusIcon from './UpdateStatusIcon';
 import UpdateProgressRing from './UpdateProgressRing';
-import UpdatePopover from './UpdatePopover';
 import ForceUpdateOverlay from './ForceUpdateOverlay';
 import { getReleaseNotes } from '../../../lib/releaseNotes';
 import ReleaseNotesPopover from '../../../components/ReleaseNotesModal';
@@ -19,9 +17,8 @@ interface Props {
 }
 
 export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNotes, onNotesShown }: Props) {
-  const { state, urgency, check, download, install, dismiss } = useUpdateController(currentVersion);
+  const { state, urgency, check, download, install } = useUpdateController(currentVersion);
   const vis = useUpdateVisibility(state, urgency, currentVersion);
-  const [popoverOpen, setPopoverOpen] = useState(false);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const { setToastMsg } = useUI();
 
@@ -54,38 +51,34 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
     }
   }, [autoShowNotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Dışına tıklayınca popover kapat
-  useEffect(() => {
-    if (!popoverOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [popoverOpen]);
-
-  const handleClick = () => {
-    if (vis.canOpenDetails) {
-      setPopoverOpen(prev => !prev);
-      return;
-    }
-    if (getReleaseNotes(currentVersion)) {
-      setShowReleaseNotes(prev => !prev);
-    }
-  };
-
   const hasUpdate = vis.showUpdateHub;
 
   // Update aktif mi — download icon + shimmer gösterilecek mi
   const isUpdateActive = hasUpdate && (state.phase === 'available' || state.phase === 'downloading' || state.phase === 'downloaded');
 
+  // Faza göre buton aksiyonu — popover yerine doğrudan tetiklenir.
+  const handleClick = () => {
+    if (state.phase === 'available') { download(); return; }
+    if (state.phase === 'downloaded') { install(); return; }
+    if (state.phase === 'error') { check(); return; }
+    // İdle / up-to-date → release notes varsa göster
+    if (getReleaseNotes(currentVersion)) {
+      setShowReleaseNotes(prev => !prev);
+    }
+  };
+
+  // Faz etiketi — buton içinde gösterilen kısa metin
+  const phaseLabel = (() => {
+    if (state.phase === 'downloading') return `%${state.progress}`;
+    if (state.phase === 'available') return 'İndir';
+    if (state.phase === 'downloaded') return 'Kur';
+    if (state.phase === 'error') return 'Yeniden Dene';
+    return `v${currentVersion}`;
+  })();
+
   return (
     <>
-      <div ref={containerRef} className="relative">
+      <div className="relative">
         <button
           onClick={handleClick}
           className={`mv-sidebar-version flex items-center gap-1.5 text-[9px] font-medium transition-all duration-150 rounded px-1.5 py-0.5 -mx-1.5 ${
@@ -119,29 +112,13 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
             </span>
           )}
 
-          {/* Label — shimmer efekti update aktifken */}
-          {vis.showProgress ? (
-            <span>{`%${state.progress}`}</span>
-          ) : isUpdateActive ? (
-            <span className="update-shimmer">{vis.sublabel || `v${state.version}`}</span>
-          ) : !vis.showUpdateHub ? (
-            <span>{`v${currentVersion}`}</span>
-          ) : null}
-        </button>
-
-        {/* Popover */}
-        <AnimatePresence>
-          {popoverOpen && (
-            <UpdatePopover
-              state={state}
-              urgency={urgency}
-              onDownload={() => { download(); setPopoverOpen(false); }}
-              onInstall={install}
-              onRetry={() => { check(); setPopoverOpen(false); }}
-              onClose={() => setPopoverOpen(false)}
-            />
+          {/* Label — faz bazlı aksiyon etiketi (İndir/Kur/%N/Yeniden Dene) veya versiyon */}
+          {isUpdateActive || state.phase === 'error' ? (
+            <span className="update-shimmer">{phaseLabel}</span>
+          ) : (
+            <span>{phaseLabel}</span>
           )}
-        </AnimatePresence>
+        </button>
 
         {/* Release notes */}
         {showReleaseNotes && getReleaseNotes(currentVersion) && (
