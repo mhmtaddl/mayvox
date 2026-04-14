@@ -13,6 +13,13 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.1': {
+    title: 'v2.0.1',
+    items: [],
+    desktop: [
+      'Açılış animasyonu (splash) artık kısa sürede gözden kaçmıyor — logo animasyonu en az 1.2 saniye görünüyor, sonra ana pencereye yumuşak geçiş yapılıyor.',
+    ],
+  },
   '2.0.0': {
     title: 'v2.0.0 — MayVox Resmi Lansman',
     items: [

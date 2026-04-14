@@ -325,6 +325,9 @@ function createSplashWindow() {
   });
   splash.loadFile(path.join(__dirname, "splash.html"));
   splash.once("ready-to-show", () => splash.show());
+  // Fallback: ready-to-show gelmezse (örn. asset yükleme sorunu) 100ms içinde yine göster
+  // — aksi halde splash hiç görünmeyebilir ve kullanıcı "direkt büyük pencere" görür.
+  setTimeout(() => { try { if (!splash.isDestroyed() && !splash.isVisible()) splash.show(); } catch {} }, 100);
   return splash;
 }
 
@@ -603,6 +606,8 @@ app.whenReady().then(() => {
   // 3. Main ready-to-show → splash fade-out → main show
   const splash = createSplashWindow();
   const mainWin = createMainWindow();
+  const startTs = Date.now();
+  const MIN_SPLASH_MS = 1200;
 
   let transitioned = false;
   function doTransition() {
@@ -614,7 +619,13 @@ app.whenReady().then(() => {
     if (mainWin && !mainWin.isDestroyed()) fadeMainIn(mainWin);
   }
 
-  mainWin.once("ready-to-show", () => doTransition());
+  mainWin.once("ready-to-show", () => {
+    // Warm cache'de React çok hızlı yüklenebilir — splash göz kırpıp kaybolmasın diye
+    // minimum görünür süre garanti et.
+    const elapsed = Date.now() - startTs;
+    const wait = Math.max(0, MIN_SPLASH_MS - elapsed);
+    setTimeout(doTransition, wait);
+  });
 
   // Güvenlik: 12s içinde ready-to-show gelmezse yine de geçiş yap
   setTimeout(() => {
