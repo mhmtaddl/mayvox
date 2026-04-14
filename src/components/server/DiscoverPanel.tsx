@@ -29,6 +29,22 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
   const [toast, setToast] = useState('');
   const seqRef = useRef(0);
 
+  // Dar panel genişliğinde kart boyutunu korumak için 2 sütun + 4 kart üst sınırı.
+  // Geniş panelde 3 sütun + 9 kart. Grid div koşullu render edildiği için
+  // callback ref ile mount/unmount'ta ResizeObserver bağlanır/sökülür.
+  const [isNarrow, setIsNarrow] = useState(false);
+  const roRef = useRef<ResizeObserver | null>(null);
+  const gridRefCb = useCallback((node: HTMLDivElement | null) => {
+    if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setIsNarrow(w < 560);
+    });
+    ro.observe(node);
+    roRef.current = ro;
+  }, []);
+
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); }, []);
 
   useEffect(() => {
@@ -144,8 +160,8 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
             <div className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Eşleşen sunucu bulunamadı</div>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2.5">
-            {servers.map(s => {
+          <div ref={gridRefCb} className={`grid gap-2.5 ${isNarrow ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {(isNarrow ? servers.slice(0, 4) : servers).map(s => {
               const member = isMember(s);
               const active = isActive(s);
               const isJoining = joining === s.id;
