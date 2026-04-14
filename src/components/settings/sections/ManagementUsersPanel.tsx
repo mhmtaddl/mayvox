@@ -233,7 +233,7 @@ export default function ManagementUsersPanel() {
             setToastMsg('Email yok, şifre sıfırlama maili gönderilemedi');
             break;
           }
-          const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+          const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
           const { data: { session } } = await supabase.auth.getSession();
           if (!session?.access_token) {
             setToastMsg('Oturum bulunamadı');

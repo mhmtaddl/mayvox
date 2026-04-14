@@ -13,6 +13,39 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.0': {
+    title: 'v2.0.0 — MayVox Resmi Lansman',
+    items: [
+      '— Altyapı —',
+      'Uygulama artık tamamen mayvox.com altyapısı üzerinde çalışıyor.',
+      'Eski altyapı geçiş döneminde aktif — mevcut hesaplar kesintisiz çalışmaya devam ediyor.',
+      '',
+      '— Tamamen Yeni Arayüz —',
+      'Uygulama baştan sona yeniden tasarlandı — modern, sade ve daha hızlı bir deneyim.',
+      '',
+      '— Sunucu Sistemi —',
+      'Kendi sunucunu kurup topluluğunu yönetebilirsin.',
+      '',
+      '— Sohbet —',
+      'Metin tabanlı sohbet sistemi eklendi — sesli odaların yanında yazılı iletişim.',
+      'Özel mesaj (DM) sistemi — arkadaşlarınla birebir yazış.',
+      '',
+      '— Arkadaşlık —',
+      'Arkadaş ekleme sistemi eklendi — kullanıcı adıyla istek gönder, kabul edildiğinde listene eklensin.',
+      'Çevrimiçi arkadaşlarını ve durumlarını tek bakışta gör.',
+      'Arkadaş listesi üzerinden doğrudan DM aç veya sunucuya davet et.',
+      '',
+      '— Davet Sistemi v2 —',
+      'Davet linkleri eklendi — tek tıkla paylaşılabilir, süreli/tek kullanımlık seçenekleri.',
+      'Davet talep ve onay akışı baştan yazıldı — admin ve kullanıcı için daha net.',
+    ],
+    adminItems: [
+      'Sistem yönetim paneli eklendi — tüm sunucuları, kullanıcıları ve davet kayıtlarını tek ekrandan yönet.',
+      'Sunucu plan yönetimi — paketleri, limitleri ve yetkinlikleri admin tarafından kontrol edebilirsin.',
+      'Denetim (audit) logları — kim ne yaptı, tüm kritik aksiyonlar kayıt altında.',
+      'Kullanıcı yönetimi paneli genişletildi — arama, filtre, rol atama, şifre sıfırlama.',
+    ],
+  },
   '1.7.14': {
     title: 'v1.7.14',
     items: [],

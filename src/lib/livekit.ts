@@ -4,7 +4,7 @@ import { logger } from './logger';
 const TOKEN_TIMEOUT_MS = 10_000;
 const MAX_RETRIES = 3;
 
-const TOKEN_SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+const TOKEN_SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
 const isRetryable = (status: number) => status === 502 || status === 503 || status === 504;
 

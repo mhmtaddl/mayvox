@@ -190,9 +190,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                     <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-30">
                       {s.memberCount} üye · Katılım: {isFrictionless(s) ? 'Açık' : 'Davetli'}
                     </span>
-                    {active ? (
-                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', color: 'var(--theme-accent)' }}>Açık</span>
-                    ) : member ? (
+                    {member ? (
                       <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/35">Üyesiniz</span>
                     ) : s.myJoinRequestStatus === 'pending' ? (
                       <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full"

@@ -29,7 +29,7 @@ type ChatEventHandler = {
 };
 
 const CHAT_WS_URL =
-  import.meta.env.VITE_CHAT_WS_URL || 'wss://api.cylksohbet.org/ws/chat';
+  import.meta.env.VITE_CHAT_WS_URL || 'wss://api.mayvox.com/ws/chat';
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_RECONNECT_ATTEMPTS = 50;

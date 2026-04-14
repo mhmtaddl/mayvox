@@ -37,7 +37,7 @@ export function useAdminPanel({
   const [passwordResetRequests, setPasswordResetRequests] = useState<ResetRequest[]>([]);
   const [inviteRequests, setInviteRequests] = useState<InviteRequest[]>([]);
 
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
   // ── Password reset polling (15sn) ──
   useEffect(() => {

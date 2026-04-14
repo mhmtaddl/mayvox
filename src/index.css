@@ -413,3 +413,13 @@ button, a, input, [role="button"] {
   animation-play-state: paused !important;
   transition-duration: 0s !important;
 }
+
+/* Açık temada sol paneldeki motto ve versiyon — tam kontrast (pulse dot update sinyali
+   yine gösteriliyor; label rengi okunabilirlik için koyulaştırılıyor) */
+html[data-theme-light="true"] .mv-sidebar-motto {
+  color: rgba(15, 15, 15, 0.85) !important;
+}
+html[data-theme-light="true"] .mv-sidebar-version,
+html[data-theme-light="true"] .mv-sidebar-version span {
+  color: rgba(15, 15, 15, 0.9) !important;
+}

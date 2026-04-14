@@ -18,21 +18,27 @@ interface UseDuckingProps {
   speakingLevels: Record<string, number>;
   /** Kullanıcının manuel volume ayarları — { userId: 1-99 } */
   userVolumes: Record<string, number>;
+  /** userId ↔ identity (name) eşlemesi için kullanıcı listesi */
+  allUsers: { id: string; name: string }[];
   /** Ducking config (room mode'dan) */
   duckingConfig: DuckingConfig;
   /** Aktif kanaldaysa true */
   isConnected: boolean;
   /** Mevcut kullanıcının adı (kendi sesine ducking uygulanmaz) */
   localIdentity: string;
+  /** Hoparlör kapalı mı — deafen aktifse ducking volume'u ezmemeli, 0'a klempleme */
+  isDeafenedRef: React.MutableRefObject<boolean>;
 }
 
 export function useDucking({
   livekitRoomRef,
   speakingLevels,
   userVolumes,
+  allUsers,
   duckingConfig,
   isConnected,
   localIdentity,
+  isDeafenedRef,
 }: UseDuckingProps) {
   // Her remote participant için mevcut ducking çarpanı (0–1 arasında, 1 = tam ses)
   const currentGainsRef = useRef<Map<string, number>>(new Map());
@@ -43,6 +49,8 @@ export function useDucking({
   configRef.current = duckingConfig;
   const userVolumesRef = useRef(userVolumes);
   userVolumesRef.current = userVolumes;
+  const allUsersRef = useRef(allUsers);
+  allUsersRef.current = allUsers;
   const speakingRef = useRef(speakingLevels);
   speakingRef.current = speakingLevels;
 
@@ -144,9 +152,26 @@ export function useDucking({
     const room = livekitRoomRef.current;
     if (!room) return;
 
+    // Deafen aktifken ducking volume'u 0'a klemplenir — aksi halde ducking
+    // setVolume ile el.muted'ı by-pass edebilir.
+    if (isDeafenedRef.current) {
+      for (const [, p] of room.remoteParticipants) {
+        if (p.identity !== identity) continue;
+        for (const pub of p.audioTrackPublications.values()) {
+          const track = pub.track ?? (pub as any).audioTrack;
+          if (track && track instanceof RemoteAudioTrack) track.setVolume(0);
+        }
+        document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${identity}"]`).forEach(el => { el.volume = 0; el.muted = true; });
+        break;
+      }
+      return;
+    }
+
     // Kullanıcının manuel volume ayarı (1-99, default 50)
-    // Ducking gain bunu çarpan olarak uygular, override etmez
-    const userVol = (userVolumesRef.current[identity] ?? 50) / 100;
+    // Ducking gain bunu çarpan olarak uygular, override etmez.
+    // userVolumes userId ile key'lendiği için identity (user.name) → userId resolve edilir.
+    const userId = allUsersRef.current.find(u => u.name === identity)?.id;
+    const userVol = ((userId ? userVolumesRef.current[userId] : undefined) ?? 50) / 100;
     const finalVol = Math.max(0, Math.min(1, userVol * duckingGain));
 
     // LiveKit track API

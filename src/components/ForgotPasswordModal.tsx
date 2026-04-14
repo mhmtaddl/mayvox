@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
 export default function ForgotPasswordModal({ onClose }: Props) {
   const [identifier, setIdentifier] = useState('');

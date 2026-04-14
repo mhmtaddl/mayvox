@@ -151,7 +151,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
             </h1>
             {activeServerPublic === false && <Lock size={10} className="text-[var(--theme-secondary-text)]/35 shrink-0" />}
           </div>
-          <span className="text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerMotto || 'voice & chat'}</span>
+          <span className="mv-sidebar-motto text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerMotto || 'voice & chat'}</span>
         </div>
         {activeServerId && (() => {
           // SUNUCU ROLÜ tek belirleyici — app-level admin (canManageServer flag) kasten

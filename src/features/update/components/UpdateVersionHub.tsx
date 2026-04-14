@@ -88,7 +88,7 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
       <div ref={containerRef} className="relative">
         <button
           onClick={handleClick}
-          className={`flex items-center gap-1.5 text-[9px] font-medium transition-all duration-150 rounded px-1.5 py-0.5 -mx-1.5 ${
+          className={`mv-sidebar-version flex items-center gap-1.5 text-[9px] font-medium transition-all duration-150 rounded px-1.5 py-0.5 -mx-1.5 ${
             hasUpdate
               ? 'text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 cursor-pointer'
               : getReleaseNotes(currentVersion)

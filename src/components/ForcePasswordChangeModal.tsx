@@ -3,7 +3,7 @@ import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { updateUserPassword, supabase } from '../lib/supabase';
 
-const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.cylksohbet.org';
+const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
 interface Props {
   onDone: () => void;

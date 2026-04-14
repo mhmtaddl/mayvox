@@ -178,13 +178,13 @@ export function useAppSettings() {
     const saved = localStorage.getItem('noiseSuppressionStrength');
     if (saved !== null) {
       const n = parseInt(saved);
-      return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 75));
+      return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 50));
     }
     // Backward-compat: eski audioProfile preset'ine göre başlangıç strength
     const oldProfile = localStorage.getItem('audioProfile');
     if (oldProfile === 'natural') return 30;
     if (oldProfile === 'broadcast' || oldProfile === 'noisy') return 90;
-    return 75; // default (clean / custom / yok)
+    return 50; // ilk kurulum varsayılanı
   });
   const setNoiseSuppressionStrength = (v: number) => {
     const clamped = Math.max(0, Math.min(100, Math.round(v)));
@@ -199,7 +199,7 @@ export function useAppSettings() {
 
   const [pttReleaseDelay, setPttReleaseDelayState] = useState<number>(() => {
     const saved = localStorage.getItem('pttReleaseDelay');
-    return saved !== null ? parseInt(saved) : 250;
+    return saved !== null ? parseInt(saved) : 0;
   });
   const setPttReleaseDelay = (v: number) => { localStorage.setItem('pttReleaseDelay', String(v)); setPttReleaseDelayState(v); };
 

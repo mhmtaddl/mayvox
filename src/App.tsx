@@ -253,8 +253,19 @@ export default function App() {
   const setIsDeafened = (v: boolean) => {
     setIsDeafenedState(v);
     isDeafenedRef.current = v;
-    // Tüm LiveKit audio element'lerini mute/unmute et
+    // DOM seviyesinde mute (primary)
     document.querySelectorAll('audio[data-livekit-audio]').forEach(el => { (el as HTMLAudioElement).muted = v; });
+    // LiveKit track seviyesinde de volume'u 0/1'e zorla — ducking sporadik ezmelerine karşı belt-and-suspenders.
+    // Undeafen'da ducking bir sonraki tick'te doğru userVol * duckingGain değerini yazar.
+    const room = livekitRoomRef.current;
+    if (room) {
+      for (const [, p] of room.remoteParticipants) {
+        for (const pub of p.audioTrackPublications.values()) {
+          const t = pub.track ?? (pub as any).audioTrack;
+          if (t && typeof t.setVolume === 'function') t.setVolume(v ? 0 : 1);
+        }
+      }
+    }
   };
   const [connectionLevel, setConnectionLevel] = useState(4);
 
@@ -682,9 +693,11 @@ export default function App() {
     livekitRoomRef,
     speakingLevels,
     userVolumes,
+    allUsers,
     duckingConfig: getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).ducking,
     isConnected: !!activeChannel && !isConnecting,
     localIdentity: currentUser.name,
+    isDeafenedRef,
   });
 
   // ── Moderation hook ──────────────────────────────────────────────────────
