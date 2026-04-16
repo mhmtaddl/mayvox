@@ -40,11 +40,15 @@ function resolveAccent(kind: string): ToastAccent {
   }
 }
 
+const PULSE_DURATION_MS = 180;
+
 export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
   const [hovered, setHovered] = useState(false);
+  const [isPulsing, setIsPulsing] = useState(false);
   const remainingRef = useRef(ttlMs);
   const startRef = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevRevisionRef = useRef<number>(toast.revision ?? 1);
 
   useEffect(() => {
     recordDisplayed(toast.id, toast.kind, toast.priority);
@@ -64,33 +68,60 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
     };
   }, [hovered, toast.id]);
 
+  // Faz 3: grouping update (revision++) → 180ms subtle pulse. Toast yeniden
+  // mount olmaz (id stabil); scale + accent shadow geçici boost ile "yeni bilgi
+  // geldi" micro-feedback'i verir.
+  useEffect(() => {
+    const cur = toast.revision ?? 1;
+    if (cur > prevRevisionRef.current) {
+      prevRevisionRef.current = cur;
+      setIsPulsing(true);
+      const t = setTimeout(() => setIsPulsing(false), PULSE_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+    prevRevisionRef.current = cur;
+  }, [toast.revision]);
+
   const { color: accent, icon: Icon } = resolveAccent(toast.kind);
   const avatar = toast.avatar;
   const hasAvatar = typeof avatar === 'string' && avatar.startsWith('http');
   const isSubtle = toast.visualMode === 'toast-subtle';
+  const count = toast.groupCount ?? 1;
+  const showBadge = count > 1;
 
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: -12, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: hovered ? 1.012 : 1 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: hovered ? 1.012 : (isPulsing ? 1.02 : 1),
+      }}
       exit={{ opacity: 0, x: 36, scale: 0.98, transition: { duration: 0.20, ease: [0.32, 0, 0.67, 0] } }}
-      transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.6 }}
+      transition={{
+        // Pulse: kısa duration ease (snap-in hissi)
+        // Hover/idle: spring (mevcut Faz 2 davranışı)
+        scale: isPulsing
+          ? { duration: PULSE_DURATION_MS / 1000, ease: [0.16, 1, 0.3, 1] }
+          : { type: 'spring', stiffness: 380, damping: 30, mass: 0.6 },
+        default: { type: 'spring', stiffness: 380, damping: 30, mass: 0.6 },
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => handleClick(toast)}
       className="group relative flex items-stretch w-[320px] cursor-pointer rounded-2xl overflow-hidden"
       style={{
-        // Glassmorphism — yumuşak tül + dengeli blur (20/1.6 dark tema'da fazla
-        // doygunluk yaratıyordu; 14/1.35 daha sessiz ve okunur).
         background: 'rgba(255,255,255,0.035)',
         border: '1px solid rgba(255,255,255,0.07)',
         backdropFilter: 'blur(14px) saturate(1.35)',
         WebkitBackdropFilter: 'blur(14px) saturate(1.35)',
-        boxShadow: hovered
-          // Yumuşak halo: düşük alpha + geniş blur, accent border çok hafif.
-          ? `0 10px 26px -14px rgba(0,0,0,0.38), 0 0 0 1px ${accent}14, 0 0 28px -12px ${accent}26`
-          : '0 8px 22px -14px rgba(0,0,0,0.32), 0 1px 2px 0 rgba(0,0,0,0.12)',
+        boxShadow: isPulsing
+          // Pulse: accent glow biraz daha belirgin — kısa süre, neon değil.
+          ? `0 10px 26px -12px rgba(0,0,0,0.40), 0 0 0 1px ${accent}28, 0 0 32px -8px ${accent}44`
+          : hovered
+            ? `0 10px 26px -14px rgba(0,0,0,0.38), 0 0 0 1px ${accent}14, 0 0 28px -12px ${accent}26`
+            : '0 8px 22px -14px rgba(0,0,0,0.32), 0 1px 2px 0 rgba(0,0,0,0.12)',
         opacity: isSubtle ? 0.9 : 1,
         transition: 'box-shadow 220ms ease-out',
       }}
@@ -106,20 +137,38 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
 
       {/* İçerik */}
       <div className="flex-1 min-w-0 flex items-start gap-3 pl-3 pr-3 py-3 relative">
-        {/* Icon / avatar */}
-        <div
-          className="shrink-0 w-9 h-9 rounded-[10px] overflow-hidden flex items-center justify-center"
-          style={{
-            background: hasAvatar
-              ? 'transparent'
-              : `linear-gradient(135deg, ${accent}1a, ${accent}08)`,
-            border: hasAvatar ? '1px solid rgba(255,255,255,0.05)' : `1px solid ${accent}1f`,
-          }}
-        >
-          {hasAvatar
-            ? <img src={avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            : <Icon size={16} style={{ color: accent }} />
-          }
+        {/* Icon + badge wrapper — badge icon kutusunun sağ üstünden çıkıntı yapar */}
+        <div className="shrink-0 relative">
+          <div
+            className="w-9 h-9 rounded-[10px] overflow-hidden flex items-center justify-center"
+            style={{
+              background: hasAvatar
+                ? 'transparent'
+                : `linear-gradient(135deg, ${accent}1a, ${accent}08)`,
+              border: hasAvatar ? '1px solid rgba(255,255,255,0.05)' : `1px solid ${accent}1f`,
+            }}
+          >
+            {hasAvatar
+              ? <img src={avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              : <Icon size={16} style={{ color: accent }} />
+            }
+          </div>
+
+          {/* Faz 3: grouped count badge — groupCount > 1 ise görünür, 99+ cap */}
+          {showBadge && (
+            <div
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none tabular-nums pointer-events-none"
+              style={{
+                background: accent,
+                color: '#fff',
+                boxShadow: `0 1px 4px ${accent}55`,
+                border: '1.5px solid rgba(0,0,0,0.35)',
+              }}
+              aria-label={`${count} yeni`}
+            >
+              {count > 99 ? '99+' : count}
+            </div>
+          )}
         </div>
 
         {/* Metin */}

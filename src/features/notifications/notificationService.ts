@@ -54,6 +54,9 @@ export interface ToastItem {
   groupCount?: number;
   /** v3.1: grouping update'inde artan revizyon; UI subtle pulse için. */
   revision?: number;
+  /** Faz 3: ilk dispatch'teki base title (ör. sender adı). Grouping update'te
+   *  format helper'ı orijinal title'dan dinamik yeniden üretebilsin diye saklanır. */
+  originalTitle?: string;
 }
 
 export interface NotifContext {
@@ -550,27 +553,55 @@ export function handleInvite(inv: InviteNotif) {
 }
 
 /**
+ * Faz 3: Grouped toast title formatı — kind + data.intent bazlı tutarlı şablon.
+ *  - DM          → "Sender · N mesaj"
+ *  - joinRequest → "N katılma başvurusu"
+ *  - invite / diğer → "N yeni davet"
+ *
+ * `baseTitle` = ilk dispatch'teki orijinal title (sender adı vs). ToastItem.originalTitle
+ * alanı bu değeri kalıcı tutar; grouping update'inde "Ad · X mesaj" → "Ad · Y mesaj"
+ * şeklinde format yeniden üretilir, sender adı kaybolmaz.
+ */
+function groupedTitle(
+  kind: ToastKind,
+  data: Record<string, unknown>,
+  count: number,
+  baseTitle: string,
+): string {
+  if (kind === 'dm') return `${baseTitle} · ${count} mesaj`;
+  if (data.intent === 'joinRequest') return `${count} katılma başvurusu`;
+  return `${count} yeni davet`;
+}
+
+/**
  * Decision'ı uygular: groupKey ile bundle, insertToast, rate-limited sound, flash.
  */
 function dispatchDecision(base: Omit<ToastItem, 'attentionTier' | 'visualMode' | 'groupKey' | 'groupCount'>, d: NotificationDecision) {
   const kind = base.kind;
 
+  // Faz 3 defensive guard: critical priority ASLA grouping'e girmez.
+  // (emit.ts resolveChannels zaten critical → toast:false dönüyor, yani bu
+  // katmana critical ulaşmamalı. Yine de future-proof — service'e doğrudan
+  // critical event girerse grouping bypass edilmeli.)
+  const priorityStr = base.priority as string;
+  const isCriticalBypass = priorityStr === 'CRITICAL' || priorityStr === 'critical';
+
   // Grouping: aynı groupKey'li aktif toast varsa — yeni toast basma, mevcut toast'ı güncelle.
   // Toast id KORUNUR (React key stabil, entrance animasyonu yeniden tetiklenmez);
   // sadece değişen alanlar + revision++ — UI bunu subtle pulse ile gösterir.
-  if (d.groupKey) {
+  if (d.groupKey && !isCriticalBypass) {
     const existing = toasts.find(t => t.groupKey === d.groupKey);
     if (existing) {
       const count = (existing.groupCount ?? 1) + 1;
+      const original = existing.originalTitle ?? existing.title;
       const updated: ToastItem = {
         ...existing,               // id + kind + priority + data STABİL kalır
         avatar: base.avatar ?? existing.avatar,
-        title: kind === 'dm'
-          ? `${base.title} · ${count} mesaj`
-          : `${count} yeni davet`,
+        title: groupedTitle(kind, existing.data, count, original),
         body: base.body ?? existing.body,
         createdAt: Date.now(),     // TTL reset
         groupCount: count,
+        originalTitle: original,
         attentionTier: d.attentionTier,
         visualMode: d.visualMode,
         revision: (existing.revision ?? 1) + 1,
@@ -587,9 +618,10 @@ function dispatchDecision(base: Omit<ToastItem, 'attentionTier' | 'visualMode' |
     ...base,
     attentionTier: d.attentionTier,
     visualMode: d.visualMode,
-    groupKey: d.groupKey,
+    groupKey: isCriticalBypass ? undefined : d.groupKey,
     groupCount: 1,
     revision: 1,
+    originalTitle: base.title,
   });
   fatigueRecordNotif();
   applySideEffects(kind, d);
