@@ -79,7 +79,7 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => handleClick(toast)}
-      className="group relative flex items-stretch w-[340px] cursor-pointer rounded-2xl overflow-hidden"
+      className="group relative flex items-stretch w-[320px] cursor-pointer rounded-2xl overflow-hidden"
       style={{
         // Glassmorphism — yumuşak tül + dengeli blur (20/1.6 dark tema'da fazla
         // doygunluk yaratıyordu; 14/1.35 daha sessiz ve okunur).
@@ -139,7 +139,7 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
         {/* Dismiss */}
         <button
           onClick={(e) => { e.stopPropagation(); dismiss(toast.id); }}
-          className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)] opacity-0 group-hover:opacity-45 hover:!opacity-100 hover:bg-white/5 transition-opacity duration-150"
+          className="shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)] opacity-0 group-hover:opacity-40 hover:!opacity-100 hover:bg-white/5 transition-opacity duration-150"
           aria-label="Kapat"
         >
           <X size={11} />
@@ -147,15 +147,17 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
       </div>
 
       {/* Alt progress — 1.5px ince, yatay opacity fade (premium hissi), CSS keyframe
-          hover pause ile senkron. Trailing edge soluklaştığı için "düz blok" yok. */}
+          hover pause ile senkron. İlk 140ms opacity fade-in (tam dolu blok olarak
+          patlamasın); ardından scaleX 1→0 ttl boyunca. Trailing edge soluklaştığı
+          için "düz blok" yok. */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[1.5px] pointer-events-none"
         style={{
           background: `linear-gradient(to right, ${accent}e0 0%, ${accent}99 55%, ${accent}33 100%)`,
           transformOrigin: 'left center',
-          animation: `toast-progress ${ttlMs}ms linear forwards`,
+          animation: `toast-progress-fadein 140ms ease-out forwards, toast-progress ${ttlMs}ms linear forwards`,
           animationPlayState: hovered ? 'paused' : 'running',
-          willChange: 'transform',
+          willChange: 'transform, opacity',
         }}
       />
     </motion.div>

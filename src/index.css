@@ -519,6 +519,12 @@ button, a, input, [role="button"] {
   to   { transform: scaleX(0); }
 }
 
+/* Progress bar ilk görünümünde "tam dolu blok" olarak patlamasın — 140ms fade-in */
+@keyframes toast-progress-fadein {
+  from { opacity: 0; }
+  to   { opacity: 0.6; }
+}
+
 /* ─── Kızıl temada mic/headphone OFF → nötr gri (kırmızı-üstü-kırmızı önle) ─── */
 [data-theme-pack="crimson"] .voice-ctrl-off {
   background: rgba(var(--glass-tint), 0.07) !important;
