@@ -95,6 +95,15 @@ import { activatePresence } from './lib/presenceLifecycle';
 import { useAppSettings } from './features/app/hooks/useAppSettings';
 import { useAdminPanel } from './features/app/hooks/useAdminPanel';
 import { useChannelActions } from './features/app/hooks/useChannelActions';
+import {
+  registerToastSink,
+  registerBellSink,
+  registerSoundSink,
+  registerFlashSink,
+} from './features/notifications/emit';
+import { pushInformational } from './features/notifications/informationalStore';
+import { playNotifyBeep } from './features/notifications/notificationSound';
+import { requestElectronFlash } from './features/notifications/electronAttention';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
 
@@ -385,6 +394,34 @@ export default function App() {
       }
     }
   }, []);
+
+  // ── Faz 1: Unified notification emitter sinks ─────────────────────────────
+  // emitNotification altyapısı Faz 1'de sadece kurulur; mevcut setToastMsg/
+  // service handler path'leri aynı kalır (UI bit-identical). Faz 2+'de call
+  // site'lar kademeli olarak emitNotification'a migrate edilecek. Sink register
+  // edilmemişse emitter o kanalı sessizce atlar.
+  useEffect(() => {
+    registerToastSink((n) => setToastMsg(n.message));
+    registerBellSink((n) => {
+      pushInformational({
+        key: n.id,
+        kind: 'generic',
+        label: n.title,
+        detail: n.message,
+        serverId: typeof n.meta?.serverId === 'string' ? n.meta.serverId : undefined,
+        createdAt: n.timestamp,
+      });
+    });
+    registerSoundSink(() => playNotifyBeep());
+    registerFlashSink(() => requestElectronFlash(true));
+    return () => {
+      registerToastSink(null);
+      registerBellSink(null);
+      registerSoundSink(null);
+      registerFlashSink(null);
+    };
+  }, [setToastMsg]);
+
   // ── Invite state: ephemeral state + persistent ref (rehydration için) ──
   type InviteData = { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string };
   const [invitationModal, setInvitationModalRaw] = useState<InviteData | null>(null);
