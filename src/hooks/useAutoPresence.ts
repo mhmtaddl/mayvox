@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import type React from 'react';
 
 // ── Auto-Presence: kullanıcı aktivitesine göre otomatik durum tespiti ──────
 // Tek aktivite kaynağı: bu hook hem auto-presence hem auto-leave için
@@ -11,7 +12,9 @@ export type AutoStatus = 'active' | 'idle' | 'deafened';
 
 const ACTIVITY_THROTTLE_MS = 10_000; // 10 saniye — DOM event throttle
 const CHECK_INTERVAL_MS = 15_000;    // 15 saniye — idle kontrol aralığı
-const DEFAULT_IDLE_MS = 5 * 60 * 1000; // Fallback: 5dk (autoLeaveMinutes yoksa)
+// Pasif eşiği: auto-leave ayarından BAĞIMSIZ sabit 10 dakika.
+// Auto-leave kapatılsa bile "Pasif" görünür olmaya devam etmeli.
+export const IDLE_THRESHOLD_MS = 10 * 60 * 1000;
 
 interface UseAutoPresenceProps {
   /** Kullanıcı giriş yapmış mı */
@@ -22,17 +25,24 @@ interface UseAutoPresenceProps {
   isPttPressed: boolean;
   /** Mevcut statusText (Aktif/AFK/Çevrimdışı/Pasif/Duymuyor...) */
   statusText: string | undefined;
-  /** Idle eşiği (ms). Ayarlardaki autoLeaveMinutes * 60 * 1000 verilmeli.
-   *  0 veya undefined → DEFAULT_IDLE_MS kullanılır. */
-  idleThresholdMs?: number;
+  /** Mic muted mı (mute açıkken voice activity yok sayılır) */
+  isMuted: boolean;
+  /** LiveKit local participant audio level ref (0..1) */
+  localAudioLevelRef?: React.MutableRefObject<number>;
   /** Durum değiştiğinde çağrılır — sadece gerçek değişikliklerde */
   onStatusChange: (status: AutoStatus) => void;
 }
 
-/** Manuel / sabit statü değerleri — bunlar aktifken auto-presence override etmez */
+/** Manuel / sabit statü değerleri — bunlar aktifken auto-presence override etmez.
+ *  AFK burada DEĞİL: AFK iken de idle sayacı çalışmaya devam eder, ama UI
+ *  statusText="AFK" olduğu sürece AFK gösterir. AFK clear sadece kanal join
+ *  veya manuel statusText değişimi ile yapılır (App.tsx). DOM event AFK'yı
+ *  temizlemez — kanaldan auto-removed olan kullanıcı mouse oynattı diye
+ *  "Aktif" görünmemeli. */
 const MANUAL_STATUSES = new Set([
-  'AFK',
   'Çevrimdışı',
+  'Rahatsız Etmeyin',
+  'AFK',
 ]);
 
 function isManualStatus(text: string | undefined): boolean {
@@ -45,7 +55,8 @@ export function useAutoPresence({
   isDeafened,
   isPttPressed,
   statusText,
-  idleThresholdMs,
+  isMuted,
+  localAudioLevelRef,
   onStatusChange,
 }: UseAutoPresenceProps) {
   // ── Tek aktivite kaynağı — auto-leave de bu ref'i kullanmalı ──────────
@@ -54,10 +65,6 @@ export function useAutoPresence({
   const currentAutoStatusRef = useRef<AutoStatus>('active');
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
-
-  const effectiveThreshold = idleThresholdMs && idleThresholdMs > 0
-    ? idleThresholdMs
-    : DEFAULT_IDLE_MS;
 
   // ── Activity kaydı (throttled) ────────────────────────────────────────
   // idle → active geçişi hızlı olsun: eğer şu an idle'daysa throttle bypass
@@ -93,19 +100,23 @@ export function useAutoPresence({
     }
   }, [isPttPressed, recordActivityImmediate, statusText, isDeafened]);
 
-  // ── DOM event listener'ları (mouse, keyboard, click, touch) ───────────
+  // ── DOM event listener'ları — "gerçek etkileşim" modeli ───────────────
+  // mousemove KASITLI kaldırıldı: sadece pencerede mouse oynaması "aktif"
+  // sayılmamalı. Kullanıcı gerçekten bir şey yapıyor mu kriteri:
+  //   - click (butonlar, menüler, kanallar)
+  //   - keydown (klavye ile yazma/gezinme)
+  //   - touchstart (mobil dokunma)
+  // Voice activity (mic) + PTT ayrıca ayrı path'lerden zaten recordActivity çağırır.
   useEffect(() => {
     if (!isLoggedIn) return;
 
     const handler = () => recordActivity();
 
-    window.addEventListener('mousemove', handler, { passive: true });
     window.addEventListener('keydown', handler, { passive: true });
     window.addEventListener('click', handler, { passive: true });
     window.addEventListener('touchstart', handler, { passive: true });
 
     return () => {
-      window.removeEventListener('mousemove', handler);
       window.removeEventListener('keydown', handler);
       window.removeEventListener('click', handler);
       window.removeEventListener('touchstart', handler);
@@ -125,7 +136,7 @@ export function useAutoPresence({
 
       // Öncelik 2: Son aktiviteden bu yana geçen süre
       const elapsed = Date.now() - lastActivityRef.current;
-      if (elapsed >= effectiveThreshold) return 'idle';
+      if (elapsed >= IDLE_THRESHOLD_MS) return 'idle';
 
       // Varsayılan: aktif
       return 'active';
@@ -144,7 +155,7 @@ export function useAutoPresence({
 
     const interval = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isLoggedIn, isDeafened, statusText, effectiveThreshold]);
+  }, [isLoggedIn, isDeafened, statusText]);
 
   // ── Deafen değişiminde anında tepki (interval beklemesin) ─────────────
   useEffect(() => {
@@ -168,9 +179,34 @@ export function useAutoPresence({
     }
   }, [isDeafened, isLoggedIn, statusText, recordActivityImmediate]);
 
+  // ── Voice activity: local audio level > threshold + 600ms debounce ───
+  // speakingLevels pipeline'ına dokunulmaz (ducking). Sadece local user'ın
+  // seviyesi belirli süre eşiğin üzerindeyse activity kaydı tetiklenir.
+  useEffect(() => {
+    if (!isLoggedIn || !localAudioLevelRef) return;
+    const VOICE_THRESHOLD = 0.02;
+    const VOICE_DEBOUNCE_MS = 600;
+    const CHECK_MS = 200;
+    let sustainedStart: number | null = null;
+    const tick = () => {
+      const level = localAudioLevelRef.current ?? 0;
+      if (!isMuted && level > VOICE_THRESHOLD) {
+        if (sustainedStart === null) sustainedStart = Date.now();
+        else if (Date.now() - sustainedStart >= VOICE_DEBOUNCE_MS) {
+          recordActivity();
+          // recordActivity zaten throttled (10sn) — burada reset etmek gerekmez
+        }
+      } else {
+        sustainedStart = null;
+      }
+    };
+    const interval = setInterval(tick, CHECK_MS);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, isMuted, localAudioLevelRef, recordActivity]);
+
   // ── Manuel statüden "Aktif"e dönüşte activity sıfırla ────────────────
   useEffect(() => {
-    if (statusText === 'Aktif' || !statusText) {
+    if (statusText === 'Online' || statusText === 'Aktif' || !statusText) {
       recordActivityImmediate();
       // Manuel statüden döndüyse durumu yeniden hesapla
       const newStatus: AutoStatus = isDeafened ? 'deafened' : 'active';

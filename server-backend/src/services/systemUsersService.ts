@@ -37,6 +37,11 @@ export interface AdminUserRow {
   plan_end_at: string | null;
   plan_status: PlanStatus;
 
+  user_level: string | null;
+  user_level_source: PlanSource | null;
+  user_level_start_at: string | null;
+  user_level_end_at: string | null;
+
   owned_server_count: number;
   created_at: string | null;
 }
@@ -97,7 +102,7 @@ export async function listAllUsers(
   let q = supa
     .from('profiles')
     .select(
-      'id, name, email, first_name, last_name, avatar, role, is_admin, is_moderator, is_primary_admin, is_muted, mute_expires, is_voice_banned, ban_expires, server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end, created_at',
+      'id, name, email, first_name, last_name, avatar, role, is_admin, is_moderator, is_primary_admin, is_muted, mute_expires, is_voice_banned, ban_expires, server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end, user_level, user_level_source, user_level_start_at, user_level_end_at, created_at',
       { count: 'exact' },
     );
 
@@ -169,6 +174,10 @@ export async function listAllUsers(
     server_creation_plan_source: string | null;
     server_creation_plan_start: string | null;
     server_creation_plan_end: string | null;
+    user_level: string | null;
+    user_level_source: string | null;
+    user_level_start_at: string | null;
+    user_level_end_at: string | null;
     created_at: string | null;
   }>;
 
@@ -216,6 +225,10 @@ export async function listAllUsers(
       plan_start_at: p.server_creation_plan_start,
       plan_end_at: p.server_creation_plan_end,
       plan_status: planStatus,
+      user_level: p.user_level ?? null,
+      user_level_source: (p.user_level_source as PlanSource | null) ?? null,
+      user_level_start_at: p.user_level_start_at,
+      user_level_end_at: p.user_level_end_at,
       owned_server_count: countMap.get(p.id) ?? 0,
       created_at: p.created_at,
     };
@@ -364,6 +377,112 @@ export async function revokeUserPlanManual(
     targetType: 'profile',
     targetId: targetUserId,
     metadata: { action: 'revoke', before: existing ?? null },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Kullanıcı Seviyesi — Manuel atama / kaldırma (Plan ile simetrik)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface SetUserLevelInput {
+  adminUserId: string;
+  adminToken: string;
+  targetUserId: string;
+  level: string;
+  durationType: DurationType;
+  customEndAt?: string | null;
+}
+
+/** Manuel seviye atama. paid kaynaklıysa admin override etmez. */
+export async function setUserLevelManual(input: SetUserLevelInput): Promise<void> {
+  const supa = scopedClient(input.adminToken);
+
+  const { data: existing, error: readErr } = await supa
+    .from('profiles')
+    .select('user_level, user_level_source')
+    .eq('id', input.targetUserId)
+    .maybeSingle();
+  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+
+  if (existing && (existing as { user_level_source?: string }).user_level_source === 'paid') {
+    const err = new Error('Ücretli (paid) seviyeyi admin override edemez');
+    (err as Error & { code?: number }).code = 403;
+    throw err;
+  }
+
+  const startAt = new Date().toISOString();
+  const endAt = computeEndAt(input.durationType, input.customEndAt);
+
+  const { error: updErr } = await supa
+    .from('profiles')
+    .update({
+      user_level: input.level,
+      user_level_source: 'manual',
+      user_level_start_at: startAt,
+      user_level_end_at: endAt,
+    })
+    .eq('id', input.targetUserId);
+  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+
+  await writeSystemAudit({
+    adminUserId: input.adminUserId,
+    action: 'system_admin_action.user.level_change',
+    targetType: 'profile',
+    targetId: input.targetUserId,
+    metadata: {
+      level: input.level,
+      source: 'manual',
+      durationType: input.durationType,
+      user_level_start_at: startAt,
+      user_level_end_at: endAt,
+      before: existing ?? null,
+    },
+  });
+}
+
+/** Manuel seviyeyi kaldırır. paid kaynaklıysa yine yasak. */
+export async function revokeUserLevelManual(
+  adminUserId: string,
+  adminToken: string,
+  targetUserId: string,
+): Promise<void> {
+  const supa = scopedClient(adminToken);
+
+  const { data: existing, error: readErr } = await supa
+    .from('profiles')
+    .select('user_level, user_level_source, user_level_start_at, user_level_end_at')
+    .eq('id', targetUserId)
+    .maybeSingle();
+  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+
+  if (existing && (existing as { user_level_source?: string }).user_level_source === 'paid') {
+    const err = new Error('Ücretli (paid) seviye admin tarafından kaldırılamaz');
+    (err as Error & { code?: number }).code = 403;
+    throw err;
+  }
+
+  const endAt = new Date().toISOString();
+
+  const { error: updErr } = await supa
+    .from('profiles')
+    .update({
+      user_level: null,
+      user_level_source: null,
+      user_level_end_at: endAt,
+    })
+    .eq('id', targetUserId);
+  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+
+  await writeSystemAudit({
+    adminUserId,
+    action: 'system_admin_action.user.level_change',
+    targetType: 'profile',
+    targetId: targetUserId,
+    metadata: {
+      action: 'revoke',
+      user_level_end_at: endAt,
+      before: existing ?? null,
+    },
   });
 }
 

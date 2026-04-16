@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList } from 'lucide-react';
 import { CardSection, inputCls, labelCls } from '../shared';
-import { toTitleCaseTr } from '../../../lib/formatName';
+import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH } from '../../../lib/formatName';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
@@ -55,6 +56,13 @@ function useAccountState() {
   };
 
   const isPasswordValid = settingsPassword.length === 0 || validatePassword(settingsPassword);
+
+  const hasProfileChanges =
+    settingsDisplayName !== (currentUser.name || '') ||
+    settingsUsername !== (currentUser.email || currentUser.name || '') ||
+    settingsFirstName !== (currentUser.firstName || '') ||
+    settingsLastName !== (currentUser.lastName || '') ||
+    settingsAge !== (currentUser.age?.toString() || '');
 
   const getAvatarText = (user: Partial<User> & { firstName?: string; lastName?: string; age?: number }) => {
     const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '')).toUpperCase();
@@ -193,7 +201,7 @@ function useAccountState() {
     settingsPasswordRepeat, setSettingsPasswordRepeat, settingsPasswordError,
     updateSuccessMessage, showSettingsPassword, setShowSettingsPassword,
     avatarUploading, customAvatarUrl, cropSrc, setCropSrc, fileInputRef,
-    pressingProfile, isPasswordValid, getAvatarText, toTitleCase,
+    pressingProfile, isPasswordValid, hasProfileChanges, getAvatarText, toTitleCase,
     handleUpdateProfile, handleAvatarFileChange, handleCropConfirm, triggerSaveProfile,
   };
 }
@@ -213,88 +221,140 @@ function ProfileCard() {
     settingsFirstName, setSettingsFirstName, settingsLastName, setSettingsLastName,
     settingsAge, avatarBorderColor, setAvatarBorderColor,
     customAvatarUrl, avatarUploading, fileInputRef, getAvatarText, toTitleCase,
-    handleAvatarFileChange,
+    handleAvatarFileChange, currentUser,
   } = ctx;
+  const frameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
+  const [previewColor, setPreviewColor] = useState<string | null>(null);
+  const [customHex, setCustomHex] = useState(avatarBorderColor.startsWith('#') ? avatarBorderColor : '');
+  const activeColor = previewColor ?? avatarBorderColor;
 
-  const borderColors = [
+  const TIER_LABEL: Record<string, string> = { standard: 'Standart', vip: 'VIP', elite: 'Elit' };
+  const PALETTE_BASIC = [
+    { hex: '#6B7280', name: 'Gri' },
+    { hex: '#9CA3AF', name: 'Gümüş' },
     { hex: '#3B82F6', name: 'Mavi' },
-    { hex: '#8B5CF6', name: 'Mor' },
+    { hex: '#06B6D4', name: 'Cyan' },
     { hex: '#10B981', name: 'Yeşil' },
+    { hex: '#84CC16', name: 'Lime' },
+  ];
+  const PALETTE_VIVID = [
     { hex: '#EF4444', name: 'Kırmızı' },
+    { hex: '#F97316', name: 'Turuncu' },
     { hex: '#F59E0B', name: 'Sarı' },
     { hex: '#EC4899', name: 'Pembe' },
-    { hex: '#06B6D4', name: 'Cyan' },
-    { hex: '#F97316', name: 'Turuncu' },
-    { hex: '#6B7280', name: 'Gri' },
+    { hex: '#8B5CF6', name: 'Mor' },
+    { hex: '#A855F7', name: 'Lavanta' },
   ];
 
+  const FrameDot = ({ hex, name }: { hex: string; name: string }) => {
+    const isSel = avatarBorderColor === hex;
+    return (
+      <button
+        onClick={() => { setAvatarBorderColor(hex); setPreviewColor(null); setCustomHex(hex); }}
+        onMouseEnter={() => setPreviewColor(hex)}
+        onMouseLeave={() => setPreviewColor(null)}
+        title={name}
+        style={{
+          width: 28, height: 28, borderRadius: '22%', backgroundColor: hex, border: 'none',
+          boxShadow: isSel ? `0 0 0 2px #0E0F12, 0 0 0 3.5px ${hex}, 0 0 16px ${hex}60` : `0 0 0 1px ${hex}40`,
+          transform: isSel ? 'scale(1.22)' : 'scale(1)',
+          transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+          cursor: 'pointer', outline: 'none', flexShrink: 0,
+        }}
+      />
+    );
+  };
+
+  const NoneIcon = () => (
+    <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="4" y1="4" x2="20" y2="20" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+
   return (
-    <CardSection icon={<UserIcon size={12} />} title="Profil">
-      {/* Avatar */}
-      <div className="flex flex-col items-center mb-4">
-        <div
-          className="relative group cursor-pointer shrink-0"
-          onClick={() => fileInputRef.current?.click()}
-        >
+    <CardSection icon={<UserIcon size={12} />} title="">
+      {/* ── Avatar + Ad Soyad + Çerçeve — tek akış ── */}
+      <div className="flex items-center gap-4 mb-4">
+        {/* Avatar — sol */}
+        <div className="flex flex-col items-center shrink-0">
           <div
-            className="h-16 w-16 avatar-squircle bg-[var(--theme-accent)]/20 border-[3px] overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base shadow-sm"
-            style={{ borderColor: avatarBorderColor }}
+            className="relative group cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
           >
-            {customAvatarUrl ? (
-              <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
-            )}
+            <div
+              className={activeColor ? getFrameClassName(frameTier) : ''}
+              style={activeColor ? { ...getFrameStyle(activeColor, frameTier), borderRadius: '22%' } : undefined}
+            >
+              <div className="avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base" style={{ width: 72, height: 72 }}>
+                {customAvatarUrl ? (
+                  <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
+                )}
+              </div>
+            </div>
+            <div className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {avatarUploading
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Camera size={16} className="text-white" />
+              }
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
           </div>
-          <div className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            {avatarUploading
-              ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              : <Camera size={16} className="text-white" />
-            }
+          <span className="mt-1.5 text-[8px] font-bold uppercase tracking-[0.12em] text-[var(--theme-accent)]/60">
+            {TIER_LABEL[frameTier]}
+          </span>
+        </div>
+
+        {/* Ad + Soyad + Çerçeve — sağ taraf, genişler */}
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className={labelCls}>Ad</label>
+              <input type="text" maxLength={NAME_INPUT_MAX_LENGTH} value={settingsFirstName} onChange={e => setSettingsFirstName(normalizeNameInput(e.target.value))} className={inputCls} />
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Soyad</label>
+              <input type="text" maxLength={NAME_INPUT_MAX_LENGTH} value={settingsLastName} onChange={e => setSettingsLastName(normalizeNameInput(e.target.value))} className={inputCls} />
+            </div>
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
-        </div>
-      </div>
 
-      {/* Ad + Soyad — md+: yan yana, base: alt alta */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 mb-3">
-        <div className="space-y-1">
-          <label className={labelCls}>Ad</label>
-          <input type="text" value={settingsFirstName} onChange={e => setSettingsFirstName(toTitleCase(e.target.value))} className={inputCls} />
+          {/* Çerçeve rengi — input'ların altında, aynı genişlikte */}
+          <div>
+            <p className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Çerçeve</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Yok kutucuğu — çapraz çizgili */}
+          <button
+            onClick={() => { setAvatarBorderColor(''); setPreviewColor(null); setCustomHex(''); }}
+            onMouseEnter={() => setPreviewColor('')}
+            onMouseLeave={() => setPreviewColor(null)}
+            title="Yok"
+            style={{
+              width: 28, height: 28, borderRadius: '22%',
+              background: 'transparent',
+              border: '2px dashed rgba(255,255,255,0.12)',
+              boxShadow: !avatarBorderColor ? '0 0 0 2px rgba(255,255,255,0.3)' : 'none',
+              transform: !avatarBorderColor ? 'scale(1.18)' : 'scale(1)',
+              transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+              cursor: 'pointer', outline: 'none', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <NoneIcon />
+          </button>
+          {/* Renk paletleri */}
+          {[...PALETTE_BASIC, ...PALETTE_VIVID].map(c => <FrameDot key={c.hex} {...c} />)}
+          {/* Özel renk seçici */}
+          <input
+            type="color"
+            value={customHex || '#6B7280'}
+            onChange={e => { setCustomHex(e.target.value); setAvatarBorderColor(e.target.value); }}
+            className="w-7 h-7 rounded-[22%] cursor-pointer border-0 bg-transparent p-0 shrink-0"
+            title="Özel renk"
+            style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.15)' }}
+          />
         </div>
-        <div className="space-y-1">
-          <label className={labelCls}>Soyad</label>
-          <input type="text" value={settingsLastName} onChange={e => setSettingsLastName(toTitleCase(e.target.value))} className={inputCls} />
-        </div>
-      </div>
-
-      {/* Çerçeve rengi */}
-      <div>
-        <p className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-wider mb-2">Çerçeve Rengi</p>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {borderColors.map(({ hex, name }) => {
-            const isSelected = avatarBorderColor === hex;
-            return (
-              <button
-                key={hex}
-                onClick={() => setAvatarBorderColor(hex)}
-                title={name}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: '22%',
-                  backgroundColor: hex,
-                  border: isSelected ? '2.5px solid white' : '2px solid transparent',
-                  boxShadow: isSelected ? `0 0 0 2px ${hex}` : `0 0 0 1px ${hex}55`,
-                  transform: isSelected ? 'scale(1.22)' : 'scale(1)',
-                  transition: 'all 0.15s ease',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  flexShrink: 0,
-                }}
-              />
-            );
-          })}
+          </div>
         </div>
       </div>
     </CardSection>
@@ -307,11 +367,11 @@ function AccountInfoCard() {
   const {
     settingsUsername, setSettingsUsername, settingsDisplayName, setSettingsDisplayName,
     settingsAge, setSettingsAge, currentAppVersion,
-    updateSuccessMessage, settingsPasswordError, handleUpdateProfile, pressingProfile,
+    updateSuccessMessage, settingsPasswordError, handleUpdateProfile, pressingProfile, hasProfileChanges,
   } = ctx;
 
   return (
-    <CardSection icon={<ClipboardList size={12} />} title="Hesap Bilgileri" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined}>
+    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined}>
       <div className="space-y-3">
         <div className="space-y-1">
           <label className={labelCls}>Kullanıcı Adı</label>
@@ -336,7 +396,8 @@ function AccountInfoCard() {
         </p>
         <button
           onClick={handleUpdateProfile}
-          className={`shrink-0 w-full md:w-auto px-5 py-2 btn-primary font-bold text-xs active:scale-95 ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
+          disabled={!hasProfileChanges}
+          className={`shrink-0 w-full md:w-auto px-5 py-2 btn-primary font-bold text-xs active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
         >
           Güncelle
         </button>
@@ -354,7 +415,7 @@ function SecurityCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<Shield size={12} />} title="Güvenlik">
+    <CardSection icon={<Shield size={12} />} title="">
       <div className="space-y-3">
         <div className="space-y-1">
           <label className={labelCls}>Yeni Şifre</label>
@@ -418,9 +479,25 @@ export default function AccountSection() {
           onCancel={() => state.setCropSrc(null)}
         />
       )}
-      <ProfileCard />
-      <AccountInfoCard />
-      <SecurityCard />
+      <div className="flex flex-col gap-5 md:gap-6">
+        <ProfileCard />
+
+        <section>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <span className="text-[var(--theme-accent)]/70"><ClipboardList size={11} strokeWidth={2.2} /></span>
+            <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Hesap Bilgileri</h3>
+          </div>
+          <AccountInfoCard />
+        </section>
+
+        <section>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <span className="text-[var(--theme-accent)]/70"><Shield size={11} strokeWidth={2.2} /></span>
+            <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Güvenlik</h3>
+          </div>
+          <SecurityCard />
+        </section>
+      </div>
     </AccountCtx.Provider>
   );
 }

@@ -89,6 +89,7 @@ import { toTitleCaseTr, formatFullName } from './lib/formatName';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
 import { ConfirmProvider } from './contexts/ConfirmContext';
+import { FavoriteFriendsProvider } from './contexts/FavoriteFriendsContext';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import { activatePresence } from './lib/presenceLifecycle';
 import { useAppSettings } from './features/app/hooks/useAppSettings';
@@ -139,6 +140,8 @@ function mapDbProfile(
     totalUsageMinutes: p.total_usage_minutes || 0,
     showLastSeen: p.show_last_seen !== false,
     serverCreationPlan: resolveServerCreationPlan(p),
+    userLevel: (p as { user_level?: string | null }).user_level ?? null,
+    avatarBorderColor: (p as { avatar_border_color?: string }).avatar_border_color ?? '',
   };
 }
 
@@ -168,7 +171,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       age: profile.age || 18,
       avatar: profile.avatar || '',
       status: 'online' as const,
-      statusText: 'Aktif',
+      statusText: 'Online',
       isAdmin: profile.is_admin || false,
       isPrimaryAdmin: profile.is_primary_admin || false,
       isModerator: profile.is_moderator || false,
@@ -182,6 +185,8 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       totalUsageMinutes: profile.total_usage_minutes || 0,
       showLastSeen: profile.show_last_seen !== false,
       serverCreationPlan: resolveServerCreationPlan(profile),
+      userLevel: (profile as { user_level?: string | null }).user_level ?? null,
+      avatarBorderColor: (profile as { avatar_border_color?: string }).avatar_border_color ?? '',
     };
   }
   return {
@@ -192,7 +197,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
     age: 18,
     avatar: '',
     status: 'online' as const,
-    statusText: 'Aktif',
+    statusText: 'Online',
     isAdmin: false,
     isPrimaryAdmin: false,
   };
@@ -246,6 +251,22 @@ export default function App() {
     }
   };
 
+  // avatarBorderColor değişimini izle → currentUser + allUsers + broadcast sync
+  const prevFrameColorRef = useRef(settings.avatarBorderColor);
+  useEffect(() => {
+    const color = settings.avatarBorderColor;
+    if (color === prevFrameColorRef.current) return;
+    prevFrameColorRef.current = color;
+    if (!currentUser.id) return;
+    setCurrentUser(prev => ({ ...prev, avatarBorderColor: color }));
+    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, avatarBorderColor: color } : u));
+    presenceChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'moderation',
+      payload: { userId: currentUser.id, updates: { avatarBorderColor: color } },
+    });
+  }, [settings.avatarBorderColor]); // eslint-disable-line react-hooks/exhaustive-deps
+
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafenedState] = useState(false);
@@ -278,7 +299,7 @@ export default function App() {
     age: 0,
     avatar: '',
     status: 'online',
-    statusText: 'Aktif',
+    statusText: 'Online',
     isAdmin: false,
     isPrimaryAdmin: false,
   });
@@ -432,6 +453,7 @@ export default function App() {
     const saved = localStorage.getItem('userVolumes');
     return saved ? JSON.parse(saved) : {};
   });
+  const [settingsTarget, setSettingsTarget] = useState<import('./contexts/UIContext').SettingsTarget>(null);
 
   // Invite cooldown + status artık useChannelActions hook'unda
   // Stable ref wrapper'lar — usePresence çağrısı bu fonksiyonlardan önce geldiği için ref gerekir
@@ -492,6 +514,19 @@ export default function App() {
   // but useLiveKitConnection needs presenceChannelRef (which comes from usePresence).
   const disconnectLKRef = useRef<() => Promise<void>>(async () => {});
   const handleJoinChannelRef = useRef<(id: string, isInvited?: boolean) => Promise<void>>(async () => {});
+
+  // ── Session epoch — ghost countdown timeout'larını geçersiz kılmak için ──
+  // Bump edildiği iki nokta:
+  //   1) activeChannel non-null değere transition (kanal join)
+  //   2) LiveKit RoomEvent.Reconnected
+  // Channel leave'de bump YOK — cancelCountdown() yeterli.
+  const sessionEpochRef = useRef(0);
+  const bumpEpoch = useCallback(() => {
+    sessionEpochRef.current += 1;
+  }, []);
+
+  // ── Local audio level ref — LiveKit yazar, useAutoPresence okur ──
+  const localAudioLevelRef = useRef<number>(0);
 
   // ── Device hook ─────────────────────────────────────────────────────────
   const {
@@ -556,7 +591,10 @@ export default function App() {
 
   // ── Auto-Presence hook ───────────────────────────────────────────────────
   // Tek aktivite kaynağı: auto-presence + auto-leave aynı lastActivityRef'i kullanır.
-  // idleThresholdMs: ayarlardaki autoLeaveMinutes'ten gelir → iki sistem senkron kalır.
+  // Idle eşiği 10dk sabit (useAutoPresence içinde IDLE_THRESHOLD_MS) — auto-leave'den bağımsız.
+  // State + ref ikilisi: state React re-render'ı tetikler (UI güncel kalsın),
+  // ref callback closure'larında güncel değeri okumak için.
+  const [autoStatus, setAutoStatus] = useState<AutoStatus>('active');
   const autoStatusRef = useRef<AutoStatus>('active');
   // presenceChannelRef usePresence'tan sonra dolacak — callback lazy olduğundan ref üzerinden erişiyoruz
   const presenceChannelForAutoRef = useRef<any>(null);
@@ -570,11 +608,11 @@ export default function App() {
     isDeafened,
     isPttPressed,
     statusText: currentUser.statusText,
-    // Auto-presence idle'ı auto-leave kick'ten ÖNCE göstermeli:
-    // Threshold'un yarısında "Pasif" görünür, tam threshold'da oda çıkışı olur.
-    idleThresholdMs: Math.floor(autoLeaveMinutes * 60 * 1000 / 2),
+    isMuted,
+    localAudioLevelRef,
     onStatusChange: (status) => {
       autoStatusRef.current = status;
+      setAutoStatus(status);
       // Presence payload'ı güncelle — diğer kullanıcılar yeni durumu görsün
       const ch = presenceChannelForAutoRef.current;
       if (!ch || !currentUserRef.current.id) return;
@@ -587,12 +625,18 @@ export default function App() {
         currentRoom: activeChannelRef.current || undefined,
         serverId: activeServerIdRef.current || undefined,
         autoStatus: status,
+        onlineSince: onlineSinceRef.current,
+        platform: platformRef.current,
+        // Çevrimdışı/Rahatsız Etmeyin/AFK gibi manuel statüler — presence
+        // payload'ında taşınarak broadcast-miss/resubscribe durumlarında da
+        // stabil kalır. Observer usePresence'ta p.statusText okur.
+        statusText: currentUserRef.current.statusText || 'Online',
       });
     },
   });
 
   // ── Presence hook ────────────────────────────────────────────────────────
-  const { presenceChannelRef, knownVersionsRef, startPresence, stopPresence, resyncPresence } = usePresence({
+  const { presenceChannelRef, knownVersionsRef, onlineSinceRef, platformRef, startPresence, stopPresence, resyncPresence } = usePresence({
     currentUserRef,
     activeChannelRef,
     activeServerIdRef,
@@ -657,6 +701,8 @@ export default function App() {
     allUsersRef,
     userVolumesRef,
     setSpeakingLevels,
+    onSessionReset: bumpEpoch,
+    localAudioLevelRef,
   });
 
   // Keep forward ref current so usePresence always calls the real function
@@ -908,8 +954,20 @@ export default function App() {
   }, [view]);
 
   // ── Global click listener to close all popups/menus ──────────────────────
+  // NOT: React 19 synthetic event stopPropagation'ı native window listener'ı
+  // her zaman güvenilir engellemiyor (root delegation race). Menü açmak için
+  // tıklanan trigger'lar `data-keep-action-menu` attribute'ü ile opt-out eder;
+  // window handler bu attribute'lü target üzerinden clear'ı atlar.
   useEffect(() => {
-    const handleGlobalClick = () => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest('[data-keep-action-menu]')) {
+        // Trigger'ın kendisi menu'yü AÇMAK için state setliyor — clear'ı atla.
+        setContextMenu(null);
+        setShowInputSettings(false);
+        setShowOutputSettings(false);
+        return;
+      }
       setContextMenu(null);
       setUserActionMenu(null);
       setShowInputSettings(false);
@@ -1054,64 +1112,143 @@ export default function App() {
   }, [isDeafened]);
 
   // ── Auto-leave on idle: kullanıcı belirli süre pasif kalırsa kanaldan çıkar ──
-  // NOT: lastActivity takibi useAutoPresence'ın sharedLastActivityRef'inde.
-  // Bu timer sadece auto-leave mantığını (uyarı + oda çıkışı) çalıştırır.
-  // Auto-presence durumu (Pasif/Aktif/Duymuyor) useAutoPresence tarafından yönetilir.
-  const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Mimari:
+  //   - sharedLastActivityRef: DOM + PTT + voice activity kaynaklı son aktivite zamanı
+  //   - countdownRef: 60sn'lik geri sayım state machine (start/cancel + epoch guard)
+  //   - interval: her 1sn'de elapsed >= thresholdMs - COUNTDOWN_SECONDS*1000 ise
+  //     startCountdown, tekrar aktivite geldiğinde cancelCountdown
+  const COUNTDOWN_SECONDS = 60;
   const lastJoinRef = useRef(0);
-  const idleWarningShownRef = useRef(false);
 
-  // PTT basıldığında auto-leave uyarı flag'ini temizle (activity shared ref'te zaten güncelleniyor)
-  useEffect(() => {
-    if (isPttPressed) idleWarningShownRef.current = false;
-  }, [isPttPressed]);
+  type CountdownState = {
+    active: boolean;
+    timeoutId: ReturnType<typeof setTimeout> | null;
+    disconnectAt: number;
+    sessionEpoch: number;
+  };
+  const countdownRef = useRef<CountdownState>({
+    active: false,
+    timeoutId: null,
+    disconnectAt: 0,
+    sessionEpoch: 0,
+  });
+  // DesktopDock banner'ın dock butonlarının yerini almasını tetiklemek için
+  // active state'i React state'e de kopyalıyoruz (ref sadece re-render etmez).
+  const [countdownActive, setCountdownActive] = useState(false);
 
-  // Kanal veya ayar değiştiğinde timer'ı yeniden kur
-  useEffect(() => {
-    if (idleTimerRef.current) { clearInterval(idleTimerRef.current); idleTimerRef.current = null; }
-    if (!autoLeaveEnabled || !activeChannel) return;
+  const performAutoLeave = useCallback(() => {
+    disconnectFromLiveKit().then(() => {
+      setActiveChannel(null);
+      const afkUser = { ...currentUserRef.current, statusText: 'AFK' };
+      setCurrentUser(afkUser);
+      setAllUsers(prev => prev.map(u => u.id === afkUser.id ? afkUser : u));
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'moderation',
+        payload: { userId: afkUser.id, updates: { statusText: 'AFK' } },
+      });
+      setToastMsg('Uzun süre konuşmadığınız için kanaldan ayrıldınız.');
+    });
+  }, [disconnectFromLiveKit, setActiveChannel, setAllUsers, setCurrentUser, setToastMsg, presenceChannelRef]);
 
-    // Kanal değiştiğinde activity'yi sıfırla (shared ref üzerinden)
+  const cancelCountdown = useCallback(() => {
+    const s = countdownRef.current;
+    if (s.timeoutId) clearTimeout(s.timeoutId);
+    countdownRef.current = { active: false, timeoutId: null, disconnectAt: 0, sessionEpoch: 0 };
+    setCountdownActive(false);
+  }, []);
+
+  const startCountdown = useCallback((durationMs: number) => {
+    // Hard guard: zaten aktifse yeniden başlatma (refresh'i engeller).
+    if (countdownRef.current.active) return;
+    const epoch = sessionEpochRef.current;
+    const timeoutId = setTimeout(() => {
+      // Ghost protection: oturum değiştiyse (reconnect veya yeni kanal join)
+      // eski timeout'u yok say.
+      if (countdownRef.current.sessionEpoch !== sessionEpochRef.current) return;
+      if (!countdownRef.current.active) return;
+      countdownRef.current = { active: false, timeoutId: null, disconnectAt: 0, sessionEpoch: 0 };
+      setCountdownActive(false);
+      performAutoLeave();
+    }, durationMs);
+    countdownRef.current = {
+      active: true,
+      timeoutId,
+      disconnectAt: Date.now() + durationMs,
+      sessionEpoch: epoch,
+    };
+    setCountdownActive(true);
+  }, [performAutoLeave]);
+
+  // "Buradayım" butonu için — activity reset + countdown cancel.
+  const dismissIdleCountdown = useCallback(() => {
     recordActivityImmediate();
-    idleWarningShownRef.current = false;
+    cancelCountdown();
+  }, [recordActivityImmediate, cancelCountdown]);
 
-    const WARNING_SECONDS = 30;
+  // Auto-leave OFF → ON toggle'ında lastActivity reset: "Ben buradayım, takip
+  // etmeye başla" semantiği. Anında countdown başlamaz.
+  const prevAutoLeaveEnabledRef = useRef(autoLeaveEnabled);
+  useEffect(() => {
+    if (autoLeaveEnabled && !prevAutoLeaveEnabledRef.current) {
+      recordActivityImmediate();
+      cancelCountdown();
+    }
+    prevAutoLeaveEnabledRef.current = autoLeaveEnabled;
+  }, [autoLeaveEnabled, recordActivityImmediate, cancelCountdown]);
+
+  // Kanal veya ayar değiştiğinde interval'ı yeniden kur
+  useEffect(() => {
+    if (!autoLeaveEnabled || !activeChannel) {
+      cancelCountdown();
+      return;
+    }
+
+    // Kanal değiştiğinde activity sıfırla
+    recordActivityImmediate();
+
     const thresholdMs = autoLeaveMinutes * 60 * 1000;
-    const warningMs = thresholdMs - WARNING_SECONDS * 1000;
+    const countdownTriggerMs = Math.max(0, thresholdMs - COUNTDOWN_SECONDS * 1000);
 
     const checkInterval = setInterval(() => {
       const elapsed = Date.now() - sharedLastActivityRef.current;
 
-      // 30 saniye uyarısı — aynı idle döngüsünde sadece 1 kez
-      if (warningMs > 0 && !idleWarningShownRef.current && elapsed >= warningMs && elapsed < thresholdMs) {
-        idleWarningShownRef.current = true;
-        setToastMsg('Pasif kaldığınız için kanaldan ayrılmanıza 30 saniye kaldı.');
+      if (elapsed >= countdownTriggerMs) {
+        // Countdown başlamadıysa başlat; aktivite geldiyse zaten
+        // recordActivityImmediate → cancelCountdown zinciri gerekiyor.
+        if (!countdownRef.current.active) {
+          const remaining = thresholdMs - elapsed;
+          // Tab uyuması / clock jump sonrası elapsed zaten threshold'u geçmişse
+          // banner'ı 0 saniye gösterip flash etme — doğrudan auto-leave.
+          if (remaining <= 0) {
+            performAutoLeave();
+          } else {
+            startCountdown(remaining);
+          }
+        }
+      } else if (countdownRef.current.active) {
+        // Aktivite countdown başladıktan sonra elapsed'i düşürdü → iptal.
+        cancelCountdown();
       }
+    }, 1_000);
 
-      // Otomatik ayrılma
-      if (elapsed >= thresholdMs) {
-        clearInterval(checkInterval);
-        idleTimerRef.current = null;
-        idleWarningShownRef.current = false;
-        disconnectFromLiveKit().then(() => {
-          setActiveChannel(null);
-          // AFK durumu set et
-          const afkUser = { ...currentUserRef.current, statusText: 'AFK' };
-          setCurrentUser(afkUser);
-          setAllUsers(prev => prev.map(u => u.id === afkUser.id ? afkUser : u));
-          presenceChannelRef.current?.send({
-            type: 'broadcast',
-            event: 'moderation',
-            payload: { userId: afkUser.id, updates: { statusText: 'AFK' } },
-          });
-          setToastMsg('Uzun süre konuşmadığınız için kanaldan ayrıldınız.');
-        });
-      }
-    }, 10_000);
+    return () => {
+      clearInterval(checkInterval);
+      cancelCountdown();
+    };
+  }, [autoLeaveEnabled, autoLeaveMinutes, activeChannel, cancelCountdown, performAutoLeave, recordActivityImmediate, sharedLastActivityRef, startCountdown]);
 
-    idleTimerRef.current = checkInterval;
-    return () => { clearInterval(checkInterval); };
-  }, [autoLeaveEnabled, autoLeaveMinutes, activeChannel]);
+  // ── activeChannel non-null transition: session epoch bump ───────────────
+  // Kanala her giriş (yeni kanal veya tekrar aynı kanal) yeni bir oturumdur;
+  // önceki oturumdan kalan countdown timeout'ları geçersiz kılınmalı.
+  const prevActiveChannelRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevActiveChannelRef.current;
+    if (activeChannel && activeChannel !== prev) {
+      bumpEpoch();
+    }
+    prevActiveChannelRef.current = activeChannel;
+  }, [activeChannel, bumpEpoch]);
 
   // ── Kanaldan çıkılınca (activeChannel null) kullanıcıyı tüm kanallardan temizle ──
   // NOT: Kanala GİRİŞ için optimistic ekleme handleJoinChannel içinde yapılır;
@@ -1134,29 +1271,37 @@ export default function App() {
   };
 
   const getStatusColor = (statusText: string) => {
-    if (statusText === 'Aktif') return 'text-[var(--theme-accent)]';
+    if (statusText === 'Online' || statusText === 'Aktif') return 'text-emerald-400';
     if (statusText === 'Dinliyor') return 'text-orange-500';
     if (statusText === 'Sessiz') return 'text-[var(--theme-secondary-text)]';
     if (statusText === 'AFK') return 'text-violet-400';
     if (statusText === 'Pasif') return 'text-yellow-500';
-    if (statusText === 'Duymuyor') return 'text-red-400';
+    if (statusText === 'Duymuyor' || statusText === 'Rahatsız Etmeyin') return 'text-red-400';
+    if (statusText === 'Çevrimdışı') return 'text-[var(--theme-secondary-text)]/60';
     return 'text-blue-500';
   };
 
   const getEffectiveStatus = () => {
-    if (currentUser.statusText !== 'Aktif') return currentUser.statusText;
-    // Auto-presence durumu
-    const auto = autoStatusRef.current;
-    if (auto === 'deafened') return 'Duymuyor';
-    if (auto === 'idle') return 'Pasif';
+    // Legacy 'Aktif' değerleri de 'Online' gibi davransın — DB'den eski saklı
+    // değerler geldiğinde.
+    const st = currentUser.statusText;
+    const isOnline = st === 'Online' || st === 'Aktif' || !st;
+    if (!isOnline) return st!;
+    // Auto-presence durumu — state'ten oku ki UI her değişimde re-render olsun
+    if (autoStatus === 'deafened') return 'Duymuyor';
+    if (autoStatus === 'idle') return 'Pasif';
     if (isDeafened) return 'Sessiz';
     if (isMuted) return 'Dinliyor';
-    return 'Aktif';
+    return 'Online';
   };
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}s ${mins.toString().padStart(2, '0')}d`;
+    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -1178,10 +1323,11 @@ export default function App() {
     for (let i = 0; i < 10; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    const expiresAt = Date.now() + 180 * 1000;
+    const INVITE_CODE_TTL_SEC = 24 * 60 * 60; // 24 saat — tek kullanımlık (DB'de used flag)
+    const expiresAt = Date.now() + INVITE_CODE_TTL_SEC * 1000;
     await saveInviteCode(code, expiresAt);
     setGeneratedCode(code);
-    setTimeLeft(180);
+    setTimeLeft(INVITE_CODE_TTL_SEC);
   };
 
   // ── Join helpers ──────────────────────────────────────────────────────────
@@ -1191,15 +1337,15 @@ export default function App() {
     if (Date.now() - lastJoinRef.current < 2000) return;
     lastJoinRef.current = Date.now();
     logger.info('Room join', { channelId, channelName, userId: currentUser.id });
-    // AFK durumundaysa kanala girince temizle
-    if (currentUser.statusText === 'AFK') {
-      const activeUser = { ...currentUser, statusText: 'Aktif' };
+    // AFK veya manuel Çevrimdışı durumundaysa kanala girince Online'a dön
+    if (currentUser.statusText === 'AFK' || currentUser.statusText === 'Çevrimdışı') {
+      const activeUser = { ...currentUser, statusText: 'Online' };
       setCurrentUser(activeUser);
       setAllUsers(prev => prev.map(u => u.id === activeUser.id ? activeUser : u));
       presenceChannelRef.current?.send({
         type: 'broadcast',
         event: 'moderation',
-        payload: { userId: activeUser.id, updates: { statusText: 'Aktif' } },
+        payload: { userId: activeUser.id, updates: { statusText: 'Online' } },
       });
     }
     const now = Date.now();
@@ -1357,6 +1503,11 @@ export default function App() {
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(loggedInUser);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
+    // Avatar çerçeve rengini DB'den localStorage'a sync et
+    if (loggedInUser.avatarBorderColor !== undefined) {
+      localStorage.setItem('avatarBorderColor', loggedInUser.avatarBorderColor || '');
+      settings.setAvatarBorderColor?.(loggedInUser.avatarBorderColor || '');
+    }
 
     await initPostAuth(loggedInUser);
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
@@ -1439,8 +1590,13 @@ export default function App() {
       currentRoom: activeChannel || undefined,
       serverId: activeServerId || undefined,
       autoStatus: autoStatusRef.current,
+      // SABİT session bilgileri — track() replace yaptığı için her çağrıda gerekli.
+      onlineSince: onlineSinceRef.current,
+      platform: platformRef.current,
+      // Manuel statusText presence'ta taşınır (Çevrimdışı/Rahatsız Etmeyin/AFK).
+      statusText: currentUser.statusText || 'Online',
     });
-  }, [currentUser.id, currentUser.name, appVersion, isMuted, isDeafened, activeChannel, activeServerId, presenceChannelRef]);
+  }, [currentUser.id, currentUser.name, currentUser.statusText, appVersion, isMuted, isDeafened, activeChannel, activeServerId, presenceChannelRef, onlineSinceRef, platformRef]);
 
   const trackDebounceRef = useRef<number | null>(null);
   useEffect(() => {
@@ -1538,7 +1694,7 @@ export default function App() {
       age: ageNum,
       avatar: '',
       status: 'online',
-      statusText: 'Aktif',
+      statusText: 'Online',
       isAdmin: false,
       isPrimaryAdmin: false,
     };
@@ -1627,6 +1783,8 @@ export default function App() {
     setPasswordError,
     userVolumes,
     setUserVolumes,
+    settingsTarget,
+    setSettingsTarget,
   };
 
   const settingsContextValue: SettingsContextType = {
@@ -1663,6 +1821,9 @@ export default function App() {
     setDisplayName,
     livekitRoomRef,
     presenceChannelRef,
+    countdownRef,
+    countdownActive,
+    dismissIdleCountdown,
     handleCopyCode,
     handleUpdateUserVolume,
     handleUserActionClick,
@@ -1737,6 +1898,7 @@ export default function App() {
     <ConfirmProvider>
     <SettingsCtx.Provider value={settingsContextValue}>
       <UserContext.Provider value={userContextValue}>
+        <FavoriteFriendsProvider currentUserId={currentUser.id || undefined}>
         <ChannelContext.Provider value={channelContextValue}>
           <UIContext.Provider value={uiContextValue}>
             <AppStateContext.Provider value={appStateValue}>
@@ -1872,6 +2034,7 @@ export default function App() {
             </AppStateContext.Provider>
           </UIContext.Provider>
         </ChannelContext.Provider>
+        </FavoriteFriendsProvider>
       </UserContext.Provider>
     </SettingsCtx.Provider>
     </ConfirmProvider>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AvatarContent from '../../AvatarContent';
 import { createPortal } from 'react-dom';
 import {
   Users, Search, Shield, ShieldCheck, Crown, ChevronLeft, ChevronRight,
@@ -17,6 +18,8 @@ import {
   listUserOwnedServers,
   setUserPlan,
   revokeUserPlan,
+  setUserLevel,
+  revokeUserLevel,
   type AdminUserRow,
   type PlanKey,
   type PlanStatus,
@@ -83,6 +86,8 @@ export default function ManagementUsersPanel() {
 
   // Plan modal
   const [planModalUser, setPlanModalUser] = useState<AdminUserRow | null>(null);
+  // Role (seviye) modal
+  const [roleModalUser, setRoleModalUser] = useState<AdminUserRow | null>(null);
 
   // User detail modal (mute/ban/admin/mod/delete/reset)
   const [detailUser, setDetailUser] = useState<AdminUserRow | null>(null);
@@ -412,9 +417,13 @@ export default function ManagementUsersPanel() {
                   user={u}
                   expanded={expanded === u.id}
                   canExpand={tab === 'owners' || u.owned_server_count > 0}
+                  isSelf={u.id === currentUser.id}
+                  canAssignRole={!!(currentUser.isPrimaryAdmin || currentUser.isAdmin)}
                   onToggle={() => setExpanded(expanded === u.id ? null : u.id)}
                   onManagePlan={() => setPlanModalUser(u)}
                   onOpenDetail={() => setDetailUser(u)}
+                  onManageRole={() => setRoleModalUser(u)}
+                  onQuickAction={setRowConfirm}
                 />
               ))}
             </div>
@@ -442,6 +451,15 @@ export default function ManagementUsersPanel() {
           user={planModalUser}
           onClose={() => setPlanModalUser(null)}
           onSuccess={() => { setPlanModalUser(null); void load(); setToastMsg('Plan güncellendi'); }}
+          onError={(msg) => setToastMsg(msg)}
+        />
+      )}
+
+      {roleModalUser && (
+        <UserLevelModal
+          user={roleModalUser}
+          onClose={() => setRoleModalUser(null)}
+          onSuccess={() => { setRoleModalUser(null); void load(); setToastMsg('Seviye güncellendi'); }}
           onError={(msg) => setToastMsg(msg)}
         />
       )}
@@ -571,7 +589,7 @@ function ThemedSelect({ value, onChange, options, title, minWidth, size }: {
             left: position.left,
             minWidth: position.width,
             zIndex: 9999,
-            background: 'var(--theme-popover-bg, rgba(10,14,26,0.96))',
+            background: 'var(--theme-popover-bg, var(--surface-3))',
             border: '1px solid var(--theme-popover-border, rgba(255,255,255,0.10))',
             boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
             backdropFilter: 'blur(20px) saturate(150%)',
@@ -610,33 +628,52 @@ interface UserRowProps {
   user: AdminUserRow;
   expanded: boolean;
   canExpand: boolean;
+  isSelf: boolean;
+  canAssignRole: boolean;
   onToggle: () => void;
   onManagePlan: () => void;
   onOpenDetail: () => void;
+  onManageRole: () => void;
+  onQuickAction: (c: RowConfirm) => void;
 }
 
-const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, onToggle, onManagePlan, onOpenDetail }) => {
+const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, canAssignRole, onToggle, onManagePlan, onOpenDetail, onManageRole, onQuickAction }) => {
   const isVoiceBanned = !!user.is_voice_banned && (!user.ban_expires || user.ban_expires > Date.now());
   const isMuted = !!user.is_muted && (!user.mute_expires || user.mute_expires > Date.now());
   const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
-  const avatarUrl = user.avatar && user.avatar.startsWith('http') ? user.avatar : null;
-  const avatarInitial = (displayName || 'U').charAt(0).toUpperCase();
+  // Live status look-up — admin DTO'nun statusText'i yok. allUsers (realtime presence)
+  // içinden çek; yoksa 'Online' default → pipeline status PNG'yi (online.png) döner,
+  // initial harfe düşmez.
+  const { allUsers } = useUser();
+  const liveUser = allUsers.find(u => u.id === user.id);
+  const resolvedStatusText = liveUser?.statusText || 'Online';
+
+  // Role picker inline — sadece yetki sahibi + self değil + primary değil
+  const canEditRole = canAssignRole && !isSelf && !user.is_primary_admin;
 
   return (
-    <div className="transition-colors hover:bg-[var(--theme-panel-hover)]">
+    <div className="group transition-colors hover:bg-[var(--theme-panel-hover)]">
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Avatar */}
         <div className="shrink-0 w-8 h-8 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden">
-          {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : avatarInitial}
+          <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.first_name} name={displayName} letterClassName="text-[11px] font-bold text-[var(--theme-accent)]" />
         </div>
 
         {/* Meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[12.5px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
-            {user.is_primary_admin && <RoleBadge type="primary" />}
-            {!user.is_primary_admin && user.is_admin && <RoleBadge type="admin" />}
-            {!user.is_admin && user.is_moderator && <RoleBadge type="mod" />}
+            {user.is_primary_admin ? (
+              <RoleBadge type="primary" />
+            ) : canEditRole ? (
+              <InlineRolePicker user={user} onChange={onQuickAction} />
+            ) : (
+              <>
+                {user.is_admin && <RoleBadge type="admin" />}
+                {!user.is_admin && user.is_moderator && <RoleBadge type="mod" />}
+              </>
+            )}
+            <LevelBadge level={user.user_level} />
             <PlanBadge plan={user.plan} />
             <StatusBadge status={user.plan_status} />
             {user.plan_source === 'paid' && <PaidBadge />}
@@ -652,14 +689,42 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, onToggle, 
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions — hover ile emphasis artar, layout sabit */}
         <div className="flex items-center gap-1 shrink-0">
-          {isMuted && <span className="text-[9px] font-bold text-orange-400 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-500/15"><VolumeX size={9} />muted</span>}
-          {isVoiceBanned && <span className="text-[9px] font-bold text-red-400 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500/15"><Ban size={9} />sesban</span>}
+          {/* Moderation göstergeleri — sadece aktif durumda görünür, pasif (chip).
+              Mute/ban işlemi Detay panelinden yapılır; burada sadece "bu kullanıcı
+              susturulmuş/yasaklanmış" bilgisi. */}
+          {isMuted && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-orange-500/15 text-orange-400 text-[9px] font-bold uppercase tracking-wide"
+              title="Susturulmuş (Detay panelinden yönet)"
+            >
+              <VolumeX size={10} /> muted
+            </span>
+          )}
+          {isVoiceBanned && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[9px] font-bold uppercase tracking-wide"
+              title="Ses yasaklı (Detay panelinden yönet)"
+            >
+              <Ban size={10} /> sesban
+            </span>
+          )}
+
+          {canAssignRole && !isSelf && (
+            <button
+              onClick={onManageRole}
+              className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+              title="Kullanıcı seviyesini değiştir"
+            >
+              <ShieldCheck size={11} />
+              Seviye
+            </button>
+          )}
 
           <button
             onClick={onManagePlan}
-            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1"
+            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
             title={user.plan_source === 'paid' ? 'Ücretli plan — sadece görüntüleme' : 'Plan yönet'}
           >
             {user.plan_source === 'paid' ? <Lock size={11} /> : <Crown size={11} />}
@@ -668,7 +733,7 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, onToggle, 
 
           <button
             onClick={onOpenDetail}
-            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[var(--theme-text)] hover:bg-[var(--theme-panel-hover)] inline-flex items-center gap-1"
+            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[var(--theme-text)] hover:bg-[var(--theme-panel-hover)] inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
             title="Detaylı kullanıcı yönetimi"
           >
             <MoreVertical size={11} />
@@ -691,6 +756,93 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, onToggle, 
     </div>
   );
 };
+
+// ── Inline Role Picker — RoleBadge yerine tıklanabilir pill ──────────────
+// Mevcut rolü gösterir; click ile compact dropdown açılır; rol seçimi
+// toggleAdmin/toggleMod rowConfirm akışına yönlendirilir (enforceRoleExclusion
+// parent tarafta mutual-exclusion'ı zaten uygular).
+function InlineRolePicker({ user, onChange }: { user: AdminUserRow; onChange: (c: RowConfirm) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const current: 'admin' | 'mod' | 'none' = user.is_admin ? 'admin' : user.is_moderator ? 'mod' : 'none';
+
+  const pillCls =
+    current === 'admin' ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/22'
+    : current === 'mod' ? 'bg-blue-500/15 text-blue-400 hover:bg-blue-500/22'
+    : 'bg-white/5 text-[var(--theme-secondary-text)]/80 hover:bg-white/10';
+  const icon = current === 'admin' ? <Shield size={8} /> : current === 'mod' ? <ShieldCheck size={8} /> : <UserIconPlaceholder />;
+  const label = current === 'admin' ? 'ADMIN' : current === 'mod' ? 'MOD' : 'ÜYE';
+
+  const select = (next: 'admin' | 'mod' | 'none') => {
+    setOpen(false);
+    if (next === current) return;
+    if (next === 'admin') onChange({ type: 'toggleAdmin', user, makeAdmin: true });
+    else if (next === 'mod') onChange({ type: 'toggleMod', user, makeMod: true });
+    else if (current === 'admin') onChange({ type: 'toggleAdmin', user, makeAdmin: false });
+    else if (current === 'mod') onChange({ type: 'toggleMod', user, makeMod: false });
+  };
+
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide transition-colors ${pillCls}`}
+        title="Rolü değiştir"
+      >
+        {icon} {label}
+        <ChevronDown size={8} className={`ml-0.5 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 z-30 min-w-[140px] rounded-lg py-1 shadow-lg"
+          style={{
+            background: 'var(--theme-bg)',
+            border: '1px solid var(--theme-border)',
+            boxShadow: '0 8px 24px rgba(var(--shadow-base), 0.35)',
+          }}
+        >
+          <RoleOption active={current === 'admin'} icon={<Shield size={11} />} label="Admin" tone="rose" onClick={() => select('admin')} />
+          <RoleOption active={current === 'mod'} icon={<ShieldCheck size={11} />} label="Moderatör" tone="blue" onClick={() => select('mod')} />
+          <RoleOption active={current === 'none'} icon={<ShieldOff size={11} />} label="Üye (rol yok)" tone="muted" onClick={() => select('none')} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoleOption({ active, icon, label, tone, onClick }: {
+  active: boolean; icon: React.ReactNode; label: string; tone: 'rose' | 'blue' | 'muted'; onClick: () => void;
+}) {
+  const toneCls =
+    tone === 'rose' ? 'text-rose-400' : tone === 'blue' ? 'text-blue-400' : 'text-[var(--theme-secondary-text)]';
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-semibold text-left transition-colors ${
+        active ? 'bg-[var(--theme-accent)]/10' : 'hover:bg-[var(--theme-panel-hover)]'
+      }`}
+    >
+      <span className={toneCls}>{icon}</span>
+      <span className="flex-1 text-[var(--theme-text)]">{label}</span>
+      {active && <Check size={11} className="text-[var(--theme-accent)]" />}
+    </button>
+  );
+}
+
+// "Üye" (rol yok) için RoleBadge ikonu — küçük dot
+function UserIconPlaceholder() {
+  return <span className="inline-block w-[6px] h-[6px] rounded-full bg-current opacity-60" />;
+}
 
 function OwnedServersDrawer({ userId }: { userId: string }) {
   const [rows, setRows] = useState<OwnedServerRow[] | null>(null);
@@ -767,6 +919,21 @@ function PlanBadge({ plan }: { plan: PlanKey | 'none' }) {
   return (
     <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cls}`}>
       {PLAN_LABEL[plan]}
+    </span>
+  );
+}
+
+function LevelBadge({ level }: { level: string | null | undefined }) {
+  if (!level) return null;
+  const cls =
+    level === '3' ? 'bg-amber-500/15 text-amber-400'
+    : level === '2' ? 'bg-fuchsia-500/15 text-fuchsia-400'
+    : level === '1' ? 'bg-teal-500/15 text-teal-400'
+    : 'bg-white/5 text-[var(--theme-secondary-text)]';
+  const label = level === '1' ? 'Üye' : level === '2' ? 'VIP' : level === '3' ? 'Elit' : level;
+  return (
+    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cls}`}>
+      {label}
     </span>
   );
 }
@@ -875,10 +1042,11 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
   onOpenPlan: () => void;
 }) {
   const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
-  const avatarUrl = user.avatar && user.avatar.startsWith('http') ? user.avatar : null;
-  const avatarInitial = (displayName || 'U').charAt(0).toUpperCase();
   const isVoiceBanned = !!user.is_voice_banned && (!user.ban_expires || user.ban_expires > Date.now());
   const isMuted = !!user.is_muted && (!user.mute_expires || user.mute_expires > Date.now());
+  const { allUsers } = useUser();
+  const liveUser = allUsers.find(u => u.id === user.id);
+  const resolvedStatusText = liveUser?.statusText || 'Online';
 
   // Submenu states
   const [muteMin, setMuteMin] = useState('5');
@@ -893,7 +1061,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
       <div className="p-5 border-b border-[var(--theme-border)]">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-12 h-12 rounded-xl bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[15px] flex items-center justify-center overflow-hidden">
-            {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : avatarInitial}
+            <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.first_name} name={displayName} letterClassName="text-[14px] font-bold text-[var(--theme-accent)]" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-bold text-[var(--theme-text)] truncate">{displayName}</h3>
@@ -1332,6 +1500,214 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
         title="Planı Kaldır"
         description={`${displayName} kullanıcısının manuel planı kaldırılacak. Sunucu oluşturma yetkisi sıfırlanacak.`}
         confirmText="Planı Kaldır"
+        cancelText="Vazgeç"
+        onConfirm={performRevoke}
+        onCancel={() => setConfirmingRevoke(false)}
+        danger
+        loading={submitting}
+      />
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Kullanıcı Seviye Yönetimi — Plan Modal ile simetrik UX
+// Kademeli üye seviyeleri (tema/özellik kilidi açar). Moderatör/Admin yetkisi
+// BURADA YÖNETİLMEZ — o toggle'lar ayrı (primaryAdmin manuel verir).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AVAILABLE_LEVELS = ['1', '2', '3'] as const;
+type LevelKey = typeof AVAILABLE_LEVELS[number];
+
+const USER_LEVEL_LABEL: Record<string, string> = {
+  '': 'Seviyesiz',
+  '1': 'Üye',
+  '2': 'VIP',
+  '3': 'Elit',
+};
+
+function labelFor(level: string | null | undefined): string {
+  if (!level) return 'Seviyesiz';
+  return USER_LEVEL_LABEL[level] ?? level;
+}
+
+function UserLevelModal({ user, onClose, onSuccess, onError }: {
+  user: AdminUserRow;
+  onClose: () => void;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const currentLevel: string | null = user.user_level ?? null;
+  const initialLevel: LevelKey = (AVAILABLE_LEVELS.includes((currentLevel ?? '') as LevelKey)
+    ? (currentLevel as LevelKey)
+    : '1');
+  const [level, setLevel] = useState<LevelKey>(initialLevel);
+  const [duration, setDuration] = useState<DurationType>(user.user_level_end_at ? 'custom' : 'unlimited');
+  const [customEndAt, setCustomEndAt] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+
+  const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
+
+  const submit = async () => {
+    setSubmitting(true); setLocalError(null);
+    try {
+      await setUserLevel(user.id, {
+        level,
+        durationType: duration,
+        customEndAt: duration === 'custom' ? customEndAt : undefined,
+      });
+      onSuccess();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'İşlem başarısız';
+      setLocalError(msg);
+      onError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const performRevoke = async () => {
+    setSubmitting(true); setLocalError(null);
+    try {
+      await revokeUserLevel(user.id);
+      setConfirmingRevoke(false);
+      onSuccess();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Kaldırma başarısız';
+      setLocalError(msg);
+      onError(msg);
+      setConfirmingRevoke(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} width="md" padded={false}>
+      <div className="p-5 border-b border-[var(--theme-border)]">
+        <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1">Seviye Yönetimi</h3>
+        <p className="text-[12px] text-[var(--theme-secondary-text)]">
+          {displayName} <span className="opacity-60">• {user.email || user.id}</span>
+        </p>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Mevcut seviye özeti */}
+        <div className="p-3 rounded-xl bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[11.5px] space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[var(--theme-secondary-text)]">Mevcut seviye</span>
+            <span className="font-semibold text-[var(--theme-text)]">{labelFor(currentLevel)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[var(--theme-secondary-text)]">Kaynak</span>
+            <span className="font-semibold text-[var(--theme-text)]">{user.user_level_source ?? '—'}</span>
+          </div>
+          {user.user_level_start_at && (
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--theme-secondary-text)]">Başlangıç</span>
+              <span className="font-mono text-[10.5px]">{new Date(user.user_level_start_at).toLocaleString('tr-TR')}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-[var(--theme-secondary-text)]">Bitiş</span>
+            <span className="font-mono text-[10.5px]">
+              {user.user_level_end_at ? new Date(user.user_level_end_at).toLocaleString('tr-TR') : 'sınırsız'}
+            </span>
+          </div>
+        </div>
+
+        {/* Seviye seçimi */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Seviye</label>
+          <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+            {AVAILABLE_LEVELS.map(l => (
+              <button
+                key={l}
+                onClick={() => setLevel(l)}
+                className={`py-2 rounded-lg text-[12px] font-semibold uppercase tracking-wide border transition-colors ${
+                  level === l
+                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
+                    : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
+                }`}
+              >
+                {labelFor(l)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Süre seçimi */}
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Süre</label>
+          <div className="grid grid-cols-5 gap-1.5 mt-1.5">
+            {([
+              { v: '1week' as const, l: '1 hafta' },
+              { v: '1month' as const, l: '1 ay' },
+              { v: '1year' as const, l: '1 yıl' },
+              { v: 'custom' as const, l: 'Özel' },
+              { v: 'unlimited' as const, l: 'Sınırsız' },
+            ]).map(d => (
+              <button
+                key={d.v}
+                onClick={() => setDuration(d.v)}
+                className={`py-2 rounded-lg text-[10.5px] font-semibold border ${
+                  duration === d.v
+                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
+                    : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
+                }`}
+              >
+                {d.l}
+              </button>
+            ))}
+          </div>
+          {duration === 'custom' && (
+            <input
+              type="datetime-local"
+              value={customEndAt}
+              onChange={e => setCustomEndAt(e.target.value)}
+              className="mt-2 w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-lg px-3 py-1.5 text-[11.5px] outline-none focus:border-[var(--theme-accent)]/50"
+            />
+          )}
+        </div>
+
+        {localError && (
+          <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-[11px]">{localError}</div>
+        )}
+      </div>
+
+      <div className="flex border-t border-[var(--theme-border)]">
+        <button onClick={onClose} className="flex-1 py-3.5 text-[13px] font-semibold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-panel-hover)]">
+          Kapat
+        </button>
+        {currentLevel && (
+          <>
+            <div className="w-px bg-[var(--theme-border)]" />
+            <button
+              onClick={() => setConfirmingRevoke(true)}
+              disabled={submitting}
+              className="flex-1 py-3.5 text-[13px] font-semibold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+            >
+              Seviyeyi Geri Al
+            </button>
+          </>
+        )}
+        <div className="w-px bg-[var(--theme-border)]" />
+        <button
+          onClick={submit}
+          disabled={submitting || (duration === 'custom' && !customEndAt)}
+          className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {submitting ? 'Kaydediliyor...' : 'Seviye Belirle'}
+        </button>
+      </div>
+
+      <ConfirmModal
+        isOpen={confirmingRevoke}
+        title="Seviyeyi Geri Al"
+        description={`${displayName} kullanıcısının seviyesi kaldırılacak. Kademeli tema ve özellikler kapanacak.`}
+        confirmText="Seviyeyi Geri Al"
         cancelText="Vazgeç"
         onConfirm={performRevoke}
         onCancel={() => setConfirmingRevoke(false)}

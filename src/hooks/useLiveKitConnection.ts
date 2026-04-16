@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 import type React from 'react';
 import { logger } from '../lib/logger';
 import {
@@ -42,6 +42,10 @@ interface Props {
   allUsersRef: React.MutableRefObject<User[]>;
   userVolumesRef: React.MutableRefObject<Record<string, number>>;
   setSpeakingLevels: (levels: Record<string, number>) => void;
+  /** Yeni bir oturum başladığında (Reconnected dahil) çağrılır — epoch bump. */
+  onSessionReset?: () => void;
+  /** Local user audio level ref (yukarıdan verilir — voice activity consumer'larla paylaşım). */
+  localAudioLevelRef: React.MutableRefObject<number>;
 }
 
 export function useLiveKitConnection({
@@ -64,28 +68,43 @@ export function useLiveKitConnection({
   allUsersRef,
   userVolumesRef,
   setSpeakingLevels,
+  onSessionReset,
+  localAudioLevelRef,
 }: Props) {
   const livekitRoomRef = useRef<Room | null>(null);
   const isConnectingRef = useRef(false);
   /** Aktif RNNoise processor — strength slider anlık değişimi için. */
   const activeRnnoiseProcessorRef = useRef<RNNoiseTrackProcessor | null>(null);
+  /** Singleton disconnect — paralel çağrılar aynı promise'e bağlanır. */
+  const disconnectPromiseRef = useRef<Promise<void> | null>(null);
 
-  const disconnectFromLiveKit = async () => {
-    setIsConnecting(false);
-    isConnectingRef.current = false;
-    // RNNoise processor'u disconnect'ten önce destroy et — aksi halde AudioContext
-    // orphan kalır, yeni join'de paralel graph = echo.
-    if (activeRnnoiseProcessorRef.current) {
-      try { await activeRnnoiseProcessorRef.current.destroy(); } catch { /* no-op */ }
-      activeRnnoiseProcessorRef.current = null;
-      console.log('[rnnoise] destroyed');
-    }
-    if (livekitRoomRef.current) {
-      await livekitRoomRef.current.disconnect();
-      livekitRoomRef.current = null;
-    }
-    document.querySelectorAll('[data-livekit-audio]').forEach(el => el.remove());
-  };
+  // useCallback — stable reference. Auto-leave effect'inin dep zinciri bu
+  // fonksiyona kadar uzanıyor; her render'da yeni referans dönerse effect
+  // yeniden kurulur ve recordActivityImmediate() lastActivity'yi sıfırlar →
+  // Pasif/AFK hiç tetiklenmez. Kritik.
+  const disconnectFromLiveKit = useCallback(async (): Promise<void> => {
+    if (disconnectPromiseRef.current) return disconnectPromiseRef.current;
+    disconnectPromiseRef.current = (async () => {
+      try {
+        setIsConnecting(false);
+        isConnectingRef.current = false;
+        if (activeRnnoiseProcessorRef.current) {
+          try { await activeRnnoiseProcessorRef.current.destroy(); } catch { /* no-op */ }
+          activeRnnoiseProcessorRef.current = null;
+          console.log('[rnnoise] destroyed');
+        }
+        if (livekitRoomRef.current) {
+          await livekitRoomRef.current.disconnect();
+          livekitRoomRef.current = null;
+        }
+        document.querySelectorAll('[data-livekit-audio]').forEach(el => el.remove());
+        localAudioLevelRef.current = 0;
+      } finally {
+        disconnectPromiseRef.current = null;
+      }
+    })();
+    return disconnectPromiseRef.current;
+  }, [setIsConnecting, localAudioLevelRef]);
 
   const connectToLiveKit = async (
     channelId: string,
@@ -141,6 +160,10 @@ export function useLiveKitConnection({
         audioOutput: {
           deviceId: selectedOutput || undefined,
         },
+        // Web Audio GainNode üzerinden mix — remote audio tracks setVolume(>1)
+        // değeri artık HTMLMediaElement'te clamp edilmiyor; Web Audio gain ile
+        // gerçek amplifikasyon (100% üstü boost) sağlıyor.
+        webAudioMix: true,
       });
 
       const broadcastMemberUpdate = (members: string[], count: number) => {
@@ -187,7 +210,7 @@ export function useLiveKitConnection({
               age: 0,
               avatar: (identity[0] || '?').toUpperCase(),
               status: 'online',
-              statusText: 'Aktif',
+              statusText: 'Online',
               isAdmin: false,
               isPrimaryAdmin: false,
             };
@@ -213,11 +236,14 @@ export function useLiveKitConnection({
           if (user) {
             const savedVolume = userVolumesRef.current[user.id];
             if (savedVolume !== undefined) {
-              // track parametresi burada kesinlikle mevcut
+              // webAudioMix: true sayesinde setVolume(>1) gerçek amplifikasyon.
+              // Clamp 0..1.5 (150%).
+              const vol = Math.max(0, Math.min(1.5, savedVolume / 100));
               if (track instanceof RemoteAudioTrack) {
-                track.setVolume(savedVolume / 100);
+                track.setVolume(vol);
               }
-              audioEl.volume = Math.max(0, Math.min(1, savedVolume / 100));
+              // HTMLMediaElement fallback 0..1 clamp.
+              audioEl.volume = Math.min(1, vol);
             }
           }
         }
@@ -250,9 +276,12 @@ export function useLiveKitConnection({
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const levels: Record<string, number> = {};
+        let localLevel = 0;
         speakers.forEach(p => {
-          if (!p.isLocal) levels[p.identity] = p.audioLevel;
+          if (p.isLocal) localLevel = p.audioLevel;
+          else levels[p.identity] = p.audioLevel;
         });
+        localAudioLevelRef.current = localLevel;
         pendingLevels = levels;
         if (!speakingThrottleTimer) {
           speakingThrottleTimer = setTimeout(() => {
@@ -295,6 +324,8 @@ export function useLiveKitConnection({
         }
         connectionLostRef.current = false;
         setConnectionLevel(4);
+        // Yeni oturum — ghost countdown timeout'larını geçersiz kıl
+        onSessionReset?.();
       });
 
       room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
@@ -457,8 +488,10 @@ export function useLiveKitConnection({
       return true;
     } catch (err) {
       clearTimeout(joinTimer);
-      // Cleanup: oluşturulan room'u temizle (event listener leak önleme)
-      try { room?.disconnect(); } catch { /* ignore */ }
+      // Cleanup: oluşturulan room'u temizle (event listener leak önleme).
+      // await ile beklenir — LiveKit disconnect() internal removeAllListeners çağırır,
+      // ancak senkron değildir; await edilmezse dangling listener penceresi açık kalır.
+      try { await room?.disconnect(); } catch { /* ignore */ }
       const errMsg = (err as Error)?.message ?? '';
       const isTimeout = errMsg.includes('zaman aşımı') || (err as Error)?.name === 'AbortError';
 

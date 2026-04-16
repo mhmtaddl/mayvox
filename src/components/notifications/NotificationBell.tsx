@@ -145,39 +145,56 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         {open && (
           <motion.div
             ref={panelRef}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.12, ease: [0.2, 0, 0, 1] }}
-            className="absolute bottom-full right-0 mb-2 w-72 rounded-xl z-50 overflow-hidden"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.1 } }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-full right-0 mb-2 w-[300px] rounded-2xl z-50 overflow-hidden"
             style={{
-              background: 'rgba(var(--theme-sidebar-rgb), 0.92)',
-              backdropFilter: 'blur(20px) saturate(1.2)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
-              border: '1px solid rgba(var(--glass-tint), 0.07)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.28), 0 1px 0 rgba(var(--glass-tint), 0.04) inset',
+              // Solid premium foreground — DMPanel / profile popup ile aynı material dili.
+              background: 'var(--theme-bg)',
+              border: '1px solid var(--theme-border)',
+              boxShadow:
+                '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
+                ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
+                ' inset 0 1px 0 rgba(255,255,255,0.04)',
             }}
           >
-            {/* Top edge */}
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.06)] to-transparent" />
-
-            {/* Başlık */}
-            <div className="px-4 pt-3 pb-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/50">
+            {/* Başlık — title + counter */}
+            <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
                 Bildirimler
               </span>
+              {items.length > 0 && (
+                <span className="text-[9.5px] font-bold tabular-nums bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] px-1.5 py-0.5 rounded-full leading-none">
+                  {items.length}
+                </span>
+              )}
             </div>
 
             {/* İçerik */}
-            <div className="pb-1.5">
+            <div className="py-1.5">
               {items.length === 0 ? (
-                <div className="flex items-center gap-3 px-4 py-5">
-                  <div className="w-8 h-8 rounded-lg bg-[rgba(var(--glass-tint),0.04)] flex items-center justify-center">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-secondary-text)]/25">
+                <div className="flex flex-col items-center text-center gap-2.5 px-6 py-8">
+                  <div
+                    className="relative w-11 h-11 rounded-2xl flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.10) 0%, rgba(var(--theme-accent-rgb),0.03) 100%)',
+                      boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.10), inset 0 1px 0 rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--theme-accent)]/55">
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
                     </svg>
                   </div>
-                  <span className="text-[11px] text-[var(--theme-secondary-text)]/40">Her şey güncel</span>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-[12.5px] font-semibold text-[var(--theme-text)]/90 tracking-[-0.01em]">
+                      Her şey güncel
+                    </span>
+                    <span className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug max-w-[200px]">
+                      Yeni bir bildirim geldiğinde burada görünecek.
+                    </span>
+                  </div>
                 </div>
               ) : (
                 items.map(item => {
@@ -189,8 +206,8 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                       key={item.key}
                       onClick={onClick}
                       disabled={!onClick}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left group/row transition-colors duration-100 ${
-                        onClick ? 'hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer' : 'cursor-default'
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left group/row transition-colors duration-150 ${
+                        onClick ? 'hover:bg-[var(--theme-panel-hover)] cursor-pointer' : 'cursor-default'
                       }`}
                     >
                       {/* Sol priority çizgisi */}

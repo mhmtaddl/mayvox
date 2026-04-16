@@ -62,6 +62,8 @@ import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import { roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
+import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
+import AvatarContent from '../components/AvatarContent';
 
 import type { VoiceChannel } from '../types';
 import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
@@ -81,7 +83,7 @@ export default function ChatView() {
     userActionMenu, setUserActionMenu, roomModal, setRoomModal,
     passwordModal, setPasswordModal, passwordInput, setPasswordInput,
     passwordRepeatInput, setPasswordRepeatInput, passwordError, setPasswordError,
-    contextMenu, setContextMenu, userVolumes,
+    contextMenu, setContextMenu, userVolumes, setSettingsTarget,
   } = useUI();
   const { avatarBorderColor, soundInvite, soundInviteVariant } = useSettings();
   const {
@@ -228,9 +230,15 @@ export default function ChatView() {
   const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'bans' | 'audit' | undefined>(undefined);
 
+  // Periyodik poll (45 sn) ve window focus'ta refreshServers() çağrılıyor.
+  // Her seferinde setServerLoading(true) yapmak middle content'i spinner'a
+  // çeviriyor ve "random refresh" hissi veriyordu. Loading state SADECE ilk
+  // yüklemede gösterilmeli; sonraki arka plan refetch'leri silent olmalı.
+  const initialServerLoadDoneRef = useRef(false);
   const refreshServers = useCallback(async () => {
+    const isInitial = !initialServerLoadDoneRef.current;
     try {
-      setServerLoading(true);
+      if (isInitial) setServerLoading(true);
       setServerError('');
       const servers = await listMyServers();
       setServerList(servers);
@@ -238,7 +246,8 @@ export default function ChatView() {
     } catch (err: any) {
       setServerError(err.message || 'Sunucu listesi alınamadı');
     } finally {
-      setServerLoading(false);
+      if (isInitial) setServerLoading(false);
+      initialServerLoadDoneRef.current = true;
     }
   }, [activeServerId]);
 
@@ -611,7 +620,15 @@ export default function ChatView() {
         statusColor={getStatusColor(getEffectiveStatus())}
         avatar={currentUser.avatar}
         avatarBorderColor={avatarBorderColor}
+        userLevel={currentUser.userLevel}
+        isPrimaryAdmin={currentUser.isPrimaryAdmin}
+        isAdmin={currentUser.isAdmin}
       />
+
+      {/* Mobile-only banner; desktop'ta DesktopDock içinde render ediliyor. */}
+      <div className={FORCE_MOBILE ? '' : 'lg:hidden'}>
+        <InactivityCountdownBanner />
+      </div>
 
       <div className={`flex flex-1 min-h-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-3 lg:gap-[6px]'}`}>
         {/* ── Mobil kenar handle'ları ── */}
@@ -683,7 +700,7 @@ export default function ChatView() {
                                 {groupLabel && (<>{groupLabel === 'Dinleyiciler' && <div className="mx-1 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />}<div className="flex items-center gap-1.5 pt-1 pb-0.5 px-1">{groupLabel === 'Konuşmacılar' ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" /> : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />}<span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span></div></>)}
                                 <div onClick={(e) => { e.stopPropagation(); if (user.id !== currentUser.id) setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
                                   className={`flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1 ${isBc && !isSp ? 'opacity-70' : ''}`}>
-                                  <div className="relative shrink-0"><div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]">{user.avatar?.startsWith('http') ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : user.avatar}</div><DeviceBadge platform={user.platform} size={11} className="absolute -bottom-0.5 -right-0.5" /></div>
+                                  <div className="relative shrink-0"><div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]"><AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold text-[var(--theme-accent)]" /></div><DeviceBadge platform={user.platform} size={11} className="absolute -bottom-0.5 -right-0.5" /></div>
                                   <span className={`text-[11px] truncate flex-1 ${isBc && isSp ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-secondary-text)]'}`}>{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
                                   {isBc && (isSp ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" /> : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />)}
                                 </div>
@@ -743,7 +760,12 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Left Sidebar (masaüstü) ── */}
-        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+        <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => {
+            // Sol panelde (kanal üyesi) tıklama → ses seviyesi barı (action menu).
+            // Kendine tıklama → hiçbir şey açılmaz (self row non-interactive).
+            if (userId === currentUser.id) return;
+            setUserActionMenu({ userId, x, y });
+          }}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
           activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
           onShowDiscover={() => { setView('chat'); setShowDiscover(true); }} onLeaveServer={handleLeaveServer} />
@@ -752,7 +774,7 @@ export default function ChatView() {
         <AnimatePresence>
           {userActionMenu && (
             <ChatViewUserActionMenu menu={userActionMenu} currentUserId={currentUser.id} userVolumes={userVolumes}
-              onUpdateVolume={handleUpdateUserVolume} activeChannel={activeChannel} channels={channels}
+              onUpdateVolume={handleUpdateUserVolume} activeChannel={activeChannel} channels={channels} allUsers={allUsers}
               onToggleSpeaker={handleToggleSpeaker} inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns}
               onInvite={handleInviteUser} onClose={() => setUserActionMenu(null)} />
           )}
@@ -836,7 +858,12 @@ export default function ChatView() {
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
                   currentChannel={currentChannel} getIntensity={getIntensity} getEffectiveStatus={getEffectiveStatus}
-                  cardScale={cardScale} cardStyle={cardStyle} onProfileClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+                  cardScale={cardScale} cardStyle={cardStyle} onProfileClick={(userId, x, y) => {
+                    // Büyük voice room kartları: tıklayınca profil popup (arkadaş ekle, DM vs).
+                    // Ses seviyesi slider'ı SADECE sol kanal üye listesinde inline.
+                    if (userId === currentUser.id) return;
+                    setProfilePopup({ userId, x, y });
+                  }}
                   onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isModerator={currentUser.isModerator || false}
                   activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted}
                   onToggleChatMuted={() => setChatMuted(!chatMuted)} editingMsgId={editingMsgId} editingText={editingText}
@@ -897,7 +924,10 @@ export default function ChatView() {
               <MessageSquare size={16} />
               {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
             </button>
-            <button onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+            <button onClick={() => {
+                if (view === 'settings') { setView('chat'); }
+                else { setSettingsTarget('app'); setView('settings'); }
+              }}
               className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
               <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
               {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
@@ -907,7 +937,7 @@ export default function ChatView() {
               onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
               onOpenDM={() => setDmPanelOpen(true)}
               onOpenInvites={() => setInvitesModalOpen(true)}
-              onOpenAdminInviteRequests={() => setView('settings')}
+              onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
               onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
               onOpenServer={(sid) => setActiveServerId(sid)}
             />

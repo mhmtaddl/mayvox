@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
 import { formatFullName } from '../../lib/formatName';
+import AvatarContent from '../AvatarContent';
 
 // ── Spring presets ──
 const LAYOUT_SPRING = { type: 'spring' as const, stiffness: 250, damping: 26 };
@@ -123,13 +124,13 @@ function VoiceAvatarInner({
             transition: 'border-color 0.3s ease, box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease, height 0.3s ease',
           }}
         >
-          {user.avatar?.startsWith('http') ? (
-            <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="text-[var(--theme-text)] font-bold" style={{ fontSize: avatarSize * 0.28 }}>
-              {user.avatar}
-            </span>
-          )}
+          <AvatarContent
+            avatar={user.avatar}
+            statusText={user.statusText}
+            firstName={user.firstName}
+            name={user.name}
+            letterClassName="text-[var(--theme-text)] font-bold"
+          />
         </motion.div>
 
         {/* Speaking outer pulse ring */}

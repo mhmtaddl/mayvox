@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import AvatarContent from '../../AvatarContent';
 import { Users, Search, X, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban, Server } from 'lucide-react';
 import { cardCls } from '../shared';
 import { formatFullName } from '../../../lib/formatName';
@@ -261,9 +262,7 @@ export default function AdminUserManagement() {
                     {/* User info */}
                     <div className="flex items-center gap-2 md:gap-2.5 min-w-0 flex-1">
                       <div className="h-7 w-7 md:h-8 md:w-8 avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[9px] md:text-[10px] shrink-0 ring-1 ring-[var(--theme-border)]">
-                        {user.avatar?.startsWith('http')
-                          ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          : user.avatar}
+                        <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[9px] md:text-[10px] font-bold text-[var(--theme-text)]" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 md:gap-1.5 min-w-0">

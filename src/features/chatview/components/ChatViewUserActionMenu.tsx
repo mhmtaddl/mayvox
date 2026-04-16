@@ -10,6 +10,7 @@ interface Props {
   // Broadcast speaker toggle
   activeChannel: string | null;
   channels: Array<{ id: string; mode?: string; ownerId?: string; speakerIds?: string[]; members?: string[] }>;
+  allUsers: Array<{ id: string; name: string }>;
   onToggleSpeaker: (userId: string) => void;
   // Invite
   inviteStatuses: Record<string, string>;
@@ -25,6 +26,7 @@ export default function ChatViewUserActionMenu({
   onUpdateVolume,
   activeChannel,
   channels,
+  allUsers,
   onToggleSpeaker,
   inviteStatuses,
   inviteCooldowns,
@@ -33,7 +35,13 @@ export default function ChatViewUserActionMenu({
 }: Props) {
   const uid = menu.userId;
   const activeCh = channels.find(c => c.id === activeChannel);
-  const isInRoom = activeCh?.members?.includes(uid);
+  // members listesi hem LiveKit identity (user.name) hem user.id içerebilir
+  // (codebase'de tutarsız). İki kontrolü birden yap.
+  const targetUserName = allUsers.find(u => u.id === uid)?.name;
+  const isInRoom = !!(
+    activeCh?.members?.includes(uid) ||
+    (targetUserName && activeCh?.members?.includes(targetUserName))
+  );
 
   return (
     <motion.div
@@ -82,13 +90,13 @@ export default function ChatViewUserActionMenu({
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min="1"
-              max="99"
-              value={userVolumes[uid] ?? 50}
+              min="0"
+              max="150"
+              value={userVolumes[uid] ?? 100}
               onChange={(e) => onUpdateVolume(uid, parseInt(e.target.value))}
               className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)]"
             />
-            <span className="text-[11px] font-bold text-[var(--theme-accent)] w-8 text-right tabular-nums">%{userVolumes[uid] ?? 50}</span>
+            <span className="text-[11px] font-bold text-[var(--theme-accent)] w-10 text-right tabular-nums">%{userVolumes[uid] ?? 100}</span>
           </div>
         </div>
       )}

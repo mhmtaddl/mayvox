@@ -5,10 +5,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
+import AvatarContent from './AvatarContent';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
-import { useFavoriteFriends } from '../hooks/useFavoriteFriends';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
+import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import DeviceBadge from './chat/DeviceBadge';
 import type { User } from '../types';
 
@@ -41,7 +43,7 @@ export default function FriendsSidebarContent({
   const { setToastMsg } = useUI();
   const { avatarBorderColor, showLastSeen } = useSettings();
 
-  const { favoriteIds, isFavorite, toggleFavorite } = useFavoriteFriends(currentUser.id || undefined);
+  const { favoriteIds, isFavorite, toggleFavorite } = useSharedFavorites();
 
   const serverNameMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -50,17 +52,34 @@ export default function FriendsSidebarContent({
   }, [servers]);
 
   // ── Derived lists ──────────────────────────────────────────────────────
+  // Manuel "Çevrimdışı" (premium/staff) — presence'ta hala online ama UI'da
+  // offline grubunda gösterilir.
+  const isEffectivelyOnline = (u: { status: string; statusText?: string }) =>
+    u.status === 'online' && u.statusText !== 'Çevrimdışı';
   const friendUsers = useMemo(() => allUsers.filter(u => friendIds.has(u.id)), [allUsers, friendIds]);
-  const onlineUsers = useMemo(() => friendUsers.filter(u => u.status === 'online'), [friendUsers]);
-  const offlineUsers = useMemo(() => friendUsers.filter(u => u.status === 'offline'), [friendUsers]);
+  const onlineUsers = useMemo(() => friendUsers.filter(isEffectivelyOnline), [friendUsers]);
+  const offlineUsers = useMemo(() => friendUsers.filter(u => !isEffectivelyOnline(u)), [friendUsers]);
 
-  const onlineFavorites = useMemo(
-    () => onlineUsers.filter(u => favoriteIds.has(u.id)),
-    [onlineUsers, favoriteIds]
+  // Favoriler: hem online hem offline — online'lar önce (aktifler yukarıda).
+  // Aynı kullanıcı Online/Offline bölümlerine DUPLIKE edilmez.
+  const favoriteUsers = useMemo(
+    () => friendUsers
+      .filter(u => favoriteIds.has(u.id))
+      .sort((a, b) => {
+        const aOn = isEffectivelyOnline(a) ? 0 : 1;
+        const bOn = isEffectivelyOnline(b) ? 0 : 1;
+        if (aOn !== bOn) return aOn - bOn;
+        return 0;
+      }),
+    [friendUsers, favoriteIds]
   );
   const onlineRest = useMemo(
     () => onlineUsers.filter(u => !favoriteIds.has(u.id)),
     [onlineUsers, favoriteIds]
+  );
+  const offlineRest = useMemo(
+    () => offlineUsers.filter(u => !favoriteIds.has(u.id)),
+    [offlineUsers, favoriteIds]
   );
 
   // ── Offline collapse ───────────────────────────────────────────────────
@@ -107,17 +126,25 @@ export default function FriendsSidebarContent({
           setFriendMenu({ userId: user.id, userName: formatFullName(user.firstName, user.lastName), x: e.clientX, y: e.clientY });
         }}
       >
-        <div className="relative shrink-0">
+        {(() => {
+          const uColor = isMe ? avatarBorderColor : (user.avatarBorderColor || '');
+          const uTier = getFrameTier(
+            isMe ? currentUser.userLevel : user.userLevel,
+            isMe ? { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin } : { isPrimaryAdmin: !!user.isPrimaryAdmin, isAdmin: !!user.isAdmin },
+          );
+          return (
+        <div
+          className={`relative shrink-0 ${uColor ? getFrameClassName(uTier) : ''}`}
+          style={uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
+        >
           <div
-            className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden border-2 avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
-            style={{ borderColor: isMe ? avatarBorderColor : 'transparent' }}
+            className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           >
-            {user.avatar?.startsWith('http')
-              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : user.avatar}
+            <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
           <DeviceBadge platform={user.platform} size={isDesktop ? 12 : 13} className="absolute -bottom-0.5 -right-0.5" />
         </div>
+          ); })()}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">
@@ -138,7 +165,7 @@ export default function FriendsSidebarContent({
           <div className="flex items-center gap-1 mt-0.5">
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-            {user.statusText && user.statusText !== 'Aktif' && (
+            {user.statusText && user.statusText !== 'Online' && user.statusText !== 'Aktif' && (
               <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText)}`}>{user.statusText}</span>
             )}
           </div>
@@ -165,7 +192,11 @@ export default function FriendsSidebarContent({
         </div>
         {/* Desktop invite button */}
         {isDesktop && handleInviteUser && (() => {
-          const alreadyInChannel = activeChannel && channels?.find((c: any) => c.id === activeChannel)?.members?.includes(user.name);
+          // members[] codebase'de hem user.id (UUID) hem user.name (LiveKit
+          // identity) tutabiliyor — tutarsız. Her ikisini de kontrol et ki
+          // aynı odadaki kullanıcıya call icon'u görünmesin.
+          const activeCh = activeChannel ? channels?.find((c: any) => c.id === activeChannel) : undefined;
+          const alreadyInChannel = !!(activeCh?.members?.includes(user.id) || activeCh?.members?.includes(user.name));
           const canInvite = !isMe && activeChannel && !alreadyInChannel;
           if (!canInvite) return null;
 
@@ -206,17 +237,26 @@ export default function FriendsSidebarContent({
         setFriendMenu({ userId: user.id, userName: formatFullName(user.firstName, user.lastName), x: e.clientX, y: e.clientY });
       }}
     >
-      <div className="relative">
+      {(() => {
+        const isSelf = user.id === currentUser.id;
+        const uColor = isSelf ? avatarBorderColor : (user.avatarBorderColor || '');
+        const uTier = getFrameTier(
+          isSelf ? currentUser.userLevel : user.userLevel,
+          isSelf ? { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin } : { isPrimaryAdmin: !!user.isPrimaryAdmin, isAdmin: !!user.isAdmin },
+        );
+        return (
+      <div
+        className="relative"
+        style={isDesktop && uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
+      >
         <div
-          className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'border-2 avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
-          style={isDesktop ? { borderColor: user.id === currentUser.id ? avatarBorderColor : 'transparent' } : undefined}
+          className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
         >
-          {user.avatar?.startsWith('http')
-            ? <img src={user.avatar} alt="" className={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} referrerPolicy="no-referrer" />
-            : user.avatar}
+          <AvatarContent avatar={user.avatar} statusText="Çevrimdışı" firstName={user.firstName} name={user.name} imgClassName={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
         </div>
         {isDesktop && <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />}
       </div>
+        ); })()}
       <div className="min-w-0">
         <div className="flex items-center gap-1">
           <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-none truncate`}>
@@ -235,7 +275,7 @@ export default function FriendsSidebarContent({
           )}
           {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
-        {isDesktop && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
+        {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
           <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-none mt-0.5 block">
             {(() => {
               const d = new Date(user.lastSeenAt);
@@ -262,9 +302,7 @@ export default function FriendsSidebarContent({
     return (
       <div key={req.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-[rgba(var(--glass-tint),0.04)] transition-all">
         <div className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-          {user.avatar?.startsWith('http')
-            ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            : <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-70">{(user.firstName?.[0] || '?').toUpperCase()}</span>}
+          <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-medium text-[var(--theme-text)] truncate leading-tight">{name}</p>
@@ -321,17 +359,17 @@ export default function FriendsSidebarContent({
             </div>
           )}
 
-          {/* 2. Favorites — online only */}
-          {onlineFavorites.length > 0 && (
+          {/* 2. Favorites — online + offline (favorite olan herkes burada) */}
+          {favoriteUsers.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2 px-2">
                 <Star size={9} className="text-amber-400/60 fill-amber-400/60" />
                 <span className="text-[9px] font-bold text-amber-400/50 uppercase tracking-[0.14em]">Favoriler</span>
-                <span className="text-[9px] bg-amber-400/8 text-amber-400/50 px-1.5 py-0.5 rounded-full font-bold">{onlineFavorites.length}</span>
+                <span className="text-[9px] bg-amber-400/8 text-amber-400/50 px-1.5 py-0.5 rounded-full font-bold">{favoriteUsers.length}</span>
                 <div className="flex-1 h-px bg-amber-400/10" />
               </div>
               <div className="space-y-1">
-                {onlineFavorites.map(renderOnlineUser)}
+                {favoriteUsers.map(u => isEffectivelyOnline(u) ? renderOnlineUser(u) : renderOfflineUser(u))}
               </div>
             </div>
           )}
@@ -350,8 +388,8 @@ export default function FriendsSidebarContent({
             </div>
           )}
 
-          {/* 4. Offline — all in one section */}
-          {offlineUsers.length > 0 && (
+          {/* 4. Offline — favori olmayan offline üyeler */}
+          {offlineRest.length > 0 && (
             <div>
               <button
                 type="button"
@@ -359,13 +397,13 @@ export default function FriendsSidebarContent({
                 className="flex items-center gap-2 w-full mb-2 px-2 hover:opacity-80 transition-opacity cursor-pointer"
               >
                 <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/50 uppercase tracking-[0.14em]">Çevrimdışı</span>
-                <span className="text-[9px] bg-[var(--theme-secondary-text)]/8 text-[var(--theme-secondary-text)]/50 px-1.5 py-0.5 rounded-full font-bold">{offlineUsers.length}</span>
+                <span className="text-[9px] bg-[var(--theme-secondary-text)]/8 text-[var(--theme-secondary-text)]/50 px-1.5 py-0.5 rounded-full font-bold">{offlineRest.length}</span>
                 <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
                 <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/40 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
               </button>
               {offlineExpanded && (
                 <div className="space-y-1">
-                  {offlineUsers.map(renderOfflineUser)}
+                  {offlineRest.map(renderOfflineUser)}
                 </div>
               )}
             </div>

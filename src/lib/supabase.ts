@@ -227,17 +227,65 @@ export const deleteChannel = async (id: string) => {
   return await supabase.from('channels').delete().eq('id', id);
 };
 
-// SAVE INVITE CODE (eski global kodları siler, email'e bağlı kodları korur)
+// SAVE INVITE CODE (önceki kodları silmez — liste birikir; kullanılınca/süresi
+// dolunca tarihsel kayıt olarak kalır, "kim kullandı" gösterimi için gerekli)
 export const saveInviteCode = async (code: string, expiresAt: number) => {
   const { data: { session } } = await supabase.auth.getSession();
-  // Sadece email bağlı olmayan (global) kodları sil
-  await supabase.from('invite_codes').delete().is('email', null);
   return await supabase.from('invite_codes').insert({
     code: code.toUpperCase(),
     created_by: session?.user?.id,
     expires_at: expiresAt,
     used: false,
   });
+};
+
+// ADMIN: kendi ürettiği global davet kodlarını listele (sayfalı)
+export interface AdminInviteCodeRow {
+  code: string;
+  expires_at: number;
+  used: boolean;
+  used_by_email: string | null;
+  used_at: number | null;
+  created_at: string;
+}
+// Admin: kendi ürettiği bir davet kodunu geçersiz kıl
+export const invalidateInviteCode = async (code: string): Promise<boolean> => {
+  const { data, error } = await supabase.rpc('invalidate_invite_code', { p_code: code });
+  if (error) throw error;
+  return !!data;
+};
+
+export const listAdminInviteCodes = async (
+  limit: number,
+  offset: number,
+): Promise<{ items: AdminInviteCodeRow[]; total: number }> => {
+  const { data, error } = await supabase.rpc('list_admin_invite_codes', {
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw error;
+  type RawRow = {
+    out_code: string;
+    out_expires_at: number | string;
+    out_used: boolean;
+    out_used_by_email: string | null;
+    out_used_at: number | string | null;
+    out_created_at: string;
+    out_total_count: number | string;
+  };
+  const rows = (data || []) as RawRow[];
+  const total = rows.length > 0 ? Number(rows[0].out_total_count) : 0;
+  return {
+    items: rows.map(r => ({
+      code: r.out_code,
+      expires_at: Number(r.out_expires_at),
+      used: !!r.out_used,
+      used_by_email: r.out_used_by_email,
+      used_at: r.out_used_at != null ? Number(r.out_used_at) : null,
+      created_at: r.out_created_at,
+    })),
+    total,
+  };
 };
 
 // ─── Davet Talebi Sistemi ────────────────────────────────────────────────────

@@ -39,6 +39,11 @@
   --theme-glow-rgb: 59, 130, 246;
   --theme-glow-secondary: #6366f1;
   --theme-glow-secondary-rgb: 99, 102, 241;
+  /* Ambient bg wash — #root::before viewport-wide decoration için neutral slate
+     (accent'tan bağımsız, temanın "renk tinting"i değil "atmosfer"idir) */
+  --ambient-bg-rgb-1: 70, 100, 160;
+  --ambient-bg-rgb-2: 40, 70, 120;
+  --ambient-bg-rgb-3: 30, 50, 90;
   --glass-tint: 255, 255, 255;
   --shadow-base: 0, 0, 0;
   /* Floating panel system */
@@ -108,11 +113,12 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* Köşe parıltıları — opacity per-theme gated; default-dark 0 → tamamen kapalı */
   background:
-    radial-gradient(ellipse 50% 40% at 15% 10%, rgba(var(--theme-glow-rgb), 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 50% at 85% 85%, rgba(var(--theme-glow-secondary-rgb), 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 40% at 50% 50%, rgba(var(--theme-glow-rgb), 0.02) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(var(--theme-accent-rgb), 0.015) 0%, transparent 60%);
+    radial-gradient(circle at 0% 0%, rgba(var(--ambient-bg-rgb-1), var(--ambient-op-1, 0.05)) 0%, transparent 55%),
+    radial-gradient(circle at 100% 0%, rgba(var(--ambient-bg-rgb-1), var(--ambient-op-2, 0.04)) 0%, transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(var(--ambient-bg-rgb-2), var(--ambient-op-3, 0.04)) 0%, transparent 58%),
+    radial-gradient(circle at 100% 100%, rgba(var(--ambient-bg-rgb-3), var(--ambient-op-4, 0.035)) 0%, transparent 58%);
 }
 
 /* Noise grain overlay */
@@ -291,6 +297,46 @@ button, a, input, [role="button"] {
   animation: speaker-enter 220ms ease-out forwards;
 }
 
+/* ─── Premium Avatar Frame Animations ─────────────────────────────
+   Standard: animasyon yok (sadece static ring)
+   VIP: glow pulse — shadow yavaşça nefes alır
+   Elite: glow pulse + diagonal light sweep (::after) */
+
+/* ── VIP: Soft glow breathing ── */
+@keyframes frame-vip {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.7; }
+}
+.frame-vip {
+  animation: frame-vip 5s ease-in-out infinite;
+}
+
+/* ── Elite: Richer glow + moving light pass ── */
+@keyframes frame-elite-glow {
+  0%, 100% { filter: brightness(1); }
+  30%      { filter: brightness(1.18); }
+  60%      { filter: brightness(1.06); }
+  80%      { filter: brightness(1.14); }
+}
+@keyframes frame-light-sweep {
+  0%, 100% { background-position: -100% -100%; }
+  50%      { background-position: 200% 200%; }
+}
+.frame-elite {
+  position: relative;
+  animation: frame-elite-glow 6s ease-in-out infinite;
+}
+.frame-elite::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.07) 50%, transparent 60%);
+  background-size: 250% 250%;
+  animation: frame-light-sweep 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* ─── Cancel button — kırmızı iptal ─── */
 .btn-cancel {
   background: rgba(239, 68, 68, 0.06);
@@ -308,16 +354,84 @@ button, a, input, [role="button"] {
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* ─── Popup / Modal surface system ─── */
+/* ─── Unified Surface Material ─────────────────────────────────
+   TEK materyal ailesi. Card/panel/popup/bar — hepsi aynı ton ve border'dan.
+   .surface-card        → standart elevation (card, section, bar, inline panel)
+   .surface-elevated    → yüksek elevation (modal, popup, dropdown, popover)
+   .surface-interactive → hover/active interaction surface (tabs, list items) */
+/* Messages panel recipe — opak --theme-bg tabanı + white wash overlay.
+   Bu class cardCls zinciri üzerinden TÜM settings section'larına (Görünüm,
+   Sesler, Performans vs.) BIREBIR Mesajlar panel materyali taşır. */
+.surface-card {
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.05) 0%, rgba(var(--glass-tint), 0.02) 100%),
+    var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  box-shadow:
+    0 32px 64px -16px rgba(var(--shadow-base), 0.55),
+    0 8px 20px -6px rgba(var(--shadow-base), 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+.surface-elevated,
+.surface-floating {
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.07) 0%, rgba(var(--glass-tint), 0.03) 100%),
+    var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  box-shadow:
+    0 40px 80px -20px rgba(var(--shadow-base), 0.65),
+    0 10px 24px -6px rgba(var(--shadow-base), 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+}
+.surface-interactive {
+  transition: background-color 120ms ease;
+}
+.surface-interactive:hover {
+  background: var(--surface-hover);
+}
+.surface-interactive:active,
+.surface-interactive[data-active="true"] {
+  background: var(--surface-active);
+}
+
+/* ─── Input surface — tema accent-tinted (mic/hoparlör butonlarıyla aynı aile) ─── */
+.surface-input {
+  background: var(--theme-input-bg);
+  border: 1px solid var(--theme-input-border);
+  box-shadow: var(--theme-input-shadow);
+  color: var(--theme-input-text);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  outline: none;
+}
+.surface-input::placeholder {
+  color: var(--theme-input-placeholder);
+}
+.surface-input:hover:not(:focus):not(:disabled) {
+  background: var(--theme-input-bg-hover);
+}
+.surface-input:focus {
+  border-color: var(--theme-input-focus-border);
+  box-shadow:
+    0 0 0 2px var(--theme-input-focus-ring),
+    var(--theme-input-shadow);
+}
+.surface-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── Popup / Modal surface system (legacy — surface-floating'e denk) ─── */
 .popup-surface {
-  background: rgba(var(--theme-bg-rgb), 0.82);
+  background: var(--surface-floating-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(var(--theme-accent-rgb), 0.06);
+  border: var(--surface-card-border);
   border-radius: 16px;
-  box-shadow:
-    0 12px 40px rgba(0,0,0,0.3),
-    inset 0 1px 0 rgba(var(--glass-tint), 0.03);
+  box-shadow: var(--surface-floating-shadow);
 }
 
 .popup-overlay {

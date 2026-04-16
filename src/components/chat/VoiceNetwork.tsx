@@ -4,6 +4,7 @@ import { Mic, MicOff, Headphones, HeadphoneOff } from 'lucide-react';
 import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
 import { formatFullName } from '../../lib/formatName';
+import AvatarContent from '../AvatarContent';
 
 // ── Types ──
 interface VoiceNetworkProps {
@@ -70,11 +71,13 @@ function VoiceNode({
             transition: 'border-color 0.3s, box-shadow 0.4s cubic-bezier(0.16,1,0.3,1)',
           }}
         >
-          {user.avatar?.startsWith('http') ? (
-            <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="text-[var(--theme-text)] font-bold text-sm">{user.avatar}</span>
-          )}
+          <AvatarContent
+            avatar={user.avatar}
+            statusText={user.statusText}
+            firstName={user.firstName}
+            name={user.name}
+            letterClassName="text-[var(--theme-text)] font-bold text-sm"
+          />
         </div>
 
         {/* Mic/deafen badges */}
@@ -149,11 +152,13 @@ function CenterNode({
             transition: 'border-color 0.3s, box-shadow 0.4s cubic-bezier(0.16,1,0.3,1)',
           }}
         >
-          {user.avatar?.startsWith('http') ? (
-            <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="text-[var(--theme-text)] font-bold text-xl">{user.avatar}</span>
-          )}
+          <AvatarContent
+            avatar={user.avatar}
+            statusText={user.statusText}
+            firstName={user.firstName}
+            name={user.name}
+            letterClassName="text-[var(--theme-text)] font-bold text-xl"
+          />
         </motion.div>
 
         {/* Badges */}

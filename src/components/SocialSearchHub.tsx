@@ -6,6 +6,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import AvatarContent from './AvatarContent';
 
 interface SearchResult {
   id: string;
@@ -242,12 +243,23 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       <div
         className={`flex items-center gap-2 transition-all duration-150 ${isCenter ? 'px-4 py-2.5 rounded-xl' : 'px-3 py-[6px] rounded-lg'}`}
         style={{
-          background: isOpen ? 'rgba(var(--glass-tint), 0.05)' : 'rgba(var(--glass-tint), 0.025)',
-          border: isOpen ? '1px solid rgba(var(--theme-accent-rgb), 0.12)' : '1px solid rgba(var(--glass-tint), 0.04)',
-          boxShadow: isOpen ? '0 2px 12px rgba(0,0,0,0.1)' : 'none',
-        }}
+          // Near-opaque tema-uyumlu surface — %96 alpha ile bg neredeyse sızmaz
+          background: 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.96), rgba(var(--theme-bg-rgb), 0.98))',
+          border: isOpen
+            ? '1px solid rgba(var(--theme-accent-rgb), 0.35)'
+            : '1px solid rgba(255,255,255,0.08)',
+          boxShadow: isOpen
+            ? '0 0 0 2px rgba(var(--theme-accent-rgb),0.15), inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 20px rgba(0,0,0,0.32)'
+            : 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 20px rgba(0,0,0,0.32)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        } as React.CSSProperties}
       >
-        <Search size={isCenter ? 15 : 12} className="text-[var(--theme-secondary-text)] opacity-35 shrink-0" />
+        <Search
+          size={isCenter ? 15 : 12}
+          className="shrink-0 transition-colors duration-150"
+          style={{ color: 'rgba(255,255,255,0.6)' }}
+        />
         <input
           ref={inputRef}
           type="text"
@@ -256,10 +268,19 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           onFocus={() => setIsOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
           placeholder="Kullanıcı ara..."
-          className={`flex-1 bg-transparent text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/25 outline-none min-w-0 ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
+          className={`flex-1 bg-transparent outline-none min-w-0 placeholder:text-[rgba(255,255,255,0.45)] ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
+          style={{
+            color: 'rgba(255,255,255,0.92)',
+          } as React.CSSProperties}
         />
         {query && (
-          <button onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }} className="text-[var(--theme-secondary-text)] opacity-25 hover:opacity-50 transition-opacity">
+          <button
+            onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
+            className="transition-colors duration-150"
+            style={{ color: 'rgba(255,255,255,0.6)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.9)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
+          >
             <X size={isCenter ? 14 : 11} />
           </button>
         )}
@@ -275,33 +296,30 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
             transition={{ duration: 0.1 }}
             className={`absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden max-h-72 overflow-y-auto custom-scrollbar ${isCenter ? '' : 'mx-3'}`}
             style={{
-              background: 'rgba(var(--theme-bg-rgb), 0.92)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(var(--theme-accent-rgb), 0.08)',
-              boxShadow: '0 10px 32px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.97), rgba(var(--theme-bg-rgb), 0.99))',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 18px 40px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.04)',
             }}
           >
             {isSearching ? (
               <div className="px-4 py-5 text-center">
-                <p className="text-[10px] text-[var(--theme-text)] opacity-25">Aranıyor...</p>
+                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Aranıyor...</p>
               </div>
             ) : results.length > 0 ? (
               <div className="py-1.5">
                 {results.map(user => (
-                  <div key={user.id} className="flex items-center gap-3 px-3 py-2 transition-all duration-100 hover:bg-[rgba(var(--glass-tint),0.04)] cursor-pointer group">
+                  <div key={user.id} className="flex items-center gap-3 px-3 py-2 transition-all duration-100 hover:bg-[rgba(255,255,255,0.05)] cursor-pointer rounded-lg mx-1 group">
                     {/* Avatar */}
                     <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-                      {user.avatar?.startsWith('http') ? (
-                        <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-70">{initials(user)}</span>
-                      )}
+                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium text-[var(--theme-text)] truncate leading-tight">{displayName(user)}</p>
+                      <p className="text-[12px] font-medium truncate leading-tight" style={{ color: 'rgba(255,255,255,0.95)' }}>{displayName(user)}</p>
                       <div className="flex items-center gap-1.5">
-                        {user.name && <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-40 truncate">@{user.name}</p>}
+                        {user.name && <p className="text-[9px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>@{user.name}</p>}
                         {getStatusBadge(user.id)}
                       </div>
                     </div>
@@ -314,7 +332,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
               </div>
             ) : (
               <div className="px-4 py-5 text-center">
-                <p className="text-[10px] text-[var(--theme-text)] opacity-25">Kullanıcı bulunamadı</p>
+                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Kullanıcı bulunamadı</p>
               </div>
             )}
           </motion.div>

@@ -9,6 +9,7 @@ import { computeSpeakingVisuals } from './types';
 import OwnVoiceEqualizer from './OwnVoiceEqualizer';
 import MiniEqualizer from './MiniEqualizer';
 import { formatFullName } from '../../lib/formatName';
+import AvatarContent from '../AvatarContent';
 
 // ─── Refined transition curves ────────────────────────────────────
 // Property-specific transitions — no "all", no "filter"
@@ -119,19 +120,9 @@ function UserCardInner({
   const ageFontSize = s.dense ? 'text-[9px]' : s.icon === 13 ? 'text-[10px]' : 'text-[11px]';
 
   // Status text for current user or remote
-  const userStatusText = isMe ? effectiveStatus : (user.statusText || 'Aktif');
-
-  // Status dot color
-  const statusDotColor =
-    userStatusText === 'Aktif'
-      ? 'bg-emerald-400'
-      : userStatusText === 'AFK'
-        ? 'bg-violet-400'
-        : userStatusText === 'Pasif'
-          ? 'bg-yellow-400'
-          : userStatusText === 'Duymuyor'
-            ? 'bg-red-400'
-            : 'bg-orange-400';
+  const rawStatusText = isMe ? effectiveStatus : (user.statusText || 'Online');
+  // Legacy 'Aktif' → 'Online' normalize
+  const userStatusText = rawStatusText === 'Aktif' ? 'Online' : rawStatusText;
 
   // Own voice active state
   const isOwnVoiceActive = isMe && isPttPressed && !isMuted && !isVoiceBanned;
@@ -145,6 +136,7 @@ function UserCardInner({
 
   return (
     <div
+      data-keep-action-menu
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
@@ -174,11 +166,7 @@ function UserCardInner({
           className={`${s.avatar} rounded-lg bg-[var(--theme-accent)]/8 flex items-center justify-center text-[var(--theme-text)] font-bold overflow-hidden`}
           style={avatarStyle}
         >
-          {user.avatar && user.avatar.startsWith('http') ? (
-            <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            user.avatar
-          )}
+          <AvatarContent avatar={user.avatar} statusText={userStatusText} firstName={user.firstName} name={user.name} letterClassName="text-[var(--theme-text)] font-bold" />
         </div>
         <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
       </div>
@@ -232,13 +220,10 @@ function UserCardInner({
             <OwnVoiceEqualizer volumeLevel={volumeLevel} scale={scaleStep as 1 | 2 | 3} />
           ) : user.isSpeaking ? (
             <MiniEqualizer speakingLevel={speakingLevel} scale={scaleStep as 1 | 2 | 3} />
-          ) : userStatusText !== 'Aktif' ? (
-            <div className="flex items-center gap-1.5">
-              <div className={`${s.dense ? 'w-1.5 h-1.5' : 'w-[5px] h-[5px]'} rounded-full shrink-0 ${statusDotColor}`} />
-              <p className={`${s.status} font-medium truncate text-[var(--theme-secondary-text)]/60`}>
-                {userStatusText}
-              </p>
-            </div>
+          ) : userStatusText !== 'Online' ? (
+            <p className={`${s.status} font-medium truncate text-[var(--theme-secondary-text)]/60`}>
+              {userStatusText}
+            </p>
           ) : null}
         </div>
       </div>

@@ -82,23 +82,12 @@ export function useNotificationCenter(
     const informationalCount = informational.length;
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
-    const bellCount = friendRequestCount + dmUnreadCount + inviteReceivedCount + joinRequestCount + informationalCount + inviteRequestCount + (updateActionable ? 1 : 0);
+    // DM unread'leri artık bell badge'ine beslenmez — Mesajlar bölümüne özel.
+    const bellCount = friendRequestCount + inviteReceivedCount + joinRequestCount + informationalCount + inviteRequestCount + (updateActionable ? 1 : 0);
     const settingsCount = 0;
 
     // ── Item listesi oluştur ──
     const items: NotifItem[] = [];
-
-    if (dmUnreadCount > 0) {
-      items.push({
-        key: 'dm',
-        kind: 'message',
-        priority: 'high',
-        label: 'Okunmamış mesajlar',
-        detail: dmUnreadCount === 1 ? '1 yeni mesaj' : `${dmUnreadCount} yeni mesaj`,
-        count: dmUnreadCount,
-        isActionable: true,
-      });
-    }
 
     if (friendRequestCount > 0) {
       items.push({

@@ -39,6 +39,17 @@ export interface AppStateContextType {
   // Refs
   livekitRoomRef: React.MutableRefObject<import('livekit-client').Room | null>;
   presenceChannelRef: React.MutableRefObject<ReturnType<typeof supabase.channel> | null>;
+  /** Idle auto-leave countdown state — banner consume eder. */
+  countdownRef: React.MutableRefObject<{
+    active: boolean;
+    timeoutId: ReturnType<typeof setTimeout> | null;
+    disconnectAt: number;
+    sessionEpoch: number;
+  }>;
+  /** React state kopyası: countdown aktif mi — conditional render için. */
+  countdownActive: boolean;
+  /** Banner'daki "Buradayım" butonu için — activity reset + countdown cancel. */
+  dismissIdleCountdown: () => void;
 
   // Handlers
   handleCopyCode: () => void;

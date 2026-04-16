@@ -20,7 +20,7 @@ export function AppearanceSection() {
   const isCustomMode = appearanceMode === 'custom';
 
   return (
-    <CardSection icon={<Recycle size={12} />} title="Görünüm">
+    <CardSection icon={<Recycle size={12} />} title="">
 
       {/* ═══ THEME PACKS ═══ */}
       <div className="mb-1">
@@ -202,7 +202,8 @@ export function SoundsSection() {
   ];
 
   return (
-    <CardSection icon={<Volume2 size={12} />} title="Sesler" subtitle="Bildirim ve UI sesleri">
+    <CardSection icon={<Volume2 size={12} />} title="">
+      <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mb-3">Bildirim ve UI sesleri</p>
       <div className="divide-y divide-[var(--theme-border)]/50">
         {soundRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
           <div key={category} className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 first:pt-0 last:pb-0">
@@ -321,7 +322,7 @@ export function PerformanceSection() {
   }, [isNoiseSuppressionEnabled]);
 
   return (
-    <CardSection icon={<Zap size={12} />} title="Performans & Ses Motoru">
+    <CardSection icon={<Zap size={12} />} title="">
       <div className="space-y-3 md:space-y-0 md:divide-y md:divide-[var(--theme-border)]/50">
 
         {/* Düşük Veri Modu */}
@@ -440,24 +441,6 @@ export function VoiceModeSection() {
             )}
           </button>
         ))}
-      </div>
-    </CardSection>
-  );
-}
-
-// ── Son Görülme ──
-export function LastSeenSection() {
-  const { showLastSeen, setShowLastSeen } = useSettings();
-  return (
-    <CardSection icon={<Eye size={12} />} title="Son Görülme">
-      <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Son görülme bilgisini göster</p>
-          <p className="text-[9px] md:text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-            Kapatırsan başkaları da seninkini göremez
-          </p>
-        </div>
-        <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} tooltip="Gizlilik ayarı: kapatırsan karşılıklı gizlenir" />
       </div>
     </CardSection>
   );

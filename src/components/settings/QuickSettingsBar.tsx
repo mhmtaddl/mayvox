@@ -1,11 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { AudioLines, Palette, MoreHorizontal } from 'lucide-react';
+import { Eye, Palette, MoreHorizontal } from 'lucide-react';
 import { Toggle } from './shared';
 import { useSettings } from '../../contexts/SettingsCtx';
 
 export default function QuickSettingsBar() {
   const {
-    isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
+    showLastSeen, setShowLastSeen,
     currentTheme,
   } = useSettings();
 
@@ -40,14 +40,14 @@ export default function QuickSettingsBar() {
 
   const items = [
     {
-      key: 'noise',
+      key: 'lastSeen',
       content: (
         <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
-          <AudioLines size={13} className="text-[var(--theme-accent)] opacity-70 shrink-0" />
-          <span className="text-[10px] font-semibold text-[var(--theme-text)] truncate">Susturma</span>
+          <Eye size={13} className="text-[var(--theme-accent)] opacity-70 shrink-0" />
+          <span className="text-[10px] font-semibold text-[var(--theme-text)] truncate">Son Görülme</span>
           <Toggle
-            checked={isNoiseSuppressionEnabled}
-            onChange={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
+            checked={showLastSeen}
+            onChange={() => setShowLastSeen(!showLastSeen)}
           />
         </div>
       ),

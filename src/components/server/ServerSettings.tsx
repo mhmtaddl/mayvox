@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import AvatarContent from '../AvatarContent';
+import { useUser } from '../../contexts/UserContext';
 import { X, Settings, Users, Mail, ShieldOff, Save, Trash2, Plus, Copy, UserX, Ban, Camera, Crown, Zap, Star, Search, Shield, ChevronDown, ScrollText, Gauge, UserCheck } from 'lucide-react';
 import {
   type Server, type ServerMember, type ServerInvite, type ServerBan, type SentInvite, type ServerOverview,
@@ -149,8 +151,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}
-        style={{ width: 'min(92vw, 860px)', background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.97)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 32px 80px rgba(0,0,0,0.65)' }}>
+      <div className="surface-floating max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}
+        style={{ width: 'min(92vw, 860px)' }}>
         {/* ── Identity Strip — compact premium header ── */}
         <div
           className="relative px-6 md:px-8 py-4 border-b border-[rgba(var(--glass-tint),0.06)]"
@@ -591,6 +593,15 @@ function MembersTab({ serverId, myRole, showToast }: { serverId: string; myRole:
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  // Realtime presence haritası — admin/member DTO'larının statusText'i yok,
+  // allUsers'tan live değeri çekip AvatarContent pipeline'ına veriyoruz.
+  // Bulunmayan kullanıcılar için default 'Online' — pipeline initial yerine
+  // online.png'ye düşer (user spec'i: PNG default, initial sadece son çare).
+  const { allUsers } = useUser();
+  const resolveStatus = (userId: string): string => {
+    const u = allUsers.find(au => au.id === userId);
+    return u?.statusText || 'Online';
+  };
 
   const load = useCallback(async () => {
     try { setLoading(true); setMembers(await getMembers(serverId)); } catch { showToast('Üyeler yüklenemedi'); } finally { setLoading(false); }
@@ -655,12 +666,15 @@ function MembersTab({ serverId, myRole, showToast }: { serverId: string; myRole:
 
             return (
               <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3 rounded-xl hover:bg-[rgba(var(--glass-tint),0.04)] transition-colors group">
-                {/* Avatar */}
+                {/* Avatar — shared pipeline: custom → status PNG → initial */}
                 <div className="w-9 h-9 rounded-[10px] overflow-hidden shrink-0 flex items-center justify-center" style={{ background: 'rgba(var(--glass-tint), 0.08)' }}>
-                  {m.avatar ? (
-                    <img src={m.avatar} alt="" className="w-9 h-9 rounded-[10px] object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
-                  ) : null}
-                  <span className={`text-[10px] font-bold text-[var(--theme-secondary-text)]/50 ${m.avatar ? 'hidden' : ''}`}>{ini}</span>
+                  <AvatarContent
+                    avatar={m.avatar}
+                    statusText={resolveStatus(m.userId)}
+                    firstName={m.firstName}
+                    name={dn}
+                    letterClassName="text-[10px] font-bold text-[var(--theme-secondary-text)]/50"
+                  />
                 </div>
 
                 {/* İsim + bilgi */}
@@ -850,7 +864,13 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
             return (
               <div key={u.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[rgba(var(--glass-tint),0.04)] transition-colors">
                 <div className="w-7 h-7 rounded-[8px] overflow-hidden shrink-0 flex items-center justify-center" style={{ background: 'rgba(var(--glass-tint), 0.08)' }}>
-                  {u.avatar ? <img src={u.avatar} alt="" className="w-7 h-7 rounded-[8px] object-cover" /> : <span className="text-[8px] font-bold text-[var(--theme-secondary-text)]/40">{(u.first_name || u.name || '?')[0].toUpperCase()}</span>}
+                  <AvatarContent
+                    avatar={u.avatar}
+                    statusText="Online"
+                    firstName={u.first_name}
+                    name={u.name}
+                    letterClassName="text-[8px] font-bold text-[var(--theme-secondary-text)]/40"
+                  />
                 </div>
                 <div className="flex-1 min-w-0"><div className="text-[10px] font-semibold text-[var(--theme-text)] truncate">{u.name}</div>{full && <div className="text-[8px] text-[var(--theme-secondary-text)]/25 truncate">{full}</div>}</div>
                 {alreadySent ? <span className="text-[8px] font-semibold text-amber-400/60 shrink-0">Gönderildi</span> : (

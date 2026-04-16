@@ -97,6 +97,9 @@ export type PlanSource = 'manual' | 'paid';
 export type PlanStatus = 'active' | 'expired' | 'unlimited' | 'none';
 export type DurationType = '1week' | '1month' | '1year' | 'custom' | 'unlimited';
 
+export type UserLevel = string;
+export type UserLevelStatus = 'active' | 'expired' | 'unlimited' | 'none';
+
 export interface AdminUserRow {
   id: string;
   first_name: string | null;
@@ -118,6 +121,11 @@ export interface AdminUserRow {
   plan_start_at: string | null;
   plan_end_at: string | null;
   plan_status: PlanStatus;
+  /** Manuel atanmış seviye anahtarı (örn. "1"|"2"|"3"); null = seviyesiz. */
+  user_level?: string | null;
+  user_level_source?: PlanSource | null;
+  user_level_start_at?: string | null;
+  user_level_end_at?: string | null;
   owned_server_count: number;
   created_at: string | null;
 }
@@ -177,6 +185,23 @@ export async function setUserPlan(userId: string, payload: { plan: PlanKey; dura
 
 export async function revokeUserPlan(userId: string): Promise<void> {
   await adminFetch<void>(`/admin/users/${encodeURIComponent(userId)}/plan`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Kullanıcı seviyesi (tema/özellik kademesi) — Plan ile aynı pattern ──
+export async function setUserLevel(
+  userId: string,
+  payload: { level: string; durationType: DurationType; customEndAt?: string },
+): Promise<void> {
+  await adminFetch<void>(`/admin/users/${encodeURIComponent(userId)}/level`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function revokeUserLevel(userId: string): Promise<void> {
+  await adminFetch<void>(`/admin/users/${encodeURIComponent(userId)}/level`, {
     method: 'DELETE',
   });
 }

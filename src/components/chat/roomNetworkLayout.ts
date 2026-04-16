@@ -9,6 +9,7 @@ export interface RoomNodeData {
   lastName?: string;
   age?: number;
   avatar: string;
+  statusText?: string;
   isSelf: boolean;
   isSpeaking: boolean;
   isMuted: boolean;

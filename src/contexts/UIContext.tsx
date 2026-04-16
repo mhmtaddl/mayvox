@@ -1,5 +1,9 @@
 import React, { createContext, useContext } from 'react';
 
+// Ayarlar sayfasına deep-link intent'i — bildirim tıklamasından gelen
+// navigasyon talebi (örn: davet talepleri listesine direkt iniş)
+export type SettingsTarget = 'invite_requests' | 'app' | 'account' | null;
+
 export interface UIContextType {
   toastMsg: string | null;
   setToastMsg: (v: string | null) => void;
@@ -39,6 +43,8 @@ export interface UIContextType {
   setPasswordError: (v: boolean) => void;
   userVolumes: Record<string, number>;
   setUserVolumes: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  settingsTarget: SettingsTarget;
+  setSettingsTarget: (v: SettingsTarget) => void;
 }
 
 export const UIContext = createContext<UIContextType | null>(null);

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { User as UserIcon, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
+import { normalizeNameInput, NAME_INPUT_MAX_LENGTH } from '../lib/formatName';
 
 interface RegisterDetailsViewProps {
   displayName: string;
@@ -120,7 +121,8 @@ export default function RegisterDetailsView({
                 type="text"
                 placeholder="Adınızı giriniz"
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                maxLength={NAME_INPUT_MAX_LENGTH}
+                onChange={(e) => setFirstName(normalizeNameInput(e.target.value))}
                 onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
@@ -135,7 +137,8 @@ export default function RegisterDetailsView({
                 type="text"
                 placeholder="Soyadınızı giriniz"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                maxLength={NAME_INPUT_MAX_LENGTH}
+                onChange={(e) => setLastName(normalizeNameInput(e.target.value))}
                 onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />

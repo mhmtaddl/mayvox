@@ -1,5 +1,9 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { VolumeX } from 'lucide-react';
+import AvatarContent from './AvatarContent';
+import { useSettings } from '../contexts/SettingsCtx';
+import { useUser } from '../contexts/UserContext';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 
 export interface ChatMessage {
   id: string;
@@ -73,6 +77,10 @@ export default function ChatPanel({
   newMsgCount,
   onScrollToBottom,
 }: Props) {
+  const { avatarBorderColor } = useSettings();
+  const { currentUser } = useUser();
+  const selfFrameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
+
   // Font size — local, sadece bu panel icin
   const [chatFontSize, setChatFontSize] = useState(() => {
     const saved = localStorage.getItem('chatFontSize');
@@ -137,7 +145,22 @@ export default function ChatPanel({
           const isMe = msg.senderId === currentUserId;
           const nameColor = isMe ? 'var(--theme-accent)' : getUserColor(msg.senderId);
           const prevMsg = idx > 0 ? messages[idx - 1] : null;
+          const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
           const showDateSep = !prevMsg || new Date(prevMsg.time).toDateString() !== d.toDateString();
+          // Sender grouping — aynı gönderen + ≤5dk + date sep yok → grouped
+          const GROUP_GAP_MS = 5 * 60 * 1000;
+          const isGrouped = !!prevMsg
+            && !showDateSep
+            && prevMsg.senderId === msg.senderId
+            && (new Date(msg.time).getTime() - new Date(prevMsg.time).getTime()) < GROUP_GAP_MS;
+          const isLastInGroup = !nextMsg
+            || nextMsg.senderId !== msg.senderId
+            || new Date(nextMsg.time).toDateString() !== d.toDateString()
+            || (new Date(nextMsg.time).getTime() - new Date(msg.time).getTime()) >= GROUP_GAP_MS;
+          // Tail corner sadece group sonunda sert
+          const radiusCls = isMe
+            ? (isLastInGroup ? 'rounded-[16px] rounded-br-[6px]' : 'rounded-[16px]')
+            : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
           return (
             <React.Fragment key={msg.id}>
               {showDateSep && dateLabel && (
@@ -147,25 +170,49 @@ export default function ChatPanel({
                   <div className="flex-1 h-px" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
                 </div>
               )}
-              <div className={`flex items-start gap-2 py-1 group/msg ${isMe ? 'flex-row-reverse' : ''}`}>
-                {/* Avatar */}
-                <div className="shrink-0 overflow-hidden flex items-center justify-center mt-0.5 avatar-squircle" style={{ width: avatarPx, height: avatarPx, background: `${nameColor}15` }}>
-                  {msg.avatar?.startsWith('http') ? (
-                    <img src={msg.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <span className="font-bold" style={{ fontSize: 7 + fs, color: nameColor }}>{msg.avatar || msg.sender?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}</span>
-                  )}
-                </div>
-                {/* Mesaj balonu */}
-                <div className={`flex flex-col max-w-[75%] min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{msg.sender}</span>
-                    <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: 8 + fs }}>{ts}</span>
+              <div className={`flex items-start gap-2 group/msg ${isMe ? 'flex-row-reverse' : ''} ${isGrouped ? 'mt-1' : 'mt-3'}`}>
+                {/* Avatar — sadece group'un ilk mesajında göster, yoksa spacer */}
+                {!isGrouped ? (
+                  <div
+                    className={`shrink-0 mt-0.5 ${isMe ? getFrameClassName(selfFrameTier) : ''}`}
+                    style={{
+                      borderRadius: '22%',
+                      ...(isMe ? getFrameStyle(avatarBorderColor, selfFrameTier) : {}),
+                    }}
+                  >
+                    <div
+                      className="overflow-hidden flex items-center justify-center avatar-squircle"
+                      style={{ width: avatarPx, height: avatarPx, background: `${nameColor}15` }}
+                    >
+                      <AvatarContent avatar={msg.avatar} name={msg.sender} letterClassName="font-bold" />
+                    </div>
                   </div>
+                ) : (
+                  <div className="shrink-0" style={{ width: avatarPx, height: 1 }} />
+                )}
+                {/* Mesaj balonu */}
+                <div className={`flex flex-col max-w-[65%] min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
+                  {!isGrouped && (
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{msg.sender}</span>
+                      <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: 8 + fs }}>{ts}</span>
+                    </div>
+                  )}
                   {isEd ? (
                     <input autoFocus type="text" value={editingText} onChange={(e) => onEditingTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(); if (e.key === 'Escape') onCancelEdit(); }} onBlur={onSaveEdit} className="w-full bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded-lg px-3 py-1.5 text-[12px] text-[var(--theme-text)] outline-none" />
                   ) : (
-                    <div className={`rounded-xl px-3 py-1.5 break-words whitespace-pre-wrap ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`} style={{ fontSize: 13 + fs, color: 'var(--theme-text)', background: isMe ? 'rgba(var(--theme-accent-rgb), 0.1)' : 'rgba(var(--glass-tint), 0.04)', border: `1px solid ${isMe ? 'rgba(var(--theme-accent-rgb), 0.08)' : 'rgba(var(--glass-tint), 0.03)'}` }}>
+                    <div
+                      className={`px-3.5 py-2 break-words whitespace-pre-wrap transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+                      style={{
+                        fontSize: 13 + fs,
+                        background: isMe ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
+                        color: isMe ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
+                        border: isMe ? 'var(--msg-self-border)' : 'var(--msg-other-border)',
+                        boxShadow: 'var(--msg-shadow)',
+                        backdropFilter: isMe ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
+                        WebkitBackdropFilter: isMe ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
+                      } as React.CSSProperties}
+                    >
                       {msg.text}
                     </div>
                   )}

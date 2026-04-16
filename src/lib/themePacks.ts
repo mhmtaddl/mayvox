@@ -72,7 +72,7 @@ function noise(opts: { freq: number; oct?: number; alpha: number; tint?: string 
 }
 
 const NOISE = {
-  graphite: noise({ freq: 0.9, alpha: 0.06 }),                   // Default Dark — neutral
+  graphite: noise({ freq: 0.95, alpha: 0.028 }),                 // Default Dark — matte black grain (~2.5%, band break)
   paper:    noise({ freq: 1.2, alpha: 0.04 }),                   // Default Light — fine
   mist:     noise({ freq: 0.7, alpha: 0.05, tint: '0.4 0.6 0.8' }), // Ocean — cool
   mineral:  noise({ freq: 0.85, alpha: 0.06, tint: '0.2 0.5 0.4' }), // Emerald
@@ -96,33 +96,36 @@ export const THEME_PACKS: ThemePack[] = [
     id: 'default-dark',
     name: 'Varsayılan Koyu',
     isLight: false,
-    // Smoked graphite + soft mor-mavi grain — premium boş-değil derinlik
-    bg: `${NOISE.graphite}, ${ambientBlobs([
-      { x: '12%', y: '18%', r: '70% 55%', rgba: 'rgba(40, 56, 92, 0.08)' },
-      { x: '88%', y: '85%', r: '75% 60%', rgba: 'rgba(28, 38, 64, 0.07)' },
-    ])}, linear-gradient(165deg, #10182A 0%, #0A111E 100%)`,
-    bgSoft: '#0F1626',
-    surface: 'rgba(20, 28, 48, 0.85)',
-    surfaceHover: 'rgba(28, 38, 60, 0.88)',
-    surfaceActive: 'rgba(36, 48, 74, 0.90)',
-    border: 'rgba(255, 255, 255, 0.08)',
-    borderFocus: 'rgba(124, 137, 235, 0.45)',
-    // WCAG AAA: textPrimary #F1F5FB (kontrast 16:1 surface üstünde)
-    textPrimary: '#F1F5FB',
-    textSecondary: '#D6DEEC',
-    textMuted: '#A4B0C5',
-    textOnAccent: '#FFFFFF',
-    // Saturasyon ~70%: indigo restrained
-    accent: '#7C89EB',
-    accentRgb: '124, 137, 235',
-    accentHover: '#9099EF',
-    accentActive: '#5E6BD9',
-    accentSoft: 'rgba(124, 137, 235, 0.14)',
-    success: '#3DA468',
-    warning: '#D49A30',
-    danger: '#D85858',
-    previewFrom: '#0B1220',
-    previewTo: '#161E32',
+    // Dümdüz matte black — hiç parıltı, radial, falloff yok. Sadece ultra
+    // ince grain (banding kırıcı) + flat renk.
+    bg: `${NOISE.graphite}, #0E0F12`,
+    bgSoft: '#151720',
+    // Surface = level-2 matte. bg'ye yakın, derinlik merdiven hissi
+    surface: 'rgba(27, 30, 41, 0.86)',
+    surfaceHover: 'rgba(34, 38, 51, 0.90)',
+    surfaceActive: 'rgba(42, 47, 62, 0.93)',
+    // Ultra ince hairline — harsh outline YOK
+    border: 'rgba(255, 255, 255, 0.05)',
+    // Focus — classic silver accent
+    borderFocus: 'rgba(192, 192, 192, 0.45)',
+    // WCAG AAA text skalası
+    textPrimary: '#F4F6FA',
+    textSecondary: '#C5CAD4',
+    textMuted: '#8A909C',
+    // Silver light olduğu için üstünde dark text (matte black canvas ile aynı)
+    textOnAccent: '#0E0F12',
+    // Classic Silver #C0C0C0 — monokrom, nötr, renksiz premium
+    accent: '#C0C0C0',
+    accentRgb: '192, 192, 192',
+    accentHover: '#D4D4D4',
+    accentActive: '#A8A8A8',
+    accentSoft: 'rgba(192, 192, 192, 0.10)',
+    // Palette-harmonik state renkleri
+    success: '#3DD68C',
+    warning: '#F5B83C',
+    danger: '#FF6B6B',
+    previewFrom: '#0E0F12',
+    previewTo: '#1B1E29',
   },
   {
     id: 'default-light',
@@ -324,19 +327,25 @@ export function applyThemePack(pack: ThemePack): void {
   set('--theme-divider', pack.border);
   set('--glass-tint', pack.isLight ? '15, 23, 42' : '255, 255, 255');
 
-  // Surface / panel / card — TÜMÜ neutral glass tone (background sızmaz)
-  set('--theme-surface', pack.surface);
-  set('--theme-surface-card', pack.surface);
-  set('--theme-surface-card-border', pack.border);
-  set('--theme-panel', pack.surface);
-  set('--theme-panel-hover', pack.surfaceHover);
-  set('--theme-panel-active', pack.surfaceActive);
-  set('--theme-elevated-panel', pack.surface);
-  set('--theme-elevated-panel-hover', pack.surfaceHover);
-  set('--theme-bg-elevated', pack.surface);
+  // Surface / panel / card — Legacy alias'ları unified surface sistemine bağla
+  // (--surface-base / --surface-elevated yukarıda set ediliyor; burada geriye dönük
+  // uyumluluk için eski token isimlerini aynı değerlere yönlendiriyoruz.)
+  set('--theme-surface', 'var(--surface-base)');
+  set('--theme-surface-card', 'var(--surface-base)');
+  set('--theme-surface-card-border', pack.id === 'default-dark' ? 'rgba(255,255,255,0.06)' : pack.border);
+  set('--theme-panel', 'var(--surface-base)');
+  set('--theme-panel-hover', 'var(--surface-hover)');
+  set('--theme-panel-active', 'var(--surface-active)');
+  set('--theme-elevated-panel', 'var(--surface-elevated)');
+  set('--theme-elevated-panel-hover', 'var(--surface-elevated)');
+  set('--theme-bg-elevated', 'var(--surface-elevated)');
 
-  // Popover (modal, dropdown) — koyu opaque-ish, background renginden bağımsız
-  const popoverBg = pack.isLight ? 'rgba(255,255,255,0.96)' : 'rgba(10,14,26,0.96)';
+  // Popover (modal, dropdown, user cards, settings sections) — her tema kendi
+  // bgSoft'una bağlı, böylece default-dark matte black ailesinde kalır, emerald
+  // yeşil ailesinde kalır vs. Hardcoded navy yok.
+  const popoverBg = pack.isLight
+    ? 'rgba(255,255,255,0.96)'
+    : `rgba(${hexToRgbTuple(pack.bgSoft)}, 0.97)`;
   const popoverShadow = pack.isLight ? '0 12px 40px rgba(0,0,0,0.18)' : '0 12px 40px rgba(0,0,0,0.55)';
   set('--popover-bg', popoverBg);
   set('--popover-border', pack.border);
@@ -346,11 +355,18 @@ export function applyThemePack(pack: ThemePack): void {
   set('--theme-popover-bg', popoverBg);
   set('--theme-popover-border', pack.border);
 
-  // Input — surface ile uyumlu
-  set('--theme-input-bg', pack.surface);
-  set('--theme-input-border', pack.border);
+  // Input surface — temanın accent rengiyle tint'lenmiş (mic/hoparlör butonlarıyla aynı aile)
+  // VoiceControlButton active: bg accent/15, border accent/25 — input biraz daha soft.
+  set('--theme-input-bg', `rgba(${pack.accentRgb}, 0.10)`);
+  set('--theme-input-border', `rgba(${pack.accentRgb}, 0.18)`);
+  set('--theme-input-bg-hover', `rgba(${pack.accentRgb}, 0.13)`);
+  set('--theme-input-focus-border', `rgba(${pack.accentRgb}, 0.38)`);
+  set('--theme-input-focus-ring', `rgba(${pack.accentRgb}, 0.15)`);
   set('--theme-input-text', pack.textPrimary);
   set('--theme-input-placeholder', pack.textMuted);
+  set('--theme-input-shadow', pack.isLight
+    ? 'inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.06)'
+    : 'inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.25)');
 
   // State renkleri
   set('--theme-success', pack.success);
@@ -386,6 +402,187 @@ export function applyThemePack(pack: ThemePack): void {
   set('--theme-sidebar-rgb', bgRgb);
   set('--theme-sidebar', pack.bgSoft);
   set('--shadow-base', '0, 0, 0');
+
+  // ── Unified Dark Token System — tek tip, tutarlı isimlendirme ────────────
+  // Spec: bg-primary / bg-secondary / bg-tertiary + surface-1/2/3 + border-subtle
+  // Bu tokenlar yeni component'lerin TEK referans kaynağıdır. Legacy --theme-*
+  // alias'ları backward compat için korunur, yeni kod bu token'ları kullanmalı.
+  if (pack.isLight) {
+    set('--bg-primary',   '#F5F7FA');
+    set('--bg-secondary', '#ECF0F5');
+    set('--bg-tertiary',  '#E2E7F0');
+    set('--surface-1',    'rgba(255,255,255,0.95)');
+    set('--surface-2',    'rgba(255,255,255,0.98)');
+    set('--surface-3',    '#FFFFFF');
+    set('--text-primary',   '#0B0C0E');
+    set('--text-secondary', '#3A4150');
+    set('--text-tertiary',  '#6B7382');
+  } else {
+    // Matte black family — tüm koyu alanlar bu 3 bg + 3 surface içinde
+    set('--bg-primary',   '#0E0F12');
+    set('--bg-secondary', '#151720');
+    set('--bg-tertiary',  '#1B1E29');
+    set('--surface-1',    'rgba(21, 23, 32, 0.88)');   // sidebar / inline panel
+    set('--surface-2',    'rgba(27, 30, 41, 0.94)');   // card / modal body
+    set('--surface-3',    'rgba(34, 38, 51, 0.98)');   // floating UI (dropdown/tooltip/popover)
+    set('--text-primary',   '#F4F6FA');
+    set('--text-secondary', '#C5CAD4');
+    set('--text-tertiary',  '#8A909C');
+  }
+
+  // ── Surface Material System — tema-scoped ────────────────────────────────
+  // Unified matte-black gradient SADECE default-dark için. Colored dark temalar
+  // (ocean/emerald/crimson/amber) kendi pack.surface tint'lerini korur.
+  if (pack.id === 'default-dark') {
+    // Matte black unified material — messages panel referanslı
+    set('--surface-base',            'linear-gradient(180deg, rgba(20,22,30,0.9), rgba(10,12,18,0.9))');
+    set('--surface-elevated',        'linear-gradient(180deg, rgba(28,31,43,0.95), rgba(15,18,25,0.95))');
+    set('--surface-hover',           'rgba(255,255,255,0.04)');
+    set('--surface-active',          'rgba(255,255,255,0.06)');
+    set('--surface-card-border',     '1px solid rgba(255,255,255,0.06)');
+    set('--surface-card-shadow',     '0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)');
+    set('--surface-floating-shadow', '0 20px 60px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.04)');
+    set('--border-subtle',           'rgba(255,255,255,0.06)');
+    set('--shadow-soft',             '0 8px 24px rgba(0,0,0,0.35)');
+  } else if (pack.isLight) {
+    // Light family — beyaz kart üzerine soft shadow
+    set('--surface-base',            'linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,250,253,0.88))');
+    set('--surface-elevated',        'linear-gradient(180deg, #FFFFFF, #F5F7FA)');
+    set('--surface-hover',           'rgba(0,0,0,0.04)');
+    set('--surface-active',          'rgba(0,0,0,0.06)');
+    set('--surface-card-border',     '1px solid rgba(0,0,0,0.06)');
+    set('--surface-card-shadow',     '0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)');
+    set('--surface-floating-shadow', '0 20px 60px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.8)');
+    set('--border-subtle',           'rgba(0,0,0,0.06)');
+    set('--shadow-soft',             '0 8px 24px rgba(0,0,0,0.08)');
+  } else {
+    // Colored dark themes — kendi kimliklerini korusun (ocean blue, emerald,
+    // crimson, amber). pack.surface/surfaceHover/surfaceActive zaten tint'lenmiş.
+    set('--surface-base',            pack.surface);
+    set('--surface-elevated',        pack.surfaceHover);
+    set('--surface-hover',           pack.surfaceHover);
+    set('--surface-active',          pack.surfaceActive);
+    set('--surface-card-border',     `1px solid ${pack.border}`);
+    set('--surface-card-shadow',     '0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)');
+    set('--surface-floating-shadow', '0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)');
+    set('--border-subtle',           pack.border);
+    set('--shadow-soft',             '0 8px 24px rgba(0,0,0,0.35)');
+  }
+
+  // Legacy alias'lar — geriye uyum, her tema kendi --surface-base'ine bağlı
+  set('--surface-card-bg', 'var(--surface-base)');
+  set('--surface-card-hover-bg', 'var(--surface-elevated)');
+  set('--surface-floating-bg', 'var(--surface-elevated)');
+
+  // ── Depth Layering System — premium elevation scale ──────────────────────
+  // level-0 = base atmosphere (bg zaten)
+  // level-1 = panel / sidebar / inline card
+  // level-2 = modal / popover / elevated card
+  // level-3 = floating UI (dropdowns, tooltips, toasts, context menus)
+  // Her level sonrakinden biraz daha aydınlık + daha soft shadow.
+  if (pack.isLight) {
+    set('--depth-1', 'rgba(255,255,255,0.95)');
+    set('--depth-2', 'rgba(255,255,255,0.98)');
+    set('--depth-3', 'rgba(255,255,255,1)');
+    set('--shadow-1', '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8)');
+    set('--shadow-2', '0 6px 18px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.10)');
+    set('--shadow-3', '0 18px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.08)');
+  } else {
+    // Matte black elevation — pencere dışına taşan soft wide shadow + inset hairline
+    set('--depth-1', 'rgba(21, 23, 32, 0.88)');   // #151720 — sidebar/panel
+    set('--depth-2', 'rgba(27, 30, 41, 0.94)');   // #1B1E29 — card/modal
+    set('--depth-3', 'rgba(34, 38, 51, 0.98)');   // #222633 — floating UI
+    set('--shadow-1', '0 2px 6px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.03)');
+    set('--shadow-2', '0 10px 30px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.035)');
+    set('--shadow-3', '0 24px 56px -12px rgba(0,0,0,0.55), 0 6px 18px -4px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.045)');
+  }
+
+  // ── Message Bubble System — tema-bağımsız tutarlılık ──────────────────
+  // Kendi mesajların: HER ZAMAN açık nötr yüzey + koyu text (tema değişmez)
+  // Karşıdaki mesajlar: temanın accent rengine dayalı tint + tema-uyumlu text
+  set('--msg-self-bg', 'linear-gradient(180deg, #f1f3f5, #e6e8eb)');
+  set('--msg-self-text', '#111111');
+  set('--msg-self-border', '1px solid rgba(0,0,0,0.06)');
+  set('--msg-self-backdrop', 'none');
+
+  // Received — accent-tinted translucent bg per-theme
+  const otherAlpha = pack.isLight ? 0.08 : 0.15;
+  set('--msg-other-bg', `rgba(${pack.accentRgb}, ${otherAlpha})`);
+  set('--msg-other-text', pack.isLight ? '#111111' : 'rgba(255,255,255,0.9)');
+  set('--msg-other-border', `1px solid rgba(${pack.accentRgb}, 0.12)`);
+  set('--msg-other-backdrop', 'none');
+
+  // Ortak shadow — hafif depth
+  set('--msg-shadow', '0 4px 14px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04)');
+
+  // ── Ambient bg wash — #root::before viewport-wide atmosphere ─────────────
+  // default-dark: neutral slate (yeşil/teal tinting YOK, matte black saf kalsın).
+  // Diğer temalar: kendi kimliklerine uygun ambient tonlar.
+  const ambient = (() => {
+    switch (pack.id) {
+      case 'default-dark':   return ['70, 100, 160', '40, 70, 120', '30, 50, 90'];
+      case 'default-light':  return ['0, 0, 0', '0, 0, 0', '0, 0, 0'];
+      case 'ocean-blue':     return ['56, 130, 180', '40, 110, 160', '30, 80, 130'];
+      case 'emerald':        return ['80, 175, 145', '60, 150, 120', '40, 120, 95'];
+      case 'crimson':        return ['200, 130, 130', '180, 100, 100', '140, 70, 70'];
+      case 'amber-night':    return ['210, 165, 95', '180, 140, 75', '140, 105, 50'];
+      default:               return ['70, 100, 160', '40, 70, 120', '30, 50, 90'];
+    }
+  })();
+  set('--ambient-bg-rgb-1', ambient[0]);
+  set('--ambient-bg-rgb-2', ambient[1]);
+  set('--ambient-bg-rgb-3', ambient[2]);
+  // default-dark → hiç parıltı yok (dümdüz matte black). Diğer temalar default fallback'i alır
+  if (pack.id === 'default-dark') {
+    set('--ambient-op-1', '0');
+    set('--ambient-op-2', '0');
+    set('--ambient-op-3', '0');
+    set('--ambient-op-4', '0');
+  } else {
+    set('--ambient-op-1', '0.05');
+    set('--ambient-op-2', '0.04');
+    set('--ambient-op-3', '0.04');
+    set('--ambient-op-4', '0.035');
+  }
+
+  // ── Design System tokens (spec alignment) ────────────────────────────────
+  // Border scale — beyaz-alpha (dark) / siyah-alpha (light), tema-agnostic
+  if (pack.isLight) {
+    set('--border-hairline', 'rgba(0, 0, 0, 0.05)');
+    set('--border-subtle', 'rgba(0, 0, 0, 0.08)');
+    set('--border-default', 'rgba(0, 0, 0, 0.12)');
+    set('--divider', 'rgba(0, 0, 0, 0.06)');
+  } else {
+    set('--border-hairline', 'rgba(255, 255, 255, 0.05)');
+    set('--border-subtle', 'rgba(255, 255, 255, 0.08)');
+    set('--border-default', 'rgba(255, 255, 255, 0.12)');
+    set('--divider', 'rgba(255, 255, 255, 0.06)');
+  }
+
+  // Text extras — disabled + link
+  set('--text-disabled', pack.isLight ? '#9AA0AB' : '#5E636F');
+  set('--text-link', pack.accentHover);
+  set('--theme-text-link', pack.accentHover);
+
+  // Accent ring (focus outline)
+  set('--accent-ring', `rgba(${pack.accentRgb}, 0.40)`);
+
+  // State soft backgrounds — hex'ten türetilmiş düşük-alpha bg
+  set('--success-soft', `rgba(${hexToRgbTuple(pack.success)}, 0.12)`);
+  set('--warning-soft', `rgba(${hexToRgbTuple(pack.warning)}, 0.12)`);
+  set('--danger-soft', `rgba(${hexToRgbTuple(pack.danger)}, 0.14)`);
+
+  // Info (state set'inde ThemePack'te yok — tüm temalar için sabit cool blue)
+  set('--info', '#5BB6FF');
+  set('--info-rgb', '91, 182, 255');
+  set('--info-soft', 'rgba(91, 182, 255, 0.12)');
+
+  // Focus / selection glow — sadece interaction'da görünür, neon değil
+  set('--focus-glow', `0 0 0 2px rgba(${pack.accentRgb}, 0.14), 0 0 14px rgba(${pack.accentRgb}, 0.08)`);
+  // Aktif element — barely-there aura (default state'te obvious olmasın)
+  set('--glow-active', `0 0 16px rgba(${pack.accentRgb}, 0.10)`);
+  // Pressed state — inset push
+  set('--shadow-pressed', 'inset 0 2px 4px rgba(0,0,0,0.25)');
 
   // Document body background + color-scheme
   document.body.style.background = pack.bg;

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Mic, MicOff, Headphones, HeadphoneOff, ShieldCheck, Monitor, Smartphone } from 'lucide-react';
 import { formatFullName } from '../../lib/formatName';
+import AvatarContent from '../AvatarContent';
 import type { PositionedNode } from './roomNetworkLayout';
 import { type CardStyle, getCardStyleTokens } from './cardStyles';
 
@@ -13,12 +14,11 @@ interface Props {
 
 function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   const {
-    avatar, firstName, lastName, isSpeaking, isMuted, isDeafened,
+    avatar, firstName, lastName, statusText, isSpeaking, isMuted, isDeafened,
     platform, isAdmin, isModerator,
     onClick, onDoubleClick, onContextMenu,
   } = node;
 
-  const hasImage = avatar?.startsWith('http');
   const t = getCardStyleTokens(cardStyle);
 
   // Dynamic scale — node.scale drives sizing
@@ -32,6 +32,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   return (
     <div
       className="cursor-pointer select-none group"
+      data-keep-action-menu
       style={{
         opacity: (isMuted && isDeafened) ? 0.55 : isMuted ? 0.7 : 1,
         filter: (isMuted && isDeafened) ? 'grayscale(0.5)' : 'none',
@@ -72,16 +73,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
               transition: 'border-color 0.3s',
             }}
           >
-            {hasImage ? (
-              <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              <span
-                className="text-[var(--theme-text)] font-semibold"
-                style={{ fontSize: isCenter ? 22 : Math.round(14 + (22 - 14) * (s - 0.6) / 0.4), opacity: 0.7 }}
-              >
-                {avatar}
-              </span>
-            )}
+            <AvatarContent avatar={avatar} statusText={statusText} firstName={firstName} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
           </motion.div>
 
           {/* Speaking pulse */}

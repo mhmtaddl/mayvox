@@ -43,6 +43,10 @@ export interface User {
    *   'ultra' → tüm planlar
    */
   serverCreationPlan?: ServerCreationPlan;
+  /** Kullanıcı seviyesi: '1' = Üye, '2' = VIP, '3' = Elit. Premium özellikler için gating. */
+  userLevel?: string | null;
+  /** Seçilen avatar çerçeve rengi (hex veya boş). Profiles tablosunda persist, tüm kullanıcılara görünür. */
+  avatarBorderColor?: string;
 }
 
 export type ServerCreationPlan = 'none' | 'free' | 'pro' | 'ultra';

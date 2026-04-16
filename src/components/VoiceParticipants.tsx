@@ -162,6 +162,7 @@ function VoiceParticipants({
       lastName: user.lastName,
       age: user.age,
       avatar: user.avatar,
+      statusText: isMe ? getEffectiveStatus() : (user.statusText || 'Online'),
       isSelf: isMe,
       isSpeaking: speaking,
       isMuted: isMe ? isMuted : (!!user.selfMuted || !!user.isMuted),

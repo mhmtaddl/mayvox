@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 // ── Shared CSS classes ──
-export const inputCls = 'w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13px] focus:border-[var(--theme-accent)]/50 focus:ring-2 focus:ring-[var(--theme-accent)]/15 outline-none transition-all duration-150 text-[var(--theme-input-text)] placeholder:text-[var(--theme-input-placeholder)]';
+// surface-input class'ı bg/border/shadow/focus/placeholder'ı merkezi yönetir (index.css).
+// Burada sadece layout (padding/radius/font) kalıyor.
+export const inputCls = 'surface-input w-full rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13px]';
 
 export const labelCls = 'text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]';
 
-export const cardCls = 'bg-[var(--theme-surface-card)] backdrop-blur-xl border border-[var(--theme-surface-card-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.15)]';
+// Unified surface — Messages panel referanslı gradient + hairline + soft shadow.
+// `.surface-card` bg/border/shadow'u merkezi token'lardan alır.
+export const cardCls = 'surface-card rounded-2xl overflow-hidden';
 
 // ── Toggle switch ──
 export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onChange: () => void; tooltip?: string }) => (
@@ -49,14 +53,19 @@ export const CardSection = ({
   children: React.ReactNode;
 }) => (
   <section className={cardCls}>
-    <div className="flex items-center gap-2 px-3.5 pt-3 pb-2 md:gap-2.5 md:px-5 md:pt-4 md:pb-3">
-      <span className="text-[var(--theme-accent)] opacity-60">{icon}</span>
-      <span className="text-[9px] md:text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">{title}</span>
-      {badge}
-      <div className="flex-1" />
-      {subtitle && <span className="text-[8px] md:text-[9px] text-[var(--theme-secondary-text)]/50">{subtitle}</span>}
-    </div>
-    <div className="px-3.5 pb-3 md:px-5 md:pb-4">
+    {/* Header satırı — title boşsa hiç render etme (outer DomainTitle zaten var).
+        subtitle tek başına anlamlı olmadığı için o da gizli. Padding üst tarafta
+        header yokken artsın diye children wrapper'da pt büyür. */}
+    {(title || subtitle || badge) && (
+      <div className="flex items-center gap-2 px-3.5 pt-3 pb-2 md:gap-2.5 md:px-5 md:pt-4 md:pb-3">
+        {title && <span className="text-[var(--theme-accent)] opacity-60">{icon}</span>}
+        {title && <span className="text-[9px] md:text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">{title}</span>}
+        {badge}
+        <div className="flex-1" />
+        {subtitle && <span className="text-[8px] md:text-[9px] text-[var(--theme-secondary-text)]/50">{subtitle}</span>}
+      </div>
+    )}
+    <div className={`px-3.5 md:px-5 pb-3 md:pb-4 ${(title || subtitle || badge) ? '' : 'pt-3.5 md:pt-4'}`}>
       {children}
     </div>
   </section>

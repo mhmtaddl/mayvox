@@ -64,7 +64,7 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
   const nextIdx = (count: number) => { const start = idx; idx += count; return start; };
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-[88px] popup-overlay" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center pb-[88px]" onClick={onClose}>
       <motion.div
         ref={ref}
         onClick={e => e.stopPropagation()}
@@ -73,10 +73,16 @@ export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="relative w-[85%] max-w-sm max-h-[60vh] flex overflow-hidden rounded-2xl"
         style={{
-          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-        }}
+          // Mic/hoparlör butonuyla aynı accent-tinted surface
+          background: 'rgba(var(--theme-accent-rgb), 0.15)',
+          border: '1px solid rgba(var(--theme-accent-rgb), 0.25)',
+          boxShadow:
+            '0 32px 64px -16px rgba(0,0,0,0.55),' +
+            ' 0 8px 20px -6px rgba(0,0,0,0.3),' +
+            ' inset 0 1px 0 rgba(255,255,255,0.05)',
+          backdropFilter: 'blur(20px) saturate(120%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(120%)',
+        } as React.CSSProperties}
       >
         {/* Left accent bar */}
         <div className="w-[3px] shrink-0 rounded-l-full bg-[var(--theme-accent)]" />

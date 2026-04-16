@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Volume2,
@@ -12,6 +12,10 @@ import {
   Power,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
+import AvatarContent from '../../../components/AvatarContent';
+import { useSettings } from '../../../contexts/SettingsCtx';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
+import { hasCustomAvatar } from '../../../lib/statusAvatar';
 import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
 import { ConnectionQualityIndicator } from '../../../components/chat';
 import appLogo from '../../../assets/dock-logo-mv_tr.png';
@@ -43,6 +47,43 @@ interface Props {
   onLeaveServer?: (serverId: string) => Promise<void>;
 }
 
+// ── VolumeLabel ──────────────────────────────────────────────────────────
+// Member row'daki kalıcı "%NN" etiketinin yerine premium davranış:
+//   1) Default (50) ise hiç render yok
+//   2) Default değilse ama hover yoksa opacity 0 (group-hover ile açılır)
+//   3) Slider değeri yeni değiştiyse 1.8 sn boyunca opacity 100, sonra fade
+// Parent row `.group/member` classına sahip, group-hover pattern'i oradan gelir.
+const VolumeLabel = React.memo(function VolumeLabel({ value }: { value: number | undefined }) {
+  const [recentlyChanged, setRecentlyChanged] = useState(false);
+  const prevRef = useRef(value);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (value === prevRef.current) return;
+    const isInitialAssign = prevRef.current === undefined;
+    prevRef.current = value;
+    if (isInitialAssign) return;
+    setRecentlyChanged(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setRecentlyChanged(false), 1800);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [value]);
+
+  if (value === undefined || value === 100) return null;
+
+  return (
+    <span
+      className={`text-[9px] text-[var(--theme-secondary-text)] font-bold tabular-nums transition-opacity duration-500 shrink-0 ${
+        recentlyChanged ? 'opacity-100' : 'opacity-0 group-hover/member:opacity-90'
+      }`}
+    >
+      %{value}
+    </span>
+  );
+});
+
 export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
   const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -55,9 +96,25 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
   // listMyServers'dan gelen activeServerRole'ü kullan — global currentUser.isAdmin yerine.
   const serverAdminFallback = activeServerRole === 'owner' || activeServerRole === 'admin';
   const { currentUser, allUsers } = useUser();
+  const { avatarBorderColor } = useSettings();
+  const selfFrameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
   const { connectionLevel } = useAudio();
-  const { handleJoinChannel, handleContextMenu, handleReorderChannels, view, appVersion, showReleaseNotes, setShowReleaseNotes } = useAppState();
+  const { handleJoinChannel, handleContextMenu, handleReorderChannels, view, appVersion, showReleaseNotes, setShowReleaseNotes, handleUpdateUserVolume } = useAppState();
+
+  // Inline volume edit — tıklanan kullanıcının ismi yerine slider çıkar,
+  // dışına tıklayınca kapanır. Popup (action menu) yerine in-row UX.
+  const [editingVolumeUserId, setEditingVolumeUserId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editingVolumeUserId) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest('[data-inline-volume-row]')) return;
+      setEditingVolumeUserId(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [editingVolumeUserId]);
 
   // ── Channel drag-reorder state (local) ──
   const CHANNEL_DRAG_MIME = 'mayvox/channel';
@@ -365,9 +422,17 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                         </div>
                         {/* Real user layer */}
                         <div
-                          draggable={(canMoveMembers || serverAdminFallback) && !!user}
+                          data-keep-action-menu
+                          data-inline-volume-row
+                          draggable={(canMoveMembers || serverAdminFallback) && !!user && editingVolumeUserId !== user?.id}
                           onDragStart={(e) => user && handleDragStart(e, user.name || memberId)}
-                          onClick={(e) => user && onUserClick(user.id, e.clientX, e.clientY)}
+                          onClick={(e) => {
+                            if (!user) return;
+                            if (user.id === currentUser.id) return;
+                            // Slider içindeki tıklamalar inline edit'i kapatmasın
+                            if ((e.target as Element).closest('[data-volume-slider-control]')) return;
+                            setEditingVolumeUserId(prev => (prev === user.id ? null : user.id));
+                          }}
                           className={`absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
                             isBc && isSp
                               ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
@@ -376,21 +441,55 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                           style={{ opacity: user ? undefined : 0, transform: user ? 'scale(1)' : 'scale(0.98)', transition: 'opacity 150ms ease-out, transform 150ms ease-out' }}
                         >
                           {user && <>
-                            <div className="relative shrink-0">
-                              <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[7px]">
-                                {user.avatar?.startsWith('http')
-                                  ? <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                  : user.avatar || '?'}
+                            {(() => {
+                              const isSelf = user.id === currentUser.id;
+                              const uColor = isSelf ? avatarBorderColor : (user.avatarBorderColor || '');
+                              const uTier = isSelf ? selfFrameTier : getFrameTier(user.userLevel, { isPrimaryAdmin: !!user.isPrimaryAdmin, isAdmin: !!user.isAdmin });
+                              return (
+                            <div
+                              className={`relative shrink-0 ${uColor ? getFrameClassName(uTier) : ''}`}
+                              style={uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
+                            >
+                              <div
+                                className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[8px] font-bold"
+                                style={{
+                                  background: hasCustomAvatar(user.avatar)
+                                    ? 'rgba(0,0,0,0.15)'
+                                    : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
+                                  color: 'var(--theme-accent)',
+                                }}
+                              >
+                                <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold" />
                               </div>
                               <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />
                             </div>
-                            <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
-                            {isBc && (isSp
-                              ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
-                              : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
-                            )}
-                            {userVolumes[user.id] !== undefined && userVolumes[user.id] !== 50 && (
-                              <span className="text-[9px] text-[var(--theme-secondary-text)] font-bold">%{userVolumes[user.id]}</span>
+                              ); })()}
+                            {editingVolumeUserId === user.id ? (
+                              <div data-volume-slider-control className="flex-1 flex items-center gap-1.5 pr-1 min-w-0 overflow-hidden">
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={150}
+                                  value={userVolumes[user.id] ?? 100}
+                                  onChange={e => handleUpdateUserVolume(user.id, parseInt(e.target.value, 10))}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  onPointerDown={e => e.stopPropagation()}
+                                  className="flex-1 min-w-0 h-[3px] rounded-full appearance-none cursor-pointer accent-[var(--theme-accent)]"
+                                  style={{
+                                    background: `linear-gradient(to right, rgba(var(--theme-accent-rgb),0.85) 0%, rgba(var(--theme-accent-rgb),0.85) ${((userVolumes[user.id] ?? 100) / 150) * 100}%, rgba(var(--glass-tint),0.18) ${((userVolumes[user.id] ?? 100) / 150) * 100}%, rgba(var(--glass-tint),0.18) 100%)`,
+                                  }}
+                                />
+                                <span className="text-[8px] font-bold tabular-nums text-[var(--theme-accent)] shrink-0">%{userVolumes[user.id] ?? 100}</span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
+                                {isBc && (isSp
+                                  ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
+                                  : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
+                                )}
+                                <VolumeLabel value={userVolumes[user.id]} />
+                              </>
                             )}
                           </>}
                         </div>

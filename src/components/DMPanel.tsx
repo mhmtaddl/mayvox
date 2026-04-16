@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2 } from 'lucide-react';
+import {
+  isNotifySoundEnabled, setNotifySoundEnabled,
+  getSoundVariant, setSoundVariant, type SoundVariant,
+  getSoundVolume, setSoundVolume, type SoundVolume,
+  isToastEnabled, setToastEnabled,
+  isGroupingEnabled, setGroupingEnabled,
+  previewNotifySound,
+} from '../features/notifications/notificationSound';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
+import AvatarContent from './AvatarContent';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
 import { useDM } from '../hooks/useDM';
@@ -59,6 +68,133 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
   );
 }
 
+// ── Mesaj Ayarları Panel ────────────────────────────────────────────────
+// Compact inline dropdown — DMPanel header'ından anchor'lı, modal değil.
+function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [soundOn, setSoundOn] = useState(() => isNotifySoundEnabled());
+  const [variant, setVariant] = useState<SoundVariant>(() => getSoundVariant());
+  const [volume, setVolume] = useState<SoundVolume>(() => getSoundVolume());
+  const [toastOn, setToastOn] = useState(() => isToastEnabled());
+  const [groupOn, setGroupOn] = useState(() => isGroupingEnabled());
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="flex items-center justify-between gap-3 py-2.5 min-h-[32px]">
+      <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">{label}</span>
+      {children}
+    </div>
+  );
+
+  const Toggle = ({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) => (
+    <button
+      onClick={() => onChange(!on)}
+      className="relative w-8 h-[18px] rounded-full transition-colors duration-150"
+      style={{ background: on ? 'var(--theme-accent)' : 'rgba(var(--glass-tint),0.18)' }}
+    >
+      <span
+        className="absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform duration-150"
+        style={{ transform: on ? 'translateX(14px)' : 'translateX(0)' }}
+      />
+    </button>
+  );
+
+  const Segment = <T extends string>({ value, onChange, options }: {
+    value: T; onChange: (v: T) => void; options: Array<{ v: T; l: string }>;
+  }) => (
+    <div className="inline-flex rounded-md overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.08)' }}>
+      {options.map(o => (
+        <button
+          key={o.v}
+          onClick={() => onChange(o.v)}
+          className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+            value === o.v
+              ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]'
+              : 'text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)]'
+          }`}
+        >
+          {o.l}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      onClick={e => e.stopPropagation()}
+      className="absolute right-3 top-[48px] z-20 w-[260px] rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--theme-bg)',
+        border: '1px solid var(--theme-border)',
+        boxShadow:
+          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
+          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+      }}
+    >
+      <div className="px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
+          Mesaj Ayarları
+        </span>
+      </div>
+      <div className="px-3.5 py-1.5 divide-y divide-[rgba(var(--glass-tint),0.05)]">
+        <Row label="Bildirim sesi">
+          <Toggle on={soundOn} onChange={v => { setSoundOn(v); setNotifySoundEnabled(v); }} />
+        </Row>
+        <Row label="Bildirim tonu">
+          <Segment
+            value={variant}
+            onChange={v => {
+              setVariant(v);
+              setSoundVariant(v);
+              // Seçilen tonu anında oynat — kullanıcı farkı duysun
+              previewNotifySound();
+            }}
+            options={[
+              { v: 'ses1' as SoundVariant, l: 'Klasik' },
+              { v: 'ses2' as SoundVariant, l: 'Yumuşak' },
+            ]}
+          />
+        </Row>
+        <Row label="Ses seviyesi">
+          <Segment
+            value={volume}
+            onChange={v => {
+              setVolume(v);
+              setSoundVolume(v);
+              // Seçilen seviyeyi örnekle
+              previewNotifySound();
+            }}
+            options={[
+              { v: 'low' as SoundVolume, l: 'Düşük' },
+              { v: 'medium' as SoundVolume, l: 'Orta' },
+              { v: 'high' as SoundVolume, l: 'Yüksek' },
+            ]}
+          />
+        </Row>
+        <Row label="Masaüstü bildirimi">
+          <Toggle on={toastOn} onChange={v => { setToastOn(v); setToastEnabled(v); }} />
+        </Row>
+        <Row label="Ardışık mesajları grupla">
+          <Toggle on={groupOn} onChange={v => { setGroupOn(v); setGroupingEnabled(v); }} />
+        </Row>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Conversation Item ───────────────────────────────────────────────────
 
 function ConversationItem({
@@ -73,8 +209,6 @@ function ConversationItem({
   const user = allUsers.find((u: any) => u.id === convo.recipientId);
   const name = user ? formatFullName(user.firstName, user.lastName) : convo.recipientName || 'Kullanıcı';
   const avatar = user?.avatar || convo.recipientAvatar || '';
-  const hasAvatar = avatar?.startsWith('http');
-  const initial = (name?.[0] || '?').toUpperCase();
   const hasUnread = convo.unreadCount > 0;
 
   const timeStr = convo.lastMessageAt ? (() => {
@@ -90,29 +224,40 @@ function ConversationItem({
     <div className="relative group/conv">
       <button
         onClick={onClick}
-        className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-left transition-colors duration-150 ${
-          hasUnread ? 'hover:bg-[rgba(var(--theme-accent-rgb),0.06)]' : 'hover:bg-[rgba(var(--glass-tint),0.035)]'
+        className={`flex items-center gap-3 w-full pl-2.5 pr-3 py-2.5 rounded-[12px] text-left transition-[background-color,transform] duration-150 active:scale-[0.995] ${
+          hasUnread
+            ? 'bg-[rgba(var(--theme-accent-rgb),0.035)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)] active:bg-[rgba(var(--theme-accent-rgb),0.11)]'
+            : 'hover:bg-[rgba(var(--glass-tint),0.045)] active:bg-[rgba(var(--glass-tint),0.065)]'
         }`}
       >
-        {/* Avatar */}
-        <div className="shrink-0 w-10 h-10 rounded-[10px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
-          {hasAvatar
-            ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            : <span className="text-[12px] font-bold text-[var(--theme-accent)] opacity-50">{initial}</span>}
+        {/* Avatar — tek pipeline: custom → status PNG → initial */}
+        <div
+          className="shrink-0 relative w-10 h-10 rounded-[11px] overflow-hidden flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
+            boxShadow: hasUnread
+              ? 'inset 0 0 0 1.5px rgba(var(--theme-accent-rgb),0.45), 0 2px 6px -1px rgba(0,0,0,0.2)'
+              : 'inset 0 0 0 1px rgba(var(--glass-tint),0.10), 0 1px 3px rgba(0,0,0,0.15)',
+          }}
+        >
+          <AvatarContent avatar={avatar} statusText={user?.statusText} firstName={user?.firstName} name={name} letterClassName="text-[14px] font-bold tracking-tight text-[var(--theme-accent)]/85" />
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <span className={`text-[13px] truncate ${hasUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)] opacity-75'}`}>{name}</span>
-            {timeStr && <span className={`text-[10px] shrink-0 tabular-nums ${hasUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)] opacity-40'}`}>{timeStr}</span>}
+          <div className="flex items-center justify-between gap-2 mb-[3px]">
+            <span className={`text-[13px] leading-tight truncate tracking-[-0.01em] ${hasUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
+            {timeStr && <span className={`text-[10px] shrink-0 tabular-nums font-medium ${hasUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/50'}`}>{timeStr}</span>}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className={`text-[11px] truncate leading-snug ${hasUnread ? 'text-[var(--theme-text)] opacity-60' : 'text-[var(--theme-secondary-text)] opacity-40'}`}>
-              {convo.lastMessage || 'Henüz mesaj yok'}
+            <span className={`text-[11.5px] truncate leading-snug ${hasUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
+              {convo.lastMessage || <span className="italic opacity-70">Henüz mesaj yok</span>}
             </span>
             {hasUnread && (
-              <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)]">
+              <span
+                className="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] leading-none"
+                style={{ boxShadow: '0 2px 6px -1px rgba(var(--theme-accent-rgb),0.45)' }}
+              >
                 {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
               </span>
             )}
@@ -134,42 +279,45 @@ function ConversationItem({
 
 // ── Message Bubble ──────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isOwn }: { msg: DmMessage; isOwn: boolean }) {
+function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
+  msg: DmMessage;
+  isOwn: boolean;
+  /** Önceki mesaj aynı gönderen + ≤5dk → tighter spacing, tail radius korunur */
+  isGrouped: boolean;
+  /** Group'un son mesajı → timestamp göster */
+  isLastInGroup: boolean;
+}) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
-  const ownRef = useRef<HTMLDivElement>(null);
-  const [textDark, setTextDark] = useState(false);
-  useEffect(() => {
-    if (!isOwn || !ownRef.current) return;
-    const bg = getComputedStyle(ownRef.current).backgroundColor;
-    const m = bg.match(/(\d+)/g);
-    if (m && m.length >= 3) {
-      const [r, g, b] = m.map(Number);
-      setTextDark((0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55);
-    }
-  }, [isOwn]);
+  // Spec: same user 4px / different group 12px
+  const wrapperSpacing = isGrouped ? 'mt-1' : 'mt-3';
+  // Tail corner sadece group sonunda sert
+  const radiusCls = isOwn
+    ? (isLastInGroup ? 'rounded-[16px] rounded-br-[6px]' : 'rounded-[16px]')
+    : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-[3px]`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${wrapperSpacing}`}>
       <div
-        ref={isOwn ? ownRef : undefined}
-        className={`max-w-[80%] px-3.5 py-2 text-[13px] leading-[1.45] ${
-          isOwn
-            ? 'bg-[var(--theme-accent)] rounded-[18px] rounded-br-[6px]'
-            : 'rounded-[18px] rounded-bl-[6px]'
-        }`}
-        style={isOwn
-          ? { color: textDark ? '#111' : '#fff' }
-          : { background: 'rgba(var(--glass-tint), 0.06)', color: 'var(--theme-text)' }
-        }
+        className={`max-w-[65%] px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+        style={{
+          background: isOwn ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
+          color: isOwn ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
+          border: isOwn ? 'var(--msg-self-border)' : 'var(--msg-other-border)',
+          boxShadow: 'var(--msg-shadow)',
+          backdropFilter: isOwn ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
+          WebkitBackdropFilter: isOwn ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
+        } as React.CSSProperties}
       >
         <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-        <span
-          className={`block text-[9px] mt-1 leading-none tabular-nums ${isOwn ? 'text-right' : ''}`}
-          style={{ opacity: isOwn ? 0.45 : 0.3, color: isOwn ? (textDark ? '#333' : '#fff') : 'var(--theme-secondary-text)' }}
-        >
-          {time}
-        </span>
+        {isLastInGroup && (
+          <span
+            className={`block text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'text-right' : ''}`}
+            style={{ opacity: 0.5, color: 'currentColor' }}
+          >
+            {time}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -206,7 +354,6 @@ function ChatArea({
   const recipient = allUsers.find((u: any) => u.id === recipientId);
   const recipientName = recipient ? formatFullName(recipient.firstName, recipient.lastName) : 'Kullanıcı';
   const recipientAvatar = recipient?.avatar || '';
-  const hasAvatar = recipientAvatar?.startsWith('http');
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
@@ -226,6 +373,25 @@ function ChatArea({
     setNearBottomState(true);
     prevRecipientRef.current = recipientId;
   }, [recipientId]);
+
+  // Mouse geri tuşu (X1, button === 3) → sohbet listesine dön
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        onBack();
+      }
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    // Bazı tarayıcılar mouse back'i popstate olarak da firlatır
+    const onPopState = () => onBack();
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [onBack]);
 
   // Initial history veya thread ilk render'da dipe in
   useEffect(() => {
@@ -316,14 +482,24 @@ function ChatArea({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+      <div
+        className="flex items-center gap-3 px-4 py-3 shrink-0"
+        style={{
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.04), transparent)',
+        }}
+      >
         <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-60 hover:opacity-100 hover:bg-[rgba(var(--glass-tint),0.06)] transition-all duration-150">
           <ArrowLeft size={16} />
         </button>
-        <div className="shrink-0 w-8 h-8 rounded-[10px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
-          {hasAvatar
-            ? <img src={recipientAvatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            : <span className="text-[10px] font-bold text-[var(--theme-accent)] opacity-50">{(recipientName[0] || '?').toUpperCase()}</span>}
+        <div
+          className="shrink-0 w-9 h-9 rounded-[10px] overflow-hidden flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.10)',
+          }}
+        >
+          <AvatarContent avatar={recipientAvatar} statusText={recipient?.statusText} firstName={recipient?.firstName} name={recipientName} letterClassName="text-[13px] font-bold text-[var(--theme-accent)]/85" />
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{recipientName}</span>
@@ -364,7 +540,27 @@ function ChatArea({
               <span className="text-[9px] font-medium text-[var(--theme-secondary-text)] opacity-30 uppercase tracking-wider">{group.date}</span>
               <div className="flex-1 h-px bg-[var(--theme-border)] opacity-30" />
             </div>
-            {group.msgs.map(msg => <div key={msg.id}><MessageBubble msg={msg} isOwn={msg.senderId === currentUserId} /></div>)}
+            {group.msgs.map((msg, i, arr) => {
+              // Sender-based grouping — aynı gönderen + ≤5dk aralık ise grouped
+              const prev = i > 0 ? arr[i - 1] : null;
+              const next = i < arr.length - 1 ? arr[i + 1] : null;
+              const GROUP_GAP_MS = 5 * 60 * 1000;
+              const isGrouped = !!prev
+                && prev.senderId === msg.senderId
+                && (msg.createdAt - prev.createdAt) < GROUP_GAP_MS;
+              const isLastInGroup = !next
+                || next.senderId !== msg.senderId
+                || (next.createdAt - msg.createdAt) >= GROUP_GAP_MS;
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  msg={msg}
+                  isOwn={msg.senderId === currentUserId}
+                  isGrouped={isGrouped}
+                  isLastInGroup={isLastInGroup}
+                />
+              );
+            })}
           </div>
         ))}
       </div>
@@ -393,7 +589,15 @@ function ChatArea({
 
       {/* Input */}
       <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
-        <div className="flex items-center gap-2 rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+        <div
+          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-colors duration-150 border-[rgba(255,255,255,0.08)] focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+          } as React.CSSProperties}
+        >
           <input
             ref={inputRef}
             type="text"
@@ -462,6 +666,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const dm = useDM(currentUser.id || undefined);
   const panelRef = useRef<HTMLDivElement>(null);
   const { openConfirm } = useConfirm();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -493,12 +698,11 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
           transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
-          className="fixed bottom-[60px] right-3 z-[99] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
-          style={{
-            background: 'var(--theme-surface-card, var(--theme-bg))',
-            border: '1px solid rgba(var(--theme-accent-rgb), 0.10)',
-            boxShadow: '0 16px 48px rgba(var(--shadow-base),0.45), 0 4px 12px rgba(var(--shadow-base),0.2)',
-          }}
+          // Surface: `.surface-card` class'ı Messages panel referanslı unified
+          // materyali sağlar; Görünüm/Sesler/Performans vs aynı class üzerinden
+          // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
+          // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
+          className="surface-card fixed bottom-[60px] right-3 z-[99] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
         >
           {dm.activeRecipientId ? (
             <ChatArea
@@ -516,8 +720,18 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           ) : (
             <>
               {/* Header */}
-              <div className="px-4 py-3.5 shrink-0" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+              <div className="px-4 py-3.5 shrink-0 flex items-center justify-between relative" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
                 <span className="text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
+                <button
+                  onClick={() => setSettingsOpen(o => !o)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"
+                  title="Mesaj ayarları"
+                >
+                  <Settings2 size={14} />
+                </button>
+                <AnimatePresence>
+                  {settingsOpen && <MessageSettingsPanel onClose={() => setSettingsOpen(false)} />}
+                </AnimatePresence>
               </div>
 
               {/* List */}

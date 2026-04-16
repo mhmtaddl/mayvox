@@ -3,6 +3,7 @@ import { Search, X, UserPlus, Send, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import AvatarContent from './AvatarContent';
 
 interface SearchResult {
   id: string;
@@ -145,11 +146,7 @@ export default function UserSearch({ currentUserId }: Props) {
                   >
                     {/* Avatar */}
                     <div className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
-                      {user.avatar?.startsWith('http') ? (
-                        <img src={user.avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <span className="text-[9px] font-bold text-[var(--theme-accent)]">{initials(user)}</span>
-                      )}
+                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.firstName} name={user.name} letterClassName="text-[9px] font-bold text-[var(--theme-accent)]" />
                     </div>
 
                     {/* İsim + kullanıcı adı */}

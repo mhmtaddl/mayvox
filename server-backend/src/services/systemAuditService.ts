@@ -7,7 +7,8 @@ export type SystemAuditAction =
   | 'system_admin_action.server.ban'
   | 'system_admin_action.server.unban'
   | 'system_admin_action.server.plan_change'
-  | 'system_admin_action.server.force_owner_leave';
+  | 'system_admin_action.server.force_owner_leave'
+  | 'system_admin_action.user.level_change';
 
 export interface SystemAuditInput {
   adminUserId: string;

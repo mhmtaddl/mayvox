@@ -18,6 +18,8 @@ import {
   listUserOwnedServers,
   setUserPlanManual,
   revokeUserPlanManual,
+  setUserLevelManual,
+  revokeUserLevelManual,
   type DurationType,
   type UserSort,
 } from '../services/systemUsersService';
@@ -237,6 +239,66 @@ router.delete('/users/:id/plan', adminWriteRateLimit, async (req: Request, res: 
 
   try {
     await revokeUserPlanManual((req as any).userId, token, id);
+    res.status(204).end();
+  } catch (e) {
+    const code = (e as Error & { code?: number }).code;
+    res.status(code === 403 ? 403 : 400).json({ error: e instanceof Error ? e.message : 'İşlem başarısız' });
+  }
+});
+
+// ── PATCH /admin/users/:id/level ──
+// body: { level: string, durationType, customEndAt? }
+router.patch('/users/:id/level', adminWriteRateLimit, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  if (!id) { res.status(400).json({ error: 'id gerekli' }); return; }
+
+  const headerAuth = req.headers.authorization;
+  const token = headerAuth?.startsWith('Bearer ') ? headerAuth.slice(7) : '';
+  if (!token) { res.status(401).json({ error: 'Token gerekli' }); return; }
+
+  const levelRaw = req.body?.level;
+  if (typeof levelRaw !== 'string') {
+    res.status(400).json({ error: 'level string olmalı' }); return;
+  }
+  const level = levelRaw.trim();
+  if (!level || level.length > 32) {
+    res.status(400).json({ error: 'level 1-32 karakter olmalı' }); return;
+  }
+
+  const durationRaw = req.body?.durationType;
+  const validDurations: DurationType[] = ['1week', '1month', '1year', 'custom', 'unlimited'];
+  if (!validDurations.includes(durationRaw)) {
+    res.status(400).json({ error: 'durationType geçersiz' }); return;
+  }
+  const customEndAt = typeof req.body?.customEndAt === 'string' ? req.body.customEndAt : undefined;
+
+  try {
+    await setUserLevelManual({
+      adminUserId: (req as any).userId,
+      adminToken: token,
+      targetUserId: id,
+      level,
+      durationType: durationRaw as DurationType,
+      customEndAt,
+    });
+    res.status(204).end();
+  } catch (e) {
+    const code = (e as Error & { code?: number }).code;
+    res.status(code === 403 ? 403 : 400).json({ error: e instanceof Error ? e.message : 'İşlem başarısız' });
+  }
+});
+
+// ── DELETE /admin/users/:id/level ──
+router.delete('/users/:id/level', adminWriteRateLimit, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  if (!id) { res.status(400).json({ error: 'id gerekli' }); return; }
+
+  const headerAuth = req.headers.authorization;
+  const token = headerAuth?.startsWith('Bearer ') ? headerAuth.slice(7) : '';
+  if (!token) { res.status(401).json({ error: 'Token gerekli' }); return; }
+
+  try {
+    await revokeUserLevelManual((req as any).userId, token, id);
     res.status(204).end();
   } catch (e) {
     const code = (e as Error & { code?: number }).code;

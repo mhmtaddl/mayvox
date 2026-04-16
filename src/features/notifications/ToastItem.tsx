@@ -2,64 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { MessageCircle, UserPlus, X } from 'lucide-react';
 import { dismiss, handleClick, recordDisplayed, type ToastItem as Toast } from './notificationService';
-import { MV_SPRING } from '../../lib/signature';
 
 interface Props {
   toast: Toast;
   ttlMs?: number;
-}
-
-// Mini 3-bar EQ — DM toast voice-first kimliği.
-// Branded burst: ~2 döngü (2.2s) sonra sessiz rest state'e yerleşir.
-// Sonsuz animasyon yok — CPU/GPU ekonomisi + calm UI.
-function MiniEq({ color }: { color: string }) {
-  const [burstDone, setBurstDone] = useState(false);
-  const BAR_COUNT = 3;
-  const REST_SCALES = [0.25, 0.35, 0.25]; // sabit minimal siluet (görsel olarak canlı ama hareketsiz)
-
-  if (burstDone) {
-    return (
-      <div className="flex items-end gap-[2px] h-3 ml-1" aria-hidden="true">
-        {REST_SCALES.map((s, i) => (
-          <span
-            key={i}
-            className="w-[2px] h-full rounded-full block"
-            style={{
-              background: color,
-              transformOrigin: 'bottom center',
-              transform: `scaleY(${s})`,
-              opacity: 0.55,
-            }}
-          />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-end gap-[2px] h-3 ml-1" aria-hidden="true">
-      {Array.from({ length: BAR_COUNT }).map((_, i) => (
-        <motion.span
-          key={i}
-          className="w-[2px] h-full rounded-full block"
-          style={{ background: color, transformOrigin: 'bottom center' }}
-          initial={{ scaleY: 0.3 }}
-          animate={{ scaleY: [0.3, 1, 0.5, 0.9, 0.3] }}
-          transition={{
-            duration: 1.1,
-            repeat: 1, // 2 toplam iterasyon ≈ 2.2s burst
-            ease: 'easeInOut',
-            delay: i * 0.12,
-            repeatType: 'loop',
-          }}
-          onAnimationComplete={() => {
-            // Son bar'dan tetikle — staggered delay nedeniyle en son tamamlanan.
-            if (i === BAR_COUNT - 1) setBurstDone(true);
-          }}
-        />
-      ))}
-    </div>
-  );
 }
 
 export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
@@ -91,66 +37,31 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
   const avatar = toast.avatar;
   const hasAvatar = typeof avatar === 'string' && avatar.startsWith('http');
   const accentColor = toast.kind === 'dm' ? 'var(--theme-accent)' : 'rgb(168,85,247)';
-  const accentGlow = toast.kind === 'dm'
-    ? 'rgba(var(--theme-accent-rgb), 0.32)'
-    : 'rgba(168,85,247,0.32)';
 
-  // v3: subtle visual mode → dimmer + no EQ + no glow pulse.
   const isSubtle = toast.visualMode === 'toast-subtle';
-
-  // v3.1: Grouped update pulse — revision bump'ta tek-sefer subtle ring.
-  // Entrance animation'a dokunmadan sadece bu ek katmanı çalıştırır.
-  const [justUpdated, setJustUpdated] = useState(false);
-  useEffect(() => {
-    if (!toast.revision || toast.revision <= 1) return;
-    setJustUpdated(true);
-    const t = setTimeout(() => setJustUpdated(false), 380);
-    return () => clearTimeout(t);
-  }, [toast.revision]);
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, x: 24, scale: 0.94 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 24, scale: 0.96, transition: { duration: 0.18 } }}
-      transition={MV_SPRING.soft}
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => handleClick(toast)}
-      className="group relative flex items-start gap-3 w-[340px] cursor-pointer rounded-2xl overflow-hidden backdrop-blur-xl"
+      className="group relative flex items-start gap-3 w-[340px] cursor-pointer rounded-2xl overflow-hidden transition-colors duration-150 hover:bg-[var(--theme-panel-hover)]"
       style={{
-        background: 'var(--theme-surface-card, rgba(18,20,28,0.94))',
-        border: `1px solid rgba(var(--theme-accent-rgb), ${isSubtle ? 0.1 : 0.18})`,
-        boxShadow: isSubtle
-          ? '0 8px 24px rgba(var(--shadow-base),0.30)'
-          : '0 14px 38px rgba(var(--shadow-base),0.45), 0 2px 8px rgba(var(--shadow-base),0.18)',
+        // Solid foreground: theme-bg opak + hafif accent border, glass overkill yok.
+        background: 'var(--theme-bg)',
+        border: '1px solid var(--theme-border)',
+        boxShadow:
+          '0 20px 48px -12px rgba(var(--shadow-base),0.50),' +
+          ' 0 4px 12px -2px rgba(var(--shadow-base),0.20),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.04)',
         opacity: isSubtle ? 0.88 : 1,
       }}
     >
-      {/* Arrival glow pulse — sadece ACTIVE/URGENT toast için (subtle'da sessiz). */}
-      {!isSubtle && (
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-2xl"
-          initial={{ opacity: 0.9, boxShadow: `0 0 0 0 ${accentGlow}` }}
-          animate={{ opacity: 0, boxShadow: `0 0 0 14px rgba(0,0,0,0)` }}
-          transition={{ duration: 0.7, ease: 'easeOut' }}
-        />
-      )}
-
-      {/* Grouped update pulse — revision bump'ta subtle inner ring. */}
-      {justUpdated && (
-        <motion.span
-          key={`rev-${toast.revision}`}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-2xl"
-          initial={{ opacity: 0.55, boxShadow: `inset 0 0 0 0 ${accentGlow}` }}
-          animate={{ opacity: 0, boxShadow: `inset 0 0 0 3px rgba(0,0,0,0)` }}
-          transition={{ duration: 0.38, ease: 'easeOut' }}
-        />
-      )}
-
       {/* Sol aksan barı */}
       <div className="w-[3px] self-stretch shrink-0" style={{ background: accentColor }} />
 
@@ -169,13 +80,12 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-[12px] font-semibold text-[var(--theme-text)] truncate">
+            <span className="text-[12.5px] font-semibold text-[var(--theme-text)] truncate tracking-[-0.01em]">
               {toast.title}
             </span>
-            {toast.kind === 'dm' && !isSubtle && <MiniEq color={accentColor} />}
           </div>
           {toast.body && (
-            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-70 line-clamp-2 break-words leading-snug">
+            <p className="text-[11px] text-[var(--theme-secondary-text)]/75 line-clamp-2 break-words leading-snug">
               {toast.body}
             </p>
           )}
@@ -184,7 +94,7 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
         {/* Dismiss */}
         <button
           onClick={(e) => { e.stopPropagation(); dismiss(toast.id); }}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)] opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:bg-[rgba(var(--glass-tint),0.08)] transition-all duration-150"
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[var(--theme-secondary-text)] opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:bg-[rgba(var(--glass-tint),0.08)] transition-opacity duration-150"
           aria-label="Kapat"
         >
           <X size={11} />

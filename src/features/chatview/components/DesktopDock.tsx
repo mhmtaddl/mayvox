@@ -19,10 +19,14 @@ import {
   Users,
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
+import InactivityCountdownBanner from './InactivityCountdownBanner';
+import { formatFullName } from '../../../lib/formatName';
+import AvatarContent from '../../../components/AvatarContent';
 import { type CardStyle, CARD_STYLES } from '../../../components/chat/cardStyles';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
 import { useUI } from '../../../contexts/UIContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useChannel } from '../../../contexts/ChannelContext';
@@ -58,8 +62,8 @@ export default function DesktopDock({
   onShowCreateModal,
   canCreateServer = true,
 }: Props) {
-  const { toastMsg, setToastMsg } = useUI();
-  const { currentUser } = useUser();
+  const { toastMsg, setToastMsg, setSettingsTarget } = useUI();
+  const { currentUser, setCurrentUser, setAllUsers, getEffectiveStatus, getStatusColor } = useUser();
   const {
     showInputSettings, setShowInputSettings, showOutputSettings, setShowOutputSettings,
     inputDevices, outputDevices, selectedInput, setSelectedInput, selectedOutput, setSelectedOutput,
@@ -67,14 +71,37 @@ export default function DesktopDock({
   const {
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
     voiceMode, setVoiceMode, pttKey, isListeningForKey, setIsListeningForKey,
+    avatarBorderColor,
   } = useSettings();
   const {
     isMuted, setIsMuted, isDeafened, setIsDeafened,
     isBroadcastListener, disconnectFromLiveKit, view, setView,
+    countdownActive, broadcastModeration,
   } = useAppState();
   const { activeChannel, setActiveChannel, channels } = useChannel();
 
   const isAdminMuted = currentUser.isMuted === true;
+
+  // ── Self control panel ──
+  const [selfPanelOpen, setSelfPanelOpen] = useState(false);
+  const selfPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selfPanelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (selfPanelRef.current?.contains(e.target as Node)) return;
+      setSelfPanelOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [selfPanelOpen]);
+
+  const setSelfStatus = (next: string) => {
+    if (!currentUser.id) return;
+    const updated = { ...currentUser, statusText: next };
+    setCurrentUser(updated);
+    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updated : u));
+    broadcastModeration(currentUser.id, { statusText: next });
+  };
 
   // ── Sunucu dock state ──
   const [serverSearch, setServerSearch] = useState('');
@@ -234,7 +261,58 @@ export default function DesktopDock({
           </span>
           <span className="text-[11px] font-semibold text-[var(--theme-text)]">{toastMsg}</span>
         </div>
+      ) : countdownActive ? (
+        <InactivityCountdownBanner compact />
       ) : <>
+      {/* ── Kendi kullanıcı kartı — avatar + isim + effective status ── */}
+      {(() => {
+        const effStatus = getEffectiveStatus();
+        const statusColorClass = getStatusColor(effStatus);
+        const displayName = formatFullName(currentUser.firstName, currentUser.lastName) || currentUser.name;
+        return (
+          <div className="relative shrink-0" ref={selfPanelRef}>
+            <button
+              onClick={() => setSelfPanelOpen(o => !o)}
+              className="flex items-center gap-2 pr-2.5 pl-1 py-1 mr-1 border-r border-[rgba(var(--glass-tint),0.08)] rounded-lg hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+              title={`${displayName} — ${effStatus}`}
+            >
+              {(() => {
+                const ft = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
+                return (
+                  <div
+                    className={`relative shrink-0 ${getFrameClassName(ft)}`}
+                    style={{ ...getFrameStyle(avatarBorderColor, ft), borderRadius: 12 }}
+                  >
+                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-[var(--theme-accent)]/10 flex items-center justify-center">
+                      <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.firstName} name={currentUser.name} imgClassName="w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="flex flex-col leading-tight min-w-0 max-w-[120px] text-left">
+                <span className="text-[11px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
+                <span className={`text-[9px] font-medium ${statusColorClass} truncate`}>{effStatus}</span>
+              </div>
+            </button>
+            <AnimatePresence>
+              {selfPanelOpen && (
+                <SelfControlPanel
+                  currentStatus={currentUser.statusText ?? 'Online'}
+                  canInvisible={
+                    !!currentUser.isAdmin
+                    || !!currentUser.isModerator
+                    || currentUser.userLevel === '2'
+                    || currentUser.userLevel === '3'
+                  }
+                  onStatusChange={(s) => { setSelfStatus(s); setSelfPanelOpen(false); }}
+                  onOpenSettings={() => { setSettingsTarget('account'); setView('settings'); setSelfPanelOpen(false); }}
+                  onClose={() => setSelfPanelOpen(false)}
+                />
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })()}
       {/* ── Sunucu alanı — kompakt default ── */}
       {serverList.length > 0 && activeServer && <>
       <div ref={serverAreaRef} className="relative flex items-center gap-1 shrink-0">
@@ -590,5 +668,96 @@ export default function DesktopDock({
       )}
       </>}
     </div>
+  );
+}
+
+// ── Self Control Panel ──────────────────────────────────────────────────
+// Dock user chip'inden anchor'lı compact quick actions: status, mic/deafen,
+// settings. Modal yok, dropdown tarzı.
+// Status seçenekleri. 'Çevrimdışı' = premium/staff-only "appear offline" —
+// presence normalize'dan muaf (usePresence.ts'te Aktif→Online haricinde
+// koruma yok). Gating SelfControlPanel'de `canInvisible` ile uygulanır.
+const STATUS_OPTIONS: Array<{ key: string; label: string; dot: string; premium?: boolean }> = [
+  { key: 'Online', label: 'Çevrimiçi', dot: 'bg-emerald-400' },
+  { key: 'AFK', label: 'AFK', dot: 'bg-violet-400' },
+  { key: 'Rahatsız Etmeyin', label: 'Rahatsız Etmeyin', dot: 'bg-red-400' },
+  { key: 'Çevrimdışı', label: 'Çevrimdışı', dot: 'bg-[var(--theme-secondary-text)]/40', premium: true },
+];
+
+function SelfControlPanel({
+  currentStatus,
+  canInvisible,
+  onStatusChange,
+  onOpenSettings,
+}: {
+  currentStatus: string;
+  canInvisible: boolean;
+  onStatusChange: (s: string) => void;
+  onOpenSettings: () => void;
+  onClose: () => void;
+}) {
+  const visibleOptions = STATUS_OPTIONS.filter(o => !o.premium || canInvisible);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.1 } }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute bottom-full left-0 mb-2 w-[240px] rounded-2xl overflow-hidden z-50"
+      style={{
+        background: 'var(--theme-bg)',
+        border: '1px solid var(--theme-border)',
+        boxShadow:
+          '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
+          ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+      }}
+    >
+      {/* Status section */}
+      <div className="px-2 pt-2 pb-1">
+        <span className="px-2 text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/60 block mb-1">
+          Durum
+        </span>
+        <div className="flex flex-col">
+          {visibleOptions.map(opt => {
+            const active = currentStatus === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => onStatusChange(opt.key)}
+                className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+                  active
+                    ? 'bg-[var(--theme-accent)]/10'
+                    : 'hover:bg-[var(--theme-panel-hover)]'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${opt.dot}`} />
+                  <span className={`text-[11.5px] ${active ? 'font-semibold text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/85'}`}>
+                    {opt.label}
+                  </span>
+                </span>
+                {active && <Check size={11} className="text-[var(--theme-accent)]" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mx-3 h-px" style={{ background: 'rgba(var(--glass-tint), 0.10)' }} />
+
+      {/* Settings */}
+      <div className="px-2 py-2">
+        <button
+          onClick={onOpenSettings}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[11.5px] text-[var(--theme-text)]/85 hover:bg-[var(--theme-panel-hover)] transition-colors"
+        >
+          <Settings size={12} className="text-[var(--theme-secondary-text)]/70" />
+          <span>Hesap Ayarları</span>
+        </button>
+      </div>
+    </motion.div>
   );
 }

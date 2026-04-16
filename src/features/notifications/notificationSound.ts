@@ -9,7 +9,55 @@
  */
 
 const SOUND_PREF_KEY = 'notify:sound';
+const SOUND_VARIANT_KEY = 'notify:sound-variant';
+const SOUND_VOLUME_KEY = 'notify:sound-volume';
+const TOAST_PREF_KEY = 'notify:toast';
+const GROUP_PREF_KEY = 'notify:group';
 const ENVELOPE_MS = 400;
+
+export type SoundVariant = 'ses1' | 'ses2';
+export type SoundVolume = 'low' | 'medium' | 'high';
+
+const VOLUME_GAIN: Record<SoundVolume, number> = {
+  low: 0.20,
+  medium: 0.45,
+  high: 0.75,
+};
+
+export function getSoundVariant(): SoundVariant {
+  try {
+    const v = localStorage.getItem(SOUND_VARIANT_KEY);
+    return v === 'ses2' ? 'ses2' : 'ses1';
+  } catch { return 'ses1'; }
+}
+export function setSoundVariant(v: SoundVariant) {
+  try { localStorage.setItem(SOUND_VARIANT_KEY, v); } catch { /* no-op */ }
+}
+export function getSoundVolume(): SoundVolume {
+  try {
+    const v = localStorage.getItem(SOUND_VOLUME_KEY);
+    return v === 'low' || v === 'high' ? v : 'medium';
+  } catch { return 'medium'; }
+}
+export function setSoundVolume(v: SoundVolume) {
+  try { localStorage.setItem(SOUND_VOLUME_KEY, v); } catch { /* no-op */ }
+}
+export function isToastEnabled(): boolean {
+  try { return localStorage.getItem(TOAST_PREF_KEY) !== '0'; }
+  catch { return true; }
+}
+export function setToastEnabled(on: boolean) {
+  try { localStorage.setItem(TOAST_PREF_KEY, on ? '1' : '0'); }
+  catch { /* no-op */ }
+}
+export function isGroupingEnabled(): boolean {
+  try { return localStorage.getItem(GROUP_PREF_KEY) !== '0'; }
+  catch { return true; }
+}
+export function setGroupingEnabled(on: boolean) {
+  try { localStorage.setItem(GROUP_PREF_KEY, on ? '1' : '0'); }
+  catch { /* no-op */ }
+}
 
 /**
  * Scheduler strategy — şu an sabit, ileride settings panel'den tune edilebilir.
@@ -98,10 +146,19 @@ function actuallyPlay() {
   try {
     const t0 = c.currentTime;
     const master = c.createGain();
-    master.gain.value = 0.06;
+    const peakMaster = VOLUME_GAIN[getSoundVolume()];
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(peakMaster, t0 + 0.05);
     master.connect(c.destination);
-    playPartial(c, t0, 880, 0.9, 4, 140, master);
-    playPartial(c, t0 + 0.08, 660, 0.55, 8, 220, master);
+    const variant = getSoundVariant();
+    if (variant === 'ses2') {
+      // Ses 2 — tek tonlu sıcak ping (daha yumuşak, melodik)
+      playPartial(c, t0, 740, 1.0, 6, 260, master);
+    } else {
+      // Ses 1 — dual-tone klasik (mevcut)
+      playPartial(c, t0, 880, 0.9, 4, 140, master);
+      playPartial(c, t0 + 0.08, 660, 0.55, 8, 220, master);
+    }
     setTimeout(() => {
       try { master.disconnect(); } catch { /* no-op */ }
     }, ENVELOPE_MS + 40);
@@ -134,6 +191,34 @@ export function playNotifyBeep() {
     if (!isNotifySoundEnabled()) return;
     actuallyPlay();
   }, delay);
+}
+
+/**
+ * Preview — mevcut ayarlarla (variant + volume) sesi direkt çalar.
+ * isNotifySoundEnabled flag'ini BYPASS eder; ayarlar panelinde kullanıcı
+ * seçimini duyabilsin diye. Scheduler envelope atlanır, hammer-click kabul.
+ */
+export function previewNotifySound() {
+  const c = ensureCtx();
+  if (!c) return;
+  try {
+    const t0 = c.currentTime;
+    const master = c.createGain();
+    const peakMaster = VOLUME_GAIN[getSoundVolume()];
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(peakMaster, t0 + 0.05);
+    master.connect(c.destination);
+    const variant = getSoundVariant();
+    if (variant === 'ses2') {
+      playPartial(c, t0, 740, 1.0, 6, 260, master);
+    } else {
+      playPartial(c, t0, 880, 0.9, 4, 140, master);
+      playPartial(c, t0 + 0.08, 660, 0.55, 8, 220, master);
+    }
+    setTimeout(() => {
+      try { master.disconnect(); } catch { /* no-op */ }
+    }, ENVELOPE_MS + 40);
+  } catch { /* no-op */ }
 }
 
 export function disposeNotifySound() {

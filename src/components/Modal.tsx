@@ -79,16 +79,17 @@ export default function Modal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
-            className={`relative rounded-2xl overflow-hidden ${className ?? ''}`}
+            className={`relative rounded-2xl overflow-hidden ${danger ? '' : 'surface-floating'} ${className ?? ''}`}
             style={{
               width: 'min(92vw, ' + widthPx + 'px)',
               maxHeight: '90vh',
-              background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-              border: danger
-                ? '1px solid rgba(239, 68, 68, 0.14)'
-                : '1px solid rgba(255, 255, 255, 0.06)',
-              // Sade, soğuk gölge — accent tinted glow YASAK.
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
+              // danger case'de özel kırmızı border; aksi halde surface-floating class'ı
+              // (bg + border + shadow) otomatik uygulanır
+              ...(danger ? {
+                background: 'var(--surface-floating-bg)',
+                border: '1px solid rgba(239, 68, 68, 0.14)',
+                boxShadow: 'var(--surface-floating-shadow)',
+              } : {}),
             }}
             onClick={(e) => e.stopPropagation()}
           >

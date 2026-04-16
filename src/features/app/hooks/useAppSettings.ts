@@ -235,8 +235,19 @@ export function useAppSettings() {
   const setSoundInviteVariant = (v: 1|2) => { localStorage.setItem('soundInviteVariant', String(v)); setSoundInviteVariantState(v); };
 
   // ── Görsel ──
-  const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') || '#3B82F6');
-  const setAvatarBorderColor = (v: string) => { localStorage.setItem('avatarBorderColor', v); setAvatarBorderColorState(v); };
+  const [avatarBorderColor, setAvatarBorderColorState] = useState(() => localStorage.getItem('avatarBorderColor') ?? '');
+  const setAvatarBorderColor = (v: string) => {
+    localStorage.setItem('avatarBorderColor', v);
+    setAvatarBorderColorState(v);
+    // Profile DB'ye de kaydet — diğer kullanıcılar görsün
+    import('../../../lib/supabase').then(({ supabase }) => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) {
+          supabase.from('profiles').update({ avatar_border_color: v }).eq('id', session.user.id).then(() => {});
+        }
+      });
+    });
+  };
 
   // ── Auto-leave — ZORUNLU (v4 policy) ──
   // Kullanıcı kaptamaz; yalnızca 5-60 dk aralığında süre seçer. Backward-compat:

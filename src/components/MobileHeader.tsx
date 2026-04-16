@@ -1,6 +1,8 @@
 import React from 'react';
 import { Menu, Users } from 'lucide-react';
 import BrandArea from './BrandArea';
+import AvatarContent from './AvatarContent';
+import { getFrameTier, getFrameStyle, getFrameClassName, type FrameTier } from '../lib/avatarFrame';
 
 interface Props {
   forceMobile: boolean;
@@ -12,6 +14,9 @@ interface Props {
   statusColor: string;
   avatar?: string;
   avatarBorderColor: string;
+  userLevel?: string | null;
+  isPrimaryAdmin?: boolean;
+  isAdmin?: boolean;
 }
 
 function MobileHeader({
@@ -24,9 +29,12 @@ function MobileHeader({
   statusColor,
   avatar,
   avatarBorderColor,
+  userLevel,
+  isPrimaryAdmin,
+  isAdmin,
 }: Props) {
+  const frameTier = getFrameTier(userLevel, { isPrimaryAdmin, isAdmin });
   const lg = forceMobile ? '' : 'lg:hidden';
-  const hasImage = avatar?.startsWith('http');
 
   return (
     <header className={`${lg} flex flex-col bg-[rgba(var(--theme-bg-rgb),0.7)] backdrop-blur-xl border-b border-[rgba(var(--glass-tint),0.04)] z-10 shrink-0`}>
@@ -55,10 +63,10 @@ function MobileHeader({
               <p className="text-sm font-semibold leading-none truncate w-full">{userName} ({userAge})</p>
               <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${statusColor}`}>{statusText}</p>
             </div>
-            <div className="h-10 w-10 overflow-hidden border-2 avatar-squircle relative flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ borderColor: avatarBorderColor }}>
-              {hasImage
-                ? <img src={avatar} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                : avatar}
+            <div className={`shrink-0 ${getFrameClassName(frameTier)}`} style={{ ...getFrameStyle(avatarBorderColor, frameTier), borderRadius: '22%' }}>
+            <div className="h-10 w-10 overflow-hidden avatar-squircle relative flex items-center justify-center text-white font-bold text-xs">
+              <AvatarContent avatar={avatar} statusText={statusText} name={userName} letterClassName="text-white font-bold text-xs" />
+            </div>
             </div>
           </div>
         </div>
