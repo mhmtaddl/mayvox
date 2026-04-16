@@ -8,3 +8,7 @@ coverage/
 .env.*
 *.env
 !.env.example
+
+# Secrets — asla commit'lenmesin
+github-recovery-codes.txt
+*-recovery-codes*
