@@ -13,6 +13,18 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.4': {
+    title: 'v2.0.4',
+    items: [],
+    common: [
+      'Premium tema sistemi ve avatar çerçeveleri eklendi.',
+      'Mesaj arayüzü yenilendi, admin paneli eklendi.',
+      'Premium toast tasarımı, akıllı bildirim gruplaması ve DM okundu düzeltmesi.',
+    ],
+    admin: [
+      'Hassas veriler repodan temizlendi (güvenlik sertleştirmesi).',
+    ],
+  },
   '2.0.3': {
     title: 'v2.0.3',
     items: [],
