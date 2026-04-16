@@ -38,13 +38,39 @@ export function useDM(currentUserId: string | undefined) {
   // Optimistic hide — server confirm gelene kadar client-side filtre
   const hiddenKeysRef = useRef<Set<string>>(new Set());
 
+  // Mark-read throttle — openConversation + onNewMessage + onConversations'tan
+  // peş peşe tetiklenen WS spam'ini idempotent tutar (2sn cooldown per convKey).
+  const lastMarkReadRef = useRef<Map<string, number>>(new Map());
+  const MARK_READ_COOLDOWN_MS = 2000;
+  const markReadSafe = useCallback((convKey: string) => {
+    const now = Date.now();
+    const last = lastMarkReadRef.current.get(convKey) ?? 0;
+    if (now - last < MARK_READ_COOLDOWN_MS) return;
+    lastMarkReadRef.current.set(convKey, now);
+    dmMarkRead(convKey);
+  }, []);
+
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
     setDmHandlers({
       onConversations: (convos) => {
         // Optimistic hide filtresi — server henüz hide'ı işlememişse client tarafında filtrele
         const filtered = convos.filter(c => !hiddenKeysRef.current.has(c.conversationKey));
-        setConversations(filtered);
+        // Defensive: openConversation ile loadInitial arasında race oluşmuş olabilir
+        // — server listesi aktif konuşma için hâlâ unread>0 taşıyorsa lokalde sıfırla
+        // + authoritative mark-read yolla. markReadSafe idempotent.
+        const activeKey = activeConvKeyRef.current;
+        const staleUnread = activeKey
+          ? (filtered.find(c => c.conversationKey === activeKey)?.unreadCount ?? 0)
+          : 0;
+        const fixed = staleUnread > 0 && activeKey
+          ? filtered.map(c => c.conversationKey === activeKey ? { ...c, unreadCount: 0 } : c)
+          : filtered;
+        setConversations(fixed);
+        if (staleUnread > 0 && activeKey) {
+          markReadSafe(activeKey);
+          setTotalUnread(prev => Math.max(0, prev - staleUnread));
+        }
       },
       onHistory: (convKey, _recipientId, msgs) => {
         if (convKey === activeConvKeyRef.current) {
@@ -69,9 +95,9 @@ export function useDM(currentUserId: string | undefined) {
             if (prev.some(m => m.id === msg.id)) return prev;
             return [...prev, msg];
           });
-          // Aktif sohbetteyse okundu işaretle
+          // Aktif sohbetteyse okundu işaretle (throttled — peş peşe mesajda spam yok)
           if (msg.senderId !== currentUserId) {
-            dmMarkRead(msg.conversationKey);
+            markReadSafe(msg.conversationKey);
           }
         }
 
@@ -131,7 +157,7 @@ export function useDM(currentUserId: string | undefined) {
         }
       },
       onUnreadTotal: (count) => {
-        setTotalUnread(count);
+        setTotalUnread(Math.max(0, count));
       },
       onTyping: (convKey, fromUserId) => {
         // Sadece aktif sohbette ve karşı taraftan gelen typing'i göster.
@@ -150,7 +176,7 @@ export function useDM(currentUserId: string | undefined) {
         dmRequestUnreadTotal();
       },
     });
-  }, [currentUserId]);
+  }, [currentUserId, markReadSafe]);
 
   // İlk yüklemede konuşmaları ve unread çek
   const loadInitial = useCallback(() => {
@@ -193,17 +219,23 @@ export function useDM(currentUserId: string | undefined) {
     setPanelOpen(true);
 
     dmOpenConversation(recipientId);
+    // Authoritative mark-read — dm:open event'i mark-read GARANTİ ETMİYOR,
+    // sunucu tarafı unread persistence'ını ayrı `dm:mark_read` ile sıfırla.
+    // Throttle idempotency sağlar; loadInitial sonrası onConversations'ta da
+    // race durumunda tekrar tetiklenebilir (cooldown içinde no-op).
+    markReadSafe(convKey);
 
-    // Unread güncelle — bu konuşmanın unread'ini sıfırla
+    // Unread güncelle — bu konuşmanın unread'ini lokalde sıfırla
     setConversations(prev => prev.map(c =>
       c.conversationKey === convKey ? { ...c, unreadCount: 0 } : c
     ));
-    // Total'i yeniden hesapla
+    // Total'i yeniden hesapla (conversations boşsa convUnread=0, setTotalUnread
+    // NO-OP; gerçek düşürme loadInitial dönüp onConversations race-fix'te olur).
     setTotalUnread(prev => {
       const convUnread = conversations.find(c => c.conversationKey === convKey)?.unreadCount || 0;
       return Math.max(0, prev - convUnread);
     });
-  }, [currentUserId, conversations]);
+  }, [currentUserId, conversations, markReadSafe]);
 
   const lastDmSendRef = useRef(0);
   const lastDmTextRef = useRef('');
