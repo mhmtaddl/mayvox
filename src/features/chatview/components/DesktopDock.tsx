@@ -47,6 +47,8 @@ interface Props {
   onShowCreateModal: () => void;
   /** App-level rol + 0 sahip sunucu varsa true; değilse + buton gizlenir. */
   canCreateServer?: boolean;
+  /** 'fixed' (default): desktop bottom-center sabit pill. 'inline': parent container içinde normal akışta. */
+  layout?: 'fixed' | 'inline';
 }
 
 export default function DesktopDock({
@@ -61,7 +63,9 @@ export default function DesktopDock({
   onLeaveServer,
   onShowCreateModal,
   canCreateServer = true,
+  layout = 'fixed',
 }: Props) {
+  const isInline = layout === 'inline';
   const { toastMsg, setToastMsg, setSettingsTarget } = useUI();
   const { currentUser, setCurrentUser, setAllUsers, getEffectiveStatus, getStatusColor } = useUser();
   const {
@@ -243,9 +247,16 @@ export default function DesktopDock({
 
   return (
     <div
-      className={`${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`}
-      /* Sidebar'lar arası content alanının tam ortası */
-      style={{ left: 'calc(50% + 8px)', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }}
+      className={
+        isInline
+          ? 'flex flex-wrap items-center justify-center gap-1.5 px-2 py-2 min-h-[48px]'
+          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`
+      }
+      /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */
+      style={isInline
+        ? undefined
+        : { left: 'calc(50% + 8px)', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }
+      }
       onMouseEnter={() => { if (toastMsg) dockToastHoveredRef.current = true; }}
       onMouseLeave={() => { dockToastHoveredRef.current = false; }}
     >

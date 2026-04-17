@@ -10,6 +10,8 @@ import {
   Power,
   Headphones,
   Radio,
+  Compass,
+  Timer,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -64,6 +66,11 @@ import { roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
 import AvatarContent from '../components/AvatarContent';
+import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
+import { hasCustomAvatar } from '../lib/statusAvatar';
+import { ConnectionQualityIndicator } from '../components/chat';
+import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
+import appLogo from '../assets/dock-logo-mv_tr.png';
 
 import type { VoiceChannel } from '../types';
 import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
@@ -614,15 +621,6 @@ export default function ChatView() {
         forceMobile={FORCE_MOBILE}
         onOpenLeftDrawer={() => setMobileLeftOpen(true)}
         onOpenRightDrawer={() => setMobileRightOpen(true)}
-        userName={formatFullName(currentUser.firstName, currentUser.lastName)}
-        userAge={currentUser.age ?? 0}
-        statusText={getEffectiveStatus()}
-        statusColor={getStatusColor(getEffectiveStatus())}
-        avatar={currentUser.avatar}
-        avatarBorderColor={avatarBorderColor}
-        userLevel={currentUser.userLevel}
-        isPrimaryAdmin={currentUser.isPrimaryAdmin}
-        isAdmin={currentUser.isAdmin}
       />
 
       {/* Mobile-only banner; desktop'ta DesktopDock içinde render ediliyor. */}
@@ -658,74 +656,231 @@ export default function ChatView() {
               <motion.aside
                 initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 left-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl`}
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 left-0 w-72 z-50 flex flex-col shadow-2xl rounded-r-2xl`}
+                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx < -40) setMobileLeftOpen(false); }}
               >
-                <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
-                  <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] font-bold">
-                    <Volume2 size={16} /><span className="uppercase text-xs tracking-widest">Ses Kanalları</span>
+                {/* ── A. Marka / Sunucu Header ── */}
+                <div className="px-5 pt-5 pb-3.5 shrink-0 flex items-center gap-3.5 select-none">
+                  {activeServerData?.avatarUrl ? (
+                    <img src={activeServerData.avatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.1)]" style={{ border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }} draggable={false} />
+                  ) : activeServerData?.shortName ? (
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(var(--theme-accent-rgb),0.08)]"
+                      style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.06))', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
+                      <span className="text-[13px] font-bold text-[var(--theme-accent)]">{activeServerData.shortName}</span>
+                    </div>
+                  ) : (
+                    <div className="relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(var(--theme-accent-rgb),0.08)]"
+                      style={{ background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.10), rgba(var(--theme-accent-rgb), 0.04))', border: '1.5px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
+                      <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover rounded-[inherit]" draggable={false} />
+                    </div>
+                  )}
+                  <div className="flex flex-col leading-none min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <h1 className="text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">
+                        {(() => {
+                          const raw = activeServerData?.name ?? 'MAYVOX';
+                          const spaceIdx = raw.indexOf(' ');
+                          if (spaceIdx > 0) {
+                            const first = raw.slice(0, spaceIdx);
+                            const rest = raw.slice(spaceIdx + 1);
+                            return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
+                          }
+                          if (raw.toUpperCase() === 'MAYVOX') return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
+                          return raw;
+                        })()}
+                      </h1>
+                      {activeServerData?.isPublic === false && <Lock size={10} className="text-[var(--theme-secondary-text)]/35 shrink-0" />}
+                    </div>
+                    <span className="text-[8px] font-semibold tracking-[0.14em] uppercase text-[var(--theme-secondary-text)]/25 mt-1 truncate max-w-full">{activeServerData?.motto || 'voice & chat'}</span>
                   </div>
-                  <button onClick={() => setMobileLeftOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors"><X size={18} /></button>
-                </div>
-                <nav className={`flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar ${serverList.find(s => s.id === activeServerId)?.isBanned ? 'opacity-75' : ''}`} onClick={() => setContextMenu(null)}>
-                  {visibleChannels.map(channel => {
-                    const serverBanned = !!serverList.find(s => s.id === activeServerId)?.isBanned;
+                  {activeServerId && (() => {
+                    const hasServerStaffRole = activeServerData?.role === 'owner' || activeServerData?.role === 'admin' || activeServerData?.role === 'mod';
+                    if (hasServerStaffRole) {
+                      return (
+                        <button onClick={() => { activeServerData && setSettingsServerId(activeServerData.id); setMobileLeftOpen(false); }} title="Sunucu Ayarları"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
+                          <Settings size={13} />
+                        </button>
+                      );
+                    }
                     return (
-                    <div key={channel.id} className="space-y-1">
-                      <button onClick={() => { handleJoinChannel(channel.id); setMobileLeftOpen(false); }} disabled={isConnecting}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${activeChannel === channel.id ? `bg-[var(--theme-accent)] text-[var(--theme-badge-text)] shadow-lg shadow-black/20${isConnecting ? ' animate-pulse' : ''}` : 'text-[var(--theme-secondary-text)] hover:bg-[var(--theme-bg)]/50'} ${serverBanned ? 'opacity-60' : ''}`}>
-                        {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={15} className="shrink-0 opacity-70" />; })()}
-                        <span className="font-semibold truncate min-w-0" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
-                        {serverBanned && <Lock size={12} className="shrink-0 ml-auto opacity-70 text-orange-400" />}
-                        {!serverBanned && channel.password && <Lock size={12} className="shrink-0 ml-auto opacity-50" />}
-                        {!serverBanned && (channel.userCount ?? 0) > 0 && <span className={`text-[10px] font-bold ml-auto shrink-0 ${activeChannel === channel.id ? 'text-white/60' : 'text-[var(--theme-secondary-text)]/50'}`}>{channel.userCount}</span>}
+                      <button onClick={() => setMobileLeftOpen(false)} title="Kapat"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-all duration-150">
+                        <X size={13} />
                       </button>
-                      {(() => {
-                        const isBc = channel.mode === 'broadcast'; const speakers = channel.speakerIds || [];
-                        const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
-                        const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
-                        let memberUsers = (channel.members ?? []).map(id => allUsers.find(u => u.id === id)).filter(Boolean) as typeof allUsers;
-                        if (!memberUsers.length) return null;
-                        if (isBc) memberUsers = [...memberUsers].sort((a, b) => (isSpeakerFn(b.id) ? 1 : 0) - (isSpeakerFn(a.id) ? 1 : 0));
-                        let shownSpLabel = false, shownLsLabel = false;
-                        return (
-                          <div className="pl-9 space-y-0.5 pb-2">
+                    );
+                  })()}
+                </div>
+                <div className="mx-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.07), transparent)' }} />
+
+                <div className="px-5 pt-4 pb-4 flex flex-col flex-1 min-h-0">
+                  {visibleChannels.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center px-2">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(var(--glass-tint), 0.04)' }}>
+                        <Volume2 size={18} className="text-[var(--theme-secondary-text)]/20" />
+                      </div>
+                      <p className="text-[10px] text-[var(--theme-secondary-text)]/35 text-center leading-relaxed max-w-[160px]">
+                        Bir sohbet sunucusuna katılarak ses kanallarını görüntüleyebilirsin.
+                      </p>
+                    </div>
+                  ) : (
+                  <>
+                  <div className="flex items-center gap-2 text-[var(--theme-secondary-text)] mb-3">
+                    <Volume2 size={13} className="opacity-40" />
+                    <span className="uppercase text-[9px] tracking-[0.18em] font-bold opacity-40">Ses Kanalları</span>
+                  </div>
+
+                  <nav className={`flex-1 space-y-1 overflow-y-auto custom-scrollbar ${serverList.find(s => s.id === activeServerId)?.isBanned ? 'opacity-75' : ''}`} onClick={() => setContextMenu(null)}>
+                    {visibleChannels.map(channel => {
+                      const serverBanned = !!serverList.find(s => s.id === activeServerId)?.isBanned;
+                      return (
+                      <div key={channel.id} className="space-y-1">
+                        <button onClick={() => { handleJoinChannel(channel.id); setMobileLeftOpen(false); }} disabled={isConnecting}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${serverBanned ? 'opacity-60' : ''} ${
+                            activeChannel === channel.id
+                              ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
+                              : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
+                          }`}>
+                          <div className="relative">
+                            {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={16} className="opacity-70" />; })()}
+                            {channel.password && (
+                              <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
+                                <Lock size={8} className="text-white" />
+                              </div>
+                            )}
+                            {!channel.password && channel.isInviteOnly && (
+                              <div className="absolute -top-1 -right-1 rounded-full p-0.5 border border-[var(--theme-border)]" style={{ background: 'rgba(var(--theme-accent-rgb), 0.7)' }} title="Özel kanal">
+                                <Lock size={8} className="text-white" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="font-medium truncate" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
+                            {channel.deletionTimer !== undefined && !channel.userCount && (
+                              <div className="flex items-center gap-1 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
+                                <Timer size={10} className="text-red-500 animate-pulse" />
+                                <span className="text-[9px] font-mono font-bold text-red-500">{channel.deletionTimer}s</span>
+                              </div>
+                            )}
+                          </div>
+                          {channel.userCount > 0 && (
+                            <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                              activeChannel === channel.id ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]'
+                            }`}>
+                              {channel.userCount}
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Members List */}
+                        {channel.members && channel.members.length > 0 && (() => {
+                          const isBc = channel.mode === 'broadcast';
+                          const speakers = channel.speakerIds || [];
+                          const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
+                          const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
+                          let memberUsers = (channel.members ?? []).map(id => allUsers.find(u => u.id === id)).filter(Boolean) as typeof allUsers;
+                          if (!memberUsers.length) return null;
+                          if (isBc) memberUsers = [...memberUsers].sort((a, b) => (isSpeakerFn(b.id) ? 1 : 0) - (isSpeakerFn(a.id) ? 1 : 0));
+                          let shownSpLabel = false, shownLsLabel = false;
+
+                          return (
+                          <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
                             {memberUsers.map(user => {
                               const isSp = isBc && isSpeakerFn(user.id);
                               let groupLabel: string | null = null;
-                              if (hasSpeakers) { if (isSp && !shownSpLabel) { shownSpLabel = true; groupLabel = 'Konuşmacılar'; } if (!isSp && !shownLsLabel) { shownLsLabel = true; groupLabel = 'Dinleyiciler'; } }
+                              if (hasSpeakers) {
+                                if (isSp && !shownSpLabel) { shownSpLabel = true; groupLabel = 'Konuşmacılar'; }
+                                if (!isSp && !shownLsLabel) { shownLsLabel = true; groupLabel = 'Dinleyiciler'; }
+                              }
+                              const isSelf = user.id === currentUser.id;
+                              const uColor = isSelf ? avatarBorderColor : (user.avatarBorderColor || '');
+                              const uTier = isSelf ? getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin }) : getFrameTier(user.userLevel, { isPrimaryAdmin: !!user.isPrimaryAdmin, isAdmin: !!user.isAdmin });
+
                               return (
                               <React.Fragment key={user.id}>
-                                {groupLabel && (<>{groupLabel === 'Dinleyiciler' && <div className="mx-1 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />}<div className="flex items-center gap-1.5 pt-1 pb-0.5 px-1">{groupLabel === 'Konuşmacılar' ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" /> : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />}<span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span></div></>)}
-                                <div onClick={(e) => { e.stopPropagation(); if (user.id !== currentUser.id) setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
-                                  className={`flex items-center gap-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-[var(--theme-bg)]/40 px-1 ${isBc && !isSp ? 'opacity-70' : ''}`}>
-                                  <div className="relative shrink-0"><div className="h-6 w-6 overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[8px]"><AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold text-[var(--theme-accent)]" /></div><DeviceBadge platform={user.platform} size={11} className="absolute -bottom-0.5 -right-0.5" /></div>
-                                  <span className={`text-[11px] truncate flex-1 ${isBc && isSp ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-secondary-text)]'}`}>{formatFullName(user.firstName, user.lastName)} ({user.age})</span>
+                                {groupLabel && (
+                                  <>
+                                    {groupLabel === 'Dinleyiciler' && <div className="mx-1.5 my-1.5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />}
+                                    <div className="flex items-center gap-1.5 pt-1.5 pb-1 px-1.5">
+                                      {groupLabel === 'Konuşmacılar' ? <Radio size={8} className="text-[var(--theme-accent)] opacity-50" /> : <Headphones size={8} className="text-[var(--theme-secondary-text)] opacity-30" />}
+                                      <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]/50">{groupLabel}</span>
+                                    </div>
+                                  </>
+                                )}
+                                <div
+                                  onClick={(e) => { e.stopPropagation(); if (user.id !== currentUser.id) setProfilePopup({ userId: user.id, x: e.clientX, y: e.clientY }); }}
+                                  className={`flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98] ${
+                                    isBc && isSp ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]' : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
+                                  } ${isBc && !isSp ? 'opacity-70' : ''}`}
+                                >
+                                  <div className={`relative shrink-0 ${uColor ? getFrameClassName(uTier) : ''}`}
+                                    style={uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}>
+                                    <div className="h-5 w-5 overflow-hidden avatar-squircle flex items-center justify-center text-[8px] font-bold"
+                                      style={{
+                                        background: hasCustomAvatar(user.avatar)
+                                          ? 'rgba(0,0,0,0.15)'
+                                          : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
+                                        color: 'var(--theme-accent)',
+                                      }}>
+                                      <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold" />
+                                    </div>
+                                    <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />
+                                  </div>
+                                  <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
                                   {isBc && (isSp ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" /> : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />)}
                                 </div>
                               </React.Fragment>);
                             })}
                           </div>
-                        );
-                      })()}
-                    </div>
-                    );
-                  })}
-                </nav>
-                <div className="p-4 border-t border-[var(--theme-border)]">
-                  {(() => {
-                    const activePlan = serverList.find(s => s.id === activeServerId)?.plan;
-                    const roomLimit = getUserRoomLimit(activePlan);
-                    const userRoomCount = channels.filter(c => c.ownerId === currentUser.id).length;
-                    const atLimit = userRoomCount >= roomLimit;
-                    return (
-                  <button onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' }); setMobileLeftOpen(false); }}
-                    className={`w-full flex items-center justify-center gap-2 text-white transition-all py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 ${atLimit ? 'bg-gray-500 cursor-not-allowed opacity-50' : 'bg-[var(--theme-accent)] hover:opacity-90'}`}>
-                    <Sparkles size={15} />Oda Oluştur
+                          );
+                        })()}
+                      </div>
+                      );
+                    })}
+
+                    {/* Oda Oluştur */}
+                    {(() => {
+                      const activePlan = serverList.find(s => s.id === activeServerId)?.plan;
+                      const roomLimit = getUserRoomLimit(activePlan);
+                      const userRoomCount = channels.filter(c => c.ownerId === currentUser.id).length;
+                      const atLimit = userRoomCount >= roomLimit;
+                      return (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' }); setMobileLeftOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                          atLimit
+                            ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
+                            : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
+                        }`}>
+                        <Sparkles size={15} />
+                        <span className="text-sm font-medium">Oda Oluştur</span>
+                      </button>
+                      );
+                    })()}
+                  </nav>
+                  </>
+                  )}
+                </div>
+
+                {/* ── C. Alt Navigation + Sistem ── */}
+                <div className="shrink-0 px-4 pb-3">
+                  <div className="h-px mb-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.06), transparent)' }} />
+                  <button onClick={() => { setView('chat'); setShowDiscover(true); setMobileLeftOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.05)] transition-all duration-150 mb-1.5 active:scale-[0.98]">
+                    <Compass size={14} className="text-[var(--theme-accent)] opacity-50" /> Topluluk Keşfet
                   </button>
-                    );
-                  })()}
+                  <div className="flex items-center justify-center gap-3 px-1 py-1.5 rounded-xl" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
+                    {appVersion && (
+                      <UpdateVersionHub
+                        currentVersion={appVersion}
+                        isAdmin={!!currentUser.isAdmin}
+                        autoShowNotes={showReleaseNotes}
+                        onNotesShown={() => setShowReleaseNotes(false)}
+                      />
+                    )}
+                    <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+                  </div>
                 </div>
               </motion.aside>
             </>
@@ -741,19 +896,51 @@ export default function ChatView() {
               <motion.aside
                 initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 right-0 w-72 bg-[var(--theme-sidebar)] z-50 flex flex-col shadow-2xl`}
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 right-0 w-56 z-50 flex flex-col shadow-2xl rounded-l-2xl`}
+                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx > 40) setMobileRightOpen(false); }}
               >
-                <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
+                <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
+                <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text)]">Arkadaşlar</h3>
-                    <span className="text-[10px] bg-[var(--theme-bg)] px-2 py-0.5 rounded-full text-[var(--theme-text)] font-bold">{friendUsers.length}</span>
-                    {incomingRequests.length > 0 && <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>}
+                    <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
+                    <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
                   </div>
-                  <button onClick={() => setMobileRightOpen(false)} className="p-1.5 rounded-lg text-[var(--theme-secondary-text)] hover:bg-[var(--theme-border)] transition-colors"><X size={18} /></button>
+                  {incomingRequests.length > 0 && <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>}
                 </div>
-                <FriendsSidebarContent variant="mobile" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })} onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }} isMuted={isMuted} isDeafened={isDeafened} servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
+                <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
+                  onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
+                  channels={channels} activeChannel={activeChannel}
+                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser}
+                  isMuted={isMuted} isDeafened={isDeafened}
+                  servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
+                <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
+                  <button ref={dmToggleRef} onClick={() => { setDmPanelOpen(prev => !prev); setMobileRightOpen(false); }}
+                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+                    <MessageSquare size={16} />
+                    {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
+                  </button>
+                  <button onClick={() => {
+                      setMobileRightOpen(false);
+                      if (view === 'settings') { setView('chat'); }
+                      else { setSettingsTarget('app'); setView('settings'); }
+                    }}
+                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
+                    <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+                    {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
+                  </button>
+                  <NotificationBell
+                    summary={notifications}
+                    onOpenFriendRequests={() => {}}
+                    onOpenDM={() => { setDmPanelOpen(true); setMobileRightOpen(false); }}
+                    onOpenInvites={() => { setInvitesModalOpen(true); setMobileRightOpen(false); }}
+                    onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); setMobileRightOpen(false); }}
+                    onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); setMobileRightOpen(false); }}
+                    onOpenServer={(sid) => { setActiveServerId(sid); setMobileRightOpen(false); }}
+                  />
+                  <button onClick={() => { setMobileRightOpen(false); confirmLogout(); }} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
+                </div>
               </motion.aside>
             </>
           )}
@@ -1150,8 +1337,21 @@ export default function ChatView() {
         })()}
       </AnimatePresence>
 
-      {/* ── Mobile Footer — context-consuming, minimal props ── */}
-      <MobileFooter listenerToastRef={listenerToastRef} onOpenBell={() => setMobileRightOpen(true)} />
+      {/* ── Mobile Footer — desktop dock'u inline render eder, PTT/VAD butonu + update hub üstte ── */}
+      <MobileFooter
+        listenerToastRef={listenerToastRef}
+        onOpenBell={() => setMobileRightOpen(true)}
+        dockToastHoveredRef={dockToastHoveredRef}
+        cardStyle={cardStyle}
+        cycleCardStyle={cycleCardStyle}
+        serverList={serverList}
+        activeServerId={activeServerId}
+        onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
+        onJoinServer={handleJoinServer}
+        onLeaveServer={handleLeaveServer}
+        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }}
+        canCreateServer={canCreateServer}
+      />
 
       {/* ── DM Panel ── */}
       <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}

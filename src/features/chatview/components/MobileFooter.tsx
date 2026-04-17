@@ -1,37 +1,53 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Mic, Settings, Power, Headphones, Bell } from 'lucide-react';
-import { ConnectionQualityIndicator } from '../../../components/chat';
-import { NotificationBadge } from '../../../components/notifications';
+import { Mic } from 'lucide-react';
 import MobileUpdateHub from '../../update/components/MobileUpdateHub';
+import DesktopDock from './DesktopDock';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useChannel } from '../../../contexts/ChannelContext';
-import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
-import { useConfirm } from '../../../contexts/ConfirmContext';
-import { useNotificationCenter } from '../../../hooks/useNotificationCenter';
 import { FORCE_MOBILE } from '../constants';
+import { type CardStyle } from '../../../components/chat/cardStyles';
+import { type Server } from '../../../lib/serverService';
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
   onOpenBell?: () => void;
+  dockToastHoveredRef: React.MutableRefObject<boolean>;
+  cardStyle: CardStyle;
+  cycleCardStyle: () => void;
+  serverList: Server[];
+  activeServerId: string;
+  onSelectServer: (id: string) => void;
+  onJoinServer: (code: string) => Promise<void>;
+  onLeaveServer: (serverId: string) => Promise<void>;
+  onShowCreateModal: () => void;
+  canCreateServer?: boolean;
 }
 
-export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
+export default function MobileFooter({
+  listenerToastRef,
+  dockToastHoveredRef,
+  cardStyle,
+  cycleCardStyle,
+  serverList,
+  activeServerId,
+  onSelectServer,
+  onJoinServer,
+  onLeaveServer,
+  onShowCreateModal,
+  canCreateServer,
+}: Props) {
   const { currentUser } = useUser();
-  const { activeChannel, isConnecting } = useChannel();
-  const { setToastMsg } = useUI();
-  const { isPttPressed, setIsPttPressed, volumeLevel, connectionLevel } = useAudio();
+  const { activeChannel } = useChannel();
+  const { isPttPressed, setIsPttPressed, volumeLevel } = useAudio();
   const { voiceMode, noiseThreshold, setNoiseThreshold } = useSettings();
   const {
-    isMuted, setIsMuted, isDeafened, setIsDeafened,
-    isBroadcastListener, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
-    handleLogout,
+    isMuted,
+    view, appVersion, showReleaseNotes, setShowReleaseNotes,
   } = useAppState();
-  const { openConfirm } = useConfirm();
-  const notifications = useNotificationCenter();
 
   const isAdminMuted = currentUser.isMuted === true;
   const isVoiceBanned = !!currentUser.isVoiceBanned;
@@ -54,24 +70,11 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
     return () => { if (muteTimerRef.current) clearInterval(muteTimerRef.current); };
   }, [isAdminMuted, currentUser.muteExpires]);
 
-  const confirmLogout = () => {
-    openConfirm({
-      title: 'Çıkış yapmak istiyor musun?',
-      description: 'Hesabından çıkış yapacaksın. Tekrar giriş yapman gerekecek.',
-      confirmText: 'Çıkış Yap',
-      cancelText: 'İptal',
-      danger: true,
-      onConfirm: () => {
-        try { navigator.vibrate?.(300); } catch {}
-        handleLogout();
-      },
-    });
-  };
-
   const [vadSliderOpen, setVadSliderOpen] = useState(false);
 
   return (
-    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} bg-[var(--theme-sidebar)] shrink-0 pb-[env(safe-area-inset-bottom)]`}>
+    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} shrink-0 pb-[env(safe-area-inset-bottom)] mx-2 mb-2 rounded-2xl`}
+      style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
       {/* PTT / VAD buton alanı */}
       {activeChannel && view !== 'settings' && (() => {
         const pttDisabled = isMuted || isAdminMuted || isVoiceBanned;
@@ -104,7 +107,7 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
                       : 'bg-emerald-500/10 border border-emerald-500/25'
                 }`} />
                 {isPttPressed && !pttDisabled && (
-                  <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/50 ring-offset-2 ring-offset-[var(--theme-sidebar)]" />
+                  <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/50 ring-offset-2 ring-offset-transparent" />
                 )}
                 <div className="relative z-10 py-4 px-6">
                   <div className="flex items-center justify-center gap-3">
@@ -183,7 +186,7 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
                     : 'bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/25'
               }`} />
               {isPttPressed && !pttDisabled && (
-                <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/60 ring-offset-2 ring-offset-[var(--theme-sidebar)]" />
+                <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/60 ring-offset-2 ring-offset-transparent" />
               )}
               <div className="relative z-10 py-5 px-6">
                 <div className="flex items-center justify-center gap-3">
@@ -214,75 +217,27 @@ export default function MobileFooter({ listenerToastRef, onOpenBell }: Props) {
         );
       })()}
 
-      {/* Mobil kontrol çubuğu */}
-      <div className="flex items-center justify-around px-3 py-2.5 border-t border-[var(--theme-border)]/20">
-        <button
-          onClick={() => setIsDeafened(!isDeafened)}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
-            isDeafened ? 'bg-red-500/20 text-red-400' : 'text-[var(--theme-secondary-text)]'
-          }`}
-        >
-          <Headphones size={18} />
-          <span className="text-[9px] font-bold">{isDeafened ? 'Kapalı' : 'Hoparlör'}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
-            if (isAdminMuted) return;
-            if (isMuted && isDeafened) setIsDeafened(false);
-            setIsMuted(!isMuted);
-          }}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
-            isAdminMuted ? 'bg-orange-600/20 text-orange-400 cursor-not-allowed'
-            : isMuted ? 'bg-red-500/20 text-red-400'
-            : 'text-[var(--theme-secondary-text)]'
-          }`}
-        >
-          <Mic size={18} />
-          <span className="text-[9px] font-bold">{isAdminMuted ? (muteRemaining ?? 'Susturuldu') : isMuted ? 'Kapalı' : 'Mikrofon'}</span>
-        </button>
-
-        <button
-          onClick={onOpenBell}
-          className="flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] text-[var(--theme-secondary-text)]"
-        >
-          <span className="relative">
-            <Bell size={18} />
-            {notifications.bellCount > 0 && (
-              <NotificationBadge count={notifications.bellCount} variant="accent" size="sm" className="absolute -top-1 -right-1" />
-            )}
-          </span>
-          <span className="text-[9px] font-bold">Bildirim</span>
-        </button>
-
-        <div className="flex flex-col items-center gap-0.5 p-2 min-w-[44px]">
-          <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
-          {FORCE_MOBILE && <MobileUpdateHub currentVersion={appVersion} isAdmin={currentUser.isAdmin} autoShowNotes={showReleaseNotes} onNotesShown={() => setShowReleaseNotes(false)} />}
-        </div>
-
-        <button
-          onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all min-w-[52px] ${
-            view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'
-          }`}
-        >
-          <span className="relative">
-            <Settings size={18} />
-            {notifications.settingsCount > 0 && (
-              <NotificationBadge count={notifications.settingsCount} variant="amber" size="sm" className="absolute -top-1 -right-1" />
-            )}
-          </span>
-          <span className="text-[9px] font-bold">Ayarlar</span>
-        </button>
-
-        <button
-          onClick={confirmLogout}
-          className="flex flex-col items-center gap-0.5 p-2 rounded-xl text-[var(--theme-secondary-text)] hover:text-red-400 transition-all min-w-[52px]"
-        >
-          <Power size={18} />
-          <span className="text-[9px] font-bold">Çıkış</span>
-        </button>
+      {/* Desktop dock ile aynı — user card + server + mic + hp + audio lines + voice mode + room controls */}
+      <div style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+        <DesktopDock
+          layout="inline"
+          dockToastHoveredRef={dockToastHoveredRef}
+          listenerToastRef={listenerToastRef}
+          cardStyle={cardStyle}
+          cycleCardStyle={cycleCardStyle}
+          serverList={serverList}
+          activeServerId={activeServerId}
+          onSelectServer={onSelectServer}
+          onJoinServer={onJoinServer}
+          onLeaveServer={onLeaveServer}
+          onShowCreateModal={onShowCreateModal}
+          canCreateServer={canCreateServer}
+        />
+        {FORCE_MOBILE && (
+          <div className="flex justify-center pb-1">
+            <MobileUpdateHub currentVersion={appVersion} isAdmin={currentUser.isAdmin} autoShowNotes={showReleaseNotes} onNotesShown={() => setShowReleaseNotes(false)} />
+          </div>
+        )}
       </div>
     </footer>
   );
