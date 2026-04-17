@@ -621,6 +621,10 @@ export default function ChatView() {
         forceMobile={FORCE_MOBILE}
         onOpenLeftDrawer={() => setMobileLeftOpen(true)}
         onOpenRightDrawer={() => setMobileRightOpen(true)}
+        activeServerName={activeServerData?.name}
+        activeServerAvatarUrl={activeServerData?.avatarUrl}
+        activeServerShortName={activeServerData?.shortName}
+        activeServerIsPublic={activeServerData?.isPublic}
       />
 
       {/* Mobile-only banner; desktop'ta DesktopDock içinde render ediliyor. */}

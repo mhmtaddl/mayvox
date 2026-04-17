@@ -179,18 +179,22 @@ function VoiceParticipants({
 
   const chatEnabled = getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).chatEnabled;
 
+  // Simple grid fallback — sadece küçük tarayıcı penceresi için (non-forceMobile + non-lg)
+  const showGridFallback = !forceMobile;
+
   return (
     <>
-      {/* Desktop layout */}
-      {!forceMobile && (
-        <div className="hidden lg:block relative h-full">
-          <div ref={cardsRef} className="px-3 pt-3 pb-1">
-            <RoomNetworkVisualization
-              cardStyle={cardStyle}
-              participants={networkParticipants}
-            />
-          </div>
+      {/* Network visualization — desktop + forceMobile (Android) */}
+      <div className={`${forceMobile ? 'block' : 'hidden lg:block'} relative h-full`}>
+        <div ref={cardsRef} className="px-3 pt-3 pb-1">
+          <RoomNetworkVisualization
+            cardStyle={cardStyle}
+            participants={networkParticipants}
+          />
+        </div>
 
+        {/* ChatPanel — sadece masaüstünde (forceMobile = Android değil) */}
+        {!forceMobile && (
           <ChatPanel
             chatEnabled={chatEnabled}
             cardsHeight={cardsHeight}
@@ -217,37 +221,38 @@ function VoiceParticipants({
             newMsgCount={newMsgCount}
             onScrollToBottom={onScrollToBottom}
           />
+        )}
+      </div>
+
+      {/* Grid fallback — sadece küçük tarayıcı penceresinde (Android'de render edilmez) */}
+      {showGridFallback && (
+        <div className={`lg:hidden grid ${scaleConfig.gridGap} mx-auto w-full ${
+          s === 3
+            ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+            : s === 2
+              ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
+              : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4')
+        }`}>
+          {members.map(user => {
+            const props = renderCardProps(user);
+            const isSpeaking = !!(props as { isSpeaking?: boolean }).isSpeaking;
+            return (
+              <div key={user.id} className={`relative ${isSpeaking ? 'mv-speaker-pulse rounded-xl' : ''}`}>
+                {isSpeaking && (
+                  <BloomHighlight
+                    active={true}
+                    color="var(--theme-accent)"
+                    intensity={0.22}
+                    spread={40}
+                    borderRadius={12}
+                  />
+                )}
+                <UserCard {...props} />
+              </div>
+            );
+          })}
         </div>
       )}
-
-      {/* Mobile layout */}
-      <div className={`${forceMobile ? '' : 'lg:hidden'} grid ${scaleConfig.gridGap} mx-auto w-full ${
-        s === 3
-          ? (count <= 1 ? 'grid-cols-1 max-w-lg' : count <= 4 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
-          : s === 2
-            ? (count <= 1 ? 'grid-cols-1 max-w-md' : count <= 3 ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl' : 'grid-cols-2 sm:grid-cols-3')
-            : (count <= 1 ? 'grid-cols-1 max-w-sm' : count <= 4 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4')
-      }`}>
-        {members.map(user => {
-          const props = renderCardProps(user);
-          // v4: active speaker → soft pulse + bloom layer (non-intrusive, pointer-events:none).
-          const isSpeaking = !!(props as { isSpeaking?: boolean }).isSpeaking;
-          return (
-            <div key={user.id} className={`relative ${isSpeaking ? 'mv-speaker-pulse rounded-xl' : ''}`}>
-              {isSpeaking && (
-                <BloomHighlight
-                  active={true}
-                  color="var(--theme-accent)"
-                  intensity={0.22}
-                  spread={40}
-                  borderRadius={12}
-                />
-              )}
-              <UserCard {...props} />
-            </div>
-          );
-        })}
-      </div>
     </>
   );
 }

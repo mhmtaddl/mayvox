@@ -71,6 +71,7 @@ export default function DesktopDock({
   const {
     showInputSettings, setShowInputSettings, showOutputSettings, setShowOutputSettings,
     inputDevices, outputDevices, selectedInput, setSelectedInput, selectedOutput, setSelectedOutput,
+    isPttPressed,
   } = useAudio();
   const {
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
@@ -289,14 +290,35 @@ export default function DesktopDock({
             >
               {(() => {
                 const ft = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
+                const isSpeakingInline = isInline && isPttPressed;
                 return (
                   <div
                     className={`relative shrink-0 ${getFrameClassName(ft)}`}
                     style={{ ...getFrameStyle(avatarBorderColor, ft), borderRadius: 12 }}
                   >
+                    {/* Mobil: konuşma sırasında avatar etrafına accent glow — desktop'ta gösterilmez */}
+                    {isSpeakingInline && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute pointer-events-none animate-pulse"
+                        style={{
+                          inset: -3,
+                          borderRadius: 14,
+                          boxShadow: '0 0 0 2px var(--theme-accent), 0 0 14px rgba(var(--theme-accent-rgb), 0.55)',
+                        }}
+                      />
+                    )}
                     <div className="w-9 h-9 rounded-xl overflow-hidden bg-[var(--theme-accent)]/10 flex items-center justify-center">
                       <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.firstName} name={currentUser.name} imgClassName="w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
                     </div>
+                    {/* Mobil: avatar sağ-alt köşe status dot — desktop'ta gösterilmez */}
+                    {isInline && (
+                      <div
+                        aria-hidden="true"
+                        className={`absolute -bottom-[2px] -right-[2px] w-[11px] h-[11px] rounded-full ${getStatusDotClass(effStatus)}`}
+                        style={{ border: '2px solid var(--theme-bg)', zIndex: 2 }}
+                      />
+                    )}
                   </div>
                 );
               })()}
@@ -680,6 +702,20 @@ export default function DesktopDock({
       </>}
     </div>
   );
+}
+
+// ── Status dot bg sınıfı (mobil avatar overlay için) ─────────────────────
+// App.tsx'teki getStatusColor text-* sınıflarını bg-* karşılıklarına çevirir.
+// Tek kullanım yeri bu dosyada (inline avatar dot) olduğu için burada duruyor.
+function getStatusDotClass(statusText: string): string {
+  if (statusText === 'Online' || statusText === 'Aktif') return 'bg-emerald-400';
+  if (statusText === 'Dinliyor') return 'bg-orange-500';
+  if (statusText === 'Sessiz') return 'bg-[var(--theme-secondary-text)]';
+  if (statusText === 'AFK') return 'bg-violet-400';
+  if (statusText === 'Pasif') return 'bg-yellow-500';
+  if (statusText === 'Duymuyor' || statusText === 'Rahatsız Etmeyin') return 'bg-red-400';
+  if (statusText === 'Çevrimdışı') return 'bg-[var(--theme-secondary-text)]/60';
+  return 'bg-blue-500';
 }
 
 // ── Self Control Panel ──────────────────────────────────────────────────
