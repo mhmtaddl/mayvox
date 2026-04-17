@@ -1,7 +1,7 @@
 {
   "name": "mayvox",
   "private": true,
-  "version": "2.0.4",
+  "version": "2.0.5",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -24,6 +24,7 @@
     "@capacitor/android": "^8.3.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
+    "@capacitor/keyboard": "^8.0.3",
     "@capacitor/local-notifications": "^8.0.2",
     "@livekit/components-react": "^2.9.20",
     "@shiguredo/rnnoise-wasm": "^2025.1.5",

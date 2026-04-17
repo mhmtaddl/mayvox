@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { VoiceMode } from '../contexts/SettingsCtx';
+import { isCapacitor } from '../lib/platform';
 
 interface UsePttAudioParams {
   pttKey: string;
@@ -126,6 +127,10 @@ export function usePttAudio(params: UsePttAudioParams) {
       });
       return () => { window.electronPtt!.offDown(); window.electronPtt!.offUp(); };
     }
+    // Capacitor (mobil native): global mouse/key dinleyicileri DEVRE DIŞI.
+    // Touch event'leri sentetik mousedown üretiyor → her dokunma PTT tetikliyordu.
+    // Mobilde PTT sadece MobileFooter'daki butonun kendi pointer handler'ı ile kontrol edilir.
+    if (isCapacitor()) return;
     const cancelRelease = () => { if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; } };
     const scheduleRelease = () => { cancelRelease(); releaseTimerRef.current = setTimeout(() => { setIsPttPressed(false); releaseTimerRef.current = null; }, pttReleaseDelayRef.current); };
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -170,6 +175,11 @@ export function usePttAudio(params: UsePttAudioParams) {
 
   // ── Ses analizi effect — shouldCapture değişince start/stop ──
   useEffect(() => {
+    // Capacitor (Android): Bu hook mic'i ikinci kez getUserMedia ile alıyordu
+    // ve LiveKit'in setMicrophoneEnabled(true) ile açtığı mic stream ile çakışıp
+    // publish fail oluyordu. Mobilde ses analizini (volume bar) devre dışı bırak;
+    // mic publish'ini tamamen LiveKit yönetsin.
+    if (isCapacitor()) return;
     if (!shouldCapture) {
       // Durdur
       if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }

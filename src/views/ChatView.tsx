@@ -659,7 +659,7 @@ export default function ChatView() {
                 className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-0 bg-black/60 z-40`} onClick={() => setMobileLeftOpen(false)} />
               <motion.aside
                 initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                transition={FORCE_MOBILE ? { duration: 0.18, ease: 'easeOut' } : { type: 'spring', damping: 25, stiffness: 300 }}
                 className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 left-0 w-72 z-50 flex flex-col shadow-2xl rounded-r-2xl`}
                 style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
@@ -899,7 +899,7 @@ export default function ChatView() {
                 className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-0 bg-black/60 z-40`} onClick={() => setMobileRightOpen(false)} />
               <motion.aside
                 initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                transition={FORCE_MOBILE ? { duration: 0.18, ease: 'easeOut' } : { type: 'spring', damping: 25, stiffness: 300 }}
                 className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 right-0 w-56 z-50 flex flex-col shadow-2xl rounded-l-2xl`}
                 style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
@@ -1029,8 +1029,8 @@ export default function ChatView() {
                 <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4) 0%, transparent 65%)` }} />
                 <div className="absolute bottom-[10%] right-[15%] w-[300px] h-[300px] rounded-full opacity-[0.012]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.3) 0%, transparent 70%)` }} />
               </div>
-              {/* Oda başlığı — sadece mobilde */}
-              <div className={`relative z-[1] flex items-center justify-between mb-3 sm:mb-6 ${FORCE_MOBILE ? '' : 'lg:hidden'}`}>
+              {/* Oda başlığı — sadece tarayıcı daralmış halde (Android'de gizli, desktop parity) */}
+              <div className={`relative z-[1] flex items-center justify-between mb-3 sm:mb-6 ${FORCE_MOBILE ? 'hidden' : 'lg:hidden'}`}>
                 <div className="flex items-center gap-2 sm:gap-3">
                   {(() => { const activeCh = channels.find(c => c.id === activeChannel); const mc = getRoomModeConfig(activeCh?.mode); const ModeIcon = roomModeIcons[mc.id] || Volume2; return (<><div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0"><ModeIcon size={18} className="sm:w-5 sm:h-5" /></div><div><h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">{activeCh?.name || 'Sohbet Odası'}</h2><p className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 mt-0.5">{mc.shortHelper}</p></div></>); })()}
                 </div>
@@ -1088,6 +1088,14 @@ export default function ChatView() {
                 </div>
                 <h2 className="text-lg font-bold tracking-wide text-[var(--theme-text)] mb-2">Henüz Bir Odada Değilsiniz</h2>
                 <p className="text-xs text-[var(--theme-secondary-text)]/55 max-w-[260px] leading-relaxed mx-auto">Sohbete başlamak için sol taraftaki kanallardan birine katılın.</p>
+                {/* Mobil CTA — sol drawer'ı açar, kullanıcı kanalları görür */}
+                <button
+                  onClick={() => setMobileLeftOpen(true)}
+                  className={`${FORCE_MOBILE ? 'inline-flex' : 'inline-flex lg:hidden'} mt-5 items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 font-bold text-[13px] active:scale-[0.97] transition-transform btn-haptic`}
+                >
+                  <Volume2 size={14} />
+                  Bir Kanala Katıl
+                </button>
               </div>
               <AnnouncementsPanel currentUser={currentUser} />
             </div>
@@ -1344,7 +1352,6 @@ export default function ChatView() {
       {/* ── Mobile Footer — desktop dock'u inline render eder, PTT/VAD butonu + update hub üstte ── */}
       <MobileFooter
         listenerToastRef={listenerToastRef}
-        onOpenBell={() => setMobileRightOpen(true)}
         dockToastHoveredRef={dockToastHoveredRef}
         cardStyle={cardStyle}
         cycleCardStyle={cycleCardStyle}

@@ -597,12 +597,21 @@ export default function App() {
     return !speakers.includes(currentUser.id);
   })();
 
+  // Android/mobilde oda default'u baskındır; kullanıcı "change" butonu ile override edebilir.
+  // Kanal değiştikçe override sıfırlanır. Desktop'ta davranış değişmedi.
+  const [mobileVoiceModeOverride, setMobileVoiceModeOverride] = useState<typeof voiceMode | null>(null);
+  useEffect(() => { setMobileVoiceModeOverride(null); }, [activeChannel]);
+
   const effectiveVoiceMode = (() => {
     if (!activeChannel) return voiceMode;
     const vc = activeRoomModeConfig.voice;
-    // Kullanıcının mevcut tercihi izin verilenler arasındaysa koru
+    if (isCapacitor()) {
+      // Android: önce override, yoksa oda default'u (kullanıcının saved voiceMode'u DEĞİL)
+      if (mobileVoiceModeOverride && vc.allowedModes.includes(mobileVoiceModeOverride)) return mobileVoiceModeOverride;
+      return vc.defaultMode;
+    }
+    // Desktop: kullanıcı tercihi izin verilenlerse öncelikli
     if (vc.allowedModes.includes(voiceMode)) return voiceMode;
-    // Değilse odanın varsayılanına düş
     return vc.defaultMode;
   })();
 
@@ -1120,10 +1129,30 @@ export default function App() {
     playSound(isPttPressed ? 'ptt-on' : 'ptt-off');
   }, [isPttPressed]);
 
+  // Capacitor + VAD: LiveKit localParticipant.isSpeaking → isPttPressed
+  // (usePttAudio'nun getUserMedia analizi mobilde kapalı, LiveKit'in kendi
+  // voice activity detection'ını kaynak olarak kullan — glow ve "Konuşuyorsun"
+  // label bunun üstünden canlanır.)
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    if (effectiveVoiceMode !== 'vad') return;
+    const room = livekitRoomRef.current;
+    if (!room) return;
+    const local = room.localParticipant;
+    const onChange = () => setPttPressed(!!local.isSpeaking);
+    local.on('isSpeakingChanged' as any, onChange);
+    return () => { local.off('isSpeakingChanged' as any, onChange); };
+  }, [effectiveVoiceMode, activeChannel, isConnecting]);
+
   // ── LiveKit PTT: enable/disable mic based on PTT state ───────────────────
+  // Capacitor + VAD modu: usePttAudio'nun kendi getUserMedia analizi devre dışı
+  // (LiveKit ile çakışmasın). VAD'te mic sürekli açık — sessizlik mantığını
+  // LiveKit kendi işler. Desktop davranışı aynen korunuyor (isPttPressed gate'i).
   useEffect(() => {
     if (!livekitRoomRef.current) return;
-    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
+    const isVadContinuous = isCapacitor() && effectiveVoiceMode === 'vad';
+    const gate = isVadContinuous ? true : isPttPressed;
+    const canSpeak = gate && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
     livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
       canSpeak,
       buildAudioCaptureOptions({
@@ -1134,7 +1163,7 @@ export default function App() {
         deviceId: selectedInput,
       }),
     ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
-  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput]);
+  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, effectiveVoiceMode, activeChannel, isConnecting]);
 
   // ── RNNoise strength live update — slider değişince worklet'e postla ──
   useEffect(() => {
@@ -1928,6 +1957,8 @@ export default function App() {
     showOutputSettings,
     setShowOutputSettings,
     speakingLevels,
+    mobileVoiceModeOverride,
+    setMobileVoiceModeOverride,
   };
 
   return (

@@ -66,28 +66,36 @@ export function useChannelActions({
   const [inviteStatuses, setInviteStatuses] = useState<Record<string, 'pending' | 'accepted' | 'rejected'>>({});
 
   // ── User volume ──
+  // Kullanıcı volume slider'ı (0-150%). İki katman:
+  //   1) LiveKit RemoteAudioTrack.setVolume — webAudioMix açıkken GainNode'u ayarlar (>1 amplifikasyon)
+  //   2) HTMLMediaElement.volume fallback — webAudioMix kapalı senaryolar için (0-1 clamp)
+  // Ducking aktifse useDucking tick'leri userVolumesRef'ten okuyup tekrar uygular (çarpan olarak).
   const handleUpdateUserVolume = (userId: string, volume: number) => {
     const newVolumes = { ...userVolumes, [userId]: volume };
     setUserVolumes(newVolumes);
     localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
 
-    // webAudioMix: true — LiveKit GainNode üzerinden gidiyor, >1 amplifikasyonu
-    // (%100-150) doğrudan gain'e yazılıyor. Clamp 0..1.5.
     const vol = Math.max(0, Math.min(1.5, volume / 100));
     const user = allUsers.find(u => u.id === userId);
-    if (user && livekitRoomRef.current) {
-      const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
-      const participant = participants.find(p => p.identity === user.name);
-      if (participant) {
-        participant.audioTrackPublications.forEach(pub => {
-          const t = pub.track ?? pub.audioTrack;
-          if (t && t instanceof RemoteAudioTrack) t.setVolume(vol);
-        });
-      }
-      // HTMLMediaElement.volume 0..1 clamp'lenir; fallback için max 1.0 yaz.
-      // webAudioMix açıkken bu değer pek etkili olmasa da güvenli fallback.
-      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => { el.volume = Math.min(1, vol); });
+    if (!user || !livekitRoomRef.current) return;
+
+    const participant = Array.from(livekitRoomRef.current.remoteParticipants.values())
+      .find((p): p is RemoteParticipant => p.identity === user.name);
+
+    if (participant) {
+      // Tüm audio publications üzerinde dolaş; subscribed olanlara setVolume uygula.
+      // Eski kod `pub.audioTrack` fallback'i kullanıyordu — v2 LiveKit'te o prop yok.
+      participant.audioTrackPublications.forEach(pub => {
+        const track = pub.track;
+        if (track instanceof RemoteAudioTrack) {
+          track.setVolume(vol);
+        }
+      });
     }
+    // HTMLAudioElement fallback — webAudioMix kapalıysa volume gerçekten bu yoldan geçer.
+    document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => {
+      el.volume = Math.min(1, vol);
+    });
   };
 
   // ── User action menu ──

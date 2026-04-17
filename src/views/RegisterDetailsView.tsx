@@ -3,6 +3,7 @@ import { User as UserIcon, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
 import { normalizeNameInput, NAME_INPUT_MAX_LENGTH } from '../lib/formatName';
+import { makeEnterToNext } from '../lib/mobileFormNav';
 
 interface RegisterDetailsViewProps {
   displayName: string;
@@ -33,6 +34,10 @@ export default function RegisterDetailsView({
 }: RegisterDetailsViewProps) {
   const [pressing, setPressing] = React.useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const displayNameRef = useRef<HTMLInputElement>(null);
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const ageRef = useRef<HTMLInputElement>(null);
 
   const [appVersion, setAppVersion] = useState<string>('');
   useEffect(() => {
@@ -52,6 +57,8 @@ export default function RegisterDetailsView({
     setTimeout(() => setPressing(false), 150);
     handleCompleteRegistration();
   };
+
+  const onEnterNext = makeEnterToNext([displayNameRef, firstNameRef, lastNameRef, ageRef], triggerSubmit);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full h-full p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
@@ -103,11 +110,13 @@ export default function RegisterDetailsView({
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={displayNameRef}
                 type="text"
                 placeholder="Görünen adınızı giriniz"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(0)}
+                enterKeyHint="next"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -118,12 +127,14 @@ export default function RegisterDetailsView({
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={firstNameRef}
                 type="text"
                 placeholder="Adınızı giriniz"
                 value={firstName}
                 maxLength={NAME_INPUT_MAX_LENGTH}
                 onChange={(e) => setFirstName(normalizeNameInput(e.target.value))}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(1)}
+                enterKeyHint="next"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -134,12 +145,14 @@ export default function RegisterDetailsView({
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={lastNameRef}
                 type="text"
                 placeholder="Soyadınızı giriniz"
                 value={lastName}
                 maxLength={NAME_INPUT_MAX_LENGTH}
                 onChange={(e) => setLastName(normalizeNameInput(e.target.value))}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(2)}
+                enterKeyHint="next"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
@@ -150,11 +163,13 @@ export default function RegisterDetailsView({
             <div className="relative">
               <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={ageRef}
                 type="number"
                 placeholder="Yaşınızı giriniz"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(3)}
+                enterKeyHint="done"
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>

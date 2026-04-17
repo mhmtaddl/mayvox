@@ -193,35 +193,33 @@ function VoiceParticipants({
           />
         </div>
 
-        {/* ChatPanel — sadece masaüstünde (forceMobile = Android değil) */}
-        {!forceMobile && (
-          <ChatPanel
-            chatEnabled={chatEnabled}
-            cardsHeight={cardsHeight}
-            messages={chatMessages}
-            currentUserId={currentUser.id}
-            isAdmin={isAdmin}
-            isModerator={isModerator}
-            chatMuted={chatMuted}
-            onToggleChatMuted={onToggleChatMuted}
-            editingMsgId={editingMsgId}
-            editingText={editingText}
-            onEditingTextChange={onEditingTextChange}
-            onStartEdit={onStartEdit}
-            onSaveEdit={onSaveEdit}
-            onCancelEdit={onCancelEdit}
-            onDeleteMessage={onDeleteMessage}
-            onClearAll={onClearAll}
-            onSendMessage={onSendMessage}
-            chatInput={chatInput}
-            onChatInputChange={onChatInputChange}
-            chatScrollRef={chatScrollRef}
-            onScroll={onChatScroll}
-            isAtBottom={isAtBottom}
-            newMsgCount={newMsgCount}
-            onScrollToBottom={onScrollToBottom}
-          />
-        )}
+        {/* ChatPanel — desktop ile aynı; network viz altına absolute yerleşir */}
+        <ChatPanel
+          chatEnabled={chatEnabled}
+          cardsHeight={cardsHeight}
+          messages={chatMessages}
+          currentUserId={currentUser.id}
+          isAdmin={isAdmin}
+          isModerator={isModerator}
+          chatMuted={chatMuted}
+          onToggleChatMuted={onToggleChatMuted}
+          editingMsgId={editingMsgId}
+          editingText={editingText}
+          onEditingTextChange={onEditingTextChange}
+          onStartEdit={onStartEdit}
+          onSaveEdit={onSaveEdit}
+          onCancelEdit={onCancelEdit}
+          onDeleteMessage={onDeleteMessage}
+          onClearAll={onClearAll}
+          onSendMessage={onSendMessage}
+          chatInput={chatInput}
+          onChatInputChange={onChatInputChange}
+          chatScrollRef={chatScrollRef}
+          onScroll={onChatScroll}
+          isAtBottom={isAtBottom}
+          newMsgCount={newMsgCount}
+          onScrollToBottom={onScrollToBottom}
+        />
       </div>
 
       {/* Grid fallback — sadece küçük tarayıcı penceresinde (Android'de render edilmez) */}

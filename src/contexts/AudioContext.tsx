@@ -1,4 +1,5 @@
 import React, { createContext, useContext } from 'react';
+import type { VoiceMode } from './SettingsCtx';
 
 export interface AudioContextType {
   volumeLevel: number;
@@ -20,6 +21,10 @@ export interface AudioContextType {
   showOutputSettings: boolean;
   setShowOutputSettings: (v: boolean) => void;
   speakingLevels: Record<string, number>;
+  /** Android'de odadaki ses modunu kullanıcının tercihi ile override etmek için.
+   *  null → oda default'u kullanılır. Kanal değişince App.tsx reset eder. */
+  mobileVoiceModeOverride: VoiceMode | null;
+  setMobileVoiceModeOverride: (v: VoiceMode | null) => void;
 }
 
 export const AudioCtx = createContext<AudioContextType | null>(null);

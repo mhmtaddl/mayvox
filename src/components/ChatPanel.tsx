@@ -78,7 +78,7 @@ export default function ChatPanel({
   onScrollToBottom,
 }: Props) {
   const { avatarBorderColor } = useSettings();
-  const { currentUser } = useUser();
+  const { currentUser, allUsers } = useUser();
   const selfFrameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
 
   // Font size — local, sadece bu panel icin
@@ -184,7 +184,7 @@ export default function ChatPanel({
                       className="overflow-hidden flex items-center justify-center avatar-squircle"
                       style={{ width: avatarPx, height: avatarPx, background: `${nameColor}15` }}
                     >
-                      <AvatarContent avatar={msg.avatar} name={msg.sender} letterClassName="font-bold" />
+                      <AvatarContent avatar={msg.avatar} statusText={allUsers.find(u => u.id === msg.senderId)?.statusText || 'Online'} name={msg.sender} letterClassName="font-bold" />
                     </div>
                   </div>
                 ) : (

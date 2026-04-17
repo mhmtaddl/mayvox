@@ -20,6 +20,12 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+    // Klavye açıldığında WebView doğal olarak yeniden boyutlanır (adjustResize).
+    // 'body' modu bazı cihazlarda içeriğin klavye altında kalmasına yol açıyordu.
+    Keyboard: {
+      resize: 'native' as any,
+      resizeOnFullScreen: true,
+    },
   },
 };
 

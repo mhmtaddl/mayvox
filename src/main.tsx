@@ -4,6 +4,14 @@ import App from './App.tsx';
 import './index.css';
 import './lib/signature/signature.css';
 import { logger } from './lib/logger';
+import { isCapacitor } from './lib/platform';
+
+// Low-perf mode — Capacitor (Android 9+ cihazlarda WebView rendering yavaş).
+// <html> üzerindeki 'lowperf' class'ı CSS'te backdrop-filter ve ağır animasyonları
+// devre dışı bırakır (bkz. index.css).
+if (isCapacitor()) {
+  document.documentElement.classList.add('lowperf');
+}
 
 // ── Global error handlers ─────────────────────────────────────────────────────
 window.onerror = (message, source, lineno, colno, error) => {

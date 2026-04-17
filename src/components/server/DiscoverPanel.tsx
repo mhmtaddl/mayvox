@@ -29,21 +29,24 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
   const [toast, setToast] = useState('');
   const seqRef = useRef(0);
 
-  // Dar panel genişliğinde kart boyutunu korumak için 2 sütun + 4 kart üst sınırı.
-  // Geniş panelde 3 sütun + 9 kart. Grid div koşullu render edildiği için
-  // callback ref ile mount/unmount'ta ResizeObserver bağlanır/sökülür.
-  const [isNarrow, setIsNarrow] = useState(false);
+  // Responsive breakpoints:
+  //  - 'xs' (< 380px, eski 5" telefonlar)  → 1 sütun
+  //  - 'narrow' (380–560px, 5.5" telefon)  → 2 sütun
+  //  - 'wide' (>= 560px, tablet+)          → 3 sütun
+  type Breakpoint = 'xs' | 'narrow' | 'wide';
+  const [bp, setBp] = useState<Breakpoint>('wide');
   const roRef = useRef<ResizeObserver | null>(null);
   const gridRefCb = useCallback((node: HTMLDivElement | null) => {
     if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
     if (!node || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width ?? 0;
-      setIsNarrow(w < 560);
+      setBp(w < 380 ? 'xs' : w < 560 ? 'narrow' : 'wide');
     });
     ro.observe(node);
     roRef.current = ro;
   }, []);
+  const gridCols = bp === 'xs' ? 'grid-cols-1' : bp === 'narrow' ? 'grid-cols-2' : 'grid-cols-3';
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); }, []);
 
@@ -118,7 +121,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
   const isActive = (s: DiscoverServer) => s.id === activeServerId;
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto px-4 py-5 lg:px-8 lg:py-6">
+    <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 lg:px-8 lg:py-6">
       <div className="max-w-[860px] mx-auto w-full space-y-4">
 
         {/* Hero */}
@@ -127,17 +130,20 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
           <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-45 mt-1">Açık sunucuları keşfet, anında katıl veya kendi topluluğunu oluştur.</p>
         </div>
 
-        {/* Search + Davet kodu */}
+        {/* Search + Davet kodu — dar ekranda buton ikon+kısa metin, geniş ekranda tam metin */}
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center gap-2 h-10 rounded-lg px-3" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+          <div className="flex-1 min-w-0 flex items-center gap-2 h-10 rounded-lg px-3" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
             <Search size={14} className="text-[var(--theme-secondary-text)] opacity-35 shrink-0" />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Sunucu adı veya adres ara"
-              className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/20 outline-none" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Sunucu ara"
+              className="flex-1 min-w-0 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/20 outline-none" />
             {loading && query.trim() && <div className="w-3 h-3 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
           </div>
-          <button onClick={onJoinModal} className="h-10 px-4 rounded-lg flex items-center gap-1.5 text-[10px] font-semibold shrink-0 hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"
-            style={{ background: 'rgba(var(--glass-tint), 0.05)', border: '1px solid rgba(var(--glass-tint), 0.08)', color: 'var(--theme-text)' }}>
-            <Hash size={12} className="text-[var(--theme-accent)] opacity-60" /> Davet Kodu ile Katıl
+          <button onClick={onJoinModal} className="h-10 px-3 sm:px-4 rounded-lg flex items-center gap-1.5 text-[10px] font-semibold shrink-0 hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"
+            style={{ background: 'rgba(var(--glass-tint), 0.05)', border: '1px solid rgba(var(--glass-tint), 0.08)', color: 'var(--theme-text)' }}
+            title="Davet Kodu ile Katıl">
+            <Hash size={12} className="text-[var(--theme-accent)] opacity-60" />
+            <span className="hidden sm:inline">Davet Kodu ile Katıl</span>
+            <span className="sm:hidden">Davet Kodu</span>
           </button>
         </div>
 
@@ -160,8 +166,8 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
             <div className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Eşleşen sunucu bulunamadı</div>
           </div>
         ) : (
-          <div ref={gridRefCb} className={`grid gap-2.5 ${isNarrow ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {(isNarrow ? servers.slice(0, 4) : servers).map(s => {
+          <div ref={gridRefCb} className={`grid gap-2.5 ${gridCols}`}>
+            {servers.map(s => {
               const member = isMember(s);
               const active = isActive(s);
               const isJoining = joining === s.id;

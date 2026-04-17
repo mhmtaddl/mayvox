@@ -6,6 +6,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { requestInvite, getInviteRequestStatus } from '../lib/supabase';
 import appLogo from '../assets/app-logo.png';
+import { makeEnterToNext } from '../lib/mobileFormNav';
 
 type RequestState = 'idle' | 'requesting' | 'pending' | 'approved' | 'rejected' | 'blocked' | 'expired';
 
@@ -25,7 +26,10 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
   const [error, setError] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const pwdInputRef = useRef<HTMLInputElement>(null);
+  const repeatPwdInputRef = useRef<HTMLInputElement>(null);
 
   // Davet talebi state
   const [requestState, setRequestState] = useState<RequestState>('idle');
@@ -225,6 +229,8 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
     onSubmit();
   };
 
+  const onEnterNext = makeEnterToNext([emailInputRef, codeInputRef, pwdInputRef, repeatPwdInputRef], triggerSubmit);
+
   const canRequest = isValidEmail(email)
     && requestState === 'idle'
     && !permanentlyBlocked;
@@ -281,6 +287,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={emailInputRef}
                 type="email"
                 placeholder="E-posta adresinizi giriniz"
                 value={email}
@@ -288,7 +295,8 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                   setEmail(e.target.value);
                   if (requestState === 'idle') setError(null);
                 }}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(0)}
+                enterKeyHint="next"
                 disabled={['pending', 'approved', 'requesting'].includes(requestState)}
                 aria-label="E-posta"
                 autoComplete="email"
@@ -322,7 +330,8 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 placeholder="Admin'den aldığınız kodu girin"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(1)}
+                enterKeyHint="next"
                 aria-label="Davet kodu"
                 className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-4 focus:border-white/20 outline-none transition-all tracking-widest font-mono"
               />
@@ -468,11 +477,13 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={pwdInputRef}
                 type={showPwd ? 'text' : 'password'}
                 placeholder="Parolanızı oluşturun"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(2)}
+                enterKeyHint="next"
                 aria-label="Parola"
                 autoComplete="new-password"
                 className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-12 focus:border-white/20 outline-none transition-all"
@@ -494,11 +505,13 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
               <input
+                ref={repeatPwdInputRef}
                 type={showRepeatPwd ? 'text' : 'password'}
                 placeholder="Parolanızı tekrar girin"
                 value={repeatPwd}
                 onChange={(e) => setRepeatPwd(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                onKeyDown={onEnterNext(3)}
+                enterKeyHint="done"
                 aria-label="Parolayı tekrar gir"
                 autoComplete="new-password"
                 className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-12 focus:border-white/20 outline-none transition-all"

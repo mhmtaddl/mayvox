@@ -395,8 +395,8 @@ export default function DesktopDock({
           </AnimatePresence>
         </div>
 
-        {/* Search butonu */}
-        <div className="relative shrink-0" ref={searchPanelRef}>
+        {/* Search butonu — mobilde gizli, sunucu arama LeftSidebar'da */}
+        {!isInline && <div className="relative shrink-0" ref={searchPanelRef}>
           <button onClick={() => {
               if (!serverSearchOpen) measurePanelOrientation();
               setServerSearchOpen(prev => !prev);
@@ -501,10 +501,10 @@ export default function DesktopDock({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </div>}
 
-        {/* Sunucu oluştur — yalnız app-level yetkili + 0 sahip sunucu varsa */}
-        {canCreateServer && (
+        {/* Sunucu oluştur — mobilde gizli, LeftSidebar'da aynı aksiyon */}
+        {!isInline && canCreateServer && (
           <button onClick={() => onShowCreateModal()} title="Sunucu oluştur"
             className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-100 border bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-emerald-500/8 hover:text-emerald-400 hover:border-emerald-500/15">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -578,8 +578,8 @@ export default function DesktopDock({
           )}
         </AnimatePresence>
       </div>
-      {/* Gürültü Susturma — AudioLines (ses dalgası) ikonu; kalkan yerine anlamlı */}
-      <button
+      {/* Gürültü Susturma — mobilde gizli, Ayarlar → Ses'te aynı seçenek */}
+      {!isInline && <button
         onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
         className={`relative w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
           isNoiseSuppressionEnabled
@@ -589,7 +589,6 @@ export default function DesktopDock({
         title={isNoiseSuppressionEnabled ? 'Gürültü Susturma: Açık' : 'Gürültü Susturma: Kapalı'}
       >
         <AudioLines size={16} />
-        {/* OFF state görsel işaret: ince diagonal strike — "filtre kapalı" hissi */}
         {!isNoiseSuppressionEnabled && (
           <span
             aria-hidden="true"
@@ -601,9 +600,9 @@ export default function DesktopDock({
             />
           </span>
         )}
-      </button>
-      {/* Ses modu butonu */}
-      {activeChannel && (() => {
+      </button>}
+      {/* Ses modu butonu — mobilde gizli, Ayarlar → Ses'te PTT/VAD değişimi */}
+      {!isInline && activeChannel && (() => {
         const isVad = voiceMode === 'vad';
         const activeCh = channels.find(c => c.id === activeChannel);
         const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
@@ -648,7 +647,8 @@ export default function DesktopDock({
       {activeChannel && view !== 'settings' && (
         <>
           <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
-          <button
+          {/* Kart stili döngüsü — mobilde gizli (nadir kullanım) */}
+          {!isInline && <button
             onClick={cycleCardStyle}
             className="w-10 h-10 flex items-center justify-center btn-haptic"
             style={{
@@ -684,7 +684,7 @@ export default function DesktopDock({
                 <><rect x="2" y="2" width="12" height="12" rx="4" stroke="currentColor" strokeWidth="1.2" className="text-[var(--theme-accent)]" opacity="0.6" /><rect x="4.5" y="4.5" width="7" height="7" rx="2.5" fill="currentColor" className="text-[var(--theme-accent)]" opacity="0.15" /></>
               )}
             </svg>
-          </button>
+          </button>}
           <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white" title="Odadan Ayrıl">
             <PhoneOff size={16} />
           </button>

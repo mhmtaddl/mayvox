@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
+import { makeEnterToNext } from '../lib/mobileFormNav';
 
 interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
@@ -16,6 +17,8 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
   const [error, setError] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const nickInputRef = useRef<HTMLInputElement>(null);
+  const pwdInputRef = useRef<HTMLInputElement>(null);
 
   const [appVersion, setAppVersion] = useState<string>('');
   useEffect(() => {
@@ -37,6 +40,8 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
     setTimeout(() => setPressing(false), 150);
     onSubmit();
   };
+
+  const onEnterNext = makeEnterToNext([nickInputRef, pwdInputRef], triggerSubmit);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full h-full p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
@@ -89,11 +94,13 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
                 <input
+                  ref={nickInputRef}
                   type="text"
                   placeholder="Kullanıcı adını gir"
                   value={nick}
                   onChange={(e) => setNick(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                  onKeyDown={onEnterNext(0)}
+                  enterKeyHint="next"
                   autoComplete="username"
                   className="w-full h-[50px] rounded-2xl pl-11 pr-4 text-[14px] text-white placeholder:text-white/30 outline-none transition-all"
                   style={{
@@ -110,11 +117,13 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={18} />
                 <input
+                  ref={pwdInputRef}
                   type={showPwd ? 'text' : 'password'}
                   placeholder="Parolanı gir"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && triggerSubmit()}
+                  onKeyDown={onEnterNext(1)}
+                  enterKeyHint="done"
                   autoComplete="current-password"
                   className="w-full h-[50px] rounded-2xl pl-11 pr-12 text-[14px] text-white placeholder:text-white/30 outline-none transition-all"
                   style={{

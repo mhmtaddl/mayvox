@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mic } from 'lucide-react';
-import MobileUpdateHub from '../../update/components/MobileUpdateHub';
+import { Mic, ArrowLeftRight } from 'lucide-react';
 import DesktopDock from './DesktopDock';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
@@ -9,12 +8,12 @@ import { useAppState } from '../../../contexts/AppStateContext';
 import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
 import { FORCE_MOBILE } from '../constants';
+import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import { type CardStyle } from '../../../components/chat/cardStyles';
 import { type Server } from '../../../lib/serverService';
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
-  onOpenBell?: () => void;
   dockToastHoveredRef: React.MutableRefObject<boolean>;
   cardStyle: CardStyle;
   cycleCardStyle: () => void;
@@ -41,13 +40,43 @@ export default function MobileFooter({
   canCreateServer,
 }: Props) {
   const { currentUser } = useUser();
-  const { activeChannel } = useChannel();
-  const { isPttPressed, setIsPttPressed, volumeLevel } = useAudio();
+  const { activeChannel, channels } = useChannel();
+  const { isPttPressed, setIsPttPressed, volumeLevel, mobileVoiceModeOverride, setMobileVoiceModeOverride } = useAudio();
   const { voiceMode, noiseThreshold, setNoiseThreshold } = useSettings();
-  const {
-    isMuted,
-    view, appVersion, showReleaseNotes, setShowReleaseNotes,
-  } = useAppState();
+  const { isMuted, view } = useAppState();
+
+  // Oda default'u ile kullanıcı tercihi farklıysa 15 saniye boyunca "change" butonu göster.
+  // Butona basılırsa kullanıcının tercihi override olarak set edilir, buton 5 sn daha görünüp kaybolur.
+  const activeCh = channels.find(c => c.id === activeChannel);
+  const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
+  const roomDefault = vc ? vc.defaultMode : null;
+  const allowedModes = vc ? vc.allowedModes : [];
+  // Mobilde effective mode = override ya da oda default (kullanıcı voiceMode setting'i değil)
+  // App.tsx ile aynı logic — pill doğru branch'i render etsin diye burada da hesaplanıyor.
+  const effectiveMode = FORCE_MOBILE && activeCh && vc
+    ? (mobileVoiceModeOverride && vc.allowedModes.includes(mobileVoiceModeOverride) ? mobileVoiceModeOverride : vc.defaultMode)
+    : (vc && vc.allowedModes.includes(voiceMode) ? voiceMode : (vc?.defaultMode ?? voiceMode));
+  const canOfferChange = !!activeCh && allowedModes.length > 1 && roomDefault !== null && voiceMode !== roomDefault && allowedModes.includes(voiceMode);
+
+  const [changeBtnVisible, setChangeBtnVisible] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    if (!canOfferChange || mobileVoiceModeOverride) { setChangeBtnVisible(false); return; }
+    // Odaya ilk girişte 15sn göster
+    setChangeBtnVisible(true);
+    hideTimerRef.current = setTimeout(() => { setChangeBtnVisible(false); hideTimerRef.current = null; }, 15000);
+    return () => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; } };
+  }, [activeChannel, canOfferChange, mobileVoiceModeOverride]);
+
+  const onChangeModeClick = () => {
+    // Kullanıcının Settings-Account tercihine geç (override set et)
+    setMobileVoiceModeOverride(voiceMode);
+    // 5 sn daha görünür kalsın sonra gizle
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => { setChangeBtnVisible(false); hideTimerRef.current = null; }, 5000);
+  };
 
   const isAdminMuted = currentUser.isMuted === true;
   const isVoiceBanned = !!currentUser.isVoiceBanned;
@@ -78,7 +107,7 @@ export default function MobileFooter({
       {/* PTT / VAD buton alanı */}
       {activeChannel && view !== 'settings' && (() => {
         const pttDisabled = isMuted || isAdminMuted || isVoiceBanned;
-        const isVad = voiceMode === 'vad';
+        const isVad = effectiveMode === 'vad';
 
         const pttLabel = isAdminMuted
           ? (muteRemaining ?? 'Susturuldu')
@@ -87,17 +116,18 @@ export default function MobileFooter({
             : isVoiceBanned
               ? 'Ses Yasağı'
               : isVad
-                ? (isPttPressed ? 'Konuşuyorsun' : 'Ses Algılama Aktif')
+                ? (isPttPressed ? 'Konuşuyorsun' : 'Otomatik')
                 : isPttPressed
                   ? 'Konuşuyorsun'
-                  : 'Basılı Tut — Konuş';
+                  : 'Basılı tut';
 
         if (isVad) {
           return (
             <div className="flex flex-col items-center pt-3 pb-1 px-4 gap-2">
+              <div className="flex items-center gap-2 w-full max-w-[260px]">
               <div
                 onClick={() => { if (!pttDisabled) setVadSliderOpen(p => !p); }}
-                className={`relative w-full max-w-xs rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
+                className={`relative flex-1 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
               >
                 <div className={`absolute inset-0 rounded-2xl transition-all duration-200 ${
                   pttDisabled
@@ -139,6 +169,17 @@ export default function MobileFooter({
                   )}
                 </div>
               </div>
+              {changeBtnVisible && !pttDisabled && (
+                <button
+                  onClick={onChangeModeClick}
+                  className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
+                  style={{ background: 'rgba(var(--glass-tint), 0.08)', borderColor: 'rgba(var(--glass-tint), 0.15)', color: 'var(--theme-accent)' }}
+                  title="Konuşma moduna geç"
+                >
+                  <ArrowLeftRight size={14} />
+                </button>
+              )}
+              </div>
               {vadSliderOpen && !pttDisabled && (
                 <div className="flex items-center gap-3 w-full max-w-xs px-2 py-1 rounded-xl bg-[var(--theme-sidebar)]/80 border border-[var(--theme-border)]/20">
                   <span className="text-[10px] text-[var(--theme-secondary-text)]/60 shrink-0">Hassasiyet</span>
@@ -159,7 +200,7 @@ export default function MobileFooter({
 
         // PTT modu
         return (
-          <div className="flex items-center justify-center pt-3 pb-1 px-4">
+          <div className="flex items-center justify-center pt-3 pb-1 px-4 gap-2">
             <button
               onPointerDown={(e) => {
                 if (pttDisabled) return;
@@ -174,7 +215,7 @@ export default function MobileFooter({
               }}
               onPointerCancel={() => { if (!pttDisabled) setIsPttPressed(false); }}
               onContextMenu={(e) => e.preventDefault()}
-              className={`relative w-full max-w-xs select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
+              className={`relative w-full max-w-[220px] select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
                 pttDisabled ? 'opacity-50' : isPttPressed ? 'scale-[0.97]' : 'scale-100'
               }`}
             >
@@ -213,6 +254,16 @@ export default function MobileFooter({
                 )}
               </div>
             </button>
+            {changeBtnVisible && !pttDisabled && (
+              <button
+                onClick={onChangeModeClick}
+                className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
+                style={{ background: 'rgba(var(--glass-tint), 0.08)', borderColor: 'rgba(var(--glass-tint), 0.15)', color: 'var(--theme-accent)' }}
+                title="Konuşma moduna geç"
+              >
+                <ArrowLeftRight size={14} />
+              </button>
+            )}
           </div>
         );
       })()}
@@ -233,11 +284,6 @@ export default function MobileFooter({
           onShowCreateModal={onShowCreateModal}
           canCreateServer={canCreateServer}
         />
-        {FORCE_MOBILE && (
-          <div className="flex justify-center pb-1">
-            <MobileUpdateHub currentVersion={appVersion} isAdmin={currentUser.isAdmin} autoShowNotes={showReleaseNotes} onNotesShown={() => setShowReleaseNotes(false)} />
-          </div>
-        )}
       </div>
     </footer>
   );

@@ -1,6 +1,31 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
+/* ────────────────────────────────────────────────────────────────────────
+   Low-perf mode — Capacitor (Android 9+ eski WebView) için
+   main.tsx html.lowperf class'ını ekler.
+   Pahalı CSS'leri devre dışı bırakır: backdrop-filter ve sürekli animasyonlar.
+   ──────────────────────────────────────────────────────────────────────── */
+html.lowperf,
+html.lowperf *,
+html.lowperf *::before,
+html.lowperf *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Avatar frame'lerin sürekli glow/shimmer animasyonu low-perf'te kapalı */
+html.lowperf .frame-elite,
+html.lowperf .frame-vip {
+  animation: none !important;
+}
+html.lowperf .frame-elite::after {
+  animation: none !important;
+}
+/* Brand area shimmer'ı da ağır — low-perf'te iptal */
+html.lowperf [style*="brand-shimmer"] {
+  animation: none !important;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   /* Theme Pack tokens — Tailwind utility'leri ile kullanılabilir (bg-bg, text-text-primary, vs.) */
