@@ -244,10 +244,8 @@ export function useLiveKitConnection({
               }
               // HTMLMediaElement fallback 0..1 clamp.
               audioEl.volume = Math.min(1, vol);
-              console.log('[VOL] restore on subscribe', { identity: participant.identity, savedPct: savedVolume, vol });
             }
           }
-          console.log('[LIVEKIT] REMOTE_TRACK_SUBSCRIBED', { kind: track.kind, identity: participant.identity });
         }
       });
 
@@ -264,20 +262,6 @@ export function useLiveKitConnection({
         // zaten başarılı connect sonrasında tetiklenir (aşağıda). isLocal participant
         // için burada tekrar ses çalmaz.
         if (!participant?.isLocal) playSound('join');
-      });
-
-      // Local track lifecycle instrumentation — mic publish/unpublish görünür olsun
-      room.on(RoomEvent.LocalTrackPublished as any, (pub: any) => {
-        console.log('[LIVEKIT] LOCAL_TRACK_PUBLISHED', { kind: pub?.kind, source: pub?.source, sid: pub?.trackSid, muted: pub?.isMuted });
-      });
-      room.on(RoomEvent.LocalTrackUnpublished as any, (pub: any) => {
-        console.log('[LIVEKIT] LOCAL_TRACK_UNPUBLISHED', { kind: pub?.kind, source: pub?.source, sid: pub?.trackSid });
-      });
-      room.on(RoomEvent.TrackMuted as any, (pub: any, participant: any) => {
-        console.log('[LIVEKIT] TRACK_MUTED', { local: participant?.isLocal, kind: pub?.kind, identity: participant?.identity });
-      });
-      room.on(RoomEvent.TrackUnmuted as any, (pub: any, participant: any) => {
-        console.log('[LIVEKIT] TRACK_UNMUTED', { local: participant?.isLocal, kind: pub?.kind, identity: participant?.identity });
       });
       room.on(RoomEvent.ParticipantDisconnected, (participant) => {
         updateMembers();

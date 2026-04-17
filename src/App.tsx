@@ -1129,35 +1129,10 @@ export default function App() {
     playSound(isPttPressed ? 'ptt-on' : 'ptt-off');
   }, [isPttPressed]);
 
-  // Capacitor + VAD: LiveKit localParticipant.isSpeaking → isPttPressed
-  // (usePttAudio'nun getUserMedia analizi mobilde kapalı, LiveKit'in kendi
-  // voice activity detection'ını kaynak olarak kullan — glow ve "Konuşuyorsun"
-  // label bunun üstünden canlanır.)
-  useEffect(() => {
-    if (!isCapacitor()) return;
-    if (effectiveVoiceMode !== 'vad') return;
-    const room = livekitRoomRef.current;
-    if (!room) return;
-    const local = room.localParticipant;
-    const onChange = () => setPttPressed(!!local.isSpeaking);
-    local.on('isSpeakingChanged' as any, onChange);
-    return () => { local.off('isSpeakingChanged' as any, onChange); };
-  }, [effectiveVoiceMode, activeChannel, isConnecting]);
-
   // ── LiveKit PTT: enable/disable mic based on PTT state ───────────────────
-  // Capacitor + VAD modu: usePttAudio'nun kendi getUserMedia analizi devre dışı
-  // (LiveKit ile çakışmasın). VAD'te mic sürekli açık — sessizlik mantığını
-  // LiveKit kendi işler. Desktop davranışı aynen korunuyor (isPttPressed gate'i).
   useEffect(() => {
     if (!livekitRoomRef.current) return;
-    const isVadContinuous = isCapacitor() && effectiveVoiceMode === 'vad';
-    const gate = isVadContinuous ? true : isPttPressed;
-    const canSpeak = gate && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
-    console.log('[MIC]', canSpeak ? 'ENABLE' : 'DISABLE', {
-      mode: effectiveVoiceMode, vadCont: isVadContinuous, gate, isPttPressed,
-      isMuted, voiceBan: !!currentUser.isVoiceBanned, bcListener: isBroadcastListener,
-      device: selectedInput,
-    });
+    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
     livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
       canSpeak,
       buildAudioCaptureOptions({
@@ -1167,10 +1142,8 @@ export default function App() {
         rnnoiseActive: isNoiseSuppressionEnabled,
         deviceId: selectedInput,
       }),
-    )
-      .then(() => console.log('[MIC] set ok →', canSpeak ? 'enabled' : 'disabled'))
-      .catch(err => console.warn('[MIC] set failed:', err));
-  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, effectiveVoiceMode, activeChannel, isConnecting]);
+    ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
+  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting]);
 
   // ── RNNoise strength live update — slider değişince worklet'e postla ──
   useEffect(() => {
