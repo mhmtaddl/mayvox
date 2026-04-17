@@ -39,10 +39,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    // ── APK dosya adı: PigeVox-<version>.apk ──
+    // ── APK dosya adı: MAYVOX-<version>.apk ──
     applicationVariants.all { variant ->
         variant.outputs.all {
-            outputFileName = "PigeVox-${appVersionName}.apk"
+            outputFileName = "MAYVOX-${appVersionName}.apk"
         }
     }
 }

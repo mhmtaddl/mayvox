@@ -18,6 +18,7 @@ import type { DmConversation, DmMessage } from '../lib/dmService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
 import { MV_PRESS } from '../lib/signature';
+import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
 // Dependency yok; manuel curated set. 8 kolon × 5 satır = 40 emoji.
@@ -457,8 +458,10 @@ function ChatArea({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
-    if (e.target.value.length > 0) onTyping();
+    // ':) → 🙂' gibi text shortcut'lar yazılırken anlık dönüşür (ChatPanel ile aynı davranış)
+    const converted = replaceEmojiShortcuts(e.target.value);
+    setInput(converted);
+    if (converted.length > 0) onTyping();
   };
 
   const grouped = useMemo(() => {
@@ -606,13 +609,16 @@ function ChatArea({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (canSend) handleSend();
+                if (canSend) {
+                  handleSend();
+                  // Gönderme sonrası imleç input'ta kalsın
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                }
               }
             }}
             placeholder="Mesaj yaz..."
             maxLength={2000}
-            className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none disabled:opacity-50"
-            disabled={sending && !input}
+            className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
           />
           <button
             onClick={() => setEmojiOpen(o => !o)}

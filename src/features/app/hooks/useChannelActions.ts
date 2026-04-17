@@ -82,6 +82,7 @@ export function useChannelActions({
     const participant = Array.from(livekitRoomRef.current.remoteParticipants.values())
       .find((p): p is RemoteParticipant => p.identity === user.name);
 
+    let tracksTouched = 0;
     if (participant) {
       // Tüm audio publications üzerinde dolaş; subscribed olanlara setVolume uygula.
       // Eski kod `pub.audioTrack` fallback'i kullanıyordu — v2 LiveKit'te o prop yok.
@@ -89,13 +90,14 @@ export function useChannelActions({
         const track = pub.track;
         if (track instanceof RemoteAudioTrack) {
           track.setVolume(vol);
+          tracksTouched++;
         }
       });
     }
     // HTMLAudioElement fallback — webAudioMix kapalıysa volume gerçekten bu yoldan geçer.
-    document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => {
-      el.volume = Math.min(1, vol);
-    });
+    const els = document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`);
+    els.forEach(el => { el.volume = Math.min(1, vol); });
+    console.log('[VOL] set', { user: user.name, pct: volume, vol, tracksTouched, audioEls: els.length, participantFound: !!participant });
   };
 
   // ── User action menu ──

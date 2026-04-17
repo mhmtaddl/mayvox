@@ -1153,6 +1153,11 @@ export default function App() {
     const isVadContinuous = isCapacitor() && effectiveVoiceMode === 'vad';
     const gate = isVadContinuous ? true : isPttPressed;
     const canSpeak = gate && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
+    console.log('[MIC]', canSpeak ? 'ENABLE' : 'DISABLE', {
+      mode: effectiveVoiceMode, vadCont: isVadContinuous, gate, isPttPressed,
+      isMuted, voiceBan: !!currentUser.isVoiceBanned, bcListener: isBroadcastListener,
+      device: selectedInput,
+    });
     livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
       canSpeak,
       buildAudioCaptureOptions({
@@ -1162,7 +1167,9 @@ export default function App() {
         rnnoiseActive: isNoiseSuppressionEnabled,
         deviceId: selectedInput,
       }),
-    ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
+    )
+      .then(() => console.log('[MIC] set ok →', canSpeak ? 'enabled' : 'disabled'))
+      .catch(err => console.warn('[MIC] set failed:', err));
   }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, effectiveVoiceMode, activeChannel, isConnecting]);
 
   // ── RNNoise strength live update — slider değişince worklet'e postla ──

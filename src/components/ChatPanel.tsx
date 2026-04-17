@@ -4,6 +4,7 @@ import AvatarContent from './AvatarContent';
 import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
+import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 
 export interface ChatMessage {
   id: string;
@@ -90,6 +91,7 @@ export default function ChatPanel({
   // Emoji picker
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!showEmojiPicker) return;
     const handler = (e: MouseEvent) => {
@@ -256,11 +258,23 @@ export default function ChatPanel({
             </div>
           )}
         </div>
-        {/* Textarea */}
+        {/* Textarea — emoji shortcut ':)' → 🙂 dönüşümü + gönder sonrası focus korunur */}
         <textarea
+          ref={chatTextareaRef}
           value={chatInput}
-          onChange={(e) => onChatInputChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSendMessage(); } }}
+          onChange={(e) => onChatInputChange(replaceEmojiShortcuts(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              const t = e.currentTarget;
+              onSendMessage();
+              // Gönderme sonrası focus + yüksekliği resetle (value clear onInput tetiklemiyor)
+              requestAnimationFrame(() => {
+                t.style.height = '36px';
+                t.focus();
+              });
+            }
+          }}
           placeholder={isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
           disabled={isChatDisabled}
           rows={1}
