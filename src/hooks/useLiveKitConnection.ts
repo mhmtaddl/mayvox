@@ -160,10 +160,6 @@ export function useLiveKitConnection({
         audioOutput: {
           deviceId: selectedOutput || undefined,
         },
-        // Web Audio GainNode üzerinden mix — remote audio tracks setVolume(>1)
-        // değeri artık HTMLMediaElement'te clamp edilmiyor; Web Audio gain ile
-        // gerçek amplifikasyon (100% üstü boost) sağlıyor.
-        webAudioMix: true,
       });
 
       const broadcastMemberUpdate = (members: string[], count: number) => {

@@ -71,9 +71,7 @@ export function useChannelActions({
     setUserVolumes(newVolumes);
     localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
 
-    // webAudioMix: true — LiveKit GainNode üzerinden gidiyor, >1 amplifikasyonu
-    // (%100-150) doğrudan gain'e yazılıyor. Clamp 0..1.5.
-    const vol = Math.max(0, Math.min(1.5, volume / 100));
+    const vol = Math.max(0, Math.min(1, volume / 100));
     const user = allUsers.find(u => u.id === userId);
     if (user && livekitRoomRef.current) {
       const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
@@ -84,9 +82,7 @@ export function useChannelActions({
           if (t && t instanceof RemoteAudioTrack) t.setVolume(vol);
         });
       }
-      // HTMLMediaElement.volume 0..1 clamp'lenir; fallback için max 1.0 yaz.
-      // webAudioMix açıkken bu değer pek etkili olmasa da güvenli fallback.
-      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => { el.volume = Math.min(1, vol); });
+      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => { el.volume = vol; });
     }
   };
 
