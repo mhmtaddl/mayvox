@@ -98,6 +98,10 @@ async function sendResendEmail({ to, subject, html }) {
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
+      headers: {
+        'List-Unsubscribe': `<mailto:${RESEND_REPLY_TO}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     }),
   });
   if (!resp.ok) {
