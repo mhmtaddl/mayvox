@@ -24,6 +24,7 @@ interface Props {
   inviteStatuses?: Record<string, string>;
   inviteCooldowns?: Record<string, number>;
   handleInviteUser?: (userId: string) => void;
+  handleCancelInvite?: (userId: string) => void;
   isMuted?: boolean;
   isDeafened?: boolean;
   /** Map id→name for "şu anda X sunucusunda" indicator under online friends */
@@ -32,7 +33,7 @@ interface Props {
 
 export default function FriendsSidebarContent({
   variant, onUserClick, onDM, channels, activeChannel,
-  inviteStatuses = {}, inviteCooldowns = {}, handleInviteUser,
+  inviteStatuses = {}, inviteCooldowns = {}, handleInviteUser, handleCancelInvite,
   isMuted: selfMuted, isDeafened: selfDeafened,
   servers = [],
 }: Props) {
@@ -205,7 +206,19 @@ export default function FriendsSidebarContent({
           const onCooldown = !!(cooldownUntil && Date.now() < cooldownUntil);
           const remaining = onCooldown ? Math.ceil((cooldownUntil - Date.now()) / 1000) : 0;
 
-          if (status === 'pending') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-blue-400 bg-blue-500/10"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /></span>;
+          if (status === 'pending') {
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCancelInvite?.(user.id); }}
+                title="Daveti iptal et"
+                aria-label="Daveti iptal et"
+                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-blue-400 bg-blue-500/10 hover:bg-red-500/20 hover:text-red-400 transition-colors group/cancel"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse group-hover/cancel:hidden" />
+                <X size={12} className="hidden group-hover/cancel:block" />
+              </button>
+            );
+          }
           if (status === 'accepted') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-emerald-400 bg-emerald-500/10"><Check size={12} /></span>;
           if (status === 'rejected') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-red-400 bg-red-500/10"><X size={12} /></span>;
           return (

@@ -56,6 +56,7 @@ export interface AppStateContextType {
   handleUpdateUserVolume: (userId: string, volume: number) => void;
   handleUserActionClick: (e: React.MouseEvent, userId: string) => void;
   handleInviteUser: (userId: string) => void;
+  handleCancelInvite: (userId: string) => void;
   handleKickUser: (userId: string) => void;
   handleMoveUser: (userName: string, targetChannelId: string) => void;
   handleSaveRoom: () => Promise<void>;

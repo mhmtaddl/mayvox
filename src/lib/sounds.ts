@@ -83,6 +83,11 @@ function playPtt(ctx: AudioContext, isOn: boolean, variant: SoundVariant) {
 // ── Invite Ringtone ───────────────────────────────────────────────────────────
 export type InviteRingtoneVariant = 1 | 2;
 
+// Davet çalma süresi — caller/callee aynı timeout'u kullanır, UI modal'ı buna eşlenir.
+// Değiştirmeden önce: InvitationModal callee timeout + handleInviteUser caller timeout
+// da aynı değeri kullanır; tek kaynak burada.
+export const INVITE_RING_DURATION_MS = 35_000;
+
 let ringtoneGain: GainNode | null = null;
 let ringtoneAutoStop: ReturnType<typeof setTimeout> | null = null;
 
@@ -136,8 +141,9 @@ export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
   try {
     const ctx = getCtx();
     if (ctx.state === 'suspended') ctx.resume();
-    ringtoneGain = buildRingtone(ctx, variant, 5); // 5 × 2s = 10s
-    ringtoneAutoStop = setTimeout(stopInviteRingtone, 10000);
+    // 18 × 2s = 36s — 35s timeout'a yetecek şekilde cycles ayarlandı.
+    ringtoneGain = buildRingtone(ctx, variant, 18);
+    ringtoneAutoStop = setTimeout(stopInviteRingtone, INVITE_RING_DURATION_MS);
   } catch { /* sessizce geç */ }
 }
 

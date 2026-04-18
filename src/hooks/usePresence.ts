@@ -296,6 +296,15 @@ export function usePresence({
       }
     });
 
+    // Caller vazgeçtiğinde callee tarafının modal'ı anında kapanır.
+    // Ringtone durur, missed-call push EDİLMEZ (kullanıcı cevapsız değil, iptal).
+    channel.on('broadcast', { event: 'invite-cancelled' }, ({ payload }) => {
+      if (payload.inviteeId === user.id) {
+        import('../lib/sounds').then(m => m.stopInviteRingtone()).catch(() => {});
+        setInvitationModal(null);
+      }
+    });
+
     channel.on('broadcast', { event: 'invite-rejected' }, ({ payload }) => {
       if (payload.inviterId === user.id) {
         setToastMsg(`${payload.inviteeName} davetinize icabet etmedi.`);

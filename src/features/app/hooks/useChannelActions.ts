@@ -15,6 +15,7 @@ import {
 } from '../../../lib/serverService';
 import { formatFullName } from '../../../lib/formatName';
 import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
+import { INVITE_RING_DURATION_MS } from '../../../lib/sounds';
 import type { VoiceChannel, User } from '../../../types';
 
 interface UseChannelActionsOptions {
@@ -115,6 +116,11 @@ export function useChannelActions({
   };
 
   // ── Invite ──
+  // Caller cancel/timeout için pending invitelerin timeout handle'ı tutulur —
+  // cancel tetiklenirse auto-clear timer'ı iptal edilir, race ile state yeniden
+  // pending'e dönmesin.
+  const invitePendingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   const handleInviteUser = (userId: string) => {
     const cooldownUntil = inviteCooldownsRef.current[userId];
     if (cooldownUntil && Date.now() < cooldownUntil) return;
@@ -130,8 +136,27 @@ export function useChannelActions({
       },
     });
     setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
-    setTimeout(() => { setInviteStatuses(prev => { if (prev[userId] !== 'pending') return prev; const next = { ...prev }; delete next[userId]; return next; }); }, 10_000);
+    // Eski timer varsa temizle (nadir: duplicate davet).
+    const oldTimer = invitePendingTimersRef.current[userId];
+    if (oldTimer) clearTimeout(oldTimer);
+    invitePendingTimersRef.current[userId] = setTimeout(() => {
+      setInviteStatuses(prev => { if (prev[userId] !== 'pending') return prev; const next = { ...prev }; delete next[userId]; return next; });
+      delete invitePendingTimersRef.current[userId];
+    }, INVITE_RING_DURATION_MS);
     setUserActionMenu(null);
+  };
+
+  // Caller tarafı iptal — davetlinin modal'ı kapanması için invite-cancelled yollanır.
+  // Local state anında temizlenir; cooldown tetiklenmez (kullanıcı vazgeçti, ret değil).
+  const handleCancelInvite = (userId: string) => {
+    if (inviteStatuses[userId] !== 'pending') return;
+    presenceChannelRef.current?.send({
+      type: 'broadcast', event: 'invite-cancelled',
+      payload: { inviterId: currentUser.id, inviteeId: userId },
+    });
+    const t = invitePendingTimersRef.current[userId];
+    if (t) { clearTimeout(t); delete invitePendingTimersRef.current[userId]; }
+    setInviteStatuses(prev => { const next = { ...prev }; delete next[userId]; return next; });
   };
 
   const handleInviteRejectedCooldown = (inviteeId: string) => {
@@ -400,6 +425,7 @@ export function useChannelActions({
     handleUserActionClick,
     handleToggleSpeaker,
     handleInviteUser,
+    handleCancelInvite,
     handleKickUser,
     handleMoveUser,
     handleSaveRoom,

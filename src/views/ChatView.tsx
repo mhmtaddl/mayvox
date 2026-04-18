@@ -26,7 +26,7 @@ import UserProfilePopup from '../components/UserProfilePopup';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import SocialSearchHub from '../components/SocialSearchHub';
 import FriendsSidebarContent from '../components/FriendsSidebarContent';
-import { startInviteRingtone, stopInviteRingtone } from '../lib/sounds';
+import { startInviteRingtone, stopInviteRingtone, INVITE_RING_DURATION_MS } from '../lib/sounds';
 import { dismissInviteNotification } from '../lib/notifications';
 import { handleServerRestricted, handleServerUnrestricted } from '../features/notifications/notificationService';
 import { pushInformational } from '../features/notifications/informationalStore';
@@ -95,7 +95,7 @@ export default function ChatView() {
   const { avatarBorderColor, soundInvite, soundInviteVariant } = useSettings();
   const {
     isMuted, isDeafened, handleUpdateUserVolume, handleUserActionClick,
-    handleInviteUser, handleKickUser, handleMoveUser, handleSaveRoom,
+    handleInviteUser, handleCancelInvite, handleKickUser, handleMoveUser, handleSaveRoom,
     handleDeleteRoom, handleSetPassword, handleRemovePassword,
     handleJoinChannel, handleVerifyPassword, handleContextMenu, handleLogout,
     handleToggleSpeaker, isBroadcastListener, disconnectFromLiveKit,
@@ -542,12 +542,56 @@ export default function ChatView() {
     handleKickUser(user.id);
   };
 
-  // ── Effects ──
+  // ── Incoming call: ringtone + 35s timeout + mute state ──
+  // Modal açılınca: ringtone çalar (mute değilse), 35s timer başlar.
+  // Mute: sadece ringtone durur — caller'a sinyal yok, modal kapanmaz, timeout
+  // işlemeye devam eder (kullanıcı karar verme süresini kaybetmez).
+  // Timeout dolduğunda: modal kapanır + caller'a reject YOK (user cevap vermedi,
+  // aktif reject değil) + kullanıcıya missed-call informational push.
+  const [invitationMuted, setInvitationMuted] = useState(false);
+  const invitationDataRef = useRef<typeof invitationModal>(null);
+  invitationDataRef.current = invitationModal;
+
   useEffect(() => {
-    if (invitationModal) { if (soundInvite) startInviteRingtone(soundInviteVariant); }
-    else { stopInviteRingtone(); dismissInviteNotification(); }
+    // Yeni davet geldiğinde mute sıfırlansın.
+    if (invitationModal) setInvitationMuted(false);
+  }, [invitationModal?.inviterId, invitationModal?.roomId]);
+
+  useEffect(() => {
+    if (!invitationModal) {
+      stopInviteRingtone();
+      dismissInviteNotification();
+      return;
+    }
+    if (soundInvite && !invitationMuted) {
+      startInviteRingtone(soundInviteVariant);
+    } else {
+      stopInviteRingtone();
+    }
     return () => { stopInviteRingtone(); };
-  }, [invitationModal, soundInvite, soundInviteVariant]);
+  }, [invitationModal, invitationMuted, soundInvite, soundInviteVariant]);
+
+  useEffect(() => {
+    if (!invitationModal) return;
+    const snapshot = invitationModal;
+    const timer = setTimeout(() => {
+      // Stale guard: arada modal başka bir invite'a değiştiyse bu timeout'u at.
+      if (invitationDataRef.current !== snapshot) return;
+      pushInformational({
+        key: `missedCall:${snapshot.inviterId}:${snapshot.roomId}:${Date.now()}`,
+        kind: 'missedCall',
+        label: `${snapshot.inviterName} seni aradı`,
+        detail: `${snapshot.roomName} odasına cevapsız davet`,
+        createdAt: Date.now(),
+      });
+      setInvitationModal(null);
+    }, INVITE_RING_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [invitationModal, setInvitationModal]);
+
+  const handleInvitationMute = useCallback(() => {
+    setInvitationMuted(prev => !prev);
+  }, []);
 
   useEffect(() => {
     if (!toastMsg) return;
@@ -916,7 +960,7 @@ export default function ChatView() {
                 <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
                   onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
                   channels={channels} activeChannel={activeChannel}
-                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser}
+                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} handleCancelInvite={handleCancelInvite}
                   isMuted={isMuted} isDeafened={isDeafened}
                   servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
@@ -971,7 +1015,7 @@ export default function ChatView() {
           )}
         </AnimatePresence>
         <AnimatePresence>
-          {invitationModal && <InvitationModal data={invitationModal} onAccept={handleInvitationAccept} onDecline={handleInvitationDecline} />}
+          {invitationModal && <InvitationModal data={invitationModal} onAccept={handleInvitationAccept} onDecline={handleInvitationDecline} onMute={handleInvitationMute} isMuted={invitationMuted} />}
         </AnimatePresence>
         <AnimatePresence>
           {contextMenu && (
@@ -1115,7 +1159,7 @@ export default function ChatView() {
           </div>
           <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
             onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }} channels={channels} activeChannel={activeChannel}
-            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} isMuted={isMuted} isDeafened={isDeafened}
+            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
             servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
           <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
