@@ -337,6 +337,7 @@ export default function DesktopDock({
                     || currentUser.userLevel === '2'
                     || currentUser.userLevel === '3'
                   }
+                  isInRoom={!!activeChannel}
                   onStatusChange={(s) => { setSelfStatus(s); setSelfPanelOpen(false); }}
                   onOpenSettings={() => { setSettingsTarget('account'); setView('settings'); setSelfPanelOpen(false); }}
                   onClose={() => setSelfPanelOpen(false)}
@@ -734,11 +735,14 @@ const STATUS_OPTIONS: Array<{ key: string; label: string; dot: string; premium?:
 function SelfControlPanel({
   currentStatus,
   canInvisible,
+  isInRoom,
   onStatusChange,
   onOpenSettings,
 }: {
   currentStatus: string;
   canInvisible: boolean;
+  /** Kullanıcı bir sohbet/ses odasında mı — Çevrimdışı seçimini bloklar. */
+  isInRoom: boolean;
   onStatusChange: (s: string) => void;
   onOpenSettings: () => void;
   onClose: () => void;
@@ -769,14 +773,22 @@ function SelfControlPanel({
         <div className="flex flex-col">
           {visibleOptions.map(opt => {
             const active = currentStatus === opt.key;
+            // Oda içindeyken Çevrimdışı seçilemez — presence broadcast'i canlı
+            // kullanıcılar için "invisible" semantiğini bozmasın diye kilitlenir.
+            const disabled = isInRoom && opt.key === 'Çevrimdışı';
             return (
               <button
                 key={opt.key}
-                onClick={() => onStatusChange(opt.key)}
+                onClick={() => { if (!disabled) onStatusChange(opt.key); }}
+                disabled={disabled}
+                aria-disabled={disabled}
+                title={disabled ? 'Oda içindeyken Çevrimdışı seçilemez' : undefined}
                 className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
-                  active
-                    ? 'bg-[var(--theme-accent)]/10'
-                    : 'hover:bg-[var(--theme-panel-hover)]'
+                  disabled
+                    ? 'opacity-40 cursor-not-allowed'
+                    : active
+                      ? 'bg-[var(--theme-accent)]/10'
+                      : 'hover:bg-[var(--theme-panel-hover)]'
                 }`}
               >
                 <span className="flex items-center gap-2">
@@ -785,7 +797,7 @@ function SelfControlPanel({
                     {opt.label}
                   </span>
                 </span>
-                {active && <Check size={11} className="text-[var(--theme-accent)]" />}
+                {active && !disabled && <Check size={11} className="text-[var(--theme-accent)]" />}
               </button>
             );
           })}
