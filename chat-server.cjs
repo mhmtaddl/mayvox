@@ -67,7 +67,6 @@ dmDb.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_dm_msg_conv ON dm_messages(conversation_key, created_at);
   CREATE INDEX IF NOT EXISTS idx_dm_msg_receiver ON dm_messages(receiver_id, read_at);
-  CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_a ON dm_conversations(user_a_id);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_b ON dm_conversations(user_b_id);
 
@@ -80,13 +79,16 @@ dmDb.exec(`
 `);
 
 // Idempotent migration — delivered_at eski DB'lere retroaktif eklenir.
+// Sıra önemli: önce kolon varlığı garanti edilir, sonra o kolonu kullanan index.
 {
   const cols = dmDb.pragma('table_info(dm_messages)');
-  if (!cols.some(c => c.name === 'delivered_at')) {
+  const hasDelivered = cols.some(c => c.name === 'delivered_at');
+  if (!hasDelivered) {
     dmDb.exec(`ALTER TABLE dm_messages ADD COLUMN delivered_at INTEGER DEFAULT NULL`);
-    dmDb.exec(`CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at)`);
     console.log('[chat-server] Migration: dm_messages.delivered_at eklendi');
   }
+  // Kolon varlığı her iki path'te de (yeni DB / eski DB) garanti altında → index güvenle eklenir.
+  dmDb.exec(`CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at)`);
 }
 
 console.log('[chat-server] SQLite DM DB hazır:', DM_DB_PATH);
