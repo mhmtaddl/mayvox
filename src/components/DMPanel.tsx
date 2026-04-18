@@ -325,9 +325,11 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
   );
 }
 
-// ── Message Tick (sent / delivered / read) ──────────────────────────────
-// Kendi opacity'si parent'ın opacity'sine bağımlı değil — time span'i ayrı sarmalanır
-// yoksa opacity zinciri (0.5 × 0.85) beyaz bubble'da kontrastı çöpe atar.
+// ── Message Tick (sent / read) ──────────────────────────────────────────
+// Tek tik = gönderildi (delivered durumu görsel olarak ayrıştırılmıyor —
+// "çift gri" kullanıcılar için karıştırıcıydı). Çift yeşil = okundu.
+// Opacity zinciri (0.5 × X) beyaz bubble'da kontrastı çöpe atıyor, bu yüzden
+// tick time'dan ayrı sarmalanır ve tam opacity ile renderlanır.
 function MessageTick({ msg }: { msg: DmMessage }) {
   if (msg.readAt) {
     return (
@@ -336,16 +338,6 @@ function MessageTick({ msg }: { msg: DmMessage }) {
         strokeWidth={2.5}
         style={{ color: '#10b981' }}
         aria-label="Okundu"
-      />
-    );
-  }
-  if (msg.deliveredAt) {
-    return (
-      <CheckCheck
-        size={15}
-        strokeWidth={2.5}
-        style={{ color: '#4b5563' }}
-        aria-label="İletildi"
       />
     );
   }
