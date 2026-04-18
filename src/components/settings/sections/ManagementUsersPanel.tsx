@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import AvatarContent from '../../AvatarContent';
 import { createPortal } from 'react-dom';
 import {
@@ -300,39 +301,72 @@ export default function ManagementUsersPanel() {
         title="Sistem — Tüm Kullanıcılar"
         subtitle={loading ? 'yükleniyor...' : `${total} kullanıcı`}
       >
-        {/* Tabs */}
-        <div className="grid grid-cols-5 gap-1 p-1 mb-3 bg-[var(--theme-surface-card)] rounded-xl">
+        {/* Tabs — iOS segmented control: sliding indicator via layoutId */}
+        <div
+          className="relative grid grid-cols-5 p-1 mb-3 rounded-xl"
+          style={{
+            background: 'var(--theme-surface-card)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(var(--glass-tint),0.06)',
+          }}
+        >
           {([
             { k: 'all' as const, label: 'Tümü' },
             { k: 'admin' as const, label: 'Admin' },
             { k: 'mod' as const, label: 'Mod' },
             { k: 'user' as const, label: 'Kullanıcı' },
             { k: 'owners' as const, label: 'Sahipler' },
-          ]).map(t => (
-            <button
-              key={t.k}
-              onClick={() => setTab(t.k)}
-              className={`py-1.5 rounded-lg text-[10.5px] md:text-[11.5px] font-semibold truncate transition-all ${
-                tab === t.k
-                  ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)] border border-[rgba(var(--theme-accent-rgb),0.25)]'
-                  : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(255,255,255,0.02)]'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          ]).map(t => {
+            const active = tab === t.k;
+            return (
+              <button
+                key={t.k}
+                onClick={() => setTab(t.k)}
+                className={`relative py-1.5 rounded-lg text-[10.5px] md:text-[11.5px] font-semibold truncate transition-colors duration-150 outline-none ${
+                  active
+                    ? 'text-[var(--theme-accent)]'
+                    : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
+                }`}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="adminUsersTabIndicator"
+                    aria-hidden
+                    className="absolute inset-0 rounded-lg pointer-events-none"
+                    style={{
+                      background: 'rgba(var(--theme-accent-rgb),0.14)',
+                      border: '1px solid rgba(var(--theme-accent-rgb),0.26)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                    }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
+                  />
+                )}
+                <span className="relative z-[1]">{t.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Search + filter toggle */}
         <div className="flex gap-2 mb-3">
-          <div className="relative flex-1">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/50" />
+          <div className="relative flex-1 group/search">
+            <Search
+              size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-150 text-[var(--theme-secondary-text)]/50 group-focus-within/search:text-[var(--theme-accent)]/70"
+            />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Ad, kullanıcı adı, email ile ara..."
-              className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-xl pl-9 pr-3 py-2 md:py-2.5 text-[12px] md:text-[13px] focus:border-[var(--theme-accent)]/50 focus:ring-2 focus:ring-[var(--theme-accent)]/15 outline-none transition-all text-[var(--theme-input-text)] placeholder:text-[var(--theme-input-placeholder)]"
+              className="w-full rounded-xl pl-9 pr-3 py-2 md:py-2.5 text-[12px] md:text-[13px] outline-none
+                bg-[var(--theme-input-bg)] border
+                border-[var(--theme-input-border)]
+                text-[var(--theme-input-text)] placeholder:text-[var(--theme-input-placeholder)]
+                focus:border-[rgba(var(--theme-accent-rgb),0.55)]
+                focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.14)]
+                transition-[background,border-color,box-shadow] duration-200"
+              style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)' }}
             />
           </div>
           <button
@@ -414,7 +448,7 @@ export default function ManagementUsersPanel() {
               {(debounced || activeFilterCount > 0) && <p className="text-[10px] opacity-60 mt-1">Farklı filtre veya arama dene</p>}
             </div>
           ) : (
-            <div className="divide-y divide-[var(--theme-border)]">
+            <div className="p-1 space-y-[2px]">
               {items.map(u => (
                 <UserRow
                   key={u.id}
@@ -656,17 +690,46 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
   const canEditRole = canAssignRole && !isSelf && !user.is_primary_admin;
 
   return (
-    <div className="group transition-colors hover:bg-[var(--theme-panel-hover)]">
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.995 }}
+      className="group rounded-xl"
+      style={{
+        background: 'transparent',
+        border: '1px solid transparent',
+        boxShadow: '0 0 0 rgba(0,0,0,0)',
+        transition:
+          'background 140ms cubic-bezier(0.22,1,0.36,1), ' +
+          'border-color 140ms cubic-bezier(0.22,1,0.36,1), ' +
+          'box-shadow 160ms cubic-bezier(0.22,1,0.36,1)',
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget;
+        el.style.background = 'var(--theme-panel-hover)';
+        el.style.borderColor = 'rgba(var(--glass-tint), 0.08)';
+        el.style.boxShadow = '0 2px 10px -2px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.05)';
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.background = 'transparent';
+        el.style.borderColor = 'transparent';
+        el.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+      }}
+    >
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Avatar */}
-        <div className="shrink-0 w-8 h-8 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden">
+        <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden ring-1 ring-[rgba(var(--glass-tint),0.06)]">
           <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.first_name} name={displayName} letterClassName="text-[11px] font-bold text-[var(--theme-accent)]" />
         </div>
 
-        {/* Meta */}
+        {/* Meta — 3-tier typography hierarchy */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[12.5px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
+            <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate tracking-[-0.01em]">{displayName}</span>
             {user.is_primary_admin ? (
               <RoleBadge type="primary" />
             ) : canEditRole ? (
@@ -757,7 +820,7 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
       </div>
 
       {expanded && <OwnedServersDrawer userId={user.id} />}
-    </div>
+    </motion.div>
   );
 };
 
