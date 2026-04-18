@@ -30,7 +30,6 @@ import {
   useInviteCodeForEmail,
   getPendingInviteRequests,
   updateActivityOnLogout,
-  updateLastSeenHeartbeat,
   updateShowLastSeen,
   supabase as supabaseClient,
 } from './lib/supabase';
@@ -67,6 +66,7 @@ import { useDevices } from './hooks/useDevices';
 import { usePttAudio } from './hooks/usePttAudio';
 import { useLiveKitConnection } from './hooks/useLiveKitConnection';
 import { usePresence } from './hooks/usePresence';
+import { useBackendPresence } from './hooks/useBackendPresence';
 import { useModeration } from './hooks/useModeration';
 import { useDucking } from './hooks/useDucking';
 import { useAutoPresence, type AutoStatus } from './hooks/useAutoPresence';
@@ -515,7 +515,6 @@ export default function App() {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const sessionStartedAtRef = useRef<number>(Date.now());
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
 
@@ -724,6 +723,14 @@ export default function App() {
 
   const presenceDeps = { startPresence, resyncPresence, resyncPresenceRef };
 
+  // ── Backend-driven presence (online + last_seen) ────────────────────────
+  // Supabase Realtime presence oda/audio state'i için kalıyor; global online
+  // ve last_seen kaynağı artık custom chat-server (Hetzner).
+  const { getServerNow } = useBackendPresence({
+    currentUserId: currentUser.id || null,
+    setAllUsers,
+  });
+
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
 
@@ -930,7 +937,6 @@ export default function App() {
 
       // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
       activatePresence(restoredUser, appVersion, presenceDeps);
-      startHeartbeat(restoredUser.id);
 
       setView('chat');
       setIsSessionLoading(false);
@@ -1593,20 +1599,8 @@ export default function App() {
     activatePresence(user, appVersion, presenceDeps);
   };
 
-  const startHeartbeat = (userId: string) => {
-    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-    updateLastSeenHeartbeat(userId).catch(() => {});
-    heartbeatRef.current = setInterval(() => {
-      updateLastSeenHeartbeat(userId).catch(() => {});
-    }, 5 * 60 * 1000);
-  };
-  const stopHeartbeat = () => {
-    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
-  };
-
   const handleLogout = async () => {
     logger.info('Logout', { userId: currentUser.id, name: currentUser.name });
-    stopHeartbeat();
     if (currentUser.id) {
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
       const newTotal = (currentUser.totalUsageMinutes || 0) + sessionMins;
@@ -1660,10 +1654,10 @@ export default function App() {
     };
   }, [trackPresence, appVersion]);
 
-  // ── Pencere kapanırken son görülme + kullanım süresi kaydet
+  // ── Pencere kapanırken kullanım süresi kaydet
+  // NOT: last_seen_at artık backend tarafından yazılıyor (WS close → handleDisconnect).
   useEffect(() => {
     const handleBeforeUnload = () => {
-      stopHeartbeat();
       const u = currentUserRef.current;
       if (!u.id) return;
       const sessionMins = Math.floor((Date.now() - sessionStartedAtRef.current) / 60000);
@@ -1673,7 +1667,6 @@ export default function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      stopHeartbeat();
     };
   }, []);
 
@@ -1761,7 +1754,6 @@ export default function App() {
     setCurrentUser(newUser);
 
     await initPostAuth(newUser);
-    startHeartbeat(newUser.id);
     setView('chat');
     setLoginNick('');
     setLoginPassword('');

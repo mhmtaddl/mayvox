@@ -212,33 +212,26 @@ export function usePresence({
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
-          const wasOnline = u.status === 'online';
+          // NOT: u.status ve u.lastSeenAt artık useBackendPresence tarafından
+          // yönetiliyor (chat-server authoritative). Burada dokunmuyoruz.
           const willBeOnline = u.id === user.id || onlineIds.has(u.id);
           const nextOnlineSince = willBeOnline
             ? (onlineSinceMap.get(u.id) ?? u.onlineSince)
             : undefined;
-          if (willBeOnline && nextOnlineSince !== u.onlineSince) {
-            console.log('[usePresence] merge_user userId=' + u.id + ' previousOnlineSince=' + u.onlineSince + ' nextOnlineSince=' + nextOnlineSince);
-          }
           return {
             ...u,
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
             platform: platformMap.get(u.id) ?? u.platform,
             serverId: serverIdMap.get(u.id) ?? u.serverId,
-            status: willBeOnline ? 'online' : 'offline',
             statusText: (() => {
               if (u.id === user.id) return u.statusText;
-              if (!willBeOnline) return 'Çevrimdışı';
-              // Presence payload'da gelen manuel statü authoritative — broadcast-miss
-              // koruması. Payload varsa onu base al, yoksa local u.statusText.
+              // willBeOnline false ise presence'ta yok — status text korunur (backend
+              // zaten u.status'u offline'a çekecek). Online path'te payload authoritative.
+              if (!willBeOnline) return u.statusText;
               const payloadStatus = payloadStatusMap.get(u.id);
-              // Legacy 'Aktif' → 'Online' normalize (Çevrimdışı manuel premium statüsü, korunur)
               const baseText = payloadStatus ?? u.statusText;
-              // Sadece legacy 'Aktif' → 'Online' normalize. Çevrimdışı artık manuel
-          // premium "appear offline" statüsü — online presence'ta bile korunmalı.
-          const raw = baseText === 'Aktif' ? 'Online' : (baseText || 'Online');
+              const raw = baseText === 'Aktif' ? 'Online' : (baseText || 'Online');
               const current = raw;
-              // Auto-presence: sadece manuel durum yoksa otomatik durumu uygula
               const autoSt = autoStatusMap.get(u.id);
               if (autoSt && (current === 'Online' || current === 'Pasif' || current === 'Duymuyor')) {
                 if (autoSt === 'idle') return 'Pasif';
@@ -247,17 +240,10 @@ export function usePresence({
               }
               return current;
             })(),
-            // Auto-presence: remote kullanıcıların otomatik durumu (self hariç — local state yetkili)
             ...(u.id !== user.id && autoStatusMap.has(u.id) && {
               autoStatus: autoStatusMap.get(u.id) as 'active' | 'idle' | 'deafened',
             }),
-            // onlineSince: presence payload'dan — her kullanıcının kendi oturum başlangıcı
             onlineSince: nextOnlineSince,
-            // Kullanıcı online'dan offline'a geçti: lastSeenAt güncelle (yaklaşım)
-            lastSeenAt: !willBeOnline && wasOnline
-              ? new Date().toISOString()
-              : u.lastSeenAt,
-            // Apply audio state only if presence data includes it (skip self — local state is authoritative)
             ...(audio !== undefined && u.id !== user.id && {
               selfMuted: audio.selfMuted,
               selfDeafened: audio.selfDeafened,
@@ -542,6 +528,8 @@ export function usePresence({
     setAllUsers(prev =>
       prev.map(u => {
         const cachedVersion = mergedVersionMap.get(u.id);
+        // NOT: u.status güncellemesi useBackendPresence'a ait — burada sadece
+        // oda/audio/autoStatus/version alanları. Online ise statusText senk.
         if (onlineIds.has(u.id)) {
           const payloadStatus = payloadStatusMap.get(u.id);
           const baseText = payloadStatus ?? u.statusText;
@@ -554,14 +542,11 @@ export function usePresence({
           return {
             ...u,
             appVersion: cachedVersion ?? u.appVersion,
-            status: 'online' as const,
             statusText: resolvedStatusText,
             onlineSince: onlineSinceMap.get(u.id) ?? u.onlineSince,
             ...(autoSt && { autoStatus: autoSt as 'active' | 'idle' | 'deafened' }),
           };
         }
-        // Even if not in live onlineIds, apply cached version if available
-        // (prevents version from disappearing during brief presence gaps)
         if (cachedVersion && cachedVersion !== u.appVersion) {
           return { ...u, appVersion: cachedVersion };
         }

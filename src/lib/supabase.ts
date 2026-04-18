@@ -85,11 +85,13 @@ export const updateUserAppVersion = async (id: string, version: string) => {
     .eq('id', id);
 };
 
-// Logout / window close sırasında son görülme zamanını ve birikimli kullanım dakikasını yazar.
+// Logout / window close sırasında birikimli kullanım dakikasını yazar.
+// NOT: last_seen_at artık backend (chat-server) tarafından yönetiliyor —
+// son WS session kapanınca server NOW() ile yazılır. Burada dokunmuyoruz.
 export const updateActivityOnLogout = async (id: string, totalUsageMinutes: number) => {
   return await supabase
     .from('profiles')
-    .update({ last_seen_at: new Date().toISOString(), total_usage_minutes: totalUsageMinutes })
+    .update({ total_usage_minutes: totalUsageMinutes })
     .eq('id', id);
 };
 
@@ -98,15 +100,6 @@ export const updateShowLastSeen = async (id: string, show: boolean) => {
   return await supabase
     .from('profiles')
     .update({ show_last_seen: show })
-    .eq('id', id);
-};
-
-// Online heartbeat — crash / force-close'a karşı last_seen_at'i periyodik günceller.
-// Kullanıcı temiz çıkış yapamazsa bile DB'de en fazla 5 dk eski bir timestamp kalır.
-export const updateLastSeenHeartbeat = async (id: string) => {
-  return await supabase
-    .from('profiles')
-    .update({ last_seen_at: new Date().toISOString() })
     .eq('id', id);
 };
 

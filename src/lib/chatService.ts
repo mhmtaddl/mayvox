@@ -7,6 +7,7 @@
 
 import { supabase } from './supabase';
 import { handleDmMessage, setDmSocket, notifyDmConnected } from './dmService';
+import { getOrCreateDeviceId } from './deviceId';
 
 export interface ChatMessage {
   id: string;
@@ -97,6 +98,46 @@ function dispatchServerEvent(msg: unknown): boolean {
     try { h(event); } catch (err) { console.warn('[chatService] server subscriber error:', err); }
   }
   return true;
+}
+
+// ── Presence event bus ──
+// Backend chat-server'dan gelen presence:update ve presence:snapshot mesajlarını
+// dinleyicilere dağıtır. useBackendPresence hook'u subscribe olur.
+export interface PresenceUpdateEvent {
+  type: 'presence:update';
+  userId: string;
+  online: boolean | null;
+  lastSeenAt: string | null;
+  serverNow: string;
+}
+export interface PresenceSnapshotEvent {
+  type: 'presence:snapshot';
+  onlineUserIds: string[];
+  serverNow: string;
+}
+export type PresenceEvent = PresenceUpdateEvent | PresenceSnapshotEvent;
+type PresenceEventHandler = (event: PresenceEvent) => void;
+const presenceSubscribers = new Set<PresenceEventHandler>();
+
+export function subscribePresenceEvents(handler: PresenceEventHandler): () => void {
+  presenceSubscribers.add(handler);
+  return () => { presenceSubscribers.delete(handler); };
+}
+
+function dispatchPresenceEvent(msg: unknown): boolean {
+  if (!msg || typeof msg !== 'object') return false;
+  const type = (msg as { type?: unknown }).type;
+  if (type !== 'presence:update' && type !== 'presence:snapshot') return false;
+  const event = msg as PresenceEvent;
+  for (const h of presenceSubscribers) {
+    try { h(event); } catch (err) { console.warn('[chatService] presence subscriber error:', err); }
+  }
+  return true;
+}
+
+// WebSocket instance erişimi — presence hook heartbeat göndermek için kullanır.
+export function getChatSocket(): WebSocket | null {
+  return ws;
 }
 
 // ── Connection status event bus ──
@@ -219,7 +260,18 @@ export async function connectChat() {
       reconnectAttempt = 0;
 
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'auth', token }));
+        const isMobile =
+          !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+            .Capacitor?.isNativePlatform?.() ||
+          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const appVersion = (import.meta.env.VITE_APP_VERSION as string) || '';
+        socket.send(JSON.stringify({
+          type: 'auth',
+          token,
+          deviceId: getOrCreateDeviceId(),
+          platform: isMobile ? 'mobile' : 'desktop',
+          appVersion,
+        }));
       }
     };
 
@@ -284,6 +336,8 @@ export async function connectChat() {
           break;
 
         default:
+          // Presence event'lerini dağıt (presence:update / presence:snapshot)
+          if (dispatchPresenceEvent(msg)) break;
           // Invite event'lerini bus'a ilet
           if (dispatchInviteEvent(msg)) break;
           // server:* event'leri (join_request:new vs.)

@@ -13,6 +13,7 @@ const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const { createPresenceService, loadStore } = require('./presence');
 
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
@@ -228,6 +229,37 @@ function sendToUser(userId, data) {
   for (const d of dead) conns.delete(d);
   if (conns.size === 0) userConnections.delete(userId);
 }
+
+// ── Presence service ──────────────────────────────────────────────────────
+// Hetzner Node process = global online/last_seen authority.
+// userConnections'dan bağımsız — kendi in-memory session store'una yazar.
+const presenceStore = loadStore();
+
+function broadcastToAllAuthed(payload) {
+  const json = JSON.stringify(payload);
+  for (const [, conns] of userConnections) {
+    for (const ws of conns) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(json); } catch { /* dead socket; cleanup başka yerde */ }
+      }
+    }
+  }
+}
+
+const presence = createPresenceService({
+  store: presenceStore,
+  supabase,
+  broadcastFn: broadcastToAllAuthed,
+  log: console,
+});
+
+// Boot cleanup: prev. server instance'tan kalan orphan session'ları kapat
+presence.bootCleanup().catch(err =>
+  console.error('[presence] boot cleanup error:', err && err.message)
+);
+
+// Stale session watcher (memory store için sigorta)
+const stopPresenceCleanup = presence.startCleanupLoop();
 
 // Fail-closed: geçersiz/boş/self-pair → false.
 // Schema verification: dönen satır beklenen pair ile eşleşmezse false
@@ -643,11 +675,41 @@ wss.on('connection', (ws) => {
         // Register for DM delivery
         registerUserConnection(userId, ws);
 
+        // ── Presence: session register ────────────────────────────────────
+        // sessionKey = deviceId + random suffix → aynı device 2 tab açarsa
+        // ayrı satır, birbirine karışmaz.
+        const rawDeviceId = typeof msg.deviceId === 'string' ? msg.deviceId.trim() : '';
+        const deviceId = rawDeviceId.slice(0, 64) || `legacy-${userId.slice(0, 8)}`;
+        const wsSuffix = Math.random().toString(36).slice(2, 10);
+        ws.presenceSessionKey = `${deviceId}:${wsSuffix}`;
+        ws.presenceUserId = userId;
+        const platform = (msg.platform === 'mobile' || msg.platform === 'web')
+          ? msg.platform : 'desktop';
+        const appVer = typeof msg.appVersion === 'string'
+          ? msg.appVersion.slice(0, 32) : null;
+        presence.handleConnect(userId, ws.presenceSessionKey, {
+          deviceId, platform, appVersion: appVer,
+        }).catch(err => console.warn('[presence] connect error:', err && err.message));
+
         send(ws, {
           type: 'auth_ok',
           userId,
           userName,
         });
+
+        // Snapshot: bu client'a mevcut online kullanıcıları bildir (hydrate).
+        // userConnections Map'i zaten authoritative — store'dan bağımsız bakıyoruz.
+        {
+          const onlineUserIds = [];
+          for (const [uid] of userConnections) {
+            if (uid !== userId) onlineUserIds.push(uid);
+          }
+          send(ws, {
+            type: 'presence:snapshot',
+            onlineUserIds,
+            serverNow: new Date().toISOString(),
+          });
+        }
 
         // Reconnect batch delivery — bu user offline iken biriken tüm mesajları
         // delivered olarak işaretle ve ilgili gönderenlere dm:delivered eventi yolla.
@@ -699,6 +761,26 @@ wss.on('connection', (ws) => {
 
     if (!authenticated) {
       return send(ws, { type: 'error', message: 'Auth gerekli' });
+    }
+
+    // ── PRESENCE: heartbeat ───────────────────────────────────────────────
+    if (msg.type === 'presence:ping') {
+      if (!ws.presenceUserId || !ws.presenceSessionKey) return;
+      presence.handleHeartbeat(ws.presenceUserId, ws.presenceSessionKey)
+        .catch(err => console.warn('[presence] hb err:', err && err.message));
+      return;
+    }
+
+    // ── PRESENCE: graceful bye (client logout / before-unload) ───────────
+    if (msg.type === 'presence:bye') {
+      if (!ws.presenceUserId || !ws.presenceSessionKey) return;
+      presence.handleDisconnect(ws.presenceUserId, ws.presenceSessionKey, 'graceful')
+        .catch(err => console.warn('[presence] bye err:', err && err.message));
+      // bye sonrası aynı ws kapanacak; close handler'da tekrar disconnect çağrılsa
+      // idempotent — DB update .is('disconnected_at', null) filtresiyle no-op olur.
+      ws.presenceUserId = null;
+      ws.presenceSessionKey = null;
+      return;
     }
 
     // ── JOIN ROOM ─────────────────────────────────────────────────────────
@@ -1190,6 +1272,14 @@ wss.on('connection', (ws) => {
     clearTimeout(authTimeout);
 
     if (userId) unregisterUserConnection(userId, ws);
+
+    // Presence: ungraceful disconnect (network drop, kill, missed pong).
+    // Graceful path'te bye handler ws.presenceUserId'yi null'ladı; burada tekrar
+    // çağrılmaz. Aksi halde bu son-şans noktası last_seen'i düzgün yazar.
+    if (ws.presenceUserId && ws.presenceSessionKey) {
+      presence.handleDisconnect(ws.presenceUserId, ws.presenceSessionKey, 'close')
+        .catch(err => console.warn('[presence] close err:', err && err.message));
+    }
 
     if (currentRoom) {
       const oldRoom = currentRoom;
