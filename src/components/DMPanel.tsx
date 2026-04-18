@@ -312,13 +312,13 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
       >
         <p className="whitespace-pre-wrap break-words">{msg.text}</p>
         {isLastInGroup && (
-          <span
-            className={`flex items-center gap-1 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
-            style={{ opacity: 0.5, color: 'currentColor' }}
+          <div
+            className={`flex items-center gap-1.5 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
+            style={{ color: 'currentColor' }}
           >
-            <span>{time}</span>
+            <span style={{ opacity: 0.55 }}>{time}</span>
             {isOwn && <MessageTick msg={msg} />}
-          </span>
+          </div>
         )}
       </div>
     </div>
@@ -326,14 +326,37 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
 }
 
 // ── Message Tick (sent / delivered / read) ──────────────────────────────
+// Kendi opacity'si parent'ın opacity'sine bağımlı değil — time span'i ayrı sarmalanır
+// yoksa opacity zinciri (0.5 × 0.85) beyaz bubble'da kontrastı çöpe atar.
 function MessageTick({ msg }: { msg: DmMessage }) {
   if (msg.readAt) {
-    return <CheckCheck size={13} style={{ opacity: 1, color: '#22c55e' }} aria-label="Okundu" />;
+    return (
+      <CheckCheck
+        size={15}
+        strokeWidth={2.5}
+        style={{ color: '#10b981' }}
+        aria-label="Okundu"
+      />
+    );
   }
   if (msg.deliveredAt) {
-    return <CheckCheck size={13} style={{ opacity: 0.85, color: 'currentColor' }} aria-label="İletildi" />;
+    return (
+      <CheckCheck
+        size={15}
+        strokeWidth={2.5}
+        style={{ color: '#4b5563' }}
+        aria-label="İletildi"
+      />
+    );
   }
-  return <Check size={13} style={{ opacity: 0.85, color: 'currentColor' }} aria-label="Gönderildi" />;
+  return (
+    <Check
+      size={15}
+      strokeWidth={2.5}
+      style={{ color: '#4b5563' }}
+      aria-label="Gönderildi"
+    />
+  );
 }
 
 // ── Chat Area ───────────────────────────────────────────────────────────
