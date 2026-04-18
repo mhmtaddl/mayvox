@@ -581,7 +581,7 @@ export default function ChatView() {
       const timeStr = new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       // detail örn: "CYLK WOT - Sessiz Alan • 22:14"  veya sunucu yoksa "Sessiz Alan • 22:14"
       const locationPart = snapshot.serverName
-        ? `${snapshot.serverName} - ${snapshot.roomName}`
+        ? `${snapshot.serverName} • ${snapshot.roomName}`
         : snapshot.roomName;
       pushInformational({
         key: `missedCall:${snapshot.inviterId}:${snapshot.roomId}:${now}`,

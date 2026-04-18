@@ -18,74 +18,87 @@ interface Props {
   onAccept: () => void;
   onDecline: () => void;
   onMute: () => void;
-  /** Yalnızca ses ikonunun stilini etkiler — state cb ile toggle ayrıştırıldı. */
+  /** Yalnızca ses ikonunun ve ping animasyonunun stilini etkiler. */
   isMuted: boolean;
 }
 
-// Top-right floating call card — fullscreen overlay değil, non-blocking.
-// 35s auto-close timer + missed-call push: ChatView tarafında wire edilir.
-// Offset güvenli: Electron titlebar/window controls 40-48px, top-14 (56px) → clash yok.
+// Premium glass card — Apple-style notification.
+// Position: top-14 right-6 — window controls ile clash yok, macOS Notification Center feel.
+// Animasyon: spring entrance, hover scale, tactile active — hepsi decorative, logic etkilenmez.
 export default function InvitationModal({ data, onAccept, onDecline, onMute, isMuted }: Props) {
   const [avatarError, setAvatarError] = useState(false);
   const hasValidAvatar = !!data.inviterAvatar?.startsWith('http') && !avatarError;
   const initials = (data.inviterName || '?').trim().charAt(0).toUpperCase();
 
+  // Format: "Server • Room"  — Apple-style middot separator.
   const locationLine = data.serverName
-    ? `${data.serverName} - ${data.roomName}`
+    ? `${data.serverName} • ${data.roomName}`
     : data.roomName;
 
   return createPortal(
     <motion.div
-      initial={{ opacity: 0, x: 20, y: -8 }}
-      animate={{ opacity: 1, x: 0, y: 0 }}
-      exit={{ opacity: 0, x: 20, y: -8, transition: { duration: 0.12 } }}
-      transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-      className="fixed top-14 right-4 z-[400] w-[340px] rounded-2xl overflow-hidden pointer-events-auto"
+      initial={{ opacity: 0, y: -18, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.97, transition: { duration: 0.18, ease: [0.32, 0, 0.67, 0] } }}
+      transition={{ type: 'spring', stiffness: 340, damping: 28, mass: 0.9 }}
+      className="fixed top-14 right-6 z-[400] w-[340px] pointer-events-auto"
       style={{
-        background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '0 18px 48px rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.28)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
+        // Apple dark glass: 72% rgba neutral + saturation + strong blur
+        background: 'linear-gradient(180deg, rgba(38,38,42,0.80) 0%, rgba(28,28,32,0.78) 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.10)',
+        borderRadius: 24,
+        boxShadow: [
+          '0 20px 50px -10px rgba(0, 0, 0, 0.55)',
+          '0 6px 16px -4px rgba(0, 0, 0, 0.30)',
+          'inset 0 1px 0 rgba(255, 255, 255, 0.08)', // üst kenarda ince glint
+        ].join(', '),
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
       }}
     >
-      {/* Üst satır: avatar + isim hierarchy + mute */}
-      <div className="px-4 pt-4 pb-3 flex items-start gap-3">
-        {/* Avatar with ping (mute olunca ping durur) */}
-        <div className="relative w-12 h-12 shrink-0">
+      {/* ── Header: avatar + metadata ── */}
+      <div className="px-5 pt-4 pb-4 flex items-start gap-3.5">
+        {/* Avatar: 52px daire, ping glow */}
+        <div className="relative w-[52px] h-[52px] shrink-0">
           {!isMuted && (
             <>
               <span
-                className="absolute inset-0 rounded-full"
+                className="absolute inset-[-6px] rounded-full pointer-events-none"
                 style={{
-                  background: 'var(--theme-accent)',
-                  opacity: 0.16,
-                  animation: 'invitePing 1.6s ease-out infinite',
+                  background: 'radial-gradient(circle, rgba(16,185,129,0.35) 0%, rgba(16,185,129,0) 70%)',
+                  animation: 'callPulse 1.8s ease-out infinite',
                 }}
               />
               <span
-                className="absolute inset-[-4px] rounded-full"
+                className="absolute inset-0 rounded-full pointer-events-none"
                 style={{
-                  background: 'var(--theme-accent)',
-                  opacity: 0.09,
-                  animation: 'invitePing 1.6s ease-out 0.5s infinite',
+                  boxShadow: '0 0 0 0 rgba(16,185,129,0.45)',
+                  animation: 'callRing 1.8s ease-out infinite',
                 }}
               />
               <style>{`
-                @keyframes invitePing {
-                  0%   { transform: scale(0.88); opacity: 0.18; }
-                  70%  { transform: scale(1.4);  opacity: 0; }
-                  100% { transform: scale(1.4);  opacity: 0; }
+                @keyframes callRing {
+                  0%   { box-shadow: 0 0 0 0   rgba(16,185,129,0.45); }
+                  70%  { box-shadow: 0 0 0 14px rgba(16,185,129,0);    }
+                  100% { box-shadow: 0 0 0 0   rgba(16,185,129,0);    }
+                }
+                @keyframes callPulse {
+                  0%   { transform: scale(0.95); opacity: 0.85; }
+                  70%  { transform: scale(1.25); opacity: 0; }
+                  100% { transform: scale(1.25); opacity: 0; }
                 }
               `}</style>
             </>
           )}
           <div
-            className="relative w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-[17px] font-bold select-none"
+            className="relative w-[52px] h-[52px] rounded-full overflow-hidden flex items-center justify-center text-[19px] font-semibold select-none"
             style={{
-              background: 'rgba(var(--theme-accent-rgb, 16,185,129), 0.15)',
-              border: '1.5px solid var(--theme-accent)',
-              color: 'var(--theme-accent)',
+              background: hasValidAvatar
+                ? 'rgba(255,255,255,0.06)'
+                : 'linear-gradient(135deg, rgba(16,185,129,0.35) 0%, rgba(5,150,105,0.28) 100%)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              color: '#ffffff',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
             }}
           >
             {hasValidAvatar ? (
@@ -102,112 +115,149 @@ export default function InvitationModal({ data, onAccept, onDecline, onMute, isM
           </div>
         </div>
 
-        {/* Name + location prominent */}
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--theme-secondary-text)]/75">
+        {/* Metadata stack */}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p
+            className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: 'rgba(255,255,255,0.50)' }}
+          >
             Gelen Çağrı
           </p>
           <p
-            className="text-[15px] font-bold text-[var(--theme-text)] truncate leading-tight mt-1"
+            className="text-[16px] font-semibold truncate leading-tight mt-1"
+            style={{
+              color: 'rgba(255,255,255,0.96)',
+              letterSpacing: '-0.01em',
+            }}
             title={data.inviterName}
           >
             {data.inviterName}
           </p>
           <p
-            className="text-[12px] font-semibold truncate mt-1.5"
-            style={{ color: 'var(--theme-accent)' }}
+            className="text-[12px] font-medium truncate mt-1"
+            style={{ color: 'rgba(255,255,255,0.62)' }}
             title={locationLine}
           >
             {locationLine}
           </p>
         </div>
+      </div>
 
-        {/* Mute/unmute — VolumeX/Volume2 daha net "sessize al" sinyali verir */}
-        <button
+      {/* ── Action row: 3 circular icon-only buttons ── */}
+      <div className="px-5 pb-5 pt-1 flex items-center justify-center gap-5">
+        <IconButton
           onClick={onMute}
-          title={isMuted ? 'Zili aç' : 'Zil sesini kapat (daveti reddetmez)'}
+          kind={isMuted ? 'mute-active' : 'mute'}
+          title={isMuted ? 'Zil sesini aç' : 'Zil sesini kapat'}
           aria-label={isMuted ? 'Zil sesini aç' : 'Zil sesini kapat'}
           aria-pressed={isMuted}
-          className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-          style={{
-            background: isMuted ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)',
-            color: isMuted ? '#f87171' : 'var(--theme-secondary-text)',
-            border: `1px solid ${isMuted ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)'}`,
-          }}
-          onMouseEnter={e => {
-            if (isMuted) return;
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
-          }}
-          onMouseLeave={e => {
-            if (isMuted) return;
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
-          }}
         >
-          {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-        </button>
-      </div>
-
-      {/* Sentence line — inviter sizi X odasına davet ediyor */}
-      <div className="px-4 pb-3 -mt-1">
-        <p className="text-[11.5px] text-[var(--theme-secondary-text)] leading-snug">
-          <span className="font-semibold text-[var(--theme-text)]">{data.inviterName}</span>
-          {' sizi '}
-          <span className="font-semibold" style={{ color: 'var(--theme-accent)' }}>{locationLine}</span>
-          {' odasına davet ediyor'}
-        </p>
-      </div>
-
-      {/* Divider */}
-      <div className="border-t border-white/5" />
-
-      {/* Actions: icon-only circular */}
-      <div className="px-4 py-3 flex justify-center items-center gap-4">
-        {/* Reject */}
-        <button
+          {isMuted ? <VolumeX size={18} strokeWidth={2.1} /> : <Volume2 size={18} strokeWidth={2.1} />}
+        </IconButton>
+        <IconButton
           onClick={onDecline}
+          kind="reject"
           title="Reddet"
           aria-label="Daveti reddet"
-          className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-95"
-          style={{
-            background: 'rgba(239,68,68,0.15)',
-            border: '1.5px solid rgba(239,68,68,0.4)',
-            color: '#f87171',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgb(239,68,68)';
-            (e.currentTarget as HTMLButtonElement).style.color = '#fff';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.15)';
-            (e.currentTarget as HTMLButtonElement).style.color = '#f87171';
-          }}
         >
-          <PhoneOff size={17} />
-        </button>
-        {/* Accept */}
-        <button
+          <PhoneOff size={18} strokeWidth={2.2} />
+        </IconButton>
+        <IconButton
           onClick={onAccept}
+          kind="accept"
           title="Kabul et"
           aria-label="Daveti kabul et"
-          className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-150 hover:scale-105 active:scale-95"
-          style={{
-            background: 'rgba(16,185,129,0.18)',
-            border: '1.5px solid rgba(16,185,129,0.45)',
-            color: '#34d399',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgb(16,185,129)';
-            (e.currentTarget as HTMLButtonElement).style.color = '#fff';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16,185,129,0.18)';
-            (e.currentTarget as HTMLButtonElement).style.color = '#34d399';
-          }}
         >
-          <PhoneCall size={17} />
-        </button>
+          <PhoneCall size={18} strokeWidth={2.2} />
+        </IconButton>
       </div>
     </motion.div>,
     document.body,
+  );
+}
+
+// ── IconButton ──────────────────────────────────────────────────────────
+type ButtonKind = 'accept' | 'reject' | 'mute' | 'mute-active';
+
+const BUTTON_STYLES: Record<ButtonKind, {
+  bg: string; border: string; color: string;
+  hoverBg: string; hoverColor: string; glow: string;
+}> = {
+  accept: {
+    bg: 'rgba(16,185,129,0.18)',
+    border: 'rgba(16,185,129,0.42)',
+    color: '#4ade80',
+    hoverBg: 'rgb(16,185,129)',
+    hoverColor: '#ffffff',
+    glow: '0 6px 20px -4px rgba(16,185,129,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+  },
+  reject: {
+    bg: 'rgba(239,68,68,0.18)',
+    border: 'rgba(239,68,68,0.42)',
+    color: '#f87171',
+    hoverBg: 'rgb(239,68,68)',
+    hoverColor: '#ffffff',
+    glow: '0 6px 20px -4px rgba(239,68,68,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+  },
+  mute: {
+    bg: 'rgba(255,255,255,0.06)',
+    border: 'rgba(255,255,255,0.14)',
+    color: 'rgba(255,255,255,0.80)',
+    hoverBg: 'rgba(255,255,255,0.12)',
+    hoverColor: '#ffffff',
+    glow: '0 4px 14px -4px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10)',
+  },
+  'mute-active': {
+    bg: 'rgba(239,68,68,0.22)',
+    border: 'rgba(239,68,68,0.50)',
+    color: '#fca5a5',
+    hoverBg: 'rgba(239,68,68,0.32)',
+    hoverColor: '#ffffff',
+    glow: '0 4px 14px -4px rgba(239,68,68,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+  },
+};
+
+type IconButtonProps = {
+  onClick: () => void;
+  kind: ButtonKind;
+  children: React.ReactNode;
+  title: string;
+  'aria-label': string;
+  'aria-pressed'?: boolean;
+};
+
+function IconButton({ onClick, kind, children, title, ...aria }: IconButtonProps) {
+  const s = BUTTON_STYLES[kind];
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      title={title}
+      whileHover={{ scale: 1.08 }}
+      whileTap={{ scale: 0.92 }}
+      transition={{ type: 'spring', stiffness: 480, damping: 24 }}
+      className="w-[52px] h-[52px] rounded-full flex items-center justify-center"
+      style={{
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        color: s.color,
+        boxShadow: s.glow,
+        transition: 'background 160ms ease, color 160ms ease, border-color 160ms ease',
+      }}
+      onMouseEnter={e => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.background = s.hoverBg;
+        btn.style.color = s.hoverColor;
+      }}
+      onMouseLeave={e => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.background = s.bg;
+        btn.style.color = s.color;
+      }}
+      aria-label={aria['aria-label']}
+      aria-pressed={aria['aria-pressed']}
+    >
+      {children}
+    </motion.button>
   );
 }
