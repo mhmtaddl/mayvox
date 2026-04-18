@@ -76,6 +76,40 @@ const getSupabaseAnonKey = () => process.env.SUPABASE_ANON_KEY || process.env.VI
 const createAnonClient = () => createClient(getSupabaseUrl(), getSupabaseAnonKey());
 const createAdminClient = () => createClient(getSupabaseUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// ── Resend helpers ────────────────────────────────────────────────────────
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'MAYVOX <noreply@mayvox.com>';
+const RESEND_REPLY_TO = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
+
+async function sendResendEmail({ to, subject, html }) {
+  if (!process.env.RESEND_API_KEY) {
+    const err = new Error('RESEND_API_KEY yapılandırılmamış');
+    err.code = 'RESEND_NOT_CONFIGURED';
+    throw err;
+  }
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM_EMAIL,
+      reply_to: RESEND_REPLY_TO,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    const err = new Error(`Resend API hatası: ${errText}`);
+    err.responseText = errText;
+    err.status = resp.status;
+    throw err;
+  }
+  return resp.json();
+}
+
 // ── Auth helpers ──────────────────────────────────────────────────────────
 async function verifyAuth(req, res) {
   const authHeader = req.headers.authorization;
@@ -256,19 +290,15 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
-  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: fromEmail, reply_to: replyToEmail, to: [target.email], subject: 'MayVox — Geçici Parolanız',
+  try {
+    await sendResendEmail({
+      to: target.email,
+      subject: 'MayVox — Geçici Parolanız',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Şifre sıfırlama talebiniz alındı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Bu parola ile giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen bizimle iletişime geçin.</p></div>`,
-    }),
-  });
-  if (!emailRes.ok) {
-    console.error('[self-reset] E-posta gönderilemedi:', await emailRes.text().catch(() => ''));
+    });
+  } catch (e) {
+    console.error('[self-reset] E-posta gönderilemedi:', e.responseText || e.message);
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
@@ -303,19 +333,15 @@ app.post('/api/admin-reset-password', async (req, res) => {
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
-  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: fromEmail, reply_to: replyToEmail, to: [target.email], subject: 'MayVox — Geçici Parolanız',
+  try {
+    await sendResendEmail({
+      to: target.email,
+      subject: 'MayVox — Geçici Parolanız',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Parolanız bir yönetici tarafından sıfırlandı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen yöneticinizle iletişime geçin.</p></div>`,
-    }),
-  });
-  if (!emailRes.ok) {
-    console.error('[reset] E-posta gönderilemedi:', await emailRes.text().catch(() => ''));
+    });
+  } catch (e) {
+    console.error('[reset] E-posta gönderilemedi:', e.responseText || e.message);
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
@@ -349,19 +375,15 @@ app.post('/api/send-invite-email', async (req, res) => {
   if (!email || !code) return res.status(400).json({ error: 'email ve code gerekli' });
 
   const expDate = expiresAt ? new Date(expiresAt).toLocaleString('tr-TR') : '';
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
-  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: fromEmail, reply_to: replyToEmail, to: [email], subject: 'MayVox — Davet Kodunuz',
+  try {
+    await sendResendEmail({
+      to: email,
+      subject: 'MayVox — Davet Kodunuz',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>Başvurun onaylandı — aramıza hoş geldin! 🎉</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Davet Kodu</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${code}</span>${expDate ? `<p style="margin:12px 0 0;font-size:12px;color:#64748b;">Son geçerlilik: ${expDate}</p>` : ''}</div><p style="margin:0 0 16px;">Uygulamayı indir, bu kodu kullanarak üyeliğini tamamla ve aramıza katıl.</p><div style="text-align:center;margin:24px 0;"><a href="https://mayvox.com" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;">Uygulamayı İndir</a></div><p style="color:#94a3b8;font-size:13px;">Bu kodu yalnızca siz kullanabilirsiniz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
-    }),
-  });
-  if (!emailRes.ok) {
-    console.error('[invite] E-posta hatası:', await emailRes.text().catch(() => ''));
+    });
+  } catch (e) {
+    console.error('[invite] E-posta hatası:', e.responseText || e.message);
     return res.status(500).json({ error: 'E-posta gönderilemedi' });
   }
   res.json({ success: true });
@@ -376,23 +398,18 @@ app.post('/api/send-rejection-email', async (req, res) => {
   const { email, reason } = req.body;
   if (!email) return res.status(400).json({ error: 'email gerekli' });
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'MayVox <no-reply@mayvox.com>';
-  const replyToEmail = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
-
   const reasonBlock = reason
     ? `<div style="background:#22223a;border-left:3px solid #7c3aed;border-radius:6px;padding:14px 16px;margin:20px 0;"><p style="margin:0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1.5px;">Not</p><p style="margin:6px 0 0;color:#cbd5e1;font-size:14px;line-height:1.6;">${String(reason).replace(/[<>]/g, '')}</p></div>`
     : '';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: fromEmail, reply_to: replyToEmail, to: [email], subject: 'MayVox — Başvurunuz Hakkında',
+  try {
+    await sendResendEmail({
+      to: email,
+      subject: 'MayVox — Başvurunuz Hakkında',
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>MayVox erken erişim başvurunuz için teşekkür ederiz.</p><p style="color:#cbd5e1;">Şu an için başvurunuzu kabul edemiyoruz. Erken erişim sınırlı sayıda kullanıcıya açıldığı için tüm başvuruları karşılayamıyoruz.</p>${reasonBlock}<p style="color:#cbd5e1;">İleride yeniden başvuruda bulunabilirsiniz; kontenjan açıldığında tekrar değerlendirilir.</p><p style="color:#94a3b8;font-size:13px;margin-top:24px;">Sizi MayVox'ta ağırlamayı umuyoruz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
-    }),
-  });
-  if (!emailRes.ok) {
-    console.error('[reject] E-posta hatası:', await emailRes.text().catch(() => ''));
+    });
+  } catch (e) {
+    console.error('[reject] E-posta hatası:', e.responseText || e.message);
     return res.status(500).json({ error: 'E-posta gönderilemedi' });
   }
   res.json({ success: true });

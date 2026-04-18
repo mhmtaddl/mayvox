@@ -1,11 +1,11 @@
 // Supabase Edge Function: send-invite-email
 // Deploy: supabase functions deploy send-invite-email
-// Secrets: supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL=no-reply@mayvox.com
+// Secrets: supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL="MAYVOX <noreply@mayvox.com>"
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'MayVox <no-reply@mayvox.com>';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'MAYVOX <noreply@mayvox.com>';
 const REPLY_TO = Deno.env.get('REPLY_TO') ?? 'support@mayvox.com';
 const APP_NAME = 'MayVox';
 
