@@ -151,10 +151,21 @@ export function useDM(currentUserId: string | undefined) {
         if (convKey === activeConvKeyRef.current) {
           setMessages(prev => prev.map(m =>
             m.senderId === currentUserId && !m.readAt
-              ? { ...m, readAt: _readAt }
+              ? { ...m, readAt: _readAt, deliveredAt: m.deliveredAt ?? _readAt }
               : m
           ));
         }
+      },
+      onDelivered: (convKey, messageIds, deliveredAt) => {
+        // Aktif sohbetteyse mesaj listesindeki ilgili mesajlara deliveredAt bas.
+        if (convKey !== activeConvKeyRef.current) return;
+        if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+        const idSet = new Set(messageIds);
+        setMessages(prev => prev.map(m =>
+          idSet.has(m.id) && !m.deliveredAt
+            ? { ...m, deliveredAt }
+            : m
+        ));
       },
       onUnreadTotal: (count) => {
         setTotalUnread(Math.max(0, count));

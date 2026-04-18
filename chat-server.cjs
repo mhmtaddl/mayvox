@@ -61,11 +61,13 @@ dmDb.exec(`
     receiver_id TEXT NOT NULL,
     text TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-    read_at INTEGER DEFAULT NULL
+    read_at INTEGER DEFAULT NULL,
+    delivered_at INTEGER DEFAULT NULL
   );
 
   CREATE INDEX IF NOT EXISTS idx_dm_msg_conv ON dm_messages(conversation_key, created_at);
   CREATE INDEX IF NOT EXISTS idx_dm_msg_receiver ON dm_messages(receiver_id, read_at);
+  CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_a ON dm_conversations(user_a_id);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_b ON dm_conversations(user_b_id);
 
@@ -76,6 +78,16 @@ dmDb.exec(`
     PRIMARY KEY (user_id, conversation_key)
   );
 `);
+
+// Idempotent migration — delivered_at eski DB'lere retroaktif eklenir.
+{
+  const cols = dmDb.pragma('table_info(dm_messages)');
+  if (!cols.some(c => c.name === 'delivered_at')) {
+    dmDb.exec(`ALTER TABLE dm_messages ADD COLUMN delivered_at INTEGER DEFAULT NULL`);
+    dmDb.exec(`CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at)`);
+    console.log('[chat-server] Migration: dm_messages.delivered_at eklendi');
+  }
+}
 
 console.log('[chat-server] SQLite DM DB hazır:', DM_DB_PATH);
 
@@ -136,6 +148,23 @@ const dmStmt = {
     UPDATE dm_messages
     SET read_at = ?
     WHERE conversation_key = ? AND receiver_id = ? AND read_at IS NULL
+  `),
+  markDelivered: dmDb.prepare(`
+    UPDATE dm_messages
+    SET delivered_at = ?
+    WHERE id = ? AND receiver_id = ? AND delivered_at IS NULL
+  `),
+  // Reconnect batch: bu kullanıcıya ait henüz delivered_at işlenmemiş tüm mesajlar.
+  // SELECT sonrası idempotent UPDATE; arada gelen yeni mesaj send path'inde online yolla gider.
+  getUndeliveredForReceiver: dmDb.prepare(`
+    SELECT id, conversation_key, sender_id
+    FROM dm_messages
+    WHERE receiver_id = ? AND delivered_at IS NULL
+    ORDER BY created_at ASC
+  `),
+  markDeliveredById: dmDb.prepare(`
+    UPDATE dm_messages SET delivered_at = ?
+    WHERE id = ? AND delivered_at IS NULL
   `),
   getUnreadCount: dmDb.prepare(`
     SELECT COUNT(*) as count FROM dm_messages
@@ -618,6 +647,42 @@ wss.on('connection', (ws) => {
           userName,
         });
 
+        // Reconnect batch delivery — bu user offline iken biriken tüm mesajları
+        // delivered olarak işaretle ve ilgili gönderenlere dm:delivered eventi yolla.
+        // Bu noktadan sonra gelecek mesajlar dm:send handler'ında online yoldan geçer.
+        try {
+          const undelivered = dmStmt.getUndeliveredForReceiver.all(userId);
+          if (undelivered.length > 0) {
+            const now = Date.now();
+            const tx = dmDb.transaction((rows) => {
+              for (const r of rows) dmStmt.markDeliveredById.run(now, r.id);
+            });
+            tx(undelivered);
+
+            // sender + conversationKey başına grupla → her gönderene tek event.
+            const grouped = new Map(); // `${sender}|${convKey}` -> { senderId, conversationKey, messageIds }
+            for (const r of undelivered) {
+              const k = `${r.sender_id}|${r.conversation_key}`;
+              let entry = grouped.get(k);
+              if (!entry) {
+                entry = { senderId: r.sender_id, conversationKey: r.conversation_key, messageIds: [] };
+                grouped.set(k, entry);
+              }
+              entry.messageIds.push(r.id);
+            }
+            for (const { senderId, conversationKey, messageIds } of grouped.values()) {
+              sendToUser(senderId, {
+                type: 'dm:delivered',
+                conversationKey,
+                messageIds,
+                deliveredAt: now,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[dm] reconnect delivery flush error:', err?.message);
+        }
+
         return;
       } catch (err) {
         console.log('[chat] Auth HATA:', err?.message || err);
@@ -909,6 +974,7 @@ wss.on('connection', (ws) => {
               text: m.text,
               createdAt: m.created_at,
               readAt: m.read_at,
+              deliveredAt: m.delivered_at,
             };
           }),
         });
@@ -974,6 +1040,14 @@ wss.on('connection', (ws) => {
         const preview = text.length > 100 ? text.slice(0, 100) + '…' : text;
         dmStmt.updateLastMessage.run(preview, now, convKey);
 
+        // Recipient online ise anında delivered_at işaretle — sender çift gri tik görür.
+        // Offline ise null kalır; recipient reconnect'te auth handler'da batch flush eder.
+        const recipientOnline = userConnections.has(recipientId);
+        const deliveredAt = recipientOnline ? now : null;
+        if (recipientOnline) {
+          dmStmt.markDelivered.run(deliveredAt, msgId, recipientId);
+        }
+
         const newMsg = {
           id: msgId,
           conversationKey: convKey,
@@ -983,9 +1057,11 @@ wss.on('connection', (ws) => {
           recipientId,
           text,
           createdAt: now,
+          deliveredAt,
+          readAt: null,
         };
 
-        // Gönderene teslim
+        // Gönderene teslim (deliveredAt payload'da — UI anında çift gri gösterir)
         sendToUser(userId, { type: 'dm:new_message', message: newMsg });
 
         // Alıcıya teslim

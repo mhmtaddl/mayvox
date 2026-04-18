@@ -14,6 +14,7 @@ export interface DmMessage {
   text: string;
   createdAt: number;
   readAt?: number | null;
+  deliveredAt?: number | null;
 }
 
 export interface DmConversation {
@@ -33,6 +34,7 @@ export type DmEventHandler = {
   onHistory?: (convKey: string, recipientId: string, messages: DmMessage[]) => void;
   onNewMessage?: (msg: DmMessage) => void;
   onRead?: (convKey: string, readBy: string, readAt: number) => void;
+  onDelivered?: (convKey: string, messageIds: string[], deliveredAt: number) => void;
   onUnreadTotal?: (count: number) => void;
   onTyping?: (convKey: string, fromUserId: string) => void;
   onError?: (message: string) => void;
@@ -72,6 +74,9 @@ export function handleDmMessage(msg: any): boolean {
       return true;
     case 'dm:read':
       handlers.onRead?.(msg.conversationKey, msg.readBy, msg.readAt);
+      return true;
+    case 'dm:delivered':
+      handlers.onDelivered?.(msg.conversationKey, msg.messageIds || [], msg.deliveredAt);
       return true;
     case 'dm:unread_total':
       handlers.onUnreadTotal?.(msg.count ?? 0);

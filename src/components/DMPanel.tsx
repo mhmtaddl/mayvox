@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2 } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2, Check, CheckCheck } from 'lucide-react';
 import {
   isNotifySoundEnabled, setNotifySoundEnabled,
   getSoundVariant, setSoundVariant, type SoundVariant,
@@ -313,15 +313,27 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
         <p className="whitespace-pre-wrap break-words">{msg.text}</p>
         {isLastInGroup && (
           <span
-            className={`block text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'text-right' : ''}`}
+            className={`flex items-center gap-1 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
             style={{ opacity: 0.5, color: 'currentColor' }}
           >
-            {time}
+            <span>{time}</span>
+            {isOwn && <MessageTick msg={msg} />}
           </span>
         )}
       </div>
     </div>
   );
+}
+
+// ── Message Tick (sent / delivered / read) ──────────────────────────────
+function MessageTick({ msg }: { msg: DmMessage }) {
+  if (msg.readAt) {
+    return <CheckCheck size={13} style={{ opacity: 1, color: '#22c55e' }} aria-label="Okundu" />;
+  }
+  if (msg.deliveredAt) {
+    return <CheckCheck size={13} style={{ opacity: 0.85, color: 'currentColor' }} aria-label="İletildi" />;
+  }
+  return <Check size={13} style={{ opacity: 0.85, color: 'currentColor' }} aria-label="Gönderildi" />;
 }
 
 // ── Chat Area ───────────────────────────────────────────────────────────
