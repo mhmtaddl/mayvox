@@ -577,12 +577,19 @@ export default function ChatView() {
     const timer = setTimeout(() => {
       // Stale guard: arada modal başka bir invite'a değiştiyse bu timeout'u at.
       if (invitationDataRef.current !== snapshot) return;
+      const now = Date.now();
+      const timeStr = new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      // detail örn: "CYLK WOT - Sessiz Alan • 22:14"  veya sunucu yoksa "Sessiz Alan • 22:14"
+      const locationPart = snapshot.serverName
+        ? `${snapshot.serverName} - ${snapshot.roomName}`
+        : snapshot.roomName;
       pushInformational({
-        key: `missedCall:${snapshot.inviterId}:${snapshot.roomId}:${Date.now()}`,
+        key: `missedCall:${snapshot.inviterId}:${snapshot.roomId}:${now}`,
         kind: 'missedCall',
         label: `${snapshot.inviterName} seni aradı`,
-        detail: `${snapshot.roomName} odasına cevapsız davet`,
-        createdAt: Date.now(),
+        detail: `${locationPart} • ${timeStr}`,
+        serverAvatar: snapshot.serverAvatar ?? null,
+        createdAt: now,
       });
       setInvitationModal(null);
     }, INVITE_RING_DURATION_MS);
@@ -592,6 +599,12 @@ export default function ChatView() {
   const handleInvitationMute = useCallback(() => {
     setInvitationMuted(prev => !prev);
   }, []);
+
+  // ChatView invite butonunu server context ile sararak useChannelActions'a iletir.
+  // handleInviteUser imzası opsiyonel 2. param kabul eder; aktif server adı/avatarı burada resolve edilir.
+  const handleInviteUserWithContext = useCallback((userId: string) => {
+    handleInviteUser(userId, { name: activeServerData?.name, avatar: activeServerData?.avatarUrl ?? null });
+  }, [handleInviteUser, activeServerData]);
 
   useEffect(() => {
     if (!toastMsg) return;
@@ -960,7 +973,7 @@ export default function ChatView() {
                 <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
                   onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
                   channels={channels} activeChannel={activeChannel}
-                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} handleCancelInvite={handleCancelInvite}
+                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite}
                   isMuted={isMuted} isDeafened={isDeafened}
                   servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
@@ -1159,7 +1172,7 @@ export default function ChatView() {
           </div>
           <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
             onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }} channels={channels} activeChannel={activeChannel}
-            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUser} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
+            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
             servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
           <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}

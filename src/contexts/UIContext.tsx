@@ -7,8 +7,8 @@ export type SettingsTarget = 'invite_requests' | 'app' | 'account' | null;
 export interface UIContextType {
   toastMsg: string | null;
   setToastMsg: (v: string | null) => void;
-  invitationModal: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null;
-  setInvitationModal: (v: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string } | null) => void;
+  invitationModal: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string; serverName?: string; serverAvatar?: string | null } | null;
+  setInvitationModal: (v: { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string; serverName?: string; serverAvatar?: string | null } | null) => void;
   userActionMenu: { userId: string; x: number; y: number } | null;
   setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
   contextMenu: { x: number; y: number; channelId: string } | null;

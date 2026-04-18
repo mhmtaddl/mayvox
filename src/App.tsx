@@ -423,7 +423,7 @@ export default function App() {
   }, [setToastMsg]);
 
   // ── Invite state: ephemeral state + persistent ref (rehydration için) ──
-  type InviteData = { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string };
+  type InviteData = { inviterId: string; inviterName: string; inviterAvatar?: string; roomName: string; roomId: string; serverName?: string; serverAvatar?: string | null };
   const [invitationModal, setInvitationModalRaw] = useState<InviteData | null>(null);
   const pendingInviteRef = useRef<InviteData | null>(null);
 

@@ -24,6 +24,8 @@ interface Props {
       inviterAvatar?: string;
       roomName: string;
       roomId: string;
+      serverName?: string;
+      serverAvatar?: string | null;
     } | null,
   ) => void;
   onMoved: (targetChannelId: string) => void;
@@ -283,6 +285,8 @@ export function usePresence({
           inviterAvatar: payload.inviterAvatar,
           roomName: payload.roomName,
           roomId: payload.roomId,
+          serverName: payload.serverName,
+          serverAvatar: payload.serverAvatar ?? null,
         });
         console.log('[usePresence] invitation_modal_set');
         // Mobilde yerel bildirim — arka planda/kilitli ekranda da görünsün

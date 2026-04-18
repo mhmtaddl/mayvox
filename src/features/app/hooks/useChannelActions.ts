@@ -121,7 +121,7 @@ export function useChannelActions({
   // pending'e dönmesin.
   const invitePendingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const handleInviteUser = (userId: string) => {
+  const handleInviteUser = (userId: string, serverContext?: { name?: string; avatar?: string | null }) => {
     const cooldownUntil = inviteCooldownsRef.current[userId];
     if (cooldownUntil && Date.now() < cooldownUntil) return;
 
@@ -133,6 +133,8 @@ export function useChannelActions({
         inviterId: currentUser.id, inviteeId: userId,
         inviterName: formatFullName(currentUser.firstName, currentUser.lastName),
         inviterAvatar: currentUser.avatar, roomName: channel.name, roomId: channel.id,
+        serverName: serverContext?.name ?? undefined,
+        serverAvatar: serverContext?.avatar ?? undefined,
       },
     });
     setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
