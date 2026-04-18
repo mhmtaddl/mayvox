@@ -9,6 +9,9 @@ import { supabase } from './supabase';
 import { handleDmMessage, setDmSocket, notifyDmConnected } from './dmService';
 import { getOrCreateDeviceId } from './deviceId';
 
+// Vite build-time sabiti (vite.config.ts define). package.json version değeri.
+declare const __APP_VERSION__: string;
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -264,7 +267,10 @@ export async function connectChat() {
           !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
             .Capacitor?.isNativePlatform?.() ||
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const appVersion = (import.meta.env.VITE_APP_VERSION as string) || '';
+        // __APP_VERSION__ Vite define constant (vite.config.ts:11). Async
+        // getAppVersion() yerine sync path'i auth payload'a gerek var.
+        const appVersion: string =
+          (typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__) || '';
         socket.send(JSON.stringify({
           type: 'auth',
           token,

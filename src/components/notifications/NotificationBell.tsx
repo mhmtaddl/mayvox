@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck, ShieldAlert } from 'lucide-react';
+import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck, ShieldAlert, PhoneMissed } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
 import type { NotificationSummary, NotifItem, NotifKind } from '../../hooks/useNotificationCenter';
 import { clearAllInformational, removeInformational } from '../../features/notifications/informationalStore';
@@ -18,6 +18,8 @@ interface Props {
 }
 
 // ── Kind → ikon eşlemesi ──
+// Missed call: full-fill gradient tile — kırmızı→amber, white icon.
+// Diğerleri: stroke-only lucide icon, wrapper bg'si priority'den gelir.
 const KIND_ICON: Record<NotifKind, React.ReactNode> = {
   social: <UserPlus size={15} strokeWidth={1.8} />,
   message: <MessageSquare size={15} strokeWidth={1.8} />,
@@ -26,6 +28,24 @@ const KIND_ICON: Record<NotifKind, React.ReactNode> = {
   invite: <Mail size={15} strokeWidth={1.8} />,
   joinRequest: <UserCheck size={15} strokeWidth={1.8} />,
   restriction: <ShieldAlert size={15} strokeWidth={1.8} className="text-orange-400" />,
+  missedCall: (
+    <div
+      className="w-full h-full rounded-lg flex items-center justify-center"
+      style={{
+        // Premium red only — top brighter, bottom deeper (180deg vertical).
+        // Aggressive glow KALDIRILDI; yalnızca ince inner highlight + contact shadow.
+        background:
+          'linear-gradient(180deg, #F28680 0%, var(--danger, #E55B54) 55%, #B43B35 100%)',
+        boxShadow: [
+          'inset 0 1px 0 rgba(255,255,255,0.18)',  // minimal üst highlight
+          'inset 0 -1px 0 rgba(0,0,0,0.14)',       // alt depth
+          '0 1px 3px rgba(0,0,0,0.25)',            // subtle contact, glow yok
+        ].join(', '),
+      }}
+    >
+      <PhoneMissed size={13} strokeWidth={2.1} style={{ color: '#ffffff' }} />
+    </div>
+  ),
 };
 
 // ── Priority → sol çizgi rengi (çok hafif) ──
@@ -201,6 +221,11 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   const isNew = !seenSnapshot.has(item.key);
                   const onClick = getOnClick(item);
 
+                  // Missed call → Apple-grade floating notification item
+                  if (item.kind === 'missedCall') {
+                    return <MissedCallItem key={item.key} item={item} />;
+                  }
+
                   return (
                     <button
                       key={item.key}
@@ -236,11 +261,13 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                             </span>
                           )}
                         </div>
-                        <span className={`text-[10px] block truncate leading-tight mt-0.5 ${
-                          isNew ? 'text-[var(--theme-secondary-text)]/50' : 'text-[var(--theme-secondary-text)]/35'
-                        }`}>
-                          {item.detail}
-                        </span>
+                        {item.detail && (
+                          <span className={`text-[10px] block truncate leading-tight mt-0.5 ${
+                            isNew ? 'text-[var(--theme-secondary-text)]/50' : 'text-[var(--theme-secondary-text)]/35'
+                          }`}>
+                            {item.detail}
+                          </span>
+                        )}
                       </div>
 
                       {/* Sağ taraf */}
@@ -260,4 +287,158 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
       </AnimatePresence>
     </div>
   );
+}
+
+// ── MissedCallItem ─────────────────────────────────────────────────────
+// Apple Notification Center kalitesinde tek item.
+//  - Floating-notification container (theme-adaptive tint + subtle border)
+//  - 32×32 icon tile: top-brighter / bottom-deeper red vertical gradient
+//  - Tek satır: bold isim + normal detail
+//  - Sağda küçük soft pill: relative time (şimdi / N dk / N sa / N gün)
+//  - Entry: fade + 6px up translate, 160ms cubic
+//  - Exit: scale 0.96 + blur 4px + fade, 200ms (AnimatePresence gerekir — bu
+//    item parent unmount'ta anlık kaybolur; runtime'da tekil remove için
+//    removeInformational handler'ı bağlanabilir. Şimdilik entry-focused.)
+//  - Hover: y -1 + bg tint lift + shadow growth — NO scale bounce
+//  - Click: scale 0.98 + dismiss (bu item'ı hafif sıyır)
+const MissedCallItem: React.FC<{ item: NotifItem }> = ({ item }) => {
+  const handleDismiss = React.useCallback(() => {
+    if (!item.key.startsWith('info:')) return;
+    const infoKey = item.key.slice('info:'.length);
+    removeInformational(infoKey);
+  }, [item.key]);
+
+  const relativeLabel = React.useMemo(() => {
+    if (!item.createdAt) return '';
+    return formatRelativeTime(item.createdAt);
+  }, [item.createdAt]);
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleDismiss}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, filter: 'blur(4px)', transition: { duration: 0.20, ease: [0.22, 1, 0.36, 1] } }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.98, y: 0 }}
+      className="group/mc block w-full text-left outline-none mx-0 mb-1 last:mb-0"
+      style={{
+        // Panel içi "kart" — çok hafif tint + ince border; theme-adaptive.
+        marginLeft: 10,
+        marginRight: 10,
+        width: 'calc(100% - 20px)',
+        background: 'rgba(var(--glass-tint), 0.05)',
+        border: '1px solid rgba(var(--glass-tint), 0.09)',
+        borderRadius: 14,
+        padding: '10px 12px',
+        boxShadow: [
+          '0 1px 2px rgba(0,0,0,0.08)',
+          '0 2px 6px -2px rgba(0,0,0,0.10)',
+          'inset 0 1px 0 rgba(255,255,255,0.03)',
+        ].join(', '),
+        transition:
+          'background 180ms cubic-bezier(0.4,0,0.2,1), ' +
+          'border-color 180ms cubic-bezier(0.4,0,0.2,1), ' +
+          'box-shadow 200ms cubic-bezier(0.4,0,0.2,1)',
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget;
+        el.style.background = 'rgba(var(--glass-tint), 0.09)';
+        el.style.borderColor = 'rgba(var(--glass-tint), 0.14)';
+        el.style.boxShadow = [
+          '0 2px 4px rgba(0,0,0,0.10)',
+          '0 4px 12px -2px rgba(0,0,0,0.14)',
+          'inset 0 1px 0 rgba(255,255,255,0.04)',
+        ].join(', ');
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.background = 'rgba(var(--glass-tint), 0.05)';
+        el.style.borderColor = 'rgba(var(--glass-tint), 0.09)';
+        el.style.boxShadow = [
+          '0 1px 2px rgba(0,0,0,0.08)',
+          '0 2px 6px -2px rgba(0,0,0,0.10)',
+          'inset 0 1px 0 rgba(255,255,255,0.03)',
+        ].join(', ');
+      }}
+      aria-label={`Cevapsız çağrı: ${item.label} ${item.detail}`}
+    >
+      <div className="flex items-center gap-3">
+        {/* Icon tile — full red gradient, white stroke, minimal depth */}
+        <div
+          className="w-8 h-8 shrink-0 flex items-center justify-center"
+          style={{
+            borderRadius: 10,
+            background:
+              'linear-gradient(180deg, #F28680 0%, var(--danger, #E55B54) 55%, #B43B35 100%)',
+            boxShadow: [
+              'inset 0 1px 0 rgba(255,255,255,0.20)',
+              'inset 0 -1px 0 rgba(0,0,0,0.14)',
+              '0 1px 3px rgba(0,0,0,0.25)',
+            ].join(', '),
+          }}
+        >
+          <PhoneMissed size={14} strokeWidth={2.25} style={{ color: '#ffffff' }} />
+        </div>
+
+        {/* Text — tek satır: bold isim + normal detail */}
+        <div className="min-w-0 flex-1">
+          <p
+            className="truncate leading-[1.3]"
+            style={{
+              fontSize: 12.5,
+              letterSpacing: '-0.01em',
+              color: 'var(--text-primary, var(--theme-text))',
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>{item.label}</span>
+            {item.detail && (
+              <span
+                style={{
+                  fontWeight: 400,
+                  color: 'var(--text-secondary, var(--theme-secondary-text))',
+                  opacity: 0.75,
+                }}
+              >
+                {' '}{item.detail}
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* Meta pill — relative time, soft & minimal */}
+        {relativeLabel && (
+          <span
+            className="shrink-0 tabular-nums select-none"
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              padding: '3px 7px',
+              borderRadius: 999,
+              background: 'rgba(var(--glass-tint), 0.08)',
+              color: 'var(--text-secondary, var(--theme-secondary-text))',
+              opacity: 0.72,
+              letterSpacing: '0.01em',
+            }}
+          >
+            {relativeLabel}
+          </span>
+        )}
+      </div>
+    </motion.button>
+  );
+};
+
+// Relative time formatter (TR): "şimdi" / "N dk" / "N sa" / "N gün"
+function formatRelativeTime(createdAtMs: number): string {
+  const diff = Date.now() - createdAtMs;
+  if (diff < 60_000) return 'şimdi';
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) return `${mins} dk`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} sa`;
+  const days = Math.floor(hrs / 24);
+  return `${days} gün`;
 }

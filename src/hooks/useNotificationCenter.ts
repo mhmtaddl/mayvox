@@ -9,7 +9,7 @@ import {
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
-export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite' | 'joinRequest' | 'restriction';
+export type NotifKind = 'social' | 'message' | 'system' | 'mention' | 'invite' | 'joinRequest' | 'restriction' | 'missedCall';
 export type NotifPriority = 'high' | 'medium' | 'low';
 
 export interface NotifItem {
@@ -22,6 +22,8 @@ export interface NotifItem {
   isActionable: boolean;
   /** joinRequest türü için hangi sunucuya gidileceği */
   serverId?: string;
+  /** Informational item'lardan geliyorsa timestamp — relative time render için. */
+  createdAt?: number;
 }
 
 // ── Priority sıralama ağırlıkları ──
@@ -132,7 +134,9 @@ export function useNotificationCenter(
       const kind: NotifKind =
         info.kind === 'serverRestricted' || info.kind === 'serverUnrestricted'
           ? 'restriction'
-          : 'invite'; // görsel: mevcut 'invite' tonunda render et
+          : info.kind === 'missedCall'
+            ? 'missedCall'
+            : 'invite';
       items.push({
         key: `info:${info.key}`,
         kind,
@@ -142,6 +146,7 @@ export function useNotificationCenter(
         count: 1,
         isActionable: !!info.serverId,
         serverId: info.serverId,
+        createdAt: info.createdAt,
       });
     }
 

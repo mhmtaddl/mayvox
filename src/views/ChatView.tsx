@@ -579,15 +579,13 @@ export default function ChatView() {
       if (invitationDataRef.current !== snapshot) return;
       const now = Date.now();
       const timeStr = new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-      // detail örn: "CYLK WOT - Sessiz Alan • 22:14"  veya sunucu yoksa "Sessiz Alan • 22:14"
-      const locationPart = snapshot.serverName
-        ? `${snapshot.serverName} • ${snapshot.roomName}`
-        : snapshot.roomName;
+      // label = sadece isim (NotificationBell'de font-semibold render edilir),
+      // detail = kalan cümle + zaman (font-normal; inline birleşir).
       pushInformational({
         key: `missedCall:${snapshot.inviterId}:${snapshot.roomId}:${now}`,
         kind: 'missedCall',
-        label: `${snapshot.inviterName} seni aradı`,
-        detail: `${locationPart} • ${timeStr}`,
+        label: snapshot.inviterName,
+        detail: `seni aradı • ${timeStr}`,
         serverAvatar: snapshot.serverAvatar ?? null,
         createdAt: now,
       });

@@ -176,6 +176,27 @@ export async function listUserOwnedServers(userId: string): Promise<{ items: Own
   return adminFetch<{ items: OwnedServerRow[] }>(`/admin/users/${encodeURIComponent(userId)}/servers`);
 }
 
+// ── User sessions (presence-backed) ────────────────────────────────────
+export interface AdminUserSession {
+  session_key: string;
+  device_id: string;
+  platform: 'desktop' | 'mobile' | 'web';
+  app_version: string | null;
+  connected_at: string;
+  last_heartbeat_at: string;
+  disconnected_at: string | null;
+  disconnect_reason: string | null;
+  is_active: boolean;
+}
+
+export async function getAdminUserSessions(
+  userId: string,
+): Promise<{ sessions: AdminUserSession[] }> {
+  return adminFetch<{ sessions: AdminUserSession[] }>(
+    `/admin/users/${encodeURIComponent(userId)}/sessions`,
+  );
+}
+
 export async function setUserPlan(userId: string, payload: { plan: PlanKey; durationType: DurationType; customEndAt?: string }): Promise<void> {
   await adminFetch<void>(`/admin/users/${encodeURIComponent(userId)}/plan`, {
     method: 'PATCH',

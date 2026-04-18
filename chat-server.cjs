@@ -1299,6 +1299,13 @@ const heartbeat = setInterval(() => {
     if (!ws.isAlive) return ws.terminate();
     ws.isAlive = false;
     ws.ping();
+    // Presence backward-compat: eski client'lar presence:ping göndermez
+    // ama WS protokol-pong geliyorsa bağlantı alive demektir → presence'ı touch.
+    // 30s < 45s STALE_THRESHOLD olduğu için cleanup asla vurmaz.
+    if (ws.presenceUserId && ws.presenceSessionKey) {
+      presence.handleHeartbeat(ws.presenceUserId, ws.presenceSessionKey)
+        .catch(err => console.warn('[presence] ws-hb touch err:', err && err.message));
+    }
   });
   // Stale rate limit entry'leri temizle
   const now = Date.now();

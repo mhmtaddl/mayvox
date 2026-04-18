@@ -5,6 +5,7 @@ import {
   Users, Search, Shield, ShieldCheck, Crown, ChevronLeft, ChevronRight,
   ChevronDown, Lock, Server as ServerIcon, Filter, X, RefreshCw, AlertTriangle,
   MoreVertical, Trash2, VolumeX, Volume2, Ban, KeyRound, ShieldOff, Check,
+  Monitor, Smartphone, Globe, Circle,
 } from 'lucide-react';
 import { CardSection, cardCls } from '../shared';
 import Modal from '../../Modal';
@@ -26,8 +27,11 @@ import {
   type DurationType,
   type OwnedServerRow,
   type UserSort,
+  type AdminUserSession,
   AdminApiError,
 } from '../../../lib/systemAdminApi';
+import { useAdminUserSessions } from '../../../hooks/useAdminUserSessions';
+import { displayVersion, isOutdatedVersion } from '../../../lib/compareVersions';
 
 type Tab = 'all' | 'admin' | 'mod' | 'user' | 'owners';
 type OwnershipFilter = 'all' | 'has-server' | 'no-server';
@@ -1045,8 +1049,12 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
   const isVoiceBanned = !!user.is_voice_banned && (!user.ban_expires || user.ban_expires > Date.now());
   const isMuted = !!user.is_muted && (!user.mute_expires || user.mute_expires > Date.now());
   const { allUsers } = useUser();
+  const { appVersion } = useAppState();
   const liveUser = allUsers.find(u => u.id === user.id);
   const resolvedStatusText = liveUser?.statusText || 'Online';
+
+  // Presence-backed sessions (device + version)
+  const sessions = useAdminUserSessions(user.id);
 
   // Submenu states
   const [muteMin, setMuteMin] = useState('5');
@@ -1088,6 +1096,24 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
 
       {/* Sections */}
       <div className="p-5 space-y-5 max-h-[60vh] overflow-y-auto">
+
+        {/* Cihazlar & Versiyon — presence-backed session listesi */}
+        <DetailSection
+          title="Cihazlar & Versiyon"
+          hint={
+            sessions.loading && sessions.data.length === 0
+              ? 'Yükleniyor…'
+              : sessions.error
+                ? 'Yüklenemedi'
+                : sessions.data.some(s => s.is_active)
+                  ? `${sessions.data.filter(s => s.is_active).length} aktif oturum`
+                  : sessions.data.length > 0
+                    ? 'Şu an çevrimdışı'
+                    : 'Kayıt yok'
+          }
+        >
+          <DevicesSection sessions={sessions.data} loading={sessions.loading} error={sessions.error} currentAppVersion={appVersion} />
+        </DetailSection>
 
         {/* Plan kısayolu */}
         <DetailSection title="Plan" hint={user.plan_source === 'paid' ? 'Ücretli plan — admin override edemez' : undefined}>
@@ -1715,5 +1741,167 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
         loading={submitting}
       />
     </Modal>
+  );
+}
+
+// ── Devices & Version section ─────────────────────────────────────────
+// Presence-backed session list. Aktifler üstte, sonra geçmiş son session'lar.
+// Versiyon current appVersion'dan geride ise outdated uyarısı.
+
+function formatRelativeMs(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const diff = Date.now() - t;
+  if (diff < 60_000) return 'az önce';
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return `${m} dk önce`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} sa önce`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} gün önce`;
+  return new Date(t).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function PlatformBadge({ platform }: { platform: AdminUserSession['platform'] }) {
+  const cfg = (() => {
+    switch (platform) {
+      case 'mobile':
+        return { label: 'Mobile', icon: <Smartphone size={11} strokeWidth={1.9} />, bg: 'rgba(168,85,247,0.12)', color: '#c084fc', border: 'rgba(168,85,247,0.28)' };
+      case 'web':
+        return { label: 'Web', icon: <Globe size={11} strokeWidth={1.9} />, bg: 'rgba(52,211,153,0.12)', color: '#34d399', border: 'rgba(52,211,153,0.28)' };
+      case 'desktop':
+      default:
+        return { label: 'Desktop', icon: <Monitor size={11} strokeWidth={1.9} />, bg: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: 'rgba(96,165,250,0.28)' };
+    }
+  })();
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-[0.06em] shrink-0"
+      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
+    >
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  );
+}
+
+function VersionChip({ version, current }: { version: string | null; current?: string }) {
+  const label = displayVersion(version);
+  if (!label) {
+    return (
+      <span className="text-[10.5px] text-[var(--theme-secondary-text)]/60 italic shrink-0">bilinmiyor</span>
+    );
+  }
+  const outdated = isOutdatedVersion(version, current || null);
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10.5px] font-semibold shrink-0 tabular-nums"
+      style={{
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        background: outdated ? 'rgba(251,191,36,0.10)' : 'rgba(var(--glass-tint), 0.05)',
+        color: outdated ? '#f59e0b' : 'var(--theme-text)',
+        border: `1px solid ${outdated ? 'rgba(251,191,36,0.28)' : 'rgba(var(--glass-tint), 0.09)'}`,
+        letterSpacing: '-0.01em',
+      }}
+      title={outdated ? `Mevcut sürüm: v${current}` : undefined}
+    >
+      v{label}
+      {outdated && <AlertTriangle size={10} strokeWidth={2.2} />}
+    </span>
+  );
+}
+
+function StatusDot({ active }: { active: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 shrink-0 text-[10.5px] font-medium"
+      style={{ color: active ? '#10b981' : 'var(--theme-secondary-text)' }}
+    >
+      <Circle
+        size={7}
+        strokeWidth={0}
+        fill={active ? '#10b981' : 'var(--theme-secondary-text)'}
+        style={{ opacity: active ? 1 : 0.5 }}
+      />
+      {active ? 'Çevrimiçi' : 'Çevrimdışı'}
+    </span>
+  );
+}
+
+function DevicesSection({
+  sessions,
+  loading,
+  error,
+  currentAppVersion,
+}: {
+  sessions: AdminUserSession[];
+  loading: boolean;
+  error: string | null;
+  currentAppVersion: string;
+}) {
+  if (loading && sessions.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <RefreshCw size={12} className="animate-spin text-[var(--theme-secondary-text)]/50" />
+        <span className="text-[11px] text-[var(--theme-secondary-text)]/60">Oturumlar yükleniyor…</span>
+      </div>
+    );
+  }
+
+  if (error && sessions.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-red-500/8 border border-red-500/20">
+        <AlertTriangle size={12} className="text-red-400 shrink-0" />
+        <span className="text-[11px] text-red-400/90">{error}</span>
+      </div>
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)]">
+        <Circle size={8} strokeWidth={0} fill="currentColor" className="text-[var(--theme-secondary-text)]/40 shrink-0" />
+        <span className="text-[11px] text-[var(--theme-secondary-text)]/70">Bu kullanıcıya ait oturum kaydı yok.</span>
+      </div>
+    );
+  }
+
+  // Görünür set: aktif session'lar varsa onlar (multi-device), yoksa sadece
+  // en güncel 1 kapalı session (last known version fallback). Geçmiş session
+  // listesi gösterilmez — admin sadece "şu anki versiyon" ister.
+  const active = sessions.filter(s => s.is_active);
+  const visible = active.length > 0 ? active : sessions.slice(0, 1);
+
+  return (
+    <div className="space-y-1.5">
+      {visible.map((s) => {
+        const timeLabel = s.is_active
+          ? `Son aktivite: ${formatRelativeMs(s.last_heartbeat_at)}`
+          : s.disconnected_at
+            ? `Son görülme: ${formatRelativeMs(s.disconnected_at)}`
+            : '';
+        return (
+          <div
+            key={s.session_key}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
+            style={{
+              background: s.is_active
+                ? 'rgba(16,185,129,0.05)'
+                : 'rgba(var(--glass-tint), 0.04)',
+              border: `1px solid ${s.is_active ? 'rgba(16,185,129,0.14)' : 'rgba(var(--glass-tint), 0.08)'}`,
+            }}
+          >
+            <PlatformBadge platform={s.platform} />
+            <VersionChip version={s.app_version} current={currentAppVersion} />
+            <div className="flex-1 min-w-0 flex items-center gap-2 justify-end">
+              <span className="text-[10.5px] text-[var(--theme-secondary-text)]/70 truncate">
+                {timeLabel}
+              </span>
+              <StatusDot active={s.is_active} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

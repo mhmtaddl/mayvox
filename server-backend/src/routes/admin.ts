@@ -23,6 +23,7 @@ import {
   type DurationType,
   type UserSort,
 } from '../services/systemUsersService';
+import { listUserSessions } from '../services/userSessionsService';
 
 const router = Router();
 
@@ -187,6 +188,21 @@ router.get('/users/:id/servers', async (req: Request, res: Response) => {
     res.json({ items: rows });
   } catch (e) {
     console.error('[admin/users/:id/servers] failed', e);
+    res.status(500).json({ error: 'Sunucu hatası' });
+  }
+});
+
+// ── GET /admin/users/:id/sessions ──
+// Presence-backed session listesi (aktif + son kapanmışlar). Admin cihaz/versiyon
+// görüntülemesi için kullanır.
+router.get('/users/:id/sessions', async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  if (!id) { res.status(400).json({ error: 'id gerekli' }); return; }
+  try {
+    const sessions = await listUserSessions(id);
+    res.json({ sessions });
+  } catch (e) {
+    console.error('[admin/users/:id/sessions] failed', e);
     res.status(500).json({ error: 'Sunucu hatası' });
   }
 });
