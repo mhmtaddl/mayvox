@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { PhoneCall, PhoneOff, VolumeX, Volume2 } from 'lucide-react';
+import AvatarContent from '../../../components/AvatarContent';
 
 interface InvitationData {
   inviterId: string;
@@ -26,10 +27,6 @@ interface Props {
 // Position: top-14 right-6 — window controls ile clash yok, macOS Notification Center feel.
 // Animasyon: spring entrance, hover scale, tactile active — hepsi decorative, logic etkilenmez.
 export default function InvitationModal({ data, onAccept, onDecline, onMute, isMuted }: Props) {
-  const [avatarError, setAvatarError] = useState(false);
-  const hasValidAvatar = !!data.inviterAvatar?.startsWith('http') && !avatarError;
-  const initials = (data.inviterName || '?').trim().charAt(0).toUpperCase();
-
   // Format: "Server • Room"  — Apple-style middot separator.
   const locationLine = data.serverName
     ? `${data.serverName} • ${data.roomName}`
@@ -57,63 +54,30 @@ export default function InvitationModal({ data, onAccept, onDecline, onMute, isM
       }}
     >
       {/* ── Header: avatar + metadata ── */}
-      <div className="px-5 pt-4 pb-4 flex items-start gap-3.5">
-        {/* Avatar: 52px daire, ping glow */}
-        <div className="relative w-[52px] h-[52px] shrink-0">
-          {!isMuted && (
-            <>
-              <span
-                className="absolute inset-[-6px] rounded-full pointer-events-none"
-                style={{
-                  background: 'radial-gradient(circle, rgba(16,185,129,0.35) 0%, rgba(16,185,129,0) 70%)',
-                  animation: 'callPulse 1.8s ease-out infinite',
-                }}
-              />
-              <span
-                className="absolute inset-0 rounded-full pointer-events-none"
-                style={{
-                  boxShadow: '0 0 0 0 rgba(16,185,129,0.45)',
-                  animation: 'callRing 1.8s ease-out infinite',
-                }}
-              />
-              <style>{`
-                @keyframes callRing {
-                  0%   { box-shadow: 0 0 0 0   rgba(16,185,129,0.45); }
-                  70%  { box-shadow: 0 0 0 14px rgba(16,185,129,0);    }
-                  100% { box-shadow: 0 0 0 0   rgba(16,185,129,0);    }
-                }
-                @keyframes callPulse {
-                  0%   { transform: scale(0.95); opacity: 0.85; }
-                  70%  { transform: scale(1.25); opacity: 0; }
-                  100% { transform: scale(1.25); opacity: 0; }
-                }
-              `}</style>
-            </>
-          )}
-          <div
-            className="relative w-[52px] h-[52px] rounded-full overflow-hidden flex items-center justify-center text-[19px] font-semibold select-none"
-            style={{
-              background: hasValidAvatar
-                ? 'rgba(255,255,255,0.06)'
-                : 'linear-gradient(135deg, rgba(16,185,129,0.35) 0%, rgba(5,150,105,0.28) 100%)',
-              border: '1px solid rgba(255,255,255,0.14)',
-              color: '#ffffff',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
-            }}
-          >
-            {hasValidAvatar ? (
-              <img
-                src={data.inviterAvatar}
-                alt=""
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                onError={() => setAvatarError(true)}
-              />
-            ) : (
-              <span>{initials}</span>
-            )}
-          </div>
-        </div>
+      <div className="px-4 pt-3.5 pb-3.5 flex items-start gap-3">
+        {/* Avatar: 44px rounded square — iOS/macOS app-icon radius proportion.
+            Custom image > status PNG fallback > baş harf son çare
+            (AvatarContent tüm app'te aynı pipeline). */}
+        <motion.div
+          className="relative w-[44px] h-[44px] shrink-0 overflow-hidden"
+          style={{
+            borderRadius: 12, // ~27% — iOS squircle proportion
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.25)',
+          }}
+          animate={isMuted ? { scale: 1 } : { scale: [1, 1.03, 1] }}
+          transition={isMuted ? { duration: 0 } : { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <AvatarContent
+            avatar={data.inviterAvatar}
+            statusText="Online"
+            firstName={data.inviterName}
+            name={data.inviterName}
+            imgClassName="w-full h-full object-cover"
+            letterClassName="w-full h-full flex items-center justify-center text-[16px] font-semibold text-white/90"
+          />
+        </motion.div>
 
         {/* Metadata stack */}
         <div className="min-w-0 flex-1 pt-0.5">
