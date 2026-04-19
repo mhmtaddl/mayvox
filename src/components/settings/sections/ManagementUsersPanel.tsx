@@ -1237,16 +1237,16 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
               onClick={() => onAction({ type: 'unmute', user })}
             />
           ) : (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-5 gap-1.5">
                 {MUTE_PRESETS.map(m => (
-                  <button
+                  <SelectableChip
                     key={m}
+                    selected={false}
                     onClick={() => onAction({ type: 'mute', user, minutes: m })}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-text)] hover:bg-orange-500/10 hover:border-orange-500/30 hover:text-orange-400"
-                  >
-                    {m < 60 ? `${m} dk` : m === 60 ? '1 saat' : m === 240 ? '4 saat' : '1 gün'}
-                  </button>
+                    label={m < 60 ? `${m} dk` : m === 60 ? '1 saat' : m === 240 ? '4 saat' : '1 gün'}
+                    tone="warning"
+                  />
                 ))}
               </div>
               <div className="flex items-center gap-2">
@@ -1254,20 +1254,34 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
                   type="number" min={1} max={10080}
                   value={muteMin}
                   onChange={e => setMuteMin(e.target.value)}
-                  className="w-24 bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-lg px-2.5 py-1.5 text-[11.5px] outline-none focus:border-[var(--theme-accent)]/50"
+                  className="w-24 rounded-lg px-2.5 py-1.5 text-[11.5px] outline-none
+                    bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
+                    focus:border-[rgba(251,146,60,0.55)]
+                    focus:shadow-[0_0_0_3px_rgba(251,146,60,0.14)]
+                    transition-[border-color,box-shadow] duration-200"
                   placeholder="Özel"
                 />
                 <span className="text-[11px] text-[var(--theme-secondary-text)]">dakika</span>
-                <button
+                <motion.button
                   onClick={() => {
                     const m = parseInt(muteMin, 10);
                     if (!Number.isFinite(m) || m < 1) return;
                     onAction({ type: 'mute', user, minutes: m });
                   }}
-                  className="ml-auto px-3 py-1.5 rounded-lg text-[11.5px] font-bold bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 520, damping: 28, mass: 0.6 }}
+                  className="ml-auto px-3.5 py-1.5 rounded-lg text-[11.5px] font-bold outline-none"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(251,146,60,0.22) 0%, rgba(251,146,60,0.12) 100%)',
+                    border: '1px solid rgba(251,146,60,0.48)',
+                    color: 'rgb(251,146,60)',
+                    boxShadow: '0 2px 8px -2px rgba(251,146,60,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    transition: 'background 140ms, border-color 140ms, box-shadow 180ms',
+                  }}
                 >
                   Sustur
-                </button>
+                </motion.button>
               </div>
             </div>
           )}
@@ -1289,16 +1303,16 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
               onClick={() => onAction({ type: 'unban', user })}
             />
           ) : (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 {BAN_PRESETS.map(d => (
-                  <button
+                  <SelectableChip
                     key={d}
+                    selected={false}
                     onClick={() => onAction({ type: 'ban', user, days: d })}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-text)] hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
-                  >
-                    {d === 1 ? '1 gün' : `${d} gün`}
-                  </button>
+                    label={d === 1 ? '1 gün' : `${d} gün`}
+                    tone="danger"
+                  />
                 ))}
               </div>
               <div className="flex items-center gap-2">
@@ -1306,20 +1320,34 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
                   type="number" min={1} max={365}
                   value={banDays}
                   onChange={e => setBanDays(e.target.value)}
-                  className="w-24 bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-lg px-2.5 py-1.5 text-[11.5px] outline-none focus:border-[var(--theme-accent)]/50"
+                  className="w-24 rounded-lg px-2.5 py-1.5 text-[11.5px] outline-none
+                    bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
+                    focus:border-[rgba(239,68,68,0.55)]
+                    focus:shadow-[0_0_0_3px_rgba(239,68,68,0.14)]
+                    transition-[border-color,box-shadow] duration-200"
                   placeholder="Özel"
                 />
                 <span className="text-[11px] text-[var(--theme-secondary-text)]">gün</span>
-                <button
+                <motion.button
                   onClick={() => {
                     const d = parseInt(banDays, 10);
                     if (!Number.isFinite(d) || d < 1) return;
                     onAction({ type: 'ban', user, days: d });
                   }}
-                  className="ml-auto px-3 py-1.5 rounded-lg text-[11.5px] font-bold bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 520, damping: 28, mass: 0.6 }}
+                  className="ml-auto px-3.5 py-1.5 rounded-lg text-[11.5px] font-bold outline-none"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.12) 100%)',
+                    border: '1px solid rgba(239,68,68,0.48)',
+                    color: 'rgb(239,68,68)',
+                    boxShadow: '0 2px 8px -2px rgba(239,68,68,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    transition: 'background 140ms, border-color 140ms, box-shadow 180ms',
+                  }}
                 >
                   Yasakla
-                </button>
+                </motion.button>
               </div>
             </div>
           )}
@@ -1499,18 +1527,18 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
             <div>
               <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Plan</label>
               <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-                {(['free','pro','ultra'] as PlanKey[]).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPlan(p)}
-                    className={`py-2 rounded-lg text-[12px] font-semibold uppercase tracking-wide border ${
-                      plan === p
-                        ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
-                        : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
-                    }`}
-                  >
-                    {p}
-                  </button>
+                {([
+                  { v: 'free' as PlanKey,  l: 'Free',  d: 'Temel kullanım' },
+                  { v: 'pro' as PlanKey,   l: 'Pro',   d: 'Genişletilmiş özellikler' },
+                  { v: 'ultra' as PlanKey, l: 'Ultra', d: 'Tüm premium kilitler' },
+                ]).map(p => (
+                  <SelectableCard
+                    key={p.v}
+                    selected={plan === p.v}
+                    onClick={() => setPlan(p.v)}
+                    label={p.l}
+                    description={p.d}
+                  />
                 ))}
               </div>
             </div>
@@ -1525,17 +1553,12 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
                   { v: 'custom' as const, l: 'Özel' },
                   { v: 'unlimited' as const, l: 'Sınırsız' },
                 ]).map(d => (
-                  <button
+                  <SelectableChip
                     key={d.v}
+                    selected={duration === d.v}
                     onClick={() => setDuration(d.v)}
-                    className={`py-2 rounded-lg text-[10.5px] font-semibold border ${
-                      duration === d.v
-                        ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
-                        : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
-                    }`}
-                  >
-                    {d.l}
-                  </button>
+                    label={d.l}
+                  />
                 ))}
               </div>
               {duration === 'custom' && (
@@ -1543,7 +1566,11 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
                   type="datetime-local"
                   value={customEndAt}
                   onChange={e => setCustomEndAt(e.target.value)}
-                  className="mt-2 w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-lg px-3 py-1.5 text-[11.5px] outline-none focus:border-[var(--theme-accent)]/50"
+                  className="mt-2 w-full rounded-lg px-3 py-2 text-[11.5px] outline-none
+                    bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
+                    focus:border-[rgba(var(--theme-accent-rgb),0.55)]
+                    focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.14)]
+                    transition-[border-color,box-shadow] duration-200"
                 />
               )}
             </div>
@@ -1712,17 +1739,13 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
           <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Seviye</label>
           <div className="grid grid-cols-3 gap-1.5 mt-1.5">
             {AVAILABLE_LEVELS.map(l => (
-              <button
+              <SelectableCard
                 key={l}
+                selected={level === l}
                 onClick={() => setLevel(l)}
-                className={`py-2 rounded-lg text-[12px] font-semibold uppercase tracking-wide border transition-colors ${
-                  level === l
-                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
-                    : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
-                }`}
-              >
-                {labelFor(l)}
-              </button>
+                label={labelFor(l)}
+                description={l === '1' ? 'Temel üye' : l === '2' ? 'Genişletilmiş tema' : 'Tüm premium tema + özellikler'}
+              />
             ))}
           </div>
         </div>
@@ -1738,17 +1761,12 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
               { v: 'custom' as const, l: 'Özel' },
               { v: 'unlimited' as const, l: 'Sınırsız' },
             ]).map(d => (
-              <button
+              <SelectableChip
                 key={d.v}
+                selected={duration === d.v}
                 onClick={() => setDuration(d.v)}
-                className={`py-2 rounded-lg text-[10.5px] font-semibold border ${
-                  duration === d.v
-                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/40'
-                    : 'bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] border-[var(--theme-input-border)] hover:text-[var(--theme-text)]'
-                }`}
-              >
-                {d.l}
-              </button>
+                label={d.l}
+              />
             ))}
           </div>
           {duration === 'custom' && (
@@ -1756,7 +1774,11 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
               type="datetime-local"
               value={customEndAt}
               onChange={e => setCustomEndAt(e.target.value)}
-              className="mt-2 w-full bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] rounded-lg px-3 py-1.5 text-[11.5px] outline-none focus:border-[var(--theme-accent)]/50"
+              className="mt-2 w-full rounded-lg px-3 py-2 text-[11.5px] outline-none
+                bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
+                focus:border-[rgba(var(--theme-accent-rgb),0.55)]
+                focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.14)]
+                transition-[border-color,box-shadow] duration-200"
             />
           )}
         </div>
@@ -1806,6 +1828,124 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
     </Modal>
   );
 }
+
+// ── Selection primitives — premium decision UI ────────────────────────
+// SelectableCard: primary picks (plan, level). Large tap target, rich state.
+// SelectableChip: secondary picks (duration, mute, ban presets). Compact.
+// Her ikisi motion tabanlı; hover lift + whileTap compress + 120ms selection.
+
+type CardTone = 'accent' | 'warning' | 'danger';
+
+const TONE_PALETTE: Record<CardTone, { rgb: string; fallback: string }> = {
+  accent:  { rgb: 'var(--theme-accent-rgb)', fallback: '124,140,244' },
+  warning: { rgb: '251,146,60',              fallback: '251,146,60' }, // orange-400
+  danger:  { rgb: '239,68,68',               fallback: '239,68,68' },  // red-500
+};
+
+const SelectableCard: React.FC<{
+  selected: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  label: string;
+  description?: string;
+  tone?: CardTone;
+}> = ({ selected, onClick, disabled, label, description, tone = 'accent' }) => {
+  const t = TONE_PALETTE[tone];
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={disabled ? undefined : { y: -1 }}
+      whileTap={disabled ? undefined : { scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 480, damping: 28, mass: 0.7 }}
+      className="relative rounded-xl px-3 py-2.5 text-left outline-none overflow-hidden disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white/20"
+      style={{
+        background: selected
+          ? `linear-gradient(180deg, rgba(${t.rgb},0.20) 0%, rgba(${t.rgb},0.10) 100%)`
+          : 'var(--theme-input-bg)',
+        border: selected
+          ? `1px solid rgba(${t.rgb},0.55)`
+          : '1px solid var(--theme-input-border)',
+        boxShadow: selected
+          ? `0 4px 12px -4px rgba(${t.rgb},0.32), inset 0 1px 0 rgba(255,255,255,0.06)`
+          : 'inset 0 0 0 rgba(0,0,0,0)',
+        color: selected
+          ? `rgb(${t.rgb})`
+          : 'var(--theme-secondary-text)',
+        transition:
+          'background 140ms cubic-bezier(0.22,1,0.36,1), ' +
+          'border-color 140ms cubic-bezier(0.22,1,0.36,1), ' +
+          'color 140ms cubic-bezier(0.22,1,0.36,1), ' +
+          'box-shadow 200ms cubic-bezier(0.22,1,0.36,1)',
+      }}
+    >
+      <span className="block text-[12px] font-semibold uppercase tracking-[0.06em]">{label}</span>
+      {description && (
+        <span
+          className="block mt-0.5 text-[10px] font-medium normal-case tracking-normal"
+          style={{ opacity: selected ? 0.85 : 0.65 }}
+        >
+          {description}
+        </span>
+      )}
+      {selected && (
+        <motion.span
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          aria-hidden
+          className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+          style={{ background: `rgb(${t.rgb})` }}
+        >
+          <Check size={9} strokeWidth={3} style={{ color: 'var(--theme-bg, #0E0F12)' }} />
+        </motion.span>
+      )}
+    </motion.button>
+  );
+};
+
+const SelectableChip: React.FC<{
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+  tone?: CardTone;
+  disabled?: boolean;
+}> = ({ selected, onClick, label, tone = 'accent', disabled }) => {
+  const t = TONE_PALETTE[tone];
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={disabled ? undefined : { y: -1 }}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 28, mass: 0.6 }}
+      className="relative rounded-lg py-2 text-[10.5px] font-semibold outline-none disabled:opacity-45 disabled:cursor-not-allowed"
+      style={{
+        background: selected
+          ? `rgba(${t.rgb},0.16)`
+          : 'var(--theme-input-bg)',
+        border: selected
+          ? `1px solid rgba(${t.rgb},0.48)`
+          : '1px solid var(--theme-input-border)',
+        color: selected
+          ? `rgb(${t.rgb})`
+          : 'var(--theme-secondary-text)',
+        boxShadow: selected
+          ? `0 2px 8px -2px rgba(${t.rgb},0.25), inset 0 1px 0 rgba(255,255,255,0.04)`
+          : 'inset 0 0 0 rgba(0,0,0,0)',
+        transition:
+          'background 120ms cubic-bezier(0.22,1,0.36,1), ' +
+          'border-color 120ms cubic-bezier(0.22,1,0.36,1), ' +
+          'color 120ms cubic-bezier(0.22,1,0.36,1), ' +
+          'box-shadow 180ms cubic-bezier(0.22,1,0.36,1)',
+      }}
+    >
+      {label}
+    </motion.button>
+  );
+};
 
 // ── Devices & Version section ─────────────────────────────────────────
 // Presence-backed session list. Aktifler üstte, sonra geçmiş son session'lar.
