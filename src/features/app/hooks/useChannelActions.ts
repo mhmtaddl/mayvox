@@ -241,6 +241,7 @@ export function useChannelActions({
       try {
         // Toggle opt-in: default undefined → false (geçici). User tik attıysa true (kalıcı).
         const isPersistent = roomModal.isPersistent === true;
+        console.log('[createRoom-debug] roomModal.isPersistent:', roomModal.isPersistent, '→ sending:', isPersistent);
         const created = await createServerChannel(activeServerId, {
           name: trimmedName,
           mode: roomModal.mode,
@@ -249,6 +250,8 @@ export function useChannelActions({
           isHidden: roomModal.isHidden,
           isPersistent,
         });
+        console.log('[createRoom-debug] backend returned:', created);
+        console.log('[createRoom-debug] backend.isPersistent:', created.isPersistent, '· typeof:', typeof created.isPersistent, '· isDefault:', created.isDefault);
         const newRoom: VoiceChannel = {
           id: created.id, name: created.name, userCount: 0, members: [],
           isSystemChannel: created.isDefault,

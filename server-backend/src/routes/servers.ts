@@ -197,6 +197,7 @@ router.post('/:id/channels', async (req: Request, res: Response) => {
         isInviteOnly: body.isInviteOnly,
         isHidden: body.isHidden,
         description: body.description,
+        isPersistent: body.isPersistent,
       }
     );
     res.status(201).json(channel);

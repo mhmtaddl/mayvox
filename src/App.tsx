@@ -1056,6 +1056,18 @@ export default function App() {
           if (channel.isPersistent) return channel;
           if (SYSTEM_ROOM_NAMES.has(channel.name)) return channel; // hard fallback
 
+          // DEBUG TEMP — 2026-04-19: boş bir oda ilk kez timer'a giriyorsa state'ini logla.
+          // Kalıcı flag geliyor mu görmek için. Çözüldüğünde kaldırılacak.
+          if ((!channel.members || channel.members.length === 0) && channel.deletionTimer === undefined) {
+            console.log('[delTimer-debug] empty channel entering timer:', {
+              name: channel.name,
+              id: channel.id,
+              isSystemChannel: channel.isSystemChannel,
+              isPersistent: channel.isPersistent,
+              ownerId: channel.ownerId,
+            });
+          }
+
           const isEmpty = !channel.members || channel.members.length === 0;
 
           if (isEmpty) {
