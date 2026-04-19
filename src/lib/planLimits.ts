@@ -22,18 +22,20 @@ export type PlanKey = 'free' | 'pro' | 'ultra';
 
 export interface PlanLimits {
   maxMembers: number;
-  /** Sabit sistem odası (tüm planlar) */
+  /** Sabit sistem odası (tüm planlar = 4) */
   systemRooms: number;
   /** Kullanıcının açıp silebildiği kalıcı oda hakkı */
   extraPersistentRooms: number;
-  /** Toplam oda cap (systemRooms + extraPersistentRooms + maxNonPersistentRooms) */
-  maxTotalRooms: number;
-  /** Non-persistent oda hakkı — yeni modelde 0 (feature flag kapalı) */
+  /** Geçici ("özel") oda hakkı — boş kalınca auto-delete */
   maxNonPersistentRooms: number;
+  /** Toplam oda cap (sys + persistent + nonPersistent) */
+  maxTotalRooms: number;
   /** Sistem oda maksimum kişi */
   systemRoomCapacity: number;
-  /** Persistent oda maksimum kişi */
+  /** Kalıcı oda maksimum kişi */
   persistentRoomCapacity: number;
+  /** Geçici (özel) oda maksimum kişi */
+  nonPersistentRoomCapacity: number;
 }
 
 export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
@@ -41,28 +43,31 @@ export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
     maxMembers: 100,
     systemRooms: 4,
     extraPersistentRooms: 0,
-    maxNonPersistentRooms: 2,
-    maxTotalRooms: 6,
+    maxNonPersistentRooms: 0,       // Free: sadece 4 sistem odası
+    maxTotalRooms: 4,
     systemRoomCapacity: 15,
-    persistentRoomCapacity: 20,
+    persistentRoomCapacity: 20,     // N/A (quota=0)
+    nonPersistentRoomCapacity: 20,  // N/A (quota=0)
   },
   pro: {
     maxMembers: 300,
     systemRooms: 4,
     extraPersistentRooms: 2,
-    maxNonPersistentRooms: 5,
-    maxTotalRooms: 11,
+    maxNonPersistentRooms: 3,
+    maxTotalRooms: 9,
     systemRoomCapacity: 25,
-    persistentRoomCapacity: 35,
+    persistentRoomCapacity: 30,
+    nonPersistentRoomCapacity: 40,
   },
   ultra: {
-    maxMembers: 1500,
+    maxMembers: 1000,
     systemRooms: 4,
     extraPersistentRooms: 6,
     maxNonPersistentRooms: 10,
     maxTotalRooms: 20,
-    systemRoomCapacity: 50,
-    persistentRoomCapacity: 80,
+    systemRoomCapacity: 35,
+    persistentRoomCapacity: 45,
+    nonPersistentRoomCapacity: 60,
   },
 };
 
@@ -90,22 +95,38 @@ export function getPlanLimits(plan: string | null | undefined): PlanLimits {
 }
 
 /**
- * Plan kartında gösterilen özellik listesi — yeni model, hardcoded sayı yok.
- * Sayılar her zaman PLAN_LIMITS üzerinden okunur.
+ * Plan kartında gösterilen özellik listesi — hardcoded sayı yok.
+ * Sayılar her zaman PLAN_LIMITS'den okunur.
+ *
+ * Oda taxonomy metin karşılıkları:
+ *   - systemRooms       → "sistem odası"
+ *   - extraPersistent   → "kalıcı oda"
+ *   - nonPersistent     → "özel oda" (auto-delete)
  */
 export function planFeatureList(plan: PlanKey): string[] {
   const l = PLAN_LIMITS[plan];
-  const base = [
+  const features: string[] = [
     `${l.maxMembers.toLocaleString('tr-TR')} üye`,
-    l.extraPersistentRooms > 0
-      ? `${l.systemRooms} sistem + ${l.extraPersistentRooms} kalıcı oda hakkı`
-      : `${l.systemRooms} sistem odası`,
-    `Sistem odalarında ${l.systemRoomCapacity} kişi`,
-    `Özel odalarda ${l.persistentRoomCapacity} kişi`,
   ];
-  if (plan === 'pro') base.push('Daha iyi ses kalitesi');
-  if (plan === 'ultra') base.push('En düşük gecikme', 'En iyi ses kalitesi');
-  return base;
+
+  // Oda yapısı — plana göre hangileri varsa onu göster
+  const roomParts: string[] = [`${l.systemRooms} sistem`];
+  if (l.extraPersistentRooms > 0) roomParts.push(`${l.extraPersistentRooms} kalıcı`);
+  if (l.maxNonPersistentRooms > 0) roomParts.push(`${l.maxNonPersistentRooms} özel`);
+  features.push(roomParts.join(' + ') + ' oda');
+
+  // Kapasiteler — plana özel olarak, sadece ilgili oda türü varsa
+  features.push(`Sistem odalarında ${l.systemRoomCapacity} kişi`);
+  if (l.extraPersistentRooms > 0) {
+    features.push(`Kalıcı odalarda ${l.persistentRoomCapacity} kişi`);
+  }
+  if (l.maxNonPersistentRooms > 0) {
+    features.push(`Özel odalarda ${l.nonPersistentRoomCapacity} kişi`);
+  }
+
+  if (plan === 'pro') features.push('Daha iyi ses kalitesi');
+  if (plan === 'ultra') features.push('En düşük gecikme', 'En iyi ses kalitesi');
+  return features;
 }
 
 /** Compact özet — badge/tooltip için: "100 üye · 4 oda" */

@@ -43,9 +43,9 @@ export interface PlanLimitSet {
   maxMembers: number;
   /** Sabit sistem odası sayısı (tüm planlarda 4) — server creation'da seed edilir */
   systemRooms: number;
-  /** Plan ek kalıcı oda hakkı (kullanıcının açıp silebildiği kalıcı odalar) */
+  /** Plan ek kalıcı oda hakkı (kullanıcı oluşturur, silene kadar kalır) */
   extraPersistentRooms: number;
-  /** Non-persistent (ephemeral) oda hakkı — yeni modelde 0 all plans (future-use) */
+  /** Geçici ("özel") oda hakkı — boş kalınca auto-delete countdown ile silinir */
   maxNonPersistentRooms: number;
   /** Toplam oda kapasitesi (derived: systemRooms + extraPersistentRooms + maxNonPersistentRooms) */
   maxTotalRooms: number;
@@ -53,6 +53,8 @@ export interface PlanLimitSet {
   systemRoomCapacity: number;
   /** Kullanıcı kalıcı odalarında maksimum kişi sayısı */
   persistentRoomCapacity: number;
+  /** Geçici (özel) odalarda maksimum kişi sayısı */
+  nonPersistentRoomCapacity: number;
   /** Günlük davet linki limiti */
   maxInviteLinksPerDay: number;
 }
@@ -69,30 +71,33 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxMembers: 100,
     systemRooms: 4,
     extraPersistentRooms: 0,
-    maxNonPersistentRooms: 2,     // geçici oda (auto-delete)
-    maxTotalRooms: 6,              // 4 sys + 0 persistent + 2 temp
+    maxNonPersistentRooms: 0,             // Free: sadece 4 sistem odası
+    maxTotalRooms: 4,                     // 4 + 0 + 0
     systemRoomCapacity: 15,
-    persistentRoomCapacity: 20,
+    persistentRoomCapacity: 20,           // N/A (quota=0), monotonic ladder için yazılı
+    nonPersistentRoomCapacity: 20,        // N/A (quota=0)
     maxInviteLinksPerDay: 20,
   },
   pro: {
     maxMembers: 300,
     systemRooms: 4,
     extraPersistentRooms: 2,
-    maxNonPersistentRooms: 5,
-    maxTotalRooms: 11,             // 4 + 2 + 5
+    maxNonPersistentRooms: 3,
+    maxTotalRooms: 9,                     // 4 + 2 + 3
     systemRoomCapacity: 25,
-    persistentRoomCapacity: 35,
+    persistentRoomCapacity: 30,
+    nonPersistentRoomCapacity: 40,
     maxInviteLinksPerDay: 100,
   },
   ultra: {
-    maxMembers: 1500,
+    maxMembers: 1000,
     systemRooms: 4,
     extraPersistentRooms: 6,
     maxNonPersistentRooms: 10,
-    maxTotalRooms: 20,             // 4 + 6 + 10
-    systemRoomCapacity: 50,
-    persistentRoomCapacity: 80,
+    maxTotalRooms: 20,                    // 4 + 6 + 10
+    systemRoomCapacity: 35,
+    persistentRoomCapacity: 45,
+    nonPersistentRoomCapacity: 60,
     maxInviteLinksPerDay: 500,
   },
 };

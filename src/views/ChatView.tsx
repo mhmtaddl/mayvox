@@ -1370,8 +1370,10 @@ export default function ChatView() {
               // Sayılar canonical planLimits.ts'den — hardcoded yok.
               const fmtSub = (p: 'free' | 'pro' | 'ultra'): string => {
                 const l = PLAN_LIMITS[p];
-                const extra = l.extraPersistentRooms > 0 ? ` + ${l.extraPersistentRooms} kalıcı` : '';
-                return `${l.maxMembers.toLocaleString('tr-TR')} üye · ${l.systemRooms} sistem${extra}`;
+                const parts: string[] = [`${l.systemRooms} sistem`];
+                if (l.extraPersistentRooms > 0) parts.push(`${l.extraPersistentRooms} kalıcı`);
+                if (l.maxNonPersistentRooms > 0) parts.push(`${l.maxNonPersistentRooms} özel`);
+                return `${l.maxMembers.toLocaleString('tr-TR')} üye · ${parts.join(' + ')}`;
               };
               const planOptions = [
                 { id: 'free' as const,  name: 'Free',  sub: fmtSub('free'),  disabled: !allow('free') },

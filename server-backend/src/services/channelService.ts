@@ -12,7 +12,9 @@ import { assertLimit, FEATURE_FLAGS } from './planService';
 const NAME_MIN = 1;
 const NAME_MAX = 30;
 const MAX_USERS_MIN = 2;
-const MAX_USERS_MAX = 50;
+// Canonical plan max (Ultra nonPersistentRoomCapacity) = 60. Plan-bazlı per-room
+// type enforcement future-use. Bugünlük tek sabit cap yeterli.
+const MAX_USERS_MAX = 60;
 const ALLOWED_MODES = new Set(['social', 'gaming', 'broadcast', 'quiet']);
 
 export interface ChannelCreateInput {

@@ -2,14 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { PLAN_CONFIG, normalizePlan, getPlanLimits } from '../planService';
 
 /**
- * Yeni canonical (2026-04-19):
- *   free : 100 members · 4 sys + 0 extraPersistent = 4 total rooms
- *   pro  : 300 members · 4 sys + 2 extraPersistent = 6 total rooms
- *   ultra: 1500 members · 4 sys + 6 extraPersistent = 10 total rooms
+ * Canonical (2026-04-19 revize):
+ *   free : 100 · 4 sys + 0 kalıcı + 0 özel = 4 total
+ *   pro  : 300 · 4 sys + 2 kalıcı + 3 özel = 9 total
+ *   ultra: 1000 · 4 sys + 6 kalıcı + 10 özel = 20 total
+ *   Capacity: sys/kalıcı/özel = 15/20/20 (free) · 25/30/40 (pro) · 35/45/60 (ultra)
  */
 
 describe('planService — plan limits (canonical spec)', () => {
-  it('free plan limits', () => {
+  it('free plan limits — sadece 4 sistem odası', () => {
     const l = PLAN_CONFIG.free;
     expect(l.maxMembers).toBe(100);
     expect(l.systemRooms).toBe(4);
@@ -18,28 +19,33 @@ describe('planService — plan limits (canonical spec)', () => {
     expect(l.maxTotalRooms).toBe(4);
     expect(l.systemRoomCapacity).toBe(15);
     expect(l.persistentRoomCapacity).toBe(20);
+    expect(l.nonPersistentRoomCapacity).toBe(20);
     expect(l.maxInviteLinksPerDay).toBe(20);
   });
 
-  it('pro plan limits', () => {
+  it('pro plan limits — 4+2+3', () => {
     const l = PLAN_CONFIG.pro;
     expect(l.maxMembers).toBe(300);
     expect(l.systemRooms).toBe(4);
     expect(l.extraPersistentRooms).toBe(2);
-    expect(l.maxTotalRooms).toBe(6);
+    expect(l.maxNonPersistentRooms).toBe(3);
+    expect(l.maxTotalRooms).toBe(9);
     expect(l.systemRoomCapacity).toBe(25);
-    expect(l.persistentRoomCapacity).toBe(35);
+    expect(l.persistentRoomCapacity).toBe(30);
+    expect(l.nonPersistentRoomCapacity).toBe(40);
     expect(l.maxInviteLinksPerDay).toBe(100);
   });
 
-  it('ultra plan limits', () => {
+  it('ultra plan limits — 4+6+10', () => {
     const l = PLAN_CONFIG.ultra;
-    expect(l.maxMembers).toBe(1500);
+    expect(l.maxMembers).toBe(1000);
     expect(l.systemRooms).toBe(4);
     expect(l.extraPersistentRooms).toBe(6);
-    expect(l.maxTotalRooms).toBe(10);
-    expect(l.systemRoomCapacity).toBe(50);
-    expect(l.persistentRoomCapacity).toBe(80);
+    expect(l.maxNonPersistentRooms).toBe(10);
+    expect(l.maxTotalRooms).toBe(20);
+    expect(l.systemRoomCapacity).toBe(35);
+    expect(l.persistentRoomCapacity).toBe(45);
+    expect(l.nonPersistentRoomCapacity).toBe(60);
     expect(l.maxInviteLinksPerDay).toBe(500);
   });
 
@@ -82,15 +88,24 @@ describe('planService — getPlanLimits', () => {
 });
 
 describe('planService — monotonic tier ladder', () => {
-  it('ultra > pro > free in every scalar limit', () => {
+  it('ultra > pro > free — üye + oda sayıları + kapasiteler', () => {
     expect(PLAN_CONFIG.pro.maxMembers).toBeGreaterThan(PLAN_CONFIG.free.maxMembers);
     expect(PLAN_CONFIG.ultra.maxMembers).toBeGreaterThan(PLAN_CONFIG.pro.maxMembers);
+
     expect(PLAN_CONFIG.pro.extraPersistentRooms).toBeGreaterThan(PLAN_CONFIG.free.extraPersistentRooms);
     expect(PLAN_CONFIG.ultra.extraPersistentRooms).toBeGreaterThan(PLAN_CONFIG.pro.extraPersistentRooms);
+
+    expect(PLAN_CONFIG.pro.maxNonPersistentRooms).toBeGreaterThan(PLAN_CONFIG.free.maxNonPersistentRooms);
+    expect(PLAN_CONFIG.ultra.maxNonPersistentRooms).toBeGreaterThan(PLAN_CONFIG.pro.maxNonPersistentRooms);
+
     expect(PLAN_CONFIG.pro.systemRoomCapacity).toBeGreaterThan(PLAN_CONFIG.free.systemRoomCapacity);
     expect(PLAN_CONFIG.ultra.systemRoomCapacity).toBeGreaterThan(PLAN_CONFIG.pro.systemRoomCapacity);
+
     expect(PLAN_CONFIG.pro.persistentRoomCapacity).toBeGreaterThan(PLAN_CONFIG.free.persistentRoomCapacity);
     expect(PLAN_CONFIG.ultra.persistentRoomCapacity).toBeGreaterThan(PLAN_CONFIG.pro.persistentRoomCapacity);
+
+    expect(PLAN_CONFIG.pro.nonPersistentRoomCapacity).toBeGreaterThan(PLAN_CONFIG.free.nonPersistentRoomCapacity);
+    expect(PLAN_CONFIG.ultra.nonPersistentRoomCapacity).toBeGreaterThan(PLAN_CONFIG.pro.nonPersistentRoomCapacity);
   });
 
   it('systemRooms sabit 4, tüm planlarda', () => {
