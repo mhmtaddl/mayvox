@@ -81,7 +81,8 @@ import BanScreen from './components/BanScreen';
 import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import { type ResetRequest } from './components/PasswordResetPanel';
-import { getReleaseNotes } from './lib/releaseNotes';
+// getReleaseNotes artık App.tsx'te kullanılmıyor (auto-popup kaldırıldı).
+// Settings içindeki ReleaseNotesModal hala ./lib/releaseNotes'ten çağırıyor.
 import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
@@ -345,25 +346,17 @@ export default function App() {
   // Admin panel state — hook çağrısı presenceChannelRef'ten sonra (aşağıda)
 
   useEffect(() => {
+    // Release notes auto-popup KALDIRILDI (user tercih — v2.0.9+).
+    // Version bookkeeping korunuyor (cylk-last-version). getReleaseNotes import'u
+    // Settings içindeki manuel "Sürüm Notları" butonu için hala kullanılabilir.
     const w = window as Window & {
       electronApp?: { getVersion: () => Promise<string>; setTrayChannel?: (name: string | null) => void };
     };
     w.electronApp?.getVersion().then(v => {
       setAppVersion(v);
-      const lastSeen = localStorage.getItem('cylk-last-version');
-      if (lastSeen && lastSeen !== v && getReleaseNotes(v)) {
-        setShowReleaseNotes(true);
-      }
-      // Version'ı hemen kaydet — ilk açılışta zaten true set edildi
       localStorage.setItem('cylk-last-version', v);
     }).catch(() => {
-      // Electron değilse build-time version kullan
-      const v = appVersion;
-      const lastSeen = localStorage.getItem('cylk-last-version');
-      if (lastSeen && lastSeen !== v && getReleaseNotes(v)) {
-        setShowReleaseNotes(true);
-      }
-      localStorage.setItem('cylk-last-version', v);
+      localStorage.setItem('cylk-last-version', appVersion);
     });
   }, []);
 

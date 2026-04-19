@@ -13,6 +13,14 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.9': {
+    title: 'v2.0.9 — Ses paketi hotfix',
+    items: [],
+    common: [
+      'Arama, mesaj ve bildirim sesleri artık production build\'de de çalışıyor (dosya yolu düzeltmesi).',
+      'Sürüm notları penceresi artık otomatik açılmıyor — güncelleme sonrası rahatsız etmeyecek.',
+    ],
+  },
   '2.0.8': {
     title: 'v2.0.8 — Ses, Oda ve Çağrı Yenilemesi',
     items: [],

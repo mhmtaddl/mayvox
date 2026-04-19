@@ -62,23 +62,26 @@ const COOLDOWN_MS = {
   reject: 500,
 };
 
+// Path relative (leading slash YOK) — Electron production file:// protokolünde
+// absolute '/sounds/' filesystem root'a kaçar ve 404 olur. Relative path hem
+// dev (Vite serve) hem prod (file://) için çalışır. Vite base: './' ile uyumlu.
 const MANIFEST = {
   call: {
-    '1': '/sounds/call/1.mp3',
-    '2': '/sounds/call/2.mp3',
-    '3': '/sounds/call/3.mp3',
-    reject: '/sounds/call/reject.mp3',
+    '1': 'sounds/call/1.mp3',
+    '2': 'sounds/call/2.mp3',
+    '3': 'sounds/call/3.mp3',
+    reject: 'sounds/call/reject.mp3',
   },
   message: {
-    '1': '/sounds/message/1.mp3',
-    '2': '/sounds/message/2.mp3',
-    '3': '/sounds/message/3.mp3',
-    send: '/sounds/message/send.mp3',
+    '1': 'sounds/message/1.mp3',
+    '2': 'sounds/message/2.mp3',
+    '3': 'sounds/message/3.mp3',
+    send: 'sounds/message/send.mp3',
   },
   notification: {
-    '1': '/sounds/notification/1.mp3',
-    '2': '/sounds/notification/2.mp3',
-    '3': '/sounds/notification/3.mp3',
+    '1': 'sounds/notification/1.mp3',
+    '2': 'sounds/notification/2.mp3',
+    '3': 'sounds/notification/3.mp3',
   },
 } as const;
 
