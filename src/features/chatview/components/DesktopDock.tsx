@@ -10,6 +10,7 @@ import {
   PhoneOff,
   AudioLines,
   Home,
+  Undo2,
   Download,
   AlertCircle,
   Info,
@@ -49,6 +50,12 @@ interface Props {
   canCreateServer?: boolean;
   /** 'fixed' (default): desktop bottom-center sabit pill. 'inline': parent container içinde normal akışta. */
   layout?: 'fixed' | 'inline';
+  /** Navigation state machine — dock butonlarının visibility'sini belirler. */
+  currentView?: 'room' | 'server_home' | 'discover' | 'settings';
+  /** Kullanıcıyı sunucu ana sayfasına götürür (her view'den). */
+  onGoHome?: () => void;
+  /** Kullanıcıyı aktif odaya geri döndürür (activeChannel set değilse çalışmaz). */
+  onReturnToRoom?: () => void;
 }
 
 export default function DesktopDock({
@@ -64,6 +71,9 @@ export default function DesktopDock({
   onShowCreateModal,
   canCreateServer = true,
   layout = 'fixed',
+  currentView,
+  onGoHome,
+  onReturnToRoom,
 }: Props) {
   const isInline = layout === 'inline';
   const { toastMsg, setToastMsg, setSettingsTarget } = useUI();
@@ -396,114 +406,6 @@ export default function DesktopDock({
           </AnimatePresence>
         </div>
 
-        {/* Search butonu — mobilde gizli, sunucu arama LeftSidebar'da */}
-        {!isInline && <div className="relative shrink-0" ref={searchPanelRef}>
-          <button onClick={() => {
-              if (!serverSearchOpen) measurePanelOrientation();
-              setServerSearchOpen(prev => !prev);
-              setServerListOpen(false);
-            }} title="Sunucu bul"
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-100 border ${
-              serverSearchOpen ? 'bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] border-[var(--theme-accent)]/20' : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-[var(--theme-accent)]/8 hover:text-[var(--theme-accent)]'
-            }`}>
-            {serverSearchOpen ? <X size={12} /> : <Search size={13} strokeWidth={1.5} />}
-          </button>
-          {/* Search panel — viewport'a göre yukarı/aşağı açılır */}
-          <AnimatePresence>
-            {serverSearchOpen && (
-              <motion.div
-                ref={panelContentRef}
-                initial={{ opacity: 0, y: openUpwards ? 6 : -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: openUpwards ? 6 : -6 }}
-                transition={{ duration: 0.12 }}
-                className={`absolute left-1/2 -translate-x-1/2 w-[240px] rounded-xl z-[100] overflow-hidden ${openUpwards ? 'bottom-full mb-2' : 'top-full mt-2'}`}
-                style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', backdropFilter: 'blur(24px)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
-                <div className="flex items-center h-9 px-3 gap-1.5 border-b border-[rgba(var(--glass-tint),0.06)]">
-                  <Search size={11} className="text-[var(--theme-secondary-text)]/30 shrink-0" />
-                  <input ref={searchInputRef} value={serverSearch} onChange={e => setServerSearch(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Escape') { setServerSearchOpen(false); setServerSearch(''); return; }
-                      if (e.key === 'ArrowDown') {
-                        if (discoverResults.length === 0) return;
-                        e.preventDefault();
-                        setHighlightedIndex(i => {
-                          if (i < 0) return 0;
-                          return Math.min(i + 1, discoverResults.length - 1);
-                        });
-                        return;
-                      }
-                      if (e.key === 'ArrowUp') {
-                        if (discoverResults.length === 0) return;
-                        e.preventDefault();
-                        setHighlightedIndex(i => {
-                          if (i < 0) return discoverResults.length - 1;
-                          return Math.max(i - 1, 0);
-                        });
-                        return;
-                      }
-                      if (e.key === 'Enter' && discoverResults.length > 0) {
-                        e.preventDefault();
-                        const idx = highlightedIndex >= 0 ? highlightedIndex : 0;
-                        const target = discoverResults[idx];
-                        if (target) selectSearchResult(target);
-                      }
-                    }}
-                    placeholder="Sunucu ara..." className="flex-1 bg-transparent text-[10px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/25 outline-none min-w-0" />
-                  {serverSearch && !searchLoading && (
-                    <button
-                      type="button"
-                      onClick={() => { setServerSearch(''); searchInputRef.current?.focus(); }}
-                      className="w-4 h-4 flex items-center justify-center rounded text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors shrink-0"
-                      title="Temizle"
-                    >
-                      <X size={10} />
-                    </button>
-                  )}
-                  {searchLoading && <div className="w-3 h-3 border border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
-                </div>
-                {searchQueried && serverSearch.trim() && (
-                  <div ref={resultsListRef} className="overflow-y-auto" style={{ maxHeight: 'min(60vh, 400px)' }}>
-                    {discoverResults.length === 0 ? (
-                      <div className="px-4 py-4 text-center text-[10px] text-[var(--theme-secondary-text)]/40">Sonuç bulunamadı</div>
-                    ) : discoverResults.map((s, idx) => {
-                      const isHighlighted = idx === highlightedIndex;
-                      return (
-                        <div
-                          key={s.id}
-                          ref={el => { resultItemRefs.current[idx] = el; }}
-                          role="option"
-                          aria-selected={isHighlighted}
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          onClick={() => selectSearchResult(s)}
-                          className={`flex items-center gap-2.5 px-3 py-2 transition-colors cursor-pointer border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0 ${
-                            isHighlighted
-                              ? 'bg-[var(--theme-accent)]/8 border-l-2 border-l-[var(--theme-accent)]/60 pl-[10px]'
-                              : 'hover:bg-[rgba(var(--glass-tint),0.06)]'
-                          }`}
-                        >
-                          <div className="w-7 h-7 rounded-[8px] overflow-hidden flex items-center justify-center shrink-0" style={{ background: s.avatarUrl ? 'none' : 'rgba(var(--glass-tint), 0.08)' }}>
-                            {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-7 h-7 rounded-[8px] object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} /> : null}
-                            <span className={`text-[9px] font-bold text-[var(--theme-accent)] ${s.avatarUrl ? 'hidden' : ''}`}>{s.shortName || s.name.slice(0, 2).toUpperCase()}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[10px] font-semibold text-[var(--theme-text)] truncate">{s.name}</div>
-                            <div className="text-[8px] text-[var(--theme-secondary-text)]/40 truncate">{s.memberCount} üye</div>
-                          </div>
-                          {s.role ? (
-                            <span className="text-[8px] text-[var(--theme-secondary-text)]/40 shrink-0">Üye</span>
-                          ) : (
-                            <button onClick={e => { e.stopPropagation(); onJoinServer(s.id); setServerSearchOpen(false); setServerSearch(''); }}
-                              className="text-[8px] font-bold text-[var(--theme-accent)] px-2 py-0.5 rounded bg-[var(--theme-accent)]/10 hover:bg-[var(--theme-accent)]/20 shrink-0">Katıl</button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>}
-
         {/* Sunucu oluştur — mobilde gizli, LeftSidebar'da aynı aksiyon */}
         {!isInline && canCreateServer && (
           <button onClick={() => onShowCreateModal()} title="Sunucu oluştur"
@@ -644,12 +546,13 @@ export default function DesktopDock({
           </div>
         );
       })()}
-      {/* Oda kontrolleri */}
-      {activeChannel && view !== 'settings' && (
+      {/* Oda kontrolleri — activeChannel her view'de PhoneOff gösterir;
+          CardStyle sadece currentView='room' iken. */}
+      {activeChannel && (
         <>
           <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
-          {/* Kart stili döngüsü — mobilde gizli (nadir kullanım) */}
-          {!isInline && <button
+          {/* Kart stili döngüsü — sadece room view'inde (tek anlamlı yer). */}
+          {currentView === 'room' && !isInline && <button
             onClick={cycleCardStyle}
             className="w-10 h-10 flex items-center justify-center btn-haptic"
             style={{
@@ -686,20 +589,56 @@ export default function DesktopDock({
               )}
             </svg>
           </button>}
-          <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white" title="Odadan Ayrıl">
+          {/* Çağrıdan Ayrıl — voice disconnect + kanaldan tam çık.
+              Kullanıcı gerçekten ayrılsın: voice bağlantısı kapanır, activeChannel
+              null'a döner, voice avatar listesinden düşer. Home butonu "peek" için. */}
+          <button
+            onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white transition-colors duration-150"
+            title="Çağrıdan Ayrıl"
+          >
             <PhoneOff size={16} />
           </button>
         </>
       )}
-      {/* Ayarlardayken ana sayfa butonu */}
-      {view === 'settings' && (
-        <>
-          <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />
-          <button onClick={() => setView('chat')} className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]" title="Ana Sayfa">
-            <Home size={16} />
-          </button>
-        </>
-      )}
+      {/* ── Navigation state machine buttons ──
+          Matrix:              Home  Return
+            room                ✅     ❌
+            server_home         ❌     ✅ (activeChannel gerek)
+            discover            ✅     ✅
+            settings            ✅     ✅
+          Divider: activeChannel varsa yukarıdaki PhoneOff bloğu zaten ekledi,
+          burada duplicate önlemek için sadece activeChannel yoksa eklenir. */}
+      {(() => {
+        if (!currentView) return null;
+        const showHome = currentView !== 'server_home';
+        const showReturn = !!activeChannel && currentView !== 'room';
+        if (!showHome && !showReturn) return null;
+        return (
+          <>
+            {!activeChannel && <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />}
+            {/* Return (Undo2) daima Home'un solunda — "geri" aksiyonu sol, "ileri" sağ. */}
+            {showReturn && onReturnToRoom && (
+              <button
+                onClick={onReturnToRoom}
+                className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
+                title="Sohbet odasına dön"
+              >
+                <Undo2 size={16} />
+              </button>
+            )}
+            {showHome && onGoHome && (
+              <button
+                onClick={onGoHome}
+                className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
+                title="Sunucu ana sayfası"
+              >
+                <Home size={16} />
+              </button>
+            )}
+          </>
+        );
+      })()}
       </>}
     </div>
   );

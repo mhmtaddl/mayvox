@@ -118,6 +118,7 @@ export default function ChatView() {
   useEffect(() => {
     const onGoto = () => {
       setShowDiscover(false);
+      setIsServerHomeView(false);
       if (view === 'settings') setView('chat');
     };
     window.addEventListener('mayvox:goto-chat', onGoto);
@@ -496,6 +497,56 @@ export default function ChatView() {
     setCardStyleState(next);
   };
 
+  // ── Middle panel view override ──
+  // Kullanıcı bir kanaldayken "sunucu ana sayfasına göz at" butonuyla placeholder
+  // view'e geçer. activeChannel DEĞİŞMEZ, voice bağlantısı DEĞİŞMEZ, dock alt bar
+  // aynen kalır. Sadece orta panel render'ı override edilir. Kanal değişince auto-reset.
+  const [isServerHomeView, setIsServerHomeView] = useState(false);
+  useEffect(() => {
+    // Yeni kanal seçilince (veya tamamen çıkılınca) override'ı sıfırla —
+    // böylece kanal değiştirince eski override kalmaz.
+    setIsServerHomeView(false);
+  }, [activeChannel]);
+
+  // ── Navigation state machine ──
+  // Deterministic derive: 4 state'in kombinasyonundan tek bir currentView çıkar.
+  // Dock butonları bu değere bakarak visibility + handler wiring yapar.
+  type CurrentView = 'room' | 'server_home' | 'discover' | 'settings';
+  const currentView: CurrentView = useMemo(() => {
+    if (view === 'settings') return 'settings';
+    if (showDiscover) return 'discover';
+    if (!activeChannel || isServerHomeView) return 'server_home';
+    return 'room';
+  }, [view, showDiscover, activeChannel, isServerHomeView]);
+
+  // handleGoHome — kullanıcıyı sunucu ana sayfasına götürür.
+  // Hangi view'den olursa olsun: settings/discover kapanır, varsa oda peek moduna geçer.
+  // activeChannel korunur (voice kesilmez). Return sonradan aynı odaya döner.
+  const handleGoHome = useCallback(() => {
+    if (view === 'settings') setView('chat');
+    if (showDiscover) setShowDiscover(false);
+    if (activeChannel) setIsServerHomeView(true);
+    // activeChannel yoksa zaten natural server_home — ek aksiyon yok
+  }, [view, setView, showDiscover, activeChannel]);
+
+  // handleReturnToRoom — en son odaya geri dön.
+  // activeChannel set değilse hiçbir şey yapmaz (Return zaten görünmemeli).
+  const handleReturnToRoom = useCallback(() => {
+    if (!activeChannel) return;
+    if (view === 'settings') setView('chat');
+    if (showDiscover) setShowDiscover(false);
+    setIsServerHomeView(false);
+  }, [activeChannel, view, setView, showDiscover]);
+
+  // Sol sidebar kanal tıklamaları — isServerHomeView peek'i otomatik kapatır.
+  // Aynı kanal tıklanırsa handleJoinChannel early-return yapar (activeChannel===id),
+  // ama peek state'i bu wrapper sayesinde zaten resetlenmiş olur → kullanıcı odaya döner.
+  const handleSidebarChannelClick = useCallback((channelId: string) => {
+    setIsServerHomeView(false);
+    if (showDiscover) setShowDiscover(false);
+    handleJoinChannel(channelId);
+  }, [handleJoinChannel, showDiscover]);
+
   // ── Shared refs (passed to child components) ──
   const listenerToastRef = useRef<number>(0);
   const dockToastHoveredRef = useRef(false);
@@ -796,7 +847,7 @@ export default function ChatView() {
                       const serverBanned = !!serverList.find(s => s.id === activeServerId)?.isBanned;
                       return (
                       <div key={channel.id} className="space-y-1">
-                        <button onClick={() => { handleJoinChannel(channel.id); setMobileLeftOpen(false); }} disabled={isConnecting}
+                        <button onClick={() => { handleSidebarChannelClick(channel.id); setMobileLeftOpen(false); }} disabled={isConnecting}
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${serverBanned ? 'opacity-60' : ''} ${
                             activeChannel === channel.id
                               ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
@@ -1078,7 +1129,7 @@ export default function ChatView() {
               onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
               onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
               onJoinModal={() => setShowJoinModal(true)} />
-          ) : currentChannel ? (
+          ) : currentChannel && !isServerHomeView ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
                 <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4) 0%, transparent 65%)` }} />
@@ -1204,7 +1255,8 @@ export default function ChatView() {
       <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
         serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
         onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
-        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer} />
+        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer}
+        currentView={currentView} onGoHome={handleGoHome} onReturnToRoom={handleReturnToRoom} />
 
       {/* ── Sunucuya Katıl Modal (global) ── */}
       {showJoinModal && <JoinServerModal
