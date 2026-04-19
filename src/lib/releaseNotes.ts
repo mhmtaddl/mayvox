@@ -13,6 +13,35 @@ export interface ReleaseNote {
 // Her versiyon için güncelleme notları buraya eklenir.
 // Anahtar: "x.y.z" formatında versiyon numarası.
 const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '2.0.8': {
+    title: 'v2.0.8 — Ses, Oda ve Çağrı Yenilemesi',
+    items: [],
+    common: [
+      'Yeni ses paketi: arama, mesaj ve bildirim için 3\'er ton seçeneği (MP3).',
+      'Mesaj ayarları DM panelinin sağ üstündeki dişli ikonda — mesaj sesi / tonu / ses seviyesi + gönderim sesi toggle.',
+      'Oda sistemi yenilendi: 4 sistem odası + plan bazlı kalıcı ve özel (geçici) oda hakkı.',
+      'Yeni oda oluştururken "Oda Kalıcılığı" seçeneği — açıksa kalıcı, kapalıysa boşalınca otomatik silinen geçici oda.',
+      '1:1 çağrı UX\'i yenilendi: iptal butonu, 35 saniye timeout, sağ üstte cam kart, cevapsız çağrı bildirimi.',
+      'DM\'lerde WhatsApp tarzı tick\'ler: ✓ gönderildi, ✓✓ okundu.',
+      'Hoparlör/kulaklık kapalıyken artık gerçekten sessizlik (webAudioMix kaçağı giderildi).',
+      'Sohbet odasındayken "Çevrimdışı" durumu menüden kilitli.',
+      'Plan kartları yeniden tasarlandı — daha okunaklı kapasite ve doğru "Yükselt / Geçiş Yap" düğmeleri.',
+      'Tema renginden bağımsız iOS tarzı radio dot — her temada net görünür.',
+      'Gerçek zamanlı online durumu ve son görülme altyapısı güçlendirildi.',
+    ],
+    desktop: [
+      'Tray icon bazı Windows kurulumlarında görünmüyordu — restore edildi.',
+      'Alt bar geçişleri: oda / sunucu ana sayfa / keşfet / ayarlar arası akıcı navigasyon.',
+    ],
+    android: [
+      'Capacitor 8 uyumu ve APK paketleme iyileştirmeleri.',
+    ],
+    admin: [
+      'Admin paneli Apple-grade modal sistemi — segmented sekmeler + focus-ring arama.',
+      'Kullanıcı oturumları paneli — kim, nereden, ne zaman bağlanıyor.',
+      'Sistem odaları silme korumasında ikinci katman (isim bazlı defans).',
+    ],
+  },
   '2.0.4': {
     title: 'v2.0.4',
     items: [],
