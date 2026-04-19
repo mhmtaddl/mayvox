@@ -59,6 +59,10 @@ export interface VoiceChannel {
   userCount: number;
   members?: string[]; // Array of user names
   isSystemChannel?: boolean; // If true, it won't be auto-deleted
+  /** Kullanıcı kalıcı odası (is_default=false + is_persistent=true).
+   *  Sistem odaları için de true (sistem odaları her zaman kalıcı).
+   *  Kota hesabı: isSystemChannel=false AND isPersistent=true. */
+  isPersistent?: boolean;
   password?: string; // 4-digit numeric password
   deletionTimer?: number; // Seconds remaining until deletion
   maxUsers?: number;

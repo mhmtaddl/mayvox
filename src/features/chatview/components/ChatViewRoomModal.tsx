@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Sparkles, Settings } from 'lucide-react';
+import { Sparkles, Settings, Infinity as InfinityIcon } from 'lucide-react';
 import { ROOM_MODE_LIST } from '../../../lib/roomModeConfig';
 import { roomModeIcons } from '../constants';
 
@@ -14,6 +14,16 @@ interface RoomModalState {
   isInviteOnly: boolean;
   isHidden: boolean;
   mode: string;
+  /** "Oda Kalıcılığı" seçimi — default true.
+   *  Backend non-persistent feature-flag açıldığında false path aktifleşir. */
+  isPersistent?: boolean;
+}
+
+/** Kalıcı oda kota bilgisi — create modunda gösterilir. */
+export interface PersistentRoomsInfo {
+  used: number;
+  quota: number;
+  remaining: number;
 }
 
 interface Props {
@@ -21,9 +31,17 @@ interface Props {
   onUpdate: (updates: Partial<RoomModalState>) => void;
   onClose: () => void;
   onSave: () => void;
+  /** Create modunda kalıcı oda kota durumu — sadece 'create' type'da göstersin. */
+  persistentInfo?: PersistentRoomsInfo;
 }
 
-export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave }: Props) {
+export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave, persistentInfo }: Props) {
+  // Create modunda kota bilgisi olması beklenir; edit'te gösterilmez.
+  const showPersistentRow = roomModal.type === 'create' && persistentInfo !== undefined;
+  const quotaReached = showPersistentRow && persistentInfo!.remaining <= 0;
+  const noQuotaPlan = showPersistentRow && persistentInfo!.quota === 0;
+  // Save butonu DISABLE etmiyoruz — backend authoritative. Frontend plan resolve
+  // yanlış olursa (cache/stale) user bloklanmasın; backend 403 dönerse toast düşer.
   return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
@@ -154,8 +172,43 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
           {/* Divider */}
           <div className="my-5 h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.08), transparent)` }} />
 
-          {/* Group B: Gizlilik ayarları */}
+          {/* Group B: Gizlilik + Kalıcılık ayarları */}
           <div className="space-y-3.5">
+            {/* Oda Kalıcılığı — create modunda + plan kota bilgisiyle */}
+            {showPersistentRow && (
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Oda Kalıcılığı</p>
+                    <InfinityIcon size={12} className="text-[var(--theme-accent)]/60 shrink-0" />
+                  </div>
+                  <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+                    {noQuotaPlan
+                      ? 'Bu planda ek kalıcı oda hakkın yok. Planını yükselt.'
+                      : quotaReached
+                        ? 'Hakkın doldu — bir kalıcı odayı silerek iade al.'
+                        : 'Bu oda silinebilir; silince hak iade edilir.'}
+                  </p>
+                </div>
+                <div
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold tabular-nums"
+                  style={{
+                    background: noQuotaPlan || quotaReached
+                      ? 'rgba(239,68,68,0.10)'
+                      : 'rgba(var(--theme-accent-rgb),0.12)',
+                    color: noQuotaPlan || quotaReached
+                      ? 'rgb(239,68,68)'
+                      : 'var(--theme-accent)',
+                    border: `1px solid ${noQuotaPlan || quotaReached ? 'rgba(239,68,68,0.25)' : 'rgba(var(--theme-accent-rgb),0.25)'}`,
+                  }}
+                >
+                  {noQuotaPlan
+                    ? 'Plan desteklemiyor'
+                    : `${persistentInfo!.remaining} / ${persistentInfo!.quota} kaldı`}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
                 <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>

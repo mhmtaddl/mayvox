@@ -189,7 +189,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               {overview && (
                 <>
                   <HeaderPill icon={<Users size={10} />} value={overview.counts.members} limit={overview.limits.maxMembers} label="Üyeler" />
-                  <HeaderPill icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxChannels} label="Kanallar" />
+                  <HeaderPill icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxTotalRooms} label="Odalar" />
                 </>
               )}
             </div>
@@ -209,7 +209,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 return <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${cls}`}><Crown size={9} /> {p}</span>;
               })()}
               <HeaderPill icon={<Users size={10} />} value={overview.counts.members} limit={overview.limits.maxMembers} label="Üyeler" />
-              <HeaderPill icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxChannels} label="Kanallar" />
+              <HeaderPill icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxTotalRooms} label="Odalar" />
             </div>
           )}
         </div>

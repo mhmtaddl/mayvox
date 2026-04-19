@@ -11,7 +11,7 @@ function getCtx(): AudioContext {
 
 function tone(
   ctx: AudioContext, freq: number, start: number, dur: number,
-  vol = 0.25, type: OscillatorType = 'sine', freqEnd?: number,
+  vol = 0.55, type: OscillatorType = 'sine', freqEnd?: number,
 ) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -34,15 +34,15 @@ function playJoinLeave(ctx: AudioContext, isJoin: boolean, variant: SoundVariant
   if (variant === 1) {
     // İki nota: join yükselir, leave alçalır
     const [a, b] = isJoin ? [880, 1108] : [1108, 740];
-    tone(ctx, a, t, 0.08, 0.25); tone(ctx, b, t + 0.1, 0.08, 0.20);
+    tone(ctx, a, t, 0.08, 0.55); tone(ctx, b, t + 0.1, 0.08, 0.48);
   } else if (variant === 2) {
     // Yumuşak glide
     const [a, b] = isJoin ? [440, 660] : [660, 440];
-    tone(ctx, a, t, 0.18, 0.22, 'sine', b);
+    tone(ctx, a, t, 0.18, 0.50, 'sine', b);
   } else {
     // Üç hızlı nota (C-E-G / G-E-C)
     const notes = isJoin ? [523, 659, 784] : [784, 659, 523];
-    notes.forEach((f, i) => tone(ctx, f, t + i * 0.07, 0.06, 0.20));
+    notes.forEach((f, i) => tone(ctx, f, t + i * 0.07, 0.06, 0.48));
   }
 }
 
@@ -52,15 +52,15 @@ function playMuteDeafen(ctx: AudioContext, isOn: boolean, variant: SoundVariant)
   if (variant === 1) {
     // Üç nota: açılınca yükselir, kapanınca alçalır
     const notes = isOn ? [880, 660, 440] : [440, 660, 880];
-    notes.forEach((f, i) => tone(ctx, f, t + i * 0.07, 0.06, isOn ? 0.20 - i * 0.02 : 0.14 + i * 0.03));
+    notes.forEach((f, i) => tone(ctx, f, t + i * 0.07, 0.06, isOn ? 0.48 - i * 0.04 : 0.35 + i * 0.06));
   } else if (variant === 2) {
     // Tek ton glide
     const [a, b] = isOn ? [660, 330] : [330, 660];
-    tone(ctx, a, t, 0.12, 0.22, 'triangle', b);
+    tone(ctx, a, t, 0.12, 0.52, 'triangle', b);
   } else {
     // İki nota
     const [a, b] = isOn ? [800, 560] : [560, 800];
-    tone(ctx, a, t, 0.07, 0.20); tone(ctx, b, t + 0.08, 0.07, 0.20);
+    tone(ctx, a, t, 0.07, 0.48); tone(ctx, b, t + 0.08, 0.07, 0.48);
   }
 }
 
@@ -69,14 +69,14 @@ function playPtt(ctx: AudioContext, isOn: boolean, variant: SoundVariant) {
   const t = ctx.currentTime;
   if (variant === 1) {
     // Radyo pip
-    tone(ctx, isOn ? 1320 : 1100, t, 0.03, 0.14, 'sine');
+    tone(ctx, isOn ? 1320 : 1100, t, 0.03, 0.38, 'sine');
   } else if (variant === 2) {
     // Derin tık
-    tone(ctx, isOn ? 660 : 550, t, 0.025, 0.12, 'triangle');
+    tone(ctx, isOn ? 660 : 550, t, 0.025, 0.35, 'triangle');
   } else {
     // Çift pip
     const f = isOn ? 1320 : 1100;
-    tone(ctx, f, t, 0.02, 0.12); tone(ctx, f, t + 0.04, 0.02, 0.10);
+    tone(ctx, f, t, 0.02, 0.35); tone(ctx, f, t + 0.04, 0.02, 0.30);
   }
 }
 
@@ -93,7 +93,7 @@ let ringtoneAutoStop: ReturnType<typeof setTimeout> | null = null;
 
 function toneToNode(
   ctx: AudioContext, dest: AudioNode, freq: number, start: number, dur: number,
-  vol = 0.28, type: OscillatorType = 'sine',
+  vol = 0.55, type: OscillatorType = 'sine',
 ) {
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -111,17 +111,17 @@ function toneToNode(
 
 // Klasik: iki çift akort — 480+620 Hz, 2 saniyelik çevrim
 function ringCycleClassic(ctx: AudioContext, dest: AudioNode, t: number) {
-  toneToNode(ctx, dest, 480, t, 0.38);
-  toneToNode(ctx, dest, 620, t, 0.38);
-  toneToNode(ctx, dest, 480, t + 0.55, 0.38);
-  toneToNode(ctx, dest, 620, t + 0.55, 0.38);
+  toneToNode(ctx, dest, 480, t, 0.38, 0.55);
+  toneToNode(ctx, dest, 620, t, 0.38, 0.55);
+  toneToNode(ctx, dest, 480, t + 0.55, 0.38, 0.55);
+  toneToNode(ctx, dest, 620, t + 0.55, 0.38, 0.55);
 }
 
 // Yumuşak: üç çan notası (A4-C#5-E5) — triangle osilatör, 2 saniyelik çevrim
 function ringCycleSoft(ctx: AudioContext, dest: AudioNode, t: number) {
-  toneToNode(ctx, dest, 440, t,        0.28, 0.22, 'triangle');
-  toneToNode(ctx, dest, 554, t + 0.36, 0.28, 0.22, 'triangle');
-  toneToNode(ctx, dest, 659, t + 0.72, 0.28, 0.22, 'triangle');
+  toneToNode(ctx, dest, 440, t,        0.28, 0.50, 'triangle');
+  toneToNode(ctx, dest, 554, t + 0.36, 0.28, 0.50, 'triangle');
+  toneToNode(ctx, dest, 659, t + 0.72, 0.28, 0.50, 'triangle');
 }
 
 function buildRingtone(ctx: AudioContext, variant: InviteRingtoneVariant, cycles: number): GainNode {
@@ -138,6 +138,23 @@ function buildRingtone(ctx: AudioContext, variant: InviteRingtoneVariant, cycles
 
 export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
   stopInviteRingtone();
+  // Önce mp3 SoundManager dene; başarısızsa eski oscillator path'e fallback.
+  // Lazy-import: SoundManager modülü yüklü değilse build/test ortamlarında fail-safe.
+  try {
+    // dynamic require pattern — modül resolve edilemezse catch'e düşer
+    // (Vite ESM build'inde bu zaten import map'te vardır).
+    import('./audio/SoundManager')
+      .then(m => {
+        const ok = m.playCallRingtone({ maxMs: INVITE_RING_DURATION_MS + 1000 });
+        if (!ok) startOscillatorRingtone(variant);
+      })
+      .catch(() => startOscillatorRingtone(variant));
+  } catch {
+    startOscillatorRingtone(variant);
+  }
+}
+
+function startOscillatorRingtone(variant: InviteRingtoneVariant): void {
   try {
     const ctx = getCtx();
     if (ctx.state === 'suspended') ctx.resume();
@@ -148,6 +165,10 @@ export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
 }
 
 export function stopInviteRingtone(): void {
+  // mp3 katmanını da durdur (paralel iki path)
+  try {
+    import('./audio/SoundManager').then(m => m.stopCallRingtone()).catch(() => {});
+  } catch { /* no-op */ }
   if (ringtoneAutoStop) { clearTimeout(ringtoneAutoStop); ringtoneAutoStop = null; }
   if (ringtoneGain) {
     try {
@@ -162,7 +183,9 @@ export function stopInviteRingtone(): void {
   }
 }
 
-// Önizleme: tek çevrim çal (2s), ardından otomatik durdur
+// Önizleme: tek çevrim çal (2s), ardından otomatik durdur.
+// SoundManager kullanılırken Settings UI'da yeni picker'lar var; bu legacy
+// preview sadece eski "Klasik/Yumuşak" toggle'ı için geriye uyum sağlar.
 export function previewInviteRingtone(variant: InviteRingtoneVariant): void {
   stopInviteRingtone();
   try {

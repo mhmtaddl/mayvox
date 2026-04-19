@@ -1,24 +1,27 @@
 /**
- * Frontend plan limits — tek kaynak.
- * Backend authoritative (planService.ts); bu değerler UI messaging için.
+ * Legacy wrapper — tek canonical: `./planLimits.ts`.
+ * Geriye uyum için `USER_ROOM_LIMIT`, `getUserRoomLimit`, `roomLimitMessage` burada
+ * kalmaya devam ediyor ama değerler planLimits'den türetiliyor (desync yok).
  */
+import { PLAN_LIMITS, normalizePlan, type PlanKey } from './planLimits';
 
-export type PlanKey = 'free' | 'pro' | 'ultra';
-
-/** Plan başına özel oda sayısı — planLimits.ts kanonik değerlerle senkron. */
+/** @deprecated use `PLAN_LIMITS[plan].extraPersistentRooms` */
 export const USER_ROOM_LIMIT: Record<PlanKey, number> = {
-  free: 2,
-  pro: 5,
-  ultra: 16,
+  free: PLAN_LIMITS.free.extraPersistentRooms,
+  pro: PLAN_LIMITS.pro.extraPersistentRooms,
+  ultra: PLAN_LIMITS.ultra.extraPersistentRooms,
 };
 
+export type { PlanKey };
+
 export function getUserRoomLimit(plan: string | undefined | null): number {
-  if (plan === 'pro') return USER_ROOM_LIMIT.pro;
-  if (plan === 'ultra') return USER_ROOM_LIMIT.ultra;
-  return USER_ROOM_LIMIT.free;
+  return PLAN_LIMITS[normalizePlan(plan)].extraPersistentRooms;
 }
 
 export function roomLimitMessage(plan: string | undefined | null): string {
   const limit = getUserRoomLimit(plan);
-  return `Aynı anda en fazla ${limit} oda oluşturabilirsiniz.`;
+  if (limit === 0) {
+    return 'Bu planda ek kalıcı oda hakkınız yok. Daha fazla oda için planınızı yükseltin.';
+  }
+  return `En fazla ${limit} kalıcı oda oluşturabilirsiniz.`;
 }

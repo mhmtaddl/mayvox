@@ -12,6 +12,7 @@
 
 import type { DmMessage } from '../../lib/dmService';
 import { playNotifyBeep } from './notificationSound';
+import { playMessageReceive, playNotification } from '../../lib/audio/SoundManager';
 import { requestElectronFlash } from './electronAttention';
 import { hasSeen, markSeen } from './dedupeChannel';
 import {
@@ -629,12 +630,17 @@ function dispatchDecision(base: Omit<ToastItem, 'attentionTier' | 'visualMode' |
 
 function applySideEffects(kind: ToastKind, d: NotificationDecision) {
   // Sound — kind-bazlı rate limit + decision gate.
+  // Mp3 (SoundManager) ilk yol; per-category enable gate'i playMessageReceive /
+  // playNotification içinde uygulanır. Asset yüklenemezse oscillator beep fallback.
+  // playNotifyBeep'in kendi 'notify:sound' check'i = aynı message-enabled key
+  // olduğu için DM kapalıysa fallback de sessiz kalır (tutarlı davranış).
   if (d.sound === 'subtle') {
     const now = Date.now();
     if (now - lastSoundAt[kind] >= SOUND_RATE_MS[kind]) {
       lastSoundAt[kind] = now;
       fatigueRecordSound();
-      playNotifyBeep();
+      const mp3Played = kind === 'dm' ? playMessageReceive() : playNotification();
+      if (!mp3Played) playNotifyBeep();
     }
   }
   // Flash — sadece URGENT + fatigue clear; engine zaten gate ediyor.

@@ -41,6 +41,9 @@ export interface Channel {
   type: 'voice' | 'text';
   position: number;
   is_default: boolean;
+  /** Kullanıcı kalıcı oda = is_default=false AND is_persistent=true.
+   *  Sistem odaları is_default=true ⇒ is_persistent=true (her zaman kalıcı). */
+  is_persistent: boolean;
   owner_id: string | null;
   max_users: number | null;
   is_invite_only: boolean;
@@ -58,6 +61,7 @@ export interface ChannelResponse {
   type: 'voice' | 'text';
   position: number;
   isDefault: boolean;
+  isPersistent: boolean;
   ownerId: string | null;
   maxUsers: number | null;
   isInviteOnly: boolean;

@@ -14,7 +14,8 @@ import {
   ApiError,
 } from '../../../lib/serverService';
 import { formatFullName } from '../../../lib/formatName';
-import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
+// Kota enforcement backend'de. Frontend sadece CreateRoomModal'da
+// bilgisel sayaç gösterir (calcPersistentRoomsRemaining ChatView'dan çağrılır).
 import { INVITE_RING_DURATION_MS } from '../../../lib/sounds';
 import type { VoiceChannel, User } from '../../../types';
 
@@ -32,7 +33,7 @@ interface UseChannelActionsOptions {
   presenceChannelRef: React.MutableRefObject<any>;
   livekitRoomRef: React.MutableRefObject<any>;
   // UI
-  roomModal: { isOpen: boolean; type: 'create' | 'edit'; channelId?: string; name: string; maxUsers: number; isInviteOnly: boolean; isHidden: boolean; mode: string };
+  roomModal: { isOpen: boolean; type: 'create' | 'edit'; channelId?: string; name: string; maxUsers: number; isInviteOnly: boolean; isHidden: boolean; mode: string; isPersistent?: boolean };
   setRoomModal: React.Dispatch<React.SetStateAction<any>>;
   setContextMenu: (v: null) => void;
   setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
@@ -232,20 +233,26 @@ export function useChannelActions({
     if (!activeServerId) { setToastMsg('Önce bir sunucu seç.'); return; }
 
     if (roomModal.type === 'create') {
-      const userRooms = channels.filter(c => c.ownerId === currentUser.id);
-      const roomLimit = getUserRoomLimit(activeServerPlan);
-      if (userRooms.length >= roomLimit) { setToastMsg(roomLimitMessage(activeServerPlan)); return; }
+      // KARAR (2026-04-19): Frontend kota kontrolü kaldırıldı — backend
+      // authoritative. Frontend plan resolve'u yanlış olursa (cache/race/null)
+      // kullanıcıyı hatalı bloklamasın; backend `assertLimit` gerçek kaynak.
+      // CreateRoomModal'daki sayaç bilgisel; kullanıcı tıklayabilir, backend
+      // 403 dönerse `err.message` toast'a düşer.
       try {
+        // isPersistent: default true (new model). False path feature-flag backend'te kapalı.
+        const isPersistent = roomModal.isPersistent !== false;
         const created = await createServerChannel(activeServerId, {
           name: trimmedName,
           mode: roomModal.mode,
           maxUsers: roomModal.maxUsers || null,
           isInviteOnly: roomModal.isInviteOnly,
           isHidden: roomModal.isHidden,
+          isPersistent,
         });
         const newRoom: VoiceChannel = {
           id: created.id, name: created.name, userCount: 0, members: [],
           isSystemChannel: created.isDefault,
+          isPersistent: created.isPersistent,
           maxUsers: created.maxUsers ?? undefined,
           isInviteOnly: created.isInviteOnly,
           isHidden: created.isHidden,
@@ -370,6 +377,7 @@ export function useChannelActions({
                   userCount: ex?.userCount ?? 0,
                   members: ex?.members ?? [],
                   isSystemChannel: ch.isDefault,
+                  isPersistent: ch.isPersistent,
                   mode: ch.mode ?? ex?.mode ?? 'social',
                   maxUsers: ch.maxUsers ?? undefined,
                   isInviteOnly: ch.isInviteOnly,

@@ -6,74 +6,101 @@ import { logAction } from './auditLogService';
  * Plan enforcement — capability system'den ORTOGONAL.
  *   capability = "yapabilir mi?"   (role/permission)
  *   plan       = "ne kadar?"       (limit/constraint)
- * Bu servis sadece sayısal limit enforcement yapar; permission kararı alma.
  *
- * Parallel system — mevcut `planConfig.ts` ve `servers.plan` kolonu korunur.
+ * Canonical room taxonomy (2026-04-19):
+ *   - SYSTEM room:     is_default=true   → 4/server, silinemez, kotaya girmez
+ *   - PERSISTENT room: is_default=false AND is_persistent=true
+ *                      → plan extraPersistentRooms kotasında sayılır, silinebilir
+ *   - NON-PERSISTENT:  is_default=false AND is_persistent=false
+ *                      → yeni modelde KAPALI (maxNonPersistent=0 all plans)
+ *
  * Resolution order: server_plans.plan → servers.plan → 'free'
+ *
+ * Bu dosya BACKEND authoritative'dir. Frontend `src/lib/planLimits.ts`
+ * bu değerleri mirror eder — desync OLMAYACAK.
  */
 
 export type PlanKey = 'free' | 'pro' | 'ultra';
 
+/**
+ * Plan-level feature flags — runtime config. Hard-disable DEĞİL; tekrar açmak
+ * için sadece bu flag'i true yap + ilgili PLAN_CONFIG field'ını (>0) set et.
+ */
+export const FEATURE_FLAGS = {
+  /** Non-persistent (ephemeral) user-created odalar.
+   *  Yeni modelde (2026-04-19) KAPALI — tüm user-created odalar is_persistent=true.
+   *  Açmak için: bu flag=true + PLAN_CONFIG.*.maxNonPersistentRooms>0.
+   *  Açıldığında ChannelCreateInput.isPersistent=false path'i aktif olur. */
+  nonPersistentRoomsEnabled: false,
+} as const;
+
 export type LimitType =
-  | 'channel.create'
-  | 'privateChannel.create'
+  | 'persistentRoom.create'   // kullanıcı kalıcı oda oluştur (is_persistent=true)
+  | 'room.create'             // toplam oda (sistem + persistent + nonPersistent) — defense
   | 'invite.createLink'
   | 'server.join';
 
 export interface PlanLimitSet {
-  maxChannels: number;
   maxMembers: number;
-  maxPrivateChannels: number;
-  maxInviteLinksPerDay: number;
-  /** Sabit sistem odası sayısı (tüm planlarda 4) */
+  /** Sabit sistem odası sayısı (tüm planlarda 4) — server creation'da seed edilir */
   systemRooms: number;
+  /** Plan ek kalıcı oda hakkı (kullanıcının açıp silebildiği kalıcı odalar) */
+  extraPersistentRooms: number;
+  /** Non-persistent (ephemeral) oda hakkı — yeni modelde 0 all plans (future-use) */
+  maxNonPersistentRooms: number;
+  /** Toplam oda kapasitesi (derived: systemRooms + extraPersistentRooms + maxNonPersistentRooms) */
+  maxTotalRooms: number;
   /** Sistem odasındaki maksimum kişi sayısı */
   systemRoomCapacity: number;
-  /** Özel odadaki maksimum kişi sayısı */
-  privateRoomCapacity: number;
+  /** Kullanıcı kalıcı odalarında maksimum kişi sayısı */
+  persistentRoomCapacity: number;
+  /** Günlük davet linki limiti */
+  maxInviteLinksPerDay: number;
 }
 
 /**
- * FINAL plan config (2026-04-13). Ultra dedicated tier.
- * Sayılar: ürün spec'i — değiştirilince frontend `src/lib/planLimits.ts` da güncellenmeli.
+ * FINAL plan config — 2026-04-19 yeniden dengelendi.
+ *
+ * Monetization ratio:
+ *   Free → Pro : üye 3x, sys cap +67%, ekstra kalıcı 0→2
+ *   Pro  → Ultra: üye 5x, sys cap 2x, özel cap +128%, ekstra kalıcı 2→6
  */
 export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
   free: {
     maxMembers: 100,
     systemRooms: 4,
-    maxPrivateChannels: 2,
+    extraPersistentRooms: 0,
+    maxNonPersistentRooms: 0,
+    maxTotalRooms: 4,
     systemRoomCapacity: 15,
-    privateRoomCapacity: 20,
-    maxChannels: 4 + 2,                  // sistem + özel = toplam kanal
+    persistentRoomCapacity: 20,
     maxInviteLinksPerDay: 20,
   },
   pro: {
-    maxMembers: 250,
+    maxMembers: 300,
     systemRooms: 4,
-    maxPrivateChannels: 5,
+    extraPersistentRooms: 2,
+    maxNonPersistentRooms: 0,
+    maxTotalRooms: 6,
     systemRoomCapacity: 25,
-    privateRoomCapacity: 30,
-    maxChannels: 4 + 5,
+    persistentRoomCapacity: 35,
     maxInviteLinksPerDay: 100,
   },
   ultra: {
-    maxMembers: 1000,
+    maxMembers: 1500,
     systemRooms: 4,
-    maxPrivateChannels: 16,
-    systemRoomCapacity: 35,
-    privateRoomCapacity: 50,
-    maxChannels: 4 + 16,
+    extraPersistentRooms: 6,
+    maxNonPersistentRooms: 0,
+    maxTotalRooms: 10,
+    systemRoomCapacity: 50,
+    persistentRoomCapacity: 80,
     maxInviteLinksPerDay: 500,
   },
 };
 
-// Tekrarlayan unknown-plan warn'i limitle — her request spam olmasın.
+// Tekrarlayan unknown-plan warn'i limitle
 const seenUnknownPlans = new Set<string>();
 
-/**
- * String plan → geçerli PlanKey.
- * 'free' | 'pro' | 'ultra' dışındaki tüm değerler free'ye düşer + bir kez warn'e yazılır.
- */
 export function normalizePlan(raw: string | null | undefined): PlanKey {
   if (raw === 'free' || raw === 'pro' || raw === 'ultra') return raw;
   if (typeof raw === 'string' && raw.length > 0 && !seenUnknownPlans.has(raw)) {
@@ -83,7 +110,6 @@ export function normalizePlan(raw: string | null | undefined): PlanKey {
   return 'free';
 }
 
-/** Resolution: server_plans.plan → servers.plan → 'free' */
 export async function getServerPlan(serverId: string): Promise<PlanKey> {
   const row = await queryOne<{ plan: string | null; legacy_plan: string | null }>(
     `SELECT sp.plan AS plan, s.plan AS legacy_plan
@@ -110,9 +136,8 @@ export interface LimitCheck {
 }
 
 /**
- * Deterministic limit check — current < limit yollu pre-mutation kontrol.
- * COUNT query ile canlı sayım; cache/incrementUsage yok — spec ile tutarlı.
- * Race koşulları için risk bkz. report (channel/invite create 1-2 overshoot teorik olası).
+ * Pre-mutation limit check. Canlı COUNT query ile sayım yapar.
+ * Race koşullarında 1-2 overshoot teorik olarak mümkün (spec ile kabul).
  */
 export async function checkLimit(serverId: string, type: LimitType): Promise<LimitCheck> {
   const plan = await getServerPlan(serverId);
@@ -122,25 +147,29 @@ export async function checkLimit(serverId: string, type: LimitType): Promise<Lim
   let limit = 0;
 
   switch (type) {
-    case 'channel.create': {
+    case 'persistentRoom.create': {
+      // Kullanıcı kalıcı oda = is_default=false AND is_persistent=true
+      // Sistem odaları (is_default=true) SAYIMA GİRMEZ — her planda 4 ücretsiz.
+      const r = await queryOne<{ c: string }>(
+        `SELECT COUNT(*)::text AS c FROM channels
+         WHERE server_id = $1
+           AND COALESCE(is_default, false) = false
+           AND COALESCE(is_persistent, false) = true`,
+        [serverId],
+      );
+      current = parseInt(r?.c ?? '0', 10);
+      limit = limits.extraPersistentRooms;
+      break;
+    }
+    case 'room.create': {
+      // Defense-in-depth — toplam oda cap. Normalde persistentRoom.create
+      // yeterli ama race/drift koruması için mutation öncesi her iki check de çağrılabilir.
       const r = await queryOne<{ c: string }>(
         'SELECT COUNT(*)::text AS c FROM channels WHERE server_id = $1',
         [serverId],
       );
       current = parseInt(r?.c ?? '0', 10);
-      limit = limits.maxChannels;
-      break;
-    }
-    case 'privateChannel.create': {
-      // Ürün modeli: "özel oda" = kullanıcı oluşturulmuş custom oda (is_default=false).
-      // Erişim bayrağı (is_hidden/is_invite_only) ayrı konsept; kapasite ile karıştırma.
-      const r = await queryOne<{ c: string }>(
-        `SELECT COUNT(*)::text AS c FROM channels
-         WHERE server_id = $1 AND COALESCE(is_default, false) = false`,
-        [serverId],
-      );
-      current = parseInt(r?.c ?? '0', 10);
-      limit = limits.maxPrivateChannels;
+      limit = limits.maxTotalRooms;
       break;
     }
     case 'invite.createLink': {
@@ -154,7 +183,6 @@ export async function checkLimit(serverId: string, type: LimitType): Promise<Lim
       break;
     }
     case 'server.join': {
-      // Mevcut capacity kolonu ile plan limiti arasında DAHA KISITLAYICI olanı uygula.
       const r = await queryOne<{ member_count: number | null; capacity: number | null }>(
         `SELECT COALESCE(sa.member_count, 0) AS member_count, s.capacity
          FROM servers s LEFT JOIN server_activity sa ON sa.server_id = s.id
@@ -178,10 +206,6 @@ export async function checkLimit(serverId: string, type: LimitType): Promise<Lim
   };
 }
 
-/**
- * Throw-on-fail convenience helper. Mutation'dan ÖNCE çağrılmalı.
- * `actorId` verildiyse limit-hit audit emitlenir (plan.limit_hit).
- */
 export async function assertLimit(serverId: string, type: LimitType, actorId?: string): Promise<void> {
   const r = await checkLimit(serverId, type);
   if (!r.allowed) {
@@ -199,10 +223,6 @@ export async function assertLimit(serverId: string, type: LimitType, actorId?: s
   }
 }
 
-/**
- * Inline Math.min(capacity, maxMembers) join path'leri için audit helper.
- * Ayrı fonksiyon çünkü join path'leri assertLimit değil, lock'lu capacity query kullanıyor.
- */
 export async function emitLimitHit(
   serverId: string,
   actorId: string,
@@ -223,10 +243,10 @@ export async function emitLimitHit(
 
 function userFacingMessage(type: LimitType): string {
   switch (type) {
-    case 'channel.create':
-      return 'Plan kanal limitine ulaşıldı';
-    case 'privateChannel.create':
-      return 'Plan özel kanal limitine ulaşıldı';
+    case 'persistentRoom.create':
+      return 'Plan kalıcı oda hakkınız doldu';
+    case 'room.create':
+      return 'Plan toplam oda limitine ulaşıldı';
     case 'invite.createLink':
       return 'Günlük davet linki limitine ulaşıldı';
     case 'server.join':
@@ -234,4 +254,28 @@ function userFacingMessage(type: LimitType): string {
     default:
       return 'Plan limiti aşıldı';
   }
+}
+
+/**
+ * Downgrade enforcement helper — sadece yeni create engellenir.
+ * Mevcut odalar VERİ KAYBI OLMADAN kalır; kota üstündeyse sadece extraPersistentRooms
+ * değerine düşene kadar yeni persistent oda açılamaz.
+ *
+ * UI tarafından "plan alt limiti geçildi" uyarısı için kullanılabilir.
+ */
+export async function getPersistentRoomStatus(serverId: string): Promise<{
+  plan: PlanKey;
+  current: number;
+  quota: number;
+  remaining: number;
+  overQuota: boolean;
+}> {
+  const check = await checkLimit(serverId, 'persistentRoom.create');
+  return {
+    plan: check.plan,
+    current: check.current,
+    quota: check.limit,
+    remaining: Math.max(0, check.limit - check.current),
+    overQuota: check.current > check.limit,
+  };
 }

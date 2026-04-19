@@ -6,7 +6,7 @@ import { getServerAccessContext, assertCapability, invalidateAccessContextForSer
 import { invalidateServerOverview } from './serverOverviewService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
-import { assertLimit } from './planService';
+import { assertLimit, FEATURE_FLAGS } from './planService';
 
 // ── Sabitler ──
 const NAME_MIN = 1;
@@ -22,6 +22,10 @@ export interface ChannelCreateInput {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  /** Yeni modelde kullanıcı kalıcı oda oluşturuyorsa true.
+   *  Şu an planlarda maxNonPersistent=0 olduğundan DEFAULT true (backward compat).
+   *  Future: CreateRoomModal'dan açık boolean gelir. */
+  isPersistent?: boolean;
 }
 
 export interface ChannelUpdateInput {
@@ -42,6 +46,7 @@ function toResponse(ch: Channel): ChannelResponse {
     type: ch.type,
     position: ch.position,
     isDefault: ch.is_default,
+    isPersistent: ch.is_persistent,
     ownerId: ch.owner_id,
     maxUsers: ch.max_users,
     isInviteOnly: ch.is_invite_only,
@@ -124,13 +129,19 @@ export async function createChannel(
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.CHANNEL_CREATE, 'Kanal oluşturmak için yetkin yok');
 
+  // Frontend "Oda Kalıcılığı" toggle'ı input.isPersistent ile backend'e gelir.
+  // Default (undefined/true) = persistent path. False = non-persistent path.
+  // Non-persistent feature flag KAPALIYKEN (default), frontend false gönderse bile
+  // persistent'e düşürülür — veri kaybı yok, sadece kota gate'i uygulanır.
+  const requestedPersistent = input.isPersistent !== false;
+  const isPersistent = requestedPersistent || !FEATURE_FLAGS.nonPersistentRoomsEnabled;
+
   // Plan enforcement — tek source of truth: assertLimit (canlı COUNT).
-  // Önceki assertPlanAllows (resolver flag'ine dayalı yaklaşık kontrol) kaldırıldı;
-  // capability flag'i UI hint olarak kalıyor ama mutation authority sadece assertLimit.
-  await assertLimit(serverId, 'channel.create', userId);
-  // Ürün modeli: kullanıcı oluşturduğu HER oda "özel oda" sayılır (is_default=false);
-  // kapasitesi maxPrivateChannels (Free 2 / Pro 5 / Ultra 16). Erişim bayrağından bağımsız.
-  await assertLimit(serverId, 'privateChannel.create', userId);
+  if (isPersistent) {
+    await assertLimit(serverId, 'persistentRoom.create', userId);
+  }
+  // Toplam oda defense-in-depth (systemRooms + extraPersistent + nonPersistent)
+  await assertLimit(serverId, 'room.create', userId);
 
   const name = normalizeName(input.name);
   const mode = normalizeMode(input.mode);
@@ -138,13 +149,6 @@ export async function createChannel(
   const isInviteOnly = !!input.isInviteOnly;
   const isHidden = !!input.isHidden;
   const description = typeof input.description === 'string' ? input.description.slice(0, 200) : '';
-
-  // Plan limitine göre kanal sayısını kontrol et — mevcut getPlanLimits/serverService konvansiyonuna bak.
-  const existingCount = await queryOne<{ count: string }>(
-    'SELECT COUNT(*)::text AS count FROM channels WHERE server_id = $1',
-    [serverId]
-  );
-  const currentTotal = existingCount ? parseInt(existingCount.count, 10) : 0;
 
   // Pozisyon: mevcut max + 1
   const posRow = await queryOne<{ max_pos: number | null }>(
@@ -154,21 +158,20 @@ export async function createChannel(
   const nextPosition = (posRow?.max_pos ?? -1) + 1;
 
   const row = await queryOne<Channel>(
-    `INSERT INTO channels (server_id, name, description, type, position, is_default, owner_id, max_users, is_invite_only, is_hidden, mode)
-     VALUES ($1, $2, $3, 'voice', $4, false, $5, $6, $7, $8, $9)
+    `INSERT INTO channels (server_id, name, description, type, position, is_default, is_persistent, owner_id, max_users, is_invite_only, is_hidden, mode)
+     VALUES ($1, $2, $3, 'voice', $4, false, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [serverId, name, description, nextPosition, userId, maxUsers, isInviteOnly, isHidden, mode]
+    [serverId, name, description, nextPosition, isPersistent, userId, maxUsers, isInviteOnly, isHidden, mode]
   );
   if (!row) throw new AppError(500, 'Kanal oluşturulamadı');
 
-  void currentTotal;
   // channel_count değişti → flag hesabı etkilenir, cache'i server-wide invalidate et.
   invalidateAccessContextForServer(serverId);
   invalidateServerOverview(serverId);
   await logAction({
     serverId, actorId: userId, action: 'channel.create',
     resourceType: 'channel', resourceId: row.id,
-    metadata: { name: row.name, isInviteOnly, isHidden },
+    metadata: { name: row.name, isInviteOnly, isHidden, isPersistent },
   });
   return toResponse(row);
 }

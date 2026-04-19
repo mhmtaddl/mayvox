@@ -16,13 +16,19 @@ describe('computeFlags — centralized flag derivation', () => {
     expect(flags.canCreateChannel).toBe(true);
   });
 
-  it('CHANNEL_CREATE ama plan limitini aştıysa false', () => {
-    const flags = computeFlags(new Set([CAPABILITIES.CHANNEL_CREATE]), { maxChannels: 2 }, 20);
+  it('Free plan (maxChannels=0) → canCreateChannel false (kota 0, buton gizli)', () => {
+    const flags = computeFlags(new Set([CAPABILITIES.CHANNEL_CREATE]), { maxChannels: 0 }, 4);
     expect(flags.canCreateChannel).toBe(false);
   });
 
-  it('CHANNEL_CREATE ama limit+buffer içinde ise true', () => {
-    const flags = computeFlags(new Set([CAPABILITIES.CHANNEL_CREATE]), { maxChannels: 2 }, 5);
+  it('Pro plan (maxChannels=2) → canCreateChannel true (kota mevcut)', () => {
+    const flags = computeFlags(new Set([CAPABILITIES.CHANNEL_CREATE]), { maxChannels: 2 }, 4);
+    expect(flags.canCreateChannel).toBe(true);
+  });
+
+  it('Ultra plan (maxChannels=6) → canCreateChannel true (mutation authoritative gate)', () => {
+    // channelCount parametresi artık flag kararına girmiyor — precise check backend.
+    const flags = computeFlags(new Set([CAPABILITIES.CHANNEL_CREATE]), { maxChannels: 6 }, 20);
     expect(flags.canCreateChannel).toBe(true);
   });
 

@@ -13,7 +13,7 @@ export type SignatureSound = 'tap' | 'open' | 'close' | 'dm' | 'invite' | 'syste
 
 const PREF_KEY = 'mv:ui-sound';
 let audioCtx: AudioContext | null = null;
-let masterGain = 0.05; // global ceiling — "barely there"
+let masterGain = 0.18; // global ceiling — duyulur ama baskın değil
 
 function ensureCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -39,7 +39,7 @@ export function setSignatureSoundEnabled(on: boolean) {
   try { localStorage.setItem(PREF_KEY, on ? '1' : '0'); } catch { /* no-op */ }
 }
 export function setSignatureMasterGain(gain: number) {
-  masterGain = Math.max(0, Math.min(0.2, gain)); // hard cap 0.2
+  masterGain = Math.max(0, Math.min(0.5, gain)); // hard cap 0.5
 }
 
 // Signature tonlarının tanımı — kısa, 2 osc max.

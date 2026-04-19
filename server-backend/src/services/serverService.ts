@@ -175,15 +175,15 @@ export async function createServer(userId: string, name: string, description: st
       [server.id, userId]
     );
 
-    // Varsayılan 4 sistem kanalı — HEPSİ is_default=true; auto-delete'ten korunur.
-    // Task #18 bug fix: daha önce sadece ilk kanal default'tu, diğer 3'ü boş kalınca
-    // frontend auto-delete timer'ı ile siliniyordu.
+    // Varsayılan 4 sistem kanalı — is_default=true + is_persistent=true.
+    // Sistem odaları daima kalıcı sayılır (silinemez); is_persistent flag
+    // sadece kullanıcı-oluşturduğu kalıcı odalar için ayırt edicidir.
     await client.query(
-      `INSERT INTO channels (server_id, name, type, position, is_default, mode) VALUES
-       ($1, 'Sohbet Muhabbet', 'voice', 0, true, 'social'),
-       ($1, 'Oyun Takımı',    'voice', 1, true, 'gaming'),
-       ($1, 'Yayın Sahnesi',  'voice', 2, true, 'broadcast'),
-       ($1, 'Sessiz Alan',    'voice', 3, true, 'quiet')`,
+      `INSERT INTO channels (server_id, name, type, position, is_default, is_persistent, mode) VALUES
+       ($1, 'Sohbet Muhabbet', 'voice', 0, true, true, 'social'),
+       ($1, 'Oyun Takımı',    'voice', 1, true, true, 'gaming'),
+       ($1, 'Yayın Sahnesi',  'voice', 2, true, true, 'broadcast'),
+       ($1, 'Sessiz Alan',    'voice', 3, true, true, 'quiet')`,
       [server.id]
     );
 

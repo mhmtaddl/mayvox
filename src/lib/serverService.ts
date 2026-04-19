@@ -222,6 +222,9 @@ export interface ServerChannel {
   type: 'voice' | 'text';
   position: number;
   isDefault: boolean;
+  /** Kullanıcı kalıcı odası (is_default=false + is_persistent=true).
+   *  Sistem odaları için de true. Kota hesabı: !isDefault && isPersistent. */
+  isPersistent: boolean;
   ownerId: string | null;
   maxUsers: number | null;
   isInviteOnly: boolean;
@@ -238,6 +241,10 @@ export interface ChannelCreatePayload {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  /** "Oda Kalıcılığı" toggle — undefined/true = persistent (default).
+   *  false path şu an backend FEATURE_FLAGS.nonPersistentRoomsEnabled
+   *  kapalı olduğu için yine persistent'e düşürülür. */
+  isPersistent?: boolean;
 }
 
 export interface ChannelUpdatePayload {
@@ -467,15 +474,20 @@ export interface ServerOverview {
   serverId: string;
   plan: string;
   limits: {
-    maxChannels: number;
+    /** Toplam oda cap (systemRooms + extraPersistentRooms + maxNonPersistentRooms) */
+    maxTotalRooms: number;
     maxMembers: number;
-    maxPrivateChannels: number;
+    /** Kullanıcı kalıcı oda kotası — 0 / 2 / 6 (free / pro / ultra) */
+    extraPersistentRooms: number;
+    /** Sabit 4, referans için */
+    systemRooms: number;
     maxInviteLinksPerDay: number;
   };
   counts: {
     members: number;
     channels: number;
-    privateChannels: number;
+    /** Kullanıcı kalıcı oda sayısı (is_default=false AND is_persistent=true) */
+    persistentRooms: number;
     activeInviteLinks: number;
     inviteLinksLast24h: number;
   };

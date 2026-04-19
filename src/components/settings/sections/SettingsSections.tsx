@@ -4,7 +4,11 @@ import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useUser } from '../../../contexts/UserContext';
 import { useUI } from '../../../contexts/UIContext';
-import { previewSound, previewInviteRingtone, type SoundVariant } from '../../../lib/sounds';
+import { previewSound, type SoundVariant } from '../../../lib/sounds';
+import {
+  SoundManager, stopAllSamples,
+  type CallVariant, type NotificationVariant,
+} from '../../../lib/audio/SoundManager';
 import { themes, themeOrder, backgroundPresets } from '../../../themes';
 import { THEME_PACKS, getThemePack } from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
@@ -192,66 +196,176 @@ export function SoundsSection() {
     soundPtt, setSoundPtt,
     soundPttVariant, setSoundPttVariant,
     soundInvite, setSoundInvite,
-    soundInviteVariant, setSoundInviteVariant,
   } = useSettings();
 
-  const soundRows = [
+  // SoundManager-backed state (mp3 picker'lar için lokal kopya — render trigger)
+  const [callV, setCallV] = useState<CallVariant>(SoundManager.getCallVariant());
+  const [notifV, setNotifV] = useState<NotificationVariant>(SoundManager.getNotificationVariant());
+  const [notifOn, setNotifOn] = useState<boolean>(SoundManager.isNotificationEnabled());
+  const [vol, setVol] = useState<number>(SoundManager.getMasterVolume());
+  const [muted, setMuted] = useState<boolean>(SoundManager.isMuted());
+
+  useEffect(() => { SoundManager.preloadAll(); }, []);
+
+  // ── Oscillator-bazlı eski 3 satır (Giriş/Çıkış, Mikrofon/Hoparlör, Bas-Konuş) ──
+  const oscillatorRows = [
     { label: 'Giriş / Çıkış', tooltip: 'Odaya giriş/çıkışta ses çalar', category: 'JoinLeave' as const, variant: soundJoinLeaveVariant, setVariant: setSoundJoinLeaveVariant, enabled: soundJoinLeave, setEnabled: setSoundJoinLeave, variants: ['Ses A', 'Ses B'] },
     { label: 'Mikrofon / Hoparlör', tooltip: 'Mikrofon veya hoparlör kapandığında', category: 'MuteDeafen' as const, variant: soundMuteDeafenVariant, setVariant: setSoundMuteDeafenVariant, enabled: soundMuteDeafen, setEnabled: setSoundMuteDeafen, variants: ['Ses A', 'Ses B'] },
     { label: 'Bas-Konuş', tooltip: 'Bas-konuş tuşuna basıldığında', category: 'Ptt' as const, variant: soundPttVariant, setVariant: setSoundPttVariant, enabled: soundPtt, setEnabled: setSoundPtt, variants: ['Ses A', 'Ses B'] },
   ];
 
+  // ── Classic iOS-style radio dot — accent rengi bağımsız görünür ──
+  // Seçili değil: nötr glass-tint outline (tema-adaptif).
+  // Seçili: accent dolgu + İÇ BEYAZ NOKTA (her accent renginde kontrast) + dış glow.
+  function RadioDot({ active, dim }: { active: boolean; dim?: boolean }) {
+    return (
+      <span
+        className="relative block w-[15px] h-[15px] rounded-full transition-all duration-150"
+        style={{
+          background: active ? 'var(--theme-accent)' : 'transparent',
+          opacity: dim ? 0.55 : 1,
+          boxShadow: active
+            ? 'inset 0 0 0 1.5px var(--theme-accent), 0 0 0 3px rgba(var(--theme-accent-rgb),0.22), 0 1px 2px rgba(0,0,0,0.12)'
+            : 'inset 0 0 0 1.5px rgba(var(--glass-tint),0.55), inset 0 0 0 2.5px rgba(var(--glass-tint),0.04)',
+        }}
+      >
+        {active && (
+          <span
+            className="absolute rounded-full"
+            style={{
+              top: 4, left: 4, right: 4, bottom: 4,
+              background: 'rgba(255,255,255,0.96)',
+              boxShadow: '0 0 2px rgba(0,0,0,0.15)',
+            }}
+          />
+        )}
+      </span>
+    );
+  }
+
+  function CirclePicker<V extends string>({ current, options, enabled, onPick, onPreview }: {
+    current: V;
+    options: ReadonlyArray<V>;
+    enabled: boolean;
+    onPick: (v: V) => void;
+    onPreview: (v: V) => void;
+  }) {
+    return (
+      <div className="flex flex-wrap items-center gap-0.5">
+        {options.map(opt => {
+          const active = current === opt;
+          return (
+            <button
+              key={opt}
+              onClick={() => { stopAllSamples(); onPick(opt); onPreview(opt); }}
+              className="p-1 rounded-full transition-transform active:scale-90"
+              aria-label={`Ses ${opt}`}
+            >
+              <RadioDot active={active && enabled} dim={!enabled} />
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const mp3Variants: ReadonlyArray<'1' | '2' | '3'> = ['1', '2', '3'];
+
   return (
     <CardSection icon={<Volume2 size={12} />} title="">
       <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mb-3">Bildirim ve UI sesleri</p>
       <div className="divide-y divide-[var(--theme-border)]/50">
-        {soundRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
-          <div key={category} className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 first:pt-0 last:pb-0">
+
+        {/* 1-3: Giriş/Çıkış · Mikrofon/Hoparlör · Bas-Konuş (oscillator — circle picker) */}
+        {oscillatorRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
+          <div key={category} className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 first:pt-0">
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">{label}</p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-              {(variants.map((_, i) => (i + 1) as SoundVariant)).map((v, i) => (
-                <button
-                  key={v}
-                  disabled={!enabled}
-                  onClick={() => { setVariant(v); previewSound(category, v); }}
-                  className={`w-[44px] md:w-[48px] py-1 rounded-full text-[9px] md:text-[10px] font-semibold border text-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
-                    variant === v && enabled
-                      ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
-                      : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
-                  }`}
-                >
-                  {variants[i]}
-                </button>
-              ))}
+              <div className="flex flex-wrap items-center gap-0.5">
+                {variants.map((_, i) => {
+                  const v = (i + 1) as SoundVariant;
+                  const active = variant === v;
+                  return (
+                    <button
+                      key={v}
+                      disabled={!enabled}
+                      onClick={() => { stopAllSamples(); setVariant(v); previewSound(category, v); }}
+                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-not-allowed"
+                      aria-label={`Ses ${v}`}
+                    >
+                      <RadioDot active={active && enabled} dim={!enabled} />
+                    </button>
+                  );
+                })}
+              </div>
               <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} tooltip={tooltip} />
             </div>
           </div>
         ))}
 
-        {/* Davet Çağrısı */}
-        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 last:pb-0">
+        {/* 4: Arama (mp3 — gelen arama zil sesi, soundInvite toggle ile gated) */}
+        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Davet Çağrısı</p>
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Arama</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-            {([1, 2] as const).map(v => (
-              <button
-                key={v}
-                disabled={!soundInvite}
-                onClick={() => { setSoundInviteVariant(v); previewInviteRingtone(v); }}
-                className={`w-[44px] md:w-[48px] py-1 rounded-full text-[9px] md:text-[10px] font-semibold border text-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
-                  soundInviteVariant === v && soundInvite
-                    ? 'bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] border-[var(--theme-accent)] shadow-sm'
-                    : 'bg-transparent text-[var(--theme-secondary-text)] border-[var(--theme-border)] hover:border-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]'
-                }`}
-              >
-                {v === 1 ? 'Klasik' : 'Yumuşak'}
-              </button>
-            ))}
-            <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} tooltip="Oda davetinde çalacak zil sesi" />
+            <CirclePicker<CallVariant>
+              current={callV}
+              options={mp3Variants as ReadonlyArray<CallVariant>}
+              enabled={soundInvite}
+              onPick={v => { setCallV(v); SoundManager.setCallVariant(v); }}
+              onPreview={v => SoundManager.preview.call(v)}
+            />
+            <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} tooltip="Gelen aramada çalacak zil sesi" />
           </div>
+        </div>
+
+        {/* 5: Bildirim (mp3 — davet/sistem bildirimi) */}
+        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Bildirim</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+            <CirclePicker<NotificationVariant>
+              current={notifV}
+              options={mp3Variants as ReadonlyArray<NotificationVariant>}
+              enabled={notifOn}
+              onPick={v => { setNotifV(v); SoundManager.setNotificationVariant(v); }}
+              onPreview={v => SoundManager.preview.notification(v)}
+            />
+            <Toggle checked={notifOn} onChange={() => { const next = !notifOn; setNotifOn(next); SoundManager.setNotificationEnabled(next); }} tooltip="Davet ve sistem bildirim sesi" />
+          </div>
+        </div>
+
+        {/* 6: Genel Ses Seviyesi (master vol slider + mute toggle, en altta) */}
+        <div className="flex flex-col gap-2 py-3 last:pb-0">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Genel Ses Seviyesi</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/70 w-8 text-right">{Math.round(vol * 100)}%</span>
+              <Toggle
+                checked={!muted}
+                onChange={() => { const next = !muted; setMuted(next); SoundManager.setMuted(next); }}
+                tooltip="Tüm özel sesleri sustur"
+              />
+            </div>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={vol}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setVol(v);
+              SoundManager.setMasterVolume(v);
+            }}
+            className="w-full accent-[var(--theme-accent)]"
+            disabled={muted}
+          />
         </div>
       </div>
     </CardSection>

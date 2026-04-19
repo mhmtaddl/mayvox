@@ -10,6 +10,9 @@ export interface RoleSummary {
 }
 
 export interface AccessLimits {
+  /** Kullanıcının açabileceği kalıcı oda kotası (sistem odalarından ayrı).
+   *  Free=0, Pro=2, Ultra=6. 0 ise create button UI'da gizlenir.
+   *  Authoritative enforcement: planService.assertLimit('persistentRoom.create'). */
   maxChannels?: number;
   maxMembers?: number;
   maxInvites?: number;
@@ -67,11 +70,11 @@ export function computeFlags(
 ): AccessFlags {
   const has = (c: Capability) => capabilities.has(c);
   const maxCh = limits.maxChannels;
-  // Plan kanal kapasitesi: default sistem kanallarına ek olarak `customRooms` kadar custom
-  // kanal yaratma hakkı — precise hesap için mevcut sayıya karşı kıyas. Fazla fine-grained
-  // değil: yaklaşık buffer (10) bırakıyoruz ki sistem kanalları sayılmasın. Kesin hesap
-  // serverService seviyesinde de tekrar doğrulanıyor.
-  const channelCapacityOk = maxCh === undefined || channelCount < maxCh + 10;
+  // Yeni model (2026-04-19): maxCh = extraPersistentRooms kotası (0/2/6).
+  // Free (maxCh=0) → create button UI'da gizli. Pro/Ultra → görünür; kota dolmuşsa
+  // backend assertLimit 403 döner. Buradaki flag coarse hint; authority planService.
+  const channelCapacityOk = maxCh === undefined ? true : maxCh > 0;
+  void channelCount; // eski buffer heuristic kaldırıldı — backend authoritative.
 
   return {
     canCreateChannel: has(CAPABILITIES.CHANNEL_CREATE) && channelCapacityOk,

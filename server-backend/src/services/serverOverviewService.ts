@@ -7,15 +7,20 @@ export interface ServerOverview {
   serverId: string;
   plan: string;
   limits: {
-    maxChannels: number;
+    /** Toplam oda cap (systemRooms + extraPersistentRooms + maxNonPersistent) */
+    maxTotalRooms: number;
     maxMembers: number;
-    maxPrivateChannels: number;
+    /** Kullanıcı kalıcı oda kotası — 0 / 2 / 6 (free / pro / ultra) */
+    extraPersistentRooms: number;
+    /** Sabit 4, referans için */
+    systemRooms: number;
     maxInviteLinksPerDay: number;
   };
   counts: {
     members: number;
     channels: number;
-    privateChannels: number;
+    /** Kullanıcı kalıcı oda sayısı (is_default=false AND is_persistent=true) */
+    persistentRooms: number;
     activeInviteLinks: number;
     inviteLinksLast24h: number;
   };
@@ -48,14 +53,16 @@ export async function getServerOverview(serverId: string, callerId: string): Pro
   const row = await queryOne<{
     members: string;
     channels: string;
-    private_channels: string;
+    persistent_rooms: string;
     active_invites: string;
     invites_24h: string;
   }>(
     `SELECT
        (SELECT COUNT(*)::text FROM server_members WHERE server_id = $1) AS members,
        (SELECT COUNT(*)::text FROM channels WHERE server_id = $1) AS channels,
-       (SELECT COUNT(*)::text FROM channels WHERE server_id = $1 AND COALESCE(is_default, false) = false) AS private_channels,
+       (SELECT COUNT(*)::text FROM channels WHERE server_id = $1
+          AND COALESCE(is_default, false) = false
+          AND COALESCE(is_persistent, false) = true) AS persistent_rooms,
        (SELECT COUNT(*)::text FROM server_invite_links
           WHERE server_id = $1
             AND revoked_at IS NULL
@@ -70,15 +77,16 @@ export async function getServerOverview(serverId: string, callerId: string): Pro
     serverId,
     plan,
     limits: {
-      maxChannels: limits.maxChannels,
+      maxTotalRooms: limits.maxTotalRooms,
       maxMembers: limits.maxMembers,
-      maxPrivateChannels: limits.maxPrivateChannels,
+      extraPersistentRooms: limits.extraPersistentRooms,
+      systemRooms: limits.systemRooms,
       maxInviteLinksPerDay: limits.maxInviteLinksPerDay,
     },
     counts: {
       members: parseInt(row?.members ?? '0', 10),
       channels: parseInt(row?.channels ?? '0', 10),
-      privateChannels: parseInt(row?.private_channels ?? '0', 10),
+      persistentRooms: parseInt(row?.persistent_rooms ?? '0', 10),
       activeInviteLinks: parseInt(row?.active_invites ?? '0', 10),
       inviteLinksLast24h: parseInt(row?.invites_24h ?? '0', 10),
     },

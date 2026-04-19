@@ -27,6 +27,7 @@ import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import SocialSearchHub from '../components/SocialSearchHub';
 import FriendsSidebarContent from '../components/FriendsSidebarContent';
 import { startInviteRingtone, stopInviteRingtone, INVITE_RING_DURATION_MS } from '../lib/sounds';
+import { playReject } from '../lib/audio/SoundManager';
 import { dismissInviteNotification } from '../lib/notifications';
 import { handleServerRestricted, handleServerUnrestricted } from '../features/notifications/notificationService';
 import { pushInformational } from '../features/notifications/informationalStore';
@@ -77,7 +78,7 @@ import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getS
 import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
 import { getPlanVisual } from '../lib/planStyles';
-import { PLAN_LIMITS, PLAN_TAGLINE, planFeatureList, type PlanKey } from '../lib/planLimits';
+import { PLAN_LIMITS, PLAN_TAGLINE, planFeatureList, calcPersistentRoomsRemaining, type PlanKey } from '../lib/planLimits';
 import ServerSettings from '../components/server/ServerSettings';
 import JoinServerModal from '../components/server/JoinServerModal';
 import DiscoverPanel from '../components/server/DiscoverPanel';
@@ -443,6 +444,7 @@ export default function ChatView() {
               userCount,
               members,
               isSystemChannel: ch.isDefault,
+              isPersistent: ch.isPersistent,
               mode: ch.mode ?? nameModeMap[ch.name] ?? 'social',
               maxUsers: ch.maxUsers ?? undefined,
               isInviteOnly: ch.isInviteOnly,
@@ -694,6 +696,8 @@ export default function ChatView() {
         payload: { inviterId: invitationModal.inviterId, inviteeId: currentUser.id, inviteeName: formatFullName(currentUser.firstName, currentUser.lastName) },
       });
     }
+    // Reject sesi — stopInviteRingtone effect'i zaten modal=null'da tetiklenir.
+    playReject();
     setInvitationModal(null);
   }, [invitationModal, currentUser.id, currentUser.firstName, currentUser.lastName, presenceChannelRef, setInvitationModal]);
 
@@ -1090,8 +1094,15 @@ export default function ChatView() {
         </AnimatePresence>
         <AnimatePresence>
           {roomModal.isOpen && (
-            <ChatViewRoomModal roomModal={roomModal} onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
-              onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))} onSave={handleSaveRoom} />
+            <ChatViewRoomModal
+              roomModal={roomModal}
+              onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
+              onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))}
+              onSave={handleSaveRoom}
+              persistentInfo={roomModal.type === 'create'
+                ? calcPersistentRoomsRemaining(activeServerData?.plan, channels)
+                : undefined}
+            />
           )}
         </AnimatePresence>
         <AnimatePresence>
@@ -1356,10 +1367,16 @@ export default function ChatView() {
               const tier = currentUser.serverCreationPlan ?? 'none';
               const TIER_RANK: Record<string, number> = { none: 0, free: 1, pro: 2, ultra: 3 };
               const allow = (p: 'free' | 'pro' | 'ultra') => TIER_RANK[p] <= TIER_RANK[tier];
+              // Sayılar canonical planLimits.ts'den — hardcoded yok.
+              const fmtSub = (p: 'free' | 'pro' | 'ultra'): string => {
+                const l = PLAN_LIMITS[p];
+                const extra = l.extraPersistentRooms > 0 ? ` + ${l.extraPersistentRooms} kalıcı` : '';
+                return `${l.maxMembers.toLocaleString('tr-TR')} üye · ${l.systemRooms} sistem${extra}`;
+              };
               const planOptions = [
-                { id: 'free' as const,  name: 'Free',  sub: '100 üye · 6 oda',         disabled: !allow('free') },
-                { id: 'pro' as const,   name: 'Pro',   sub: '250 üye · 9 oda',         disabled: !allow('pro') },
-                { id: 'ultra' as const, name: 'Ultra', sub: '1000 üye · 20 oda',       disabled: !allow('ultra') },
+                { id: 'free' as const,  name: 'Free',  sub: fmtSub('free'),  disabled: !allow('free') },
+                { id: 'pro' as const,   name: 'Pro',   sub: fmtSub('pro'),   disabled: !allow('pro') },
+                { id: 'ultra' as const, name: 'Ultra', sub: fmtSub('ultra'), disabled: !allow('ultra') },
               ];
               // Seçili plan kullanıcıya kapalı hale geldiyse ilk izinliye düşür.
               if (planOptions.find(p => p.id === createPlan)?.disabled) {

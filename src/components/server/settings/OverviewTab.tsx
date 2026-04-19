@@ -54,10 +54,11 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
   if (!data) return <div className="text-[11px] text-[var(--theme-secondary-text)]/40 py-8 text-center">Yükleniyor...</div>;
 
   const memberPct = pct(data.counts.members, data.limits.maxMembers);
-  const channelPct = pct(data.counts.channels, data.limits.maxChannels);
-  const privatePct = pct(data.counts.privateChannels, data.limits.maxPrivateChannels);
+  const channelPct = pct(data.counts.channels, data.limits.maxTotalRooms);
+  // Persistent = kullanıcı kalıcı oda (sistem hariç); limit = extraPersistentRooms kotası.
+  const persistentPct = pct(data.counts.persistentRooms, data.limits.extraPersistentRooms);
   const invitePct = pct(data.counts.inviteLinksLast24h, data.limits.maxInviteLinksPerDay);
-  const peakPct = Math.max(memberPct, channelPct, privatePct);
+  const peakPct = Math.max(memberPct, channelPct, persistentPct);
 
   const status = computeStatus({ memberPct, channelPct, peakPct, dailyInvite: data.counts.inviteLinksLast24h });
   const has24hInviteActivity = data.counts.inviteLinksLast24h > 0;
@@ -77,7 +78,7 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
             activeInvites={data.counts.activeInviteLinks}
             limit24h={data.limits.maxInviteLinksPerDay}
           />
-          <TopRoomCard channels={data.counts.channels} privateChannels={data.counts.privateChannels} />
+          <TopRoomCard channels={data.counts.channels} persistentRooms={data.counts.persistentRooms} />
           <InviteStateCard
             has24h={has24hInviteActivity}
             hasActive={hasActiveInvite}
@@ -182,8 +183,8 @@ function Hero({ server, data, status }: { server: Server; data: ServerOverview; 
       {/* Inline stats with bars */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
         <HeroStat icon={<Users size={11} />} label="Üyeler" current={data.counts.members} limit={data.limits.maxMembers} />
-        <HeroStat icon={<Hash size={11} />} label="Kanallar" current={data.counts.channels} limit={data.limits.maxChannels} />
-        <HeroStat icon={<Lock size={11} />} label="Özel Kanal" current={data.counts.privateChannels} limit={data.limits.maxPrivateChannels} />
+        <HeroStat icon={<Hash size={11} />} label="Toplam Oda" current={data.counts.channels} limit={data.limits.maxTotalRooms} />
+        <HeroStat icon={<Lock size={11} />} label="Kalıcı Oda" current={data.counts.persistentRooms} limit={data.limits.extraPersistentRooms} />
         <HeroStat icon={<Link2 size={11} />} label="24s Davet" current={data.counts.inviteLinksLast24h} limit={data.limits.maxInviteLinksPerDay} />
       </div>
     </div>
@@ -278,10 +279,11 @@ function ActivityCard({ invites24h, activeInvites, limit24h }: { invites24h: num
   );
 }
 
-function TopRoomCard({ channels, privateChannels }: { channels: number; privateChannels: number }) {
-  const open = Math.max(0, channels - privateChannels);
+function TopRoomCard({ channels, persistentRooms }: { channels: number; persistentRooms: number }) {
+  // Toplam = sistem + kullanıcı-kalıcı. Sistem her zaman 4.
+  const systemRooms = Math.max(0, channels - persistentRooms);
   return (
-    <InsightCard title="Kanal Dağılımı" icon={<Hash size={12} />} tone="neutral">
+    <InsightCard title="Oda Dağılımı" icon={<Hash size={12} />} tone="neutral">
       <div className="flex items-end gap-2 mb-1.5">
         <span className="text-[24px] font-bold leading-none tabular-nums text-[var(--theme-text)]">{channels}</span>
         <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">toplam</span>
@@ -289,13 +291,13 @@ function TopRoomCard({ channels, privateChannels }: { channels: number; privateC
       <div className="flex items-center gap-3 text-[10.5px]">
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/70" />
-          <span className="text-[var(--theme-secondary-text)]">Açık:</span>
-          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{open}</span>
+          <span className="text-[var(--theme-secondary-text)]">Sistem:</span>
+          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{systemRooms}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70" />
-          <span className="text-[var(--theme-secondary-text)]">Özel:</span>
-          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{privateChannels}</span>
+          <span className="text-[var(--theme-secondary-text)]">Kalıcı:</span>
+          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{persistentRooms}</span>
         </div>
       </div>
     </InsightCard>
@@ -422,7 +424,7 @@ function PlanGrid({ currentPlan, peakPct }: { currentPlan: string; peakPct: numb
                 diff.kind === 'upgrade' ? 'text-emerald-400' : 'text-amber-400'
               }`}>
                 {diff.kind === 'upgrade'
-                  ? `↑ +${diff.members.toLocaleString('tr-TR')} üye, +${diff.privateRooms} özel oda`
+                  ? `↑ +${diff.members.toLocaleString('tr-TR')} üye, +${diff.persistentRooms} kalıcı oda hakkı`
                   : `↓ -${(-diff.members).toLocaleString('tr-TR')} üye limiti`}
               </div>
             )}
@@ -433,15 +435,15 @@ function PlanGrid({ currentPlan, peakPct }: { currentPlan: string; peakPct: numb
   );
 }
 
-function useDiff(from: PlanKey, to: PlanKey): { kind: 'upgrade' | 'downgrade'; members: number; privateRooms: number } | null {
+function useDiff(from: PlanKey, to: PlanKey): { kind: 'upgrade' | 'downgrade'; members: number; persistentRooms: number } | null {
   return useMemo(() => {
     const a = PLAN_LIMITS[from];
     const b = PLAN_LIMITS[to];
     if (!a || !b) return null;
     const dm = b.maxMembers - a.maxMembers;
-    const dp = b.privateRooms - a.privateRooms;
+    const dp = b.extraPersistentRooms - a.extraPersistentRooms;
     if (dm === 0 && dp === 0) return null;
-    return { kind: dm > 0 ? 'upgrade' : 'downgrade', members: dm, privateRooms: dp };
+    return { kind: dm > 0 ? 'upgrade' : 'downgrade', members: dm, persistentRooms: dp };
   }, [from, to]);
 }
 

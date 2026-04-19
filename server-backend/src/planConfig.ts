@@ -1,17 +1,39 @@
+/**
+ * Legacy plan shape (capacity / customRooms / systemRoomSize / customRoomSize).
+ *
+ * CANONICAL SOURCE: `./services/planService.ts` PLAN_CONFIG.
+ * Bu dosya sadece legacy field isimlerini isteyen callsite'lara adapter sağlar
+ * (accessContextService, legacy join paths). Değerler planService'den türetilir
+ * — DESYNC olmaz.
+ */
+import { PLAN_CONFIG, normalizePlan, type PlanLimitSet } from './services/planService';
+
 export interface PlanLimits {
+  /** Legacy: maxMembers */
   capacity: number;
+  /** Legacy: systemRoomCapacity */
   systemRoomSize: number;
+  /** Legacy: extraPersistentRooms (kullanıcının açabildiği kalıcı oda hakkı). */
   customRooms: number;
+  /** Legacy: persistentRoomCapacity */
   customRoomSize: number;
 }
 
-// FINAL plan limits (2026-04-13) — bkz. services/planService.ts PLAN_CONFIG (canonical kaynak).
+function toLegacy(l: PlanLimitSet): PlanLimits {
+  return {
+    capacity: l.maxMembers,
+    systemRoomSize: l.systemRoomCapacity,
+    customRooms: l.extraPersistentRooms,
+    customRoomSize: l.persistentRoomCapacity,
+  };
+}
+
 export const PLANS: Record<string, PlanLimits> = {
-  free:  { capacity: 100,  systemRoomSize: 15, customRooms: 2,  customRoomSize: 20 },
-  pro:   { capacity: 250,  systemRoomSize: 25, customRooms: 5,  customRoomSize: 30 },
-  ultra: { capacity: 1000, systemRoomSize: 35, customRooms: 16, customRoomSize: 50 },
+  free: toLegacy(PLAN_CONFIG.free),
+  pro: toLegacy(PLAN_CONFIG.pro),
+  ultra: toLegacy(PLAN_CONFIG.ultra),
 };
 
 export function getPlanLimits(plan: string): PlanLimits {
-  return PLANS[plan] ?? PLANS.free;
+  return PLANS[normalizePlan(plan)];
 }

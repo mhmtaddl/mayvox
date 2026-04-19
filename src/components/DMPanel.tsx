@@ -1,13 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2, Check, CheckCheck } from 'lucide-react';
 import {
-  isNotifySoundEnabled, setNotifySoundEnabled,
-  getSoundVariant, setSoundVariant, type SoundVariant,
-  getSoundVolume, setSoundVolume, type SoundVolume,
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
-  previewNotifySound,
 } from '../features/notifications/notificationSound';
+import { SoundManager, stopAllSamples, type MessageVariant } from '../lib/audio/SoundManager';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
@@ -19,6 +16,8 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
 import { MV_PRESS } from '../lib/signature';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
+import { playMessageSend } from '../lib/audio/SoundManager';
+// SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
 // Dependency yok; manuel curated set. 8 kolon × 5 satır = 40 emoji.
@@ -71,11 +70,13 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
 
 // ── Mesaj Ayarları Panel ────────────────────────────────────────────────
 // Compact inline dropdown — DMPanel header'ından anchor'lı, modal değil.
+// Mesaj sesi seçimi BURADA yönetilir; ana Settings > Sesler'de "Mesaj" YOK.
 function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [soundOn, setSoundOn] = useState(() => isNotifySoundEnabled());
-  const [variant, setVariant] = useState<SoundVariant>(() => getSoundVariant());
-  const [volume, setVolume] = useState<SoundVolume>(() => getSoundVolume());
+  const [soundOn, setSoundOn] = useState(() => SoundManager.isMessageEnabled());
+  const [sendOn, setSendOn] = useState(() => SoundManager.isMessageSendEnabled());
+  const [variant, setVariant] = useState<MessageVariant>(() => SoundManager.getMessageVariant());
+  const [vol, setVol] = useState<number>(() => SoundManager.getMessageVolume());
   const [toastOn, setToastOn] = useState(() => isToastEnabled());
   const [groupOn, setGroupOn] = useState(() => isGroupingEnabled());
 
@@ -88,7 +89,7 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="flex items-center justify-between gap-3 py-2.5 min-h-[32px]">
+    <div className="flex items-center justify-between gap-3 py-[7px] min-h-[28px]">
       <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">{label}</span>
       {children}
     </div>
@@ -107,25 +108,33 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
     </button>
   );
 
-  const Segment = <T extends string>({ value, onChange, options }: {
-    value: T; onChange: (v: T) => void; options: Array<{ v: T; l: string }>;
-  }) => (
-    <div className="inline-flex rounded-md overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.08)' }}>
-      {options.map(o => (
-        <button
-          key={o.v}
-          onClick={() => onChange(o.v)}
-          className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-            value === o.v
-              ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]'
-              : 'text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)]'
-          }`}
-        >
-          {o.l}
-        </button>
-      ))}
-    </div>
+  // Classic iOS-style radio — accent-rengi bağımsız görünür.
+  // Seçili değil: nötr glass-tint outline (tema-adaptif; accent'ten bağımsız).
+  // Seçili: accent dolgu + İÇ BEYAZ NOKTA (her accent renginde kontrast) + dış soft glow.
+  const RadioDot = ({ active }: { active: boolean }) => (
+    <span
+      className="relative block w-[15px] h-[15px] rounded-full transition-all duration-150"
+      style={{
+        background: active ? 'var(--theme-accent)' : 'transparent',
+        boxShadow: active
+          ? 'inset 0 0 0 1.5px var(--theme-accent), 0 0 0 3px rgba(var(--theme-accent-rgb),0.22), 0 1px 2px rgba(0,0,0,0.12)'
+          : 'inset 0 0 0 1.5px rgba(var(--glass-tint),0.55), inset 0 0 0 2.5px rgba(var(--glass-tint),0.04)',
+      }}
+    >
+      {active && (
+        <span
+          className="absolute rounded-full"
+          style={{
+            top: 4, left: 4, right: 4, bottom: 4,
+            background: 'rgba(255,255,255,0.96)',
+            boxShadow: '0 0 2px rgba(0,0,0,0.15)',
+          }}
+        />
+      )}
+    </span>
   );
+
+  const variantOptions: ReadonlyArray<MessageVariant> = ['1', '2', '3'];
 
   return (
     <motion.div
@@ -150,41 +159,60 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
           Mesaj Ayarları
         </span>
       </div>
-      <div className="px-3.5 py-1.5 divide-y divide-[rgba(var(--glass-tint),0.05)]">
-        <Row label="Bildirim sesi">
-          <Toggle on={soundOn} onChange={v => { setSoundOn(v); setNotifySoundEnabled(v); }} />
+      <div className="px-3.5 py-1 divide-y divide-[rgba(var(--glass-tint),0.05)]">
+        <Row label="Mesaj sesi">
+          <Toggle on={soundOn} onChange={v => { setSoundOn(v); SoundManager.setMessageEnabled(v); }} />
         </Row>
-        <Row label="Bildirim tonu">
-          <Segment
-            value={variant}
-            onChange={v => {
-              setVariant(v);
-              setSoundVariant(v);
-              // Seçilen tonu anında oynat — kullanıcı farkı duysun
-              previewNotifySound();
+        <Row label="Mesaj gönderim sesi">
+          <Toggle on={sendOn} onChange={v => {
+            setSendOn(v);
+            SoundManager.setMessageSendEnabled(v);
+            if (v) { stopAllSamples(); SoundManager.preview.messageSend(); }
+          }} />
+        </Row>
+        {/* Ton — tek satır, sağa hizalı radio */}
+        <Row label="Ton">
+          <div className="flex items-center gap-0.5 -mr-1">
+            {variantOptions.map(opt => {
+              const active = variant === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => {
+                    stopAllSamples();
+                    setVariant(opt);
+                    SoundManager.setMessageVariant(opt);
+                    SoundManager.preview.message(opt);
+                  }}
+                  className="p-1 rounded-full transition-transform active:scale-90"
+                  aria-label={`Ses ${opt}`}
+                >
+                  <RadioDot active={active} />
+                </button>
+              );
+            })}
+          </div>
+        </Row>
+        {/* Mesaj ses seviyesi — kompakt iki satır */}
+        <div className="py-[7px]">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Mesaj ses seviyesi</span>
+            <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/70 w-9 text-right">{Math.round(vol * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={vol}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setVol(v);
+              SoundManager.setMessageVolume(v);
             }}
-            options={[
-              { v: 'ses1' as SoundVariant, l: 'Klasik' },
-              { v: 'ses2' as SoundVariant, l: 'Yumuşak' },
-            ]}
+            className="w-full accent-[var(--theme-accent)]"
           />
-        </Row>
-        <Row label="Ses seviyesi">
-          <Segment
-            value={volume}
-            onChange={v => {
-              setVolume(v);
-              setSoundVolume(v);
-              // Seçilen seviyeyi örnekle
-              previewNotifySound();
-            }}
-            options={[
-              { v: 'low' as SoundVolume, l: 'Düşük' },
-              { v: 'medium' as SoundVolume, l: 'Orta' },
-              { v: 'high' as SoundVolume, l: 'Yüksek' },
-            ]}
-          />
-        </Row>
+        </div>
         <Row label="Masaüstü bildirimi">
           <Toggle on={toastOn} onChange={v => { setToastOn(v); setToastEnabled(v); }} />
         </Row>
@@ -480,6 +508,8 @@ function ChatArea({
     onSend(t);
     setInput('');
     inputRef.current?.focus();
+    // Mesaj gönderme sesi — düşük volume (SoundManager içinde scale edilir)
+    playMessageSend();
     // Kendi gönderimimiz → dipe in
     scheduleScroll(() => scrollToBottom(true));
   };

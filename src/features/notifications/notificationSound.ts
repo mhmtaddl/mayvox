@@ -19,9 +19,9 @@ export type SoundVariant = 'ses1' | 'ses2';
 export type SoundVolume = 'low' | 'medium' | 'high';
 
 const VOLUME_GAIN: Record<SoundVolume, number> = {
-  low: 0.20,
-  medium: 0.45,
-  high: 0.75,
+  low: 0.60,
+  medium: 0.90,
+  high: 1.0,
 };
 
 export function getSoundVariant(): SoundVariant {
