@@ -129,11 +129,10 @@ export async function createChannel(
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.CHANNEL_CREATE, 'Kanal oluşturmak için yetkin yok');
 
-  // Frontend "Oda Kalıcılığı" toggle'ı input.isPersistent ile backend'e gelir.
-  // Default (undefined/true) = persistent path. False = non-persistent path.
-  // Non-persistent feature flag KAPALIYKEN (default), frontend false gönderse bile
-  // persistent'e düşürülür — veri kaybı yok, sadece kota gate'i uygulanır.
-  const requestedPersistent = input.isPersistent !== false;
+  // "Oda Kalıcılığı" toggle opt-in: frontend açık true, kapalı false.
+  // Undefined gelirse temp varsayılır (backward-compat eski caller'lar için).
+  // Feature flag kapalıysa false'u true'ya yükseltiriz (non-persistent disabled).
+  const requestedPersistent = input.isPersistent === true;
   const isPersistent = requestedPersistent || !FEATURE_FLAGS.nonPersistentRoomsEnabled;
 
   // Plan enforcement — tek source of truth: assertLimit (canlı COUNT).

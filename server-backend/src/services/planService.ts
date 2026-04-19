@@ -27,11 +27,10 @@ export type PlanKey = 'free' | 'pro' | 'ultra';
  * için sadece bu flag'i true yap + ilgili PLAN_CONFIG field'ını (>0) set et.
  */
 export const FEATURE_FLAGS = {
-  /** Non-persistent (ephemeral) user-created odalar.
-   *  Yeni modelde (2026-04-19) KAPALI — tüm user-created odalar is_persistent=true.
-   *  Açmak için: bu flag=true + PLAN_CONFIG.*.maxNonPersistentRooms>0.
-   *  Açıldığında ChannelCreateInput.isPersistent=false path'i aktif olur. */
-  nonPersistentRoomsEnabled: false,
+  /** Non-persistent (ephemeral) user-created odalar — auto-delete timer'lı geçici oda.
+   *  Default davranış; kalıcı oda opt-in (CreateRoomModal'da "Oda Kalıcılığı" toggle).
+   *  Kapatmak için: bu flag=false → tüm user-created odalar persistent'e zorlanır. */
+  nonPersistentRoomsEnabled: true,
 } as const;
 
 export type LimitType =
@@ -70,8 +69,8 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxMembers: 100,
     systemRooms: 4,
     extraPersistentRooms: 0,
-    maxNonPersistentRooms: 0,
-    maxTotalRooms: 4,
+    maxNonPersistentRooms: 2,     // geçici oda (auto-delete)
+    maxTotalRooms: 6,              // 4 sys + 0 persistent + 2 temp
     systemRoomCapacity: 15,
     persistentRoomCapacity: 20,
     maxInviteLinksPerDay: 20,
@@ -80,8 +79,8 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxMembers: 300,
     systemRooms: 4,
     extraPersistentRooms: 2,
-    maxNonPersistentRooms: 0,
-    maxTotalRooms: 6,
+    maxNonPersistentRooms: 5,
+    maxTotalRooms: 11,             // 4 + 2 + 5
     systemRoomCapacity: 25,
     persistentRoomCapacity: 35,
     maxInviteLinksPerDay: 100,
@@ -90,8 +89,8 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxMembers: 1500,
     systemRooms: 4,
     extraPersistentRooms: 6,
-    maxNonPersistentRooms: 0,
-    maxTotalRooms: 10,
+    maxNonPersistentRooms: 10,
+    maxTotalRooms: 20,             // 4 + 6 + 10
     systemRoomCapacity: 50,
     persistentRoomCapacity: 80,
     maxInviteLinksPerDay: 500,

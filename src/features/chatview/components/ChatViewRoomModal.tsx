@@ -174,40 +174,58 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
 
           {/* Group B: Gizlilik + Kalıcılık ayarları */}
           <div className="space-y-3.5">
-            {/* Oda Kalıcılığı — create modunda + plan kota bilgisiyle */}
-            {showPersistentRow && (
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Oda Kalıcılığı</p>
-                    <InfinityIcon size={12} className="text-[var(--theme-accent)]/60 shrink-0" />
+            {/* Oda Kalıcılığı — create modunda, opt-in toggle.
+                Default OFF: geçici oda (auto-delete countdown).
+                ON: kalıcı oda (kota tüketir, silinmedikçe kalır). */}
+            {showPersistentRow && (() => {
+              const persistActive = roomModal.isPersistent === true;
+              const toggleDisabled = noQuotaPlan || (!persistActive && quotaReached);
+              const onToggle = () => {
+                if (toggleDisabled) return;
+                onUpdate({ isPersistent: !persistActive });
+              };
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Oda Kalıcılığı</p>
+                      <InfinityIcon size={12} className={`shrink-0 ${persistActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40'}`} />
+                      <span
+                        className="shrink-0 inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold tabular-nums"
+                        style={{
+                          background: noQuotaPlan ? 'rgba(239,68,68,0.10)' : quotaReached && !persistActive ? 'rgba(239,68,68,0.10)' : 'rgba(var(--glass-tint),0.08)',
+                          color: noQuotaPlan ? 'rgb(239,68,68)' : quotaReached && !persistActive ? 'rgb(239,68,68)' : 'var(--theme-secondary-text)',
+                          border: `1px solid ${noQuotaPlan || (quotaReached && !persistActive) ? 'rgba(239,68,68,0.25)' : 'rgba(var(--glass-tint),0.12)'}`,
+                        }}
+                      >
+                        {noQuotaPlan ? 'Plan desteklemiyor' : `${persistentInfo!.remaining} / ${persistentInfo!.quota}`}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+                      {noQuotaPlan
+                        ? 'Bu planda kalıcı oda hakkın yok. Oda geçici, boşalınca silinir.'
+                        : persistActive
+                          ? 'Oda silinmedikçe kalır. Silince hak iade edilir.'
+                          : quotaReached
+                            ? 'Kalıcı oda hakkın doldu. Oda geçici oluşur.'
+                            : 'Kapalı: oda geçicidir, boşalınca otomatik silinir. Açarsan kalıcı olur.'}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-                    {noQuotaPlan
-                      ? 'Bu planda ek kalıcı oda hakkın yok. Planını yükselt.'
-                      : quotaReached
-                        ? 'Hakkın doldu — bir kalıcı odayı silerek iade al.'
-                        : 'Bu oda silinebilir; silince hak iade edilir.'}
-                  </p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={persistActive}
+                    disabled={toggleDisabled}
+                    onClick={onToggle}
+                    className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${toggleDisabled ? 'opacity-40 cursor-not-allowed' : ''} ${persistActive && !toggleDisabled ? '' : 'bg-[var(--theme-border)]'}`}
+                    style={persistActive && !toggleDisabled ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
+                    title={toggleDisabled ? (noQuotaPlan ? 'Bu planda kalıcı oda hakkı yok' : 'Hakkın doldu') : undefined}
+                  >
+                    <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${persistActive && !toggleDisabled ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
+                  </button>
                 </div>
-                <div
-                  className="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold tabular-nums"
-                  style={{
-                    background: noQuotaPlan || quotaReached
-                      ? 'rgba(239,68,68,0.10)'
-                      : 'rgba(var(--theme-accent-rgb),0.12)',
-                    color: noQuotaPlan || quotaReached
-                      ? 'rgb(239,68,68)'
-                      : 'var(--theme-accent)',
-                    border: `1px solid ${noQuotaPlan || quotaReached ? 'rgba(239,68,68,0.25)' : 'rgba(var(--theme-accent-rgb),0.25)'}`,
-                  }}
-                >
-                  {noQuotaPlan
-                    ? 'Plan desteklemiyor'
-                    : `${persistentInfo!.remaining} / ${persistentInfo!.quota} kaldı`}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">

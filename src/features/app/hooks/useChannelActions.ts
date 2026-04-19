@@ -239,8 +239,8 @@ export function useChannelActions({
       // CreateRoomModal'daki sayaç bilgisel; kullanıcı tıklayabilir, backend
       // 403 dönerse `err.message` toast'a düşer.
       try {
-        // isPersistent: default true (new model). False path feature-flag backend'te kapalı.
-        const isPersistent = roomModal.isPersistent !== false;
+        // Toggle opt-in: default undefined → false (geçici). User tik attıysa true (kalıcı).
+        const isPersistent = roomModal.isPersistent === true;
         const created = await createServerChannel(activeServerId, {
           name: trimmedName,
           mode: roomModal.mode,
