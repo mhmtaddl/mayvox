@@ -1171,12 +1171,37 @@ export default function App() {
     updateNoiseStrength(noiseSuppressionStrength);
   }, [noiseSuppressionStrength, updateNoiseStrength]);
 
-  // ── Deafen: mute all remote audio elements ────────────────────────────────
+  // ── Deafen: HTMLAudioElement.muted + LiveKit track.setVolume(0) çift katman ──
+  // HTMLAudioElement.muted webAudioMix=true durumunda yetersiz kalır çünkü LiveKit
+  // sesi Web Audio API üzerinden route eder. track.setVolume(0) resmi API —
+  // her iki mix mode'da da gerçek sessizlik garanti.
+  //
+  // Undeafen'de kullanıcının per-user volume'u (userVolumes) geri yüklenir.
   useEffect(() => {
+    // Layer 1: HTML element muted
     document.querySelectorAll<HTMLAudioElement>('[data-livekit-audio]').forEach(el => {
       el.muted = isDeafened;
     });
-  }, [isDeafened]);
+
+    // Layer 2: LiveKit RemoteAudioTrack volume
+    const room = livekitRoomRef.current;
+    if (!room) return;
+    room.remoteParticipants.forEach(participant => {
+      participant.trackPublications.forEach(pub => {
+        const track = pub.track as { setVolume?: (v: number) => void; kind?: string } | undefined;
+        if (!track || typeof track.setVolume !== 'function') return;
+        if (isDeafened) {
+          track.setVolume(0);
+        } else {
+          // Restore — kayıtlı volume varsa onu, yoksa 1.0 (default)
+          const user = allUsers.find(u => u.name === participant.identity);
+          const savedPct = user ? userVolumes[user.id] : undefined;
+          const vol = savedPct !== undefined ? Math.max(0, Math.min(1.5, savedPct / 100)) : 1;
+          track.setVolume(vol);
+        }
+      });
+    });
+  }, [isDeafened, allUsers, userVolumes, livekitRoomRef]);
 
   // ── Auto-leave on idle: kullanıcı belirli süre pasif kalırsa kanaldan çıkar ──
   // Mimari:

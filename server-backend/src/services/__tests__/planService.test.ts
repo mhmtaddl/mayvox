@@ -10,13 +10,13 @@ import { PLAN_CONFIG, normalizePlan, getPlanLimits } from '../planService';
  */
 
 describe('planService — plan limits (canonical spec)', () => {
-  it('free plan limits — sadece 4 sistem odası', () => {
+  it('free plan limits — 4 sistem + 2 özel', () => {
     const l = PLAN_CONFIG.free;
     expect(l.maxMembers).toBe(100);
     expect(l.systemRooms).toBe(4);
     expect(l.extraPersistentRooms).toBe(0);
-    expect(l.maxNonPersistentRooms).toBe(0);
-    expect(l.maxTotalRooms).toBe(4);
+    expect(l.maxNonPersistentRooms).toBe(2);
+    expect(l.maxTotalRooms).toBe(6);
     expect(l.systemRoomCapacity).toBe(15);
     expect(l.persistentRoomCapacity).toBe(20);
     expect(l.nonPersistentRoomCapacity).toBe(20);
@@ -32,7 +32,7 @@ describe('planService — plan limits (canonical spec)', () => {
     expect(l.maxTotalRooms).toBe(9);
     expect(l.systemRoomCapacity).toBe(25);
     expect(l.persistentRoomCapacity).toBe(30);
-    expect(l.nonPersistentRoomCapacity).toBe(40);
+    expect(l.nonPersistentRoomCapacity).toBe(35);
     expect(l.maxInviteLinksPerDay).toBe(100);
   });
 

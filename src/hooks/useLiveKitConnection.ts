@@ -228,18 +228,23 @@ export function useLiveKitConnection({
           audioEl.muted = isDeafenedRef.current;
           document.body.appendChild(audioEl);
 
-          const user = allUsersRef.current.find(u => u.name === participant.identity);
-          if (user) {
-            const savedVolume = userVolumesRef.current[user.id];
-            if (savedVolume !== undefined) {
-              // webAudioMix: true sayesinde setVolume(>1) gerçek amplifikasyon.
-              // Clamp 0..1.5 (150%).
-              const vol = Math.max(0, Math.min(1.5, savedVolume / 100));
-              if (track instanceof RemoteAudioTrack) {
-                track.setVolume(vol);
+          // Deafened state'te yeni subscribe olan track sessiz başlasın.
+          // HTMLAudioElement.muted webAudioMix=true'da yetersiz → track.setVolume(0)
+          // LiveKit API garantili sessizlik.
+          if (isDeafenedRef.current && track instanceof RemoteAudioTrack) {
+            track.setVolume(0);
+          } else {
+            const user = allUsersRef.current.find(u => u.name === participant.identity);
+            if (user) {
+              const savedVolume = userVolumesRef.current[user.id];
+              if (savedVolume !== undefined) {
+                // webAudioMix destekli setVolume(0..1.5) — 150% amplifikasyon dahil.
+                const vol = Math.max(0, Math.min(1.5, savedVolume / 100));
+                if (track instanceof RemoteAudioTrack) {
+                  track.setVolume(vol);
+                }
+                audioEl.volume = Math.min(1, vol);
               }
-              // HTMLMediaElement fallback 0..1 clamp.
-              audioEl.volume = Math.min(1, vol);
             }
           }
         }

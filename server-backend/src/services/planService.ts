@@ -71,11 +71,11 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxMembers: 100,
     systemRooms: 4,
     extraPersistentRooms: 0,
-    maxNonPersistentRooms: 0,             // Free: sadece 4 sistem odası
-    maxTotalRooms: 4,                     // 4 + 0 + 0
+    maxNonPersistentRooms: 2,             // Free: 2 özel oda hakkı (auto-delete)
+    maxTotalRooms: 6,                     // 4 + 0 + 2
     systemRoomCapacity: 15,
     persistentRoomCapacity: 20,           // N/A (quota=0), monotonic ladder için yazılı
-    nonPersistentRoomCapacity: 20,        // N/A (quota=0)
+    nonPersistentRoomCapacity: 20,
     maxInviteLinksPerDay: 20,
   },
   pro: {
@@ -86,7 +86,7 @@ export const PLAN_CONFIG: Record<PlanKey, PlanLimitSet> = {
     maxTotalRooms: 9,                     // 4 + 2 + 3
     systemRoomCapacity: 25,
     persistentRoomCapacity: 30,
-    nonPersistentRoomCapacity: 40,
+    nonPersistentRoomCapacity: 35,
     maxInviteLinksPerDay: 100,
   },
   ultra: {

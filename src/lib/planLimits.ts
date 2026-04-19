@@ -43,11 +43,11 @@ export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
     maxMembers: 100,
     systemRooms: 4,
     extraPersistentRooms: 0,
-    maxNonPersistentRooms: 0,       // Free: sadece 4 sistem odası
-    maxTotalRooms: 4,
+    maxNonPersistentRooms: 2,       // Free: 2 özel oda hakkı (auto-delete)
+    maxTotalRooms: 6,               // 4 + 0 + 2
     systemRoomCapacity: 15,
     persistentRoomCapacity: 20,     // N/A (quota=0)
-    nonPersistentRoomCapacity: 20,  // N/A (quota=0)
+    nonPersistentRoomCapacity: 20,
   },
   pro: {
     maxMembers: 300,
@@ -57,7 +57,7 @@ export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
     maxTotalRooms: 9,
     systemRoomCapacity: 25,
     persistentRoomCapacity: 30,
-    nonPersistentRoomCapacity: 40,
+    nonPersistentRoomCapacity: 35,
   },
   ultra: {
     maxMembers: 1000,
