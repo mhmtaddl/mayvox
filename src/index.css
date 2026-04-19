@@ -38,8 +38,10 @@ html.lowperf [style*="brand-shimmer"] {
   --color-border-focus: var(--border-focus);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
   --color-text-muted: var(--text-muted);
   --color-text-on-accent: var(--text-on-accent);
+  --color-text-inverse: var(--text-inverse);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-active: var(--accent-active);

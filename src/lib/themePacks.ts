@@ -35,11 +35,13 @@ export interface ThemePack {
   border: string;
   borderFocus: string;
 
-  // Text
+  // Text — semantic ramp (primary → inverse, Apple System Gray pattern)
   textPrimary: string;
   textSecondary: string;
+  textTertiary?: string;  // new: between secondary and muted
   textMuted: string;
   textOnAccent: string;
+  textInverse?: string;   // new: opposite of primary (for text on primary-colored bg)
 
   // Accent system
   accent: string;
@@ -142,11 +144,13 @@ export const THEME_PACKS: ThemePack[] = [
     surfaceActive: 'rgba(244, 246, 250, 1)',
     border: 'rgba(0, 0, 0, 0.10)',
     borderFocus: 'rgba(0, 0, 0, 0.45)',
-    // Light: opaque dark hex — alpha YOK, kontrast garanti
-    textPrimary: '#111111',
-    textSecondary: '#222222',
-    textMuted: '#5B6675',
+    // Light: opaque dark hex — alpha YOK, kontrast garanti. Apple System Gray ramp.
+    textPrimary: '#0B0B0C',
+    textSecondary: '#3A3A3C',
+    textTertiary: '#6E6E73',
+    textMuted: '#A1A1A6',
     textOnAccent: '#FFFFFF',
+    textInverse: '#FFFFFF',
     // ── Neutral charcoal accent system — mavi YOK ──
     accent: '#1A1A1A',
     accentRgb: '26, 26, 26',
@@ -302,8 +306,13 @@ export function applyThemePack(pack: ThemePack): void {
   set('--border-focus', pack.borderFocus);
   set('--text-primary', pack.textPrimary);
   set('--text-secondary', pack.textSecondary);
+  set('--text-tertiary', pack.textTertiary ?? pack.textMuted);
   set('--text-muted', pack.textMuted);
   set('--text-on-accent', pack.textOnAccent);
+  set(
+    '--text-inverse',
+    pack.textInverse ?? (pack.isLight ? '#FFFFFF' : '#0B0B0C'),
+  );
   set('--accent', pack.accent);
   set('--accent-rgb', pack.accentRgb);
   set('--accent-hover', pack.accentHover);

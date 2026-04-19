@@ -380,7 +380,13 @@ export default function ManagementUsersPanel() {
             <Filter size={12} />
             Filtrele
             {activeFilterCount > 0 && (
-              <span className="ml-0.5 bg-[var(--theme-accent)] text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold">
+              <span
+                className="ml-0.5 rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold"
+                style={{
+                  background: 'var(--theme-accent)',
+                  color: 'var(--text-on-accent, #FFFFFF)',
+                }}
+              >
                 {activeFilterCount}
               </span>
             )}

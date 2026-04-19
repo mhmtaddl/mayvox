@@ -258,7 +258,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
         <Search
           size={isCenter ? 15 : 12}
           className="shrink-0 transition-colors duration-150"
-          style={{ color: 'rgba(255,255,255,0.6)' }}
+          style={{ color: 'var(--text-secondary)' }}
         />
         <input
           ref={inputRef}
@@ -268,18 +268,18 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           onFocus={() => setIsOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
           placeholder="Kullanıcı ara..."
-          className={`flex-1 bg-transparent outline-none min-w-0 placeholder:text-[rgba(255,255,255,0.45)] ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
+          className={`flex-1 bg-transparent outline-none min-w-0 placeholder:text-[var(--text-muted)] ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
           style={{
-            color: 'rgba(255,255,255,0.92)',
+            color: 'var(--text-primary)',
           } as React.CSSProperties}
         />
         {query && (
           <button
             onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
             className="transition-colors duration-150"
-            style={{ color: 'rgba(255,255,255,0.6)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.9)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
+            style={{ color: 'var(--text-secondary)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
           >
             <X size={isCenter ? 14 : 11} />
           </button>
@@ -305,21 +305,27 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           >
             {isSearching ? (
               <div className="px-4 py-5 text-center">
-                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Aranıyor...</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Aranıyor...</p>
               </div>
             ) : results.length > 0 ? (
               <div className="py-1.5">
                 {results.map(user => (
-                  <div key={user.id} className="flex items-center gap-3 px-3 py-2 transition-all duration-100 hover:bg-[rgba(255,255,255,0.05)] cursor-pointer rounded-lg mx-1 group">
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 px-3 py-2 transition-all duration-100 cursor-pointer rounded-lg mx-1 group"
+                    style={{ background: 'transparent' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover, rgba(var(--glass-tint),0.05))'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
                     {/* Avatar */}
                     <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
                       <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium truncate leading-tight" style={{ color: 'rgba(255,255,255,0.95)' }}>{displayName(user)}</p>
+                      <p className="text-[12px] font-medium truncate leading-tight" style={{ color: 'var(--text-primary)' }}>{displayName(user)}</p>
                       <div className="flex items-center gap-1.5">
-                        {user.name && <p className="text-[9px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>@{user.name}</p>}
+                        {user.name && <p className="text-[9px] truncate" style={{ color: 'var(--text-tertiary)' }}>@{user.name}</p>}
                         {getStatusBadge(user.id)}
                       </div>
                     </div>
@@ -332,7 +338,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
               </div>
             ) : (
               <div className="px-4 py-5 text-center">
-                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Kullanıcı bulunamadı</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Kullanıcı bulunamadı</p>
               </div>
             )}
           </motion.div>
