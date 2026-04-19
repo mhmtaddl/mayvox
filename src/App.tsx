@@ -1051,6 +1051,9 @@ export default function App() {
         const SYSTEM_ROOM_NAMES = new Set(['Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
         const nextChannels = prevChannels.map(channel => {
           if (channel.isSystemChannel) return channel;
+          // Kalıcı odalar (kullanıcı toggle ile açtı) auto-delete'ten muaf.
+          // Sadece is_default=false AND is_persistent=false olan geçici odalar timer'a girer.
+          if (channel.isPersistent) return channel;
           if (SYSTEM_ROOM_NAMES.has(channel.name)) return channel; // hard fallback
 
           const isEmpty = !channel.members || channel.members.length === 0;
