@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, UserCheck } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, UserCheck, Gavel } from 'lucide-react';
 import {
   type Server, type ServerOverview,
   getServerDetails, updateServer, deleteServer, leaveServer,
@@ -13,10 +13,17 @@ import AuditTab from './settings/AuditTab';
 import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
 import InvitesTab from './settings/InvitesTab';
-import BansTab from './settings/BansTab';
+import ModerationTab from './settings/ModerationTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'bans' | 'audit';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'moderation' | 'audit';
+// Legacy initialTab input — 'bans' artık 'moderation' tab'ına redirect olur
+type TabInput = Tab | 'bans';
+
+function resolveInitialTab(t: TabInput | undefined): Tab | undefined {
+  if (t === 'bans') return 'moderation';
+  return t;
+}
 
 // Identity strip'te plan/limit göstergesi — sadece bu dosyada kullanılıyor
 function HeaderPill({ icon, value, limit, label }: { icon: React.ReactNode; value: number; limit: number; label: string }) {
@@ -38,11 +45,12 @@ interface Props {
   onClose: () => void;
   onServerUpdated: () => void;
   onServerDeleted?: () => void;
-  initialTab?: Tab;
+  /** 'bans' legacy değer — otomatik 'moderation'a redirect edilir */
+  initialTab?: TabInput;
 }
 
 export default function ServerSettings({ serverId, onClose, onServerUpdated, onServerDeleted, initialTab }: Props) {
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
+  const [tab, setTab] = useState<Tab>(resolveInitialTab(initialTab) ?? 'overview');
   const [server, setServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -120,7 +128,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     ...(canManageServer ? [{ id: 'roles' as Tab, label: 'Roller', icon: <Shield size={13} /> }] : []),
     ...(canCreateInvite || canRevokeInvite ? [{ id: 'invites' as Tab, label: 'Davetler', icon: <Mail size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'requests' as Tab, label: 'Başvurular', icon: <UserCheck size={13} />, badge: pendingRequestCount }] : []),
-    ...(canKickMembers ? [{ id: 'bans' as Tab, label: 'Yasaklar', icon: <ShieldOff size={13} /> }] : []),
+    ...(canKickMembers ? [{ id: 'moderation' as Tab, label: 'Moderasyon', icon: <Gavel size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
   ];
 
@@ -235,7 +243,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
           {tab === 'invites' && (canCreateInvite || canRevokeInvite) && <InvitesTab serverId={serverId} showToast={showToast} />}
           {tab === 'requests' && canManageServer && <JoinRequestsTab serverId={serverId} />}
-          {tab === 'bans' && canKickMembers && <BansTab serverId={serverId} showToast={showToast} />}
+          {tab === 'moderation' && canKickMembers && <ModerationTab serverId={serverId} showToast={showToast} />}
           {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
           </>)}
         </div>
