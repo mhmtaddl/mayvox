@@ -256,7 +256,22 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
       {/* ── Liste ── */}
       {sorted.length === 0 ? (
-        <Empty text={q ? 'Aramayla eşleşen üye yok' : 'Bu rolde üye bulunmuyor'} />
+        <Empty
+          text={
+            q
+              ? 'Aramayla eşleşen üye yok'
+              : roleFilter !== 'all'
+                ? 'Bu rolde üye bulunmuyor'
+                : 'Henüz üye yok'
+          }
+          sub={
+            q
+              ? `"${searchQuery}" için sonuç yok`
+              : roleFilter !== 'all'
+                ? 'Başka bir filtre dene'
+                : 'Davetler sekmesinden davet gönderebilirsin'
+          }
+        />
       ) : (
         <div className="space-y-1">
           {sorted.map(m => (
@@ -401,7 +416,15 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
           color: chip.color,
           border: `1px solid ${chip.border}`,
         }}
-        title={canChangeRole ? 'Rolü değiştir' : undefined}
+        title={
+          canChangeRole
+            ? 'Rolü değiştir'
+            : targetRole === 'owner'
+              ? 'Sahibin rolü değiştirilemez'
+              : myRole === 'mod'
+                ? 'Rol değiştirme yetkin yok'
+                : 'Bu üyeye rol atayamazsın'
+        }
       >
         {chip.icon}
         {ROLE_LABEL[targetRole] ?? targetRole}

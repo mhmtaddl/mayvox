@@ -31,6 +31,22 @@ export function fmtDate(raw: string): string {
   return `${d.getDate()} ${['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/**
+ * Göreli zaman (TR). Audit/Moderation/Overview paylaşımlı.
+ * withDateFallback=true: 7 günden eski olaylar tarih olarak (örn "12 Mar 2026")
+ * withDateFallback=false/varsayılan: hep "Xg önce"
+ */
+export function timeAgo(iso: string, opts: { withDateFallback?: boolean } = {}): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return 'az önce';
+  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
+  if (s < 86400) return `${Math.floor(s / 3600)}sa önce`;
+  if (s < 604800 || !opts.withDateFallback) return `${Math.floor(s / 86400)}g önce`;
+  return new Date(iso).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export function displaySlug(slug: string): string {
   return slug.endsWith('.mv') ? slug : slug + '.mv';
 }
@@ -75,15 +91,6 @@ export function DangerSection({ children }: { children: React.ReactNode }) {
       </div>
       {children}
     </section>
-  );
-}
-
-export function Sec({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[10px] font-bold text-[var(--theme-secondary-text)]/35 uppercase tracking-widest mb-3">{title}</div>
-      <div className="space-y-3">{children}</div>
-    </div>
   );
 }
 
@@ -136,27 +143,6 @@ export function Loader() {
   return (
     <div className="flex items-center justify-center py-10">
       <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin" />
-    </div>
-  );
-}
-
-export function PlanFeature({ text, accent }: { text: string; accent?: boolean }) {
-  return (
-    <div className="flex items-start gap-2">
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={`shrink-0 mt-0.5 ${accent ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/30'}`}
-      >
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-      <span className={`text-[11px] leading-tight ${accent ? 'text-[var(--theme-text)] opacity-75' : 'text-[var(--theme-text)] opacity-50'}`}>{text}</span>
     </div>
   );
 }

@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Ban, MicOff, Clock, ShieldOff, AlertCircle, UserX, Shield,
-  RefreshCw, DoorOpen, History, Sparkles,
+  Ban, MicOff, Clock, ShieldOff, UserX, Shield,
+  RefreshCw, DoorOpen, History,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
-import { useUser } from '../../../contexts/UserContext';
 import {
   type ServerBan, type ServerMember, type AuditLogItem,
   getBans, getMembers, unbanMember, getAuditLog,
 } from '../../../lib/serverService';
-import { fmtDate, memberDisplayName, Empty, Loader } from './shared';
+import { fmtDate, memberDisplayName, Empty, Loader, timeAgo } from './shared';
 
 interface Props {
   serverId: string;
@@ -130,16 +129,6 @@ function extractReason(log: AuditLogItem): string | null {
     return trimmed.length > 0 ? trimmed : null;
   }
   return null;
-}
-
-function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return '';
-  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (s < 60) return 'az önce';
-  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
-  if (s < 86400) return `${Math.floor(s / 3600)}sa önce`;
-  return `${Math.floor(s / 86400)}g önce`;
 }
 
 function shortId(id: string): string {

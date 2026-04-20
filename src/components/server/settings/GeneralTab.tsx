@@ -268,7 +268,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     if (motto !== (server.motto ?? '')) u.motto = motto.trim();
     if (isPublic !== (server.isPublic ?? true)) u.isPublic = isPublic;
     if (joinPolicy !== (server.joinPolicy ?? 'invite_only')) u.joinPolicy = joinPolicy;
-    await onSave(u); setSaving(false);
+    try { await onSave(u); } finally { setSaving(false); }
   };
 
   const nameChanged = name.trim() !== server.name;
@@ -580,7 +580,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                 Vazgeç
               </GhostButton>
               <DangerButton
-                onClick={async () => { setDeleting(true); await onDelete(); }}
+                onClick={async () => {
+                  setDeleting(true);
+                  try { await onDelete(); } finally { setDeleting(false); }
+                }}
                 disabled={deleteConfirm !== server.name || deleting}
               >
                 {deleting ? 'Siliniyor...' : 'Kalıcı Olarak Sil'}

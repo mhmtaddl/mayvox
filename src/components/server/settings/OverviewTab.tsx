@@ -9,6 +9,7 @@ import {
   type ServerOverview, type Server, type ServerBan, type ServerMember, type AuditLogItem,
 } from '../../../lib/serverService';
 import { PLAN_LIMITS, PLAN_NAME, PLAN_TAGLINE, type PlanKey } from '../../../lib/planLimits';
+import { timeAgo } from './shared';
 
 interface Props {
   serverId: string;
@@ -74,16 +75,6 @@ function describeLastModEvent(log: AuditLogItem): string {
   const actor = log.actorName || 'Bilinmiyor';
   const verb = MOD_ACTION_VERB[log.action] ?? log.action;
   return `${actor} · ${verb}`;
-}
-
-function timeAgoCompact(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return '';
-  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (s < 60) return 'az önce';
-  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
-  if (s < 86400) return `${Math.floor(s / 3600)}sa önce`;
-  return `${Math.floor(s / 86400)}g önce`;
 }
 
 function useModerationSummary(serverId: string): ModerationSummary | null {
@@ -458,7 +449,7 @@ function ActiveModerationCard({
           className="text-[10px] text-[var(--theme-secondary-text)]/70 leading-snug mb-2 truncate"
           title={describeLastModEvent(summary.lastEvent)}
         >
-          Son: {describeLastModEvent(summary.lastEvent)} · {timeAgoCompact(summary.lastEvent.createdAt)}
+          Son: {describeLastModEvent(summary.lastEvent)} · {timeAgo(summary.lastEvent.createdAt)}
         </p>
       )}
 

@@ -5,7 +5,7 @@ import {
   Hash, Settings as SettingsIcon, AlertTriangle,
 } from 'lucide-react';
 import { getAuditLog, type AuditLogItem } from '../../../lib/serverService';
-import { Empty } from './shared';
+import { Empty, timeAgo } from './shared';
 
 interface Props { serverId: string; }
 
@@ -101,17 +101,6 @@ const FILTER_CHIPS: readonly FilterChip[] = [
 // ══════════════════════════════════════════════════════════
 // Helpers
 // ══════════════════════════════════════════════════════════
-
-function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return '';
-  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (s < 60) return 'az önce';
-  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
-  if (s < 86400) return `${Math.floor(s / 3600)}sa önce`;
-  if (s < 604800) return `${Math.floor(s / 86400)}g önce`;
-  return new Date(iso).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 // metadata.name / targetName / username öncelikli, yoksa resource:shortId
 function describeTarget(log: AuditLogItem): string | null {
@@ -372,7 +361,7 @@ function AuditLogRow({
         className="text-[10px] text-[#7b8ba8]/50 shrink-0 tabular-nums whitespace-nowrap"
         title={new Date(log.createdAt).toLocaleString('tr-TR')}
       >
-        {timeAgo(log.createdAt)}
+        {timeAgo(log.createdAt, { withDateFallback: true })}
       </span>
     </li>
   );
