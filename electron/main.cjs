@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
@@ -444,6 +444,19 @@ ipcMain.on("app:log", (_event, { level, message, data }) => {
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
+
+// Harici URL aç — çift protokol guard'ı (preload'da + burada)
+ipcMain.on("shell:open-external", (_event, url) => {
+  try {
+    if (typeof url !== "string") return;
+    if (!/^https?:\/\//i.test(url)) return;
+    shell.openExternal(url).catch((err) => {
+      logger.warn?.("[shell] openExternal error: " + (err?.message || err));
+    });
+  } catch (err) {
+    logger.warn?.("[shell] openExternal crash: " + (err?.message || err));
+  }
+});
 
 // ── Custom MayVox window controls ──
 function withWin(event, fn) {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2, Check, CheckCheck } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
@@ -17,6 +18,7 @@ import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
 import { MV_PRESS } from '../lib/signature';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 import { playMessageSend } from '../lib/audio/SoundManager';
+import MessageText from './chat/MessageText';
 // SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
@@ -338,7 +340,7 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
           WebkitBackdropFilter: isOwn ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
         } as React.CSSProperties}
       >
-        <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+        <MessageText text={msg.text} isOwn={isOwn} />
         {isLastInGroup && (
           <div
             className={`flex items-center gap-1.5 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
@@ -581,7 +583,7 @@ function ChatArea({
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
+      <div ref={scrollRef} onScroll={handleScroll} data-mv-chat-area="dm" className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
         {loadingHistory ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />
@@ -753,19 +755,21 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
 
   return (
     <>
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          ref={panelRef}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
+    {createPortal(
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="dm-panel"
+            ref={panelRef}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
           transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
           // Surface: `.surface-card` class'ı Messages panel referanslı unified
           // materyali sağlar; Görünüm/Sesler/Performans vs aynı class üzerinden
           // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
           // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
-          className="surface-card fixed bottom-[60px] right-3 z-[99] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
+          className="surface-card fixed bottom-[60px] right-3 z-[110] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
         >
           {dm.activeRecipientId ? (
             <ChatArea
@@ -834,9 +838,11 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               </div>
             </>
           )}
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>,
+      document.body,
+    )}
 
     </>
   );

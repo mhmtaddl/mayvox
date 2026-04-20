@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck, ShieldAlert, PhoneMissed } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
@@ -57,8 +58,25 @@ const PRIORITY_ACCENT = {
 
 export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer }: Props) {
   const [open, setOpen] = useState(false);
+  const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Panel'i body'e portal et + button bounds'unu fixed positioning için ölç.
+  // Stacking context sorununu bypass eder (video player z'sinin altında kalmaz).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      if (btnRef.current) setBtnRect(btnRef.current.getBoundingClientRect());
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [open]);
 
   // ── Session seen-state: panel açılınca mevcut key'ler "görüldü" olur ──
   const seenRef = useRef<Set<string>>(new Set());
@@ -160,26 +178,34 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         )}
       </button>
 
-      {/* ── Panel ── */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            ref={panelRef}
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.1 } }}
-            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute bottom-full right-0 mb-2 w-[300px] rounded-2xl z-50 overflow-hidden"
-            style={{
-              // Solid premium foreground — DMPanel / profile popup ile aynı material dili.
-              background: 'var(--theme-bg)',
-              border: '1px solid var(--theme-border)',
-              boxShadow:
-                '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
-                ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
-                ' inset 0 1px 0 rgba(255,255,255,0.04)',
-            }}
-          >
+      {/* ── Panel (portal → body, AnimatePresence portal'ın İÇİNDE) ── */}
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              key="bell-panel"
+              ref={panelRef}
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.1 } }}
+              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed w-[300px] rounded-2xl z-[120] overflow-hidden"
+              style={{
+                // btnRect ölçülmüşse button'a anchor'la; yoksa sağ-üst fallback — panel ASLA kaybolmasın.
+                ...(btnRect
+                  ? {
+                      bottom: window.innerHeight - btnRect.top + 8,
+                      right: window.innerWidth - btnRect.right,
+                    }
+                  : { top: 80, right: 20 }),
+                background: 'var(--theme-bg)',
+                border: '1px solid var(--theme-border)',
+                boxShadow:
+                  '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
+                  ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
+                  ' inset 0 1px 0 rgba(255,255,255,0.04)',
+              }}
+            >
             {/* Başlık — title + counter */}
             <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}>
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
@@ -282,9 +308,11 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                 })
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

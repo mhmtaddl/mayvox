@@ -42,17 +42,24 @@ export function clickedRate(intent: EventIntent): number {
   return rate(intent, 'clicked');
 }
 
+export function sampleCount(intent: EventIntent): number {
+  return byIntent[intent]?.length ?? 0;
+}
+
 export function snapshotRates(): {
   ignored: Partial<Record<EventIntent, number>>;
   clicked: Partial<Record<EventIntent, number>>;
+  counts: Partial<Record<EventIntent, number>>;
 } {
   const ignored: Partial<Record<EventIntent, number>> = {};
   const clicked: Partial<Record<EventIntent, number>> = {};
+  const counts: Partial<Record<EventIntent, number>> = {};
   for (const key of Object.keys(byIntent) as EventIntent[]) {
     ignored[key] = ignoredRate(key);
     clicked[key] = clickedRate(key);
+    counts[key] = sampleCount(key);
   }
-  return { ignored, clicked };
+  return { ignored, clicked, counts };
 }
 
 /**

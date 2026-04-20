@@ -80,6 +80,8 @@ export interface RecentStats {
   urgentLast10Min: number;
   ignoredRateByIntent: Partial<Record<EventIntent, number>>; // 0..1
   clickedRateByIntent: Partial<Record<EventIntent, number>>; // 0..1
+  /** Intent başına kayıtlı outcome sample sayısı — adaptive kararları için min-N guard. */
+  sampleCountByIntent: Partial<Record<EventIntent, number>>;
 }
 
 // ── Policy decision (engine output) ──────────────────────────────────────

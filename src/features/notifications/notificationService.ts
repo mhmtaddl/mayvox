@@ -338,6 +338,7 @@ function buildStats() {
     urgentLast10Min: urgentCount(),
     ignoredRateByIntent: rates.ignored,
     clickedRateByIntent: rates.clicked,
+    sampleCountByIntent: rates.counts,
   };
 }
 

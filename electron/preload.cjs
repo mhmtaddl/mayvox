@@ -46,6 +46,15 @@ contextBridge.exposeInMainWorld('electronApp', {
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),
 });
 
+// Harici link açıcı — sadece http/https, main tarafında çift protokol guard'ı var.
+contextBridge.exposeInMainWorld('electronShell', {
+  openExternal: (url) => {
+    if (typeof url !== 'string') return;
+    if (!/^https?:\/\//i.test(url)) return;
+    ipcRenderer.send('shell:open-external', url);
+  },
+});
+
 // Notification attention bridge — BrowserWindow.flashFrame
 // Renderer → main: flash frame toggle; main focus olayında otomatik stop eder.
 contextBridge.exposeInMainWorld('electronNotify', {

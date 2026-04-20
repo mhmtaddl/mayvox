@@ -5,6 +5,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
+import MessageText from './chat/MessageText';
 
 export interface ChatMessage {
   id: string;
@@ -131,7 +132,7 @@ export default function ChatPanel({
       </div>
 
       {/* Mesaj listesi */}
-      <div ref={chatScrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
+      <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
         <div className="flex-1" />
         {messages.length === 0 ? (
           <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajlari burada gorunecek</p>
@@ -215,7 +216,7 @@ export default function ChatPanel({
                         WebkitBackdropFilter: isMe ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
                       } as React.CSSProperties}
                     >
-                      {msg.text}
+                      <MessageText text={msg.text} isOwn={isMe} />
                     </div>
                   )}
                 </div>

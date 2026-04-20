@@ -56,6 +56,17 @@ function sameDmActivelyViewing(ctx: PolicyContext, convKey?: string): boolean {
          ctx.activeDmConvKey === convKey && ctx.dmAtBottom;
 }
 
+/** DM paneli açıksa kullanıcı zaten DM bağlamında — toast + ses gereksiz. */
+function dmPanelFocused(ctx: PolicyContext): boolean {
+  return ctx.isAppFocused && ctx.dmPanelOpen;
+}
+
+/**
+ * Adaptive gate için minimum sample boyutu — tek bir auto-dismiss (timeout)
+ * ignoredRate'i 1.0'a çıkarıp sonraki TÜM DM'leri sessizleştirmesin.
+ */
+const MIN_ADAPTIVE_SAMPLES = 8;
+
 function sameServerViewing(ctx: PolicyContext, serverId?: string): boolean {
   return ctx.isAppFocused && !!serverId && ctx.activeServerId === serverId;
 }
@@ -91,6 +102,16 @@ export function decide(event: NotificationEvent, ctx: PolicyContext, stats: Rece
   let tier: AttentionTier = meta.base;
 
   // 1) Hard context suppression — kullanıcı zaten bakıyor.
+  // DM paneli açıkken (herhangi bir thread / liste görünümü) hiçbir DM toast'ı
+  // yukarıdan inmesin; kullanıcı DM bağlamında, unread badge + liste yeterli.
+  if (event.intent === 'direct_dm' && dmPanelFocused(ctx)) {
+    return {
+      shouldNotify: false, attentionTier: 'NONE', visualMode: 'none',
+      sound: 'none', flash: false,
+      effectivePriority: meta.priority,
+      reason: 'suppress:dm-panel-open',
+    };
+  }
   if (event.intent === 'direct_dm' && sameDmActivelyViewing(ctx, event.subjectId)) {
     return {
       shouldNotify: false, attentionTier: 'NONE', visualMode: 'none',
@@ -124,13 +145,17 @@ export function decide(event: NotificationEvent, ctx: PolicyContext, stats: Rece
   }
 
   // 4) Adaptive softening — ignored rate yüksek intent'leri düşür.
+  //    ÖNEMLİ: Min-N sample guard yoksa ilk auto-dismiss toast (timeout) bile
+  //    ignoredRate'i 1.0 yapıp sonraki tüm DM'leri sessize alıyordu.
   const ignoredRate = stats.ignoredRateByIntent[event.intent] ?? 0;
-  if (ignoredRate >= 0.8) {
+  const ignoredSamples = stats.sampleCountByIntent[event.intent] ?? 0;
+  const adaptiveReady = ignoredSamples >= MIN_ADAPTIVE_SAMPLES;
+  if (adaptiveReady && ignoredRate >= 0.8) {
     tier = tierDown(tier, 1);
-    reasons.push(`adaptive-soften(ign=${ignoredRate.toFixed(2)})`);
-  } else if (ignoredRate >= 0.6) {
+    reasons.push(`adaptive-soften(ign=${ignoredRate.toFixed(2)},n=${ignoredSamples})`);
+  } else if (adaptiveReady && ignoredRate >= 0.6) {
     // Orta ignore → sound'ı kaldır (tier'ı değiştirmeden).
-    reasons.push(`adaptive-mute-soft(ign=${ignoredRate.toFixed(2)})`);
+    reasons.push(`adaptive-mute-soft(ign=${ignoredRate.toFixed(2)},n=${ignoredSamples})`);
   }
 
   // 5) Fatigue gate — yakın zamanda çok notif/ses varsa düşür.
@@ -181,7 +206,7 @@ export function decide(event: NotificationEvent, ctx: PolicyContext, stats: Rece
     sound = 'none';
     reasons.push('fatigue:sound-muted');
   }
-  if (sound !== 'none' && ignoredRate >= 0.6) {
+  if (sound !== 'none' && adaptiveReady && ignoredRate >= 0.6) {
     sound = 'none';
     reasons.push('adaptive-mute');
   }
