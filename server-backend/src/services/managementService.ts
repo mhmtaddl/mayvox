@@ -248,11 +248,15 @@ async function requireModerationTarget(
 /**
  * Sunucu-içi voice mute. Süresiz (expiresInSeconds = null) ya da süreli.
  * Idempotent: zaten muted olsa bile süreyi yeniler.
+ *
+ * Aktif voice efekti: mute anında kullanıcı tüm voice odalardan düşürülür.
+ * Tekrar join ederse token-server gate etmediği için ses yeniden açılır (R2 known
+ * limitation). Ama en azından anlık susar — "bas-konuş geçiyor" UX'ini kapatır.
  */
 export async function muteMember(
   serverId: string, userId: string, targetUserId: string,
   expiresInSeconds: number | null,
-): Promise<{ expiresAt: string | null }> {
+): Promise<{ expiresAt: string | null; channelsAffected: number; livekitConfigured: boolean }> {
   const target = await requireModerationTarget(
     serverId, userId, targetUserId, CAPABILITIES.MEMBER_MUTE,
     'Üye susturmak için yetkin yok',
@@ -278,6 +282,9 @@ export async function muteMember(
   );
   invalidateAccessContext(targetUserId, serverId);
 
+  // Aktif voice odalardan düşür (LiveKit yoksa silent no-op)
+  const lk = await removeParticipantFromAllServerRooms(serverId, targetUserId);
+
   await logAction({
     serverId, actorId: userId, action: 'member.mute',
     resourceType: 'member', resourceId: targetUserId,
@@ -286,10 +293,12 @@ export async function muteMember(
       durationSeconds: expiresInSeconds,
       targetRole: target.role,
       wasAlreadyMuted: !!target.voice_muted_by,
+      channelsAffected: lk.channelsAffected,
+      livekitConfigured: lk.configured,
     },
   });
 
-  return { expiresAt };
+  return { expiresAt, channelsAffected: lk.channelsAffected, livekitConfigured: lk.configured };
 }
 
 /**
