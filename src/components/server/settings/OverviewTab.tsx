@@ -1,130 +1,131 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Crown, Users, Hash, Lock, Link2, AlertCircle, Activity,
   Sparkles, ArrowUpRight, Settings as SettingsIcon, Trash2, ChevronRight,
-  TrendingUp, Gauge, ShieldAlert, Zap, Check,
+  TrendingUp, Gauge, ShieldAlert, Zap, Gavel, Ban, MicOff,
 } from 'lucide-react';
-import { getServerOverview, type ServerOverview, type Server } from '../../../lib/serverService';
-import { PLAN_LIMITS, PLAN_NAME, PLAN_TAGLINE, PLAN_RANK, type PlanKey } from '../../../lib/planLimits';
+import {
+  getServerOverview, getBans, getMembers, getAuditLog,
+  type ServerOverview, type Server, type ServerBan, type ServerMember, type AuditLogItem,
+} from '../../../lib/serverService';
+import { PLAN_LIMITS, PLAN_NAME, PLAN_TAGLINE, type PlanKey } from '../../../lib/planLimits';
 
 interface Props {
   serverId: string;
   server: Server;
   isOwner: boolean;
   initialOverview?: ServerOverview | null;
-  onSwitchTab?: (tab: 'general' | 'invites') => void;
+  onSwitchTab?: (tab: 'general' | 'invites' | 'moderation') => void;
 }
 
-const PLAN_LABEL = PLAN_NAME;
+// ══════════════════════════════════════════════════════════
+// Plan visual tokens — PlanSummaryRow için tek yer
+// ══════════════════════════════════════════════════════════
 
-// Premium plan visuals — Stripe/Linear/Apple seviyesinde hiyerarşi.
-// Each tier gets distinct accent + gradient + glow; ultra is the "hero" card.
 interface PlanVisual {
+  accent: string;
+  rgb: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  accent: string;          // text color for headings + hero number
-  chipBg: string;          // icon chip background
-  cardBg: string;          // subtle gradient overlay
-  borderIdle: string;      // default border
-  borderCurrent: string;   // active plan border
-  glowIdle: string;        // default shadow
-  glowHover: string;       // hover shadow
-  ctaClass: string;        // CTA button style
-  topBadge?: string;       // centered top badge text (Ultra only)
 }
+
 const PLAN_VISUAL: Record<PlanKey, PlanVisual> = {
-  free: {
-    icon: Sparkles,
-    accent: 'text-emerald-400',
-    chipBg: 'bg-emerald-500/12',
-    cardBg: 'bg-gradient-to-br from-emerald-500/[0.03] to-transparent',
-    borderIdle: 'border-[rgba(var(--glass-tint),0.10)]',
-    borderCurrent: 'border-emerald-500/45',
-    glowIdle: '',
-    glowHover: 'hover:shadow-[0_8px_24px_rgba(16,185,129,0.10)]',
-    ctaClass: 'bg-[rgba(var(--glass-tint),0.08)] text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.14)]',
-  },
-  pro: {
-    icon: Zap,
-    accent: 'text-sky-400',
-    chipBg: 'bg-sky-500/15',
-    cardBg: 'bg-gradient-to-br from-sky-500/[0.06] to-transparent',
-    borderIdle: 'border-sky-500/25',
-    borderCurrent: 'border-sky-500/55',
-    glowIdle: 'shadow-[0_4px_16px_rgba(56,189,248,0.06)]',
-    glowHover: 'hover:shadow-[0_8px_28px_rgba(56,189,248,0.16)]',
-    ctaClass: 'bg-sky-500 text-white hover:bg-sky-400 shadow-[0_4px_14px_rgba(56,189,248,0.35)]',
-  },
-  ultra: {
-    icon: Crown,
-    accent: 'text-violet-300',
-    chipBg: 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20',
-    cardBg: 'bg-gradient-to-br from-violet-500/[0.10] via-fuchsia-500/[0.04] to-transparent',
-    borderIdle: 'border-violet-500/40',
-    borderCurrent: 'border-violet-400/70',
-    glowIdle: 'shadow-[0_8px_30px_rgba(167,139,250,0.15)]',
-    glowHover: 'hover:shadow-[0_12px_40px_rgba(167,139,250,0.25)]',
-    ctaClass: 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-[0_6px_20px_rgba(167,139,250,0.45)] hover:from-violet-400 hover:to-fuchsia-400',
-    topBadge: 'En Popüler',
-  },
+  free:  { accent: '#34d399', rgb: '16,185,129',  icon: Sparkles },
+  pro:   { accent: '#60a5fa', rgb: '96,165,250',  icon: Zap },
+  ultra: { accent: '#c084fc', rgb: '192,132,252', icon: Crown },
 };
 
-// CTA — plan ile current plan ilişkisine göre (upgrade / downgrade / current).
-// Yanlış "Yükselt" metni Ultra'dakinin Pro'yu görüşüne çıkmasın.
-type PlanAction = 'current' | 'upgrade' | 'downgrade';
-function planAction(plan: PlanKey, currentPlan: PlanKey): PlanAction {
-  if (plan === currentPlan) return 'current';
-  return (PLAN_RANK[plan] ?? 0) > (PLAN_RANK[currentPlan] ?? 0) ? 'upgrade' : 'downgrade';
-}
-function ctaText(action: PlanAction): string {
-  if (action === 'current') return 'Aktif Plan';
-  if (action === 'upgrade') return 'Yükselt';
-  return 'Geçiş Yap';
+function audioQualityLabel(plan: PlanKey): string {
+  if (plan === 'ultra') return 'Stüdyo kalitesinde ses';
+  if (plan === 'pro') return 'Yüksek kaliteli ses';
+  return 'Standart ses';
 }
 
-// Feature satırları — oda breakdown + kapasite satırları + plan avantajları.
-// Yapı:
-//   1) Oda (ikonlu, ana satır)
-//   2..N) Kapasite satırları (indent'li, sub-info)
-//   N+1..) Plan avantajları (ikonlu, ses / gecikme vb.)
-interface FeatureRow {
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
-  label: string;
-  indent?: boolean;
-}
-function planFeatureRows(plan: PlanKey): FeatureRow[] {
-  const l = PLAN_LIMITS[plan];
-  const breakdown: string[] = [`${l.systemRooms} sistem`];
-  if (l.extraPersistentRooms > 0) breakdown.push(`${l.extraPersistentRooms} kalıcı`);
-  if (l.maxNonPersistentRooms > 0) breakdown.push(`${l.maxNonPersistentRooms} özel`);
+// ══════════════════════════════════════════════════════════
+// Moderation insight — ek fetch, lightweight
+// ══════════════════════════════════════════════════════════
 
-  const rows: FeatureRow[] = [
-    { icon: Hash, label: `${l.maxTotalRooms} oda • ${breakdown.join(' + ')}` },
-    { indent: true, label: `Sistem: ${l.systemRoomCapacity} kişi` },
-  ];
-  if (l.extraPersistentRooms > 0) {
-    rows.push({ indent: true, label: `Kalıcı: ${l.persistentRoomCapacity} kişi` });
-  }
-  if (l.maxNonPersistentRooms > 0) {
-    rows.push({ indent: true, label: `Özel: ${l.nonPersistentRoomCapacity} kişi` });
-  }
-
-  // Plan avantajları — ses kalitesi + (ultra için) gecikme
-  if (plan === 'free') {
-    rows.push({ icon: Activity, label: 'Standart ses' });
-  } else if (plan === 'pro') {
-    rows.push({ icon: Activity, label: 'Yüksek ses kalitesi' });
-  } else {
-    rows.push({ icon: Activity, label: 'Stüdyo kalitesinde ses' });
-    rows.push({ icon: TrendingUp, label: 'En düşük gecikme' });
-  }
-  return rows;
+interface ModerationSummary {
+  banCount: number;
+  mutedCount: number;
+  lastEvent: AuditLogItem | null;
 }
+
+function isModerationEvent(action: string): boolean {
+  if (action === 'member.kick' || action === 'member.mute' || action === 'member.unmute') return true;
+  if (action === 'member.ban' || action === 'member.unban') return true;
+  if (action === 'member.timeout' || action === 'member.timeout_clear') return true;
+  if (action === 'member.role_change' || action === 'role.change') return true;
+  return false;
+}
+
+const MOD_ACTION_VERB: Record<string, string> = {
+  'member.ban': 'yasakladı',
+  'member.unban': 'yasak kaldırdı',
+  'member.kick': 'attı',
+  'member.mute': 'susturdu',
+  'member.unmute': 'sesi açtı',
+  'member.timeout': 'zaman aşımı verdi',
+  'member.timeout_clear': 'zaman aşımını kaldırdı',
+  'member.role_change': 'rol değiştirdi',
+  'role.change': 'rol değiştirdi',
+};
+
+function describeLastModEvent(log: AuditLogItem): string {
+  const actor = log.actorName || 'Bilinmiyor';
+  const verb = MOD_ACTION_VERB[log.action] ?? log.action;
+  return `${actor} · ${verb}`;
+}
+
+function timeAgoCompact(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return 'az önce';
+  if (s < 3600) return `${Math.floor(s / 60)}dk önce`;
+  if (s < 86400) return `${Math.floor(s / 3600)}sa önce`;
+  return `${Math.floor(s / 86400)}g önce`;
+}
+
+function useModerationSummary(serverId: string): ModerationSummary | null {
+  const [data, setData] = useState<ModerationSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [b, m, a] = await Promise.allSettled([
+          getBans(serverId),
+          getMembers(serverId),
+          getAuditLog(serverId, { limit: 10 }),
+        ]);
+        if (cancelled) return;
+        const bans: ServerBan[] = b.status === 'fulfilled' ? b.value : [];
+        const members: ServerMember[] = m.status === 'fulfilled' ? m.value : [];
+        const logs: AuditLogItem[] = a.status === 'fulfilled' ? a.value : [];
+        const lastEvent = logs.find(l => isModerationEvent(l.action)) ?? null;
+        setData({
+          banCount: bans.length,
+          mutedCount: members.filter(x => x.isMuted).length,
+          lastEvent,
+        });
+      } catch {
+        if (!cancelled) setData({ banCount: 0, mutedCount: 0, lastEvent: null });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [serverId]);
+
+  return data;
+}
+
+// ══════════════════════════════════════════════════════════
+// Main
+// ══════════════════════════════════════════════════════════
 
 export default function OverviewTab({ serverId, server, isOwner, initialOverview, onSwitchTab }: Props) {
-  // initialOverview seed olarak görünür ama her tab açılışında taze veri çekilir
-  // (kanal/davet/üye mutasyonları sonrası stale kalmasın).
   const [data, setData] = useState<ServerOverview | null>(initialOverview ?? null);
   const [error, setError] = useState('');
+  const modSummary = useModerationSummary(serverId);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,19 +143,20 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
   if (error) {
     return (
       <div className="flex items-center gap-2 p-3 rounded-lg text-[11px] text-red-400/85"
-        style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.1)' }}>
+        style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.1)' }}
+      >
         <AlertCircle size={12} />
         <span>{error}</span>
       </div>
     );
   }
-  if (!data) return <div className="text-[11px] text-[var(--theme-secondary-text)]/40 py-8 text-center">Yükleniyor...</div>;
+  if (!data) {
+    return <div className="text-[11px] text-[var(--theme-secondary-text)]/40 py-8 text-center">Yükleniyor...</div>;
+  }
 
   const memberPct = pct(data.counts.members, data.limits.maxMembers);
   const channelPct = pct(data.counts.channels, data.limits.maxTotalRooms);
-  // Persistent = kullanıcı kalıcı oda (sistem hariç); limit = extraPersistentRooms kotası.
   const persistentPct = pct(data.counts.persistentRooms, data.limits.extraPersistentRooms);
-  const invitePct = pct(data.counts.inviteLinksLast24h, data.limits.maxInviteLinksPerDay);
   const peakPct = Math.max(memberPct, channelPct, persistentPct);
 
   const status = computeStatus({ memberPct, channelPct, peakPct, dailyInvite: data.counts.inviteLinksLast24h });
@@ -162,85 +164,81 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
   const hasActiveInvite = data.counts.activeInviteLinks > 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* ───── HERO ───── */}
+    <div className="flex flex-col gap-5 pb-4">
+      {/* ── HERO ── */}
       <Hero server={server} data={data} status={status} />
 
-      {/* ───── INSIGHTS ───── */}
+      {/* ── AKILLI KARTLAR (2x2) ── */}
       <Section title="Akıllı Kartlar" icon={<Sparkles size={11} />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CapacityCard memberPct={memberPct} channelPct={channelPct} peakPct={peakPct} plan={data.plan} />
+          <ActiveModerationCard
+            summary={modSummary}
+            onOpen={onSwitchTab ? () => onSwitchTab('moderation') : undefined}
+          />
           <ActivityCard
             invites24h={data.counts.inviteLinksLast24h}
             activeInvites={data.counts.activeInviteLinks}
             limit24h={data.limits.maxInviteLinksPerDay}
           />
-          <TopRoomCard channels={data.counts.channels} persistentRooms={data.counts.persistentRooms} />
           <InviteStateCard
             has24h={has24hInviteActivity}
             hasActive={hasActiveInvite}
             count={data.counts.activeInviteLinks}
-            onCreate={() => onSwitchTab?.('invites')}
+            onOpen={onSwitchTab ? () => onSwitchTab('invites') : undefined}
           />
         </div>
       </Section>
 
-      {/* ───── PLAN ───── */}
-      <Section title="Plan" icon={<Crown size={11} />} hint="Plan değişikliği için sistem yönetimine başvurun.">
-        <PlanGrid currentPlan={data.plan} peakPct={peakPct} />
+      {/* ── PLAN (tek satır özet) ── */}
+      <Section title="Plan" icon={<Crown size={11} />} hint="Plan değişikliği için sistem yönetimine başvurun">
+        <PlanSummaryRow plan={data.plan} />
       </Section>
 
-      {/* ───── AYARLAR CTA ───── */}
+      {/* ── AYARLAR ── */}
       <Section title="Ayarlar" icon={<SettingsIcon size={11} />}>
-        <button
+        <NavRow
+          icon={<SettingsIcon size={14} />}
+          iconBg="rgba(var(--theme-accent-rgb), 0.12)"
+          iconColor="var(--theme-accent)"
+          title="Sunucu Kimliği & Erişim"
+          hint="Ad, adres, açıklama, motto, görünürlük ve katılım politikası"
           onClick={() => onSwitchTab?.('general')}
-          className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)] hover:bg-[rgba(var(--glass-tint),0.07)] hover:border-[rgba(var(--theme-accent-rgb),0.25)] transition-all text-left"
-        >
-          <div className="w-9 h-9 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] flex items-center justify-center shrink-0">
-            <SettingsIcon size={15} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12.5px] font-semibold text-[var(--theme-text)]">Sunucu Kimliği & Erişim</div>
-            <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-0.5">Ad, adres, açıklama, motto, görünürlük ve katılım politikası</div>
-          </div>
-          <ChevronRight size={14} className="text-[var(--theme-secondary-text)]/50 shrink-0" />
-        </button>
+        />
       </Section>
 
-      {/* ───── DANGER ZONE ───── */}
+      {/* ── TEHLİKELİ BÖLGE ── */}
       {isOwner && (
         <Section title="Tehlikeli Bölge" icon={<ShieldAlert size={11} />} danger>
-          <button
+          <NavRow
+            icon={<Trash2 size={14} />}
+            iconBg="rgba(239,68,68,0.15)"
+            iconColor="#f87171"
+            title="Sunucuyu Sil"
+            hint="Tüm kanallar, üyeler, mesajlar ve davetler kalıcı olarak silinir. Bu işlem geri alınamaz."
+            tone="danger"
             onClick={() => onSwitchTab?.('general')}
-            className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-red-500/[0.06] border border-red-500/25 hover:bg-red-500/[0.10] hover:border-red-500/40 transition-all text-left"
-          >
-            <div className="w-9 h-9 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center shrink-0">
-              <Trash2 size={15} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] font-semibold text-red-300">Sunucuyu Sil</div>
-              <div className="text-[10.5px] text-[var(--theme-secondary-text)] mt-0.5">Tüm kanallar, üyeler, mesajlar ve davetler kalıcı olarak silinir. Bu işlem geri alınamaz.</div>
-            </div>
-            <ChevronRight size={14} className="text-red-400/60 shrink-0" />
-          </button>
+          />
         </Section>
       )}
     </div>
   );
 }
 
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
 // HERO
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
 
-function Hero({ server, data, status }: { server: Server; data: ServerOverview; status: { label: string; tone: 'low' | 'growing' | 'near' | 'full' } }) {
-  // Hero badge için tek katmanlı tone — PLAN_VISUAL'dan türet.
-  const v = PLAN_VISUAL[(data.plan as PlanKey)] ?? PLAN_VISUAL.free;
-  // Ultra chipBg gradient; Hero içinde sade accent/10 daha tutarlı.
+function Hero({ server, data, status }: { server: Server; data: ServerOverview; status: StatusInfo }) {
+  const planKey = ((): PlanKey => {
+    if (data.plan === 'pro' || data.plan === 'ultra') return data.plan;
+    return 'free';
+  })();
   const tone = {
-    text: v.accent,
-    chip: data.plan === 'ultra' ? 'bg-violet-500/15' : v.chipBg,
+    text: PLAN_VISUAL[planKey].accent,
+    chip: `rgba(${PLAN_VISUAL[planKey].rgb}, 0.15)`,
   };
+
   const statusStyle =
     status.tone === 'full' ? 'bg-red-500/15 text-red-400 border-red-500/30'
     : status.tone === 'near' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
@@ -257,7 +255,6 @@ function Hero({ server, data, status }: { server: Server; data: ServerOverview; 
       }}
     >
       <div className="flex items-start gap-4 flex-wrap">
-        {/* LEFT — identity */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
             style={{ background: server.avatarUrl ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
@@ -268,22 +265,27 @@ function Hero({ server, data, status }: { server: Server; data: ServerOverview; 
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-[18px] font-bold text-[var(--theme-text)] truncate tracking-tight">{server.name}</h2>
-              <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md leading-none ${tone.chip} ${tone.text}`}>
-                <Crown size={9} /> {PLAN_LABEL[data.plan] ?? data.plan}
+              <span
+                className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md leading-none"
+                style={{ background: tone.chip, color: tone.text }}
+              >
+                <Crown size={9} /> {PLAN_NAME[planKey] ?? data.plan}
               </span>
             </div>
             <div className="text-[11px] font-mono text-[var(--theme-secondary-text)]/55 mt-0.5">{server.slug}</div>
-            {server.motto && <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-1 italic truncate max-w-[280px]">{server.motto}</div>}
+            {server.motto && (
+              <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-1 italic truncate max-w-[280px]">
+                {server.motto}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Status badge */}
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold uppercase tracking-wide border ${statusStyle}`}>
           <Activity size={10} /> {status.label}
         </span>
       </div>
 
-      {/* Inline stats with bars */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
         <HeroStat icon={<Users size={11} />} label="Üyeler" current={data.counts.members} limit={data.limits.maxMembers} />
         <HeroStat icon={<Hash size={11} />} label="Toplam Oda" current={data.counts.channels} limit={data.limits.maxTotalRooms} />
@@ -314,9 +316,9 @@ function HeroStat({ icon, label, current, limit }: { icon: React.ReactNode; labe
   );
 }
 
-// ══════════════════════════════════════
-// SECTION
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// Section wrapper
+// ══════════════════════════════════════════════════════════
 
 function Section({ title, icon, hint, danger, children }: { title: string; icon: React.ReactNode; hint?: string; danger?: boolean; children: React.ReactNode }) {
   return (
@@ -326,19 +328,48 @@ function Section({ title, icon, hint, danger, children }: { title: string; icon:
           <span className="opacity-80">{icon}</span>
           {title}
         </div>
-        {hint && <span className="text-[9.5px] text-[var(--theme-secondary-text)]/55">{hint}</span>}
+        {hint && <span className="text-[9.5px] text-[var(--theme-secondary-text)]/55 truncate ml-3">{hint}</span>}
       </div>
       {children}
     </section>
   );
 }
 
-// ══════════════════════════════════════
-// INSIGHT CARDS
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// Insight card wrapper
+// ══════════════════════════════════════════════════════════
+
+type InsightTone = 'accent' | 'amber' | 'red' | 'purple' | 'neutral';
+
+function InsightCard({ title, icon, tone, children }: { title: string; icon: React.ReactNode; tone: InsightTone; children: React.ReactNode }) {
+  const ringCls =
+    tone === 'red' ? 'border-red-500/25 bg-red-500/[0.04]'
+    : tone === 'amber' ? 'border-amber-500/25 bg-amber-500/[0.04]'
+    : tone === 'accent' ? 'border-[rgba(var(--theme-accent-rgb),0.20)] bg-[rgba(var(--theme-accent-rgb),0.04)]'
+    : tone === 'purple' ? 'border-[rgba(167,139,250,0.25)] bg-[rgba(167,139,250,0.04)]'
+    : 'border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.03)]';
+  const titleCls =
+    tone === 'red' ? 'text-red-400'
+    : tone === 'amber' ? 'text-amber-400'
+    : tone === 'accent' ? 'text-[var(--theme-accent)]'
+    : tone === 'purple' ? 'text-purple-400'
+    : 'text-[var(--theme-secondary-text)]/75';
+  return (
+    <div className={`p-3.5 rounded-xl border ${ringCls}`}>
+      <div className={`flex items-center gap-1.5 mb-2 text-[9.5px] font-bold uppercase tracking-[0.12em] ${titleCls}`}>
+        <span className="opacity-90">{icon}</span> {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Insight cards
+// ══════════════════════════════════════════════════════════
 
 function CapacityCard({ memberPct, channelPct, peakPct, plan }: { memberPct: number; channelPct: number; peakPct: number; plan: string }) {
-  const tone = peakPct >= 100 ? 'red' : peakPct >= 80 ? 'amber' : 'accent';
+  const tone: InsightTone = peakPct >= 100 ? 'red' : peakPct >= 80 ? 'amber' : 'accent';
   const hint =
     peakPct >= 100 ? 'Limit doldu — plan yükseltme şart'
     : peakPct >= 80 ? `Kapasitenin %${Math.round(peakPct)}'ine ulaştın, ${plan === 'ultra' ? 'optimize et' : 'plan yükseltme önerilir'}`
@@ -360,15 +391,102 @@ function CapacityCard({ memberPct, channelPct, peakPct, plan }: { memberPct: num
   );
 }
 
+function ActiveModerationCard({
+  summary, onOpen,
+}: { summary: ModerationSummary | null; onOpen?: () => void }) {
+  if (!summary) {
+    // loading skeleton
+    return (
+      <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone="neutral">
+        <div className="flex items-end gap-2 mb-2">
+          <span className="text-[24px] font-bold leading-none text-[var(--theme-secondary-text)]/30 tabular-nums">–</span>
+          <span className="text-[10px] text-[var(--theme-secondary-text)]/40 leading-none mb-0.5">yükleniyor</span>
+        </div>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug">Moderasyon özeti hazırlanıyor...</p>
+      </InsightCard>
+    );
+  }
+
+  const total = summary.banCount + summary.mutedCount;
+  const hasActivity = total > 0 || summary.lastEvent != null;
+
+  if (!hasActivity) {
+    return (
+      <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone="neutral">
+        <div className="text-[13px] font-bold text-emerald-400 mb-1">Ceza yok</div>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">
+          Sunucu huzurlu — son dönemde moderasyon işlemi yapılmadı.
+        </p>
+        {onOpen && (
+          <button onClick={onOpen} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/75 hover:text-[var(--theme-text)] transition-colors">
+            Moderasyonu aç <ArrowUpRight size={10} />
+          </button>
+        )}
+      </InsightCard>
+    );
+  }
+
+  const tone: InsightTone = summary.banCount > 0 ? 'red' : summary.mutedCount > 0 ? 'amber' : 'accent';
+  const valueCls = tone === 'red' ? 'text-red-400' : tone === 'amber' ? 'text-amber-400' : 'text-[var(--theme-text)]';
+
+  return (
+    <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone={tone}>
+      <div className="flex items-end gap-2 mb-2">
+        <span className={`text-[24px] font-bold leading-none tabular-nums ${valueCls}`}>{total}</span>
+        <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">aktif ceza</span>
+      </div>
+
+      {(summary.banCount > 0 || summary.mutedCount > 0) && (
+        <div className="flex items-center gap-3 text-[10.5px] mb-2">
+          {summary.banCount > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <Ban size={10} className="text-red-400" />
+              <span className="text-[var(--theme-secondary-text)]">{summary.banCount} yasaklı</span>
+            </span>
+          )}
+          {summary.mutedCount > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <MicOff size={10} className="text-orange-400" />
+              <span className="text-[var(--theme-secondary-text)]">{summary.mutedCount} susturma</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {summary.lastEvent && (
+        <p
+          className="text-[10px] text-[var(--theme-secondary-text)]/70 leading-snug mb-2 truncate"
+          title={describeLastModEvent(summary.lastEvent)}
+        >
+          Son: {describeLastModEvent(summary.lastEvent)} · {timeAgoCompact(summary.lastEvent.createdAt)}
+        </p>
+      )}
+
+      {onOpen && (
+        <button
+          onClick={onOpen}
+          className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-accent)] hover:underline"
+        >
+          Moderasyonu aç <ArrowUpRight size={10} />
+        </button>
+      )}
+    </InsightCard>
+  );
+}
+
 function ActivityCard({ invites24h, activeInvites, limit24h }: { invites24h: number; activeInvites: number; limit24h: number }) {
-  const trend = invites24h > 0 ? 'up' : 'flat';
+  const trend: InsightTone = invites24h > 0 ? 'accent' : 'neutral';
   const usage = pct(invites24h, limit24h);
   return (
-    <InsightCard title="Davet Aktivitesi" icon={<TrendingUp size={12} />} tone={trend === 'up' ? 'accent' : 'neutral'}>
+    <InsightCard title="Davet Aktivitesi" icon={<TrendingUp size={12} />} tone={trend}>
       <div className="flex items-end gap-2 mb-1">
         <span className="text-[24px] font-bold leading-none tabular-nums text-[var(--theme-text)]">{invites24h}</span>
         <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">son 24s</span>
-        {trend === 'up' && <span className="text-[10px] text-emerald-400 leading-none mb-0.5 ml-auto inline-flex items-center gap-0.5"><TrendingUp size={9} /> aktif</span>}
+        {invites24h > 0 && (
+          <span className="text-[10px] text-emerald-400 leading-none mb-0.5 ml-auto inline-flex items-center gap-0.5">
+            <TrendingUp size={9} /> aktif
+          </span>
+        )}
       </div>
       <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mb-1.5">
         Aktif davet linki: <span className="font-semibold text-[var(--theme-text)]/85">{activeInvites}</span>
@@ -382,32 +500,9 @@ function ActivityCard({ invites24h, activeInvites, limit24h }: { invites24h: num
   );
 }
 
-function TopRoomCard({ channels, persistentRooms }: { channels: number; persistentRooms: number }) {
-  // Toplam = sistem + kullanıcı-kalıcı. Sistem her zaman 4.
-  const systemRooms = Math.max(0, channels - persistentRooms);
-  return (
-    <InsightCard title="Oda Dağılımı" icon={<Hash size={12} />} tone="neutral">
-      <div className="flex items-end gap-2 mb-1.5">
-        <span className="text-[24px] font-bold leading-none tabular-nums text-[var(--theme-text)]">{channels}</span>
-        <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">toplam</span>
-      </div>
-      <div className="flex items-center gap-3 text-[10.5px]">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/70" />
-          <span className="text-[var(--theme-secondary-text)]">Sistem:</span>
-          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{systemRooms}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70" />
-          <span className="text-[var(--theme-secondary-text)]">Kalıcı:</span>
-          <span className="font-semibold text-[var(--theme-text)]/85 tabular-nums">{persistentRooms}</span>
-        </div>
-      </div>
-    </InsightCard>
-  );
-}
-
-function InviteStateCard({ hasActive, count, onCreate }: { has24h: boolean; hasActive: boolean; count: number; onCreate?: () => void }) {
+function InviteStateCard({
+  hasActive, count, onOpen,
+}: { has24h: boolean; hasActive: boolean; count: number; onOpen?: () => void }) {
   return (
     <InsightCard title="Davet Durumu" icon={<Link2 size={12} />} tone={hasActive ? 'accent' : 'amber'}>
       {hasActive ? (
@@ -416,20 +511,24 @@ function InviteStateCard({ hasActive, count, onCreate }: { has24h: boolean; hasA
             <span className="text-[24px] font-bold leading-none tabular-nums text-[var(--theme-text)]">{count}</span>
             <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">aktif link</span>
           </div>
-          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">Davet sistemi aktif. Linkler hâlâ kullanılabiliyor.</p>
-          {onCreate && (
-            <button onClick={onCreate} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-accent)] hover:underline">
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">
+            Davet sistemi aktif. Linkler hâlâ kullanılabiliyor.
+          </p>
+          {onOpen && (
+            <button onClick={onOpen} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-accent)] hover:underline">
               Davetleri yönet <ArrowUpRight size={10} />
             </button>
           )}
         </>
       ) : (
         <>
-          <div className="text-[12px] font-semibold text-amber-400 mb-1">Aktif davet yok</div>
-          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">Yeni üye almak için Davetler sekmesinden bir link oluştur.</p>
+          <div className="text-[13px] font-bold text-amber-400 mb-1">Aktif davet yok</div>
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">
+            Yeni üye almak için Davetler sekmesinden bir link oluştur.
+          </p>
           <button
-            onClick={onCreate}
-            disabled={!onCreate}
+            onClick={onOpen}
+            disabled={!onOpen}
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/20 transition-colors disabled:opacity-40"
           >
             Davet oluştur <ArrowUpRight size={10} />
@@ -437,27 +536,6 @@ function InviteStateCard({ hasActive, count, onCreate }: { has24h: boolean; hasA
         </>
       )}
     </InsightCard>
-  );
-}
-
-function InsightCard({ title, icon, tone, children }: { title: string; icon: React.ReactNode; tone: 'accent' | 'amber' | 'red' | 'neutral'; children: React.ReactNode }) {
-  const ringCls =
-    tone === 'red' ? 'border-red-500/25 bg-red-500/[0.04]'
-    : tone === 'amber' ? 'border-amber-500/25 bg-amber-500/[0.04]'
-    : tone === 'accent' ? 'border-[rgba(var(--theme-accent-rgb),0.20)] bg-[rgba(var(--theme-accent-rgb),0.04)]'
-    : 'border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.03)]';
-  const titleCls =
-    tone === 'red' ? 'text-red-400'
-    : tone === 'amber' ? 'text-amber-400'
-    : tone === 'accent' ? 'text-[var(--theme-accent)]'
-    : 'text-[var(--theme-secondary-text)]/75';
-  return (
-    <div className={`p-3.5 rounded-xl border ${ringCls}`}>
-      <div className={`flex items-center gap-1.5 mb-2 text-[9.5px] font-bold uppercase tracking-[0.12em] ${titleCls}`}>
-        <span className="opacity-90">{icon}</span> {title}
-      </div>
-      {children}
-    </div>
   );
 }
 
@@ -474,155 +552,121 @@ function MiniBar({ label, pct: value }: { label: string; pct: number }) {
   );
 }
 
-// ══════════════════════════════════════
-// PLAN GRID
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// Plan — tek satırlık özet
+// ══════════════════════════════════════════════════════════
 
-function PlanGrid({ currentPlan, peakPct }: { currentPlan: string; peakPct: number }) {
-  const order: PlanKey[] = ['free', 'pro', 'ultra'];
-  void peakPct;
-  // Normalize: unknown/invalid plan → 'free' fallback (PLAN_RANK için güvenli)
-  const current: PlanKey = (currentPlan === 'pro' || currentPlan === 'ultra') ? currentPlan : 'free';
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3">
-      {order.map(p => (
-        <PlanCard key={p} plan={p} currentPlan={current} />
-      ))}
-    </div>
-  );
-}
-
-function PlanCard({ plan, currentPlan }: { plan: PlanKey; currentPlan: PlanKey }) {
-  const l = PLAN_LIMITS[plan];
-  const v = PLAN_VISUAL[plan];
-  const Icon = v.icon;
-  const features = planFeatureRows(plan);
-  const action = planAction(plan, currentPlan);
-  const cta = ctaText(action);
-  const isCurrent = action === 'current';
-  const isUpgrade = action === 'upgrade';
-  const isDowngrade = action === 'downgrade';
-
-  // CTA class — action'a göre: current=disabled, upgrade=plan-spesifik solid, downgrade=nötr ghost
-  const btnClass = isCurrent
-    ? 'bg-[rgba(var(--glass-tint),0.05)] text-[var(--theme-secondary-text)]/55 cursor-default'
-    : isUpgrade
-      ? v.ctaClass
-      : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/80 hover:bg-[rgba(var(--glass-tint),0.12)] hover:text-[var(--theme-text)] border border-[rgba(var(--glass-tint),0.10)]';
-
-  // Downgrade kartı görsel olarak daha soluk (hiyerarşi: current→upgrade→downgrade)
-  const cardOpacity = isDowngrade ? 'opacity-[0.85]' : '';
+function PlanSummaryRow({ plan }: { plan: string }) {
+  const key: PlanKey = (plan === 'pro' || plan === 'ultra') ? plan : 'free';
+  const visual = PLAN_VISUAL[key];
+  const limits = PLAN_LIMITS[key];
+  const Icon = visual.icon;
+  const audio = audioQualityLabel(key);
 
   return (
     <div
-      className={`group relative rounded-2xl p-4 border-2 transition-[transform,box-shadow,border-color] duration-200
-        ${v.cardBg}
-        ${isCurrent ? v.borderCurrent : v.borderIdle}
-        ${v.glowIdle}
-        ${isCurrent ? '' : `${v.glowHover} hover:-translate-y-0.5`}
-        ${cardOpacity}
-      `}
+      className="flex items-center gap-3.5 p-3.5 rounded-xl"
+      style={{
+        background: `linear-gradient(180deg, rgba(${visual.rgb}, 0.05), rgba(${visual.rgb}, 0.015))`,
+        border: `1px solid rgba(${visual.rgb}, 0.18)`,
+        boxShadow: `inset 0 1px 0 rgba(${visual.rgb}, 0.08)`,
+      }}
     >
-      {/* Top-center premium badge (Ultra) — only when not current */}
-      {v.topBadge && !isCurrent && (
-        <div
-          className="absolute -top-[11px] left-1/2 -translate-x-1/2 px-2.5 py-[3px] rounded-full text-[9px] font-bold uppercase tracking-[0.12em] whitespace-nowrap"
-          style={{
-            background: 'linear-gradient(90deg, rgb(167,139,250), rgb(232,121,249))',
-            color: 'white',
-            boxShadow: '0 4px 12px rgba(167,139,250,0.45), 0 0 0 2px var(--theme-bg)',
-          }}
-        >
-          ✦ {v.topBadge}
-        </div>
-      )}
-
-      {/* Current plan corner chip */}
-      {isCurrent && (
-        <div
-          className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[9px] font-bold uppercase tracking-wider"
-          style={{
-            background: 'rgba(var(--glass-tint),0.10)',
-            color: 'var(--theme-secondary-text)',
-            border: '1px solid rgba(var(--glass-tint),0.08)',
-          }}
-        >
-          <Check size={9} strokeWidth={3} /> Aktif
-        </div>
-      )}
-
-      {/* Header: icon chip + plan name */}
-      <div className="flex items-center gap-2 mb-1">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${v.chipBg}`}>
-          <Icon size={13} className={v.accent} />
-        </div>
-        <span className={`text-[15px] font-bold tracking-tight ${v.accent}`}>{PLAN_LABEL[plan]}</span>
-      </div>
-
-      {/* Tagline */}
-      <p className="text-[11px] text-[var(--theme-secondary-text)]/70 leading-snug mb-3">
-        {PLAN_TAGLINE[plan]}
-      </p>
-
-      {/* Member count — inline sayı + label, orta vurgu */}
-      <div className="mb-3 flex items-baseline gap-1.5">
-        <span className={`text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums ${v.accent}`}>
-          {l.maxMembers.toLocaleString('tr-TR')}
-        </span>
-        <span className="text-[12.5px] font-medium text-[var(--theme-secondary-text)]/70">üye</span>
-      </div>
-
-      {/* Soft divider */}
       <div
-        className="h-px mb-3"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.12) 50%, transparent)' }}
-      />
+        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+        style={{
+          background: `rgba(${visual.rgb}, 0.14)`,
+          border: `1px solid rgba(${visual.rgb}, 0.25)`,
+          color: visual.accent,
+          boxShadow: `inset 0 1px 0 rgba(${visual.rgb}, 0.12)`,
+        }}
+      >
+        <Icon size={17} />
+      </div>
 
-      {/* Feature rows — indent'li satırlar alt-bilgi olarak hizalanır.
-          Ultra 7 satır, Pro 6, Free 4 — min-h-[152px] en büyük planın alt hizasını kilitler. */}
-      <ul className="space-y-[5px] mb-4 min-h-[152px]">
-        {features.map(({ icon: FIcon, label, indent }, i) => (
-          <li key={i} className="flex items-center gap-2">
-            {FIcon ? (
-              <FIcon size={11} className={`${v.accent} opacity-70 shrink-0`} />
-            ) : (
-              <span className="w-[11px] shrink-0" aria-hidden />
-            )}
-            <span
-              className={`text-[11.5px] leading-[1.35] ${
-                indent
-                  ? 'text-[var(--theme-secondary-text)]/75'
-                  : 'text-[var(--theme-text)]/90 font-medium'
-              }`}
-            >
-              {label}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[13px] font-bold tracking-tight" style={{ color: visual.accent }}>
+            {PLAN_NAME[key]}
+          </span>
+          <span className="text-[10px] text-[var(--theme-secondary-text)]/60 italic truncate">
+            {PLAN_TAGLINE[key]}
+          </span>
+        </div>
+        <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-0.5 tabular-nums">
+          {limits.maxMembers.toLocaleString('tr-TR')} üye · {limits.maxTotalRooms} oda · {audio}
+        </div>
+      </div>
 
-      {/* CTA */}
       <button
         type="button"
-        disabled={isCurrent}
-        className={`w-full py-2 rounded-xl text-[12px] font-semibold tracking-tight transition-all duration-150 active:scale-[0.98] ${btnClass}`}
+        disabled
+        className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 cursor-not-allowed"
+        style={{
+          background: 'rgba(var(--glass-tint), 0.05)',
+          color: 'var(--theme-secondary-text)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
+        }}
+        title="Plan değişikliği yakında"
       >
-        {isCurrent && <Check size={11} strokeWidth={3} className="inline mr-1 -mt-0.5" />}
-        {cta}
+        Yakında <ArrowUpRight size={10} />
       </button>
     </div>
   );
 }
 
-// ══════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// NavRow — Settings + Danger CTA paylaşımlı
+// ══════════════════════════════════════════════════════════
+
+function NavRow({
+  icon, iconBg, iconColor, title, hint, tone, onClick,
+}: {
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  hint: string;
+  tone?: 'danger';
+  onClick?: () => void;
+}) {
+  const baseCls = tone === 'danger'
+    ? 'bg-red-500/[0.06] border-red-500/25 hover:bg-red-500/[0.10] hover:border-red-500/40'
+    : 'bg-[rgba(var(--glass-tint),0.04)] border-[rgba(var(--glass-tint),0.08)] hover:bg-[rgba(var(--glass-tint),0.07)] hover:border-[rgba(var(--theme-accent-rgb),0.25)]';
+  const titleCls = tone === 'danger' ? 'text-red-300' : 'text-[var(--theme-text)]';
+  const chevronCls = tone === 'danger' ? 'text-red-400/60' : 'text-[var(--theme-secondary-text)]/50';
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left ${baseCls}`}
+    >
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: iconBg, color: iconColor }}
+      >
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-[12.5px] font-semibold ${titleCls}`}>{title}</div>
+        <div className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-0.5 leading-snug">{hint}</div>
+      </div>
+      <ChevronRight size={14} className={`${chevronCls} shrink-0`} />
+    </button>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Helpers
+// ══════════════════════════════════════════════════════════
 
 function pct(c: number, l: number): number {
   return l > 0 ? Math.min(100, (c / l) * 100) : 0;
 }
 
-function computeStatus(args: { memberPct: number; channelPct: number; peakPct: number; dailyInvite: number }): { label: string; tone: 'low' | 'growing' | 'near' | 'full' } {
+interface StatusInfo { label: string; tone: 'low' | 'growing' | 'near' | 'full'; }
+
+function computeStatus(args: { memberPct: number; channelPct: number; peakPct: number; dailyInvite: number }): StatusInfo {
   if (args.peakPct >= 100) return { label: 'Limit dolu', tone: 'full' };
   if (args.peakPct >= 80) return { label: 'Kapasiteye yakın', tone: 'near' };
   if (args.peakPct >= 30 || args.dailyInvite >= 3) return { label: 'Büyüyor', tone: 'growing' };
