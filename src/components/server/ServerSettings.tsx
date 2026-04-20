@@ -124,7 +124,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   }, [serverId, canManageServerEarly]);
 
   if (loading || !server) return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="flex-1 flex items-center justify-center min-h-0">
       <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin" />
     </div>
   );
@@ -150,9 +150,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   ];
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="surface-floating max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}
-        style={{ width: 'min(92vw, 860px)' }}>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* ── Identity Strip — compact premium header ── */}
         <div
           className="relative px-6 md:px-8 py-4 border-b border-[rgba(var(--glass-tint),0.06)]"

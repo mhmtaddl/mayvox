@@ -1120,7 +1120,7 @@ export default function ChatView() {
             const activeSrv = serverList.find(s => s.id === activeServerId);
             // Restricted mode: settings/discover dışındaki tüm akışlarda merkezi panel
             // restriction ekranıyla DEĞİŞTİRİLİR (boş-state UI'sı görünmez).
-            if (activeSrv?.isBanned && view !== 'settings' && !showDiscover) {
+            if (activeSrv?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) {
               return (
                 <div className="flex-1 flex flex-col min-h-0">
                   <RestrictedServerScreen
@@ -1133,8 +1133,12 @@ export default function ChatView() {
             return null;
           })()}
           <div
-            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? 'overflow-y-auto custom-scrollbar p-3' : `lg:mb-[72px] ${currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover) ? 'hidden' : ''}`}>
-          {view === 'settings' ? <SettingsView /> : showDiscover ? (
+            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[72px] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
+          {settingsServerId ? (
+            <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={refreshServers}
+              onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers(); }}
+              initialTab={settingsInitialTab} />
+          ) : view === 'settings' ? <SettingsView /> : showDiscover ? (
             <DiscoverPanel activeServerId={activeServerId}
               canCreate={canCreateServer}
               onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
@@ -1447,12 +1451,7 @@ export default function ChatView() {
       {/* Task #10: Tek-düze bildirim — `toastMsg` yalnız DesktopDock içinde
           (buton alanında) render edilir. Burada ikinci kopya kaldırıldı. */}
 
-      {/* ── Sunucu Ayarları ── */}
-      {settingsServerId && (
-        <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={refreshServers}
-          onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers(); }}
-          initialTab={settingsInitialTab} />
-      )}
+      {/* ── Sunucu Ayarları artık orta panelde inline render ediliyor (yukarıda main içinde) ── */}
 
       {/* ── Profile Popup ── */}
       <AnimatePresence>
