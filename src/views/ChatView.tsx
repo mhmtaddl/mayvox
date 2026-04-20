@@ -239,6 +239,46 @@ export default function ChatView() {
   const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'bans' | 'audit' | undefined>(undefined);
 
+  // ══════════════════════════════════════════════════════════
+  // Server Settings otomatik kapanma
+  // ══════════════════════════════════════════════════════════
+  // Server settings orta panelde inline render oluyor. X butonu dışında
+  // kapanması için "orta paneli tetikleyen" her aksiyon settings'i de
+  // kapatmalı: Discover, Ayarlar (view=settings), sunucu switch, kanala
+  // katılma. Her handler'a manuel setSettingsServerId(null) eklemek yerine
+  // state-watcher useEffect'i tek yerden yönetiyor.
+  //
+  // Not: settingsServerId + settingsInitialTab bilinçli olarak deps
+  // dışında — effect yalnız middle-panel target'ları değiştiğinde fire
+  // etmeli, settings kendi açılışıyla kendini kapatmasın.
+  const closeSettingsPanel = useCallback(() => {
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
+  }, []);
+
+  useEffect(() => {
+    // Mount'ta fires ama settingsServerId zaten null → no-op.
+    // Sonraki değişimler: Discover açılırsa, view=settings olursa, server
+    // switch olursa, kanala katılınırsa → settings kapanır.
+    closeSettingsPanel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, showDiscover, activeServerId, activeChannel]);
+
+  // Mouse geri (XButton1 = button 3) → settings aktifse kapat.
+  // Electron Chromium'da mouse back native navigation tetiklemez (SPA),
+  // o yüzden preventDefault güvenli; diğer ortamlarda da zararsız.
+  useEffect(() => {
+    if (!settingsServerId) return;
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        closeSettingsPanel();
+      }
+    };
+    window.addEventListener('mouseup', onMouseUp);
+    return () => window.removeEventListener('mouseup', onMouseUp);
+  }, [settingsServerId, closeSettingsPanel]);
+
   // Periyodik poll (45 sn) ve window focus'ta refreshServers() çağrılıyor.
   // Her seferinde setServerLoading(true) yapmak middle content'i spinner'a
   // çeviriyor ve "random refresh" hissi veriyordu. Loading state SADECE ilk
