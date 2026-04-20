@@ -228,6 +228,13 @@ function GhostButton({
 // ══════════════════════════════════════════════════════════════════
 
 export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, onLeave, showToast }: Props) {
+  // ⛔️ DEBUG v2 ⛔️ — Dev console'da görünüyorsa yeni kod mount oluyor.
+  // Temizlik: bu log + asagidaki banner redesign onaylanmca kaldirilacak.
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.log('[GeneralTab v2 REDESIGN] mounted — server:', server.id, '·', server.name);
+  }
+
   const [name, setName] = useState(server.name);
   const [desc, setDesc] = useState(server.description);
   const [motto, setMotto] = useState(server.motto ?? '');
@@ -283,7 +290,57 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   };
 
   return (
-    <div className="space-y-6 pb-4">
+    <div
+      className="space-y-6 pb-4"
+      style={{
+        // ⛔️ DEBUG: outer tab container dashed magenta border
+        // Goruyorsan GeneralTab v2 render ediliyor.
+        outline: '3px dashed #ec4899',
+        outlineOffset: '4px',
+        borderRadius: '8px',
+      }}
+    >
+      {/* ⛔️ DEBUG BANNER — gorunuyorsa yeni kod aktif ⛔️ */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+          color: '#ffffff',
+          padding: '18px 22px',
+          borderRadius: '14px',
+          border: '3px dashed #fef08a',
+          fontWeight: 800,
+          fontSize: '14px',
+          textAlign: 'center',
+          boxShadow: '0 8px 28px rgba(239,68,68,0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
+          letterSpacing: '0.02em',
+        }}
+      >
+        🔥 GENERAL TAB v2 REDESIGN AKTİF — {new Date().toLocaleTimeString('tr-TR')} 🔥
+        <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9, marginTop: '6px' }}>
+          Bu bannerı görüyorsan yeni kod render ediliyor. Görmüyorsan dev server HMR kaçırmış, restart et (Ctrl+C → npm run dev).
+        </div>
+      </div>
+
+      {/* ⛔️ DEBUG KARTI — CSS var'dan bağımsız, saf hex renkler */}
+      <div
+        style={{
+          background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04))',
+          border: '2px solid #10b981',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          color: '#d1fae5',
+          fontSize: '12px',
+          fontWeight: 600,
+        }}
+      >
+        ✅ Bu yeşil kart saf hex renkle çiziliyor (CSS var YOK). Görünüyorsa CSS variables'ı tanı izle:
+        <ul style={{ marginTop: 8, paddingLeft: 18, fontSize: 11, opacity: 0.85, fontWeight: 500 }}>
+          <li>--theme-accent: {typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue('--theme-accent') || 'TANIMSIZ') : '?'}</li>
+          <li>--glass-tint: {typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue('--glass-tint') || 'TANIMSIZ') : '?'}</li>
+          <li>--theme-text: {typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue('--theme-text') || 'TANIMSIZ') : '?'}</li>
+        </ul>
+      </div>
+
       {/* ═════════════ Card 1 — Sunucu Kimliği ═════════════ */}
       <GlassCard title="Sunucu Kimliği" hint="Görünür isim ve tanıtım metinleri">
         <div className="flex items-start gap-5">
