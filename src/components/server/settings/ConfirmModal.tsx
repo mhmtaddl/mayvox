@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, UserX, Ban, Check } from 'lucide-react';
+import { UserX, Ban, Check } from 'lucide-react';
 
 export type ConfirmVariant = 'kick' | 'ban';
 
@@ -13,23 +13,24 @@ interface Props {
   onConfirm: (reason: string) => void;
 }
 
-const VARIANT_META: Record<ConfirmVariant, {
+interface VariantMeta {
   title: string;
   description: (name: string) => React.ReactNode;
-  reasonRequired: boolean;
-  reasonPlaceholder: string;
+  reasonRequired: boolean;     // false ise reason field hiç render edilmez
+  reasonPlaceholder?: string;
   ctaLabel: string;
   ctaBusyLabel: string;
   icon: React.ReactNode;
   tone: 'warn' | 'danger';
-}> = {
+}
+
+const VARIANT_META: Record<ConfirmVariant, VariantMeta> = {
   kick: {
     title: 'Sunucudan At',
     description: name => (
-      <><strong className="text-[#e8ecf4]/95">{name}</strong> sunucudan atılacak. Tekrar katılmak için davet alabilir.</>
+      <><strong className="text-[#e8ecf4]/95">{name}</strong> sunucudan atılacak. Yasak değil — davet ile tekrar katılabilir.</>
     ),
     reasonRequired: false,
-    reasonPlaceholder: 'Opsiyonel — sebep (kayıtlara girer)',
     ctaLabel: 'Sunucudan At',
     ctaBusyLabel: 'Atılıyor...',
     icon: <UserX size={18} strokeWidth={1.8} />,
@@ -38,10 +39,10 @@ const VARIANT_META: Record<ConfirmVariant, {
   ban: {
     title: 'Üyeyi Yasakla',
     description: name => (
-      <><strong className="text-[#e8ecf4]/95">{name}</strong> yasaklanacak ve davet almadıkça tekrar katılamaz. Yasak kayıtlara işlenir.</>
+      <><strong className="text-[#e8ecf4]/95">{name}</strong> yasaklanacak ve davet almadıkça tekrar katılamaz. Sebep denetim kayıtlarına işlenir.</>
     ),
     reasonRequired: true,
-    reasonPlaceholder: 'Yasak sebebi (zorunlu — kayıtlara girer)',
+    reasonPlaceholder: 'Yasak sebebi (zorunlu)',
     ctaLabel: 'Yasakla',
     ctaBusyLabel: 'Yasaklanıyor...',
     icon: <Ban size={18} strokeWidth={1.8} />,
@@ -49,19 +50,29 @@ const VARIANT_META: Record<ConfirmVariant, {
   },
 };
 
+const TONE_RGB: Record<'warn' | 'danger', string> = {
+  warn: '251,146,60',
+  danger: '239,68,68',
+};
+
+const TONE_HEX: Record<'warn' | 'danger', string> = {
+  warn: '#fb923c',
+  danger: '#ef4444',
+};
+
 export default function ConfirmModal({ variant, targetName, open, busy, onCancel, onConfirm }: Props) {
   const [reason, setReason] = useState('');
   const meta = VARIANT_META[variant];
-  const toneColor = meta.tone === 'danger' ? '#ef4444' : '#fb923c';
-  const toneRgb = meta.tone === 'danger' ? '239,68,68' : '251,146,60';
+  const toneRgb = TONE_RGB[meta.tone];
+  const toneHex = TONE_HEX[meta.tone];
 
+  // Modal kapandığında reason'ı temizle
   useEffect(() => { if (!open) setReason(''); }, [open]);
 
+  // ESC to close
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onCancel]);
@@ -69,12 +80,17 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
   if (!open) return null;
 
   const trimmed = reason.trim();
-  const canSubmit = !busy && (!meta.reasonRequired || trimmed.length >= 3);
+  const reasonValid = !meta.reasonRequired || trimmed.length >= 3;
+  const canSubmit = !busy && reasonValid;
 
   const modal = (
     <div
       className="fixed inset-0 z-[700] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      style={{
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
       onClick={onCancel}
     >
       <div
@@ -89,61 +105,66 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
             'inset 0 1px 0 rgba(255,255,255,0.06)',
         }}
       >
+        {/* Tone icon */}
         <div
           className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
           style={{
             background: `rgba(${toneRgb}, 0.14)`,
             border: `1px solid rgba(${toneRgb}, 0.25)`,
-            color: toneColor,
+            color: toneHex,
             boxShadow: `inset 0 1px 0 rgba(${toneRgb}, 0.10)`,
           }}
         >
           {meta.icon}
         </div>
 
+        {/* Title + description */}
         <h3 className="text-[15.5px] font-bold text-[#e8ecf4] tracking-tight mb-1.5">{meta.title}</h3>
         <p className="text-[11.5px] text-[#7b8ba8] leading-relaxed mb-5">
           {meta.description(targetName)}
         </p>
 
-        <label className="block text-[10px] font-semibold uppercase tracking-[0.10em] text-[#7b8ba8]/70 mb-2">
-          {meta.reasonRequired ? 'Sebep (zorunlu)' : 'Sebep'}
-        </label>
-        <textarea
-          value={reason}
-          onChange={e => setReason(e.target.value.slice(0, 200))}
-          placeholder={meta.reasonPlaceholder}
-          rows={3}
-          autoFocus
-          className="w-full bg-[rgba(255,255,255,0.035)] border rounded-xl px-4 py-3 text-[12.5px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/40 outline-none resize-none transition-all duration-200 ease-out focus:bg-[rgba(255,255,255,0.055)]"
-          style={{
-            borderColor: meta.tone === 'danger'
-              ? 'rgba(239,68,68,0.22)'
-              : 'rgba(251,146,60,0.22)',
-          }}
-          onFocus={e => {
-            e.currentTarget.style.borderColor = meta.tone === 'danger' ? 'rgba(239,68,68,0.50)' : 'rgba(251,146,60,0.50)';
-            e.currentTarget.style.boxShadow = `0 0 0 4px rgba(${toneRgb}, 0.10)`;
-          }}
-          onBlur={e => {
-            e.currentTarget.style.borderColor = meta.tone === 'danger' ? 'rgba(239,68,68,0.22)' : 'rgba(251,146,60,0.22)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        />
-        <div className="flex items-center justify-between mt-1.5 text-[10px] text-[#7b8ba8]/50">
-          <span>
-            {meta.reasonRequired && trimmed.length > 0 && trimmed.length < 3
-              ? <span className="text-amber-400/80">En az 3 karakter</span>
-              : ''}
-          </span>
-          <span>{reason.length}/200</span>
-        </div>
+        {/* Reason textarea — yalnızca ban variant için */}
+        {meta.reasonRequired && (
+          <>
+            <label className="block text-[10px] font-semibold uppercase tracking-[0.10em] text-[#7b8ba8]/70 mb-2">
+              Sebep (zorunlu)
+            </label>
+            <textarea
+              value={reason}
+              onChange={e => setReason(e.target.value.slice(0, 200))}
+              placeholder={meta.reasonPlaceholder}
+              rows={3}
+              autoFocus
+              className="w-full bg-[rgba(255,255,255,0.035)] border rounded-xl px-4 py-3 text-[12.5px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/40 outline-none resize-none transition-all duration-200 ease-out focus:bg-[rgba(255,255,255,0.055)]"
+              style={{ borderColor: `rgba(${toneRgb}, 0.22)` }}
+              onFocus={e => {
+                e.currentTarget.style.borderColor = `rgba(${toneRgb}, 0.50)`;
+                e.currentTarget.style.boxShadow = `0 0 0 4px rgba(${toneRgb}, 0.10)`;
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = `rgba(${toneRgb}, 0.22)`;
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+            <div className="flex items-center justify-between mt-1.5 text-[10px] text-[#7b8ba8]/50">
+              <span>
+                {trimmed.length > 0 && trimmed.length < 3 && (
+                  <span className="text-amber-400/80">En az 3 karakter</span>
+                )}
+              </span>
+              <span>{reason.length}/200</span>
+            </div>
+          </>
+        )}
 
-        <div className="flex items-center gap-2 justify-end mt-5">
+        {/* Actions */}
+        <div className={`flex items-center gap-2 justify-end ${meta.reasonRequired ? 'mt-5' : 'mt-1'}`}>
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-[12.5px] font-semibold text-[#e8ecf4]/75 hover:text-[#e8ecf4] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.10)] border border-[rgba(255,255,255,0.08)] transition-all duration-200 active:scale-[0.97]"
+            disabled={busy}
+            className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-[12.5px] font-semibold text-[#e8ecf4]/75 hover:text-[#e8ecf4] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.10)] border border-[rgba(255,255,255,0.08)] transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Vazgeç
           </button>

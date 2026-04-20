@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, X, Crown, Shield, ShieldCheck, User as UserIcon,
-  MoreHorizontal, MicOff, Clock, UserMinus, UserX, Ban,
+  MoreHorizontal, MicOff, Clock, UserX, Ban,
   ChevronRight, DoorOpen,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
@@ -11,7 +11,7 @@ import {
   getMembers, kickMember, changeRole, banMember,
 } from '../../../lib/serverService';
 import {
-  type ServerRole, ROLE_HIERARCHY, canActOn, canSetRole,
+  type ServerRole, ROLE_HIERARCHY, canActOn,
 } from '../../../lib/permissionBundles';
 import { fmtDate, memberDisplayName, Empty, Loader } from './shared';
 import ActionMenu, { type ActionItem } from './ActionMenu';
@@ -33,7 +33,10 @@ const ROLE_FILTERS: readonly { value: string; label: string }[] = [
 ];
 
 const ROLE_LABEL: Record<ServerRole, string> = {
-  owner: 'Sahip', admin: 'Yönetici', mod: 'Moderatör', member: 'Üye',
+  owner: 'Sahip',
+  admin: 'Yönetici',
+  mod: 'Moderatör',
+  member: 'Üye',
 };
 
 const ROLE_CHIP: Record<ServerRole, { icon: React.ReactNode; bg: string; color: string; border: string }> = {
@@ -42,6 +45,11 @@ const ROLE_CHIP: Record<ServerRole, { icon: React.ReactNode; bg: string; color: 
   mod: { icon: <ShieldCheck size={10} />, bg: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: 'rgba(167,139,250,0.25)' },
   member: { icon: <UserIcon size={10} />, bg: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: 'rgba(255,255,255,0.08)' },
 };
+
+type PopoverState =
+  | { kind: 'action'; member: ServerMember; rect: DOMRect }
+  | { kind: 'role'; member: ServerMember; rect: DOMRect }
+  | null;
 
 // ══════════════════════════════════════════════════════════
 // MembersTab — premium üye yönetimi (kebab + role picker + modals)
@@ -53,59 +61,122 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   const [roleFilter, setRoleFilter] = useState('all');
 
   const { allUsers } = useUser();
-  const resolveStatus = (userId: string): string => {
+  const resolveStatus = useCallback((userId: string): string => {
     const u = allUsers.find(au => au.id === userId);
     return u?.statusText || 'Online';
-  };
+  }, [allUsers]);
 
   const load = useCallback(async () => {
     try { setLoading(true); setMembers(await getMembers(serverId)); }
     catch { showToast('Üyeler yüklenemedi'); }
     finally { setLoading(false); }
   }, [serverId, showToast]);
+
   useEffect(() => { load(); }, [load]);
 
-  // ─── popover + modal state ───
-  const [actionMenu, setActionMenu] = useState<{ member: ServerMember; rect: DOMRect } | null>(null);
-  const [rolePicker, setRolePicker] = useState<{ member: ServerMember; rect: DOMRect } | null>(null);
+  // ─── Popover state (tekil — kebab ve role picker aynı anda açılamaz) ───
+  const [popover, setPopover] = useState<PopoverState>(null);
   const [confirm, setConfirm] = useState<{ variant: ConfirmVariant; member: ServerMember } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const myRoleTyped: ServerRole = (ROLE_HIERARCHY[myRole as ServerRole] != null)
-    ? (myRole as ServerRole)
-    : 'member';
+  // myRole — string gelen prop'u ServerRole'a daralt (unknown → member fallback)
+  const myRoleTyped: ServerRole = ((): ServerRole => {
+    const r = myRole as ServerRole;
+    return ROLE_HIERARCHY[r] != null ? r : 'member';
+  })();
 
-  const act = async (fn: () => Promise<unknown>, okMsg: string, userId: string) => {
+  // ─── Aksiyon runner — busy state + reload + toast ───
+  const act = useCallback(async (fn: () => Promise<unknown>, okMsg: string, userId: string) => {
     setBusyId(userId);
     try { await fn(); await load(); showToast(okMsg); }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : 'İşlem başarısız'); }
     finally { setBusyId(null); }
-  };
+  }, [load, showToast]);
 
-  const handleRoleChange = (member: ServerMember, nextRole: ServerRole) => {
-    if (member.role === nextRole) { setRolePicker(null); return; }
+  const handleRoleChange = useCallback((member: ServerMember, nextRole: ServerRole) => {
+    setPopover(null);
+    if (member.role === nextRole) return;
     const dn = memberDisplayName(member);
-    setRolePicker(null);
     void act(
       () => changeRole(serverId, member.userId, nextRole),
       `${dn} → ${ROLE_LABEL[nextRole]}`,
       member.userId,
     );
-  };
+  }, [act, serverId]);
 
-  const handleKick = (member: ServerMember, reason: string) => {
-    const dn = memberDisplayName(member);
-    // kickMember reason parametresi almıyor; şimdilik çağrıyı olduğu gibi tut.
-    // reason audit log için gelecekte backend'e eklenebilir.
-    void reason;
+  const handleKick = useCallback((member: ServerMember) => {
     setConfirm(null);
+    const dn = memberDisplayName(member);
+    // Backend kickMember(serverId, userId) — reason backend'de yok, modal'dan kaldırıldı
     void act(() => kickMember(serverId, member.userId), `${dn} sunucudan çıkarıldı`, member.userId);
-  };
+  }, [act, serverId]);
 
-  const handleBan = (member: ServerMember, reason: string) => {
-    const dn = memberDisplayName(member);
+  const handleBan = useCallback((member: ServerMember, reason: string) => {
     setConfirm(null);
+    const dn = memberDisplayName(member);
     void act(() => banMember(serverId, member.userId, reason), `${dn} yasaklandı`, member.userId);
+  }, [act, serverId]);
+
+  // ─── Kebab menu items — popover açıkken hesaplanır ───
+  const buildActionItems = (m: ServerMember, rect: DOMRect): ActionItem[] => {
+    const targetRole = m.role as ServerRole;
+    const canAct = canActOn(myRoleTyped, targetRole);
+    const canRoleAction = canAct && (myRoleTyped === 'owner' || myRoleTyped === 'admin');
+    const canKick = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2; // mod+
+    const canBan = canAct && ROLE_HIERARCHY[myRoleTyped] >= 3;  // admin+
+    const canModerate = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2;
+
+    return [
+      {
+        id: 'role',
+        label: 'Rolü Değiştir...',
+        icon: <ChevronRight size={13} />,
+        disabled: !canRoleAction,
+        onClick: () => setPopover({ kind: 'role', member: m, rect }),
+      },
+      {
+        id: 'voice_mute',
+        label: 'Sesini Sustur',
+        icon: <MicOff size={13} />,
+        pending: true,
+        disabled: !canModerate,
+        separatorBefore: true,
+        onClick: () => {},
+      },
+      {
+        id: 'timeout',
+        label: 'Zaman Aşımı Ver',
+        icon: <Clock size={13} />,
+        pending: true,
+        disabled: !canModerate,
+        onClick: () => {},
+      },
+      {
+        id: 'room_kick',
+        label: 'Odadan Çıkar',
+        icon: <DoorOpen size={13} />,
+        pending: true,
+        disabled: !canModerate,
+        onClick: () => {},
+      },
+      {
+        id: 'kick',
+        label: 'Sunucudan At',
+        icon: <UserX size={13} />,
+        tone: 'warn',
+        disabled: !canKick,
+        separatorBefore: true,
+        onClick: () => { setPopover(null); setConfirm({ variant: 'kick', member: m }); },
+      },
+      {
+        id: 'ban',
+        label: 'Yasakla...',
+        icon: <Ban size={13} />,
+        tone: 'danger',
+        disabled: !canBan,
+        onClick: () => { setPopover(null); setConfirm({ variant: 'ban', member: m }); },
+      },
+    ];
   };
 
   // ─── Filtre + sıralama ───
@@ -113,7 +184,8 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   const filtered = members.filter(m => {
     if (roleFilter !== 'all' && m.role !== roleFilter) return false;
     if (!q) return true;
-    return memberDisplayName(m).toLowerCase().includes(q) || m.username?.toLowerCase().includes(q);
+    return memberDisplayName(m).toLowerCase().includes(q)
+      || (m.username?.toLowerCase().includes(q) ?? false);
   });
   const sorted = [...filtered].sort((a, b) => {
     const ra = ROLE_HIERARCHY[a.role as ServerRole] ?? 0;
@@ -125,7 +197,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
   return (
     <div className="space-y-4 pb-4">
-      {/* Üst bar: arama + filtre */}
+      {/* ── Üst bar: arama + rol filtresi ── */}
       <div className="flex items-center gap-3 flex-wrap">
         <div
           className="flex-1 min-w-[200px] flex items-center gap-2 h-10 rounded-xl px-3.5 transition-colors duration-200"
@@ -142,7 +214,11 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
             className="flex-1 bg-transparent text-[12px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/40 outline-none"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="text-[#7b8ba8]/45 hover:text-[#e8ecf4] transition-colors">
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-[#7b8ba8]/45 hover:text-[#e8ecf4] transition-colors"
+              aria-label="Aramayı temizle"
+            >
               <X size={12} />
             </button>
           )}
@@ -154,7 +230,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
               <button
                 key={rf.value}
                 onClick={() => setRoleFilter(rf.value)}
-                className={`h-8 px-3 rounded-lg text-[10.5px] font-semibold transition-all duration-150 ${
+                className={`h-8 px-3 rounded-lg text-[10.5px] font-semibold transition-all duration-150 active:scale-[0.97] ${
                   active
                     ? 'text-[#60a5fa]'
                     : 'text-[#7b8ba8]/55 hover:text-[#e8ecf4] hover:bg-[rgba(255,255,255,0.04)]'
@@ -171,16 +247,14 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         </div>
       </div>
 
-      {/* Sayaç */}
-      <div className="flex items-center justify-between">
-        <span className="text-[10.5px] text-[#7b8ba8]/55 font-medium">
-          {sorted.length === members.length
-            ? `${members.length} üye`
-            : `${sorted.length} / ${members.length} üye`}
-        </span>
+      {/* ── Sayaç ── */}
+      <div className="text-[10.5px] text-[#7b8ba8]/55 font-medium">
+        {sorted.length === members.length
+          ? `${members.length} üye`
+          : `${sorted.length} / ${members.length} üye`}
       </div>
 
-      {/* Liste */}
+      {/* ── Liste ── */}
       {sorted.length === 0 ? (
         <Empty text={q ? 'Aramayla eşleşen üye yok' : 'Bu rolde üye bulunmuyor'} />
       ) : (
@@ -192,100 +266,33 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
               myRole={myRoleTyped}
               statusText={resolveStatus(m.userId)}
               busy={busyId === m.userId}
-              onOpenKebab={(rect) => setActionMenu({ member: m, rect })}
-              onOpenRolePicker={(rect) => setRolePicker({ member: m, rect })}
+              onOpenKebab={rect => setPopover({ kind: 'action', member: m, rect })}
+              onOpenRolePicker={rect => setPopover({ kind: 'role', member: m, rect })}
             />
           ))}
         </div>
       )}
 
-      {/* ─── Portals ─── */}
-      {actionMenu && (() => {
-        const m = actionMenu.member;
-        const dn = memberDisplayName(m);
-        const targetRole = m.role as ServerRole;
-        const canAct = canActOn(myRoleTyped, targetRole);
-        const canRole = canAct && (myRoleTyped === 'owner' || myRoleTyped === 'admin');
-        const canKick = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2; // mod+
-        const canBan = canAct && ROLE_HIERARCHY[myRoleTyped] >= 3; // admin+
-        const canModerate = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2; // mod+
-
-        const items: ActionItem[] = [
-          {
-            id: 'role',
-            label: 'Rolü Değiştir...',
-            icon: <ChevronRight size={13} />,
-            disabled: !canRole,
-            onClick: () => {
-              // Kebab anchor rect'ini role picker'a geçir
-              setRolePicker({ member: m, rect: actionMenu.rect });
-            },
-          },
-          {
-            id: 'voice_mute',
-            label: 'Sesini Sustur',
-            icon: <MicOff size={13} />,
-            onClick: () => {},
-            pending: true,
-            disabled: !canModerate,
-            separatorBefore: true,
-          },
-          {
-            id: 'timeout',
-            label: 'Zaman Aşımı Ver',
-            icon: <Clock size={13} />,
-            onClick: () => {},
-            pending: true,
-            disabled: !canModerate,
-          },
-          {
-            id: 'room_kick',
-            label: 'Odadan Çıkar',
-            icon: <DoorOpen size={13} />,
-            onClick: () => {},
-            pending: true,
-            disabled: !canModerate,
-          },
-          {
-            id: 'kick',
-            label: 'Sunucudan At',
-            icon: <UserX size={13} />,
-            tone: 'warn',
-            disabled: !canKick,
-            separatorBefore: true,
-            onClick: () => setConfirm({ variant: 'kick', member: m }),
-          },
-          {
-            id: 'ban',
-            label: 'Yasakla...',
-            icon: <Ban size={13} />,
-            tone: 'danger',
-            disabled: !canBan,
-            onClick: () => setConfirm({ variant: 'ban', member: m }),
-          },
-        ];
-
-        void dn; // dn kullanılmıyor — action menu sadece m ile geçiyor
-        return (
-          <ActionMenu
-            items={items}
-            anchorRect={actionMenu.rect}
-            onClose={() => setActionMenu(null)}
-          />
-        );
-      })()}
-
-      {rolePicker && (
+      {/* ── Popovers (tekil) ── */}
+      {popover?.kind === 'action' && (
+        <ActionMenu
+          items={buildActionItems(popover.member, popover.rect)}
+          anchorRect={popover.rect}
+          onClose={() => setPopover(null)}
+        />
+      )}
+      {popover?.kind === 'role' && (
         <RolePicker
-          currentRole={rolePicker.member.role as ServerRole}
+          currentRole={popover.member.role as ServerRole}
           actorRole={myRoleTyped}
-          anchorRect={rolePicker.rect}
-          busy={busyId === rolePicker.member.userId}
-          onClose={() => setRolePicker(null)}
-          onSelect={role => handleRoleChange(rolePicker.member, role)}
+          anchorRect={popover.rect}
+          busy={busyId === popover.member.userId}
+          onClose={() => setPopover(null)}
+          onSelect={role => handleRoleChange(popover.member, role)}
         />
       )}
 
+      {/* ── Confirm modal ── */}
       {confirm && (
         <ConfirmModal
           variant={confirm.variant}
@@ -294,7 +301,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           busy={busyId === confirm.member.userId}
           onCancel={() => setConfirm(null)}
           onConfirm={reason => {
-            if (confirm.variant === 'kick') handleKick(confirm.member, reason);
+            if (confirm.variant === 'kick') handleKick(confirm.member);
             else handleBan(confirm.member, reason);
           }}
         />
@@ -320,23 +327,21 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
   const dn = memberDisplayName(member);
   const targetRole = member.role as ServerRole;
   const chip = ROLE_CHIP[targetRole] ?? ROLE_CHIP.member;
-  const canChangeRole =
-    canActOn(myRole, targetRole) &&
-    (canSetRole(myRole, 'mod') || canSetRole(myRole, 'member') || canSetRole(myRole, 'admin'));
+
+  // Yetki gate'leri
   const canAnyAction = canActOn(myRole, targetRole);
+  // Rol değiştirme yetkisi: owner/admin + üzerinde aksiyon yetkisi
+  const canChangeRole = canAnyAction && (myRole === 'owner' || myRole === 'admin');
 
   const kebabRef = useRef<HTMLButtonElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
 
+  const rowCls = busy
+    ? 'bg-[rgba(59,130,246,0.05)]'
+    : 'hover:bg-[rgba(255,255,255,0.035)]';
+
   return (
-    <div
-      className="flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 group"
-      style={{
-        background: busy ? 'rgba(59,130,246,0.04)' : 'transparent',
-      }}
-      onMouseEnter={e => { if (!busy) e.currentTarget.style.background = 'rgba(255,255,255,0.035)'; }}
-      onMouseLeave={e => { if (!busy) e.currentTarget.style.background = 'transparent'; }}
-    >
+    <div className={`flex items-center gap-3.5 px-4 py-3 rounded-xl transition-colors duration-200 group ${rowCls}`}>
       {/* Avatar */}
       <div
         className="w-10 h-10 rounded-[10px] overflow-hidden shrink-0 flex items-center justify-center"
@@ -363,7 +368,7 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
                 color: '#fb923c',
                 border: '1px solid rgba(251,146,60,0.25)',
               }}
-              title="Sistem yönetimi tarafından susturulmuş"
+              title="Sistem yönetimi tarafından susturulmuş — kaldırmak için sistem yönetimiyle iletişime geç"
             >
               <MicOff size={9} strokeWidth={2.2} /> Sesi kapalı
             </span>
@@ -371,9 +376,9 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           {member.username && member.username !== dn && (
-            <span className="text-[10px] text-[#7b8ba8]/50">@{member.username}</span>
+            <span className="text-[10px] text-[#7b8ba8]/50 truncate">@{member.username}</span>
           )}
-          <span className="text-[10px] text-[#7b8ba8]/40">{fmtDate(member.joinedAt)}</span>
+          <span className="text-[10px] text-[#7b8ba8]/40 shrink-0">{fmtDate(member.joinedAt)}</span>
         </div>
       </div>
 
@@ -390,18 +395,16 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
           canChangeRole && !busy
             ? 'hover:brightness-[1.10] active:scale-[0.95] cursor-pointer'
             : 'cursor-default'
-        }`}
+        } disabled:opacity-80`}
         style={{
           background: chip.bg,
           color: chip.color,
           border: `1px solid ${chip.border}`,
         }}
+        title={canChangeRole ? 'Rolü değiştir' : undefined}
       >
         {chip.icon}
         {ROLE_LABEL[targetRole] ?? targetRole}
-        {canChangeRole && !busy && (
-          <UserMinus size={9} className="opacity-0 group-hover:opacity-60 transition-opacity" style={{ display: 'none' }} />
-        )}
       </button>
 
       {/* Kebab */}
@@ -415,7 +418,7 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
         }}
         className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150 ${
           canAnyAction && !busy
-            ? 'text-[#7b8ba8]/50 hover:text-[#e8ecf4] hover:bg-[rgba(255,255,255,0.08)] active:scale-[0.94] opacity-60 group-hover:opacity-100'
+            ? 'text-[#7b8ba8]/60 hover:text-[#e8ecf4] hover:bg-[rgba(255,255,255,0.08)] active:scale-[0.94]'
             : 'text-[#7b8ba8]/20 cursor-default'
         }`}
         aria-label="Daha fazla aksiyon"
