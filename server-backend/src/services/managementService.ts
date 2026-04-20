@@ -9,7 +9,7 @@ import { getServerAccessContext, assertCapability, invalidateAccessContext, inva
 import { CAPABILITIES, type Capability } from '../capabilities';
 import { logAction } from './auditLogService';
 import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
-import { removeParticipantFromAllServerRooms, removeParticipantFromChannel } from './livekitService';
+import { removeParticipantFromAllServerRooms, removeParticipantFromChannel, setPublishPermissionInAllServerRooms } from './livekitService';
 
 // ── Yetki kontrol ──
 
@@ -249,9 +249,9 @@ async function requireModerationTarget(
  * Sunucu-içi voice mute. Süresiz (expiresInSeconds = null) ya da süreli.
  * Idempotent: zaten muted olsa bile süreyi yeniler.
  *
- * Aktif voice efekti: mute anında kullanıcı tüm voice odalardan düşürülür.
- * Tekrar join ederse token-server gate etmediği için ses yeniden açılır (R2 known
- * limitation). Ama en azından anlık susar — "bas-konuş geçiyor" UX'ini kapatır.
+ * Aktif voice efekti: kullanıcı ODADAN ATILMAZ — sadece canPublish=false setlenir
+ * (mic server-side kapanır, kullanıcı odada kalıp başkalarını dinleyebilir).
+ * Tekrar join ederse fresh token canPublish:true alır (R2 known limitation — token-server gate ayrı iş).
  */
 export async function muteMember(
   serverId: string, userId: string, targetUserId: string,
@@ -282,8 +282,8 @@ export async function muteMember(
   );
   invalidateAccessContext(targetUserId, serverId);
 
-  // Aktif voice odalardan düşür (LiveKit yoksa silent no-op)
-  const lk = await removeParticipantFromAllServerRooms(serverId, targetUserId);
+  // Aktif voice odalarda mic'i kapat — kullanıcı odada kalır (LiveKit yoksa silent no-op)
+  const lk = await setPublishPermissionInAllServerRooms(serverId, targetUserId, false);
 
   await logAction({
     serverId, actorId: userId, action: 'member.mute',
@@ -321,6 +321,10 @@ export async function unmuteMember(serverId: string, userId: string, targetUserI
 
   if (result.rowCount === 0) return { wasActive: false };  // idempotent safe return
   invalidateAccessContext(targetUserId, serverId);
+
+  // Kullanıcı hâlâ odadaysa canPublish'i tekrar aç (anında mic'i geri ver).
+  // Odada değilse no-op — fresh join zaten canPublish:true ile token alır.
+  await setPublishPermissionInAllServerRooms(serverId, targetUserId, true);
 
   await logAction({
     serverId, actorId: userId, action: 'member.unmute',

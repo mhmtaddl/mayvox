@@ -92,3 +92,55 @@ export async function removeParticipantFromAllServerRooms(
   const results = await Promise.all(channelIds.map(id => removeFromOneRoom(id, targetUserId)));
   return { configured: true, channelsAffected: results.filter(Boolean).length };
 }
+
+/**
+ * Tek bir odada kullanıcının publish iznini değiştirir (kullanıcı odadan atılmaz).
+ * Mute için canPublish=false, unmute için canPublish=true.
+ *
+ * LiveKit semantik notu: permission atomic güncellenir — tüm istenen permission
+ * alanları setlenmezse default (false) alır. Token-server canPublish+canSubscribe
+ * grant ediyor; biz de ikisini birlikte setliyoruz, diğer alanlar default false kalır.
+ */
+async function updatePublishInOneRoom(
+  roomName: string,
+  identity: string,
+  canPublish: boolean,
+): Promise<boolean> {
+  const client = getClient();
+  if (!client) return false;
+  try {
+    await client.updateParticipant(roomName, identity, {
+      permission: { canPublish, canSubscribe: true },
+    });
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message.toLowerCase() : '';
+    if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('404')) {
+      return false;
+    }
+    console.warn('[livekit] updateParticipant failed', { roomName, identity, canPublish, err });
+    return false;
+  }
+}
+
+/**
+ * Sunucudaki TÜM voice kanallarında kullanıcının publish iznini değiştirir.
+ * Mute akışı: odadan ATMAZ, sadece mic'i server-side kapatır.
+ * Tekrar join ederse fresh token ile canPublish:true alır — bu token-server
+ * gate'inde çözülür (R2 known limitation).
+ */
+export async function setPublishPermissionInAllServerRooms(
+  serverId: string,
+  targetUserId: string,
+  canPublish: boolean,
+): Promise<{ configured: boolean; channelsAffected: number }> {
+  if (!isLiveKitConfigured()) return { configured: false, channelsAffected: 0 };
+
+  const channelIds = await listServerVoiceChannelIds(serverId);
+  if (channelIds.length === 0) return { configured: true, channelsAffected: 0 };
+
+  const results = await Promise.all(
+    channelIds.map(id => updatePublishInOneRoom(id, targetUserId, canPublish))
+  );
+  return { configured: true, channelsAffected: results.filter(Boolean).length };
+}
