@@ -8,6 +8,7 @@ import {
   ConnectionQuality,
   DisconnectReason,
   RemoteAudioTrack,
+  ParticipantEvent,
   type Participant,
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -117,6 +118,21 @@ export function useLiveKitConnection({
     // Toplam süre koruması — sonsuz beklemeyi önler
     const joinAbort = new AbortController();
     const joinTimer = setTimeout(() => joinAbort.abort(), TOTAL_JOIN_TIMEOUT_MS);
+
+    // ── Moderation toast dedupe ─────────────────────────────────────
+    // LiveKit SDK aynı permission değişikliği için nadiren birden fazla event
+    // fırlatabilir; ayrıca connect/reconnect yakınlığında duplicate olabilir.
+    // 2sn penceresi içinde aynı mesajı ikinci kez gösterme. Room her connect'te
+    // yeniden yaratıldığından closure state reset olur.
+    let lastToastAt = 0;
+    let lastToastMsg = '';
+    const moderationToast = (msg: string) => {
+      const now = Date.now();
+      if (msg === lastToastMsg && now - lastToastAt < 2000) return;
+      lastToastMsg = msg;
+      lastToastAt = now;
+      setToastMsg(msg);
+    };
 
     let room: Room | null = null;
     try {
@@ -366,7 +382,13 @@ export function useLiveKitConnection({
             setActiveChannel(null);
             connectionLostRef.current = true;
             setConnectionLevel(0);
-            // Toast kaldırıldı
+            // Moderator removeParticipant çağırdıysa LiveKit bu reason ile disconnect eder.
+            // Timeout + room-kick için ortak (ikisi de backend'de removeParticipant kullanıyor).
+            // [DEBUG moderation]
+            console.debug('[moderation] disconnect reason', { reason, enumName: DisconnectReason[reason ?? -1] });
+            if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
+              moderationToast('Moderatör tarafından odadan çıkarıldın');
+            }
           } else {
             playSound('leave');
             setConnectionLevel(4);
@@ -389,6 +411,34 @@ export function useLiveKitConnection({
 
       // Set ref only after successful connect
       livekitRoomRef.current = room;
+
+      // ── Moderation: canPublish değişimi (mute/unmute) ─────────────
+      // Backend updateParticipant ile canPublish'i değiştirince LiveKit bu event'i
+      // emit eder. prev.canPublish ile mevcut değeri karşılaştırıp toast gösterir.
+      room.localParticipant.on(
+        ParticipantEvent.ParticipantPermissionsChanged,
+        // ParticipantPermission tipi livekit-client'tan export değil; ihtiyacımız olan tek
+        // alan canPublish, minimal inline shape yeterli.
+        (prev?: { canPublish?: boolean }) => {
+          const nextCanPublish = room!.localParticipant.permissions?.canPublish;
+          const prevCanPublish = prev?.canPublish;
+          // [DEBUG moderation] — teşhis sonrası silinecek
+          console.debug('[moderation] permissionsChanged', { prevCanPublish, nextCanPublish });
+          if (nextCanPublish === prevCanPublish) return;
+          if (nextCanPublish === false) {
+            moderationToast('Bu sunucuda susturuldun');
+          } else if (prevCanPublish === false && nextCanPublish === true) {
+            // REGRESSION FIX: canPublish:false iken LiveKit track'i unpublish eder.
+            // canPublish:true döndüğünde SDK otomatik republish etmez — manuel çağırmalıyız.
+            // setMicrophoneEnabled(true) mic track'ı tekrar publish eder; kullanıcının
+            // push-to-talk state'i (track.enabled) ayrı bir katman, etkilenmez.
+            room!.localParticipant.setMicrophoneEnabled(true).catch(err => {
+              console.warn('[moderation] mic re-enable failed', err);
+            });
+            moderationToast('Susturman kaldırıldı, tekrar konuşabilirsin');
+          }
+        },
+      );
 
       updateMembers();
       syncUsers();
