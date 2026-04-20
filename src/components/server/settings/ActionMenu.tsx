@@ -10,6 +10,10 @@ export interface ActionItem {
   tone?: 'neutral' | 'warn' | 'danger';
   pending?: boolean; // "yakında" rozeti + disabled
   separatorBefore?: boolean; // öncesinde ayraç çiz
+  /** Bu item kendi popover'ını (role picker, timeout picker) açacaksa `false`. Default: true.
+   *  Sebep: React 18 auto-batching. Handler setPopover({kind:'x'}) ve onClose setPopover(null)
+   *  aynı tick'te çalışırsa son olan (null) kazanır → sub-popover hiç açılmaz. */
+  closesMenu?: boolean;
 }
 
 interface Props {
@@ -109,7 +113,13 @@ export default function ActionMenu({ items, anchorRect, onClose }: Props) {
             <button
               type="button"
               disabled={disabled}
-              onClick={() => { if (!disabled) { item.onClick(); onClose(); } }}
+              onClick={() => {
+                if (disabled) return;
+                item.onClick();
+                // Sub-popover açan item'lar için onClose çağırma — item'ın kendi
+                // setPopover({kind:'...'})'i popover.kind değiştirince zaten ActionMenu unmount olur.
+                if (item.closesMenu !== false) onClose();
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12.5px] font-medium tracking-tight transition-colors duration-150 ${toneClass(item.tone, disabled)}`}
             >
               {item.icon && (

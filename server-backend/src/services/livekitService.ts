@@ -1,14 +1,14 @@
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { config } from '../config';
 import { queryMany } from '../repositories/db';
-import { supabase } from '../supabaseClient';
 
 /**
  * LiveKit moderation helpers.
  *
  * Kurallar:
  *  - Room name  = channel.id (UUID string). Frontend getLiveKitToken çağrısında bu kullanılıyor.
- *  - Identity   = profile.name. Token server ile aynı convention — değişirse ikisi de değişmeli.
+ *  - Identity   = user.id (Supabase UUID). cylk-token-server `new AccessToken(..., { identity: user.id })`
+ *    ile üretiyor — ikisi aynı olmalı. Eğer token-server identity şeması değişirse burası da değişmeli.
  *  - ENV eksikse tüm fonksiyonlar no-op (0 channel etkilendi) döner, hata fırlatmaz.
  *    Bu deliberate: moderation aksiyonu DB tarafında başarılı, LiveKit tarafı sessiz downgrade.
  */
@@ -25,18 +25,6 @@ function getClient(): RoomServiceClient | null {
 
 export function isLiveKitConfigured(): boolean {
   return getClient() !== null;
-}
-
-/** user_id → profile.name (LiveKit identity). Bulunamazsa null. */
-async function resolveIdentity(userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('name')
-    .eq('id', userId)
-    .maybeSingle();
-  if (error || !data) return null;
-  const name = (data as { name?: string | null }).name;
-  return typeof name === 'string' && name.length > 0 ? name : null;
 }
 
 async function listServerVoiceChannelIds(serverId: string): Promise<string[]> {
@@ -80,9 +68,8 @@ export async function removeParticipantFromChannel(
   targetUserId: string
 ): Promise<{ configured: boolean; removed: boolean }> {
   if (!isLiveKitConfigured()) return { configured: false, removed: false };
-  const identity = await resolveIdentity(targetUserId);
-  if (!identity) return { configured: true, removed: false };
-  const removed = await removeFromOneRoom(channelId, identity);
+  // Identity = Supabase user.id (token-server convention'ıyla aynı).
+  const removed = await removeFromOneRoom(channelId, targetUserId);
   return { configured: true, removed };
 }
 
@@ -97,13 +84,11 @@ export async function removeParticipantFromAllServerRooms(
   targetUserId: string
 ): Promise<{ configured: boolean; channelsAffected: number }> {
   if (!isLiveKitConfigured()) return { configured: false, channelsAffected: 0 };
-  const identity = await resolveIdentity(targetUserId);
-  if (!identity) return { configured: true, channelsAffected: 0 };
 
   const channelIds = await listServerVoiceChannelIds(serverId);
   if (channelIds.length === 0) return { configured: true, channelsAffected: 0 };
 
-  // Paralel dene; her bir oda bağımsız.
-  const results = await Promise.all(channelIds.map(id => removeFromOneRoom(id, identity)));
+  // Identity = Supabase user.id. Paralel dene; her bir oda bağımsız.
+  const results = await Promise.all(channelIds.map(id => removeFromOneRoom(id, targetUserId)));
   return { configured: true, channelsAffected: results.filter(Boolean).length };
 }

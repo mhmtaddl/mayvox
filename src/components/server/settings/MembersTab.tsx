@@ -194,6 +194,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         label: 'Rolü Değiştir...',
         icon: <ChevronRight size={13} />,
         disabled: !canRoleAction,
+        closesMenu: false,
         onClick: () => setPopover({ kind: 'role', member: m, rect }),
       },
       {
@@ -209,6 +210,9 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         label: timedOut ? 'Zaman Aşımını Kaldır' : 'Zaman Aşımı Ver...',
         icon: <Clock size={13} />,
         disabled: !canModerate,
+        // timedOut=true yolu kapatır (handleTimeoutClear akışı), false yolu popover açar.
+        // İkinci durumda menu kapanmamalı ki setPopover override edilmesin.
+        closesMenu: false,
         onClick: () => {
           if (timedOut) handleTimeoutClear(m);
           else setPopover({ kind: 'timeout', member: m, rect });
