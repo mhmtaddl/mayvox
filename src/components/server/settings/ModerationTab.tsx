@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Ban, MicOff, Clock, ShieldOff, UserX, Shield,
-  RefreshCw, DoorOpen, History,
+  RefreshCw, DoorOpen, History, AlertTriangle, Mic,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import {
-  type ServerBan, type ServerMember, type AuditLogItem,
+  type ServerBan, type ServerMember, type AuditLogItem, type MyModerationState,
   getBans, getMembers, unbanMember, getAuditLog,
+  unmuteMember, clearTimeoutMember, getMyModerationState,
 } from '../../../lib/serverService';
 import { fmtDate, memberDisplayName, Empty, Loader, timeAgo } from './shared';
 
@@ -20,34 +21,34 @@ interface Props {
 // ══════════════════════════════════════════════════════════
 export default function ModerationTab({ serverId, showToast }: Props) {
   const [bans, setBans] = useState<ServerBan[] | null>(null);
-  const [mutedMembers, setMutedMembers] = useState<ServerMember[] | null>(null);
+  const [members, setMembers] = useState<ServerMember[] | null>(null);
   const [logs, setLogs] = useState<AuditLogItem[] | null>(null);
+  const [myState, setMyState] = useState<MyModerationState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [unbanBusyId, setUnbanBusyId] = useState<string | null>(null);
+  /** Tüm satır-seviyeli aksiyonlar tek state üzerinden — unban, unmute, clearTimeout aynı anda bir tane */
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
-  // 3 paralel fetch — Promise.allSettled: biri fail olursa diğerleri çalışmaya devam eder
-  // (örn: mod user için getAuditLog 403 dönebilir, Yasaklılar yine yüklenir)
+  // 4 paralel fetch — Promise.allSettled: biri fail olursa diğerleri çalışmaya devam eder
+  // (örn: mod user için getAuditLog 403 dönebilir, diğer bölümler yine yüklenir)
   const loadAll = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
     else setRefreshing(true);
     try {
-      const [b, m, a] = await Promise.allSettled([
+      const [b, m, a, s] = await Promise.allSettled([
         getBans(serverId),
         getMembers(serverId),
         getAuditLog(serverId, { limit: 30 }),
+        getMyModerationState(serverId),
       ]);
       setBans(b.status === 'fulfilled' ? b.value : []);
-      setMutedMembers(
-        m.status === 'fulfilled'
-          ? m.value.filter(x => x.isMuted)
-          : []
-      );
+      setMembers(m.status === 'fulfilled' ? m.value : []);
       setLogs(
         a.status === 'fulfilled'
           ? a.value.filter(isModerationAction)
           : []
       );
+      setMyState(s.status === 'fulfilled' ? s.value : null);
     } finally {
       if (isInitial) setLoading(false);
       else setRefreshing(false);
@@ -56,36 +57,124 @@ export default function ModerationTab({ serverId, showToast }: Props) {
 
   useEffect(() => { void loadAll(true); }, [loadAll]);
 
-  const handleUnban = useCallback(async (userId: string) => {
-    setUnbanBusyId(userId);
+  /** Generic satır aksiyonu — unban/unmute/clearTimeout tek pattern */
+  const runRowAction = useCallback(async (
+    userId: string,
+    fn: () => Promise<unknown>,
+    okMsg: string,
+    failMsg: string,
+  ) => {
+    setActionBusyId(userId);
     try {
-      await unbanMember(serverId, userId);
-      showToast('Yasak kaldırıldı');
+      await fn();
+      showToast(okMsg);
       await loadAll(false);
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Yasak kaldırılamadı');
+      showToast(e instanceof Error ? e.message : failMsg);
     } finally {
-      setUnbanBusyId(null);
+      setActionBusyId(null);
     }
-  }, [serverId, showToast, loadAll]);
+  }, [showToast, loadAll]);
+
+  const handleUnban = useCallback((userId: string) => {
+    void runRowAction(userId, () => unbanMember(serverId, userId), 'Yasak kaldırıldı', 'Yasak kaldırılamadı');
+  }, [serverId, runRowAction]);
+
+  const handleUnmute = useCallback((member: ServerMember) => {
+    const dn = memberDisplayName(member);
+    void runRowAction(
+      member.userId,
+      () => unmuteMember(serverId, member.userId),
+      `${dn} susturması kaldırıldı`,
+      'Susturma kaldırılamadı',
+    );
+  }, [serverId, runRowAction]);
+
+  const handleClearTimeout = useCallback((member: ServerMember) => {
+    const dn = memberDisplayName(member);
+    void runRowAction(
+      member.userId,
+      () => clearTimeoutMember(serverId, member.userId),
+      `${dn} zaman aşımı kaldırıldı`,
+      'Zaman aşımı kaldırılamadı',
+    );
+  }, [serverId, runRowAction]);
+
+  // Members listesinden türeyen aktif ceza listeleri — tek source (MembersTab ile aynı endpoint)
+  const voiceMutedMembers = useMemo(
+    () => (members ?? []).filter(m => m.isMuted || m.voiceMutedBy !== null),
+    [members]
+  );
+  const timedOutMembers = useMemo(
+    () => (members ?? []).filter(m => m.timeoutUntil !== null),
+    [members]
+  );
 
   if (loading) return <Loader />;
 
   return (
     <div className="space-y-5 pb-4">
+      {myState?.timedOutUntil && (
+        <SelfTimeoutBanner until={myState.timedOutUntil} />
+      )}
+
       <BansSection
         bans={bans ?? []}
-        busyId={unbanBusyId}
+        busyId={actionBusyId}
         onUnban={handleUnban}
       />
 
-      <ActivePunishmentsSection muted={mutedMembers ?? []} />
+      <VoiceMuteSection
+        members={voiceMutedMembers}
+        busyId={actionBusyId}
+        onUnmute={handleUnmute}
+      />
+
+      <TimeoutSection
+        members={timedOutMembers}
+        busyId={actionBusyId}
+        onClearTimeout={handleClearTimeout}
+      />
 
       <HistorySection
         logs={logs ?? []}
         refreshing={refreshing}
         onRefresh={() => loadAll(false)}
       />
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Self timeout banner — kullanıcı kendisi timeout ise üstte uyarı
+// ══════════════════════════════════════════════════════════
+function SelfTimeoutBanner({ until }: { until: string }) {
+  return (
+    <div
+      className="flex items-start gap-3 p-4 rounded-2xl"
+      style={{
+        background: 'linear-gradient(180deg, rgba(239,68,68,0.10), rgba(239,68,68,0.04))',
+        border: '1px solid rgba(239,68,68,0.28)',
+        boxShadow: 'inset 0 1px 0 rgba(239,68,68,0.08)',
+      }}
+    >
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+        style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.30)' }}
+      >
+        <AlertTriangle size={14} className="text-red-400" strokeWidth={2.2} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[12.5px] font-bold text-[#e8ecf4] tracking-tight">
+          Bu sunucuda zaman aşımındasın
+        </div>
+        <div className="text-[11px] text-[#e8ecf4]/75 mt-1 leading-relaxed">
+          Şu zamana kadar kısıtlandın: <span className="font-semibold text-red-300">{fmtDate(until)}</span>
+        </div>
+        <div className="text-[10.5px] text-[#7b8ba8]/70 mt-1.5">
+          Mesaj gönderemez, sesli kanallara katılamazsın.
+        </div>
+      </div>
     </div>
   );
 }
@@ -300,71 +389,61 @@ function BanRow({ ban, busy, onUnban }: { ban: ServerBan; busy: boolean; onUnban
 }
 
 // ══════════════════════════════════════════════════════════
-// 2) Aktif Cezalar (salt-okunur)
+// 2) Susturulanlar — sistem + sunucu-içi mute birleşik (aksiyon: sadece sunucu-içi)
 // ══════════════════════════════════════════════════════════
 
-function ActivePunishmentsSection({ muted }: { muted: ServerMember[] }) {
+function VoiceMuteSection({
+  members, busyId, onUnmute,
+}: {
+  members: ServerMember[];
+  busyId: string | null;
+  onUnmute: (m: ServerMember) => void;
+}) {
   return (
     <SectionCard
       icon={<ShieldOff size={14} className="text-orange-400" />}
-      title="Aktif Cezalar"
-      count={muted.length}
+      title="Susturulanlar"
+      count={members.length}
       accent="rgba(251,146,60,0.10)"
-      action={
-        <span
-          className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            color: '#7b8ba8',
-            border: '1px solid rgba(255,255,255,0.06)',
-          }}
-          title="Aktif cezalar salt-okunur gösterilir"
-        >
-          Salt-okunur
-        </span>
-      }
     >
-      {muted.length > 0 && (
-        <ul className="space-y-1.5 mb-3">
-          {muted.map(m => <MutedMemberRow key={m.userId} member={m} />)}
+      {members.length === 0 ? (
+        <EmptySectionNote
+          icon={<Mic size={13} className="text-emerald-400" />}
+          accent="rgba(16,185,129,0.10)"
+          borderColor="rgba(16,185,129,0.20)"
+          title="Aktif susturma yok"
+          hint="Herkes konuşabiliyor"
+        />
+      ) : (
+        <ul className="space-y-1.5">
+          {members.map(m => (
+            <VoiceMuteRow
+              key={m.userId}
+              member={m}
+              busy={busyId === m.userId}
+              onUnmute={() => onUnmute(m)}
+            />
+          ))}
         </ul>
-      )}
-
-      {/* Yakında durumları — UI hazır, backend eklenince enable */}
-      <div className="space-y-1.5">
-        <PendingPunishmentRow
-          icon={<Clock size={13} className="text-amber-400/70" />}
-          label="Zaman aşımı"
-          hint="Geçici olarak sunucuya erişim kısıtlama"
-        />
-        <PendingPunishmentRow
-          icon={<DoorOpen size={13} className="text-amber-400/70" />}
-          label="Oda çıkarma"
-          hint="Sesli odadan tek seferlik çıkarma"
-        />
-        <PendingPunishmentRow
-          icon={<MicOff size={13} className="text-amber-400/70" />}
-          label="Sunucu-içi susturma"
-          hint="Sunucu bazlı voice mute (global yerine)"
-        />
-      </div>
-
-      {muted.length === 0 && (
-        <div className="text-[10.5px] text-[#7b8ba8]/50 italic mt-3 text-center">
-          Şu an aktif bir ceza yok
-        </div>
       )}
     </SectionCard>
   );
 }
 
-function MutedMemberRow({ member }: { member: ServerMember; key?: React.Key }) {
+function VoiceMuteRow({
+  member, busy, onUnmute,
+}: {
+  member: ServerMember; busy: boolean; onUnmute: () => void; key?: React.Key;
+}) {
   const dn = memberDisplayName(member);
+  // Sistem yönetimi mute (is_muted) kaldırılamaz; sadece sunucu-içi mute'a aksiyon
+  const canUnmute = member.voiceMutedBy !== null;
+
   return (
     <li
       className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
       style={{
-        background: 'rgba(251,146,60,0.05)',
+        background: busy ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.04)',
         border: '1px solid rgba(251,146,60,0.15)',
       }}
     >
@@ -380,58 +459,202 @@ function MutedMemberRow({ member }: { member: ServerMember; key?: React.Key }) {
           letterClassName="text-[11px] font-bold text-[#7b8ba8]/70"
         />
       </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[12px] font-semibold text-[#e8ecf4] truncate">{dn}</span>
+          {member.isMuted && (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(251,146,60,0.14)',
+                color: '#fb923c',
+                border: '1px solid rgba(251,146,60,0.25)',
+              }}
+              title="Sistem yönetimi tarafından"
+            >
+              <MicOff size={9} strokeWidth={2.2} /> Sistem
+            </span>
+          )}
+          {member.voiceMutedBy !== null && (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(167,139,250,0.14)',
+                color: '#a78bfa',
+                border: '1px solid rgba(167,139,250,0.25)',
+              }}
+            >
+              <MicOff size={9} strokeWidth={2.2} /> Sunucu
+            </span>
+          )}
+        </div>
+        <div className="text-[10px] text-[#7b8ba8]/60 mt-0.5">
+          {member.voiceMutedBy
+            ? member.voiceMutedUntil
+              ? `Bitiş: ${fmtDate(member.voiceMutedUntil)}`
+              : 'Süresiz · moderatör tarafından'
+            : 'Kaldırma sistem yönetimi üzerinden'}
+        </div>
+      </div>
+
+      {canUnmute && (
+        <button
+          type="button"
+          onClick={onUnmute}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold shrink-0 transition-all duration-150 active:scale-[0.96] disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: 'rgba(16,185,129,0.10)',
+            color: '#34d399',
+            border: '1px solid rgba(16,185,129,0.20)',
+          }}
+        >
+          {busy
+            ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <Mic size={11} strokeWidth={2} />}
+          {busy ? 'Kaldırılıyor...' : 'Kaldır'}
+        </button>
+      )}
+    </li>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// 3) Zaman Aşımındakiler
+// ══════════════════════════════════════════════════════════
+
+function TimeoutSection({
+  members, busyId, onClearTimeout,
+}: {
+  members: ServerMember[];
+  busyId: string | null;
+  onClearTimeout: (m: ServerMember) => void;
+}) {
+  return (
+    <SectionCard
+      icon={<Clock size={14} className="text-red-400" />}
+      title="Zaman Aşımındakiler"
+      count={members.length}
+      accent="rgba(239,68,68,0.10)"
+    >
+      {members.length === 0 ? (
+        <EmptySectionNote
+          icon={<Shield size={13} className="text-emerald-400" />}
+          accent="rgba(16,185,129,0.10)"
+          borderColor="rgba(16,185,129,0.20)"
+          title="Aktif zaman aşımı yok"
+          hint="Tüm üyeler sunucuda aktif olarak katılabiliyor"
+        />
+      ) : (
+        <ul className="space-y-1.5">
+          {members.map(m => (
+            <TimeoutRow
+              key={m.userId}
+              member={m}
+              busy={busyId === m.userId}
+              onClear={() => onClearTimeout(m)}
+            />
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+function TimeoutRow({
+  member, busy, onClear,
+}: {
+  member: ServerMember; busy: boolean; onClear: () => void; key?: React.Key;
+}) {
+  const dn = memberDisplayName(member);
+  return (
+    <li
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+      style={{
+        background: busy ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.04)',
+        border: '1px solid rgba(239,68,68,0.18)',
+      }}
+    >
+      <div
+        className="w-9 h-9 rounded-[10px] overflow-hidden shrink-0 flex items-center justify-center"
+        style={{ background: 'rgba(255,255,255,0.06)' }}
+      >
+        <AvatarContent
+          avatar={member.avatar}
+          statusText="Online"
+          firstName={member.firstName}
+          name={dn}
+          letterClassName="text-[11px] font-bold text-[#7b8ba8]/70"
+        />
+      </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[12px] font-semibold text-[#e8ecf4] truncate">{dn}</span>
           <span
             className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
             style={{
-              background: 'rgba(251,146,60,0.14)',
-              color: '#fb923c',
-              border: '1px solid rgba(251,146,60,0.25)',
+              background: 'rgba(239,68,68,0.14)',
+              color: '#f87171',
+              border: '1px solid rgba(239,68,68,0.28)',
             }}
           >
-            <MicOff size={9} strokeWidth={2.2} /> Sesi kapalı
+            <Clock size={9} strokeWidth={2.2} /> Zaman aşımı
           </span>
         </div>
         <div className="text-[10px] text-[#7b8ba8]/60 mt-0.5">
-          Sistem yönetimi tarafından · Kaldırma sistem yönetimi üzerinden
+          {member.timeoutUntil ? `Bitiş: ${fmtDate(member.timeoutUntil)}` : '—'}
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold shrink-0 transition-all duration-150 active:scale-[0.96] disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          background: 'rgba(16,185,129,0.10)',
+          color: '#34d399',
+          border: '1px solid rgba(16,185,129,0.20)',
+        }}
+      >
+        {busy
+          ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          : <Shield size={11} strokeWidth={2} />}
+        {busy ? 'Kaldırılıyor...' : 'Kaldır'}
+      </button>
     </li>
   );
 }
 
-function PendingPunishmentRow({ icon, label, hint }: { icon: React.ReactNode; label: string; hint: string }) {
+// Boş state notu — BansSection "Yasaklı üye yok" ile tutarlı stil.
+function EmptySectionNote({
+  icon, accent, borderColor, title, hint,
+}: {
+  icon: React.ReactNode;
+  accent: string;
+  borderColor: string;
+  title: string;
+  hint: string;
+}) {
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 rounded-xl opacity-70"
+      className="rounded-xl p-4 flex items-center gap-3"
       style={{
         background: 'rgba(255,255,255,0.02)',
-        border: '1px dashed rgba(255,255,255,0.08)',
+        border: '1px solid rgba(255,255,255,0.05)',
       }}
     >
       <div
-        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-        style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.14)' }}
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: accent, border: `1px solid ${borderColor}` }}
       >
         {icon}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[11.5px] font-semibold text-[#e8ecf4]/75">{label}</span>
-          <span
-            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-            style={{
-              background: 'rgba(251,191,36,0.12)',
-              color: 'rgba(251,191,36,0.9)',
-              border: '1px solid rgba(251,191,36,0.22)',
-            }}
-          >
-            yakında
-          </span>
-        </div>
-        <div className="text-[10px] text-[#7b8ba8]/60 mt-0.5 leading-snug">{hint}</div>
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-[#e8ecf4]">{title}</div>
+        <div className="text-[10.5px] text-[#7b8ba8]/70 mt-0.5">{hint}</div>
       </div>
     </div>
   );

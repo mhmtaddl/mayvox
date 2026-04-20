@@ -31,6 +31,14 @@ export interface ServerMember {
   joined_at: string;
   is_muted: boolean;
   is_notifications_muted: boolean;
+  // ── Moderation voice actions (migration 023) ──
+  // NOT: is_muted sistem yönetimi alanı; voice_muted_* ise sunucu-içi mod aksiyonu.
+  voice_muted_by: string | null;
+  voice_muted_at: string | null;
+  voice_mute_expires_at: string | null;  // NULL = süresiz, gelecek tarih = süreli
+  timeout_until: string | null;           // gelecek tarih = aktif timeout
+  timeout_set_by: string | null;
+  timeout_set_at: string | null;
 }
 
 export interface Channel {
@@ -132,7 +140,14 @@ export interface MemberResponse {
   avatar: string | null;
   role: string;
   joinedAt: string;
+  /** Sistem yönetimi voice mute (read-only, owner/admin/mod kaldıramaz) */
   isMuted: boolean;
+  /** Sunucu-içi voice mute aktif mi (null = yok / süresi dolmuş) */
+  voiceMutedUntil: string | null;
+  voiceMutedBy: string | null;
+  /** Sunucu-içi timeout aktif mi (null = yok / süresi dolmuş) */
+  timeoutUntil: string | null;
+  timeoutSetBy: string | null;
 }
 
 export interface UserInviteResponse {

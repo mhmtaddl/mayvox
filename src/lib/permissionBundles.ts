@@ -52,7 +52,12 @@ export const BUNDLE_HINT: Record<Bundle, string> = {
 export const BUNDLE_CAPS: Record<Bundle, readonly Capability[]> = {
   manage_server: [CAPABILITIES.SERVER_MANAGE],
   manage_members: [CAPABILITIES.MEMBER_KICK, CAPABILITIES.ROLE_MANAGE],
-  moderate_voice: [CAPABILITIES.MEMBER_MOVE],
+  moderate_voice: [
+    CAPABILITIES.MEMBER_MOVE,
+    CAPABILITIES.MEMBER_MUTE,
+    CAPABILITIES.MEMBER_TIMEOUT,
+    CAPABILITIES.MEMBER_ROOM_KICK,
+  ],
   manage_invites: [CAPABILITIES.INVITE_CREATE, CAPABILITIES.INVITE_REVOKE],
   read_audit: [],
   manage_channels: [
@@ -65,12 +70,12 @@ export const BUNDLE_CAPS: Record<Bundle, readonly Capability[]> = {
 
 /**
  * Bundle içinde backend tarafında hazır OLMAYAN (yakında) alt-özellikler.
- * moderate_voice → mute/timeout backend'e eklenince bu azalır.
+ * moderate_voice → mute/timeout/room_kick backend'e eklendi (migration 023).
  */
 export const BUNDLE_PARTIAL_PENDING: Record<Bundle, readonly string[]> = {
   manage_server: [],
   manage_members: [],
-  moderate_voice: ['member.mute', 'member.timeout'],
+  moderate_voice: [],
   manage_invites: [],
   read_audit: [],
   manage_channels: ['channel.access.grant'],
@@ -145,6 +150,9 @@ export const CAP_LABEL: Record<string, string> = {
   'invite.revoke': 'Davet iptal',
   'member.move': 'Üye taşı',
   'member.kick': 'Üye at',
+  'member.mute': 'Sesini sustur',
+  'member.timeout': 'Zaman aşımı ver',
+  'member.room_kick': 'Odadan çıkar',
   'role.manage': 'Rol yönet',
 };
 

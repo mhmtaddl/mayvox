@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, X, Crown, Shield, ShieldCheck, User as UserIcon,
-  MoreHorizontal, MicOff, Clock, UserX, Ban,
+  MoreHorizontal, MicOff, Mic, Clock, UserX, Ban,
   ChevronRight, DoorOpen,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import { useUser } from '../../../contexts/UserContext';
 import {
   type ServerMember,
+  type TimeoutPresetSeconds,
   getMembers, kickMember, changeRole, banMember,
+  muteMember, unmuteMember,
+  timeoutMember, clearTimeoutMember,
+  kickFromRoom,
 } from '../../../lib/serverService';
 import {
   type ServerRole, ROLE_HIERARCHY, canActOn,
@@ -16,6 +20,7 @@ import {
 import { fmtDate, memberDisplayName, Empty, Loader } from './shared';
 import ActionMenu, { type ActionItem } from './ActionMenu';
 import RolePicker from './RolePicker';
+import TimeoutPicker from './TimeoutPicker';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
 
 interface Props {
@@ -49,7 +54,18 @@ const ROLE_CHIP: Record<ServerRole, { icon: React.ReactNode; bg: string; color: 
 type PopoverState =
   | { kind: 'action'; member: ServerMember; rect: DOMRect }
   | { kind: 'role'; member: ServerMember; rect: DOMRect }
+  | { kind: 'timeout'; member: ServerMember; rect: DOMRect }
   | null;
+
+/** Aktif voice mute var mı? Süresiz (voiceMutedBy dolu, voiceMutedUntil null) veya süreli. */
+function isVoiceMuted(m: ServerMember): boolean {
+  return m.voiceMutedBy !== null;
+}
+
+/** Aktif timeout var mı? Backend lazy-expiration uygular — null = yok. */
+function isTimedOut(m: ServerMember): boolean {
+  return m.timeoutUntil !== null;
+}
 
 // ══════════════════════════════════════════════════════════
 // MembersTab — premium üye yönetimi (kebab + role picker + modals)
@@ -60,7 +76,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  const { allUsers } = useUser();
+  const { allUsers, currentUser } = useUser();
   const resolveStatus = useCallback((userId: string): string => {
     const u = allUsers.find(au => au.id === userId);
     return u?.statusText || 'Online';
@@ -117,14 +133,60 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     void act(() => banMember(serverId, member.userId, reason), `${dn} yasaklandı`, member.userId);
   }, [act, serverId]);
 
+  // ─── Moderation voice action handler'ları (migration 023) ───
+
+  const handleMuteToggle = useCallback((member: ServerMember) => {
+    setPopover(null);
+    const dn = memberDisplayName(member);
+    if (isVoiceMuted(member)) {
+      void act(() => unmuteMember(serverId, member.userId), `${dn} sunucu susturması kaldırıldı`, member.userId);
+    } else {
+      // MVP: süresiz mute. İleride süre seçici eklenebilir.
+      void act(() => muteMember(serverId, member.userId, null), `${dn} sunucuda susturuldu`, member.userId);
+    }
+  }, [act, serverId]);
+
+  const handleTimeoutSet = useCallback((member: ServerMember, durationSeconds: TimeoutPresetSeconds) => {
+    setPopover(null);
+    const dn = memberDisplayName(member);
+    void act(
+      () => timeoutMember(serverId, member.userId, durationSeconds),
+      `${dn} zaman aşımına alındı`,
+      member.userId,
+    );
+  }, [act, serverId]);
+
+  const handleTimeoutClear = useCallback((member: ServerMember) => {
+    setPopover(null);
+    const dn = memberDisplayName(member);
+    void act(() => clearTimeoutMember(serverId, member.userId), `${dn} zaman aşımı kaldırıldı`, member.userId);
+  }, [act, serverId]);
+
+  const handleRoomKick = useCallback((member: ServerMember) => {
+    setPopover(null);
+    const dn = memberDisplayName(member);
+    void act(
+      () => kickFromRoom(serverId, member.userId, null),
+      `${dn} odadan çıkarıldı`,
+      member.userId,
+    );
+  }, [act, serverId]);
+
   // ─── Kebab menu items — popover açıkken hesaplanır ───
   const buildActionItems = (m: ServerMember, rect: DOMRect): ActionItem[] => {
     const targetRole = m.role as ServerRole;
-    const canAct = canActOn(myRoleTyped, targetRole);
+    // canActOn hierarchy ile aksiyon yetkisini belirler (owner → hiçbiri, kendi seviyen/üst →
+    // false). Ek olarak kendi satırına aksiyon: canActOn zaten owner=>false; normal case'te
+    // self-check açık — myRoleTyped ile kendi role'un aynı olsa bile false dönebilmesi için.
+    const isSelf = currentUser?.id === m.userId;
+    const canAct = !isSelf && canActOn(myRoleTyped, targetRole);
     const canRoleAction = canAct && (myRoleTyped === 'owner' || myRoleTyped === 'admin');
     const canKick = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2; // mod+
     const canBan = canAct && ROLE_HIERARCHY[myRoleTyped] >= 3;  // admin+
     const canModerate = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2;
+
+    const muted = isVoiceMuted(m);
+    const timedOut = isTimedOut(m);
 
     return [
       {
@@ -136,28 +198,28 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
       },
       {
         id: 'voice_mute',
-        label: 'Sesini Sustur',
-        icon: <MicOff size={13} />,
-        pending: true,
+        label: muted ? 'Susturmayı Kaldır' : 'Sesini Sustur',
+        icon: muted ? <Mic size={13} /> : <MicOff size={13} />,
         disabled: !canModerate,
         separatorBefore: true,
-        onClick: () => {},
+        onClick: () => handleMuteToggle(m),
       },
       {
         id: 'timeout',
-        label: 'Zaman Aşımı Ver',
+        label: timedOut ? 'Zaman Aşımını Kaldır' : 'Zaman Aşımı Ver...',
         icon: <Clock size={13} />,
-        pending: true,
         disabled: !canModerate,
-        onClick: () => {},
+        onClick: () => {
+          if (timedOut) handleTimeoutClear(m);
+          else setPopover({ kind: 'timeout', member: m, rect });
+        },
       },
       {
         id: 'room_kick',
         label: 'Odadan Çıkar',
         icon: <DoorOpen size={13} />,
-        pending: true,
         disabled: !canModerate,
-        onClick: () => {},
+        onClick: () => handleRoomKick(m),
       },
       {
         id: 'kick',
@@ -279,6 +341,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
               key={m.userId}
               member={m}
               myRole={myRoleTyped}
+              isSelf={currentUser?.id === m.userId}
               statusText={resolveStatus(m.userId)}
               busy={busyId === m.userId}
               onOpenKebab={rect => setPopover({ kind: 'action', member: m, rect })}
@@ -306,6 +369,14 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           onSelect={role => handleRoleChange(popover.member, role)}
         />
       )}
+      {popover?.kind === 'timeout' && (
+        <TimeoutPicker
+          anchorRect={popover.rect}
+          busy={busyId === popover.member.userId}
+          onClose={() => setPopover(null)}
+          onSelect={duration => handleTimeoutSet(popover.member, duration)}
+        />
+      )}
 
       {/* ── Confirm modal ── */}
       {confirm && (
@@ -331,6 +402,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 interface MemberRowProps {
   member: ServerMember;
   myRole: ServerRole;
+  isSelf: boolean;
   statusText: string;
   busy: boolean;
   onOpenKebab: (rect: DOMRect) => void;
@@ -338,14 +410,15 @@ interface MemberRowProps {
   key?: React.Key;
 }
 
-function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePicker }: MemberRowProps) {
+function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOpenRolePicker }: MemberRowProps) {
   const dn = memberDisplayName(member);
   const targetRole = member.role as ServerRole;
   const chip = ROLE_CHIP[targetRole] ?? ROLE_CHIP.member;
+  const muted = isVoiceMuted(member);
+  const timedOut = isTimedOut(member);
 
-  // Yetki gate'leri
-  const canAnyAction = canActOn(myRole, targetRole);
-  // Rol değiştirme yetkisi: owner/admin + üzerinde aksiyon yetkisi
+  // Yetki gate'leri — kendi satırımda hiçbir aksiyon açılmaz
+  const canAnyAction = !isSelf && canActOn(myRole, targetRole);
   const canChangeRole = canAnyAction && (myRole === 'owner' || myRole === 'admin');
 
   const kebabRef = useRef<HTMLButtonElement>(null);
@@ -388,6 +461,36 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
               <MicOff size={9} strokeWidth={2.2} /> Sesi kapalı
             </span>
           )}
+          {muted && (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(167,139,250,0.12)',
+                color: '#a78bfa',
+                border: '1px solid rgba(167,139,250,0.25)',
+              }}
+              title={
+                member.voiceMutedUntil
+                  ? `Sunucu susturma aktif — bitiş: ${fmtDate(member.voiceMutedUntil)}`
+                  : 'Sunucu susturma aktif — süresiz'
+              }
+            >
+              <MicOff size={9} strokeWidth={2.2} /> Sunucu sustur
+            </span>
+          )}
+          {timedOut && (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(239,68,68,0.12)',
+                color: '#f87171',
+                border: '1px solid rgba(239,68,68,0.28)',
+              }}
+              title={member.timeoutUntil ? `Zaman aşımı — bitiş: ${fmtDate(member.timeoutUntil)}` : 'Zaman aşımı aktif'}
+            >
+              <Clock size={9} strokeWidth={2.2} /> Zaman aşımı
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           {member.username && member.username !== dn && (
@@ -419,11 +522,13 @@ function MemberRow({ member, myRole, statusText, busy, onOpenKebab, onOpenRolePi
         title={
           canChangeRole
             ? 'Rolü değiştir'
-            : targetRole === 'owner'
-              ? 'Sahibin rolü değiştirilemez'
-              : myRole === 'mod'
-                ? 'Rol değiştirme yetkin yok'
-                : 'Bu üyeye rol atayamazsın'
+            : isSelf
+              ? 'Kendi rolünü değiştiremezsin'
+              : targetRole === 'owner'
+                ? 'Sahibin rolü değiştirilemez'
+                : myRole === 'mod'
+                  ? 'Rol değiştirme yetkin yok'
+                  : 'Bu üyeye rol atayamazsın'
         }
       >
         {chip.icon}

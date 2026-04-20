@@ -340,6 +340,78 @@ router.post('/:id/members/:userId/kick', async (req: Request, res: Response) => 
   catch (err) { handleError(res, err); }
 });
 
+// ── Moderation voice actions (migration 023) ──
+
+/** GET /servers/:id/members/me/moderation-state — kendi aktif cezalarını oku
+ *  Kullanım: frontend banner, chat-server mesaj gate, token-server voice gate. */
+router.get('/:id/members/me/moderation-state', async (req: Request, res: Response) => {
+  try { res.json(await mgmt.getMyModerationState(req.params.id as string, (req as any).userId)); }
+  catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/members/:userId/mute
+ *  Body: { expiresInSeconds?: number | null }  — null/omitted = süresiz */
+router.post('/:id/members/:userId/mute', async (req: Request, res: Response) => {
+  try {
+    const expires = req.body?.expiresInSeconds;
+    const out = await mgmt.muteMember(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+      expires === undefined || expires === null ? null : Number(expires),
+    );
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/members/:userId/mute */
+router.delete('/:id/members/:userId/mute', async (req: Request, res: Response) => {
+  try {
+    const out = await mgmt.unmuteMember(req.params.id as string, (req as any).userId, req.params.userId as string);
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/members/:userId/timeout
+ *  Body: { durationSeconds: 60|300|600|3600|86400|604800 } */
+router.post('/:id/members/:userId/timeout', async (req: Request, res: Response) => {
+  try {
+    const duration = Number(req.body?.durationSeconds);
+    const out = await mgmt.timeoutMember(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+      duration,
+    );
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/members/:userId/timeout */
+router.delete('/:id/members/:userId/timeout', async (req: Request, res: Response) => {
+  try {
+    const out = await mgmt.clearTimeoutMember(req.params.id as string, (req as any).userId, req.params.userId as string);
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/members/:userId/room-kick
+ *  Body: { channelId?: string }  — yoksa tüm voice odalardan düşür */
+router.post('/:id/members/:userId/room-kick', async (req: Request, res: Response) => {
+  try {
+    const channelId = typeof req.body?.channelId === 'string' && req.body.channelId.length > 0
+      ? (req.body.channelId as string)
+      : null;
+    const out = await mgmt.kickFromRoom(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+      channelId,
+    );
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
 /** PATCH /servers/:id/members/:userId/role */
 router.patch('/:id/members/:userId/role', async (req: Request, res: Response) => {
   try { await mgmt.changeRole(req.params.id as string, (req as any).userId, req.params.userId as string, req.body.role); res.json({ ok: true }); }

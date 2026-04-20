@@ -21,6 +21,9 @@ export const CAPABILITIES = {
 
   MEMBER_MOVE: 'member.move',
   MEMBER_KICK: 'member.kick',
+  MEMBER_MUTE: 'member.mute',
+  MEMBER_TIMEOUT: 'member.timeout',
+  MEMBER_ROOM_KICK: 'member.room_kick',
 
   ROLE_MANAGE: 'role.manage',
 } as const;

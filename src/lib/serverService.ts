@@ -58,8 +58,43 @@ export interface ServerMember {
   avatar: string | null;
   role: string;
   joinedAt: string;
+  /** Sistem yönetimi voice mute — salt-okunur, moderator kaldıramaz. */
   isMuted: boolean;
+  /** Sunucu-içi voice mute bitiş zamanı. null ise: aktif mute yok VEYA süresiz (voiceMutedBy ile birlikte değerlendir). */
+  voiceMutedUntil: string | null;
+  /** Aktif voice mute'u set eden moderator userId. null = aktif mute yok. */
+  voiceMutedBy: string | null;
+  /** Aktif timeout bitiş zamanı. null = timeout yok. */
+  timeoutUntil: string | null;
+  /** Aktif timeout'u veren moderator userId. */
+  timeoutSetBy: string | null;
 }
+
+/**
+ * Kullanıcının kendi moderation state'i — bu kişiye moderation uygulanmış mı?
+ * GET /servers/:id/members/me/moderation-state
+ */
+export interface MyModerationState {
+  timedOutUntil: string | null;
+  voiceMutedUntil: string | null;
+  isVoiceMuted: boolean;
+}
+
+/**
+ * Timeout süre preset'leri (saniye). Backend ile birebir aynı liste.
+ * UI'daki picker bu listeyi render eder; backend bunun dışındaki süreyi 400 ile reddeder.
+ */
+export const TIMEOUT_PRESETS_SECONDS = [60, 300, 600, 3600, 86400, 604800] as const;
+export type TimeoutPresetSeconds = typeof TIMEOUT_PRESETS_SECONDS[number];
+
+export const TIMEOUT_PRESET_LABELS: Record<TimeoutPresetSeconds, string> = {
+  60:     '60 saniye',
+  300:    '5 dakika',
+  600:    '10 dakika',
+  3600:   '1 saat',
+  86400:  '1 gün',
+  604800: '1 hafta',
+};
 
 export interface UserInvite {
   id: string;
@@ -559,6 +594,77 @@ export async function changeRole(serverId: string, userId: string, role: string)
 
 export async function banMember(serverId: string, userId: string, reason: string): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/servers/${serverId}/members/${userId}/ban`, { method: 'POST', body: JSON.stringify({ reason }) });
+}
+
+// ── Moderation voice actions (migration 023) ──
+// Backend ayrıntı: kendine aksiyon ve owner'a aksiyon backend tarafında 403 döner.
+// LiveKit env yoksa aktif odadan düşürme no-op olur; DB + audit çalışır.
+
+/**
+ * Sunucu-içi voice mute.
+ * @param expiresInSeconds  null = süresiz. Pozitif sayı = süreli.
+ */
+export async function muteMember(
+  serverId: string,
+  userId: string,
+  expiresInSeconds: number | null,
+): Promise<{ expiresAt: string | null }> {
+  const body = JSON.stringify({ expiresInSeconds });
+  return apiFetch<{ expiresAt: string | null }>(
+    `/servers/${serverId}/members/${userId}/mute`,
+    { method: 'POST', body },
+  );
+}
+
+export async function unmuteMember(serverId: string, userId: string): Promise<{ wasActive: boolean }> {
+  return apiFetch<{ wasActive: boolean }>(
+    `/servers/${serverId}/members/${userId}/mute`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
+ * Zaman aşımı — Discord-vari. Mesaj yazamaz + voice join edemez + aktif voice'tan düşer.
+ * @param durationSeconds TIMEOUT_PRESETS_SECONDS'dan biri olmak zorunda.
+ */
+export async function timeoutMember(
+  serverId: string,
+  userId: string,
+  durationSeconds: TimeoutPresetSeconds,
+): Promise<{ until: string; channelsAffected: number; livekitConfigured: boolean }> {
+  const body = JSON.stringify({ durationSeconds });
+  return apiFetch<{ until: string; channelsAffected: number; livekitConfigured: boolean }>(
+    `/servers/${serverId}/members/${userId}/timeout`,
+    { method: 'POST', body },
+  );
+}
+
+export async function clearTimeoutMember(serverId: string, userId: string): Promise<{ wasActive: boolean }> {
+  return apiFetch<{ wasActive: boolean }>(
+    `/servers/${serverId}/members/${userId}/timeout`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
+ * Voice room kick — aktif odadan tek seferlik çıkar. Kalıcı yasak değil; kullanıcı tekrar join edebilir.
+ * @param channelId  verilirse sadece o odadan; null ise tüm voice odalardan.
+ */
+export async function kickFromRoom(
+  serverId: string,
+  userId: string,
+  channelId: string | null = null,
+): Promise<{ channelsAffected: number; livekitConfigured: boolean }> {
+  const body = JSON.stringify({ channelId });
+  return apiFetch<{ channelsAffected: number; livekitConfigured: boolean }>(
+    `/servers/${serverId}/members/${userId}/room-kick`,
+    { method: 'POST', body },
+  );
+}
+
+/** Kullanıcının o sunucudaki aktif cezalarını oku — banner/enforcement için. */
+export async function getMyModerationState(serverId: string): Promise<MyModerationState> {
+  return apiFetch<MyModerationState>(`/servers/${serverId}/members/me/moderation-state`);
 }
 
 // ── Ban yönetimi ──

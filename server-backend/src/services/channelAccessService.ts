@@ -24,7 +24,7 @@ export interface ChannelAccessEntry {
 export interface ChannelAccessSummary {
   canSee: boolean;
   canJoin: boolean;
-  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found' | 'server-banned';
+  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found' | 'server-banned' | 'timed-out';
 }
 
 async function isServerBanned(serverId: string): Promise<boolean> {
@@ -50,6 +50,17 @@ async function fetchMemberRole(serverId: string, userId: string): Promise<string
   return m?.role ?? null;
 }
 
+/** Role + aktif timeout — evaluateChannelAccess için tek query. */
+async function fetchMemberState(serverId: string, userId: string): Promise<{ role: string; isTimedOut: boolean } | null> {
+  const m = await queryOne<{ role: string; timeout_until: string | null }>(
+    'SELECT role, timeout_until FROM server_members WHERE server_id = $1 AND user_id = $2',
+    [serverId, userId]
+  );
+  if (!m) return null;
+  const isTimedOut = !!m.timeout_until && new Date(m.timeout_until).getTime() > Date.now();
+  return { role: m.role, isTimedOut };
+}
+
 async function hasGrant(channelId: string, userId: string): Promise<boolean> {
   const row = await queryOne<{ channel_id: string }>(
     'SELECT channel_id FROM channel_access WHERE channel_id = $1 AND user_id = $2',
@@ -67,14 +78,22 @@ export async function evaluateChannelAccess(
   const channel = await fetchChannel(serverId, channelId);
   if (!channel) return { canSee: false, canJoin: false, reason: 'not-found' };
 
-  const role = await fetchMemberRole(serverId, userId);
-  if (!role) return { canSee: false, canJoin: false, reason: 'not-member' };
+  const state = await fetchMemberState(serverId, userId);
+  if (!state) return { canSee: false, canJoin: false, reason: 'not-member' };
+  const role = state.role;
 
   // Restricted mode: sunucu banlıysa kanalı görebilir ama join edemez.
   // Sistem yönetici override'ı YOK; sistem admini de aynı kuralı uygular
   // (zaten /admin route'larını kullanır).
   if (await isServerBanned(serverId)) {
     return { canSee: true, canJoin: false, reason: 'server-banned' };
+  }
+
+  // Timeout: kullanıcı kanalı görebilir ama join edemez (mesaj + voice gate).
+  // Moderatör/admin/owner rolü olsa bile timeout aktifse join kapalı — hierarchy guard:
+  // owner zaten timeout edilemez (managementService kontrol ediyor).
+  if (state.isTimedOut) {
+    return { canSee: true, canJoin: false, reason: 'timed-out' };
   }
 
   if (MANAGE_ROLES.has(role)) {

@@ -33,6 +33,20 @@ export interface AccessFlags {
   canManageRoles: boolean;
 }
 
+/**
+ * Moderation state — sunucu-içi ceza bilgisi (migration 023).
+ * Lazy expiration: dolmuş değerler null döner.
+ * Cache TTL 5sn; timeout'un minimum süresi 60s olduğundan gözlemlenebilir gecikme yok.
+ */
+export interface AccessModerationState {
+  /** Aktif timeout bitiş zamanı (ISO). null = timeout yok. */
+  timedOutUntil: string | null;
+  /** Aktif voice mute bitiş zamanı (ISO). null = süresiz ise "permanent", yoksa null. */
+  voiceMutedUntil: string | null;
+  /** true = sunucu-içi voice mute aktif (süreli veya süresiz). is_muted sistem yönetimi alanından AYRI. */
+  isVoiceMuted: boolean;
+}
+
 export interface ServerAccessContext {
   userId: string;
   serverId: string;
@@ -48,6 +62,8 @@ export interface ServerAccessContext {
   flags: AccessFlags;
   /** Server system admin tarafından kısıtlanmış (restricted mode) — görünüm açık, oda join kapalı. */
   isBanned: boolean;
+  /** Sunucu-içi moderation cezaları (mod/admin tarafından verilen). */
+  moderation: AccessModerationState;
 }
 
 interface MembershipRow {
@@ -57,6 +73,9 @@ interface MembershipRow {
   member_count: number;
   owner_user_id: string;
   is_banned: boolean;
+  timeout_until: string | null;
+  voice_muted_by: string | null;
+  voice_mute_expires_at: string | null;
 }
 
 /**
@@ -135,10 +154,13 @@ export async function getServerAccessContext(
     if (hit && hit.expiresAt > Date.now()) return hit.ctx;
   }
 
-  // 1) Membership + plan + counts — tek query
+  // 1) Membership + plan + counts + moderation state — tek query
   const membership = await queryOne<MembershipRow>(
     `SELECT
         sm.role AS role,
+        sm.timeout_until AS timeout_until,
+        sm.voice_muted_by AS voice_muted_by,
+        sm.voice_mute_expires_at AS voice_mute_expires_at,
         s.plan AS plan,
         s.owner_user_id AS owner_user_id,
         COALESCE(s.is_banned, false) AS is_banned,
@@ -204,6 +226,13 @@ export async function getServerAccessContext(
     maxMembers: planLimits.capacity,
   };
 
+  // Lazy expiration — geçmiş değerleri null'a indir (DB cleanup ayrı).
+  const now = Date.now();
+  const timeoutActive = !!membership.timeout_until && new Date(membership.timeout_until).getTime() > now;
+  const voiceMuteActive = !!membership.voice_muted_by && (
+    !membership.voice_mute_expires_at || new Date(membership.voice_mute_expires_at).getTime() > now
+  );
+
   const ctx: ServerAccessContext = {
     userId,
     serverId,
@@ -218,6 +247,11 @@ export async function getServerAccessContext(
     limits,
     flags: computeFlags(capSet, limits, membership.channel_count),
     isBanned: !!membership.is_banned,
+    moderation: {
+      timedOutUntil: timeoutActive ? membership.timeout_until : null,
+      voiceMutedUntil: voiceMuteActive ? membership.voice_mute_expires_at : null,
+      isVoiceMuted: voiceMuteActive,
+    },
   };
 
   accessCache.set(key, { ctx, expiresAt: Date.now() + ACCESS_CACHE_TTL_MS });
@@ -236,6 +270,7 @@ function emptyContext(userId: string, serverId: string): ServerAccessContext {
     limits,
     flags: computeFlags(new Set(), limits, 0),
     isBanned: false,
+    moderation: { timedOutUntil: null, voiceMutedUntil: null, isVoiceMuted: false },
   };
 }
 
@@ -291,6 +326,38 @@ export function assertServerNotBanned(ctx: ServerAccessContext, msg?: string): v
       msg || 'Bu sunucu sistem yönetimi tarafından geçici olarak kısıtlandı. Odalara giriş kapalı.',
     );
     (err as any).reason = 'server-banned';
+    throw err;
+  }
+}
+
+/**
+ * Timeout guard — mesaj yazma / voice join / kanal etkileşimi gibi AKTİF eylemlerde çağır.
+ * Pasif görüntüleme yollarında çağırma; kullanıcı sunucuyu görebilmeli.
+ */
+export function assertNotTimedOut(ctx: ServerAccessContext, msg?: string): void {
+  if (ctx.moderation.timedOutUntil) {
+    const err = new AppError(
+      403,
+      msg || `Bu sunucuda zaman aşımındasın. Bitiş: ${ctx.moderation.timedOutUntil}`,
+    );
+    (err as any).reason = 'timed-out';
+    (err as any).timedOutUntil = ctx.moderation.timedOutUntil;
+    throw err;
+  }
+}
+
+/**
+ * Voice mute guard — voice publish/unmute eylemlerinde çağır (ilerideki voice token üretiminde).
+ * Mevcut etki: sadece voice yayın izni; mesaj ve diğer eylemler etkilenmez.
+ */
+export function assertNotVoiceMuted(ctx: ServerAccessContext, msg?: string): void {
+  if (ctx.moderation.isVoiceMuted) {
+    const err = new AppError(
+      403,
+      msg || 'Bu sunucuda sesin kapalı. Moderatör ile iletişime geç.',
+    );
+    (err as any).reason = 'voice-muted';
+    (err as any).voiceMutedUntil = ctx.moderation.voiceMutedUntil;
     throw err;
   }
 }
