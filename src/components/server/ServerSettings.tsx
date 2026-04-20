@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, UserCheck, Gavel } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel } from 'lucide-react';
 import {
   type Server, type ServerOverview,
   getServerDetails, updateServer, deleteServer, leaveServer,
@@ -8,21 +8,29 @@ import {
 import { useChannel } from '../../contexts/ChannelContext';
 import OverviewTab from './settings/OverviewTab';
 import RolesTab from './settings/RolesTab';
-import JoinRequestsTab from './settings/JoinRequestsTab';
 import AuditTab from './settings/AuditTab';
 import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
-import InvitesTab from './settings/InvitesTab';
+import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
 import ModerationTab from './settings/ModerationTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'moderation' | 'audit';
-// Legacy initialTab input — 'bans' artık 'moderation' tab'ına redirect olur
-type TabInput = Tab | 'bans';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'moderation' | 'audit';
+// Legacy initialTab input:
+//   'bans'     → 'moderation' tab
+//   'requests' → 'invites' tab + Başvurular sub-section
+type TabInput = Tab | 'bans' | 'requests';
 
-function resolveInitialTab(t: TabInput | undefined): Tab | undefined {
-  if (t === 'bans') return 'moderation';
-  return t;
+interface ResolvedInitial {
+  tab: Tab;
+  invitesSubTab?: InvitesSubTab;
+}
+
+function resolveInitial(t: TabInput | undefined): ResolvedInitial {
+  if (!t) return { tab: 'overview' };
+  if (t === 'bans') return { tab: 'moderation' };
+  if (t === 'requests') return { tab: 'invites', invitesSubTab: 'requests' };
+  return { tab: t };
 }
 
 // Identity strip'te plan/limit göstergesi — sadece bu dosyada kullanılıyor
@@ -45,12 +53,15 @@ interface Props {
   onClose: () => void;
   onServerUpdated: () => void;
   onServerDeleted?: () => void;
-  /** 'bans' legacy değer — otomatik 'moderation'a redirect edilir */
+  /** Legacy değerler: 'bans' → moderation, 'requests' → invites/Başvurular */
   initialTab?: TabInput;
 }
 
 export default function ServerSettings({ serverId, onClose, onServerUpdated, onServerDeleted, initialTab }: Props) {
-  const [tab, setTab] = useState<Tab>(resolveInitialTab(initialTab) ?? 'overview');
+  const initial = resolveInitial(initialTab);
+  const [tab, setTab] = useState<Tab>(initial.tab);
+  // Lifted sub-tab state: InvitesTab kullanıcı sekme değiştirip dönünce seçimi korusun.
+  const [invitesMode, setInvitesMode] = useState<InvitesSubTab>(initial.invitesSubTab ?? 'links');
   const [server, setServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -126,8 +137,13 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     { id: 'general', label: 'Genel', icon: <Settings size={13} /> },
     ...(canKickMembers ? [{ id: 'members' as Tab, label: 'Üyeler', icon: <Users size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'roles' as Tab, label: 'Roller', icon: <Shield size={13} /> }] : []),
-    ...(canCreateInvite || canRevokeInvite ? [{ id: 'invites' as Tab, label: 'Davetler', icon: <Mail size={13} /> }] : []),
-    ...(canManageServer ? [{ id: 'requests' as Tab, label: 'Başvurular', icon: <UserCheck size={13} />, badge: pendingRequestCount }] : []),
+    ...(canCreateInvite || canRevokeInvite ? [{
+      id: 'invites' as Tab,
+      label: 'Davetler',
+      icon: <Mail size={13} />,
+      // Admin için pending başvuru sayısı rozet olarak Davetler tab'ında görünür
+      badge: (canManageServer && pendingRequestCount > 0) ? pendingRequestCount : undefined,
+    }] : []),
     ...(canKickMembers ? [{ id: 'moderation' as Tab, label: 'Moderasyon', icon: <Gavel size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
   ];
@@ -241,8 +257,16 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={(t) => setTab(t)} />}
           {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
           {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
-          {tab === 'invites' && (canCreateInvite || canRevokeInvite) && <InvitesTab serverId={serverId} showToast={showToast} />}
-          {tab === 'requests' && canManageServer && <JoinRequestsTab serverId={serverId} />}
+          {tab === 'invites' && (canCreateInvite || canRevokeInvite) && (
+            <InvitesTab
+              serverId={serverId}
+              showToast={showToast}
+              canManageServer={canManageServer}
+              pendingRequestCount={pendingRequestCount}
+              mode={invitesMode}
+              onModeChange={setInvitesMode}
+            />
+          )}
           {tab === 'moderation' && canKickMembers && <ModerationTab serverId={serverId} showToast={showToast} />}
           {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
           </>)}
