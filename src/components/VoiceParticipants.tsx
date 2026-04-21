@@ -6,8 +6,6 @@ import type { User } from '../types';
 import type { ChatMessage } from './ChatPanel';
 import ChatPanel from './ChatPanel';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
-import { useConfirm } from '../contexts/ConfirmContext';
-import { formatFullName } from '../lib/formatName';
 import { BloomHighlight } from '../lib/signature';
 
 interface Props {
@@ -28,6 +26,8 @@ interface Props {
   cardStyle: CardStyle;
   onProfileClick: (userId: string, x: number, y: number) => void;
   onKickUser: (userId: string) => void;
+  /** Sağ-tık / context menü talebi — ChatView seviyesinde role-aware menü açar. */
+  onRequestMemberMenu?: (user: User, x: number, y: number) => void;
   isAdmin: boolean;
   // Chat panel props
   activeChannel: string | null;
@@ -72,6 +72,7 @@ function VoiceParticipants({
   cardStyle,
   onProfileClick,
   onKickUser,
+  onRequestMemberMenu,
   isAdmin,
   activeChannel,
   channels,
@@ -96,7 +97,6 @@ function VoiceParticipants({
   onScrollToBottom,
   isModerator,
 }: Props) {
-  const { openConfirm } = useConfirm();
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
   useEffect(() => {
@@ -148,7 +148,11 @@ function VoiceParticipants({
       effectiveStatus: getEffectiveStatus(),
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
-      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); openConfirm({ title: 'Kullanıcıyı çıkar', description: `${formatFullName(user.firstName, user.lastName)} odadan çıkarılsın mı?`, confirmText: 'Çıkar', cancelText: 'İptal', danger: true, onConfirm: () => onKickUser(user.id) }); } },
+      onContextMenu: (e: React.MouseEvent) => {
+        if (isMe) return;
+        e.preventDefault();
+        onRequestMemberMenu?.(user, e.clientX, e.clientY);
+      },
     };
   };
 
@@ -173,7 +177,11 @@ function VoiceParticipants({
       appVersion: user.appVersion,
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
-      onContextMenu: (e: React.MouseEvent) => { if (!isMe && isAdmin) { e.preventDefault(); openConfirm({ title: 'Kullanıcıyı çıkar', description: `${formatFullName(user.firstName, user.lastName)} odadan çıkarılsın mı?`, confirmText: 'Çıkar', cancelText: 'İptal', danger: true, onConfirm: () => onKickUser(user.id) }); } },
+      onContextMenu: (e: React.MouseEvent) => {
+        if (isMe) return;
+        e.preventDefault();
+        onRequestMemberMenu?.(user, e.clientX, e.clientY);
+      },
     };
   });
 

@@ -35,6 +35,8 @@ interface Props {
   handleDrop: (e: React.DragEvent, channelId: string) => void;
   handleDragStart: (e: React.DragEvent, userName: string) => void;
   onUserClick: (userId: string, x: number, y: number) => void;
+  /** Sağ-tık / context menü talebi — ChatView seviyesinde role-aware menü açar. */
+  onUserContextMenu?: (userId: string, x: number, y: number) => void;
   activeServerName?: string;
   activeServerShortName?: string;
   activeServerAvatarUrl?: string;
@@ -84,7 +86,7 @@ const VolumeLabel = React.memo(function VolumeLabel({ value }: { value: number |
   );
 });
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, onUserContextMenu, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
   const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -432,6 +434,12 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             // Slider içindeki tıklamalar inline edit'i kapatmasın
                             if ((e.target as Element).closest('[data-volume-slider-control]')) return;
                             setEditingVolumeUserId(prev => (prev === user.id ? null : user.id));
+                          }}
+                          onContextMenu={(e) => {
+                            if (!user) return;
+                            if (user.id === currentUser.id) return;
+                            e.preventDefault();
+                            onUserContextMenu?.(user.id, e.clientX, e.clientY);
                           }}
                           className={`absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
                             isBc && isSp

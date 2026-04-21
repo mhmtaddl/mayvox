@@ -152,6 +152,10 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     return () => { handler(); setOpen(false); };
   }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer]);
 
+  // State model: open > unread > idle. Panel open pauses all unread cues
+  // (amber color, glow, swing) and uses the standard active-state styling.
+  const unread = bellCount > 0 && !open;
+
   return (
     <div className="relative">
       {/* ── Çan butonu ── */}
@@ -161,19 +165,39 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/bell ${
           open
             ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8'
-            : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'
+            : unread
+              ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]'
+              : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'
         }`}
         title="Bildirimler"
       >
         <svg
-          width="16" height="16" viewBox="0 0 24 24" fill="none"
+          width="22" height="16" viewBox="-4 0 32 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className={bellCount > 0 && !open ? 'group-hover/bell:animate-[bell-ring_0.5s_ease-in-out]' : ''}
+          className={unread ? 'bell-swing-loop' : ''}
         >
+          {unread && (
+            <>
+              <g className="bell-wave-l" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none">
+                <line x1="-0.5" y1="8"  x2="-3"   y2="6"  />
+                <line x1="-1"   y1="12" x2="-3.5" y2="12" />
+                <line x1="-0.5" y1="16" x2="-3"   y2="18" />
+              </g>
+              <g className="bell-wave-r" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none">
+                <line x1="24.5" y1="8"  x2="27"   y2="6"  />
+                <line x1="25"   y1="12" x2="27.5" y2="12" />
+                <line x1="24.5" y1="16" x2="27"   y2="18" />
+              </g>
+              <path
+                d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                fill="currentColor" stroke="none"
+              />
+            </>
+          )}
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {bellCount > 0 && !open && (
+        {unread && (
           <NotificationBadge count={bellCount} mode="count" variant="accent" size="sm" className="absolute -top-0.5 -right-0.5" />
         )}
       </button>

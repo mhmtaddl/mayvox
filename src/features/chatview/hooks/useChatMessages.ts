@@ -5,7 +5,7 @@ import type { ChatMessage } from '../../../lib/chatService';
 interface UseChatMessagesOptions {
   activeChannel: string | null;
   channels: Array<{ id: string; mode?: string }>;
-  currentUser: { isAdmin?: boolean; isModerator?: boolean };
+  currentUser: { id: string; isAdmin?: boolean; isModerator?: boolean };
   chatMuted: boolean;
   /** Moderasyon chat ban aktif mi — aktifse kullanıcı bypass YAPAMAZ, isAdmin/isModerator farketmez. */
   isChatBanned?: boolean;
@@ -24,6 +24,12 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
   const lastSendRef = useRef(0);
   const lastSendTextRef = useRef('');
 
+  // onMessage closure `[]` deps ile tek sefer kurulur — currentUser.id
+  // değişiminde stale kalmaması için ref'te taşıyoruz. chatMuted ses gate'i
+  // DEĞİL (moderator'ın sohbeti yazma engelleme toggle'ı); ses için kullanma.
+  const currentUserIdRef = useRef(currentUser.id);
+  useEffect(() => { currentUserIdRef.current = currentUser.id; }, [currentUser.id]);
+
   // WebSocket chat bağlantısı
   useEffect(() => {
     import('../../../lib/chatService').then(({ connectChat, setChatHandlers }) => {
@@ -39,6 +45,22 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
             setTimeout(() => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }), 50);
           } else {
             setNewMsgCount(c => c + 1);
+          }
+          // Mesaj bildirim tonu — kendi mesajın değilse her zaman çal.
+          // KURAL (kullanıcı talebi): Aynı sohbet/ses odasında bile olsan mesaj
+          // geldiğinde ton duyulacak. Hiçbir "in-room suppression" yok.
+          // bypassEnabled:true → global 'notify:sound' pref gate'i bypass edilir;
+          // fallback'te de previewNotifySound (gate'siz) kullanılır.
+          if (msg.senderId !== currentUserIdRef.current) {
+            import('../../../lib/audio/SoundManager').then(({ playMessageReceive }) => {
+              const ok = playMessageReceive({ bypassEnabled: true });
+              if (!ok) {
+                // MP3 asset yüklenemezse web-audio beep fallback (pref-bypass).
+                import('../../../features/notifications/notificationSound')
+                  .then(({ previewNotifySound }) => previewNotifySound())
+                  .catch(() => { /* fallback da yüklenemezse sessiz geç */ });
+              }
+            });
           }
         },
         onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),

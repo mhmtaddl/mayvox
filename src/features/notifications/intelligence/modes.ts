@@ -20,13 +20,18 @@ function cap(tier: AttentionTier, ceiling: AttentionTier): AttentionTier {
 
 /**
  * Kullanıcı explicit mode seçmediyse context'ten türet.
- *   - isUserSpeaking → VOICE_PRIORITY
- *   - isInVoiceRoom → VOICE_PRIORITY
- *   - aksi halde NORMAL (kullanıcı FOCUS/QUIET'i explicit seçer)
+ *   - isUserSpeaking → VOICE_PRIORITY (aktif konuşurken DM sesini kıs)
+ *   - aksi halde NORMAL
+ *
+ * NOT: `isInVoiceRoom` (sadece odada oturmak) VOICE_PRIORITY'ye geçirmez.
+ * Kullanıcı talebi: "sohbet odasında dahi olsa o ses, ton çalacak. mesaj sesini
+ * duyacak herkes." Passive presence sound suppression'ına neden olmaz.
+ * Sadece aktif konuşma anında ducking yapılır ki konuşma sırasında DM
+ * tonu araya girmesin; aksi halde mesaj sesi her zaman duyulur.
  */
 export function resolveEffectiveMode(ctx: PolicyContext): NotificationMode {
   if (ctx.mode === 'QUIET' || ctx.mode === 'FOCUS' || ctx.mode === 'VOICE_PRIORITY') return ctx.mode;
-  if (ctx.isUserSpeaking || ctx.isInVoiceRoom) return 'VOICE_PRIORITY';
+  if (ctx.isUserSpeaking) return 'VOICE_PRIORITY';
   return 'NORMAL';
 }
 
@@ -48,9 +53,10 @@ export function applyModeAdjustment(
       return tier;
 
     case 'VOICE_PRIORITY':
-      // IN_VOICE_ACTIVE (konuşuyor) → agresif downgrade.
+      // Sadece IN_VOICE_ACTIVE (kullanıcı aktif konuşuyor) downgrade yapılır —
+      // konuşma sırasında DM tonu araya girmesin. IN_VOICE_PASSIVE (sadece oturmak)
+      // downgrade YAPMAZ; mesaj sesi her zaman çalar (kullanıcı kuralı).
       if (interaction === 'IN_VOICE_ACTIVE') return downgrade(tier, 2);
-      if (interaction === 'IN_VOICE_PASSIVE') return downgrade(tier, 1);
       return tier;
 
     case 'QUIET':

@@ -43,6 +43,8 @@ import { useWindowActivity } from '../hooks/useWindowActivity';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
 import MobileHeader from '../components/MobileHeader';
 import VoiceParticipants from '../components/VoiceParticipants';
+import RoomMemberContextMenu, { type RoomMemberMenuCtx } from '../features/chatview/components/RoomMemberContextMenu';
+import { ROLE_HIERARCHY, type ServerRole } from '../lib/permissionBundles';
 import { NotificationBadge, NotificationBell } from '../components/notifications';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
 import { useIncomingInvites } from '../hooks/useIncomingInvites';
@@ -109,18 +111,25 @@ export default function ChatView() {
   const [showDiscover, setShowDiscover] = useState(false);
 
   // ── Kanal seçildiğinde merkez panel zorla chat view'e geçer ──
-  // Hem activeChannel değiştiğinde, hem de App.tsx'in 'mayvox:goto-chat' event'inde
-  // (aynı odaya tekrar tıklama dahil) discover/settings kapatılır.
+  // KURAL: Kullanıcı sohbet/ses odasına nerede tıklarsa tıklasın, orta panel
+  // mutlaka o odayı açmalı. Settings/discover/home-peek varsa hepsi kapanır.
+  // Bu kuralı bozan hiçbir refactor yapılmamalı (CLAUDE.md).
   useEffect(() => {
     if (!activeChannel) return;
     if (showDiscover) setShowDiscover(false);
     if (view === 'settings') setView('chat');
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
   }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onGoto = () => {
       setShowDiscover(false);
       setIsServerHomeView(false);
+      // Sunucu ayarları panelini de zorla kapat — kullanıcı sohbet/ses odasına
+      // tıkladığında orta panel her zaman o odaya dönmeli, settings'te kalmamalı.
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
       if (view === 'settings') setView('chat');
     };
     window.addEventListener('mayvox:goto-chat', onGoto);
@@ -169,6 +178,14 @@ export default function ChatView() {
   const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
+  // Oda içi sağ-tık role-aware context menu. Hedef sunucudan ayrılırsa (target
+  // member artık listede yok) ctx'i temizleyerek menüyü otomatik kapatırız.
+  const [roomMemberMenu, setRoomMemberMenu] = useState<RoomMemberMenuCtx | null>(null);
+  useEffect(() => {
+    if (!roomMemberMenu) return;
+    const stillPresent = sortedChannelMembers.some(m => m.id === roomMemberMenu.user.id);
+    if (!stillPresent) setRoomMemberMenu(null);
+  }, [roomMemberMenu, sortedChannelMembers]);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
   const [activeDmConvKey, setActiveDmConvKey] = useState<string | null>(null);
   const [dmAtBottom, setDmAtBottom] = useState(true);
@@ -1119,8 +1136,13 @@ export default function ChatView() {
                   servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
                   <button ref={dmToggleRef} onClick={() => { setDmPanelOpen(prev => !prev); setMobileRightOpen(false); }}
-                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
-                    <MessageSquare size={16} />
+                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {dmUnreadCount > 0 && !dmPanelOpen && (
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" className="notif-icon-pulse" />
+                      )}
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
                     {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
                   </button>
                   <button onClick={() => {
@@ -1154,6 +1176,11 @@ export default function ChatView() {
             // Kendine tıklama → hiçbir şey açılmaz (self row non-interactive).
             if (userId === currentUser.id) return;
             setUserActionMenu({ userId, x, y });
+          }}
+          onUserContextMenu={(userId, x, y) => {
+            // Sol sidebar üye satırı sağ-tık → participant card ile aynı role-aware menü.
+            const user = sortedChannelMembers.find(u => u.id === userId) ?? allUsers.find(u => u.id === userId);
+            if (user) setRoomMemberMenu({ user, x, y });
           }}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
           activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
@@ -1265,6 +1292,7 @@ export default function ChatView() {
                     setProfilePopup({ userId, x, y });
                   }}
                   onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isModerator={currentUser.isModerator || false}
+                  onRequestMemberMenu={(user, x, y) => setRoomMemberMenu({ user, x, y })}
                   activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted}
                   onToggleChatMuted={() => setChatMuted(!chatMuted)} editingMsgId={editingMsgId} editingText={editingText}
                   onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
@@ -1328,8 +1356,13 @@ export default function ChatView() {
             servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
           <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
-              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
-              <MessageSquare size={16} />
+              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {dmUnreadCount > 0 && !dmPanelOpen && (
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" className="notif-icon-pulse" />
+                )}
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
               {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
             </button>
             <button onClick={() => {
@@ -1581,6 +1614,19 @@ export default function ChatView() {
       <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}
         onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount}
         onActiveConvKeyChange={setActiveDmConvKey} onNearBottomChange={setDmAtBottom} toggleRef={dmToggleRef} />
+
+      {/* ── Oda içi üye moderation context menu (sağ-tık, role-aware) ──
+          Tetikleme noktaları: (1) VoiceParticipants katılımcı kartı, (2) LeftSidebar üye satırı.
+          İkisi de aynı state'i (`roomMemberMenu`) set eder, tek menü render edilir. */}
+      <RoomMemberContextMenu
+        ctx={roomMemberMenu}
+        onClose={() => setRoomMemberMenu(null)}
+        serverId={activeServerId}
+        myRole={(ROLE_HIERARCHY[activeServerData?.role as ServerRole] != null ? (activeServerData!.role as ServerRole) : 'member')}
+        ownerUserId={null}
+        currentUserId={currentUser.id}
+        showToast={setToastMsg}
+      />
 
       {/* ── Notification toast stack (top-right portal) ── */}
       <ToastContainer />
