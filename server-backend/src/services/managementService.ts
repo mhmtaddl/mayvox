@@ -10,6 +10,7 @@ import { CAPABILITIES, type Capability } from '../capabilities';
 import { logAction } from './auditLogService';
 import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 import { removeParticipantFromAllServerRooms, removeParticipantFromChannel, setPublishPermissionInAllServerRooms } from './livekitService';
+import { broadcastModeration } from './moderationBroadcast';
 
 // ── Yetki kontrol ──
 
@@ -140,6 +141,9 @@ export async function kickMember(serverId: string, userId: string, targetUserId:
   await pool.query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
   await pool.query('UPDATE server_activity SET member_count = GREATEST(0, member_count - 1), updated_at = now() WHERE server_id = $1', [serverId]);
   invalidateAccessContext(targetUserId, serverId);
+  void broadcastModeration({
+    userId: targetUserId, action: 'kick', actorId: userId, serverId,
+  });
   await logAction({
     serverId, actorId: userId, action: 'member.kick',
     resourceType: 'member', resourceId: targetUserId,
@@ -282,6 +286,13 @@ export async function muteMember(
   );
   invalidateAccessContext(targetUserId, serverId);
 
+  // Realtime broadcast — DB update tamamlandı, hedef kullanıcı UI'ı için LiveKit'i
+  // beklemeye gerek yok. fire-and-forget, LiveKit ile paralel dispatch.
+  void broadcastModeration({
+    userId: targetUserId, action: 'mute', actorId: userId, serverId,
+    updates: { isServerMuted: true, voiceMutedUntil: expiresAt },
+  });
+
   // Aktif voice odalarda mic'i kapat — kullanıcı odada kalır (LiveKit yoksa silent no-op)
   const lk = await setPublishPermissionInAllServerRooms(serverId, targetUserId, false);
 
@@ -321,6 +332,12 @@ export async function unmuteMember(serverId: string, userId: string, targetUserI
 
   if (result.rowCount === 0) return { wasActive: false };  // idempotent safe return
   invalidateAccessContext(targetUserId, serverId);
+
+  // Broadcast önce — LiveKit paralel yürütülür, hedef toast'ı hızlanır.
+  void broadcastModeration({
+    userId: targetUserId, action: 'unmute', actorId: userId, serverId,
+    updates: { isServerMuted: false, voiceMutedUntil: null },
+  });
 
   // Kullanıcı hâlâ odadaysa canPublish'i tekrar aç (anında mic'i geri ver).
   // Odada değilse no-op — fresh join zaten canPublish:true ile token alır.
@@ -365,6 +382,12 @@ export async function timeoutMember(
   );
   invalidateAccessContext(targetUserId, serverId);
 
+  // Broadcast önce — hedef toast'ı LiveKit beklemeden ulaşsın.
+  void broadcastModeration({
+    userId: targetUserId, action: 'timeout', actorId: userId, serverId,
+    updates: { timedOutUntil: until },
+  });
+
   // Aktif voice odalardan düşür (LiveKit yoksa silent no-op)
   const lk = await removeParticipantFromAllServerRooms(serverId, targetUserId);
 
@@ -401,6 +424,12 @@ export async function clearTimeoutMember(serverId: string, userId: string, targe
   if (result.rowCount === 0) return { wasActive: false };
   invalidateAccessContext(targetUserId, serverId);
 
+  // Broadcast önce — kullanıcıda anlık temizlik.
+  void broadcastModeration({
+    userId: targetUserId, action: 'clear_timeout', actorId: userId, serverId,
+    updates: { timedOutUntil: null },
+  });
+
   await logAction({
     serverId, actorId: userId, action: 'member.timeout_clear',
     resourceType: 'member', resourceId: targetUserId,
@@ -432,6 +461,13 @@ export async function kickFromRoom(
     );
     if (!ch) throw new AppError(404, 'Kanal bulunamadı');
   }
+
+  // Broadcast'i LiveKit ile paralel başlat — hedef toast'ı LiveKit latency'sini
+  // beklemeden gelir. Not: disconnect handler da PARTICIPANT_REMOVED'da toast atar;
+  // presence handler dedup'lı olduğu için çift toast riski yok.
+  void broadcastModeration({
+    userId: targetUserId, action: 'room_kick', actorId: userId, serverId,
+  });
 
   const lk = channelId
     ? await removeParticipantFromChannel(channelId, targetUserId).then(r => ({ configured: r.configured, channelsAffected: r.removed ? 1 : 0 }))
@@ -479,6 +515,11 @@ export async function banMember(serverId: string, userId: string, targetUserId: 
     [serverId, targetUserId, reason, userId]
   );
   invalidateAccessContext(targetUserId, serverId);
+  void broadcastModeration({
+    userId: targetUserId, action: 'ban', actorId: userId, serverId,
+    updates: { isVoiceBanned: true },
+    reason: reason?.slice(0, 200),
+  });
   await logAction({
     serverId, actorId: userId, action: 'member.ban',
     resourceType: 'member', resourceId: targetUserId,
@@ -504,10 +545,55 @@ export async function unbanMember(serverId: string, userId: string, targetUserId
   await requireRole(serverId, userId, 'mod');
   const result = await pool.query('DELETE FROM server_bans WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
   if (result.rowCount === 0) throw new AppError(404, 'Ban kaydı bulunamadı');
+  void broadcastModeration({
+    userId: targetUserId, action: 'unban', actorId: userId, serverId,
+    updates: { isVoiceBanned: false },
+  });
   await logAction({
     serverId, actorId: userId, action: 'member.unban',
     resourceType: 'member', resourceId: targetUserId,
   });
+}
+
+/**
+ * Bir üyenin moderasyon ceza geçmişini sıfırla. Audit log'daki mute/timeout/room_kick/
+ * kick/ban satırlarını hard-delete eder, yerine tek 'moderation.history_reset' kaydı yazar.
+ * Kullanıcının mevcut aktif state'ine (voice_muted_by, timeout_until vb.) DOKUNMAZ —
+ * aktif cezalar ayrı ayrı kaldırılır (clearTimeout/unmute/unban).
+ */
+export async function resetMemberModerationHistory(
+  serverId: string, userId: string, targetUserId: string,
+): Promise<{ deleted: number }> {
+  const ctx = await getServerAccessContext(userId, serverId);
+  // Mute/timeout yetkisi olan (mod+) sıfırlayabilir.
+  assertCapability(ctx, CAPABILITIES.MEMBER_TIMEOUT, 'Ceza geçmişini sıfırlamak için yetkin yok');
+  if (userId === targetUserId) throw new AppError(400, 'Kendi geçmişini sıfırlayamazsın');
+
+  const result = await pool.query(
+    `DELETE FROM audit_log
+       WHERE server_id = $1
+         AND resource_type = 'member'
+         AND resource_id = $2
+         AND action IN (
+           'member.mute', 'member.unmute',
+           'member.timeout', 'member.timeout_clear',
+           'member.room_kick',
+           'member.kick',
+           'member.ban', 'member.unban'
+         )`,
+    [serverId, targetUserId]
+  );
+  const deleted = result.rowCount ?? 0;
+
+  await logAction({
+    serverId, actorId: userId, action: 'moderation.history_reset',
+    resourceType: 'member', resourceId: targetUserId,
+    metadata: { deletedRows: deleted },
+  });
+
+  // Hedef kullanıcıya bildirim göndermiyoruz — ceza geçmişi sıfırlamak aktif bir
+  // aksiyon değil (cezaları zaten kaldırmadı). Moderator kendi popover'ında re-fetch yapar.
+  return { deleted };
 }
 
 /** Kullanıcıya sunucu daveti gönder */

@@ -11,6 +11,7 @@ import { FORCE_MOBILE } from '../constants';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import { type CardStyle } from '../../../components/chat/cardStyles';
 import { type Server } from '../../../lib/serverService';
+import { formatRemainingFromIso } from '../../../lib/formatTimeout';
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
@@ -43,7 +44,16 @@ export default function MobileFooter({
   const { activeChannel, channels } = useChannel();
   const { isPttPressed, setIsPttPressed, volumeLevel, mobileVoiceModeOverride, setMobileVoiceModeOverride } = useAudio();
   const { voiceMode, noiseThreshold, setNoiseThreshold } = useSettings();
-  const { isMuted, view } = useAppState();
+  const { isMuted, view, voiceDisabledReason, timedOutUntil } = useAppState();
+  // Server-side ses bloğu — mobile PTT / VAD tetiklenmesin, UI pasif görünsün.
+  const isVoiceBlocked = voiceDisabledReason !== null;
+  const timeoutRemStr = voiceDisabledReason === 'timeout' ? formatRemainingFromIso(timedOutUntil) : null;
+  const voiceBlockedLabel =
+    voiceDisabledReason === 'server_muted' ? 'Susturuldunuz'
+    : voiceDisabledReason === 'timeout'    ? (timeoutRemStr ? `Zamanaşımı — ${timeoutRemStr}` : 'Zamanaşımı')
+    : voiceDisabledReason === 'kicked'     ? 'Odadan çıkarıldınız'
+    : voiceDisabledReason === 'banned'     ? 'Erişim kapalı'
+    : '';
 
   // Oda default'u ile kullanıcı tercihi farklıysa 15 saniye boyunca "change" butonu göster.
   // Butona basılırsa kullanıcının tercihi override olarak set edilir, buton 5 sn daha görünüp kaybolur.
@@ -106,20 +116,24 @@ export default function MobileFooter({
       style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
       {/* PTT / VAD buton alanı */}
       {activeChannel && view !== 'settings' && (() => {
-        const pttDisabled = isMuted || isAdminMuted || isVoiceBanned;
+        // pttDisabled: dokunma/konuşma tamamen bloklu. Server bloğu (mute/timeout/kick/ban)
+        // da buraya dahil — UI opak, PTT pointer handler'ları erken return eder.
+        const pttDisabled = isMuted || isAdminMuted || isVoiceBanned || isVoiceBlocked;
         const isVad = effectiveMode === 'vad';
 
-        const pttLabel = isAdminMuted
-          ? (muteRemaining ?? 'Susturuldu')
-          : isMuted
-            ? 'Mikrofon Kapalı'
-            : isVoiceBanned
-              ? 'Ses Yasağı'
-              : isVad
-                ? (isPttPressed ? 'Konuşuyorsun' : 'Otomatik')
-                : isPttPressed
-                  ? 'Konuşuyorsun'
-                  : 'Basılı tut';
+        const pttLabel = isVoiceBlocked
+          ? voiceBlockedLabel
+          : isAdminMuted
+            ? (muteRemaining ?? 'Susturuldu')
+            : isMuted
+              ? 'Mikrofon Kapalı'
+              : isVoiceBanned
+                ? 'Ses Yasağı'
+                : isVad
+                  ? (isPttPressed ? 'Konuşuyorsun' : 'Otomatik')
+                  : isPttPressed
+                    ? 'Konuşuyorsun'
+                    : 'Basılı tut';
 
         if (isVad) {
           return (

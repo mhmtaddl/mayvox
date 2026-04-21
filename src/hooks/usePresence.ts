@@ -17,6 +17,15 @@ interface Props {
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
   setActiveChannel: React.Dispatch<React.SetStateAction<string | null>>;
   setToastMsg: (v: string | null) => void;
+  /** Moderation broadcast'tan gelen timedOutUntil değerini App.tsx state'ine yansıtır. */
+  setTimedOutUntil: (v: string | null) => void;
+  /**
+   * Moderation broadcast `clear_timeout` / `timeout` anında voiceDisabledReason'ı doğrudan
+   * temizlemek/set etmek için. Aksi halde App.tsx expire watcher'ı beklemek gerekirdi.
+   */
+  setVoiceDisabledReason: React.Dispatch<React.SetStateAction<
+    'server_muted' | 'timeout' | 'kicked' | 'banned' | null
+  >>;
   setInvitationModal: (
     v: {
       inviterId: string;
@@ -45,6 +54,8 @@ export function usePresence({
   setChannels,
   setActiveChannel,
   setToastMsg,
+  setTimedOutUntil,
+  setVoiceDisabledReason,
   setInvitationModal,
   onMoved,
   onPasswordResetUpdate,
@@ -334,20 +345,109 @@ export function usePresence({
       );
     });
 
-    channel.on('broadcast', { event: 'moderation' }, ({ payload }) => {
-      if (payload.userId === user.id) {
-        setCurrentUser(prev => ({ ...prev, ...payload.updates }));
-        // Ban geldiğinde aktif sesli kanaldan çıkar
-        if (payload.updates.isVoiceBanned === true) {
+    channel.on('broadcast', { event: 'moderation' }, async ({ payload }) => {
+      // Defensive: payload shape backend broadcastModeration ile aynı.
+      const updates = payload.updates || {};
+      const action = payload.action as string | undefined;
+
+      // Moderator/admin/owner kendi uyguladığı aksiyonu geri alıyor → toast/ses YOK.
+      // Kullanıcı isteği: sunucu sahibine/admine/moderatöre kendi aksiyonlarında bildirim/ses çıkmasın.
+      // Hedef UI sync için allUsers merge işlemini yine yapıyoruz (badge güncellemesi için).
+      const isActor = payload.actorId && payload.actorId === user.id;
+
+      if (payload.userId === user.id && !isActor) {
+        // User tipine yansıtılabilen alanları setCurrentUser'a merge et.
+        // timedOutUntil User tipinde değil — ayrı setTimedOutUntil ile yansıtılıyor.
+        const userFields = {
+          ...(updates.isMuted !== undefined && { isMuted: updates.isMuted }),
+          ...(updates.isVoiceBanned !== undefined && { isVoiceBanned: updates.isVoiceBanned }),
+          ...(updates.muteExpires !== undefined && { muteExpires: updates.muteExpires }),
+          ...(updates.banExpires !== undefined && { banExpires: updates.banExpires }),
+        };
+        if (Object.keys(userFields).length > 0) {
+          setCurrentUser(prev => ({ ...prev, ...userFields }));
+        }
+
+        // Action bazlı anlık toast + sound. Sound her action için tek kez çalar.
+        const playMod = async () => {
+          try {
+            const mod = await import('../lib/sounds');
+            mod.playSound('moderation');
+          } catch { /* sound not critical */ }
+        };
+
+        if (action === 'ban' || updates.isVoiceBanned === true) {
+          setToastMsg('Sunucuya erişiminiz kaldırıldı');
           setActiveChannel(null);
           disconnectRef.current();
+          window.dispatchEvent(new CustomEvent('mayvox:refresh-server-list'));
+          void playMod();
+        } else if (action === 'unban' || updates.isVoiceBanned === false) {
+          setToastMsg('Ses yasağınız kaldırıldı');
+          window.dispatchEvent(new CustomEvent('mayvox:refresh-server-list'));
+          void playMod();
+        } else if (action === 'mute' || updates.isServerMuted === true) {
+          // Sunucu-seviyesi mute (server_members.voice_muted_by). Sistem mute (users.is_muted)
+          // ile karıştırma — ikisi de toast atar ama kaynak farklı.
+          setToastMsg('Bu sunucuda susturuldunuz');
+          void playMod();
+        } else if (action === 'unmute' || updates.isServerMuted === false) {
+          setToastMsg('Susturulmanız kaldırıldı');
+          void playMod();
+        } else if (action === 'timeout' && updates.timedOutUntil) {
+          setTimedOutUntil(updates.timedOutUntil);
+          // voiceDisabledReason anlık set — App.tsx expire watcher beklemeden PTT/VAD guard aktif olsun.
+          setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'timeout'));
+          // Toast her durumda at — odada olsun olmasın. Dedup setToastMsg içinde state-driven
+          // (aynı mesaj yutulur), useLiveKit disconnect handler'daki moderationToast da 2sn dedup.
+          // Yani aktif odada iki path'ten gelse bile kullanıcı tek toast görür.
+          const { formatRemainingFromIso } = await import('../lib/formatTimeout');
+          const remStr = formatRemainingFromIso(updates.timedOutUntil);
+          setToastMsg(remStr
+            ? `Zamanaşımı cezası aldınız — ${remStr} boyunca konuşamaz ve sohbet odalarına giremezsiniz.`
+            : 'Zamanaşımı cezası aldınız — belirli bir süre konuşamaz ve sohbet odalarına giremezsiniz.');
+          void playMod();
+        } else if (action === 'clear_timeout' || (action === undefined && updates.timedOutUntil === null)) {
+          // ANLIK temizlik — App.tsx expire watcher'ı beklemeden reason + state birlikte.
+          // Aksi halde setTimedOutUntil(null) sonrası useEffect `if (!timedOutUntil) return;`
+          // ile erken çıkıyor ve reason 'timeout'ta stale kalıyordu.
+          setTimedOutUntil(null);
+          setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
+          setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+          void playMod();
+        } else if (action === 'kick') {
+          setToastMsg('Sunucudan çıkarıldınız');
+          window.dispatchEvent(new CustomEvent('mayvox:refresh-server-list'));
+          void playMod();
+        } else if (action === 'room_kick') {
+          // useLiveKitConnection disconnect'i zaten toast atıyor; duplicate'i önle:
+          // eğer aktif channel varsa LiveKit handler'a bırak, yoksa burada bildir.
+          if (!activeChannelRef.current) {
+            setToastMsg('Odadan çıkarıldınız');
+          }
+          void playMod();
+        } else if (updates.isMuted === true) {
+          setToastMsg('Susturuldunuz');
+          void playMod();
+        } else if (updates.isMuted === false) {
+          setToastMsg('Susturulmanız kaldırıldı');
+          void playMod();
         }
       }
-      setAllUsers(prev =>
-        prev.map(u =>
-          u.id === payload.userId ? { ...u, ...payload.updates } : u,
-        ),
-      );
+
+      // allUsers map'ine payload.updates'i merge — rozet UI'ları için.
+      // timedOutUntil User tipinde olmadığı için sadece ortak field'ları yansıt.
+      const otherFields = {
+        ...(updates.isMuted !== undefined && { isMuted: updates.isMuted }),
+        ...(updates.isVoiceBanned !== undefined && { isVoiceBanned: updates.isVoiceBanned }),
+      };
+      if (Object.keys(otherFields).length > 0) {
+        setAllUsers(prev =>
+          prev.map(u =>
+            u.id === payload.userId ? { ...u, ...otherFields } : u,
+          ),
+        );
+      }
     });
 
     channel.on('broadcast', { event: 'password-reset-update' }, ({ payload }) => {

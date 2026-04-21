@@ -12,3 +12,7 @@ coverage/
 # Secrets — asla commit'lenmesin
 github-recovery-codes.txt
 *-recovery-codes*
+
+# Claude Code session/permission state — secret'lar içerebilir, repo'ya girmesin
+.claude/
+android/.claude/

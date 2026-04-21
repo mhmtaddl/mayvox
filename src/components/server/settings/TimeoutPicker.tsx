@@ -79,6 +79,7 @@ export default function TimeoutPicker({ anchorRect, onSelect, onClose, busy }: P
   const picker = (
     <div
       ref={ref}
+      className="popup-surface"
       onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed',
@@ -86,22 +87,13 @@ export default function TimeoutPicker({ anchorRect, onSelect, onClose, busy }: P
         left: pos.left,
         width: 280,
         zIndex: 600,
-        background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 14,
         padding: '10px',
-        boxShadow:
-          '0 20px 50px rgba(0,0,0,0.55), ' +
-          '0 4px 14px rgba(0,0,0,0.35), ' +
-          'inset 0 1px 0 rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
         animation: 'timeoutPickerIn 140ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
-      <div className="flex items-center gap-2 px-2 pb-2 mb-1 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 px-2 pb-2 mb-1 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
         <Clock size={12} className="text-amber-400" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#7b8ba8]">Zaman Aşımı Süresi</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]">Zaman Aşımı Süresi</span>
       </div>
 
       {OPTIONS.map(opt => (

@@ -26,22 +26,24 @@ export function useDevices() {
         const savedInput = localStorage.getItem('selectedInput');
         const savedOutput = localStorage.getItem('selectedOutput');
 
+        // Stale validation — her fetch'te mevcut seçili cihaz hâlâ listede mi kontrol et.
+        // Cihaz çıkarılınca invalid deviceId'de takılı kalmayı önler (kulaklık fişi çekilir gibi).
         if (inputs.length > 0) {
-          const exists = savedInput && inputs.some(d => d.deviceId === savedInput);
-          if (exists) {
-            setSelectedInput(savedInput);
-          } else {
-            setSelectedInput(prev => prev || inputs[0].deviceId);
-          }
+          setSelectedInput(prev => {
+            const stillValid = prev && inputs.some(d => d.deviceId === prev);
+            if (stillValid) return prev;
+            const savedValid = savedInput && inputs.some(d => d.deviceId === savedInput);
+            return savedValid ? savedInput : inputs[0].deviceId;
+          });
         }
 
         if (outputs.length > 0) {
-          const exists = savedOutput && outputs.some(d => d.deviceId === savedOutput);
-          if (exists) {
-            setSelectedOutput(savedOutput);
-          } else {
-            setSelectedOutput(prev => prev || outputs[0].deviceId);
-          }
+          setSelectedOutput(prev => {
+            const stillValid = prev && outputs.some(d => d.deviceId === prev);
+            if (stillValid) return prev;
+            const savedValid = savedOutput && outputs.some(d => d.deviceId === savedOutput);
+            return savedValid ? savedOutput : outputs[0].deviceId;
+          });
         }
       } catch (err) {
         console.error("Cihazlar listelenemedi:", err);

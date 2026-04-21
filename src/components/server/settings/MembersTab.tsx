@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, X, Crown, Shield, ShieldCheck, User as UserIcon,
   MoreHorizontal, MicOff, Mic, Clock, UserX, Ban,
-  ChevronRight, DoorOpen,
+  DoorOpen, History,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import { useUser } from '../../../contexts/UserContext';
@@ -18,9 +18,11 @@ import {
   type ServerRole, ROLE_HIERARCHY, canActOn,
 } from '../../../lib/permissionBundles';
 import { fmtDate, memberDisplayName, Empty, Loader } from './shared';
+import { formatRemainingFromIso, getRemainingMs } from '../../../lib/formatTimeout';
 import ActionMenu, { type ActionItem } from './ActionMenu';
 import RolePicker from './RolePicker';
 import TimeoutPicker from './TimeoutPicker';
+import ModerationHistoryPopover from './ModerationHistoryPopover';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
 
 interface Props {
@@ -55,6 +57,7 @@ type PopoverState =
   | { kind: 'action'; member: ServerMember; rect: DOMRect }
   | { kind: 'role'; member: ServerMember; rect: DOMRect }
   | { kind: 'timeout'; member: ServerMember; rect: DOMRect }
+  | { kind: 'history'; member: ServerMember; rect: DOMRect }
   | null;
 
 /** Aktif voice mute var mı? Süresiz (voiceMutedBy dolu, voiceMutedUntil null) veya süreli. */
@@ -64,7 +67,28 @@ function isVoiceMuted(m: ServerMember): boolean {
 
 /** Aktif timeout var mı? Backend lazy-expiration uygular — null = yok. */
 function isTimedOut(m: ServerMember): boolean {
-  return m.timeoutUntil !== null;
+  if (!m.timeoutUntil) return false;
+  return getRemainingMs(m.timeoutUntil) > 0;
+}
+
+/**
+ * Timeout canlı geri sayım — her saniye format'ı tazeler.
+ * Süre dolunca null'a döner; parent re-render'ında badge kaybolur (lazy-expiration backend'de).
+ */
+function TimeoutCountdown({ until, onExpire }: { until: string; onExpire?: () => void }) {
+  const [remStr, setRemStr] = useState<string | null>(() => formatRemainingFromIso(until));
+  useEffect(() => {
+    const tick = () => {
+      const s = formatRemainingFromIso(until);
+      setRemStr(s);
+      if (s === null) onExpire?.();
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [until, onExpire]);
+  if (!remStr) return null;
+  return <span>{remStr}</span>;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -82,13 +106,53 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     return u?.statusText || 'Online';
   }, [allUsers]);
 
-  const load = useCallback(async () => {
-    try { setLoading(true); setMembers(await getMembers(serverId)); }
-    catch { showToast('Üyeler yüklenemedi'); }
-    finally { setLoading(false); }
-  }, [serverId, showToast]);
+  // showToast'u ref'e al — load useCallback'ının dep'ini kirletmesin.
+  // Aksi halde App.tsx'in showToast prop identity'si değiştikçe load yeniden yaratılıyor →
+  // focus listener re-mount + useEffect(load) yeniden fire → gereksiz refresh + loading flicker.
+  const showToastRef = useRef(showToast);
+  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  // Initial load flag — ilk yüklemede spinner göster, sonraki silent reload'larda gösterme.
+  // Kullanıcı focus/refresh sırasında blank middle content görmesin.
+  const initialLoadDoneRef = useRef(false);
+
+  const load = useCallback(async () => {
+    const isInitial = !initialLoadDoneRef.current;
+    try {
+      if (isInitial) setLoading(true);
+      setMembers(await getMembers(serverId));
+    } catch {
+      showToastRef.current('Üyeler yüklenemedi');
+    } finally {
+      if (isInitial) setLoading(false);
+      initialLoadDoneRef.current = true;
+    }
+  }, [serverId]); // SADECE serverId — showToast ref'te.
+
+  useEffect(() => {
+    // Server değişince initial flag sıfırla ki yeni sunucuda spinner görünsün.
+    initialLoadDoneRef.current = false;
+    void load();
+  }, [load]);
+
+  // Window focus / visibility change → silent reload (loading göstermiyor).
+  // Moderator başka pencerede mute/timeout kaldırırsa stale state'i düzelt.
+  // Throttle: 5sn.
+  useEffect(() => {
+    let lastAt = 0;
+    const refresh = () => {
+      const now = Date.now();
+      if (now - lastAt < 5_000) return;
+      lastAt = now;
+      void load();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [load]);
 
   // ─── Popover state (tekil — kebab ve role picker aynı anda açılamaz) ───
   const [popover, setPopover] = useState<PopoverState>(null);
@@ -101,13 +165,18 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     return ROLE_HIERARCHY[r] != null ? r : 'member';
   })();
 
-  // ─── Aksiyon runner — busy state + reload + toast ───
-  const act = useCallback(async (fn: () => Promise<unknown>, okMsg: string, userId: string) => {
+  // ─── Aksiyon runner — busy state + reload + toast (SADECE hata) ───
+  // Başarılı moderation aksiyonunda moderator'a confirmation toast/ses GÖSTERİLMEZ —
+  // kullanıcı talebi. Moderator feedback'i row UI güncellemesinden zaten geliyor
+  // (badge değişimi, mic ikonu vb.). Hedef kullanıcıya realtime broadcast gider.
+  // Hata durumunda toast korunur — moderator işlem başarısızsa bilmeli.
+  // okMsg parametresi geriye uyumluluk için tutuluyor; kullanılmıyor.
+  const act = useCallback(async (fn: () => Promise<unknown>, _okMsg: string, userId: string) => {
     setBusyId(userId);
-    try { await fn(); await load(); showToast(okMsg); }
-    catch (e: unknown) { showToast(e instanceof Error ? e.message : 'İşlem başarısız'); }
+    try { await fn(); await load(); }
+    catch (e: unknown) { showToastRef.current(e instanceof Error ? e.message : 'İşlem başarısız'); }
     finally { setBusyId(null); }
-  }, [load, showToast]);
+  }, [load]);
 
   const handleRoleChange = useCallback((member: ServerMember, nextRole: ServerRole) => {
     setPopover(null);
@@ -180,7 +249,6 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     // self-check açık — myRoleTyped ile kendi role'un aynı olsa bile false dönebilmesi için.
     const isSelf = currentUser?.id === m.userId;
     const canAct = !isSelf && canActOn(myRoleTyped, targetRole);
-    const canRoleAction = canAct && (myRoleTyped === 'owner' || myRoleTyped === 'admin');
     const canKick = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2; // mod+
     const canBan = canAct && ROLE_HIERARCHY[myRoleTyped] >= 3;  // admin+
     const canModerate = canAct && ROLE_HIERARCHY[myRoleTyped] >= 2;
@@ -190,19 +258,10 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
     return [
       {
-        id: 'role',
-        label: 'Rolü Değiştir...',
-        icon: <ChevronRight size={13} />,
-        disabled: !canRoleAction,
-        closesMenu: false,
-        onClick: () => setPopover({ kind: 'role', member: m, rect }),
-      },
-      {
         id: 'voice_mute',
         label: muted ? 'Susturmayı Kaldır' : 'Sesini Sustur',
         icon: muted ? <Mic size={13} /> : <MicOff size={13} />,
         disabled: !canModerate,
-        separatorBefore: true,
         onClick: () => handleMuteToggle(m),
       },
       {
@@ -340,18 +399,25 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         />
       ) : (
         <div className="space-y-1">
-          {sorted.map(m => (
-            <MemberRow
-              key={m.userId}
-              member={m}
-              myRole={myRoleTyped}
-              isSelf={currentUser?.id === m.userId}
-              statusText={resolveStatus(m.userId)}
-              busy={busyId === m.userId}
-              onOpenKebab={rect => setPopover({ kind: 'action', member: m, rect })}
-              onOpenRolePicker={rect => setPopover({ kind: 'role', member: m, rect })}
-            />
-          ))}
+          {sorted.map(m => {
+            const targetRole = m.role as ServerRole;
+            const isSelf = currentUser?.id === m.userId;
+            const canModerate = !isSelf && canActOn(myRoleTyped, targetRole) && ROLE_HIERARCHY[myRoleTyped] >= 2;
+            return (
+              <MemberRow
+                key={m.userId}
+                member={m}
+                myRole={myRoleTyped}
+                isSelf={isSelf}
+                statusText={resolveStatus(m.userId)}
+                busy={busyId === m.userId}
+                onOpenKebab={rect => setPopover({ kind: 'action', member: m, rect })}
+                onOpenRolePicker={rect => setPopover({ kind: 'role', member: m, rect })}
+                onOpenHistory={rect => setPopover({ kind: 'history', member: m, rect })}
+                canModerate={canModerate}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -379,6 +445,15 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           busy={busyId === popover.member.userId}
           onClose={() => setPopover(null)}
           onSelect={duration => handleTimeoutSet(popover.member, duration)}
+        />
+      )}
+      {popover?.kind === 'history' && (
+        <ModerationHistoryPopover
+          serverId={serverId}
+          member={popover.member}
+          anchorRect={popover.rect}
+          onClose={() => setPopover(null)}
+          onToast={(m) => showToastRef.current(m)}
         />
       )}
 
@@ -411,10 +486,12 @@ interface MemberRowProps {
   busy: boolean;
   onOpenKebab: (rect: DOMRect) => void;
   onOpenRolePicker: (rect: DOMRect) => void;
+  onOpenHistory: (rect: DOMRect) => void;
+  canModerate: boolean;
   key?: React.Key;
 }
 
-function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOpenRolePicker }: MemberRowProps) {
+function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOpenRolePicker, onOpenHistory, canModerate }: MemberRowProps) {
   const dn = memberDisplayName(member);
   const targetRole = member.role as ServerRole;
   const chip = ROLE_CHIP[targetRole] ?? ROLE_CHIP.member;
@@ -427,6 +504,7 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
 
   const kebabRef = useRef<HTMLButtonElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
+  const historyRef = useRef<HTMLButtonElement>(null);
 
   const rowCls = busy
     ? 'bg-[rgba(59,130,246,0.05)]'
@@ -452,47 +530,53 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[12.5px] font-semibold text-[#e8ecf4] truncate">{dn}</span>
+          {/* Moderasyon ikonları — sade ikon badge. Renkler:
+              sistem mute = turuncu, sunucu mute = turuncu, timeout = mor + canlı countdown. */}
           {member.isMuted && (
             <span
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full"
               style={{
                 background: 'rgba(251,146,60,0.12)',
                 color: '#fb923c',
                 border: '1px solid rgba(251,146,60,0.25)',
               }}
-              title="Sistem yönetimi tarafından susturulmuş — kaldırmak için sistem yönetimiyle iletişime geç"
+              title="Sistem tarafından susturulmuş"
+              aria-label="Sistem susturma"
             >
-              <MicOff size={9} strokeWidth={2.2} /> Sesi kapalı
+              <MicOff size={10} strokeWidth={2.2} />
             </span>
           )}
           {muted && (
             <span
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full"
               style={{
-                background: 'rgba(167,139,250,0.12)',
-                color: '#a78bfa',
-                border: '1px solid rgba(167,139,250,0.25)',
+                background: 'rgba(251,146,60,0.12)',
+                color: '#fb923c',
+                border: '1px solid rgba(251,146,60,0.25)',
               }}
               title={
                 member.voiceMutedUntil
                   ? `Sunucu susturma aktif — bitiş: ${fmtDate(member.voiceMutedUntil)}`
                   : 'Sunucu susturma aktif — süresiz'
               }
+              aria-label="Sunucu susturma"
             >
-              <MicOff size={9} strokeWidth={2.2} /> Sunucu sustur
+              <MicOff size={10} strokeWidth={2.2} />
             </span>
           )}
-          {timedOut && (
+          {timedOut && member.timeoutUntil && (
             <span
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full text-[10px] font-semibold tabular-nums"
               style={{
-                background: 'rgba(239,68,68,0.12)',
-                color: '#f87171',
-                border: '1px solid rgba(239,68,68,0.28)',
+                background: 'rgba(167,139,250,0.12)',
+                color: '#a78bfa',
+                border: '1px solid rgba(167,139,250,0.28)',
               }}
-              title={member.timeoutUntil ? `Zaman aşımı — bitiş: ${fmtDate(member.timeoutUntil)}` : 'Zaman aşımı aktif'}
+              title={`Zamanaşımı — bitiş: ${fmtDate(member.timeoutUntil)}`}
+              aria-label="Zamanaşımı"
             >
-              <Clock size={9} strokeWidth={2.2} /> Zaman aşımı
+              <Clock size={10} strokeWidth={2.2} />
+              <TimeoutCountdown until={member.timeoutUntil} />
             </span>
           )}
         </div>
@@ -538,6 +622,23 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
         {chip.icon}
         {ROLE_LABEL[targetRole] ?? targetRole}
       </button>
+
+      {/* Ceza geçmişi — rol chip ve kebab arasında ayrı erişim. Moderate yetkisi yoksa gizli. */}
+      {canModerate && !isSelf && (
+        <button
+          ref={historyRef}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (historyRef.current) onOpenHistory(historyRef.current.getBoundingClientRect());
+          }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[#7b8ba8]/60 hover:text-[#a78bfa] hover:bg-[rgba(167,139,250,0.08)] transition-colors"
+          title="Ceza geçmişi"
+          aria-label="Ceza geçmişi"
+        >
+          <History size={14} strokeWidth={2.2} />
+        </button>
+      )}
 
       {/* Kebab */}
       <button

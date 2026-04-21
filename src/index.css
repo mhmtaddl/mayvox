@@ -473,6 +473,9 @@ button, a, input, [role="button"] {
 }
 
 /* ─── Dock notification entry ─── */
+/* animation-fill-mode: forwards — animasyon bittiğinde son keyframe state'i korunur.
+   Aksi halde re-render / layout shift sırasında element opacity 0'a dönebiliyordu;
+   semptom: toast container görünüyor ama metin/icon boş kalıyordu. */
 @keyframes dock-notify-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }

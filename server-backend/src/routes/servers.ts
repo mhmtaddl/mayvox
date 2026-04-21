@@ -418,6 +418,19 @@ router.patch('/:id/members/:userId/role', async (req: Request, res: Response) =>
   catch (err) { handleError(res, err); }
 });
 
+/** DELETE /servers/:id/members/:userId/moderation-history
+ *  Audit log'daki moderation satırlarını siler; aktif cezalara dokunmaz. */
+router.delete('/:id/members/:userId/moderation-history', async (req: Request, res: Response) => {
+  try {
+    const out = await mgmt.resetMemberModerationHistory(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+    );
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
 // ── Ban yönetimi ──
 
 /** POST /servers/:id/members/:userId/ban */

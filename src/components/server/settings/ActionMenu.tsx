@@ -76,29 +76,21 @@ export default function ActionMenu({ items, anchorRect, onClose }: Props) {
     switch (tone) {
       case 'danger': return 'text-red-400 hover:bg-red-500/10 hover:text-red-300';
       case 'warn': return 'text-orange-400 hover:bg-orange-500/10 hover:text-orange-300';
-      default: return 'text-[#e8ecf4]/85 hover:bg-[rgba(255,255,255,0.06)] hover:text-[#e8ecf4]';
+      default: return 'text-[var(--theme-text)]/85 hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]';
     }
   };
 
   const menu = (
     <div
       ref={ref}
+      className="popup-surface"
       style={{
         position: 'fixed',
         top: pos.top,
         left: pos.left,
         minWidth: 220,
         zIndex: 600,
-        background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 14,
         padding: '6px',
-        boxShadow:
-          '0 20px 50px rgba(0,0,0,0.55), ' +
-          '0 4px 14px rgba(0,0,0,0.35), ' +
-          'inset 0 1px 0 rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
         animation: 'actionMenuIn 140ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
       onClick={e => e.stopPropagation()}
@@ -108,7 +100,7 @@ export default function ActionMenu({ items, anchorRect, onClose }: Props) {
         return (
           <React.Fragment key={item.id}>
             {item.separatorBefore && idx > 0 && (
-              <div className="my-1 mx-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+              <div className="my-1 mx-1 h-px" style={{ background: 'rgba(var(--glass-tint),0.08)' }} />
             )}
             <button
               type="button"

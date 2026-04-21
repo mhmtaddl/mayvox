@@ -34,6 +34,7 @@ import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
 import { FORCE_MOBILE } from '../constants';
 import { searchServers, type Server, type DiscoverServer } from '../../../lib/serverService';
+import { formatRemainingFromIso } from '../../../lib/formatTimeout';
 
 interface Props {
   dockToastHoveredRef: React.MutableRefObject<boolean>;
@@ -92,10 +93,30 @@ export default function DesktopDock({
     isMuted, setIsMuted, isDeafened, setIsDeafened,
     isBroadcastListener, disconnectFromLiveKit, view, setView,
     countdownActive, broadcastModeration,
+    voiceDisabledReason, timedOutUntil,
   } = useAppState();
   const { activeChannel, setActiveChannel, channels } = useChannel();
 
   const isAdminMuted = currentUser.isMuted === true;
+  // Server-side ses bloğu — mic butonu "locked" state ile çizilir.
+  // Kullanıcı tıklasa da toggle olmaz; tooltip sebep gösterir.
+  const isVoiceBlocked = voiceDisabledReason !== null;
+  // Timeout-aware metin: kalan süre varsa toast'ta gösterilmek üzere zenginleştir.
+  const timeoutRemStr = voiceDisabledReason === 'timeout' ? formatRemainingFromIso(timedOutUntil) : null;
+  const voiceBlockedTitle =
+    voiceDisabledReason === 'server_muted' ? 'Bu sunucuda susturuldunuz'
+    : voiceDisabledReason === 'timeout'
+      ? (timeoutRemStr
+          ? `Zamanaşımı cezası aktif — ${timeoutRemStr} daha konuşamaz ve sohbet odalarına giremezsiniz.`
+          : 'Zamanaşımı cezası aktif — konuşamaz ve sohbet odalarına giremezsiniz.')
+    : voiceDisabledReason === 'kicked'     ? 'Odadan çıkarıldınız'
+    : voiceDisabledReason === 'banned'     ? 'Sunucuya erişiminiz kaldırıldı'
+    : '';
+  // Tooltip için kısa form (mic button title'a uzun metin sığmaz).
+  const voiceBlockedShort =
+    voiceDisabledReason === 'timeout'
+      ? (timeoutRemStr ? `Zamanaşımı — ${timeoutRemStr}` : 'Zamanaşımı aktif')
+      : voiceBlockedTitle;
 
   // ── Self control panel ──
   const [selfPanelOpen, setSelfPanelOpen] = useState(false);
@@ -272,16 +293,42 @@ export default function DesktopDock({
       onMouseLeave={() => { dockToastHoveredRef.current = false; }}
     >
       {toastMsg ? (
+        // İKİ KATMAN — text content hiçbir animation altında DEĞİL.
+        // Dış wrapper: click/hover, animasyonsuz, stable mount.
+        // Dekor layer: absolute, ring/pulse animasyonu burada, pointer-events-none.
+        // Content layer: icon + text, STATİK stil — opacity/visibility/transform sabit.
+        // Parent'ta animation tutup child'a da animation vermek ilk paint'te race
+        // doğuruyordu (text CSS animation first-frame'inde opacity:0 ile paint olup
+        // sonra update olmuyordu — özellikle Chromium/Electron'da reproducible).
         <div
           className="relative flex items-center justify-center gap-2 px-5 h-10 cursor-pointer select-none whitespace-nowrap"
-          style={{ animation: 'dock-notify-in 180ms ease-out' }}
           onClick={() => setToastMsg(null)}
         >
-          <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ animation: 'dock-notify-ring 450ms ease-out forwards' }} />
-          <span className="shrink-0 text-[var(--theme-accent)]" style={{ animation: 'dock-notify-icon 180ms ease-out' }}>
+          {/* Dekor: entry fade + ring pulse — SADECE absolute layer'a uygulanıyor */}
+          <div
+            className="absolute inset-0 rounded-2xl pointer-events-none"
+            style={{ animation: 'dock-notify-in 180ms ease-out forwards, dock-notify-ring 450ms ease-out forwards' }}
+          />
+          {/* Content: icon + text — animasyonsuz, explicit görünür */}
+          <span
+            className="relative shrink-0 text-[var(--theme-accent)] inline-flex items-center"
+            style={{ opacity: 1, visibility: 'visible', transform: 'none', filter: 'none' }}
+          >
             {toastMsg.includes('indiriliyor') ? <Download size={12} /> : toastMsg.includes('hazır') ? <Check size={12} /> : toastMsg.includes('hata') || toastMsg.includes('Hata') || toastMsg.includes('başarısız') ? <AlertCircle size={12} /> : <Info size={12} />}
           </span>
-          <span className="text-[11px] font-semibold text-[var(--theme-text)]">{toastMsg}</span>
+          <span
+            className="relative text-[11px] font-semibold text-[var(--theme-text)] leading-none"
+            style={{
+              opacity: 1,
+              visibility: 'visible',
+              transform: 'none',
+              filter: 'none',
+              // zIndex relative flow'da icon'dan sonra geldiği için dekor absolute layer'ın üstünde
+              zIndex: 1,
+            }}
+          >
+            {toastMsg}
+          </span>
         </div>
       ) : countdownActive ? (
         <InactivityCountdownBanner compact />
@@ -422,17 +469,30 @@ export default function DesktopDock({
       {/* Mikrofon + ayar */}
       <div className="relative group/mic">
         <VoiceControlButton
-          active={!isMuted}
+          // Server bloğu varken UI de pasif göster — mic mantıken publish edemiyor.
+          active={!isMuted && !isVoiceBlocked}
           icon={Mic}
           offIcon={MicOff}
-          override={isAdminMuted ? 'warning' : null}
+          // Locked state: admin-muted (users.is_muted) VEYA server-side block (mute/timeout/kick/ban).
+          override={isAdminMuted || isVoiceBlocked ? 'warning' : null}
           onClick={() => {
+            // Server bloğu aktifken kullanıcı self-mute toggle'ı DA yapamasın — aksi halde
+            // "açık gibi görünüyor ama konuşamıyorum" paradox'u doğar. Sebebi toast ile açıkla.
+            if (isVoiceBlocked) {
+              if (voiceBlockedTitle) setToastMsg(voiceBlockedTitle);
+              return;
+            }
             if (isBroadcastListener) { if (Date.now() - (listenerToastRef.current || 0) > 3000) { setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.'); listenerToastRef.current = Date.now(); } return; }
             if (isAdminMuted) return;
             if (isMuted && isDeafened) setIsDeafened(false);
             setIsMuted(!isMuted);
           }}
-          title={isAdminMuted ? 'Susturuldu' : isMuted ? 'Mikrofonu aç' : 'Mikrofonu kapat'}
+          title={
+            isVoiceBlocked ? voiceBlockedShort
+            : isAdminMuted ? 'Susturuldu'
+            : isMuted ? 'Mikrofonu aç'
+            : 'Mikrofonu kapat'
+          }
         />
         <div onClick={(e) => { e.stopPropagation(); setShowInputSettings(!showInputSettings); setShowOutputSettings(false); }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[rgba(var(--glass-tint),0.15)] flex items-center justify-center cursor-pointer opacity-0 group-hover/mic:opacity-100 transition-opacity hover:bg-[rgba(var(--glass-tint),0.25)]">
           <Settings size={8} className="text-[var(--theme-text)]" />

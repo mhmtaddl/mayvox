@@ -2,6 +2,7 @@ import React, { createContext, useContext } from 'react';
 import { AppView, User, VoiceChannel, InviteRequest } from '../types';
 import { supabase } from '../lib/supabase';
 import type { ResetRequest } from '../components/PasswordResetPanel';
+import type { VoiceDisabledReason } from '../hooks/useLiveKitConnection';
 
 export interface AppStateContextType {
   // View
@@ -13,6 +14,15 @@ export interface AppStateContextType {
   setIsMuted: (v: boolean) => void;
   isDeafened: boolean;
   setIsDeafened: (v: boolean) => void;
+
+  /**
+   * Server-side ses bloğu (moderatör mute / timeout / room-kick / ban).
+   * null = konuşabilir. UI bu değere bakarak "locked" state çizer,
+   * PTT/VAD pipeline'ı bu değere bakarak guard yapar.
+   */
+  voiceDisabledReason: VoiceDisabledReason;
+  /** Aktif timeout bitişi (ISO). Mic click / join guard kalan süreyi göstermek için okur. */
+  timedOutUntil: string | null;
 
   // Generated code
   generatedCode: string | null;

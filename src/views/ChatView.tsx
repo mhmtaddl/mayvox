@@ -197,12 +197,25 @@ export default function ChatView() {
     // mode: NORMAL default; user settings geldiğinde buraya bağlanır.
   });
   useEffect(() => {
+    // Notification click başında açık overlay'leri kapat. settings view'ındaysa chat'e dön,
+    // server settings panel'i açıksa kapat, settingsTarget deep-link'i temizle. closeSettingsPanel
+    // useEffect'i zaten view/activeServerId değişiminde fire ediyor ama navigation hemen sonra
+    // gelen toast action'ları (modal açma vb.) için deterministik bir baseline sağlamak gerekli.
+    const closeTransientPanels = () => {
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+    };
+
     registerNotifHandlers({
       onDmClick: (recipientId /*, conversationKey */) => {
+        closeTransientPanels();
         setDmTargetUserId(recipientId);
         setDmPanelOpen(true);
       },
       onInviteClick: (_inviteId, serverId) => {
+        closeTransientPanels();
         // Gelen davetler modal'ını aç — kullanıcı accept/decline yapabilsin.
         setInvitesModalOpen(true);
         // Sunucu context'i varsa fokuslamak için active server'ı geçirme
@@ -210,15 +223,20 @@ export default function ChatView() {
         void serverId;
       },
       onJoinRequestClick: (serverId) => {
-        // Admin çanında "yeni başvuru" toast'ına tıklayınca: sunucu ayarları → Başvurular sekmesi.
+        // Settings panel'e gideceğiz — view=chat'e değil, doğrudan hedef settings'i aç.
+        // closeTransientPanels burada çağrılmaz çünkü hedefin kendisi settings panel.
+        setView('chat'); // settings view'ından orta panel'e dön ki server settings inline açılsın
+        setSettingsTarget(null);
         setSettingsInitialTab('requests');
         setSettingsServerId(serverId);
       },
       onJoinRequestAcceptedClick: (serverId) => {
+        closeTransientPanels();
         // "Başvurun kabul edildi" toast'ına tıklayınca sunucuya geç.
         setActiveServerId(serverId);
       },
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Sunucu state ──
@@ -291,14 +309,29 @@ export default function ChatView() {
       setServerError('');
       const servers = await listMyServers();
       setServerList(servers);
-      if (servers.length > 0 && !activeServerId) setActiveServerId(servers[0].id);
+      // Aktif sunucu artık listede yoksa (ban/kick sonrası) fallback: ilk server veya null.
+      // Eski fallback sadece "activeServerId yoksa" idi; stale activeServerId invalid olunca
+      // sidebar yanlış sunucuyu highlight ediyordu ve settings panel açık kalıyordu.
+      const activeStillValid = activeServerId && servers.some(s => s.id === activeServerId);
+      if (!activeStillValid) {
+        setActiveServerId(servers[0]?.id ?? '');
+      }
     } catch (err: any) {
       setServerError(err.message || 'Sunucu listesi alınamadı');
     } finally {
       if (isInitial) setServerLoading(false);
       initialServerLoadDoneRef.current = true;
     }
-  }, [activeServerId]);
+  }, [activeServerId, setActiveServerId]);
+
+  // Server list invalidation: moderation/ban/kick event'leri bu window event'ini fire eder.
+  // useLiveKitConnection disconnect (PARTICIPANT_REMOVED) + usePresence (isVoiceBanned)
+  // dispatch eder. Handler refreshServers çağırır — polling'i 45s beklemeden sidebar anlık güncellenir.
+  useEffect(() => {
+    const handler = () => { void refreshServers(); };
+    window.addEventListener('mayvox:refresh-server-list', handler);
+    return () => window.removeEventListener('mayvox:refresh-server-list', handler);
+  }, [refreshServers]);
 
   // ── Restriction state transition notifications ──
   // İlk render = sadece baseline doldur, toast atma. Sonraki listler arasında
@@ -697,10 +730,20 @@ export default function ChatView() {
     handleInviteUser(userId, { name: activeServerData?.name, avatar: activeServerData?.avatarUrl ?? null });
   }, [handleInviteUser, activeServerData]);
 
+  // Auto-dismiss: toast 3s sonra kapanır (hover'da beklenir, yeni toastMsg render'ında
+  // timer sıfırlanır). setInterval yerine setTimeout — ilk tick 3s'de garanti.
   useEffect(() => {
     if (!toastMsg) return;
-    const id = setInterval(() => { if (!dockToastHoveredRef.current) setToastMsg(null); }, 3000);
-    return () => clearInterval(id);
+    const tick = () => {
+      if (dockToastHoveredRef.current) {
+        // Hover sırasında 1s'de bir tekrar dene; hover biter bitmez dismiss olur.
+        timerId = setTimeout(tick, 1000);
+        return;
+      }
+      setToastMsg(null);
+    };
+    let timerId: ReturnType<typeof setTimeout> = setTimeout(tick, 3000);
+    return () => clearTimeout(timerId);
   }, [toastMsg]);
 
   // ── Derived data ──

@@ -18,9 +18,19 @@ import { AUDIO_FLAGS } from '../lib/audioFlags';
 import { RNNoiseTrackProcessor } from '../lib/audio/rnnoiseProcessor';
 import { playSound } from '../lib/sounds';
 import type { User, VoiceChannel } from '../types';
+import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/formatTimeout';
+import { getMyModerationState } from '../lib/serverService';
 
 // Toplam bağlantı süresi üst sınırı (token + connect + mic setup)
 const TOTAL_JOIN_TIMEOUT_MS = 25_000;
+
+/** Ses publish'ini engelleyen tek-kaynak gerçeklik. null = konuşabilir. */
+export type VoiceDisabledReason =
+  | 'server_muted'   // Moderatör canPublish=false setlemiş (kullanıcı odada kalır)
+  | 'timeout'        // Sunucu-içi timeout — odadan düşürülmüş (PARTICIPANT_REMOVED)
+  | 'kicked'         // Voice room kick — odadan düşürülmüş (PARTICIPANT_REMOVED)
+  | 'banned'         // Sunucu erişimi kaldırılmış
+  | null;
 
 interface Props {
   presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
@@ -36,6 +46,19 @@ interface Props {
   selectedOutput: string;
   setConnectionLevel: (v: number) => void;
   setToastMsg: (v: string | null) => void;
+  /**
+   * Tek-kaynak: ses publish'i neden kapalı. PTT/VAD/setMicrophoneEnabled bu state'e bakar.
+   * Dispatch tipinde — reconnect/unmute yolunda fonksiyonel update ile sadece
+   * 'server_muted' state'ini temizleyebilmek için (ban/timeout/kicked'a dokunmasın).
+   */
+  setVoiceDisabledReason: React.Dispatch<React.SetStateAction<VoiceDisabledReason>>;
+  /**
+   * Aktif timeout bitişi (ISO). Disconnect sırasında PARTICIPANT_REMOVED olursa
+   * ref'e bakıp timeout vs kick ayırt ediliyor. App.tsx'ten forwarded ref.
+   */
+  timedOutUntilRef: React.MutableRefObject<string | null>;
+  /** Disconnect sırasında backend'den çekilen timeout bilgisiyle state'i günceller. */
+  setTimedOutUntil: (v: string | null) => void;
   setActiveChannel: React.Dispatch<React.SetStateAction<string | null>>;
   setIsConnecting: (v: boolean) => void;
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
@@ -62,6 +85,9 @@ export function useLiveKitConnection({
   selectedOutput,
   setConnectionLevel,
   setToastMsg,
+  setVoiceDisabledReason,
+  timedOutUntilRef,
+  setTimedOutUntil,
   setActiveChannel,
   setIsConnecting,
   setChannels,
@@ -78,6 +104,13 @@ export function useLiveKitConnection({
   const activeRnnoiseProcessorRef = useRef<RNNoiseTrackProcessor | null>(null);
   /** Singleton disconnect — paralel çağrılar aynı promise'e bağlanır. */
   const disconnectPromiseRef = useRef<Promise<void> | null>(null);
+  /**
+   * selectedOutput ref — TrackSubscribed handler closure'ında stale kalmaması için.
+   * Kullanıcı connect sonrası output değiştirirse yeni katılımcıların audio element'i
+   * doğru sink'e atanır.
+   */
+  const selectedOutputRef = useRef(selectedOutput);
+  useEffect(() => { selectedOutputRef.current = selectedOutput; }, [selectedOutput]);
 
   // useCallback — stable reference. Auto-leave effect'inin dep zinciri bu
   // fonksiyona kadar uzanıyor; her render'da yeni referans dönerse effect
@@ -100,12 +133,16 @@ export function useLiveKitConnection({
         }
         document.querySelectorAll('[data-livekit-audio]').forEach(el => el.remove());
         localAudioLevelRef.current = 0;
+        // Bağlantı yokken voice pipeline guard'ı serbest bırak — kullanıcı yeni
+        // bir kanala join ederken stuck "kicked"/"server_muted" reason kalmasın.
+        // Initial check yeni connect'te tekrar set eder.
+        setVoiceDisabledReason(null);
       } finally {
         disconnectPromiseRef.current = null;
       }
     })();
     return disconnectPromiseRef.current;
-  }, [setIsConnecting, localAudioLevelRef]);
+  }, [setIsConnecting, localAudioLevelRef, setVoiceDisabledReason]);
 
   const connectToLiveKit = async (
     channelId: string,
@@ -132,6 +169,9 @@ export function useLiveKitConnection({
       lastToastMsg = msg;
       lastToastAt = now;
       setToastMsg(msg);
+      // NOT: Moderation chime bu path'ten çalınmaz. Sadece usePresence'daki self
+      // branch'ı (actor gate'li) sesi tetikler — böylece moderator/admin/owner
+      // kendi uyguladığı aksiyonda ses almaz.
     };
 
     let room: Room | null = null;
@@ -242,7 +282,22 @@ export function useLiveKitConnection({
           audioEl.setAttribute('data-livekit-audio', 'true');
           audioEl.setAttribute('data-participant', participant.identity);
           audioEl.muted = isDeafenedRef.current;
+          if (isDeafenedRef.current) {
+            audioEl.volume = 0;
+            try { audioEl.pause(); } catch { /* no-op */ }
+          }
           document.body.appendChild(audioEl);
+
+          // Yeni subscribe olan audio element seçili output cihazına route edilsin.
+          // Ref üzerinden oku — closure stale kalmasın (kullanıcı connect sonrası output değiştirmiş olabilir).
+          const currentSink = selectedOutputRef.current;
+          if (currentSink) {
+            // @ts-expect-error setSinkId TS lib'de henüz public değil — runtime'da var.
+            if (typeof audioEl.setSinkId === 'function') {
+              // @ts-expect-error
+              audioEl.setSinkId(currentSink).catch(() => { /* cihaz bulunamadı — safe no-op */ });
+            }
+          }
 
           // Deafened state'te yeni subscribe olan track sessiz başlasın.
           // HTMLAudioElement.muted webAudioMix=true'da yetersiz → track.setVolume(0)
@@ -341,6 +396,17 @@ export function useLiveKitConnection({
         }
         connectionLostRef.current = false;
         setConnectionLevel(4);
+        // Reconnect sonrası permission'ı tekrar oku — reconnect sırasında mute/unmute
+        // gelmiş olabilir ve Permission event'i reconnect boyunca kaçırılmış olabilir.
+        const canPublishNow = room.localParticipant.permissions?.canPublish;
+        if (canPublishNow === false) {
+          setVoiceDisabledReason('server_muted');
+        } else if (canPublishNow === true) {
+          // Sadece 'server_muted' ise temizle — 'banned' (App.tsx sync'i ile gelir)
+          // ya da başka reason'a dokunmuyoruz. timeout/kicked zaten disconnect olduğu
+          // için reconnect code-path'ine girmez.
+          setVoiceDisabledReason(prev => (prev === 'server_muted' || prev === 'kicked' ? null : prev));
+        }
         // Yeni oturum — ghost countdown timeout'larını geçersiz kıl
         onSessionReset?.();
       });
@@ -384,14 +450,60 @@ export function useLiveKitConnection({
             setConnectionLevel(0);
             // Moderator removeParticipant çağırdıysa LiveKit bu reason ile disconnect eder.
             // Timeout + room-kick için ortak (ikisi de backend'de removeParticipant kullanıyor).
-            // [DEBUG moderation]
-            console.debug('[moderation] disconnect reason', { reason, enumName: DisconnectReason[reason ?? -1] });
+            // Backend'den ek sinyal gelene kadar 'kicked' kullanıyoruz; usePresence
+            // moderation broadcast'ı timeout/banned'i daha spesifik üzerine yazabilir.
             if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
-              moderationToast('Moderatör tarafından odadan çıkarıldın');
+              // Timeout vs room-kick ayrımı. Backend timeoutMember ve kickFromRoom ikisi de
+              // removeParticipant çağırıyor.
+              //   - Timeout ise: reason='timeout' set et (mic kilitli kalır, süre dolana kadar konuşamaz).
+              //   - Room-kick ise: reason SET ETME — kullanıcı sadece odadan düştü, mikrofonu
+              //     kilitleme yok. Başka odaya girince normal konuşabilir. Aksi halde stale
+              //     'kicked' reason yeni join'e taşınıyor ve mic UI'da "locked" kalıyordu.
+              const staleRem = getRemainingMs(timedOutUntilRef.current);
+              if (staleRem > 0) {
+                setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'timeout'));
+                const remStr = formatRemainingFromIso(timedOutUntilRef.current);
+                moderationToast(remStr
+                  ? `Zamanaşımı cezası aldınız — ${remStr} boyunca konuşamaz ve sohbet odalarına giremezsiniz.`
+                  : 'Zamanaşımı cezası aldınız — belirli bir süre konuşamaz ve sohbet odalarına giremezsiniz.');
+              } else {
+                // Pessimistic "kicked" reason SET ETMİYORUZ. Backend'de timeout varsa async
+                // fetch upgrade eder. Fetch dönene kadar kısa pencere: aktif channel zaten null,
+                // PTT/VAD guard `isVoiceConnected`'e bağlı → otomatik pasif. Kullanıcı başka
+                // odaya join etmek isterse engel yok (gerçek mute/timeout değilse).
+                const srvId = activeServerIdRef.current;
+                if (srvId) {
+                  void (async () => {
+                    try {
+                      const mod = await getMyModerationState(srvId);
+                      const rem = getRemainingMs(mod.timedOutUntil);
+                      if (rem > 0 && mod.timedOutUntil) {
+                        setTimedOutUntil(mod.timedOutUntil);
+                        setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'timeout'));
+                        const remStr = formatRemaining(rem);
+                        moderationToast(remStr
+                          ? `Zamanaşımı cezası aldınız — ${remStr} boyunca konuşamaz ve sohbet odalarına giremezsiniz.`
+                          : 'Zamanaşımı cezası aldınız — belirli bir süre konuşamaz ve sohbet odalarına giremezsiniz.');
+                      } else {
+                        moderationToast('Odadan çıkarıldınız');
+                      }
+                    } catch {
+                      moderationToast('Odadan çıkarıldınız');
+                    }
+                  })();
+                } else {
+                  moderationToast('Odadan çıkarıldınız');
+                }
+              }
+              // Sidebar invalidation — moderatör ban atmışsa server listesi stale kalmasın.
+              // ChatView bu event'i yakalar → refreshServers() + aktif sunucu düştüyse fallback.
+              window.dispatchEvent(new CustomEvent('mayvox:refresh-server-list'));
             }
           } else {
             playSound('leave');
             setConnectionLevel(4);
+            // Kullanıcının kendi ayrılışı — server-mute reason'unu temizle
+            setVoiceDisabledReason(null);
           }
         }
       });
@@ -414,7 +526,8 @@ export function useLiveKitConnection({
 
       // ── Moderation: canPublish değişimi (mute/unmute) ─────────────
       // Backend updateParticipant ile canPublish'i değiştirince LiveKit bu event'i
-      // emit eder. prev.canPublish ile mevcut değeri karşılaştırıp toast gösterir.
+      // emit eder. Tek-kaynak gerçeklik: voiceDisabledReason store'u burada güncellenir;
+      // PTT/VAD/setMicrophoneEnabled effect'i bu reason'a bakarak guard yapar.
       room.localParticipant.on(
         ParticipantEvent.ParticipantPermissionsChanged,
         // ParticipantPermission tipi livekit-client'tan export değil; ihtiyacımız olan tek
@@ -422,20 +535,28 @@ export function useLiveKitConnection({
         (prev?: { canPublish?: boolean }) => {
           const nextCanPublish = room!.localParticipant.permissions?.canPublish;
           const prevCanPublish = prev?.canPublish;
-          // [DEBUG moderation] — teşhis sonrası silinecek
-          console.debug('[moderation] permissionsChanged', { prevCanPublish, nextCanPublish });
           if (nextCanPublish === prevCanPublish) return;
           if (nextCanPublish === false) {
-            moderationToast('Bu sunucuda susturuldun');
-          } else if (prevCanPublish === false && nextCanPublish === true) {
+            // 'banned' zaten daha ağır bir durum — ona dokunmayalım (App.tsx sync'i üzerine yazabilirdi).
+            setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'server_muted'));
+            moderationToast('Bu sunucuda susturuldunuz');
+          } else if (nextCanPublish === true && prevCanPublish !== true) {
+            // false→true (veya undefined→true ilk yerleşim): mute kaldırıldı.
             // REGRESSION FIX: canPublish:false iken LiveKit track'i unpublish eder.
             // canPublish:true döndüğünde SDK otomatik republish etmez — manuel çağırmalıyız.
-            // setMicrophoneEnabled(true) mic track'ı tekrar publish eder; kullanıcının
-            // push-to-talk state'i (track.enabled) ayrı bir katman, etkilenmez.
+            // PTT effect zaten isPttPressed'e göre tekrar enable edecek; burada sadece
+            // mute'tan döndüğümüzü işaretlemek + reason temizlemek yeter (sadece server_muted'den).
+            setVoiceDisabledReason(prev => (prev === 'server_muted' || prev === 'kicked' ? null : prev));
+            // Eğer kullanıcı şu an PTT basılı tutuyorsa veya VAD aktifse mic'i hemen aç.
+            // (Aksi takdirde bir sonraki PTT basılışında zaten enable olur.)
             room!.localParticipant.setMicrophoneEnabled(true).catch(err => {
               console.warn('[moderation] mic re-enable failed', err);
             });
-            moderationToast('Susturman kaldırıldı, tekrar konuşabilirsin');
+            // prev === false (gerçek unmute) iken toast at; ilk yerleşim (undefined→true)
+            // sessizce geçsin — kullanıcı zaten normal join etti.
+            if (prevCanPublish === false) {
+              moderationToast('Susturulmanız kaldırıldı');
+            }
           }
         },
       );
@@ -443,6 +564,23 @@ export function useLiveKitConnection({
       updateMembers();
       syncUsers();
       playSound('join');
+
+      // Initial check: zaten muted state'te bir kanala join olduysa LiveKit
+      // ParticipantPermissionsChanged event'ini fire ETMEZ (sadece değişimde fire eder).
+      // İlk publish girişiminden ÖNCE permission'ı oku ve reason'u set et.
+      //
+      // ÖNEMLİ: undefined → dokunma. Permission henüz server'dan sync edilmediyse
+      // bilgi yok demek; reason'u temizlersek handleJoinChannel pre-set'ini ezeriz
+      // (muted kullanıcı ilk frame'de konuşur). Sadece true veya false'ta state değiştir.
+      const initialCanPublish = room.localParticipant.permissions?.canPublish;
+      if (initialCanPublish === false) {
+        setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'server_muted'));
+        moderationToast('Bu sunucuda susturuldunuz');
+      } else if (initialCanPublish === true) {
+        // Sadece server_muted'den temizle — ban/timeout/kicked korunur.
+        setVoiceDisabledReason(prev => (prev === 'server_muted' || prev === 'kicked' ? null : prev));
+      }
+      // undefined → no-op; ParticipantPermissionsChanged event geldiğinde düzeltir.
 
       await room.localParticipant.setMicrophoneEnabled(false);
 

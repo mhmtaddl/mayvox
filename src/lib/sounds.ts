@@ -1,6 +1,6 @@
 export type SoundCategory = 'JoinLeave' | 'MuteDeafen' | 'Ptt';
 export type SoundVariant = 1 | 2 | 3;
-type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 'ptt-on' | 'ptt-off';
+type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 'ptt-on' | 'ptt-off' | 'moderation';
 
 let audioCtx: AudioContext | null = null;
 
@@ -196,6 +196,17 @@ export function previewInviteRingtone(variant: InviteRingtoneVariant): void {
   } catch { /* sessizce geç */ }
 }
 
+// ── Moderation chime ─────────────────────────────────────────────────────────
+// Net ama sert olmayan uyarı — mute/timeout/ban/kick ortak ses.
+// İki nota, descending minor third: yumuşak "dikkat" hissi, bildirim gibi.
+function playModerationChime(ctx: AudioContext) {
+  const t = ctx.currentTime;
+  // İlk nota: A5 (880), kısa
+  tone(ctx, 880, t, 0.08, 0.42, 'triangle');
+  // İkinci nota: E5 (659), aşağı — minor third descending, uyarı tonu.
+  tone(ctx, 659, t + 0.1, 0.14, 0.42, 'triangle');
+}
+
 // ── Yardımcı ─────────────────────────────────────────────────────────────────
 function getCategory(type: SoundType): SoundCategory {
   if (type === 'join' || type === 'leave') return 'JoinLeave';
@@ -210,6 +221,15 @@ function getVariant(cat: SoundCategory): SoundVariant {
 // ── Public API ────────────────────────────────────────────────────────────────
 export function playSound(type: SoundType): void {
   try {
+    // Moderation özel path — MuteDeafen kategorisine bağlı (kullanıcı tek toggle ile kapatabilsin),
+    // ama variant üretmez: tek net chime.
+    if (type === 'moderation') {
+      if (localStorage.getItem('soundMuteDeafen') === 'false') return;
+      const ctx = getCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+      playModerationChime(ctx);
+      return;
+    }
     const cat = getCategory(type);
     if (localStorage.getItem(`sound${cat}`) === 'false') return;
     const ctx = getCtx();

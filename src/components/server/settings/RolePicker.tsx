@@ -64,6 +64,7 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
   const picker = (
     <div
       ref={ref}
+      className="popup-surface"
       onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed',
@@ -71,22 +72,13 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
         left: pos.left,
         width: 280,
         zIndex: 600,
-        background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 14,
         padding: '10px',
-        boxShadow:
-          '0 20px 50px rgba(0,0,0,0.55), ' +
-          '0 4px 14px rgba(0,0,0,0.35), ' +
-          'inset 0 1px 0 rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
         animation: 'rolePickerIn 140ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
-      <div className="flex items-center gap-2 px-2 pb-2 mb-1 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 px-2 pb-2 mb-1 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
         <Crown size={12} className="text-amber-400" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#7b8ba8]">Rol Ata</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]">Rol Ata</span>
       </div>
 
       {OPTIONS.map(opt => {
@@ -115,10 +107,7 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
                   {opt.label}
                 </span>
                 {isSelected && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                    style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
-                    <Check size={9} strokeWidth={3} /> Mevcut
-                  </span>
+                  <Check size={12} strokeWidth={3} className="text-[#60a5fa]" aria-label="Mevcut rol" />
                 )}
               </div>
               <div className="text-[10.5px] text-[#7b8ba8]/75 mt-0.5 leading-snug">{opt.hint}</div>

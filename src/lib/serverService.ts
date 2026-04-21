@@ -646,6 +646,14 @@ export async function clearTimeoutMember(serverId: string, userId: string): Prom
   );
 }
 
+/** Ceza geçmişini sıfırla (audit log satırlarını siler, aktif cezalara dokunmaz). */
+export async function resetMemberModerationHistory(serverId: string, userId: string): Promise<{ deleted: number }> {
+  return apiFetch<{ deleted: number }>(
+    `/servers/${serverId}/members/${userId}/moderation-history`,
+    { method: 'DELETE' },
+  );
+}
+
 /**
  * Voice room kick — aktif odadan tek seferlik çıkar. Kalıcı yasak değil; kullanıcı tekrar join edebilir.
  * @param channelId  verilirse sadece o odadan; null ise tüm voice odalardan.

@@ -34,7 +34,8 @@ import {
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
-import { checkChannelAccess, getServerAccessContext, type ServerAccessContext } from './lib/serverService';
+import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
+import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 
@@ -64,7 +65,7 @@ import { SettingsCtx, SettingsContextType } from './contexts/SettingsCtx';
 
 import { useDevices } from './hooks/useDevices';
 import { usePttAudio } from './hooks/usePttAudio';
-import { useLiveKitConnection } from './hooks/useLiveKitConnection';
+import { useLiveKitConnection, type VoiceDisabledReason } from './hooks/useLiveKitConnection';
 import { usePresence } from './hooks/usePresence';
 import { useBackendPresence } from './hooks/useBackendPresence';
 import { useModeration } from './hooks/useModeration';
@@ -361,32 +362,61 @@ export default function App() {
   }, []);
 
   // ── UI state ─────────────────────────────────────────────────────────────
+  // Toast pipeline — state-driven: tek gerçek kaynak setToastMsgRaw'ın kendi state'i.
+  // toastActiveRef kaldırıldı; ref ile state ayrıştığı için aynı mesaj dedup'a yakalanıp
+  // hiç görünmeden yutuluyordu. Queue kalıyor — sıradaki mesajlar için.
+  // lastPresentedAtRef: minimum görünürlük süresi — setToastMsg(null) toast daha
+  // render olmadan çağrılsa bile kullanıcı metni görene kadar kapatmaz.
   const [toastMsg, setToastMsgRaw] = useState<string | null>(null);
+  const toastMsgRef = useRef<string | null>(null);
   const toastQueueRef = useRef<string[]>([]);
-  const toastActiveRef = useRef<string | null>(null);
+  const lastPresentedAtRef = useRef<number>(0);
+
+  // ── Voice pipeline guard (tek-kaynak gerçeklik) ─────────────────────────
+  // null = konuşabilir. Set edildiğinde PTT/VAD/setMicrophoneEnabled bloklanır.
+  // Kaynaklar: LiveKit ParticipantPermissionsChanged (server_muted),
+  // DisconnectReason.PARTICIPANT_REMOVED (kicked/timeout), currentUser.isVoiceBanned (banned).
+  const [voiceDisabledReason, setVoiceDisabledReason] = useState<VoiceDisabledReason>(null);
+  const voiceDisabledReasonRef = useRef<VoiceDisabledReason>(null);
+  useEffect(() => { voiceDisabledReasonRef.current = voiceDisabledReason; }, [voiceDisabledReason]);
+  const isVoiceBlocked = voiceDisabledReason !== null;
+
+  // Timeout bitiş zamanı (ISO). Sunucu-içi timeout aktifken set edilir; join guard,
+  // mic click, ve disconnect sırasında timeout vs kick ayrımı için okunur.
+  // Ref: LiveKit event callback'lerinden closure-free erişim için.
+  const [timedOutUntil, setTimedOutUntil] = useState<string | null>(null);
+  const timedOutUntilRef = useRef<string | null>(null);
+  useEffect(() => { timedOutUntilRef.current = timedOutUntil; }, [timedOutUntil]);
 
   const setToastMsg = useCallback((msg: string | null) => {
     if (msg === null) {
-      // Dismiss aktif — sıradakini göster
-      toastActiveRef.current = null;
+      // Minimum görünürlük: toast 600ms içinde dismiss edilmeye çalışılıyorsa
+      // kalan süre kadar bekle — aksi halde yeni eklenen toast animasyon bitmeden kaybolur.
+      const presented = Date.now() - lastPresentedAtRef.current;
+      if (toastMsgRef.current && presented < 600) {
+        const wait = 600 - presented;
+        setTimeout(() => setToastMsg(null), wait);
+        return;
+      }
       const next = toastQueueRef.current.shift() ?? null;
       setToastMsgRaw(next);
-      toastActiveRef.current = next;
       return;
     }
-    // Dedupe: aktif mesaj veya kuyrukta aynısı varsa atla
-    if (toastActiveRef.current === msg || toastQueueRef.current.includes(msg)) return;
-    // Aktif mesaj yoksa direkt göster
-    if (!toastActiveRef.current) {
-      toastActiveRef.current = msg;
+    // Dedupe state-driven: aktif mesaj veya kuyrukta aynısı varsa atla.
+    if (toastMsgRef.current === msg || toastQueueRef.current.includes(msg)) return;
+    // Aktif mesaj yoksa direkt göster; varsa kuyruk (sınır 5).
+    if (!toastMsgRef.current) {
       setToastMsgRaw(msg);
-    } else {
-      // Kuyruk sınırı 5
-      if (toastQueueRef.current.length < 5) {
-        toastQueueRef.current.push(msg);
-      }
+    } else if (toastQueueRef.current.length < 5) {
+      toastQueueRef.current.push(msg);
     }
   }, []);
+
+  // toastMsg state → ref sync + present timestamp bookkeeping.
+  useEffect(() => {
+    toastMsgRef.current = toastMsg;
+    if (toastMsg) lastPresentedAtRef.current = Date.now();
+  }, [toastMsg]);
 
   // ── Faz 1: Unified notification emitter sinks ─────────────────────────────
   // emitNotification altyapısı Faz 1'de sadece kurulur; mevcut setToastMsg/
@@ -614,6 +644,8 @@ export default function App() {
     setIsListeningForKey,
     isMuted,
     isVoiceBanned: currentUser.isVoiceBanned ?? false,
+    // Server-side blok (mute/timeout/kicked/banned) — tek-kaynak: voiceDisabledReason
+    isServerMuted: isVoiceBlocked,
     isVoiceConnected: !!activeChannel && !isConnecting,
     selectedInput,
     isNoiseSuppressionEnabled,
@@ -685,6 +717,8 @@ export default function App() {
     setChannels,
     setActiveChannel,
     setToastMsg,
+    setTimedOutUntil,
+    setVoiceDisabledReason,
     setInvitationModal,
     onMoved: (targetChannelId) => handleJoinChannelRef.current(targetChannelId, true),
     onPasswordResetUpdate: (userId) => {
@@ -740,6 +774,9 @@ export default function App() {
     selectedOutput,
     setConnectionLevel,
     setToastMsg,
+    setVoiceDisabledReason,
+    timedOutUntilRef,
+    setTimedOutUntil,
     setActiveChannel,
     setIsConnecting,
     setChannels,
@@ -1138,15 +1175,89 @@ export default function App() {
     setIsMuted(currentUser.isMuted ?? false);
   }, [currentUser.isMuted]);
 
+  // Ban → voiceDisabledReason senkronizasyonu (presence broadcast tetikler).
+  // Ban kalkarsa ve LiveKit canPublish:true ise reason temizlenir.
+  useEffect(() => {
+    if (currentUser.isVoiceBanned) {
+      setVoiceDisabledReason('banned');
+    } else if (voiceDisabledReasonRef.current === 'banned') {
+      setVoiceDisabledReason(null);
+    }
+  }, [currentUser.isVoiceBanned]);
+
+  // ── Timeout expire watcher ────────────────────────────────────────────
+  // timedOutUntil set iken tam süresi dolunca transition toast'ı fire et ve
+  // voiceDisabledReason='timeout'u temizle. Polling yerine setTimeout — tek
+  // precise fire; süre değiştikçe effect yeniden kurulur.
+  useEffect(() => {
+    if (!timedOutUntil) return;
+    const remaining = getRemainingMs(timedOutUntil);
+    if (remaining === 0) {
+      // Zaten geçmiş — hemen temizle, bildirim at.
+      setTimedOutUntil(null);
+      setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
+      setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+      return;
+    }
+    const t = setTimeout(() => {
+      setTimedOutUntil(null);
+      setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
+      setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+    }, remaining + 50); // +50ms güvenlik payı
+    return () => clearTimeout(t);
+  }, [timedOutUntil, setToastMsg]);
+
+  // ── Timeout focus re-sync ─────────────────────────────────────────────
+  // Kullanıcı app'e geri döndüğünde (sekme/pencere focus) timeout state'i
+  // backend ile uyumla. Moderatör erken kaldırmış olabilir; backend broadcast
+  // yoksa frontend'i haberdar etmek için window focus tek reliable signal.
+  // Throttle: 10sn içinde yeniden çağırma (spam önleme).
+  useEffect(() => {
+    let lastFetchAt = 0;
+    const onFocus = async () => {
+      const serverId = activeServerIdRef.current;
+      if (!serverId) return;
+      const now = Date.now();
+      if (now - lastFetchAt < 10_000) return;
+      lastFetchAt = now;
+      // Yalnız aktif timeout varken re-sync yap — stale state düzeltmek için.
+      const hadTimeout = voiceDisabledReasonRef.current === 'timeout' || timedOutUntilRef.current !== null;
+      if (!hadTimeout) return;
+      try {
+        const mod = await getMyModerationState(serverId);
+        const rem = mod.timedOutUntil ? getRemainingMs(mod.timedOutUntil) : 0;
+        if (rem === 0 || !mod.timedOutUntil) {
+          // Early clear — stale state'i düzelt + transition toast.
+          setTimedOutUntil(null);
+          setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
+          setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+        } else if (mod.timedOutUntil !== timedOutUntilRef.current) {
+          // Süre değişmişse state'i güncelle (moderator süre uzatmış olabilir).
+          setTimedOutUntil(mod.timedOutUntil);
+        }
+      } catch { /* silent */ }
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [setToastMsg]);
+
   useEffect(() => {
     if (!activeChannel || isConnecting) return;
     playSound(isPttPressed ? 'ptt-on' : 'ptt-off');
   }, [isPttPressed]);
 
   // ── LiveKit PTT: enable/disable mic based on PTT state ───────────────────
+  // Guard: voiceDisabledReason !== null → mic ZORLA kapalı, kullanıcı UI hacklese
+  // bile setMicrophoneEnabled(true) çağrılmaz. Server-side canPublish:false zaten
+  // double-guarantee veriyor; bu local guard kullanıcı UX'ini doğru tutar
+  // (volume meter, isPttPressed sound efektleri vs. tetiklenmez).
   useEffect(() => {
     if (!livekitRoomRef.current) return;
-    const canSpeak = isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener;
+    const canSpeak = isPttPressed
+      && !isMuted
+      && !currentUser.isVoiceBanned
+      && !isBroadcastListener
+      && !isVoiceBlocked;
     livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
       canSpeak,
       buildAudioCaptureOptions({
@@ -1157,26 +1268,46 @@ export default function App() {
         deviceId: selectedInput,
       }),
     ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
-  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting]);
+  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting, isVoiceBlocked]);
+
+  // ── Voice pipeline guard: reason set olunca mic'i ZORLA kapat ──────────
+  // PTT effect zaten isVoiceBlocked'ı dep alıyor; bu effect ek güvenlik
+  // katmanı: reason herhangi bir sebeple non-null olursa anında mic kapat.
+  // Race condition / late event durumlarında stuck "konuşuyor" hâlini önler.
+  useEffect(() => {
+    if (!isVoiceBlocked) return;
+    const room = livekitRoomRef.current;
+    if (!room) return;
+    room.localParticipant.setMicrophoneEnabled(false).catch(err => {
+      console.warn('Voice guard: mic force-disable failed:', err);
+    });
+  }, [isVoiceBlocked]);
 
   // ── RNNoise strength live update — slider değişince worklet'e postla ──
   useEffect(() => {
     updateNoiseStrength(noiseSuppressionStrength);
   }, [noiseSuppressionStrength, updateNoiseStrength]);
 
-  // ── Deafen: HTMLAudioElement.muted + LiveKit track.setVolume(0) çift katman ──
-  // HTMLAudioElement.muted webAudioMix=true durumunda yetersiz kalır çünkü LiveKit
-  // sesi Web Audio API üzerinden route eder. track.setVolume(0) resmi API —
-  // her iki mix mode'da da gerçek sessizlik garanti.
-  //
-  // Undeafen'de kullanıcının per-user volume'u (userVolumes) geri yüklenir.
+  // ── Deafen transition: pause/play SADECE isDeafened değişiminde ──
+  // allUsers/userVolumes dep'lerine bağlanırsa her user update'inde play() spam olur →
+  // autoplay policy log'u ve gereksiz reflow. Transition-only effect ile ayrıştırıldı.
   useEffect(() => {
-    // Layer 1: HTML element muted
     document.querySelectorAll<HTMLAudioElement>('[data-livekit-audio]').forEach(el => {
       el.muted = isDeafened;
+      if (isDeafened) {
+        el.volume = 0;
+        try { el.pause(); } catch { /* no-op */ }
+      } else {
+        el.volume = 1;
+        // play() autoplay policy ilk gesture'dan önce reddedebilir — LiveKit zaten autoplay yapar.
+        void el.play().catch(() => { /* safe — LiveKit attach tekrar tetikler */ });
+      }
     });
+  }, [isDeafened]);
 
-    // Layer 2: LiveKit RemoteAudioTrack volume
+  // ── Deafen + per-user volume restore: LiveKit track gain node ──
+  // Her user/volume update'inde re-run — setVolume() idempotent ve ucuz (Web Audio gain param).
+  useEffect(() => {
     const room = livekitRoomRef.current;
     if (!room) return;
     room.remoteParticipants.forEach(participant => {
@@ -1186,7 +1317,6 @@ export default function App() {
         if (isDeafened) {
           track.setVolume(0);
         } else {
-          // Restore — kayıtlı volume varsa onu, yoksa 1.0 (default)
           const user = allUsers.find(u => u.name === participant.identity);
           const savedPct = user ? userVolumes[user.id] : undefined;
           const vol = savedPct !== undefined ? Math.max(0, Math.min(1.5, savedPct / 100)) : 1;
@@ -1195,6 +1325,31 @@ export default function App() {
       });
     });
   }, [isDeafened, allUsers, userVolumes, livekitRoomRef]);
+
+  // ── Output device routing: selectedOutput değişince runtime'da sink'i değiştir ──
+  // Room constructor'daki audioOutput sadece initial connect için; runtime değişimler
+  // için room.switchActiveDevice VE audioEl.setSinkId iki katmandan uygulanmalı.
+  // Deafen sırasında sink'e dokunmuyoruz — zaten mute/pause/volume 0 ile sessiz.
+  useEffect(() => {
+    if (!selectedOutput) return;
+    const room = livekitRoomRef.current;
+    if (room) {
+      // LiveKit v2 API — webAudioMix modunda Web Audio destination'ını da günceller.
+      room.switchActiveDevice('audiooutput', selectedOutput).catch(err => {
+        console.warn('[audio] switchActiveDevice audiooutput failed:', err);
+      });
+    }
+    // Tüm mevcut LiveKit audio element'lere sinkId uygula (setSinkId destekliyorsa).
+    document.querySelectorAll<HTMLAudioElement>('[data-livekit-audio]').forEach(el => {
+      // @ts-expect-error setSinkId TS lib'de henüz public değil — runtime'da var.
+      if (typeof el.setSinkId === 'function') {
+        // @ts-expect-error
+        el.setSinkId(selectedOutput).catch((err: unknown) => {
+          console.warn('[audio] setSinkId failed:', err);
+        });
+      }
+    });
+  }, [selectedOutput, activeChannel, livekitRoomRef]);
 
   // ── Auto-leave on idle: kullanıcı belirli süre pasif kalırsa kanaldan çıkar ──
   // Mimari:
@@ -1449,6 +1604,58 @@ export default function App() {
     }));
     setCurrentUser(prev => ({ ...prev, joinedAt: now }));
     setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
+
+    // Muted-join race guard + timeout join-block: Fresh token 'canPublish:true' ile
+    // geliyor; LiveKit server connect sonrası ~100-400ms içinde permission push ediyor.
+    // Bu pencerede kullanıcı konuşabiliyordu. Connect ÖNCE backend'den moderation state'i
+    // çek → muted/timedOut ise voiceDisabledReason pre-set. Timeout aktifse join'i
+    // tamamen iptal et — kullanıcı odaya hiç girmesin, anlamlı toast ver.
+    // Silent-fail: backend hata verirse connect'i bloklama, mevcut LiveKit event path'i
+    // yine reason'u doğru set edecek.
+    const serverId = activeServerIdRef.current;
+    if (serverId) {
+      try {
+        const mod = await getMyModerationState(serverId);
+        const timeoutRemaining = mod.timedOutUntil ? getRemainingMs(mod.timedOutUntil) : 0;
+
+        if (timeoutRemaining > 0 && mod.timedOutUntil) {
+          // Aktif timeout — join'i tamamen iptal et, state rollback.
+          setTimedOutUntil(mod.timedOutUntil);
+          setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'timeout'));
+          const remStr = formatRemaining(timeoutRemaining);
+          setToastMsg(remStr
+            ? `Zamanaşımı nedeniyle bu odaya giremezsiniz — kalan süre: ${remStr}`
+            : 'Zamanaşımı nedeniyle bu odaya giremezsiniz');
+          // Optimistic join state'ini rollback et — connectToLiveKit'e hiç gitme.
+          setActiveChannel(null);
+          activeChannelRef.current = null;
+          setIsConnecting(false);
+          setChannels(prev => prev.map(c => {
+            const members = (c.members || []).filter(m => m !== myId);
+            return { ...c, members, userCount: members.length };
+          }));
+          setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
+          setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: undefined } : u));
+          return;
+        }
+
+        // Timeout yok — sadece pre-set yap (mute varsa), timedOutUntil'i sıfırla.
+        if (mod.isVoiceMuted) {
+          setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'server_muted'));
+        }
+        // Early-clear detection: frontend timeout state'ı dolu ama backend null dönüyor →
+        // moderator cezayı erken kaldırmış. Stale reason/state'i temizle, transition toast at.
+        const hadTimeout = voiceDisabledReasonRef.current === 'timeout' || timedOutUntilRef.current !== null;
+        if (hadTimeout && (timeoutRemaining === 0 || !mod.timedOutUntil)) {
+          setTimedOutUntil(null);
+          setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
+          setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+        }
+      } catch (err) {
+        // Pre-check başarısız — LiveKit permission event'ine güven (daha geç ama çalışır).
+        console.warn('[join] moderation state pre-check failed:', err);
+      }
+    }
 
     const connected = await connectToLiveKit(channelId);
     setIsConnecting(false);
@@ -1872,6 +2079,8 @@ export default function App() {
     setIsMuted,
     isDeafened,
     setIsDeafened,
+    voiceDisabledReason,
+    timedOutUntil,
     generatedCode,
     setGeneratedCode,
     timeLeft,

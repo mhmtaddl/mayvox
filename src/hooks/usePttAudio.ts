@@ -8,6 +8,12 @@ interface UsePttAudioParams {
   setIsListeningForKey: (v: boolean) => void;
   isMuted: boolean;
   isVoiceBanned: boolean;
+  /**
+   * Server-side ses bloğu (moderatör mute / timeout / room-kick / ban).
+   * true iken PTT keydown, VAD speaking trigger ve capture tamamen bloklanır.
+   * voiceDisabledReason !== null ile beslenir.
+   */
+  isServerMuted: boolean;
   isVoiceConnected: boolean;
   selectedInput: string;
   isNoiseSuppressionEnabled: boolean;
@@ -40,7 +46,7 @@ const VAD_SILENCE_TIMEOUT = 500;
 export function usePttAudio(params: UsePttAudioParams) {
   const {
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
-    isMuted, isVoiceBanned, isVoiceConnected, selectedInput,
+    isMuted, isVoiceBanned, isServerMuted, isVoiceConnected, selectedInput,
     isNoiseSuppressionEnabled, noiseThreshold, isLowDataMode,
     pttReleaseDelay, voiceMode, onMicError,
   } = params;
@@ -58,6 +64,7 @@ export function usePttAudio(params: UsePttAudioParams) {
   const isVoiceConnectedRef = useRef(isVoiceConnected);
   const isPttPressedRef = useRef(isPttPressed);
   const isMutedRef = useRef(isMuted);
+  const isServerMutedRef = useRef(isServerMuted);
   const noiseThresholdRef = useRef(noiseThreshold);
   const isNoiseSupRef = useRef(isNoiseSuppressionEnabled);
   const isLowDataRef = useRef(isLowDataMode);
@@ -65,6 +72,13 @@ export function usePttAudio(params: UsePttAudioParams) {
   useEffect(() => { pttReleaseDelayRef.current = pttReleaseDelay; }, [pttReleaseDelay]);
   useEffect(() => { isPttPressedRef.current = isPttPressed; }, [isPttPressed]);
   useEffect(() => { isMutedRef.current = isMuted; if (isMuted && isPttPressed) setIsPttPressed(false); }, [isMuted, isPttPressed]);
+  useEffect(() => {
+    isServerMutedRef.current = isServerMuted;
+    // Server tarafı susturma/kick/timeout geldi — hemen PTT state'ini düşür.
+    // Stuck "basılı" state'i kalırsa kullanıcı tekrar izin alınca otomatik konuşmaya
+    // başlar, bunu önlüyoruz: tekrar konuşmak için tekrar basmak zorunda.
+    if (isServerMuted && isPttPressed) setIsPttPressed(false);
+  }, [isServerMuted, isPttPressed]);
   useEffect(() => { noiseThresholdRef.current = noiseThreshold; }, [noiseThreshold]);
   useEffect(() => { isNoiseSupRef.current = isNoiseSuppressionEnabled; }, [isNoiseSuppressionEnabled]);
   useEffect(() => { isLowDataRef.current = isLowDataMode; }, [isLowDataMode]);
@@ -117,7 +131,8 @@ export function usePttAudio(params: UsePttAudioParams) {
     if (isListeningForKey || voiceMode === 'vad') return;
     if (window.electronPtt) {
       window.electronPtt.onDown(() => {
-        if (!isVoiceConnectedRef.current || isMutedRef.current) return;
+        // Voice pipeline guard — server susturma/kick/timeout/ban varken PTT başlatma.
+        if (!isVoiceConnectedRef.current || isMutedRef.current || isServerMutedRef.current) return;
         if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; }
         setIsPttPressed(true);
       });
@@ -131,7 +146,8 @@ export function usePttAudio(params: UsePttAudioParams) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
-      if (k === pttKey && isVoiceConnectedRef.current && !isMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
+      // Voice pipeline guard — server bloğu varken keydown hiçbir şey yapmasın.
+      if (k === pttKey && isVoiceConnectedRef.current && !isMutedRef.current && !isServerMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
@@ -139,7 +155,8 @@ export function usePttAudio(params: UsePttAudioParams) {
     };
     const handleMouseDown = (e: MouseEvent) => {
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
-      if (btn === pttKey && isVoiceConnectedRef.current && !isMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
+      // Voice pipeline guard — server bloğu varken mouse PTT başlatma.
+      if (btn === pttKey && isVoiceConnectedRef.current && !isMutedRef.current && !isServerMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
@@ -163,10 +180,12 @@ export function usePttAudio(params: UsePttAudioParams) {
   // VAD: capture isVoiceConnected'a bağlı (isPttPressed capture'ı tetiklememeli)
   // PTT: capture isPttPressed'a bağlı
   const shouldCapture = useMemo(() => {
-    if (isMuted || isVoiceBanned) return false;
+    // Voice pipeline guard — server bloğu varken getUserMedia'ya hiç gitme.
+    // Mic stream açılmaz, analyser çalışmaz, VAD tetiklenmez.
+    if (isMuted || isVoiceBanned || isServerMuted) return false;
     return voiceMode === 'vad' ? isVoiceConnected : isPttPressed;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode, isMuted, isVoiceBanned, isVoiceConnected, isPttPressed]);
+  }, [voiceMode, isMuted, isVoiceBanned, isServerMuted, isVoiceConnected, isPttPressed]);
 
   // ── Ses analizi effect — shouldCapture değişince start/stop ──
   useEffect(() => {
@@ -256,7 +275,10 @@ export function usePttAudio(params: UsePttAudioParams) {
                   clearTimeout(vadSilenceTimerRef.current);
                   vadSilenceTimerRef.current = null;
                 }
-                if (!isPttPressedRef.current) {
+                // Voice pipeline guard — server bloğu aktifse speaking trigger atma.
+                // shouldCapture zaten false olacak ama mid-flight race'i kapatmak için
+                // ikinci katman guard: isPttPressed(true) publish effect'i tetikler.
+                if (!isPttPressedRef.current && !isServerMutedRef.current) {
                   console.log('[usePttAudio] VAD voice detected → isPttPressed = true, avg:', average.toFixed(1));
                   setIsPttPressed(true);
                 }
