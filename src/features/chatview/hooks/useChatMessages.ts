@@ -7,9 +7,13 @@ interface UseChatMessagesOptions {
   channels: Array<{ id: string; mode?: string }>;
   currentUser: { isAdmin?: boolean; isModerator?: boolean };
   chatMuted: boolean;
+  /** Moderasyon chat ban aktif mi — aktifse kullanıcı bypass YAPAMAZ, isAdmin/isModerator farketmez. */
+  isChatBanned?: boolean;
+  /** Chat ban nedeniyle gönderim engellendiğinde kullanıcıya toast gösterme callback'i. */
+  onChatBannedBlocked?: () => void;
 }
 
-export function useChatMessages({ activeChannel, channels, currentUser, chatMuted }: UseChatMessagesOptions) {
+export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked }: UseChatMessagesOptions) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -75,6 +79,13 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
   const sendChatMessage = useCallback(() => {
     const activeChannelObj = channels.find(c => c.id === activeChannel);
     if (!getRoomModeConfig(activeChannelObj?.mode).chatEnabled) return;
+    // Chat ban — hedefe özgü moderasyon cezası, BYPASS YOK (admin/moderator bile engelli).
+    // Backend hierarchy zaten kendi seviyeden üsttekine chat ban atılmasını önler,
+    // yani buraya düşen zaten atılabilir bir kullanıcıdır.
+    if (isChatBanned) {
+      onChatBannedBlocked?.();
+      return;
+    }
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
@@ -86,7 +97,7 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     setChatInput('');
     import('../../../lib/chatService').then(({ sendMessage }) => sendMessage(text));
     setTimeout(scrollToBottom, 100);
-  }, [activeChannel, channels, chatMuted, currentUser.isAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
+  }, [activeChannel, channels, chatMuted, isChatBanned, onChatBannedBlocked, currentUser.isAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
 
   const deleteChatMessage = useCallback((id: string) => {
     setChatMessages(prev => prev.filter(m => m.id !== id));

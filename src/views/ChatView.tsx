@@ -102,6 +102,7 @@ export default function ChatView() {
     handleToggleSpeaker, isBroadcastListener, disconnectFromLiveKit,
     presenceChannelRef, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
     passwordResetRequests, inviteRequests, inviteCooldowns, inviteStatuses,
+    isChatBanned: isChatBannedFromCtx,
   } = useAppState();
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel } = useAudio();
 
@@ -145,7 +146,11 @@ export default function ChatView() {
     chatMessages, chatInput, setChatInput, editingMsgId, editingText, setEditingText,
     isAtBottom, newMsgCount, chatScrollRef, handleChatScroll, scrollToBottom,
     sendChatMessage, deleteChatMessage, clearAllMessages, startEditMessage, saveEditMessage, cancelEdit,
-  } = useChatMessages({ activeChannel, channels, currentUser, chatMuted });
+  } = useChatMessages({
+    activeChannel, channels, currentUser, chatMuted,
+    isChatBanned: isChatBannedFromCtx,
+    onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
+  });
 
   // ── Dominant speaker hook ──
   const sortedChannelMembers = useMemo(

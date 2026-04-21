@@ -39,6 +39,11 @@ export interface ServerMember {
   timeout_until: string | null;           // gelecek tarih = aktif timeout
   timeout_set_by: string | null;
   timeout_set_at: string | null;
+  // ── Moderation chat ban (migration 024) ──
+  // Sunucu text odalarında mesaj yasağı; voice/timeout'tan bağımsız.
+  chat_banned_by: string | null;
+  chat_banned_at: string | null;
+  chat_ban_expires_at: string | null;     // NULL = süresiz, gelecek tarih = süreli
 }
 
 export interface Channel {
@@ -148,6 +153,9 @@ export interface MemberResponse {
   /** Sunucu-içi timeout aktif mi (null = yok / süresi dolmuş) */
   timeoutUntil: string | null;
   timeoutSetBy: string | null;
+  /** Sunucu text odalarında mesaj yasağı aktif mi (null = yok / süresi dolmuş / süresiz-ise expires_at null olabilir) */
+  chatBannedUntil: string | null;
+  chatBannedBy: string | null;
 }
 
 export interface UserInviteResponse {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, X, Crown, Shield, ShieldCheck, User as UserIcon,
   MoreHorizontal, MicOff, Mic, Clock, UserX, Ban,
-  DoorOpen, History,
+  DoorOpen, History, MessageSquareOff, MessageSquare,
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import { useUser } from '../../../contexts/UserContext';
@@ -13,6 +13,7 @@ import {
   muteMember, unmuteMember,
   timeoutMember, clearTimeoutMember,
   kickFromRoom,
+  chatBanMember, chatUnbanMember,
 } from '../../../lib/serverService';
 import {
   type ServerRole, ROLE_HIERARCHY, canActOn,
@@ -69,6 +70,11 @@ function isVoiceMuted(m: ServerMember): boolean {
 function isTimedOut(m: ServerMember): boolean {
   if (!m.timeoutUntil) return false;
   return getRemainingMs(m.timeoutUntil) > 0;
+}
+
+/** Aktif chat ban var mı? Süresiz (chatBannedBy dolu, chatBannedUntil null) veya süreli. */
+function isChatBanned(m: ServerMember): boolean {
+  return m.chatBannedBy !== null;
 }
 
 /**
@@ -241,6 +247,17 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     );
   }, [act, serverId]);
 
+  const handleChatBanToggle = useCallback((member: ServerMember) => {
+    setPopover(null);
+    const dn = memberDisplayName(member);
+    if (isChatBanned(member)) {
+      void act(() => chatUnbanMember(serverId, member.userId), `${dn} sohbet yasağı kaldırıldı`, member.userId);
+    } else {
+      // MVP: süresiz chat ban. İleride süre seçici eklenebilir (TimeoutPicker pattern).
+      void act(() => chatBanMember(serverId, member.userId, null), `${dn} sohbet yasağı aldı`, member.userId);
+    }
+  }, [act, serverId]);
+
   // ─── Kebab menu items — popover açıkken hesaplanır ───
   const buildActionItems = (m: ServerMember, rect: DOMRect): ActionItem[] => {
     const targetRole = m.role as ServerRole;
@@ -255,6 +272,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
     const muted = isVoiceMuted(m);
     const timedOut = isTimedOut(m);
+    const chatBanned = isChatBanned(m);
 
     return [
       {
@@ -283,6 +301,13 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         icon: <DoorOpen size={13} />,
         disabled: !canModerate,
         onClick: () => handleRoomKick(m),
+      },
+      {
+        id: 'chat_ban',
+        label: chatBanned ? 'Sohbet Yasağını Kaldır' : 'Sohbeti Yasakla',
+        icon: chatBanned ? <MessageSquare size={13} /> : <MessageSquareOff size={13} />,
+        disabled: !canModerate,
+        onClick: () => handleChatBanToggle(m),
       },
       {
         id: 'kick',
@@ -497,6 +522,7 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
   const chip = ROLE_CHIP[targetRole] ?? ROLE_CHIP.member;
   const muted = isVoiceMuted(member);
   const timedOut = isTimedOut(member);
+  const chatBanned = isChatBanned(member);
 
   // Yetki gate'leri — kendi satırımda hiçbir aksiyon açılmaz
   const canAnyAction = !isSelf && canActOn(myRole, targetRole);
@@ -577,6 +603,24 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
             >
               <Clock size={10} strokeWidth={2.2} />
               <TimeoutCountdown until={member.timeoutUntil} />
+            </span>
+          )}
+          {chatBanned && (
+            <span
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full"
+              style={{
+                background: 'rgba(244,114,182,0.12)',
+                color: '#f472b6',
+                border: '1px solid rgba(244,114,182,0.28)',
+              }}
+              title={
+                member.chatBannedUntil
+                  ? `Sohbet yasağı aktif — bitiş: ${fmtDate(member.chatBannedUntil)}`
+                  : 'Sohbet yasağı aktif — süresiz'
+              }
+              aria-label="Sohbet yasağı"
+            >
+              <MessageSquareOff size={10} strokeWidth={2.2} />
             </span>
           )}
         </div>

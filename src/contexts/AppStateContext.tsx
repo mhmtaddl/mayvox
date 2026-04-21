@@ -23,6 +23,10 @@ export interface AppStateContextType {
   voiceDisabledReason: VoiceDisabledReason;
   /** Aktif timeout bitişi (ISO). Mic click / join guard kalan süreyi göstermek için okur. */
   timedOutUntil: string | null;
+  /** Aktif chat ban bitişi (ISO). Süresiz ise null olsa bile isChatBanned true olur. */
+  chatBannedUntil: string | null;
+  /** Chat ban aktif mi — süresiz + süreli ikisini de kapsar. Mesaj gönderme guard'ı. */
+  isChatBanned: boolean;
 
   // Generated code
   generatedCode: string | null;

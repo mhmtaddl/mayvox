@@ -372,6 +372,29 @@ router.delete('/:id/members/:userId/mute', async (req: Request, res: Response) =
   } catch (err) { handleError(res, err); }
 });
 
+/** POST /servers/:id/members/:userId/chat-ban
+ *  Body: { expiresInSeconds?: number | null }  — null/undefined = süresiz */
+router.post('/:id/members/:userId/chat-ban', async (req: Request, res: Response) => {
+  try {
+    const expires = req.body?.expiresInSeconds;
+    const out = await mgmt.chatBanMember(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+      expires === undefined || expires === null ? null : Number(expires),
+    );
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/members/:userId/chat-ban */
+router.delete('/:id/members/:userId/chat-ban', async (req: Request, res: Response) => {
+  try {
+    const out = await mgmt.chatUnbanMember(req.params.id as string, (req as any).userId, req.params.userId as string);
+    res.json({ ok: true, ...out });
+  } catch (err) { handleError(res, err); }
+});
+
 /** POST /servers/:id/members/:userId/timeout
  *  Body: { durationSeconds: 60|300|600|3600|86400|604800 } */
 router.post('/:id/members/:userId/timeout', async (req: Request, res: Response) => {

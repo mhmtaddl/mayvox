@@ -388,6 +388,15 @@ export default function App() {
   const timedOutUntilRef = useRef<string | null>(null);
   useEffect(() => { timedOutUntilRef.current = timedOutUntil; }, [timedOutUntil]);
 
+  // Chat ban — süresiz ise chatBannedUntil null kalabilir ama isChatBanned true olur.
+  // Süreli ise chatBannedUntil dolu + isChatBanned true. Chat_unban / yok: ikisi de temizlenir.
+  const [chatBannedUntil, setChatBannedUntil] = useState<string | null>(null);
+  const chatBannedUntilRef = useRef<string | null>(null);
+  useEffect(() => { chatBannedUntilRef.current = chatBannedUntil; }, [chatBannedUntil]);
+  const [isChatBanned, setIsChatBanned] = useState(false);
+  const isChatBannedRef = useRef(false);
+  useEffect(() => { isChatBannedRef.current = isChatBanned; }, [isChatBanned]);
+
   const setToastMsg = useCallback((msg: string | null) => {
     if (msg === null) {
       // Minimum görünürlük: toast 600ms içinde dismiss edilmeye çalışılıyorsa
@@ -718,6 +727,8 @@ export default function App() {
     setActiveChannel,
     setToastMsg,
     setTimedOutUntil,
+    setChatBannedUntil,
+    setIsChatBanned,
     setVoiceDisabledReason,
     setInvitationModal,
     onMoved: (targetChannelId) => handleJoinChannelRef.current(targetChannelId, true),
@@ -1341,10 +1352,9 @@ export default function App() {
     }
     // Tüm mevcut LiveKit audio element'lere sinkId uygula (setSinkId destekliyorsa).
     document.querySelectorAll<HTMLAudioElement>('[data-livekit-audio]').forEach(el => {
-      // @ts-expect-error setSinkId TS lib'de henüz public değil — runtime'da var.
-      if (typeof el.setSinkId === 'function') {
-        // @ts-expect-error
-        el.setSinkId(selectedOutput).catch((err: unknown) => {
+      const sinkEl = el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+      if (typeof sinkEl.setSinkId === 'function') {
+        sinkEl.setSinkId(selectedOutput).catch((err: unknown) => {
           console.warn('[audio] setSinkId failed:', err);
         });
       }
@@ -1650,6 +1660,13 @@ export default function App() {
           setTimedOutUntil(null);
           setVoiceDisabledReason(prev => (prev === 'timeout' ? null : prev));
           setToastMsg('Zamanaşımı cezanız kaldırıldı — tekrar konuşabilir ve sohbet odalarına girebilirsiniz.');
+        }
+        // Chat ban state senkronu — voice'u etkilemez, sadece mesaj guard'ı için.
+        if (mod.chatBannedUntil !== chatBannedUntilRef.current) {
+          setChatBannedUntil(mod.chatBannedUntil);
+        }
+        if (mod.isChatBanned !== isChatBannedRef.current) {
+          setIsChatBanned(mod.isChatBanned);
         }
       } catch (err) {
         // Pre-check başarısız — LiveKit permission event'ine güven (daha geç ama çalışır).
@@ -2081,6 +2098,8 @@ export default function App() {
     setIsDeafened,
     voiceDisabledReason,
     timedOutUntil,
+    chatBannedUntil,
+    isChatBanned,
     generatedCode,
     setGeneratedCode,
     timeLeft,

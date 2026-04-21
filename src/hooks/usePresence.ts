@@ -19,6 +19,10 @@ interface Props {
   setToastMsg: (v: string | null) => void;
   /** Moderation broadcast'tan gelen timedOutUntil değerini App.tsx state'ine yansıtır. */
   setTimedOutUntil: (v: string | null) => void;
+  /** Moderation broadcast'tan gelen chatBannedUntil değerini App.tsx state'ine yansıtır. */
+  setChatBannedUntil: (v: string | null) => void;
+  /** Chat ban aktif mi (süresiz ise until null olsa bile true). */
+  setIsChatBanned: (v: boolean) => void;
   /**
    * Moderation broadcast `clear_timeout` / `timeout` anında voiceDisabledReason'ı doğrudan
    * temizlemek/set etmek için. Aksi halde App.tsx expire watcher'ı beklemek gerekirdi.
@@ -55,6 +59,8 @@ export function usePresence({
   setActiveChannel,
   setToastMsg,
   setTimedOutUntil,
+  setChatBannedUntil,
+  setIsChatBanned,
   setVoiceDisabledReason,
   setInvitationModal,
   onMoved,
@@ -406,6 +412,16 @@ export function usePresence({
           setToastMsg(remStr
             ? `Zamanaşımı cezası aldınız — ${remStr} boyunca konuşamaz ve sohbet odalarına giremezsiniz.`
             : 'Zamanaşımı cezası aldınız — belirli bir süre konuşamaz ve sohbet odalarına giremezsiniz.');
+          void playMod();
+        } else if (action === 'chat_ban') {
+          setChatBannedUntil(updates.chatBannedUntil ?? null);
+          setIsChatBanned(true);
+          setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.');
+          void playMod();
+        } else if (action === 'chat_unban') {
+          setChatBannedUntil(null);
+          setIsChatBanned(false);
+          setToastMsg('Sohbet yasağınız kaldırıldı — tekrar mesaj yazabilirsiniz.');
           void playMod();
         } else if (action === 'clear_timeout' || (action === undefined && updates.timedOutUntil === null)) {
           // ANLIK temizlik — App.tsx expire watcher'ı beklemeden reason + state birlikte.

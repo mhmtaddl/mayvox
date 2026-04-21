@@ -102,6 +102,9 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
       !r.voice_mute_expires_at || new Date(r.voice_mute_expires_at).getTime() > now
     );
     const timeoutActive = !!r.timeout_until && new Date(r.timeout_until).getTime() > now;
+    const chatBanActive = !!r.chat_banned_by && (
+      !r.chat_ban_expires_at || new Date(r.chat_ban_expires_at).getTime() > now
+    );
 
     return {
       userId: r.user_id,
@@ -116,6 +119,8 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
       voiceMutedBy: voiceMuteActive ? r.voice_muted_by : null,
       timeoutUntil: timeoutActive ? r.timeout_until : null,
       timeoutSetBy: timeoutActive ? r.timeout_set_by : null,
+      chatBannedUntil: chatBanActive ? r.chat_ban_expires_at : null,
+      chatBannedBy: chatBanActive ? r.chat_banned_by : null,
     };
   });
 }
@@ -194,10 +199,10 @@ export async function changeRole(serverId: string, userId: string, targetUserId:
 export async function getMyModerationState(
   serverId: string,
   userId: string,
-): Promise<{ timedOutUntil: string | null; voiceMutedUntil: string | null; isVoiceMuted: boolean }> {
+): Promise<{ timedOutUntil: string | null; voiceMutedUntil: string | null; isVoiceMuted: boolean; chatBannedUntil: string | null; isChatBanned: boolean }> {
   const ctx = await getServerAccessContext(userId, serverId);
   if (!ctx.membership.exists) {
-    return { timedOutUntil: null, voiceMutedUntil: null, isVoiceMuted: false };
+    return { timedOutUntil: null, voiceMutedUntil: null, isVoiceMuted: false, chatBannedUntil: null, isChatBanned: false };
   }
   return ctx.moderation;
 }
@@ -228,13 +233,13 @@ async function requireModerationTarget(
   unauthorizedMsg: string,
   selfMsg: string,
   hierarchyMsg: string,
-): Promise<{ role: string; is_muted: boolean; voice_muted_by: string | null; timeout_until: string | null }> {
+): Promise<{ role: string; is_muted: boolean; voice_muted_by: string | null; timeout_until: string | null; chat_banned_by: string | null }> {
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, capability, unauthorizedMsg);
   if (userId === targetUserId) throw new AppError(400, selfMsg);
 
-  const target = await queryOne<{ role: string; is_muted: boolean; voice_muted_by: string | null; timeout_until: string | null }>(
-    'SELECT role, is_muted, voice_muted_by, timeout_until FROM server_members WHERE server_id = $1 AND user_id = $2',
+  const target = await queryOne<{ role: string; is_muted: boolean; voice_muted_by: string | null; timeout_until: string | null; chat_banned_by: string | null }>(
+    'SELECT role, is_muted, voice_muted_by, timeout_until, chat_banned_by FROM server_members WHERE server_id = $1 AND user_id = $2',
     [serverId, targetUserId]
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
@@ -345,6 +350,89 @@ export async function unmuteMember(serverId: string, userId: string, targetUserI
 
   await logAction({
     serverId, actorId: userId, action: 'member.unmute',
+    resourceType: 'member', resourceId: targetUserId,
+  });
+  return { wasActive: true };
+}
+
+/**
+ * Sunucu text odalarında mesaj yasağı (chat ban).
+ * Kapsam: sunucudaki TÜM text kanallarında mesaj yazamaz. Voice ve moderator yetkileri etkilenmez.
+ * Idempotent: zaten banlı olsa bile süre yenilenir.
+ */
+export async function chatBanMember(
+  serverId: string, userId: string, targetUserId: string,
+  expiresInSeconds: number | null,
+): Promise<{ expiresAt: string | null }> {
+  const target = await requireModerationTarget(
+    serverId, userId, targetUserId, CAPABILITIES.MEMBER_CHAT_BAN,
+    'Sohbet yasağı uygulamak için yetkin yok',
+    'Kendine sohbet yasağı uygulayamazsın',
+    'Kendi seviyendeki veya üstündeki kullanıcıya sohbet yasağı uygulayamazsın',
+  );
+
+  if (expiresInSeconds !== null && (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0)) {
+    throw new AppError(400, 'Geçersiz sohbet yasağı süresi');
+  }
+
+  const expiresAt = expiresInSeconds !== null
+    ? new Date(Date.now() + expiresInSeconds * 1000).toISOString()
+    : null;
+
+  await pool.query(
+    `UPDATE server_members
+       SET chat_banned_by = $1,
+           chat_banned_at = now(),
+           chat_ban_expires_at = $2
+     WHERE server_id = $3 AND user_id = $4`,
+    [userId, expiresAt, serverId, targetUserId]
+  );
+  invalidateAccessContext(targetUserId, serverId);
+
+  void broadcastModeration({
+    userId: targetUserId, action: 'chat_ban', actorId: userId, serverId,
+    updates: { chatBannedUntil: expiresAt },
+  });
+
+  await logAction({
+    serverId, actorId: userId, action: 'member.chat_ban',
+    resourceType: 'member', resourceId: targetUserId,
+    metadata: {
+      expiresAt,
+      durationSeconds: expiresInSeconds,
+      targetRole: target.role,
+      wasAlreadyBanned: !!target.chat_banned_by,
+    },
+  });
+
+  return { expiresAt };
+}
+
+/** Chat ban kaldır. Aktif değilse safe return (audit yazmayız). */
+export async function chatUnbanMember(serverId: string, userId: string, targetUserId: string): Promise<{ wasActive: boolean }> {
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertCapability(ctx, CAPABILITIES.MEMBER_CHAT_BAN, 'Sohbet yasağını kaldırmak için yetkin yok');
+
+  const result = await pool.query(
+    `UPDATE server_members
+       SET chat_banned_by = NULL,
+           chat_banned_at = NULL,
+           chat_ban_expires_at = NULL
+     WHERE server_id = $1 AND user_id = $2
+       AND chat_banned_by IS NOT NULL`,
+    [serverId, targetUserId]
+  );
+
+  if (result.rowCount === 0) return { wasActive: false };
+  invalidateAccessContext(targetUserId, serverId);
+
+  void broadcastModeration({
+    userId: targetUserId, action: 'chat_unban', actorId: userId, serverId,
+    updates: { chatBannedUntil: null },
+  });
+
+  await logAction({
+    serverId, actorId: userId, action: 'member.chat_unban',
     resourceType: 'member', resourceId: targetUserId,
   });
   return { wasActive: true };
@@ -579,7 +667,8 @@ export async function resetMemberModerationHistory(
            'member.timeout', 'member.timeout_clear',
            'member.room_kick',
            'member.kick',
-           'member.ban', 'member.unban'
+           'member.ban', 'member.unban',
+           'member.chat_ban', 'member.chat_unban'
          )`,
     [serverId, targetUserId]
   );

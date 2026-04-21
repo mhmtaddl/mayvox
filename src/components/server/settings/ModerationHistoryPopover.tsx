@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { History, MicOff, Clock, DoorOpen, UserX, Ban, RotateCcw } from 'lucide-react';
+import { History, MicOff, Clock, DoorOpen, UserX, Ban, RotateCcw, MessageSquareOff } from 'lucide-react';
 import {
   type ServerMember,
   type AuditLogItem,
@@ -18,27 +18,28 @@ interface Props {
 }
 
 interface CountRow {
-  key: 'mute' | 'timeout' | 'room_kick' | 'kick' | 'ban';
+  key: 'mute' | 'timeout' | 'room_kick' | 'chat_ban' | 'kick' | 'ban';
   label: string;
   icon: React.ReactNode;
   color: string;
   actions: readonly string[];
 }
 
-// Renk paleti — mute=turuncu, timeout=mor (yeni tasarım kuralı).
+// Renk paleti — mute=turuncu, timeout=mor, chat_ban=pembe (yeni tasarım kuralı).
 const ROWS: readonly CountRow[] = [
-  { key: 'mute',      label: 'Sustur',       icon: <MicOff size={12} />,   color: '#fb923c', actions: ['member.mute'] },
-  { key: 'timeout',   label: 'Zaman aşımı',  icon: <Clock size={12} />,    color: '#a78bfa', actions: ['member.timeout'] },
-  { key: 'room_kick', label: 'Odadan çıkar', icon: <DoorOpen size={12} />, color: '#fb923c', actions: ['member.room_kick'] },
-  { key: 'kick',      label: 'Sunucudan at', icon: <UserX size={12} />,    color: '#f87171', actions: ['member.kick'] },
-  { key: 'ban',       label: 'Yasakla',      icon: <Ban size={12} />,      color: '#ef4444', actions: ['member.ban'] },
+  { key: 'mute',      label: 'Sustur',         icon: <MicOff size={12} />,          color: '#fb923c', actions: ['member.mute'] },
+  { key: 'timeout',   label: 'Zaman aşımı',    icon: <Clock size={12} />,           color: '#a78bfa', actions: ['member.timeout'] },
+  { key: 'room_kick', label: 'Odadan çıkar',   icon: <DoorOpen size={12} />,        color: '#fb923c', actions: ['member.room_kick'] },
+  { key: 'chat_ban',  label: 'Sohbet yasağı',  icon: <MessageSquareOff size={12} />, color: '#f472b6', actions: ['member.chat_ban'] },
+  { key: 'kick',      label: 'Sunucudan at',   icon: <UserX size={12} />,           color: '#f87171', actions: ['member.kick'] },
+  { key: 'ban',       label: 'Yasakla',        icon: <Ban size={12} />,             color: '#ef4444', actions: ['member.ban'] },
 ];
 
 const POPOVER_WIDTH = 280;
 // Sabit yükseklik — içerik load olsa da olmasa da popover aynı boyutta kalır.
-// Header (26) + 5 satır × 40 + padding (20) ≈ 246. İlk render ve yüklenmiş render aynı
-// boyuta sahip olduğu için re-measure / zıplama OLMAZ. Loading state de bu alan içinde görünür.
-const POPOVER_HEIGHT = 246;
+// Header (26) + 6 satır × 40 + padding (20) ≈ 286. İlk render ve yüklenmiş render aynı
+// boyuta sahip olduğu için re-measure / zıplama OLMAZ.
+const POPOVER_HEIGHT = 286;
 const MARGIN = 8;
 
 /**

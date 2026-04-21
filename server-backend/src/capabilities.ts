@@ -28,6 +28,7 @@ export const CAPABILITIES = {
   MEMBER_MUTE: 'member.mute',
   MEMBER_TIMEOUT: 'member.timeout',
   MEMBER_ROOM_KICK: 'member.room_kick',
+  MEMBER_CHAT_BAN: 'member.chat_ban',
 
   ROLE_MANAGE: 'role.manage',
 } as const;
@@ -57,6 +58,7 @@ export const SYSTEM_ROLE_CAPS: Record<string, Capability[]> = {
     CAPABILITIES.MEMBER_MUTE,
     CAPABILITIES.MEMBER_TIMEOUT,
     CAPABILITIES.MEMBER_ROOM_KICK,
+    CAPABILITIES.MEMBER_CHAT_BAN,
   ],
   member: [
     CAPABILITIES.SERVER_VIEW,

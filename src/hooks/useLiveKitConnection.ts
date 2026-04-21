@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import type React from 'react';
 import { logger } from '../lib/logger';
 import {
@@ -292,10 +292,9 @@ export function useLiveKitConnection({
           // Ref üzerinden oku — closure stale kalmasın (kullanıcı connect sonrası output değiştirmiş olabilir).
           const currentSink = selectedOutputRef.current;
           if (currentSink) {
-            // @ts-expect-error setSinkId TS lib'de henüz public değil — runtime'da var.
-            if (typeof audioEl.setSinkId === 'function') {
-              // @ts-expect-error
-              audioEl.setSinkId(currentSink).catch(() => { /* cihaz bulunamadı — safe no-op */ });
+            const sinkEl = audioEl as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+            if (typeof sinkEl.setSinkId === 'function') {
+              sinkEl.setSinkId(currentSink).catch(() => { /* cihaz bulunamadı — safe no-op */ });
             }
           }
 

@@ -16,7 +16,8 @@ export type ModerationAction =
   | 'mute' | 'unmute'
   | 'timeout' | 'clear_timeout'
   | 'ban' | 'unban'
-  | 'kick' | 'room_kick';
+  | 'kick' | 'room_kick'
+  | 'chat_ban' | 'chat_unban';
 
 export interface ModerationBroadcastPayload {
   userId: string;
@@ -29,6 +30,7 @@ export interface ModerationBroadcastPayload {
     timedOutUntil?: string | null;
     isServerMuted?: boolean;
     voiceMutedUntil?: string | null;
+    chatBannedUntil?: string | null;
   };
   reason?: string;
   actorId?: string;

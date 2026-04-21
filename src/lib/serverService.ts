@@ -68,6 +68,10 @@ export interface ServerMember {
   timeoutUntil: string | null;
   /** Aktif timeout'u veren moderator userId. */
   timeoutSetBy: string | null;
+  /** Aktif chat ban bitiş zamanı. null = yok VEYA süresiz (chatBannedBy ile değerlendir). */
+  chatBannedUntil: string | null;
+  /** Chat ban'i uygulayan moderator userId. null = aktif chat ban yok. */
+  chatBannedBy: string | null;
 }
 
 /**
@@ -78,6 +82,8 @@ export interface MyModerationState {
   timedOutUntil: string | null;
   voiceMutedUntil: string | null;
   isVoiceMuted: boolean;
+  chatBannedUntil: string | null;
+  isChatBanned: boolean;
 }
 
 /**
@@ -619,6 +625,29 @@ export async function muteMember(
 export async function unmuteMember(serverId: string, userId: string): Promise<{ wasActive: boolean }> {
   return apiFetch<{ wasActive: boolean }>(
     `/servers/${serverId}/members/${userId}/mute`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
+ * Chat ban — sunucu text odalarında mesaj yasağı. Voice/moderator yetkilerinden bağımsız.
+ * @param expiresInSeconds null = süresiz; number = süreli (saniye).
+ */
+export async function chatBanMember(
+  serverId: string,
+  userId: string,
+  expiresInSeconds: number | null = null,
+): Promise<{ expiresAt: string | null }> {
+  const body = JSON.stringify({ expiresInSeconds });
+  return apiFetch<{ expiresAt: string | null }>(
+    `/servers/${serverId}/members/${userId}/chat-ban`,
+    { method: 'POST', body },
+  );
+}
+
+export async function chatUnbanMember(serverId: string, userId: string): Promise<{ wasActive: boolean }> {
+  return apiFetch<{ wasActive: boolean }>(
+    `/servers/${serverId}/members/${userId}/chat-ban`,
     { method: 'DELETE' },
   );
 }

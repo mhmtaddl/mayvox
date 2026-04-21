@@ -45,6 +45,10 @@ export interface AccessModerationState {
   voiceMutedUntil: string | null;
   /** true = sunucu-içi voice mute aktif (süreli veya süresiz). is_muted sistem yönetimi alanından AYRI. */
   isVoiceMuted: boolean;
+  /** Aktif chat ban bitiş zamanı (ISO). null = chat ban yok veya süresiz-boş. */
+  chatBannedUntil: string | null;
+  /** true = sunucu text odalarında mesaj yasağı aktif (süreli veya süresiz). */
+  isChatBanned: boolean;
 }
 
 export interface ServerAccessContext {
@@ -76,6 +80,8 @@ interface MembershipRow {
   timeout_until: string | null;
   voice_muted_by: string | null;
   voice_mute_expires_at: string | null;
+  chat_banned_by: string | null;
+  chat_ban_expires_at: string | null;
 }
 
 /**
@@ -161,6 +167,8 @@ export async function getServerAccessContext(
         sm.timeout_until AS timeout_until,
         sm.voice_muted_by AS voice_muted_by,
         sm.voice_mute_expires_at AS voice_mute_expires_at,
+        sm.chat_banned_by AS chat_banned_by,
+        sm.chat_ban_expires_at AS chat_ban_expires_at,
         s.plan AS plan,
         s.owner_user_id AS owner_user_id,
         COALESCE(s.is_banned, false) AS is_banned,
@@ -232,6 +240,9 @@ export async function getServerAccessContext(
   const voiceMuteActive = !!membership.voice_muted_by && (
     !membership.voice_mute_expires_at || new Date(membership.voice_mute_expires_at).getTime() > now
   );
+  const chatBanActive = !!membership.chat_banned_by && (
+    !membership.chat_ban_expires_at || new Date(membership.chat_ban_expires_at).getTime() > now
+  );
 
   const ctx: ServerAccessContext = {
     userId,
@@ -251,6 +262,8 @@ export async function getServerAccessContext(
       timedOutUntil: timeoutActive ? membership.timeout_until : null,
       voiceMutedUntil: voiceMuteActive ? membership.voice_mute_expires_at : null,
       isVoiceMuted: voiceMuteActive,
+      chatBannedUntil: chatBanActive ? membership.chat_ban_expires_at : null,
+      isChatBanned: chatBanActive,
     },
   };
 
@@ -270,7 +283,7 @@ function emptyContext(userId: string, serverId: string): ServerAccessContext {
     limits,
     flags: computeFlags(new Set(), limits, 0),
     isBanned: false,
-    moderation: { timedOutUntil: null, voiceMutedUntil: null, isVoiceMuted: false },
+    moderation: { timedOutUntil: null, voiceMutedUntil: null, isVoiceMuted: false, chatBannedUntil: null, isChatBanned: false },
   };
 }
 
