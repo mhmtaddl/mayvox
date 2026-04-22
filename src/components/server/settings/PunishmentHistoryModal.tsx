@@ -291,20 +291,8 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
           className="flex items-center gap-3 px-5 py-4"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         >
-          {/* Avatar */}
-          <div
-            className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
-            style={{
-              background: member.avatar ? 'transparent' : 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(244,114,182,0.25))',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
-            }}
-          >
-            {member.avatar ? (
-              <img src={member.avatar} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-[13px] font-bold text-white/95 drop-shadow">{initials}</span>
-            )}
-          </div>
+          {/* Avatar — bozuk URL'de fallback initial */}
+          <HeaderAvatar src={member.avatar} initials={initials} />
 
           {/* Name + meta */}
           <div className="flex-1 min-w-0">
@@ -635,6 +623,33 @@ function autoReasonText(reason: string): string {
   if (reason === 'profanity_threshold') return 'Küfür filtresi ihlali nedeniyle otomatik ceza';
   if (reason === 'spam_threshold') return 'Spam ihlali nedeniyle otomatik ceza';
   return 'Otomatik yazma engeli uygulandı';
+}
+
+// ── Header avatar (bozuk URL → initial fallback) ──
+function HeaderAvatar({ src, initials }: { src: string | null; initials: string }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = !!src && !failed;
+  return (
+    <div
+      className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
+      style={{
+        background: showImg ? 'transparent' : 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(244,114,182,0.25))',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+    >
+      {showImg ? (
+        <img
+          src={src!}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="text-[13px] font-bold text-white/95 drop-shadow">{initials}</span>
+      )}
+    </div>
+  );
 }
 
 // ── Empty state ──

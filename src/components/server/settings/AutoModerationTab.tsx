@@ -979,6 +979,65 @@ function gradientFromId(id: string | null | undefined): string {
   return `linear-gradient(135deg, hsl(${hue}, 52%, 48%), hsl(${(hue + 45) % 360}, 55%, 34%))`;
 }
 
+/**
+ * Güvenli avatar — src boşsa ya da img load fail olursa fallback render eder.
+ * variant='chip': 24px dairesel (event row). variant='card': 36px rounded-lg + initial gradient.
+ */
+function SafeAvatar({
+  src, userId, userName, variant,
+}: { src: string | null; userId: string | null; userName: string | null; variant: 'chip' | 'card' }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = !!src && !failed;
+  if (variant === 'chip') {
+    return (
+      <div
+        className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+        style={{
+          background: showImg ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
+          border: '1px solid rgba(var(--glass-tint),0.12)',
+        }}
+      >
+        {showImg ? (
+          <img
+            src={src!}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setFailed(true)}
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <UserIcon size={11} className="text-[var(--theme-secondary-text)]/50" />
+        )}
+      </div>
+    );
+  }
+  // card
+  return (
+    <div
+      className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
+      style={{
+        background: showImg ? 'transparent' : gradientFromId(userId),
+        boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+      aria-label={userName || 'Bilinmiyor'}
+    >
+      {showImg ? (
+        <img
+          src={src!}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="text-[14px] font-bold text-white/95 drop-shadow">
+          {getInitial(userName)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Şu an cezalı bölümü ──
 function formatRemaining(expiresIso: string, nowMs: number): string {
   const exp = Date.parse(expiresIso);
@@ -1083,23 +1142,8 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
       }}
     >
       <div className="flex items-center gap-3">
-        {/* Avatar 36 — varsa image, yoksa initial + deterministik gradient */}
-        <div
-          className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
-          style={{
-            background: ev.userAvatar ? 'transparent' : gradientFromId(ev.userId),
-            boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
-          }}
-          aria-label={ev.userName || 'Bilinmiyor'}
-        >
-          {ev.userAvatar ? (
-            <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-[14px] font-bold text-white/95 drop-shadow">
-              {getInitial(ev.userName)}
-            </span>
-          )}
-        </div>
+        {/* Avatar 36 — varsa image, bozuk URL veya yoksa initial + deterministik gradient */}
+        <SafeAvatar src={ev.userAvatar} userId={ev.userId} userName={ev.userName} variant="card" />
 
         {/* Orta kolon: ad + pill + progress */}
         <div className="flex-1 min-w-0">
@@ -1209,20 +1253,8 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
     <li
       className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] ${isAuto ? 'modEventRow--auto' : ''}`}
     >
-      {/* Avatar (veya fallback ikon) */}
-      <div
-        className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden shrink-0"
-        style={{
-          background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
-          border: '1px solid rgba(var(--glass-tint),0.12)',
-        }}
-      >
-        {ev.userAvatar ? (
-          <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <UserIcon size={11} className="text-[var(--theme-secondary-text)]/50" />
-        )}
-      </div>
+      {/* Avatar (bozuk URL veya null → fallback ikon) */}
+      <SafeAvatar src={ev.userAvatar} userId={ev.userId} userName={ev.userName} variant="chip" />
 
       <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px]">
         <span className="font-semibold text-[var(--theme-text)] truncate">{userLabel}</span>
