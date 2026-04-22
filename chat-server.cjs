@@ -411,30 +411,13 @@ function normalizeForProfanity(text) {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ');
 }
 
-// Agresif bypass normalize — kullanıcı UI'de görmez, arka planda çalışır.
-// Amaç: leet (s1ktir), punctuation (s*ktir), spacing (s i k t i r), repeat (sikkkir)
-// gibi bypass kalıplarını yakalamak. NİHAİ çıktı whitespace + noktalama'sız.
-function aggressiveNormalize(text) {
-  let t = String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  // Leet reverse — sayı/sembol → harf
-  t = t.replace(/[01!34@5$7]/g, c => {
-    switch (c) {
-      case '0': return 'o';
-      case '1': case '!': return 'i';
-      case '3': return 'e';
-      case '4': case '@': return 'a';
-      case '5': case '$': return 's';
-      case '7': return 't';
-      default: return c;
-    }
-  });
-  // Türkçe
-  t = t.replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u');
-  // Tüm harf/sayı olmayan karakterleri TAMAMEN sil (boşluk, nokta, *, _, -, vs.)
-  t = t.replace(/[^\p{L}\p{N}]/gu, '');
-  // Ardışık tekrar kolaps (sikkkir → sikir, amkkkkk → amk)
-  t = t.replace(/(.)\1+/g, '$1');
-  return t;
+// Liberal bypass normalize — case-fold + diakritik + TR. Whitespace/noktalama/rakam
+// KORUNUR çünkü liberal regex onları pozisyon-wildcard olarak kullanır.
+function liberalNormalize(text) {
+  return String(text)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u');
 }
 
 function buildProfanityPattern(words) {
@@ -468,61 +451,99 @@ function buildProfanityPattern(words) {
   }
 }
 
-// Agresif pattern — bypass (leet/punct/space/repeat) saldırılarını yakalar.
-// SADECE 4+ harf kelimeler dahil edilir: kısa kelimeler (ass, sex, cum, anal=4 hmm)
-// substring match'te false positive patlatır (classical, sexton, cumulative, analyze).
-// Minimum uzunluk konservatif: 5 harf (anal, cum, ass hepsi hariç; "siktir" dahil).
-function buildAggressivePattern(words) {
+// Liberal matcher — her kelime harfinin yerine "target VEYA non-letter
+// (rakam/sembol/boşluk)" kabul. Yakalananlar: `sikt*r`, `s1ktir`, `s^ktir`,
+// `5!kt!r`, `s i k t i r`, `s.i.k.t.i.r`, `amc*k` vb.
+//
+// Tek büyük regex V8'de patlar (400KB+). İlk harfe göre bucket'a böleriz;
+// her bucket ayrı ~15-20KB regex. Match sırasında input'un her kelime-başı
+// pozisyonundan sadece ilgili bucket test edilir.
+// Min uzunluk 5 — kısa kelimeler (amk, piç) standart whole-word pattern'de.
+function buildLiberalMatcher(words) {
   if (!Array.isArray(words) || words.length === 0) return null;
-  const set = new Set();
+  const byFirst = new Map();
   for (const w of words) {
     if (typeof w !== 'string') continue;
-    const n = aggressiveNormalize(w);
+    const n = liberalNormalize(w).replace(/[^\p{L}]/gu, '');
     if (!n || n.length < 5) continue;
-    set.add(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const first = n[0];
+    if (!byFirst.has(first)) byFirst.set(first, []);
+    byFirst.get(first).push(n);
   }
-  if (set.size === 0) return null;
-  // Substring match — aggressive input tek string (tüm non-letter silinmiş).
-  try {
-    return new RegExp(`(?:${[...set].join('|')})`, 'iu');
-  } catch {
-    return null;
+  const buckets = new Map();
+  for (const [first, list] of byFirst) {
+    const alts = [];
+    for (const w of list) {
+      const parts = [];
+      for (const c of w) {
+        const esc = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        parts.push(`(?:${esc}|[^\\p{L}])`);
+      }
+      alts.push(parts.join('[^\\p{L}]*'));
+    }
+    try {
+      buckets.set(first, new RegExp(`^(?:${alts.join('|')})`, 'iu'));
+    } catch { /* skip bucket on compile error */ }
   }
+  if (buckets.size === 0) return null;
+  return { buckets, all: [...buckets.values()] };
+}
+
+// Liberal matcher üzerinden input'u test et.
+// Kelime başı pozisyonlarında ilgili bucket regex'ini `^`-anchor'lı slice'la test eder.
+function liberalMatches(matcher, input) {
+  if (!matcher) return false;
+  const LETTER = /\p{L}/u;
+  const s = input;
+  const n = s.length;
+  for (let i = 0; i < n; i++) {
+    if (i > 0 && LETTER.test(s[i - 1])) continue; // kelime başı sınırı
+    const ch = s[i];
+    if (LETTER.test(ch)) {
+      const re = matcher.buckets.get(ch);
+      if (re && re.test(s.slice(i))) return true;
+    } else {
+      // Non-letter ilk karakter: target position 0 non-letter'ı da kabul ediyor, tüm bucket'ları dene.
+      for (const re of matcher.all) {
+        if (re.test(s.slice(i))) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Sistem kara listesi — kullanıcı değiştiremez. Profanity.enabled=true ise her zaman aktif.
 // Boot'ta tek sefer compile; process-wide singleton.
 // Multi-language: { tr: [...], en: [...], ... } → Object.values().flat() ile tek pattern.
 let SYSTEM_PROFANITY_PATTERN = null;
-let SYSTEM_AGGRESSIVE_PATTERN = null;
+let SYSTEM_LIBERAL_MATCHER = null;
 try {
   const data = require('./system-profanity.json');
   let words = [];
   if (Array.isArray(data)) {
-    words = data; // legacy array formatı
+    words = data;
   } else if (data && typeof data === 'object') {
     for (const arr of Object.values(data)) {
       if (Array.isArray(arr)) words = words.concat(arr);
     }
   }
   SYSTEM_PROFANITY_PATTERN = buildProfanityPattern(words);
-  SYSTEM_AGGRESSIVE_PATTERN = buildAggressivePattern(words);
+  SYSTEM_LIBERAL_MATCHER = buildLiberalMatcher(words);
   const langs = (data && !Array.isArray(data) && typeof data === 'object') ? Object.keys(data).length : 1;
-  console.log(`[profanity] sistem kara listesi yüklendi: ${words.length} kelime (${langs} dil) + bypass pattern`);
+  const bucketCount = SYSTEM_LIBERAL_MATCHER?.buckets?.size ?? 0;
+  console.log(`[profanity] sistem kara listesi yüklendi: ${words.length} kelime (${langs} dil) + ${bucketCount} bucket liberal matcher`);
 } catch (err) {
   console.warn('[profanity] sistem kara listesi yüklenemedi:', err?.message);
 }
 
 function messageHasProfanity(text, profanity) {
   if (!profanity || !profanity.enabled) return false;
-  // 1) Standart normalize (whitespace korur) — multi-word küfürler + normal match
   const normalized = normalizeForProfanity(text);
   if (SYSTEM_PROFANITY_PATTERN && SYSTEM_PROFANITY_PATTERN.test(normalized)) return true;
   if (profanity.pattern && profanity.pattern.test(normalized)) return true;
-  // 2) Agresif normalize (leet/punct/space/repeat strip) — bypass denemeleri
-  const aggressive = aggressiveNormalize(text);
-  if (SYSTEM_AGGRESSIVE_PATTERN && SYSTEM_AGGRESSIVE_PATTERN.test(aggressive)) return true;
-  if (profanity.aggressivePattern && profanity.aggressivePattern.test(aggressive)) return true;
+  const liberal = liberalNormalize(text);
+  if (liberalMatches(SYSTEM_LIBERAL_MATCHER, liberal)) return true;
+  if (liberalMatches(profanity.liberalMatcher, liberal)) return true;
   return false;
 }
 
@@ -553,9 +574,8 @@ async function getChannelFloodConfig(channelId) {
       profanity: profanityRaw ? {
         enabled: !!profanityRaw.enabled,
         words: Array.isArray(profanityRaw.words) ? profanityRaw.words : [],
-        // Precompile — aynı TTL süresince tüm mesajlarda reuse.
         pattern: profanityRaw.enabled ? buildProfanityPattern(profanityRaw.words) : null,
-        aggressivePattern: profanityRaw.enabled ? buildAggressivePattern(profanityRaw.words) : null,
+        liberalMatcher: profanityRaw.enabled ? buildLiberalMatcher(profanityRaw.words) : null,
       } : null,
       expiresAt: now + FLOOD_CONFIG_TTL_MS,
     };
