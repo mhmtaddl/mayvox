@@ -100,7 +100,8 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
       [channelId],
     );
     if (!row) {
-      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] }, spam: { enabled: false } });
+      // Default AÇIK — kanal bilinmiyorsa bile sistem listesi çalışsın.
+      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true } });
     }
     const flood = row.moderation_config?.flood;
     const profanity = row.moderation_config?.profanity;
@@ -113,15 +114,16 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
         windowMs:   flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,
       },
       profanity: {
-        enabled: !!profanity?.enabled,
+        // Sunucu sahibi açıkça kapatmadıysa varsayılan AÇIK.
+        enabled: profanity?.enabled ?? true,
         words:   Array.isArray(profanity?.words) ? profanity.words : [],
       },
-      spam: { enabled: !!spam?.enabled },
+      spam: { enabled: spam?.enabled ?? true },
     });
   } catch (err) {
     console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
-    // Fail-safe: chat-server built-in default ile devam edebilsin.
-    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] }, spam: { enabled: false } });
+    // Fail-safe: hata durumunda da sistem listesi aktif kalsın.
+    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true } });
   }
 });
 

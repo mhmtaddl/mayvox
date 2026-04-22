@@ -538,13 +538,17 @@ try {
 }
 
 function messageHasProfanity(text, profanity) {
-  if (!profanity || !profanity.enabled) return false;
+  // Sistem kara listesi HER ZAMAN aktif — sunucu sahibi kapatamaz.
+  // Küfür filtresi toggle'ı SADECE sunucu sahibinin eklediği kelime listesini etkiler.
   const normalized = normalizeForProfanity(text);
   if (SYSTEM_PROFANITY_PATTERN && SYSTEM_PROFANITY_PATTERN.test(normalized)) return true;
-  if (profanity.pattern && profanity.pattern.test(normalized)) return true;
   const liberal = liberalNormalize(text);
   if (liberalMatches(SYSTEM_LIBERAL_MATCHER, liberal)) return true;
-  if (liberalMatches(profanity.liberalMatcher, liberal)) return true;
+  // Sunucu özel kelimeler — sadece profanity.enabled iken
+  if (profanity?.enabled) {
+    if (profanity.pattern?.test(normalized)) return true;
+    if (liberalMatches(profanity.liberalMatcher, liberal)) return true;
+  }
   return false;
 }
 

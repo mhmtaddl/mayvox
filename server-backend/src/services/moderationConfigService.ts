@@ -128,11 +128,12 @@ export async function getServerModerationConfig(
       windowMs:   cfg.flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,
     },
     profanity: {
-      enabled: cfg.profanity?.enabled ?? false,
+      // Varsayılan AÇIK — sunucu sahibi açıkça kapatmadıysa.
+      enabled: cfg.profanity?.enabled ?? true,
       words:   cfg.profanity?.words   ?? [],
     },
     spam: {
-      enabled: cfg.spam?.enabled ?? false,
+      enabled: cfg.spam?.enabled ?? true,
     },
   };
 }

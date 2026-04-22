@@ -247,7 +247,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-rose-400" />
-            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Küfür filtresi</h4>
+            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Sunucu özel kelime listesi</h4>
           </div>
           <button
             type="button"
@@ -263,8 +263,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           </button>
         </div>
         <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
-          Listedeki kelimeler mesajlarda tespit edilirse mesaj gönderilmez. Türkçe eklerle (salak
-          → salakça, salakların) otomatik uyumludur.
+          <strong className="text-[var(--theme-text)]">Sistem kara listesi (3058 kelime) her zaman aktiftir</strong> —
+          bu toggle <u>yalnızca</u> aşağıdaki kutuya eklediğin sunucu-özel kelimeleri açar/kapatır. Türkçe
+          eklerle (salak → salakça, salakların) otomatik uyumludur.
         </p>
 
         <label className="block text-[11px] font-semibold text-[var(--theme-text)] mb-1.5">
@@ -304,15 +305,6 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           </button>
         </div>
 
-        {/* Sistem kara listesi bilgi notu */}
-        <div className="mt-3 px-3 py-2 rounded-lg text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-relaxed flex items-start gap-2"
-          style={{ background: 'rgba(var(--theme-accent-rgb),0.04)', border: '1px solid rgba(var(--theme-accent-rgb),0.10)' }}>
-          <BookLock size={12} className="mt-0.5 shrink-0 text-[var(--theme-accent)]/80" />
-          <span>
-            <strong className="text-[var(--theme-text)]">Sistem kara listesi</strong> ({SYSTEM_BLACKLIST_TOTAL} kelime · {Object.keys(SYSTEM_BLACKLIST_BY_LANG).length} dil) küfür filtresi
-            aktifken her zaman çalışır — kaldırılamaz. Kendi kelimelerini yukarıdaki kutudan ekleyebilirsin.
-          </span>
-        </div>
       </section>
 
       {/* ── Kara liste modal ── */}
