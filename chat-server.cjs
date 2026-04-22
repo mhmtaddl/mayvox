@@ -15,6 +15,7 @@ const path = require('path');
 const fs = require('fs');
 const { createPresenceService, loadStore } = require('./presence');
 const { createFloodControl } = require('./flood-control.cjs');
+const spamGuard = require('./spam-guard.cjs');
 
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
@@ -555,7 +556,7 @@ async function getChannelFloodConfig(channelId) {
 
   if (!INTERNAL_NOTIFY_SECRET) {
     // Secret yoksa server-backend ile konuşamayız → null dön (flood-control built-in).
-    const entry = { serverId: null, flood: null, profanity: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
+    const entry = { serverId: null, flood: null, profanity: null, spam: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -568,6 +569,7 @@ async function getChannelFloodConfig(channelId) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const body = await resp.json();
     const profanityRaw = body?.profanity && typeof body.profanity === 'object' ? body.profanity : null;
+    const spamRaw = body?.spam && typeof body.spam === 'object' ? body.spam : null;
     const entry = {
       serverId: typeof body?.serverId === 'string' ? body.serverId : null,
       flood: body?.flood && typeof body.flood === 'object' ? body.flood : null,
@@ -577,6 +579,7 @@ async function getChannelFloodConfig(channelId) {
         pattern: profanityRaw.enabled ? buildProfanityPattern(profanityRaw.words) : null,
         liberalMatcher: profanityRaw.enabled ? buildLiberalMatcher(profanityRaw.words) : null,
       } : null,
+      spam: spamRaw ? { enabled: !!spamRaw.enabled } : null,
       expiresAt: now + FLOOD_CONFIG_TTL_MS,
     };
     floodConfigCache.set(channelId, entry);
@@ -584,7 +587,7 @@ async function getChannelFloodConfig(channelId) {
   } catch (err) {
     // Ağ/timeout hatası — kısa TTL negative cache, tekrar denemeye girer.
     console.warn('[flood-config] fetch fail channel=%s err=%s', channelId, err?.message || err);
-    const entry = { serverId: null, flood: null, profanity: null, expiresAt: now + 5_000 };
+    const entry = { serverId: null, flood: null, profanity: null, spam: null, expiresAt: now + 5_000 };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -1092,6 +1095,18 @@ wss.on('connection', (ws) => {
             message: 'Mesajında yasaklı bir ifade var.',
           });
         }
+        // Spam: repeated text / all caps / emoji spam / link spam. Sadece enabled ise çalışır.
+        if (cfg?.spam?.enabled) {
+          const spamRes = spamGuard.checkSpam(userId, text);
+          if (spamRes.spam) {
+            console.log(`[spam] block userId=${userId} server=${cfg?.serverId || '-'} reason=${spamRes.reason} len=${text.length}`);
+            return send(ws, {
+              type: 'error',
+              code: 'spam_blocked',
+              message: 'Mesajın spam filtresine takıldı.',
+            });
+          }
+        }
       }
 
       try {
@@ -1550,6 +1565,8 @@ const heartbeat = setInterval(() => {
   for (const [k, v] of userTypingLimits) { if (now > v.resetAt) userTypingLimits.delete(k); }
   // Flood config cache TTL cleanup
   for (const [k, v] of floodConfigCache) { if (now > v.expiresAt) floodConfigCache.delete(k); }
+  // Spam guard history cleanup (60s window)
+  spamGuard.sweep(now);
 }, 30000);
 
 wss.on('close', () => clearInterval(heartbeat));

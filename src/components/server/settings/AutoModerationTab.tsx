@@ -69,6 +69,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const [profanityEnabled, setProfanityEnabled] = useState(false);
   // Textarea'da her satır bir kelime — state string olarak tutulur, save'de split edilir.
   const [profanityText, setProfanityText] = useState('');
+  const [spamEnabled, setSpamEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -80,6 +81,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       setFlood(cfg.flood);
       setProfanityEnabled(cfg.profanity.enabled);
       setProfanityText((cfg.profanity.words || []).join('\n'));
+      setSpamEnabled(cfg.spam.enabled);
     } catch (err: any) {
       showToast(err?.message || 'Ayarlar yüklenemedi');
     } finally {
@@ -112,7 +114,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     flood.limit      !== initial.flood.limit ||
     flood.windowMs   !== initial.flood.windowMs ||
     profanityEnabled !== initial.profanity.enabled ||
-    profanityText    !== initialWordsStr
+    profanityText    !== initialWordsStr ||
+    spamEnabled      !== initial.spam.enabled
   );
 
   const handleSave = async () => {
@@ -121,8 +124,14 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       await updateModerationConfig(serverId, {
         flood,
         profanity: { enabled: profanityEnabled, words: currentWords },
+        spam: { enabled: spamEnabled },
       });
-      setInitial(prev => prev ? { ...prev, flood, profanity: { enabled: profanityEnabled, words: currentWords } } : prev);
+      setInitial(prev => prev ? {
+        ...prev,
+        flood,
+        profanity: { enabled: profanityEnabled, words: currentWords },
+        spam: { enabled: spamEnabled },
+      } : prev);
       // UI'yi normalize sonuç ile hizala (dedup/trim eksik satır varsa).
       setProfanityText(currentWords.join('\n'));
       showToast('Oto-Mod ayarları kaydedildi');
@@ -138,6 +147,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setFlood(initial.flood);
     setProfanityEnabled(initial.profanity.enabled);
     setProfanityText((initial.profanity.words || []).join('\n'));
+    setSpamEnabled(initial.spam.enabled);
   };
 
   // Kara liste modal (dil-tab + sayfalama)
@@ -310,26 +320,53 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         <BlacklistModal onClose={() => setShowBlacklist(false)} />
       )}
 
-      {/* ── Spam koruması — placeholder (Faz 3) ── */}
+      {/* ── Spam koruması ── */}
       <section
-        className="rounded-2xl p-5 opacity-55 pointer-events-none"
+        className="rounded-2xl p-5"
         style={{
-          background: 'rgba(var(--glass-tint), 0.03)',
-          border: '1px dashed rgba(var(--glass-tint), 0.12)',
+          background: 'rgba(var(--glass-tint), 0.04)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <MessageSquareWarning size={14} className="text-[var(--theme-secondary-text)]/60" />
+            <MessageSquareWarning size={14} className="text-sky-400" />
             <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Spam koruması</h4>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-accent)]/80 px-2 py-0.5 rounded-full border border-[var(--theme-accent)]/30 bg-[var(--theme-accent)]/10">
-            Yakında
-          </span>
+          <button
+            type="button"
+            onClick={() => setSpamEnabled(v => !v)}
+            role="switch"
+            aria-checked={spamEnabled}
+            className={`relative w-9 h-5 rounded-full transition-colors ${spamEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: spamEnabled ? 'translateX(16px)' : 'translateX(0)' }}
+            />
+          </button>
         </div>
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/60 mt-2 leading-relaxed">
-          Aynı mesajın tekrarı, tamamı büyük harf, zincir emoji gibi şablonları otomatik tespit eder.
+        <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
+          Şu şablonlar tespit edilirse mesaj gönderilmez:
         </p>
+        <ul className="space-y-1.5 text-[11px] text-[var(--theme-secondary-text)]/75">
+          <li className="flex items-start gap-2">
+            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
+            <span><strong className="text-[var(--theme-text)]">Tekrar eden mesaj</strong> — 60 saniye içinde aynı mesaj 3+ kez</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
+            <span><strong className="text-[var(--theme-text)]">ALL CAPS</strong> — 10+ harf ve %80+'ı büyük harf</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
+            <span><strong className="text-[var(--theme-text)]">Zincir emoji</strong> — sadece emoji içeren 10+ emojilik mesaj</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
+            <span><strong className="text-[var(--theme-text)]">Link spam</strong> — tek mesajda 3+ URL</span>
+          </li>
+        </ul>
       </section>
 
       {/* Action bar */}

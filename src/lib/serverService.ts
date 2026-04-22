@@ -750,6 +750,7 @@ export async function updateModerationConfig(
   patch: {
     flood?: FloodConfig;
     profanity?: { enabled: boolean; words: string[] };
+    spam?: { enabled: boolean };
   },
 ): Promise<void> {
   await apiFetch<unknown>(`/servers/${serverId}/moderation-config`, {

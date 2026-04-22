@@ -100,10 +100,11 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
       [channelId],
     );
     if (!row) {
-      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] } });
+      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] }, spam: { enabled: false } });
     }
     const flood = row.moderation_config?.flood;
     const profanity = row.moderation_config?.profanity;
+    const spam = row.moderation_config?.spam;
     res.json({
       serverId: row.server_id,
       flood: {
@@ -115,11 +116,12 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
         enabled: !!profanity?.enabled,
         words:   Array.isArray(profanity?.words) ? profanity.words : [],
       },
+      spam: { enabled: !!spam?.enabled },
     });
   } catch (err) {
     console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
     // Fail-safe: chat-server built-in default ile devam edebilsin.
-    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] } });
+    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] }, spam: { enabled: false } });
   }
 });
 

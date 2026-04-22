@@ -67,6 +67,14 @@ function validateFlood(input: unknown): FloodConfig {
 const PROFANITY_MAX_WORDS = 500;
 const PROFANITY_MAX_WORD_LEN = 50;
 
+function validateSpam(input: unknown): { enabled: boolean } {
+  if (!input || typeof input !== 'object') {
+    throw new AppError(400, 'spam config obje olmalı');
+  }
+  const o = input as Record<string, unknown>;
+  return { enabled: typeof o.enabled === 'boolean' ? o.enabled : false };
+}
+
 function validateProfanity(input: unknown): { enabled: boolean; words: string[] } {
   if (!input || typeof input !== 'object') {
     throw new AppError(400, 'profanity config obje olmalı');
@@ -162,7 +170,9 @@ export async function updateServerModerationConfig(
   if ('profanity' in input) {
     next.profanity = validateProfanity(input.profanity);
   }
-  // spam Faz 3b'de açılacak.
+  if ('spam' in input) {
+    next.spam = validateSpam(input.spam);
+  }
 
   await queryOne(
     'UPDATE servers SET moderation_config = $1 WHERE id = $2 RETURNING id',
