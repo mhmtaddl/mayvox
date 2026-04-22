@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   getModerationConfig, updateModerationConfig,
@@ -7,7 +8,44 @@ import {
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
 // Vite JSON import native; build-time inline olur, runtime fetch yok.
-import SYSTEM_BLACKLIST from '../../../../system-profanity.json';
+// Shape: { [langCode]: string[] }  (multi-language object)
+import SYSTEM_BLACKLIST_RAW from '../../../../system-profanity.json';
+const SYSTEM_BLACKLIST_BY_LANG = SYSTEM_BLACKLIST_RAW as Record<string, string[]>;
+const SYSTEM_BLACKLIST_TOTAL = Object.values(SYSTEM_BLACKLIST_BY_LANG).reduce((a, arr) => a + arr.length, 0);
+
+// Dil kodu → (ad, bayrak emoji). Liste user'ın verdiği kod tablosu ile senkron.
+const LANG_META: Record<string, { name: string; flag: string }> = {
+  tr:                 { name: 'Türkçe',               flag: '🇹🇷' },
+  en:                 { name: 'English',              flag: '🇬🇧' },
+  ar:                 { name: 'العربية',              flag: '🇸🇦' },
+  cs:                 { name: 'Čeština',              flag: '🇨🇿' },
+  da:                 { name: 'Dansk',                flag: '🇩🇰' },
+  de:                 { name: 'Deutsch',              flag: '🇩🇪' },
+  eo:                 { name: 'Esperanto',            flag: '🌐' },
+  es:                 { name: 'Español',              flag: '🇪🇸' },
+  fa:                 { name: 'فارسی',                flag: '🇮🇷' },
+  fi:                 { name: 'Suomi',                flag: '🇫🇮' },
+  fil:                { name: 'Filipino',             flag: '🇵🇭' },
+  fr:                 { name: 'Français',             flag: '🇫🇷' },
+  'fr-CA-u-sd-caqc':  { name: 'Français (Québec)',    flag: '🇨🇦' },
+  hi:                 { name: 'हिन्दी',                flag: '🇮🇳' },
+  hu:                 { name: 'Magyar',               flag: '🇭🇺' },
+  it:                 { name: 'Italiano',             flag: '🇮🇹' },
+  ja:                 { name: '日本語',               flag: '🇯🇵' },
+  kab:                { name: 'Taqbaylit',            flag: '🏳️' },
+  ko:                 { name: '한국어',               flag: '🇰🇷' },
+  nl:                 { name: 'Nederlands',           flag: '🇳🇱' },
+  no:                 { name: 'Norsk',                flag: '🇳🇴' },
+  pl:                 { name: 'Polski',               flag: '🇵🇱' },
+  pt:                 { name: 'Português',            flag: '🇵🇹' },
+  ru:                 { name: 'Русский',              flag: '🇷🇺' },
+  sv:                 { name: 'Svenska',              flag: '🇸🇪' },
+  th:                 { name: 'ไทย',                  flag: '🇹🇭' },
+  tlh:                { name: 'Klingon',              flag: '🖖' },
+  zh:                 { name: '中文',                 flag: '🇨🇳' },
+};
+
+const WORDS_PER_PAGE = 60;
 
 interface Props {
   serverId: string;
@@ -102,14 +140,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setProfanityText((initial.profanity.words || []).join('\n'));
   };
 
-  // Kara liste modal
+  // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
-  const [blacklistQuery, setBlacklistQuery] = useState('');
-  const filteredBlacklist = useMemo(() => {
-    const q = blacklistQuery.trim().toLowerCase();
-    if (!q) return SYSTEM_BLACKLIST as string[];
-    return (SYSTEM_BLACKLIST as string[]).filter(w => w.toLowerCase().includes(q));
-  }, [blacklistQuery]);
 
   if (loading) return <Loader />;
 
@@ -258,7 +290,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
               color: 'var(--theme-text)',
             }}
           >
-            <BookLock size={11} /> Kara listeyi gör ({(SYSTEM_BLACKLIST as string[]).length})
+            <BookLock size={11} /> Kara listeyi gör ({SYSTEM_BLACKLIST_TOTAL})
           </button>
         </div>
 
@@ -267,7 +299,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           style={{ background: 'rgba(var(--theme-accent-rgb),0.04)', border: '1px solid rgba(var(--theme-accent-rgb),0.10)' }}>
           <BookLock size={12} className="mt-0.5 shrink-0 text-[var(--theme-accent)]/80" />
           <span>
-            <strong className="text-[var(--theme-text)]">Sistem kara listesi</strong> ({(SYSTEM_BLACKLIST as string[]).length} kelime) küfür filtresi
+            <strong className="text-[var(--theme-text)]">Sistem kara listesi</strong> ({SYSTEM_BLACKLIST_TOTAL} kelime · {Object.keys(SYSTEM_BLACKLIST_BY_LANG).length} dil) küfür filtresi
             aktifken her zaman çalışır — kaldırılamaz. Kendi kelimelerini yukarıdaki kutudan ekleyebilirsin.
           </span>
         </div>
@@ -275,13 +307,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
       {/* ── Kara liste modal ── */}
       {showBlacklist && (
-        <BlacklistModal
-          words={filteredBlacklist}
-          total={(SYSTEM_BLACKLIST as string[]).length}
-          query={blacklistQuery}
-          onQueryChange={setBlacklistQuery}
-          onClose={() => { setShowBlacklist(false); setBlacklistQuery(''); }}
-        />
+        <BlacklistModal onClose={() => setShowBlacklist(false)} />
       )}
 
       {/* ── Spam koruması — placeholder (Faz 3) ── */}
@@ -374,86 +400,166 @@ function SliderRow({
   );
 }
 
-// ── Sistem kara listesi modal (read-only + search) ──
-function BlacklistModal({
-  words, total, query, onQueryChange, onClose,
-}: {
-  words: string[];
-  total: number;
-  query: string;
-  onQueryChange: (v: string) => void;
-  onClose: () => void;
-}) {
-  return (
+// ── Sistem kara listesi modal (dil tab + sayfalama + search) ──
+// Stil: ChannelAccessModal ile paritet (tema-aware, solid bg, blur yok).
+function BlacklistModal({ onClose }: { onClose: () => void }) {
+  const langs = useMemo(() => Object.keys(SYSTEM_BLACKLIST_BY_LANG), []);
+  const [activeLang, setActiveLang] = useState<string>(langs[0] || 'tr');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+
+  // Dil değişince sayfa 1'e dön, search temizle
+  useEffect(() => { setPage(1); setQuery(''); }, [activeLang]);
+  // Search değişince sayfa 1'e dön
+  useEffect(() => { setPage(1); }, [query]);
+
+  // ESC ile kapat
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const langWords = SYSTEM_BLACKLIST_BY_LANG[activeLang] || [];
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return langWords;
+    return langWords.filter(w => w.toLowerCase().includes(q));
+  }, [langWords, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / WORDS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pageWords = filtered.slice((currentPage - 1) * WORDS_PER_PAGE, currentPage * WORDS_PER_PAGE);
+
+  const activeMeta = LANG_META[activeLang] || { name: activeLang, flag: '🏳️' };
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.72)' }}
       onClick={onClose}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-[520px] max-h-[min(80vh,640px)] flex flex-col rounded-2xl overflow-hidden"
+        className="w-[680px] max-w-[94vw] rounded-2xl overflow-hidden flex flex-col"
         style={{
-          background: 'rgba(var(--glass-tint), 0.08)',
-          border: '1px solid rgba(var(--glass-tint), 0.15)',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(24px)',
+          maxHeight: 'min(85vh, 720px)',
+          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
         }}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[rgba(var(--glass-tint),0.08)] flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/12 border border-[var(--theme-accent)]/25 flex items-center justify-center shrink-0">
-            <BookLock size={14} className="text-[var(--theme-accent)]" />
+        <div className="px-6 pt-6 pb-3 flex items-center gap-4 shrink-0">
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.18), rgba(var(--theme-accent-rgb), 0.08))',
+            }}
+          >
+            <BookLock size={18} className="text-[var(--theme-accent)]" />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="text-[13px] font-bold text-[var(--theme-text)] leading-none">Sistem kara listesi</h4>
-            <p className="text-[10.5px] text-[var(--theme-secondary-text)]/65 mt-1">
-              {query ? `${words.length} eşleşti / ${total} toplam` : `${total} kelime — her zaman aktif, kaldırılamaz`}
+            <h3 className="text-[16px] font-bold text-[var(--theme-text)] truncate">Sistem Kara Listesi</h3>
+            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-55 mt-0.5 truncate">
+              {SYSTEM_BLACKLIST_TOTAL} kelime · {langs.length} dil — her zaman aktif, kaldırılamaz
             </p>
           </div>
           <button
             onClick={onClose}
-            aria-label="Kapat"
-            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors shrink-0"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)] transition-colors shrink-0"
+            title="Kapat"
           >
-            <X size={14} />
+            <X size={15} />
           </button>
         </div>
 
-        {/* Search */}
-        <div className="px-5 py-3 border-b border-[rgba(var(--glass-tint),0.05)] shrink-0">
-          <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => onQueryChange(e.target.value)}
-              autoFocus
-              placeholder="Kelime ara..."
-              className="w-full pl-7 pr-3 py-2 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors"
-              style={{
-                background: 'rgba(var(--glass-tint), 0.06)',
-                border: '1px solid rgba(var(--glass-tint), 0.10)',
-              }}
-            />
+        {/* Dil tab bar — horizontal scroll */}
+        <div
+          className="px-4 pb-3 overflow-x-auto custom-scrollbar shrink-0"
+          style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.06)' }}
+        >
+          <div className="flex gap-1.5 min-w-max">
+            {langs.map(code => {
+              const meta = LANG_META[code] || { name: code, flag: '🏳️' };
+              const count = SYSTEM_BLACKLIST_BY_LANG[code]?.length ?? 0;
+              const active = code === activeLang;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setActiveLang(code)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11.5px] font-semibold shrink-0 transition-colors"
+                  style={active ? {
+                    background: 'rgba(var(--theme-accent-rgb),0.14)',
+                    border: '1px solid rgba(var(--theme-accent-rgb),0.30)',
+                    color: 'var(--theme-accent)',
+                  } : {
+                    background: 'transparent',
+                    border: '1px solid rgba(var(--glass-tint),0.08)',
+                    color: 'var(--theme-secondary-text)',
+                  }}
+                >
+                  <span className="text-[12px]">{meta.flag}</span>
+                  <span>{meta.name}</span>
+                  <span className="tabular-nums opacity-65">{count}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 custom-scrollbar">
-          {words.length === 0 ? (
-            <div className="text-center py-8 text-[11px] text-[var(--theme-secondary-text)]/50">
-              Bu arama için eşleşme yok
+        {/* Search */}
+        <div className="px-6 py-3 shrink-0">
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{
+              background: 'rgba(var(--glass-tint), 0.04)',
+              border: '1px solid rgba(var(--glass-tint), 0.08)',
+            }}
+          >
+            <Search size={12} className="text-[var(--theme-secondary-text)]/40 shrink-0" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              autoFocus
+              placeholder={`${activeMeta.name} içinde ara...`}
+              className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none min-w-0"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                className="text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-text)] transition-colors shrink-0"
+                title="Temizle"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/50 mt-1.5">
+            {query
+              ? `${filtered.length} eşleşti / ${langWords.length} kelime`
+              : `${langWords.length} kelime`}
+            {totalPages > 1 && ` · Sayfa ${currentPage}/${totalPages}`}
+          </p>
+        </div>
+
+        {/* Kelime grid */}
+        <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
+          {pageWords.length === 0 ? (
+            <div className="text-center py-10 text-[11px] text-[var(--theme-secondary-text)]/40">
+              {query ? 'Bu arama için eşleşme yok' : 'Bu dilde kelime yok'}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {words.map((w, i) => (
+              {pageWords.map((w, i) => (
                 <span
-                  key={`${i}-${w}`}
-                  className="px-2 py-1 rounded text-[11px] text-[var(--theme-text)]/85 font-mono truncate"
+                  key={`${activeLang}-${(currentPage - 1) * WORDS_PER_PAGE + i}`}
+                  className="px-2.5 py-1.5 rounded-md text-[11.5px] text-[var(--theme-text)]/90 font-mono truncate"
                   style={{
-                    background: 'rgba(var(--glass-tint), 0.05)',
-                    border: '1px solid rgba(var(--glass-tint), 0.06)',
+                    background: 'rgba(var(--theme-accent-rgb), 0.06)',
+                    border: '1px solid rgba(var(--theme-accent-rgb), 0.12)',
                   }}
                   title={w}
                 >
@@ -463,7 +569,81 @@ function BlacklistModal({
             </div>
           )}
         </div>
+
+        {/* Pagination bar */}
+        {totalPages > 1 && (
+          <div
+            className="px-6 py-3 flex items-center justify-between gap-2 shrink-0"
+            style={{ borderTop: '1px solid rgba(var(--glass-tint),0.06)' }}
+          >
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+              style={{
+                background: 'rgba(var(--glass-tint),0.06)',
+                border: '1px solid rgba(var(--glass-tint),0.10)',
+                color: 'var(--theme-text)',
+              }}
+            >
+              <ChevronLeft size={12} /> Önceki
+            </button>
+
+            <div className="flex items-center gap-1">
+              {buildPageNumbers(currentPage, totalPages).map((n, i) =>
+                n === '…' ? (
+                  <span key={`dots-${i}`} className="px-1 text-[11px] text-[var(--theme-secondary-text)]/40">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n as number)}
+                    className="w-7 h-7 rounded-md text-[11px] font-bold tabular-nums transition-colors"
+                    style={n === currentPage ? {
+                      background: 'var(--theme-accent)',
+                      color: 'var(--theme-text-on-accent, #000)',
+                    } : {
+                      background: 'rgba(var(--glass-tint),0.04)',
+                      color: 'var(--theme-secondary-text)',
+                    }}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+            </div>
+
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+              style={{
+                background: 'rgba(var(--glass-tint),0.06)',
+                border: '1px solid rgba(var(--glass-tint),0.10)',
+                color: 'var(--theme-text)',
+              }}
+            >
+              Sonraki <ChevronRight size={12} />
+            </button>
+          </div>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
+}
+
+// Sayfa numaraları — kompakt pattern: 1 … (n-1) n (n+1) … last
+function buildPageNumbers(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const out: (number | '…')[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) out.push('…');
+  for (let i = start; i <= end; i++) out.push(i);
+  if (end < total - 1) out.push('…');
+  out.push(total);
+  return out;
 }

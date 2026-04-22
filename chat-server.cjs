@@ -435,11 +435,21 @@ function buildProfanityPattern(words) {
 
 // Sistem kara listesi — kullanıcı değiştiremez. Profanity.enabled=true ise her zaman aktif.
 // Boot'ta tek sefer compile; process-wide singleton.
+// Multi-language: { tr: [...], en: [...], ... } → Object.values().flat() ile tek pattern.
 let SYSTEM_PROFANITY_PATTERN = null;
 try {
-  const list = require('./system-profanity.json');
-  SYSTEM_PROFANITY_PATTERN = buildProfanityPattern(list);
-  console.log(`[profanity] sistem kara listesi yüklendi: ${Array.isArray(list) ? list.length : 0} kelime`);
+  const data = require('./system-profanity.json');
+  let words = [];
+  if (Array.isArray(data)) {
+    words = data; // legacy array formatı
+  } else if (data && typeof data === 'object') {
+    for (const arr of Object.values(data)) {
+      if (Array.isArray(arr)) words = words.concat(arr);
+    }
+  }
+  SYSTEM_PROFANITY_PATTERN = buildProfanityPattern(words);
+  const langs = (data && !Array.isArray(data) && typeof data === 'object') ? Object.keys(data).length : 1;
+  console.log(`[profanity] sistem kara listesi yüklendi: ${words.length} kelime (${langs} dil)`);
 } catch (err) {
   console.warn('[profanity] sistem kara listesi yüklenemedi:', err?.message);
 }
