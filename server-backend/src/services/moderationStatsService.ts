@@ -10,7 +10,7 @@ import { queryOne, queryMany } from '../repositories/db';
 import { AppError } from './serverService';
 import { supabase } from '../supabaseClient';
 
-export type ModKind = 'flood' | 'profanity' | 'spam';
+export type ModKind = 'flood' | 'profanity' | 'spam' | 'auto_punish';
 
 export interface ModStats {
   floodBlocked: number;
@@ -32,7 +32,7 @@ export function isValidRange(r: unknown): r is StatRange {
 }
 
 export function isValidKind(k: unknown): k is ModKind {
-  return k === 'flood' || k === 'profanity' || k === 'spam';
+  return k === 'flood' || k === 'profanity' || k === 'spam' || k === 'auto_punish';
 }
 
 /**

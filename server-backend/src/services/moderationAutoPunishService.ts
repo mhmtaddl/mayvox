@@ -17,6 +17,7 @@ import { pool, queryOne } from '../repositories/db';
 import { invalidateAccessContext } from './accessContextService';
 import { broadcastModeration } from './moderationBroadcast';
 import { logAction } from './auditLogService';
+import { recordEvent as recordModStatEvent } from './moderationStatsService';
 
 export type AutoPunishResult =
   | { applied: false; reason: 'skipped_not_member'   }
@@ -98,6 +99,16 @@ export async function applyAutoPunishFlood(
       targetRole: target.role,
     },
   });
+
+  // Son moderasyon olayları feed'ine düşsün — channelId bilinmiyor (auto-punish
+  // flood threshold'ından tetiklendi; orijinal kanal tek bir olay değil, birden
+  // çok ihlalin toplamı). userId dolu, channelId null (Faz A).
+  try {
+    await recordModStatEvent(serverId, 'auto_punish', { userId: targetUserId, channelId: null });
+  } catch (err) {
+    // Event yazımı best-effort — ceza zaten uygulandı, event fail olsa da sorun yok.
+    console.warn('[auto-punish] event record fail:', err instanceof Error ? err.message : err);
+  }
 
   return { applied: true, reason: 'applied', expiresAt };
 }

@@ -201,7 +201,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const [eventsDenied, setEventsDenied] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventSearch, setEventSearch] = useState('');
-  const [eventKindFilter, setEventKindFilter] = useState<'all' | 'flood' | 'profanity' | 'spam'>('all');
+  const [eventKindFilter, setEventKindFilter] = useState<'all' | 'flood' | 'profanity' | 'spam' | 'auto_punish'>('all');
   const [eventPage, setEventPage] = useState(1);
   useEffect(() => {
     let cancelled = false;
@@ -661,10 +661,11 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                 }}
               >
                 {([
-                  { k: 'all', label: 'Tümü', rgb: null },
-                  { k: 'flood', label: 'Flood', rgb: '34,211,238' },
-                  { k: 'profanity', label: 'Küfür', rgb: '251,113,133' },
-                  { k: 'spam', label: 'Spam', rgb: '167,139,250' },
+                  { k: 'all',         label: 'Tümü',      rgb: null },
+                  { k: 'flood',       label: 'Flood',     rgb: '34,211,238' },
+                  { k: 'profanity',   label: 'Küfür',     rgb: '251,113,133' },
+                  { k: 'spam',        label: 'Spam',      rgb: '167,139,250' },
+                  { k: 'auto_punish', label: 'Auto Ceza', rgb: '251,191,36' },
                 ] as const).map(opt => {
                   const active = eventKindFilter === opt.k;
                   return (
@@ -904,9 +905,10 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
 
 // ── Moderation event tek satır ──
 const EVENT_KIND_META: Record<string, { rgb: string; label: string }> = {
-  flood:     { rgb: '34,211,238',  label: 'flood' },
-  profanity: { rgb: '251,113,133', label: 'küfür' },
-  spam:      { rgb: '167,139,250', label: 'spam' },
+  flood:       { rgb: '34,211,238',  label: 'flood' },
+  profanity:   { rgb: '251,113,133', label: 'küfür' },
+  spam:        { rgb: '167,139,250', label: 'spam' },
+  auto_punish: { rgb: '251,191,36',  label: 'auto ceza' },
 };
 
 function formatRelativeTime(iso: string): string {

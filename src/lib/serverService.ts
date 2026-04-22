@@ -783,7 +783,7 @@ export async function getModerationStats(serverId: string, range: ModStatRange):
   return apiFetch<ModerationStats>(`/servers/${serverId}/moderation-stats?range=${encodeURIComponent(range)}`);
 }
 
-export type ModEventKind = 'flood' | 'profanity' | 'spam';
+export type ModEventKind = 'flood' | 'profanity' | 'spam' | 'auto_punish';
 export interface ModerationEvent {
   id: string;
   kind: ModEventKind;
