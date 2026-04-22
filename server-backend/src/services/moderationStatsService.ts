@@ -8,6 +8,7 @@
  */
 import { queryOne, queryMany } from '../repositories/db';
 import { AppError } from './serverService';
+import { supabase } from '../supabaseClient';
 
 export type ModKind = 'flood' | 'profanity' | 'spam';
 
@@ -65,8 +66,10 @@ export interface ModEvent {
 }
 
 /**
- * Son N moderation event'i döner — profiles + channels join ile enrichment.
+ * Son N moderation event'i döner — Hetzner DB'den raw events + Supabase'den
+ * profile enrichment + Hetzner channels'tan channel adı.
  * Role gate üst katmanda (route) yapılır; bu fonksiyon sadece listeler.
+ * Mesaj içeriği ASLA sorgulanmaz/dönülmez.
  */
 export async function listEvents(
   serverId: string,
@@ -80,44 +83,65 @@ export async function listEvents(
     where += ` AND ms.kind = $${params.length}`;
   }
   params.push(limit);
+  // 1) Raw events + channel name (Hetzner: channels tablosu aynı DB'de)
   const rows = await queryMany<{
     id: string;
     kind: ModKind;
     user_id: string | null;
-    user_name: string | null;
-    user_avatar: string | null;
     channel_id: string | null;
     channel_name: string | null;
     created_at: string;
   }>(
     `SELECT ms.id::text, ms.kind,
             ms.user_id,
-            COALESCE(
-              NULLIF(TRIM(CONCAT_WS(' ', p.first_name, p.last_name)), ''),
-              p.name
-            ) AS user_name,
-            p.avatar AS user_avatar,
             ms.channel_id,
             c.name AS channel_name,
             ms.created_at::text
      FROM moderation_stats ms
-     LEFT JOIN profiles p ON p.id = ms.user_id
      LEFT JOIN channels c ON c.id = ms.channel_id AND c.server_id = ms.server_id
      WHERE ${where}
      ORDER BY ms.created_at DESC
      LIMIT $${params.length}`,
     params,
   );
-  return rows.map(r => ({
-    id: r.id,
-    kind: r.kind,
-    userId: r.user_id,
-    userName: r.user_name,
-    userAvatar: r.user_avatar,
-    channelId: r.channel_id,
-    channelName: r.channel_name,
-    createdAt: r.created_at,
-  }));
+
+  // 2) Profile enrichment — Supabase'den batch fetch (profiles Hetzner'da değil)
+  const userIds = [...new Set(rows.map(r => r.user_id).filter((x): x is string => !!x))];
+  const profileMap = new Map<string, { name: string; avatar: string | null }>();
+  if (userIds.length > 0) {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, name, avatar')
+        .in('id', userIds);
+      if (data) {
+        for (const p of data) {
+          const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+          profileMap.set(p.id as string, {
+            name: full || (p.name as string) || '',
+            avatar: (p.avatar as string) ?? null,
+          });
+        }
+      }
+    } catch (err) {
+      // Enrichment best-effort — fail olursa isim/avatar null döner
+      console.warn('[moderation-events] profile enrich failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return rows.map(r => {
+    const prof = r.user_id ? profileMap.get(r.user_id) : undefined;
+    return {
+      id: r.id,
+      kind: r.kind,
+      userId: r.user_id,
+      userName: prof?.name ?? null,
+      userAvatar: prof?.avatar ?? null,
+      channelId: r.channel_id,
+      channelName: r.channel_name,
+      createdAt: r.created_at,
+    };
+  });
 }
 
 /**
