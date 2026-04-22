@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ShieldCheck, TrendingUp, TrendingDown, Minus, RefreshCw, Download,
   Users as UsersIcon, Hash as HashIcon, Gavel, Zap, Filter, MessageSquareWarning,
-  ScrollText, ArrowUpRight,
+  ScrollText, ArrowUpRight, BarChart3,
 } from 'lucide-react';
 import {
   type ModerationEvent, type ActiveAutoPunishment,
@@ -12,6 +12,7 @@ import { useUser } from '../../../contexts/UserContext';
 import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
 import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 import { timeAgo } from './shared';
+import AuditLogPanel from './AuditLogPanel';
 
 interface Props {
   serverId: string;
@@ -141,7 +142,10 @@ function formatDelta(d: number): { text: string; tone: 'up' | 'down' | 'neutral'
 // ═══════════════════════════════════════════
 // Main component
 // ═══════════════════════════════════════════
+type SubTab = 'analiz' | 'kayitlar';
+
 export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
+  const [subTab, setSubTab] = useState<SubTab>('analiz');
   const [range, setRange] = useState<Range>('24h');
   const [events, setEvents] = useState<ModerationEvent[] | null>(null);
   const [active, setActive] = useState<ActiveAutoPunishment[]>([]);
@@ -230,9 +234,20 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
     );
   }
 
+  // ── Sub-tab: Kayıtlar (AuditLogPanel) ──
+  if (subTab === 'kayitlar') {
+    return (
+      <div className="max-w-[1280px] mx-auto space-y-3 pb-8">
+        <SubTabHeader subTab={subTab} onChange={setSubTab} />
+        <AuditLogPanel serverId={serverId} />
+      </div>
+    );
+  }
+
   if (loading && !events) {
     return (
       <div className="max-w-[1280px] mx-auto space-y-3">
+        <SubTabHeader subTab={subTab} onChange={setSubTab} />
         <div className="h-[88px] rounded-2xl animate-pulse" style={{ background: 'rgba(var(--glass-tint),0.04)' }} />
         <div className="h-[260px] rounded-2xl animate-pulse" style={{ background: 'rgba(var(--glass-tint),0.04)' }} />
         <div className="grid grid-cols-2 gap-3">
@@ -248,6 +263,7 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
 
   return (
     <div className="max-w-[1280px] mx-auto space-y-3 pb-8">
+      <SubTabHeader subTab={subTab} onChange={setSubTab} />
       {/* ── Utility row — range + refresh + export ── */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
@@ -354,6 +370,45 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
         }
         .denetim-series { animation: denetim-series-in 220ms ease-out; }
       `}</style>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Sub-tab header (Analiz / Kayıtlar)
+// ═══════════════════════════════════════════
+function SubTabHeader({ subTab, onChange }: { subTab: SubTab; onChange: (t: SubTab) => void }) {
+  const tabs: Array<{ key: SubTab; label: string; icon: React.ReactNode }> = [
+    { key: 'analiz',   label: 'Analiz',   icon: <BarChart3 size={12} /> },
+    { key: 'kayitlar', label: 'Kayıtlar', icon: <ScrollText size={12} /> },
+  ];
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 rounded-lg p-0.5"
+      style={{
+        background: 'rgba(var(--glass-tint),0.04)',
+        border: '1px solid rgba(var(--glass-tint),0.08)',
+      }}
+    >
+      {tabs.map(t => {
+        const active = subTab === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            className="flex items-center gap-1.5 px-3 h-7 rounded-md text-[11.5px] font-bold transition-all"
+            style={active ? {
+              background: 'rgba(var(--theme-accent-rgb),0.14)',
+              color: 'var(--theme-accent)',
+            } : {
+              color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
+            }}
+          >
+            {t.icon} {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
