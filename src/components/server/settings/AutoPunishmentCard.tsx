@@ -36,24 +36,34 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
 
   return (
     <section
-      className="automod-card rounded-2xl p-5"
+      className="automod-card rounded-2xl p-3.5"
       style={{
         background: 'rgba(var(--glass-tint), 0.04)',
         border: '1px solid rgba(var(--glass-tint), 0.08)',
       }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <Gavel size={14} className="text-amber-400" />
-          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Otomatik Ceza</h4>
+      {/* Header — başlık + ceza rozeti + toggle tek satır */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Gavel size={13} className="text-amber-400 shrink-0" />
+          <h4 className="text-[13px] font-bold text-[var(--theme-text)] truncate">Otomatik Ceza</h4>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0"
+            style={{
+              background: 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.26)',
+              color: 'rgb(251,191,36)',
+            }}
+          >
+            Yazma Engeli
+          </span>
         </div>
         <button
           type="button"
           onClick={() => set('enabled', !value.enabled)}
           role="switch"
           aria-checked={value.enabled}
-          className={`relative w-9 h-5 rounded-full transition-colors ${value.enabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+          className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${value.enabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
         >
           <span
             className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
@@ -61,18 +71,12 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
           />
         </button>
       </div>
-      <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
-        Eşiği aşan kullanıcılara sunucu otomatik ceza uygular. Korumalı roller
-        (owner / admin / moderator) bu cezadan etkilenmez.
-      </p>
 
-      {/* Inputs + Preview disabled state */}
       <div className={`transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
-        {/* 3 input yan yana */}
-        <div className="grid grid-cols-3 gap-2.5 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-2.5">
           <InputRow
             icon={<Hash size={11} />}
-            label="İhlal sayısı"
+            label="İhlal"
             unit="ihlal"
             value={value.threshold}
             min={BOUNDS.threshold.min}
@@ -81,7 +85,7 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
           />
           <InputRow
             icon={<Clock size={11} />}
-            label="Dakika içinde"
+            label="Süre"
             unit="dk"
             value={value.windowMinutes}
             min={BOUNDS.windowMinutes.min}
@@ -90,7 +94,7 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
           />
           <InputRow
             icon={<Timer size={11} />}
-            label="Dakika boyunca"
+            label="Ceza süresi"
             unit="dk"
             value={value.durationMinutes}
             min={BOUNDS.durationMinutes.min}
@@ -99,38 +103,18 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
           />
         </div>
 
-        {/* Action badge (read-only) */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/55 uppercase tracking-[0.1em]">
-            Ceza
-          </span>
-          <span
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold"
-            style={{
-              background: 'rgba(245,158,11,0.12)',
-              border: '1px solid rgba(245,158,11,0.30)',
-              color: 'rgb(251,191,36)',
-            }}
-          >
-            <Gavel size={10} /> Yazma Engeli
-          </span>
-        </div>
-
-        {/* Canlı önizleme */}
+        {/* Preview — tek satır */}
         <div
-          className="px-3.5 py-3 rounded-lg text-[12px] leading-relaxed"
+          className="px-3 py-2 rounded-lg text-[11.5px] leading-snug"
           style={{
-            background: 'rgba(var(--theme-accent-rgb),0.06)',
-            border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
+            background: 'rgba(var(--theme-accent-rgb),0.05)',
+            border: '1px solid rgba(var(--theme-accent-rgb),0.12)',
           }}
         >
-          <span className="text-[var(--theme-secondary-text)]/60 font-semibold text-[9.5px] uppercase tracking-[0.12em] block mb-1">
-            Önizleme
-          </span>
-          <span className="text-[var(--theme-text)]/90">
-            <AnimatedValue value={value.windowMinutes} suffix=" dakika" /> içinde{' '}
-            <AnimatedValue value={value.threshold} suffix=" flood ihlali" /> yapan kullanıcıya{' '}
-            <AnimatedValue value={value.durationMinutes} suffix=" dakika" /> yazma engeli uygulanır.
+          <span className="text-[var(--theme-text)]/85">
+            <AnimatedValue value={value.windowMinutes} suffix=" dk" /> içinde{' '}
+            <AnimatedValue value={value.threshold} suffix=" ihlal" /> →{' '}
+            <AnimatedValue value={value.durationMinutes} suffix=" dk" /> yazma engeli
           </span>
         </div>
       </div>

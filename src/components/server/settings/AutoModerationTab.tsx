@@ -198,6 +198,11 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setAutoPunishFlood(initial.autoPunishment?.flood ?? AUTOPUNISH_FLOOD_DEFAULT);
   };
 
+  // Refactor: Rules merged card — sadece bir sekme açık
+  const [activeRuleTab, setActiveRuleTab] = useState<'flood' | 'profanity' | 'spam'>('flood');
+  // Refactor: Aktif cezalar compact liste toggle
+  const [showAllActive, setShowAllActive] = useState(false);
+
   // Moderation stats — time range + gerçek backend fetch + 30s refresh
   const [timeRange, setTimeRange] = useState<ModStatRange>('5m');
   const [stats, setStats] = useState<ModerationStats>(EMPTY_STATS);
@@ -302,329 +307,267 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   if (loading) return <Loader />;
 
   return (
-    <div className="max-w-[760px] mx-auto space-y-4 pb-8">
-      {/* ── Hero (kontrol merkezi, minimal) ── */}
+    <div className="max-w-[760px] mx-auto space-y-3 pb-8">
+      {/* ── Summary Bar — 3 stat pill + range, tek satır, ≤64px ── */}
       <div
-        className="relative rounded-2xl px-4 py-3.5 overflow-hidden"
+        className="flex items-center gap-2 rounded-2xl px-3 py-2"
         style={{
-          background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.06), rgba(var(--theme-accent-rgb),0.01) 60%, transparent)',
-          border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
-          boxShadow: '0 1px 0 rgba(255,255,255,0.04) inset',
+          background: 'rgba(var(--glass-tint), 0.04)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        {/* Sakin sağ-üst hafif accent glow */}
-        <div
-          className="absolute -top-16 -right-12 w-44 h-44 rounded-full pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb),0.08), transparent 70%)',
-            filter: 'blur(16px)',
-          }}
-          aria-hidden="true"
-        />
-        <div className="relative flex items-start gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.16), rgba(var(--theme-accent-rgb),0.06))',
-              border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
-            }}
-          >
-            <ShieldCheck size={15} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-[14px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
-            <p className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-1 leading-snug">
-              3 katman aktif: Flood · Küfür filtresi · Spam koruması
-            </p>
-          </div>
+        <ShieldCheck size={14} className="text-[var(--theme-accent)]/80 shrink-0" strokeWidth={2} />
+        <div className="flex-1 grid grid-cols-3 gap-1.5 min-w-0">
+          <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  active={flood.enabled} />
+          <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  active={profanityEnabled} />
+          <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   active={spamEnabled} />
         </div>
-
-        {/* Hero ↔ stats ince divider */}
         <div
-          className="relative mt-3 h-px"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.18), transparent)' }}
-          aria-hidden="true"
-        />
-
-        {/* Stats — label + range selector + 3 mini pill */}
-        <div className="relative mt-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block w-1 h-1 rounded-full bg-emerald-400"
-                style={{ boxShadow: '0 0 4px rgba(52,211,153,0.55)' }}
-                aria-hidden="true"
-              />
-              <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
-                Son {RANGE_LABELS[timeRange]}
-              </span>
-            </div>
-            {/* Segmented range selector */}
-            <div
-              className="inline-flex items-center gap-0.5 rounded-lg p-0.5"
-              style={{
-                background: 'rgba(var(--glass-tint),0.05)',
-                border: '1px solid rgba(var(--glass-tint),0.08)',
-              }}
-            >
-              {(['5m', '1h', '24h'] as ModStatRange[]).map(r => {
-                const active = timeRange === r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setTimeRange(r)}
-                    className={`rangeBtn px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
-                    style={active ? {
-                      background: 'rgba(var(--theme-accent-rgb),0.22)',
-                      color: 'var(--theme-accent)',
-                      boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset, 0 0 10px rgba(var(--theme-accent-rgb),0.18)',
-                    } : {
-                      color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.58)',
-                    }}
-                  >
-                    {RANGE_LABELS[r]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  active={flood.enabled} />
-            <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  active={profanityEnabled} />
-            <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   active={spamEnabled} />
-          </div>
-          <p className="text-center text-[10px] text-[var(--theme-secondary-text)]/45 mt-2">
-            {stats.floodBlocked === 0 && stats.profanityBlocked === 0 && stats.spamBlocked === 0
-              ? 'Henüz moderasyon olayı yok'
-              : 'Seçilen zaman aralığındaki moderasyon olayları'}
-          </p>
+          className="inline-flex items-center gap-0.5 rounded-lg p-0.5 shrink-0"
+          style={{
+            background: 'rgba(var(--glass-tint),0.05)',
+            border: '1px solid rgba(var(--glass-tint),0.08)',
+          }}
+        >
+          {(['5m', '1h', '24h'] as ModStatRange[]).map(r => {
+            const active = timeRange === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setTimeRange(r)}
+                className={`rangeBtn px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
+                style={active ? {
+                  background: 'rgba(var(--theme-accent-rgb),0.18)',
+                  color: 'var(--theme-accent)',
+                } : {
+                  color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.58)',
+                }}
+              >
+                {RANGE_LABELS[r]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Flood Control ── */}
+      {/* ── Rules (merged card — tab system) ── */}
       <section
-        className="automod-card rounded-2xl p-5"
+        className="automod-card rounded-2xl"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-cyan-400" />
-            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Flood Control</h4>
-          </div>
-          <button
-            type="button"
-            onClick={() => setFlood(prev => ({ ...prev, enabled: !prev.enabled }))}
-            role="switch"
-            aria-checked={flood.enabled}
-            className={`relative w-9 h-5 rounded-full transition-colors ${flood.enabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
-          >
-            <span
-              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-              style={{ transform: flood.enabled ? 'translateX(16px)' : 'translateX(0)' }}
-            />
-          </button>
-        </div>
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-5 leading-relaxed">
-          Kısa sürede çok sayıda mesaj gönderenleri sessizce engeller. Limit aşılırsa mesaj kaydedilmez
-          ve gönderene "biraz bekle" uyarısı gider.
-        </p>
-
-        <div className={`space-y-5 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
-          <SliderRow
-            icon={<MessageSquareWarning size={12} />}
-            label="Mesaj limiti"
-            hint="Pencere içinde izin verilen maksimum mesaj"
-            unit={`${flood.limit} mesaj`}
-            value={flood.limit}
-            min={BOUNDS.limit.min}
-            max={BOUNDS.limit.max}
-            step={BOUNDS.limit.step}
-            onChange={v => setFlood(prev => ({ ...prev, limit: v }))}
-          />
-
-          <SliderRow
-            icon={<ListFilter size={12} />}
-            label="Zaman penceresi"
-            hint="Limit bu süre içinde geçerli"
-            unit={`${(flood.windowMs / 1000).toFixed(1)} sn`}
-            value={flood.windowMs}
-            min={BOUNDS.windowMs.min}
-            max={BOUNDS.windowMs.max}
-            step={BOUNDS.windowMs.step}
-            onChange={v => setFlood(prev => ({ ...prev, windowMs: v }))}
-          />
-
-          <SliderRow
-            icon={<Zap size={12} />}
-            label="Cooldown (bekleme)"
-            hint="Limit aşıldığında kullanıcının beklemesi gereken süre"
-            unit={`${(flood.cooldownMs / 1000).toFixed(1)} sn`}
-            value={flood.cooldownMs}
-            min={BOUNDS.cooldownMs.min}
-            max={BOUNDS.cooldownMs.max}
-            step={BOUNDS.cooldownMs.step}
-            onChange={v => setFlood(prev => ({ ...prev, cooldownMs: v }))}
-          />
-        </div>
-
-        {/* Live preview */}
+        {/* Tab header + aktif tab toggle */}
         <div
-          className={`mt-5 px-3 py-2.5 rounded-lg text-[11px] text-[var(--theme-secondary-text)]/75 leading-relaxed transition-opacity ${flood.enabled ? '' : 'opacity-50'}`}
-          style={{ background: 'rgba(var(--theme-accent-rgb),0.06)', border: '1px solid rgba(var(--theme-accent-rgb),0.12)' }}
+          className="flex items-center justify-between px-3 pt-2.5 pb-2"
+          style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.06)' }}
         >
-          <span className="font-semibold text-[var(--theme-text)]">Önizleme:</span>{' '}
-          {(flood.windowMs / 1000).toFixed(1)} saniyede <strong>{flood.limit}</strong> mesaj limiti.
-          Aşan kullanıcıya <strong>{(flood.cooldownMs / 1000).toFixed(1)} sn</strong> bekleme uygulanır.
-        </div>
-      </section>
-
-      {/* ── Küfür filtresi ── */}
-      <section
-        className="automod-card rounded-2xl p-5"
-        style={{
-          background: 'rgba(var(--glass-tint), 0.04)',
-          border: '1px solid rgba(var(--glass-tint), 0.08)',
-        }}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-rose-400" />
-            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Sunucu özel kelime listesi</h4>
+          <div className="inline-flex items-center gap-0.5 rounded-lg p-0.5" style={{ background: 'rgba(var(--glass-tint),0.04)' }}>
+            {([
+              { k: 'flood',     label: 'Flood',   icon: <Zap size={11} />,                 rgb: '34,211,238',  enabled: flood.enabled },
+              { k: 'profanity', label: 'Küfür',   icon: <Filter size={11} />,              rgb: '251,113,133', enabled: profanityEnabled },
+              { k: 'spam',      label: 'Spam',    icon: <MessageSquareWarning size={11} />, rgb: '167,139,250', enabled: spamEnabled },
+            ] as const).map(t => {
+              const active = activeRuleTab === t.k;
+              return (
+                <button
+                  key={t.k}
+                  type="button"
+                  onClick={() => setActiveRuleTab(t.k)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all"
+                  style={active ? {
+                    background: `rgba(${t.rgb}, 0.14)`,
+                    color: `rgb(${t.rgb})`,
+                    border: `1px solid rgba(${t.rgb}, 0.24)`,
+                  } : {
+                    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.70)',
+                    border: '1px solid transparent',
+                  }}
+                >
+                  {t.icon} {t.label}
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full ml-0.5"
+                    style={{
+                      background: t.enabled ? `rgb(${t.rgb})` : 'rgba(var(--glass-tint), 0.25)',
+                      boxShadow: t.enabled ? `0 0 4px rgba(${t.rgb}, 0.6)` : 'none',
+                    }}
+                    aria-hidden="true"
+                  />
+                </button>
+              );
+            })}
           </div>
-          <button
-            type="button"
-            onClick={() => setProfanityEnabled(v => !v)}
-            role="switch"
-            aria-checked={profanityEnabled}
-            className={`relative w-9 h-5 rounded-full transition-colors ${profanityEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
-          >
-            <span
-              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-              style={{ transform: profanityEnabled ? 'translateX(16px)' : 'translateX(0)' }}
-            />
-          </button>
-        </div>
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
-          <strong className="text-[var(--theme-text)]">Sistem kara listesi (3058 kelime) her zaman aktiftir</strong> —
-          bu toggle <u>yalnızca</u> aşağıdaki kutuya eklediğin sunucu-özel kelimeleri açar/kapatır. Türkçe
-          eklerle (salak → salakça, salakların) otomatik uyumludur.
-        </p>
-
-        <label className="block text-[11px] font-semibold text-[var(--theme-text)] mb-1.5">
-          Kelime listesi
-          <span className="ml-2 text-[10px] font-normal text-[var(--theme-secondary-text)]/55 tabular-nums">
-            ({currentWords.length} kelime)
-          </span>
-        </label>
-        <textarea
-          value={profanityText}
-          onChange={e => setProfanityText(e.target.value)}
-          disabled={!profanityEnabled}
-          rows={6}
-          placeholder={'Her satıra bir kelime yaz…\naptal\nsalak'}
-          className="w-full rounded-lg px-3 py-2 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed font-mono"
-          style={{
-            background: 'rgba(var(--glass-tint), 0.05)',
-            border: '1px solid rgba(var(--glass-tint), 0.10)',
-          }}
-        />
-        <div className="flex items-center justify-between mt-1.5 gap-3">
-          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 leading-snug">
-            Büyük/küçük harf farkı yok; Türkçe ve Latin aksanları otomatik normalize edilir.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowBlacklist(true)}
-            title="Küfür filtresi aktifken her sunucuda çalışan sistem listesi"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold shrink-0 transition-colors"
-            style={{
-              background: 'rgba(var(--glass-tint),0.06)',
-              border: '1px solid rgba(var(--glass-tint),0.15)',
-              color: 'var(--theme-text)',
-            }}
-          >
-            <BookLock size={11} /> Kara listeyi gör ({SYSTEM_BLACKLIST_TOTAL})
-          </button>
+          {/* Aktif tab'ın toggle'ı */}
+          {activeRuleTab === 'flood' && (
+            <button
+              type="button"
+              onClick={() => setFlood(prev => ({ ...prev, enabled: !prev.enabled }))}
+              role="switch"
+              aria-checked={flood.enabled}
+              className={`relative w-9 h-5 rounded-full transition-colors ${flood.enabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+            >
+              <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ transform: flood.enabled ? 'translateX(16px)' : 'translateX(0)' }} />
+            </button>
+          )}
+          {activeRuleTab === 'profanity' && (
+            <button
+              type="button"
+              onClick={() => setProfanityEnabled(v => !v)}
+              role="switch"
+              aria-checked={profanityEnabled}
+              className={`relative w-9 h-5 rounded-full transition-colors ${profanityEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+            >
+              <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ transform: profanityEnabled ? 'translateX(16px)' : 'translateX(0)' }} />
+            </button>
+          )}
+          {activeRuleTab === 'spam' && (
+            <button
+              type="button"
+              onClick={() => setSpamEnabled(v => !v)}
+              role="switch"
+              aria-checked={spamEnabled}
+              className={`relative w-9 h-5 rounded-full transition-colors ${spamEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+            >
+              <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ transform: spamEnabled ? 'translateX(16px)' : 'translateX(0)' }} />
+            </button>
+          )}
         </div>
 
-      </section>
-
-      {/* ── Kara liste modal ── */}
-      {showBlacklist && (
-        <BlacklistModal onClose={() => setShowBlacklist(false)} />
-      )}
-
-      {/* ── Spam koruması ── */}
-      <section
-        className="automod-card rounded-2xl p-5"
-        style={{
-          background: 'rgba(var(--glass-tint), 0.04)',
-          border: '1px solid rgba(var(--glass-tint), 0.08)',
-        }}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <MessageSquareWarning size={14} className="text-sky-400" />
-            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Spam koruması</h4>
+        {/* Flood tab */}
+        {activeRuleTab === 'flood' && (
+          <div className="p-3.5">
+            <div className={`space-y-3 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
+              <SliderRow
+                icon={<MessageSquareWarning size={12} />}
+                label="Mesaj limiti"
+                hint="Pencere içinde izin verilen maksimum mesaj"
+                unit={`${flood.limit} mesaj`}
+                value={flood.limit}
+                min={BOUNDS.limit.min}
+                max={BOUNDS.limit.max}
+                step={BOUNDS.limit.step}
+                onChange={v => setFlood(prev => ({ ...prev, limit: v }))}
+              />
+              <SliderRow
+                icon={<ListFilter size={12} />}
+                label="Zaman penceresi"
+                hint="Limit bu süre içinde geçerli"
+                unit={`${(flood.windowMs / 1000).toFixed(1)} sn`}
+                value={flood.windowMs}
+                min={BOUNDS.windowMs.min}
+                max={BOUNDS.windowMs.max}
+                step={BOUNDS.windowMs.step}
+                onChange={v => setFlood(prev => ({ ...prev, windowMs: v }))}
+              />
+              <SliderRow
+                icon={<Zap size={12} />}
+                label="Cooldown (bekleme)"
+                hint="Limit aşıldığında kullanıcının beklemesi gereken süre"
+                unit={`${(flood.cooldownMs / 1000).toFixed(1)} sn`}
+                value={flood.cooldownMs}
+                min={BOUNDS.cooldownMs.min}
+                max={BOUNDS.cooldownMs.max}
+                step={BOUNDS.cooldownMs.step}
+                onChange={v => setFlood(prev => ({ ...prev, cooldownMs: v }))}
+              />
+            </div>
+            <div
+              className={`mt-3 px-3 py-2 rounded-lg text-[11px] text-[var(--theme-secondary-text)]/75 leading-snug transition-opacity ${flood.enabled ? '' : 'opacity-50'}`}
+              style={{ background: 'rgba(var(--theme-accent-rgb),0.05)', border: '1px solid rgba(var(--theme-accent-rgb),0.10)' }}
+            >
+              {(flood.windowMs / 1000).toFixed(1)} saniyede <strong className="text-[var(--theme-text)]">{flood.limit}</strong> mesaj limiti · Aşanlar <strong className="text-[var(--theme-text)]">{(flood.cooldownMs / 1000).toFixed(1)} sn</strong> bekler
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setSpamEnabled(v => !v)}
-            role="switch"
-            aria-checked={spamEnabled}
-            className={`relative w-9 h-5 rounded-full transition-colors ${spamEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
-          >
-            <span
-              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-              style={{ transform: spamEnabled ? 'translateX(16px)' : 'translateX(0)' }}
+        )}
+
+        {/* Profanity tab */}
+        {activeRuleTab === 'profanity' && (
+          <div className="p-3.5">
+            <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-2.5 leading-snug">
+              <strong className="text-[var(--theme-text)]">Sistem kara listesi ({SYSTEM_BLACKLIST_TOTAL} kelime) her zaman aktif.</strong> Toggle yalnızca sunucu-özel listeyi açar/kapatır.
+            </p>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-semibold text-[var(--theme-text)]">
+                Kelime listesi
+                <span className="ml-1.5 text-[10px] font-normal text-[var(--theme-secondary-text)]/55 tabular-nums">
+                  ({currentWords.length})
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowBlacklist(true)}
+                title="Küfür filtresi aktifken her sunucuda çalışan sistem listesi"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold shrink-0 transition-colors"
+                style={{
+                  background: 'rgba(var(--glass-tint),0.06)',
+                  border: '1px solid rgba(var(--glass-tint),0.12)',
+                  color: 'var(--theme-secondary-text)',
+                }}
+              >
+                <BookLock size={10} /> Sistem listesi
+              </button>
+            </div>
+            <textarea
+              value={profanityText}
+              onChange={e => setProfanityText(e.target.value)}
+              disabled={!profanityEnabled}
+              rows={5}
+              placeholder={'Her satıra bir kelime…'}
+              className="w-full rounded-lg px-3 py-2 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+              style={{
+                background: 'rgba(var(--glass-tint), 0.05)',
+                border: '1px solid rgba(var(--glass-tint), 0.10)',
+              }}
             />
-          </button>
-        </div>
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
-          Şu şablonlar tespit edilirse mesaj gönderilmez:
-        </p>
-        <ul className="space-y-1.5 text-[11px] text-[var(--theme-secondary-text)]/75">
-          <li className="flex items-start gap-2">
-            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
-            <span><strong className="text-[var(--theme-text)]">Tekrar eden mesaj</strong> — 60 saniye içinde aynı mesaj 3+ kez</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
-            <span><strong className="text-[var(--theme-text)]">ALL CAPS</strong> — 10+ harf ve %80+'ı büyük harf</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
-            <span><strong className="text-[var(--theme-text)]">Zincir emoji</strong> — sadece emoji içeren 10+ emojilik mesaj</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[var(--theme-accent)]/70 shrink-0">•</span>
-            <span><strong className="text-[var(--theme-text)]">Link spam</strong> — tek mesajda 3+ URL</span>
-          </li>
-        </ul>
+            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
+              Büyük/küçük harf farkı yok · Türkçe ekler otomatik uyumlu
+            </p>
+          </div>
+        )}
+
+        {/* Spam tab */}
+        {activeRuleTab === 'spam' && (
+          <div className="p-3.5">
+            <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-2 leading-snug">
+              Şu şablonlar engellenir:
+            </p>
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[var(--theme-secondary-text)]/75">
+              <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">Tekrar</strong> — 60sn içinde 3+ aynı mesaj</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">ALL CAPS</strong> — 10+ harf, %80+ büyük</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">Zincir emoji</strong> — 10+ emoji</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">Link spam</strong> — tek mesajda 3+ URL</span></li>
+            </ul>
+          </div>
+        )}
       </section>
 
-      {/* ── Otomatik Ceza (MVP: flood → chat_timeout) ── */}
-      <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
+      {showBlacklist && <BlacklistModal onClose={() => setShowBlacklist(false)} />}
 
-      {/* ── Şu an cezalı (mod+ görür) ── */}
-      {!eventsDenied && (
-        <ActivePunishmentsSection items={activePunishments} resolveStatusAvatar={resolveStatusAvatar} />
-      )}
+      {/* ── Auto Punishment + Aktif cezalar (smart card) ── */}
+      <div className={`smart-punish ${!eventsDenied && activePunishments.length > 0 ? 'has-active' : ''}`}>
+        <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
+        {!eventsDenied && activePunishments.length > 0 && (
+          <ActivePunishmentsCompact
+            items={activePunishments}
+            resolveStatusAvatar={resolveStatusAvatar}
+            showAll={showAllActive}
+            onToggleShowAll={() => setShowAllActive(v => !v)}
+          />
+        )}
+      </div>
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (
         <section
-          className="automod-card rounded-2xl p-5"
+          className="automod-card rounded-2xl p-3.5"
           style={{
             background: 'rgba(var(--glass-tint), 0.04)',
             border: '1px solid rgba(var(--glass-tint), 0.08)',
           }}
         >
-          <div className="flex items-center justify-between mb-3 gap-2">
+          <div className="flex items-center justify-between mb-2.5 gap-2">
             <div className="flex items-center gap-2">
               <ScrollText size={14} className="text-[var(--theme-accent)]/80" />
               <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Son moderasyon olayları</h4>
@@ -762,7 +705,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             </div>
           ) : (
             <>
-              <ul className="space-y-1">
+              <ul className="space-y-0.5">
                 {pagedEvents.map(ev => <ModEventRow key={ev.id} ev={ev} resolveStatusAvatar={resolveStatusAvatar} />)}
               </ul>
               {eventTotalPages > 1 && (
@@ -929,6 +872,12 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           border-left: 2px solid rgba(251,191,36,0.55);
           padding-left: calc(0.625rem - 2px);
         }
+        /* Smart punishment card — AutoPunishmentCard + ActivePunishmentsCompact seamless */
+        .smart-punish.has-active > section:first-child {
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+          border-bottom: 1px solid rgba(var(--glass-tint), 0.05);
+        }
       `}</style>
     </div>
   );
@@ -1057,70 +1006,79 @@ function formatRemaining(expiresIso: string, nowMs: number): string {
   return `${m}dk ${s}sn`;
 }
 
-function ActivePunishmentsSection({ items, resolveStatusAvatar }: { items: ActiveAutoPunishment[]; resolveStatusAvatar: (userId: string | null) => string }) {
-  // 1s tick — progress bar + countdown canlı azalsın
+/**
+ * Compact aktif cezalar listesi — AutoPunishmentCard'ın altına seamless bitişik olarak
+ * render edilir (ortak wrapper içinde). Üst border yok, alt köşeler rounded.
+ * Default: max 2 görünür kart + "daha fazla" toggle.
+ */
+function ActivePunishmentsCompact({
+  items, resolveStatusAvatar, showAll, onToggleShowAll,
+}: {
+  items: ActiveAutoPunishment[];
+  resolveStatusAvatar: (userId: string | null) => string;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+}) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  // Süresi bitmiş local gizle (30s refresh server'dan da düşer)
   const live = items.filter(ev => Date.parse(ev.expiresAt) > nowMs);
+  if (live.length === 0) return null;
+
+  const visible = showAll ? live : live.slice(0, 2);
+  const hiddenCount = live.length - visible.length;
 
   return (
-    <section
-      className="automod-card rounded-2xl p-5"
+    <div
+      className="rounded-b-2xl -mt-[1px] px-3.5 pt-2.5 pb-3"
       style={{
-        background: 'rgba(var(--glass-tint), 0.04)',
+        background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.08)',
+        borderTop: '1px solid rgba(var(--glass-tint), 0.05)',
       }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Gavel size={14} className="text-amber-400" />
-          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Aktif cezalar</h4>
-          {live.length > 0 && (
-            <span className="relative inline-flex items-center justify-center w-2 h-2 ml-1" aria-hidden="true">
-              <span className="absolute inset-0 rounded-full bg-amber-400" style={{ boxShadow: '0 0 6px rgba(251,191,36,0.8)' }} />
-              <span
-                className="absolute inset-0 rounded-full"
-                style={{ background: 'rgba(251,191,36,0.55)', animation: 'statusChipPulse 2.2s ease-out infinite' }}
-              />
-            </span>
-          )}
-        </div>
-        {live.length > 0 && (
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Gavel size={11} className="text-amber-400" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/70">
+            Aktif Cezalar
+          </span>
           <span
-            className="text-[10px] font-bold tabular-nums px-2 py-0.5 rounded-full"
+            className="text-[9.5px] font-bold tabular-nums px-1.5 py-0.5 rounded-full"
             style={{
               background: 'rgba(251,191,36,0.12)',
-              border: '1px solid rgba(251,191,36,0.25)',
+              border: '1px solid rgba(251,191,36,0.22)',
               color: 'rgb(251,191,36)',
             }}
           >
-            {live.length} aktif
+            {live.length}
           </span>
+        </div>
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={onToggleShowAll}
+            className="text-[10px] font-semibold text-[var(--theme-accent)] hover:underline transition-colors"
+          >
+            {showAll ? 'Daha az göster' : `+${hiddenCount} daha göster`}
+          </button>
+        )}
+        {showAll && hiddenCount === 0 && live.length > 2 && (
+          <button
+            type="button"
+            onClick={onToggleShowAll}
+            className="text-[10px] font-semibold text-[var(--theme-accent)] hover:underline transition-colors"
+          >
+            Daha az göster
+          </button>
         )}
       </div>
-
-      {live.length === 0 ? (
-        <div
-          className="px-4 py-8 rounded-xl text-center"
-          style={{ background: 'rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint),0.06)' }}
-        >
-          <div className="text-[12.5px] font-semibold text-[var(--theme-text)]/75">
-            Şu anda aktif otomatik ceza bulunmuyor
-          </div>
-          <div className="mt-1 text-[10.5px] text-[var(--theme-secondary-text)]/50">
-            Kuralları ihlal eden kullanıcılar burada listelenir
-          </div>
-        </div>
-      ) : (
-        <ul className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-          {live.map(ev => <ActivePunishmentCard key={ev.userId} ev={ev} nowMs={nowMs} resolveStatusAvatar={resolveStatusAvatar} />)}
-        </ul>
-      )}
-    </section>
+      <ul className={`space-y-1.5 ${showAll ? 'max-h-[240px] overflow-y-auto custom-scrollbar pr-1' : ''}`}>
+        {visible.map(ev => <ActivePunishmentCard key={ev.userId} ev={ev} nowMs={nowMs} resolveStatusAvatar={resolveStatusAvatar} />)}
+      </ul>
+    </div>
   );
 }
 
@@ -1136,7 +1094,7 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number; 
 
   return (
     <li
-      className="apCard relative rounded-[14px] px-3.5 py-3"
+      className="apCard relative rounded-xl px-3 py-2.5"
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.08)',
@@ -1250,7 +1208,7 @@ const ModEventRow: React.FC<{ ev: ModerationEvent; resolveStatusAvatar: (userId:
   const isAuto = ev.kind === 'auto_punish';
   return (
     <li
-      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] ${isAuto ? 'modEventRow--auto' : ''}`}
+      className={`flex items-center gap-2.5 px-2.5 py-1 rounded-md transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] ${isAuto ? 'modEventRow--auto' : ''}`}
     >
       {/* Avatar — bozuk URL veya null → kullanıcı durum PNG'si (online/pasif/dinliyor/...) */}
       <SafeAvatar src={ev.userAvatar} statusAvatar={resolveStatusAvatar(ev.userId)} userName={ev.userName} variant="chip" />
