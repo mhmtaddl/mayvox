@@ -759,3 +759,15 @@ export async function updateModerationConfig(
     body: JSON.stringify(patch),
   });
 }
+
+// ── Moderation stats (Faz 4 telemetry) ──
+export type ModStatRange = '5m' | '1h' | '24h';
+export interface ModerationStats {
+  floodBlocked: number;
+  profanityBlocked: number;
+  spamBlocked: number;
+}
+
+export async function getModerationStats(serverId: string, range: ModStatRange): Promise<ModerationStats> {
+  return apiFetch<ModerationStats>(`/servers/${serverId}/moderation-stats?range=${encodeURIComponent(range)}`);
+}

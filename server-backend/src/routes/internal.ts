@@ -3,6 +3,7 @@ import { config } from '../config';
 import { logAction } from '../services/auditLogService';
 import { queryOne } from '../repositories/db';
 import { FLOOD_DEFAULTS, type ModerationConfig } from '../services/moderationConfigService';
+import { recordEvent, isValidKind, type ModKind } from '../services/moderationStatsService';
 
 const router = Router();
 
@@ -125,6 +126,29 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
     console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
     // Fail-safe: hata durumunda da sistem listesi aktif kalsın.
     res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true } });
+  }
+});
+
+/**
+ * POST /internal/moderation-stat-event
+ * Body: { serverId: string, kind: 'flood'|'profanity'|'spam' }
+ * chat-server block event'i için fire-and-forget hedef.
+ */
+router.post('/moderation-stat-event', async (req: Request, res: Response) => {
+  if (!requireInternal(req, res)) return;
+  const { serverId, kind } = req.body ?? {};
+  if (typeof serverId !== 'string' || !serverId) {
+    return res.status(400).json({ error: 'serverId required' });
+  }
+  if (!isValidKind(kind)) {
+    return res.status(400).json({ error: 'invalid kind' });
+  }
+  try {
+    await recordEvent(serverId, kind as ModKind);
+    res.status(204).end();
+  } catch (err) {
+    console.warn('[internal/moderation-stat-event] err', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'record_failed' });
   }
 });
 

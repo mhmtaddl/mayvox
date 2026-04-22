@@ -13,6 +13,7 @@ import { getServerOverview } from '../services/serverOverviewService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
+import { getStats as getModerationStats, isValidRange } from '../services/moderationStatsService';
 
 const router = Router();
 
@@ -116,6 +117,26 @@ router.patch('/:id/moderation-config', async (req: Request, res: Response) => {
   try {
     const next = await updateServerModerationConfig(req.params.id as string, (req as any).userId, req.body);
     res.json(next);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/moderation-stats?range=5m|1h|24h — block sayaçları */
+router.get('/:id/moderation-stats', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const range = typeof req.query.range === 'string' ? req.query.range : '5m';
+    if (!isValidRange(range)) {
+      res.status(400).json({ error: 'range must be 5m|1h|24h' });
+      return;
+    }
+    // Role gate: sunucu üyesi olsun yeter (read-only sayaçlar, hassas veri yok).
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    const stats = await getModerationStats(serverId, range);
+    res.json(stats);
   } catch (err) { handleError(res, err); }
 });
 

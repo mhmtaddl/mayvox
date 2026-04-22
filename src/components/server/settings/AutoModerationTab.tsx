@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
-  getModerationConfig, updateModerationConfig,
+  type ModerationStats, type ModStatRange,
+  getModerationConfig, updateModerationConfig, getModerationStats,
 } from '../../../lib/serverService';
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
@@ -46,6 +47,11 @@ const LANG_META: Record<string, { name: string; flag: string }> = {
 };
 
 const WORDS_PER_PAGE = 60;
+
+// Moderation stats — time-range selector
+const RANGE_LABELS: Record<ModStatRange, string> = { '5m': '5 dk', '1h': '1 saat', '24h': '24 saat' };
+const STATS_REFRESH_MS = 30_000;
+const EMPTY_STATS: ModerationStats = { floodBlocked: 0, profanityBlocked: 0, spamBlocked: 0 };
 
 interface Props {
   serverId: string;
@@ -151,6 +157,24 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setSpamEnabled(initial.spam.enabled);
   };
 
+  // Moderation stats — time range + gerçek backend fetch + 30s refresh
+  const [timeRange, setTimeRange] = useState<ModStatRange>('5m');
+  const [stats, setStats] = useState<ModerationStats>(EMPTY_STATS);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchStats = async () => {
+      try {
+        const s = await getModerationStats(serverId, timeRange);
+        if (!cancelled) setStats(s);
+      } catch {
+        // Sessizce yut — UI sayaçlar 0'da kalır, zero-state helper devreye girer.
+      }
+    };
+    fetchStats();
+    const t = setInterval(fetchStats, STATS_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [serverId, timeRange]);
+
   // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
 
@@ -158,92 +182,116 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
   return (
     <div className="max-w-[760px] mx-auto space-y-4 pb-8">
-      {/* ── Hero (kontrol merkezi) ── */}
+      {/* ── Hero (kontrol merkezi, minimal) ── */}
       <div
-        className="relative rounded-2xl p-5 overflow-hidden"
+        className="relative rounded-2xl px-4 py-3.5 overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.12), rgba(var(--theme-accent-rgb),0.02) 55%, transparent)',
-          border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
-          boxShadow: '0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(var(--theme-accent-rgb),0.07)',
+          background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.06), rgba(var(--theme-accent-rgb),0.01) 60%, transparent)',
+          border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
+          boxShadow: '0 1px 0 rgba(255,255,255,0.04) inset',
         }}
       >
-        {/* Dekoratif glow — sağ üst (yoğun) */}
+        {/* Sakin sağ-üst hafif accent glow */}
         <div
-          className="absolute -top-20 -right-16 w-56 h-56 rounded-full pointer-events-none"
+          className="absolute -top-16 -right-12 w-44 h-44 rounded-full pointer-events-none"
           style={{
-            background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb),0.18), transparent 70%)',
-            filter: 'blur(14px)',
+            background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb),0.08), transparent 70%)',
+            filter: 'blur(16px)',
           }}
           aria-hidden="true"
         />
-        {/* İkinci katman glow — sol alt (derinlik) */}
-        <div
-          className="absolute -bottom-24 -left-10 w-64 h-64 rounded-full pointer-events-none opacity-60"
-          style={{
-            background: 'radial-gradient(circle, rgba(167,139,250,0.10), transparent 70%)',
-            filter: 'blur(20px)',
-          }}
-          aria-hidden="true"
-        />
-        {/* Üstte ince highlight çizgisi */}
-        <div
-          className="absolute top-0 left-6 right-6 h-px pointer-events-none"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }}
-          aria-hidden="true"
-        />
-        <div className="relative flex items-start gap-4">
+        <div className="relative flex items-start gap-3">
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{
-              background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.24), rgba(var(--theme-accent-rgb),0.08))',
-              border: '1px solid rgba(var(--theme-accent-rgb),0.32)',
-              boxShadow: '0 1px 0 rgba(255,255,255,0.10) inset, 0 4px 16px rgba(var(--theme-accent-rgb),0.18)',
+              background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.16), rgba(var(--theme-accent-rgb),0.06))',
+              border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
             }}
           >
-            <ShieldCheck size={20} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
+            <ShieldCheck size={15} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[16px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
-            <p className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-1 leading-relaxed font-mono">
-              3 katman aktif · flood · içerik filtresi · spam davranışı
-            </p>
-            {/* Modül durum rozetleri */}
-            <div className="flex flex-wrap items-center gap-1.5 mt-3">
-              <StatusChip color="cyan"   label="Flood"  active={flood.enabled} />
-              <StatusChip color="rose"   label="Küfür"  active={profanityEnabled} />
-              <StatusChip color="violet" label="Spam"   active={spamEnabled} />
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[14px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
+              <div className="flex flex-wrap items-center gap-1 shrink-0">
+                <StatusChip color="cyan"   label="Flood"  active={flood.enabled} />
+                <StatusChip color="rose"   label="Küfür"  active={profanityEnabled} />
+                <StatusChip color="violet" label="Spam"   active={spamEnabled} />
+              </div>
             </div>
+            <p className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-1 leading-snug">
+              3 katman aktif: Flood · Küfür filtresi · Spam koruması
+            </p>
           </div>
         </div>
 
-        {/* Mini istatistik şeridi (mock — telemetry ilerde bağlanacak) */}
+        {/* Hero ↔ stats ince divider */}
         <div
-          className="relative mt-4 pt-3 flex items-center justify-between gap-3"
-          style={{ borderTop: '1px solid rgba(var(--glass-tint),0.08)' }}
-        >
-          <div className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"
-              style={{ boxShadow: '0 0 6px rgba(52,211,153,0.6)' }}
-              aria-hidden="true"
-            />
-            <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
-              Son 5 dk
-            </span>
+          className="relative mt-3 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.18), transparent)' }}
+          aria-hidden="true"
+        />
+
+        {/* Stats — label + range selector + 3 mini pill */}
+        <div className="relative mt-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-1 h-1 rounded-full bg-emerald-400"
+                style={{ boxShadow: '0 0 4px rgba(52,211,153,0.55)' }}
+                aria-hidden="true"
+              />
+              <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
+                Son {RANGE_LABELS[timeRange]}
+              </span>
+            </div>
+            {/* Segmented range selector */}
+            <div
+              className="inline-flex items-center gap-0.5 rounded-lg p-0.5"
+              style={{
+                background: 'rgba(var(--glass-tint),0.05)',
+                border: '1px solid rgba(var(--glass-tint),0.08)',
+              }}
+            >
+              {(['5m', '1h', '24h'] as ModStatRange[]).map(r => {
+                const active = timeRange === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setTimeRange(r)}
+                    className={`rangeBtn px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
+                    style={active ? {
+                      background: 'rgba(var(--theme-accent-rgb),0.22)',
+                      color: 'var(--theme-accent)',
+                      boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset, 0 0 10px rgba(var(--theme-accent-rgb),0.18)',
+                    } : {
+                      color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.58)',
+                    }}
+                  >
+                    {RANGE_LABELS[r]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-3 tabular-nums">
-            <HeroStat color="cyan"   value={0} label="flood" />
-            <span className="w-px h-3 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
-            <HeroStat color="rose"   value={0} label="küfür" />
-            <span className="w-px h-3 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
-            <HeroStat color="violet" value={0} label="spam" />
+          <div className="grid grid-cols-3 gap-1.5">
+            <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  />
+            <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  />
+            <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   />
           </div>
+          {/* Zero-state hint (tüm sayaçlar 0 iken "ölü" görünümünü yumuşatır) */}
+          {stats.floodBlocked === 0 && stats.profanityBlocked === 0 && stats.spamBlocked === 0 && (
+            <p className="text-center text-[10px] text-[var(--theme-secondary-text)]/40 mt-2">
+              Henüz moderasyon olayı yok
+            </p>
+          )}
         </div>
       </div>
 
       {/* ── Flood Control ── */}
       <section
-        className="rounded-2xl p-5"
+        className="automod-card rounded-2xl p-5"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
@@ -251,7 +299,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       >
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <Zap size={14} className="text-amber-400" />
+            <Zap size={14} className="text-cyan-400" />
             <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Flood Control</h4>
           </div>
           <button
@@ -323,7 +371,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
       {/* ── Küfür filtresi ── */}
       <section
-        className="rounded-2xl p-5"
+        className="automod-card rounded-2xl p-5"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
@@ -399,7 +447,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
       {/* ── Spam koruması ── */}
       <section
-        className="rounded-2xl p-5"
+        className="automod-card rounded-2xl p-5"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
@@ -469,12 +517,46 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         </button>
       </div>
 
-      {/* Global keyframes — hero status chip pulse */}
+      {/* Global keyframes + hover rules (saf CSS, library yok) */}
       <style>{`
         @keyframes statusChipPulse {
           0%   { transform: scale(1);   opacity: 0.55; }
           70%  { transform: scale(2.2); opacity: 0;    }
           100% { transform: scale(2.2); opacity: 0;    }
+        }
+        /* Hero stat — value değişiminde yumuşak fade-in (React key change trigger) */
+        @keyframes statValueIn {
+          from { opacity: 0; transform: translateY(2px); }
+          to   { opacity: 1; transform: translateY(0);   }
+        }
+        .statValue { animation: statValueIn 220ms ease-out; display: inline-block; }
+        /* Hero stat pill hover */
+        .statPill {
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+        }
+        .statPill:hover {
+          background: var(--statpill-hover-bg, rgba(255,255,255,0.04));
+          border-color: var(--statpill-hover-border, rgba(255,255,255,0.12));
+          transform: translateY(-1px);
+        }
+        /* Range selector */
+        .rangeBtn { cursor: pointer; }
+        .rangeBtn:not(.rangeBtn--active):hover {
+          background: rgba(var(--glass-tint), 0.10);
+          color: var(--theme-text);
+        }
+        /* StatusChip hover: cursor default, glow hafif artar */
+        .statusChip { cursor: default; }
+        .statusChip--active:hover {
+          box-shadow: var(--chip-hover-glow, none), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        /* Modül kartı hover lift (Flood / Küfür / Spam) */
+        .automod-card {
+          transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+        .automod-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
         }
       `}</style>
     </div>
@@ -490,26 +572,30 @@ const CHIP_COLOR_MAP: Record<string, { rgb: string }> = {
 
 function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet'; label: string; active: boolean }) {
   const c = CHIP_COLOR_MAP[color];
+  // Inline style'daki --rgb ve --active-* değerlerini CSS class (statusChip) hover rule'u için CSS vars olarak verir.
+  const activeStyle: React.CSSProperties = active ? {
+    background: `rgba(${c.rgb}, 0.18)`,
+    border: `1px solid rgba(${c.rgb}, 0.45)`,
+    color: `rgb(${c.rgb})`,
+    boxShadow: `0 0 14px rgba(${c.rgb}, 0.22), inset 0 1px 0 rgba(255,255,255,0.05)`,
+    ['--chip-hover-glow' as any]: `0 0 22px rgba(${c.rgb}, 0.34)`,
+  } : {
+    background: 'rgba(var(--glass-tint),0.04)',
+    border: '1px solid rgba(var(--glass-tint),0.10)',
+    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
+    ['--chip-hover-glow' as any]: 'none',
+  };
   return (
     <span
-      className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors"
-      style={active ? {
-        background: `rgba(${c.rgb}, 0.14)`,
-        border: `1px solid rgba(${c.rgb}, 0.40)`,
-        color: `rgb(${c.rgb})`,
-        boxShadow: `0 0 12px rgba(${c.rgb}, 0.18)`,
-      } : {
-        background: 'rgba(var(--glass-tint),0.04)',
-        border: '1px solid rgba(var(--glass-tint),0.10)',
-        color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.75)',
-      }}
+      className={`statusChip relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all duration-150 ${active ? 'statusChip--active' : ''}`}
+      style={activeStyle}
     >
       <span className="relative flex items-center justify-center w-2 h-2">
         <span
           className="absolute inset-0 rounded-full"
           style={{
             background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.35)',
-            boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.85)` : 'none',
+            boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.90)` : 'none',
           }}
         />
         {active && (
@@ -524,28 +610,47 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
         )}
       </span>
       {label}
-      <span className="text-[9px] font-semibold tracking-[0.12em] opacity-50 uppercase">
+      <span className="text-[9px] font-semibold tracking-[0.12em] uppercase" style={{ opacity: 0.45 }}>
         {active ? 'açık' : 'kapalı'}
       </span>
     </span>
   );
 }
 
-// ── Hero istatistik (mini sayaç) ──
-function HeroStat({ color, value, label }: { color: 'cyan' | 'rose' | 'violet'; value: number; label: string }) {
+// ── Hero istatistik pill (kompakt: renk noktası + sayı + label) ──
+// Hover rules + value fade animasyonu için className kullanır (statPill + statValue).
+function HeroStat({
+  color, value, label,
+}: { color: 'cyan' | 'rose' | 'violet'; value: number; label: string }) {
   const c = CHIP_COLOR_MAP[color];
   return (
-    <span className="inline-flex items-baseline gap-1.5">
+    <div
+      className="statPill relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5"
+      style={{
+        background: `rgba(${c.rgb}, 0.04)`,
+        border: `1px solid rgba(${c.rgb}, 0.12)`,
+        // Hover'da kullanılacak tonlar (CSS rule'dan okunur)
+        ['--statpill-hover-bg' as any]: `rgba(${c.rgb}, 0.08)`,
+        ['--statpill-hover-border' as any]: `rgba(${c.rgb}, 0.22)`,
+      }}
+    >
       <span
-        className="text-[13px] font-bold tabular-nums"
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: `rgb(${c.rgb})`, boxShadow: `0 0 7px rgba(${c.rgb}, 0.75)` }}
+        aria-hidden="true"
+      />
+      {/* Key = value → sayı değişiminde React remount + CSS fade-in animation */}
+      <span
+        key={value}
+        className="statValue text-[15px] font-bold tabular-nums leading-none"
         style={{ color: `rgb(${c.rgb})` }}
       >
         {value}
       </span>
-      <span className="text-[9.5px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/55">
+      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60">
         {label}
       </span>
-    </span>
+    </div>
   );
 }
 

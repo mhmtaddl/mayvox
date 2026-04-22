@@ -597,6 +597,26 @@ async function getChannelFloodConfig(channelId) {
   }
 }
 
+// ── Moderation stats bridge (fire-and-forget) ──
+// Block olayı gerçekleştiğinde server-backend'e event push. Timeout kısa (500ms);
+// başarısız olursa sessizce yutulur, moderation kararını etkilemez.
+async function reportModStat(serverId, kind) {
+  if (!INTERNAL_NOTIFY_SECRET || !serverId) return;
+  try {
+    await fetch(`${SERVER_BACKEND_URL}/internal/moderation-stat-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFY_SECRET,
+      },
+      body: JSON.stringify({ serverId, kind }),
+      signal: AbortSignal.timeout(500),
+    });
+  } catch {
+    // Sessizce yut — moderasyon kararı zaten yapıldı; istatistik best-effort.
+  }
+}
+
 // ── Audit bridge: chat-server → server-backend ──
 // Fire-and-forget. Audit başarısızsa DM devam eder — best-effort.
 // METADATA-ONLY: mesaj gövdesi (body/text) ASLA audit'e gönderilmez.
@@ -1084,6 +1104,8 @@ wss.on('connection', (ws) => {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {
             console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+            // Stat event sadece yeni offense'ta (cooldown içi red'ler sayaç şişirmesin).
+            if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood');
           }
           return send(ws, {
             type: 'error',
@@ -1095,6 +1117,7 @@ wss.on('connection', (ws) => {
         // Profanity: flood geçti, içerik kontrolü. Eşleşirse sessizce reddet (logla ama DB/broadcast yapma).
         if (messageHasProfanity(text, cfg?.profanity)) {
           console.log(`[profanity] block userId=${userId} server=${cfg?.serverId || '-'} len=${text.length}`);
+          if (cfg?.serverId) void reportModStat(cfg.serverId, 'profanity');
           return send(ws, {
             type: 'error',
             code: 'profanity_blocked',
@@ -1106,6 +1129,7 @@ wss.on('connection', (ws) => {
           const spamRes = spamGuard.checkSpam(userId, text);
           if (spamRes.spam) {
             console.log(`[spam] block userId=${userId} server=${cfg?.serverId || '-'} reason=${spamRes.reason} len=${text.length}`);
+            if (cfg?.serverId) void reportModStat(cfg.serverId, 'spam');
             return send(ws, {
               type: 'error',
               code: 'spam_blocked',
