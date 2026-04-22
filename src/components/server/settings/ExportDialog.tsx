@@ -58,21 +58,37 @@ export default function ExportDialog({
     ? `Tek tarih · ${fmtDay(range[0])}`
     : `Aralık · ${fmtDay(range[0])} — ${fmtDay(range[1])}`;
 
+  const [errMsg, setErrMsg] = useState<string | null>(null);
   const handleDownload = async () => {
     setBusy(true);
-    try { await onDownload(mode, range); onClose(); }
-    finally { setBusy(false); }
+    setErrMsg(null);
+    try {
+      await onDownload(mode, range);
+      onClose();
+    } catch (e: any) {
+      const m = e instanceof Error ? e.message : String(e);
+      console.error('[ExportDialog] download failed:', e);
+      setErrMsg(m || 'İndirme başarısız');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div
-      className="fixed inset-0 z-[700] flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.40)' }}
-      onMouseDown={() => !busy && onClose()}
+      className="fixed inset-0 z-[700] flex items-center justify-center px-4 pointer-events-none"
     >
+      {/* Şeffaf click-catcher — arka planı KARARTMIYOR, sadece dışarı tıklanınca modal kapanır */}
       <div
-        className="surface-elevated relative w-full max-w-[400px] rounded-2xl overflow-hidden"
-        style={{ animation: 'edModalIn 200ms cubic-bezier(0.2,0.8,0.2,1)' }}
+        className="absolute inset-0 pointer-events-auto"
+        onMouseDown={() => !busy && onClose()}
+      />
+      <div
+        className="surface-elevated relative w-full max-w-[400px] rounded-2xl overflow-hidden pointer-events-auto"
+        style={{
+          animation: 'edModalIn 200ms cubic-bezier(0.2,0.8,0.2,1)',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.30)',
+        }}
         onMouseDown={e => e.stopPropagation()}
       >
         <div
@@ -163,6 +179,18 @@ export default function ExportDialog({
             </div>
           )}
         </div>
+
+        {errMsg && (
+          <div
+            className="mx-5 mb-2 px-3 py-2 rounded-lg text-[11px] text-red-300"
+            style={{
+              background: 'rgba(239,68,68,0.10)',
+              border: '1px solid rgba(239,68,68,0.25)',
+            }}
+          >
+            {errMsg}
+          </div>
+        )}
 
         <div
           className="flex items-center justify-end gap-2 px-5 py-3"

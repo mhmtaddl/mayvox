@@ -40,7 +40,13 @@ export interface ExportConfig {
 }
 
 export async function downloadXlsx(cfg: ExportConfig): Promise<void> {
-  const ExcelJS = (await import('exceljs')).default;
+  // ExcelJS UMD — bundler'a göre default veya namespace'te olabilir. İkisini de dene.
+  const mod: any = await import('exceljs');
+  const ExcelJS: any = mod.default ?? mod;
+  if (!ExcelJS?.Workbook) {
+    console.error('[exportXlsx] ExcelJS yüklenemedi:', mod);
+    throw new Error('XLSX kütüphanesi yüklenemedi');
+  }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'MayVox';
