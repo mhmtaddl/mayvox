@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel, ShieldCheck, Save, RotateCcw } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, ShieldCheck, Save, RotateCcw } from 'lucide-react';
 import type { AutoModActions } from './settings/AutoModerationTab';
 import type { GeneralActions } from './settings/GeneralTab';
 import {
@@ -14,15 +14,15 @@ import DenetimTab from './settings/DenetimTab';
 import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
 import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
-import ModerationTab from './settings/ModerationTab';
 import AutoModerationTab from './settings/AutoModerationTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'moderation' | 'automod' | 'audit';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'audit';
 // Legacy initialTab input:
-//   'bans'     → 'moderation' tab
+//   'bans'     → 'members' tab (banlı kullanıcılar MembersTab altında)
 //   'requests' → 'invites' tab + Başvurular sub-section
-type TabInput = Tab | 'bans' | 'requests';
+//   'moderation' → 'members' (ModerationTab kaldırıldı, ban listesi MembersTab'ta)
+type TabInput = Tab | 'bans' | 'requests' | 'moderation';
 
 interface ResolvedInitial {
   tab: Tab;
@@ -31,7 +31,8 @@ interface ResolvedInitial {
 
 function resolveInitial(t: TabInput | undefined): ResolvedInitial {
   if (!t) return { tab: 'overview' };
-  if (t === 'bans') return { tab: 'moderation' };
+  // Legacy aliases — ModerationTab kaldırıldı, ban listesi MembersTab altında.
+  if (t === 'bans' || t === 'moderation') return { tab: 'members' };
   if (t === 'requests') return { tab: 'invites', invitesSubTab: 'requests' };
   return { tab: t };
 }
@@ -165,7 +166,6 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
       // Admin için pending başvuru sayısı rozet olarak Davetler tab'ında görünür
       badge: (canManageServer && pendingRequestCount > 0) ? pendingRequestCount : undefined,
     }] : []),
-    ...(canKickMembers ? [{ id: 'moderation' as Tab, label: 'Moderasyon', icon: <Gavel size={13} /> }] : []),
     ...(canKickMembers ? [{ id: 'automod' as Tab, label: 'Oto-Mod', icon: <ShieldCheck size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
   ];
@@ -308,7 +308,6 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               onModeChange={setInvitesMode}
             />
           )}
-          {tab === 'moderation' && canKickMembers && <ModerationTab serverId={serverId} showToast={showToast} />}
           {tab === 'automod' && canKickMembers && (
             <AutoModerationTab
               serverId={serverId}

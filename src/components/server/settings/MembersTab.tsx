@@ -25,6 +25,7 @@ import RolePicker from './RolePicker';
 import TimeoutPicker from './TimeoutPicker';
 import PunishmentHistoryModal from './PunishmentHistoryModal';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
+import BannedUsersSection from './BannedUsersSection';
 
 interface Props {
   serverId: string;
@@ -445,6 +446,9 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           })}
         </div>
       )}
+
+      {/* ── Yasaklı kullanıcılar (ModerationTab'tan taşındı) ── */}
+      <BannedUsersSection serverId={serverId} showToast={showToast} />
 
       {/* ── Popovers (tekil) ── */}
       {popover?.kind === 'action' && (
