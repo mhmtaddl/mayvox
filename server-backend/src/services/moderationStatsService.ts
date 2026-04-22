@@ -75,8 +75,8 @@ export async function listEvents(
   serverId: string,
   opts: { limit?: number; kind?: ModKind } = {},
 ): Promise<ModEvent[]> {
-  // UI erişim tavanı 1000 — daha geniş geçmiş için ayrı "tüm geçmişi dışa aktar" feature lazım.
-  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 1000);
+  // UI erişim tavanı 1000; export path'i için 50.000 hard cap.
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 50_000);
   const params: unknown[] = [serverId];
   let where = `ms.server_id = $1`;
   if (opts.kind) {

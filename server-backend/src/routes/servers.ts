@@ -165,6 +165,46 @@ router.get('/:id/moderation-events', async (req: Request, res: Response) => {
   } catch (err) { handleError(res, err); }
 });
 
+/** GET /servers/:id/moderation-events/export?kind=flood|profanity|spam
+ *  CSV export — hard cap 50.000 satır. Aynı role gate (canKickMembers).
+ *  Mesaj içeriği DAHİL DEĞİL — sadece metadata.
+ */
+router.get('/:id/moderation-events/export', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    if (!ctx.flags.canKickMembers) {
+      res.status(403).json({ error: 'Moderasyon olaylarını dışa aktarma yetkin yok' });
+      return;
+    }
+    const rawKind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
+    const kind = rawKind && isValidKind(rawKind) ? rawKind : undefined;
+    const events = await listModerationEvents(serverId, { limit: 50_000, kind });
+    // CSV header + rows. Escape: double-quote wrap, içindeki " → ""
+    const esc = (v: string | null | undefined): string => {
+      const s = v ?? '';
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = 'id,kind,user_id,user_name,channel_id,channel_name,created_at';
+    const lines = events.map(ev => [
+      esc(ev.id), esc(ev.kind), esc(ev.userId), esc(ev.userName),
+      esc(ev.channelId), esc(ev.channelName), esc(ev.createdAt),
+    ].join(','));
+    // UTF-8 BOM — Excel TR karakterleri doğru okur.
+    const csv = '﻿' + header + '\n' + lines.join('\n') + '\n';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const suffix = kind ? `-${kind}` : '';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="moderation-events${suffix}-${stamp}.csv"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(csv);
+  } catch (err) { handleError(res, err); }
+});
+
 /** GET /servers/:id/audit-log — admin audit feed (SERVER_MANAGE) */
 router.get('/:id/audit-log', async (req: Request, res: Response) => {
   try {

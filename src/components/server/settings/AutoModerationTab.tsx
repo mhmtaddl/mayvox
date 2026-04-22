@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon, Download } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
   type ModerationEvent,
   getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
+  exportModerationEventsCsv,
 } from '../../../lib/serverService';
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
@@ -222,6 +223,22 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   // Filter/search değişince sayfa 1'e reset
   useEffect(() => { setEventPage(1); }, [eventSearch, eventKindFilter]);
 
+  // CSV export — aktif kind filter URL'e yansır.
+  const [exporting, setExporting] = useState(false);
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      await exportModerationEventsCsv(serverId, {
+        kind: eventKindFilter === 'all' ? undefined : eventKindFilter,
+      });
+      showToast('Moderasyon olayları dışa aktarıldı');
+    } catch (err: any) {
+      showToast(err?.message || 'Dışa aktarım başarısız');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
 
@@ -258,14 +275,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             <ShieldCheck size={15} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[14px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
-              <div className="flex flex-wrap items-center gap-1 shrink-0">
-                <StatusChip color="cyan"   label="Flood"  active={flood.enabled} />
-                <StatusChip color="rose"   label="Küfür"  active={profanityEnabled} />
-                <StatusChip color="violet" label="Spam"   active={spamEnabled} />
-              </div>
-            </div>
+            <h3 className="text-[14px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
             <p className="text-[10.5px] text-[var(--theme-secondary-text)]/70 mt-1 leading-snug">
               3 katman aktif: Flood · Küfür filtresi · Spam koruması
             </p>
@@ -549,19 +559,46 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             border: '1px solid rgba(var(--glass-tint), 0.08)',
           }}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-2">
             <div className="flex items-center gap-2">
               <ScrollText size={14} className="text-[var(--theme-accent)]/80" />
               <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Son moderasyon olayları</h4>
             </div>
-            {events && events.length > 0 && (
-              <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
-                {filteredEvents.length === events.length
-                  ? `${events.length} olay`
-                  : `${filteredEvents.length} / ${events.length} olay`}
-                {eventTotalPages > 1 && <span className="text-[var(--theme-secondary-text)]/35"> · sayfa {eventCurrentPage}/{eventTotalPages}</span>}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {events && events.length > 0 && (
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
+                  {filteredEvents.length === events.length
+                    ? `${events.length} olay`
+                    : `${filteredEvents.length} / ${events.length} olay`}
+                  {eventTotalPages > 1 && <span className="text-[var(--theme-secondary-text)]/35"> · sayfa {eventCurrentPage}/{eventTotalPages}</span>}
+                </span>
+              )}
+              {events && events.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={exporting}
+                  title={
+                    eventKindFilter === 'all'
+                      ? 'Tüm olayları CSV olarak dışa aktar (en fazla 50.000 satır)'
+                      : `"${eventKindFilter}" türündeki olayları CSV olarak dışa aktar`
+                  }
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'rgba(var(--theme-accent-rgb),0.10)',
+                    border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
+                    color: 'var(--theme-accent)',
+                  }}
+                >
+                  {exporting ? (
+                    <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                  ) : (
+                    <Download size={11} />
+                  )}
+                  {exporting ? 'Hazırlanıyor…' : 'CSV indir'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Toolbar — search + kind filter */}
@@ -947,15 +984,13 @@ function HeroStat({
       >
         {value}
       </span>
-      <div className="flex flex-col leading-tight min-w-0">
-        <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/65">
-          {label}
-        </span>
-        <span className="text-[8.5px] font-semibold uppercase tracking-[0.1em]"
-          style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)', opacity: active ? 0.7 : 0.4 }}>
-          {active ? 'açık' : 'kapalı'}
-        </span>
-      </div>
+      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/65">
+        {label}
+      </span>
+      <span className="ml-auto text-[9px] font-semibold uppercase tracking-[0.1em] pl-1.5 shrink-0"
+        style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)', opacity: active ? 0.75 : 0.4 }}>
+        {active ? 'açık' : 'kapalı'}
+      </span>
     </div>
   );
 }
