@@ -23,7 +23,7 @@ import { formatRemainingFromIso, getRemainingMs } from '../../../lib/formatTimeo
 import ActionMenu, { type ActionItem } from './ActionMenu';
 import RolePicker from './RolePicker';
 import TimeoutPicker from './TimeoutPicker';
-import ModerationHistoryPopover from './ModerationHistoryPopover';
+import PunishmentHistoryModal from './PunishmentHistoryModal';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
 
 interface Props {
@@ -473,10 +473,9 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         />
       )}
       {popover?.kind === 'history' && (
-        <ModerationHistoryPopover
+        <PunishmentHistoryModal
           serverId={serverId}
           member={popover.member}
-          anchorRect={popover.rect}
           onClose={() => setPopover(null)}
           onToast={(m) => showToastRef.current(m)}
         />
