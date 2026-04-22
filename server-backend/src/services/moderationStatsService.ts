@@ -98,7 +98,7 @@ export async function listEvents(
             c.name AS channel_name,
             ms.created_at::text
      FROM moderation_stats ms
-     LEFT JOIN channels c ON c.id = ms.channel_id AND c.server_id = ms.server_id
+     LEFT JOIN channels c ON c.id::text = ms.channel_id AND c.server_id::text = ms.server_id
      WHERE ${where}
      ORDER BY ms.created_at DESC
      LIMIT $${params.length}`,
