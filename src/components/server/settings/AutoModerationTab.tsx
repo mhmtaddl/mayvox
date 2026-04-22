@@ -176,19 +176,20 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     return () => { cancelled = true; clearInterval(t); };
   }, [serverId, timeRange]);
 
-  // Moderation events (detay feed) — sadece mod+ görür.
-  // 403 dönerse section hiç render edilmez (gate'li).
+  // Moderation events — fetch (limit 1000 — UI tavanı) + client-side filter/search/paginate.
   const [events, setEvents] = useState<ModerationEvent[] | null>(null);
   const [eventsDenied, setEventsDenied] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventSearch, setEventSearch] = useState('');
+  const [eventKindFilter, setEventKindFilter] = useState<'all' | 'flood' | 'profanity' | 'spam'>('all');
+  const [eventPage, setEventPage] = useState(1);
   useEffect(() => {
     let cancelled = false;
     const fetchEvents = async () => {
       try {
-        const list = await getModerationEvents(serverId, { limit: 50 });
+        const list = await getModerationEvents(serverId, { limit: 1000 });
         if (!cancelled) { setEvents(list); setEventsDenied(false); }
       } catch (err: any) {
-        // 403 → kullanıcı mod değil; section kalıcı gizlenir.
         if (!cancelled && /yetkin yok|üyesi değil/i.test(err?.message || '')) {
           setEventsDenied(true);
         }
@@ -200,6 +201,26 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     const t = setInterval(fetchEvents, STATS_REFRESH_MS);
     return () => { cancelled = true; clearInterval(t); };
   }, [serverId]);
+
+  // Filter/search uygulanır → pagination (15/sayfa)
+  const filteredEvents = useMemo(() => {
+    if (!events) return [];
+    const q = eventSearch.trim().toLowerCase();
+    return events.filter(ev => {
+      if (eventKindFilter !== 'all' && ev.kind !== eventKindFilter) return false;
+      if (q) {
+        const hay = [ev.userName || '', ev.channelName || ''].join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [events, eventSearch, eventKindFilter]);
+  const EVENTS_PER_PAGE = 15;
+  const eventTotalPages = Math.max(1, Math.ceil(filteredEvents.length / EVENTS_PER_PAGE));
+  const eventCurrentPage = Math.min(eventPage, eventTotalPages);
+  const pagedEvents = filteredEvents.slice((eventCurrentPage - 1) * EVENTS_PER_PAGE, eventCurrentPage * EVENTS_PER_PAGE);
+  // Filter/search değişince sayfa 1'e reset
+  useEffect(() => { setEventPage(1); }, [eventSearch, eventKindFilter]);
 
   // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
@@ -302,16 +323,15 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-1.5">
-            <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  />
-            <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  />
-            <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   />
+            <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  active={flood.enabled} />
+            <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  active={profanityEnabled} />
+            <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   active={spamEnabled} />
           </div>
-          {/* Zero-state hint (tüm sayaçlar 0 iken "ölü" görünümünü yumuşatır) */}
-          {stats.floodBlocked === 0 && stats.profanityBlocked === 0 && stats.spamBlocked === 0 && (
-            <p className="text-center text-[10px] text-[var(--theme-secondary-text)]/40 mt-2">
-              Henüz moderasyon olayı yok
-            </p>
-          )}
+          <p className="text-center text-[10px] text-[var(--theme-secondary-text)]/45 mt-2">
+            {stats.floodBlocked === 0 && stats.profanityBlocked === 0 && stats.spamBlocked === 0
+              ? 'Henüz moderasyon olayı yok'
+              : 'Seçilen zaman aralığındaki moderasyon olayları'}
+          </p>
         </div>
       </div>
 
@@ -536,10 +556,82 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             </div>
             {events && events.length > 0 && (
               <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
-                {events.length} olay
+                {filteredEvents.length === events.length
+                  ? `${events.length} olay`
+                  : `${filteredEvents.length} / ${events.length} olay`}
+                {eventTotalPages > 1 && <span className="text-[var(--theme-secondary-text)]/35"> · sayfa {eventCurrentPage}/{eventTotalPages}</span>}
               </span>
             )}
           </div>
+
+          {/* Toolbar — search + kind filter */}
+          {events && events.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div
+                className="flex-1 min-w-[180px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                style={{
+                  background: 'rgba(var(--glass-tint), 0.04)',
+                  border: '1px solid rgba(var(--glass-tint), 0.08)',
+                }}
+              >
+                <Search size={11} className="text-[var(--theme-secondary-text)]/40 shrink-0" />
+                <input
+                  type="text"
+                  value={eventSearch}
+                  onChange={e => setEventSearch(e.target.value)}
+                  placeholder="Kullanıcı veya kanal ara..."
+                  className="flex-1 bg-transparent text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none min-w-0"
+                />
+                {eventSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setEventSearch('')}
+                    className="text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-text)] transition-colors shrink-0"
+                    title="Temizle"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              {/* Kind filter — segmented control */}
+              <div
+                className="inline-flex items-center gap-0.5 rounded-lg p-0.5 shrink-0"
+                style={{
+                  background: 'rgba(var(--glass-tint), 0.04)',
+                  border: '1px solid rgba(var(--glass-tint), 0.08)',
+                }}
+              >
+                {([
+                  { k: 'all', label: 'Tümü', rgb: null },
+                  { k: 'flood', label: 'Flood', rgb: '34,211,238' },
+                  { k: 'profanity', label: 'Küfür', rgb: '251,113,133' },
+                  { k: 'spam', label: 'Spam', rgb: '167,139,250' },
+                ] as const).map(opt => {
+                  const active = eventKindFilter === opt.k;
+                  return (
+                    <button
+                      key={opt.k}
+                      type="button"
+                      onClick={() => setEventKindFilter(opt.k)}
+                      className="rangeBtn px-2 py-0.5 rounded-md text-[10px] font-bold transition-all"
+                      style={active && opt.rgb ? {
+                        background: `rgba(${opt.rgb}, 0.18)`,
+                        color: `rgb(${opt.rgb})`,
+                        boxShadow: `0 0 8px rgba(${opt.rgb}, 0.14)`,
+                      } : active ? {
+                        background: 'rgba(var(--theme-accent-rgb),0.18)',
+                        color: 'var(--theme-accent)',
+                      } : {
+                        color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.62)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {eventsLoading && events === null ? (
             <div className="space-y-1.5">
@@ -553,15 +645,80 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             </div>
           ) : !events || events.length === 0 ? (
             <div
-              className="px-3 py-6 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+              className="px-3 py-8 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
               style={{ background: 'rgba(var(--glass-tint),0.03)' }}
             >
               Henüz moderasyon olayı yok
             </div>
+          ) : filteredEvents.length === 0 ? (
+            <div
+              className="px-3 py-8 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+              style={{ background: 'rgba(var(--glass-tint),0.03)' }}
+            >
+              Bu filtrelerle eşleşen moderasyon olayı yok
+            </div>
           ) : (
-            <ul className="space-y-1">
-              {events.map(ev => <ModEventRow key={ev.id} ev={ev} />)}
-            </ul>
+            <>
+              <ul className="space-y-1">
+                {pagedEvents.map(ev => <ModEventRow key={ev.id} ev={ev} />)}
+              </ul>
+              {eventTotalPages > 1 && (
+                <div
+                  className="mt-3 pt-3 flex items-center justify-between gap-2"
+                  style={{ borderTop: '1px solid rgba(var(--glass-tint),0.06)' }}
+                >
+                  <button
+                    type="button"
+                    disabled={eventCurrentPage <= 1}
+                    onClick={() => setEventPage(p => Math.max(1, p - 1))}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'rgba(var(--glass-tint),0.05)',
+                      border: '1px solid rgba(var(--glass-tint),0.10)',
+                      color: 'var(--theme-text)',
+                    }}
+                  >
+                    <ChevronLeft size={11} /> Önceki
+                  </button>
+                  <div className="flex items-center gap-0.5">
+                    {buildPageNumbers(eventCurrentPage, eventTotalPages).map((n, i) =>
+                      n === '…' ? (
+                        <span key={`pg-dots-${i}`} className="px-1 text-[10px] text-[var(--theme-secondary-text)]/35">…</span>
+                      ) : (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setEventPage(n as number)}
+                          className="w-6 h-6 rounded-md text-[10px] font-bold tabular-nums transition-colors"
+                          style={n === eventCurrentPage ? {
+                            background: 'var(--theme-accent)',
+                            color: 'var(--theme-text-on-accent, #000)',
+                          } : {
+                            background: 'rgba(var(--glass-tint),0.04)',
+                            color: 'var(--theme-secondary-text)',
+                          }}
+                        >
+                          {n}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={eventCurrentPage >= eventTotalPages}
+                    onClick={() => setEventPage(p => Math.min(eventTotalPages, p + 1))}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'rgba(var(--glass-tint),0.05)',
+                      border: '1px solid rgba(var(--glass-tint),0.10)',
+                      color: 'var(--theme-text)',
+                    }}
+                  >
+                    Sonraki <ChevronRight size={11} />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -682,9 +839,6 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
         )}
       </span>
       {label}
-      <span className="text-[9px] font-semibold tracking-[0.12em] uppercase" style={{ opacity: 0.45 }}>
-        {active ? 'açık' : 'kapalı'}
-      </span>
     </span>
   );
 }
@@ -760,39 +914,48 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
   );
 };
 
-// ── Hero istatistik pill (kompakt: renk noktası + sayı + label) ──
+// ── Hero istatistik pill (kompakt: renk noktası + sayı + label + durum) ──
 // Hover rules + value fade animasyonu için className kullanır (statPill + statValue).
 function HeroStat({
-  color, value, label,
-}: { color: 'cyan' | 'rose' | 'violet'; value: number; label: string }) {
+  color, value, label, active,
+}: { color: 'cyan' | 'rose' | 'violet'; value: number; label: string; active: boolean }) {
   const c = CHIP_COLOR_MAP[color];
   return (
     <div
-      className="statPill relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5"
+      className="statPill relative flex items-center gap-2 rounded-lg px-2.5 py-1.5"
       style={{
-        background: `rgba(${c.rgb}, 0.04)`,
-        border: `1px solid rgba(${c.rgb}, 0.12)`,
-        // Hover'da kullanılacak tonlar (CSS rule'dan okunur)
-        ['--statpill-hover-bg' as any]: `rgba(${c.rgb}, 0.08)`,
-        ['--statpill-hover-border' as any]: `rgba(${c.rgb}, 0.22)`,
+        background: active ? `rgba(${c.rgb}, 0.04)` : 'rgba(var(--glass-tint),0.03)',
+        border: active ? `1px solid rgba(${c.rgb}, 0.12)` : '1px solid rgba(var(--glass-tint),0.08)',
+        opacity: active ? 1 : 0.55,
+        ['--statpill-hover-bg' as any]: active ? `rgba(${c.rgb}, 0.08)` : 'rgba(var(--glass-tint),0.06)',
+        ['--statpill-hover-border' as any]: active ? `rgba(${c.rgb}, 0.22)` : 'rgba(var(--glass-tint),0.14)',
       }}
     >
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: `rgb(${c.rgb})`, boxShadow: `0 0 7px rgba(${c.rgb}, 0.75)` }}
+        style={{
+          background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.45)',
+          boxShadow: active ? `0 0 7px rgba(${c.rgb}, 0.75)` : 'none',
+        }}
         aria-hidden="true"
       />
       {/* Key = value → sayı değişiminde React remount + CSS fade-in animation */}
       <span
         key={value}
         className="statValue text-[15px] font-bold tabular-nums leading-none"
-        style={{ color: `rgb(${c.rgb})` }}
+        style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)' }}
       >
         {value}
       </span>
-      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60">
-        {label}
-      </span>
+      <div className="flex flex-col leading-tight min-w-0">
+        <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/65">
+          {label}
+        </span>
+        <span className="text-[8.5px] font-semibold uppercase tracking-[0.1em]"
+          style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)', opacity: active ? 0.7 : 0.4 }}>
+          {active ? 'açık' : 'kapalı'}
+        </span>
+      </div>
     </div>
   );
 }
