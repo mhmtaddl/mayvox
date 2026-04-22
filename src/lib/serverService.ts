@@ -795,8 +795,8 @@ export async function getModerationEvents(
   return apiFetch<ModerationEvent[]>(`/servers/${serverId}/moderation-events${qs ? `?${qs}` : ''}`);
 }
 
-/** CSV export — browser download tetikler. */
-export async function exportModerationEventsCsv(
+/** Moderation events export — XLSX (ExcelJS server-side). Browser download tetikler. */
+export async function exportModerationEventsXlsx(
   serverId: string,
   opts: { kind?: ModEventKind } = {},
 ): Promise<void> {
@@ -810,10 +810,9 @@ export async function exportModerationEventsCsv(
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, body.error || `Dışa aktarım başarısız (${res.status})`);
   }
-  // Filename'i header'dan ya da fallback ile üret
   const cd = res.headers.get('Content-Disposition') || '';
   const match = /filename="([^"]+)"/.exec(cd);
-  const filename = match?.[1] || `moderation-events-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = match?.[1] || `moderasyon-kayitlari-${new Date().toISOString().slice(0, 10)}.xlsx`;
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

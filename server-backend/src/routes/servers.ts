@@ -14,6 +14,8 @@ import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
+import ExcelJS from 'exceljs';
+import { queryOne } from '../repositories/db';
 
 const router = Router();
 
@@ -184,13 +186,15 @@ router.get('/:id/moderation-events/export', async (req: Request, res: Response) 
     const rawKind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
     const kind = rawKind && isValidKind(rawKind) ? rawKind : undefined;
     const events = await listModerationEvents(serverId, { limit: 50_000, kind });
-    // CSV escape: double-quote wrap, içindeki " → ""
-    const esc = (v: string | null | undefined): string => {
-      const s = v ?? '';
-      return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
+    // Sunucu adı (rapor başlığı için)
+    const srvRow = await queryOne<{ name: string }>(
+      'SELECT name FROM servers WHERE id = $1',
+      [serverId],
+    );
+    const serverName = srvRow?.name || serverId;
     // kind → TR etiket
     const KIND_TR: Record<string, string> = { flood: 'Flood', profanity: 'Küfür', spam: 'Spam' };
+    const FILTER_LABEL = kind ? KIND_TR[kind] || kind : 'Tümü';
     // ISO → "22.04.2026 16:15:07" (Europe/Istanbul)
     const fmtDate = (iso: string): string => {
       try {
@@ -203,26 +207,134 @@ router.get('/:id/moderation-events/export', async (req: Request, res: Response) 
         });
       } catch { return iso; }
     };
-    // TR Excel uyumlu: semicolon separator (Türkçe Windows Excel default ayırıcı)
-    const SEP = ';';
-    const header = ['Kayıt No', 'Olay Türü', 'Kullanıcı', 'Kullanıcı ID', 'Kanal', 'Kanal ID', 'Tarih'].join(SEP);
-    const lines = events.map(ev => [
-      esc(ev.id),
-      esc(KIND_TR[ev.kind] || ev.kind),
-      esc(ev.userName || 'Bilinmiyor'),
-      esc(ev.userId),
-      esc(ev.channelName || ''),
-      esc(ev.channelId),
-      esc(fmtDate(ev.createdAt)),
-    ].join(SEP));
-    // UTF-8 BOM — Excel TR karakterleri doğru okur.
-    const csv = '﻿' + header + '\r\n' + lines.join('\r\n') + '\r\n';
+    const nowLabel = fmtDate(new Date().toISOString());
+
+    // ── ExcelJS workbook ──
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'MayVox';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Moderasyon Kayıtları', {
+      pageSetup: {
+        orientation: 'landscape',
+        paperSize: 9, // A4
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.5, right: 0.5, top: 0.55, bottom: 0.55, header: 0.3, footer: 0.3 },
+        printTitlesRow: '7:7', // header her sayfada tekrar
+      },
+      views: [{ state: 'frozen', ySplit: 7 }], // header sabit (scroll'da)
+    });
+
+    // Kolon genişlikleri (sabit, okunabilir)
+    ws.columns = [
+      { key: 'id',          width: 10 },
+      { key: 'kind',        width: 12 },
+      { key: 'user',        width: 22 },
+      { key: 'userId',      width: 40 },
+      { key: 'channel',     width: 22 },
+      { key: 'channelId',   width: 40 },
+      { key: 'at',          width: 22 },
+    ];
+
+    // ── Rapor başlığı bloğu (A1:G5) ──
+    const ACCENT = 'FF6366F1'; // indigo — MayVox accent'e yakın
+    ws.mergeCells('A1:G1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = 'Moderasyon Kayıtları Raporu';
+    titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+    ws.getRow(1).height = 28;
+
+    const metaLabelFont = { bold: true, color: { argb: 'FF334155' } };
+    const metaValueFont = { color: { argb: 'FF0F172A' } };
+    const metaPairs: Array<[string, string]> = [
+      ['Sunucu:',       serverName],
+      ['Oluşturulma:',  nowLabel],
+      ['Filtre:',       FILTER_LABEL],
+      ['Toplam Kayıt:', String(events.length)],
+    ];
+    metaPairs.forEach((pair, i) => {
+      const row = i + 2;
+      const lbl = ws.getCell(`A${row}`);
+      lbl.value = pair[0];
+      lbl.font = metaLabelFont;
+      lbl.alignment = { horizontal: 'right', vertical: 'middle' };
+      ws.mergeCells(`B${row}:G${row}`);
+      const val = ws.getCell(`B${row}`);
+      val.value = pair[1];
+      val.font = metaValueFont;
+      val.alignment = { horizontal: 'left', vertical: 'middle' };
+    });
+
+    // Boş satır (row 6) — başlık bloğu ile veri arasında nefes
+    ws.getRow(6).height = 8;
+
+    // ── Header row 7 ──
+    ws.getRow(7).values = ['Kayıt No', 'Olay Türü', 'Kullanıcı', 'Kullanıcı ID', 'Kanal', 'Kanal ID', 'Tarih'];
+    ws.getRow(7).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(7).alignment = { vertical: 'middle', horizontal: 'left' };
+    ws.getRow(7).height = 22;
+    ws.getRow(7).eachCell(c => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      c.border = {
+        top: { style: 'thin', color: { argb: 'FF475569' } },
+        bottom: { style: 'medium', color: { argb: 'FF475569' } },
+      };
+    });
+
+    // ── Veri satırları + zebra ──
+    const ZEBRA = 'FFF1F5F9'; // slate-100
+    events.forEach((ev, i) => {
+      const rowIdx = 8 + i;
+      const row = ws.getRow(rowIdx);
+      row.values = [
+        Number(ev.id) || ev.id,
+        KIND_TR[ev.kind] || ev.kind,
+        ev.userName || 'Bilinmiyor',
+        ev.userId || '',
+        ev.channelName || '',
+        ev.channelId || '',
+        fmtDate(ev.createdAt),
+      ];
+      row.alignment = { vertical: 'middle' };
+      if (i % 2 === 1) {
+        row.eachCell(c => {
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
+        });
+      }
+      // Kind kolonuna renkli vurgu
+      const kindCell = row.getCell(2);
+      const kindColor = ev.kind === 'flood' ? 'FF0891B2'
+                     : ev.kind === 'profanity' ? 'FFE11D48'
+                     : ev.kind === 'spam' ? 'FF7C3AED'
+                     : 'FF475569';
+      kindCell.font = { bold: true, color: { argb: kindColor } };
+      // "Bilinmiyor" fallback italic+muted
+      if (!ev.userName) {
+        row.getCell(3).font = { italic: true, color: { argb: 'FF94A3B8' } };
+      }
+    });
+
+    // Empty state mesajı (olay yoksa)
+    if (events.length === 0) {
+      ws.mergeCells('A8:G8');
+      const empty = ws.getCell('A8');
+      empty.value = 'Bu filtreyle eşleşen moderasyon olayı yok.';
+      empty.alignment = { horizontal: 'center', vertical: 'middle' };
+      empty.font = { italic: true, color: { argb: 'FF94A3B8' } };
+      ws.getRow(8).height = 28;
+    }
+
+    // ── Stream ──
     const stamp = new Date().toISOString().slice(0, 10);
     const suffix = kind ? `-${kind}` : '';
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="moderasyon-kayitlari${suffix}-${stamp}.csv"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="moderasyon-kayitlari${suffix}-${stamp}.xlsx"`);
     res.setHeader('Cache-Control', 'no-store');
-    res.send(csv);
+    await wb.xlsx.write(res);
+    res.end();
   } catch (err) { handleError(res, err); }
 });
 

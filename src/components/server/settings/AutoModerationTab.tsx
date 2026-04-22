@@ -6,7 +6,7 @@ import {
   type ModerationStats, type ModStatRange,
   type ModerationEvent,
   getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
-  exportModerationEventsCsv,
+  exportModerationEventsXlsx,
 } from '../../../lib/serverService';
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
@@ -228,7 +228,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const handleExportCsv = async () => {
     try {
       setExporting(true);
-      await exportModerationEventsCsv(serverId, {
+      await exportModerationEventsXlsx(serverId, {
         kind: eventKindFilter === 'all' ? undefined : eventKindFilter,
       });
       showToast('Log indirildi');
@@ -580,8 +580,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                   disabled={exporting}
                   title={
                     eventKindFilter === 'all'
-                      ? 'Tüm olay kayıtlarını Excel uyumlu CSV olarak indir (en fazla 50.000 satır)'
-                      : `"${eventKindFilter}" türündeki olay kayıtlarını indir`
+                      ? 'Tüm olay kayıtlarını Excel (XLSX) raporu olarak indir (en fazla 50.000 satır)'
+                      : `"${eventKindFilter}" türündeki olay kayıtlarını Excel raporu olarak indir`
                   }
                   className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
