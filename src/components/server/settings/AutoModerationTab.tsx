@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon, Download, Gavel } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
@@ -12,6 +12,9 @@ import {
 } from '../../../lib/serverService';
 import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
+import { useUser } from '../../../contexts/UserContext';
+import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
+import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
 // Vite JSON import native; build-time inline olur, runtime fetch yok.
 // Shape: { [langCode]: string[] }  (multi-language object)
@@ -82,6 +85,22 @@ const BOUNDS = {
 
 
 export default function AutoModerationTab({ serverId, showToast }: Props) {
+  // Presence: kullanıcıların anlık durumları (statusText) avatar fallback'te kullanılır.
+  const { allUsers } = useUser();
+  const userStatusMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const u of allUsers) m.set(u.id, u.statusText ?? null);
+    return m;
+  }, [allUsers]);
+  const resolveStatusAvatar = useCallback(
+    (userId: string | null): string => {
+      if (!userId) return cevrimdisiPng;
+      const statusText = userStatusMap.get(userId) ?? null;
+      return getStatusAvatar(statusText) ?? cevrimdisiPng;
+    },
+    [userStatusMap],
+  );
+
   const [initial, setInitial] = useState<ModerationConfigResponse | null>(null);
   const [flood, setFlood] = useState<FloodConfig>(FLOOD_DEFAULT);
   const [profanityEnabled, setProfanityEnabled] = useState(false);
@@ -593,7 +612,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
       {/* ── Şu an cezalı (mod+ görür) ── */}
       {!eventsDenied && (
-        <ActivePunishmentsSection items={activePunishments} />
+        <ActivePunishmentsSection items={activePunishments} resolveStatusAvatar={resolveStatusAvatar} />
       )}
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
@@ -744,7 +763,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           ) : (
             <>
               <ul className="space-y-1">
-                {pagedEvents.map(ev => <ModEventRow key={ev.id} ev={ev} />)}
+                {pagedEvents.map(ev => <ModEventRow key={ev.id} ev={ev} resolveStatusAvatar={resolveStatusAvatar} />)}
               </ul>
               {eventTotalPages > 1 && (
                 <div
@@ -966,74 +985,57 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
   );
 }
 
-// ── Avatar fallback (initial + deterministik gradient) ──
-function getInitial(name: string | null | undefined): string {
-  const t = (name || '').trim();
-  return t ? t[0].toUpperCase() : '?';
-}
-function gradientFromId(id: string | null | undefined): string {
-  const s = id || '?';
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  const hue = Math.abs(h) % 360;
-  return `linear-gradient(135deg, hsl(${hue}, 52%, 48%), hsl(${(hue + 45) % 360}, 55%, 34%))`;
-}
-
 /**
- * Güvenli avatar — src boşsa ya da img load fail olursa fallback render eder.
- * variant='chip': 24px dairesel (event row). variant='card': 36px rounded-lg + initial gradient.
+ * Güvenli avatar — öncelik: (1) userAvatar varsa & yüklenebilirse onu, (2) aksi halde
+ * kullanıcının anlık statusText'ine göre varsayılan PNG (online/pasif/dinliyor/
+ * duymuyor/afk/cevrimdisi), (3) status da yoksa cevrimdisi PNG.
+ *
+ * status prop'u UserContext'ten resolve edilir; modal render sırasında user kaydı
+ * bulunamayan (sunucudan ayrılmış, cache dışı) kullanıcılar için default 'cevrimdisi'.
  */
 function SafeAvatar({
-  src, userId, userName, variant,
-}: { src: string | null; userId: string | null; userName: string | null; variant: 'chip' | 'card' }) {
+  src, statusAvatar, userName, variant,
+}: { src: string | null; statusAvatar: string; userName: string | null; variant: 'chip' | 'card' }) {
   const [failed, setFailed] = useState(false);
-  const showImg = !!src && !failed;
+  const showCustom = !!src && !failed && hasCustomAvatar(src);
+  const finalSrc = showCustom ? src! : statusAvatar;
   if (variant === 'chip') {
     return (
       <div
         className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden shrink-0"
         style={{
-          background: showImg ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
+          background: 'rgba(var(--glass-tint),0.08)',
           border: '1px solid rgba(var(--glass-tint),0.12)',
         }}
+        aria-label={userName || 'Bilinmiyor'}
       >
-        {showImg ? (
-          <img
-            src={src!}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={() => setFailed(true)}
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <UserIcon size={11} className="text-[var(--theme-secondary-text)]/50" />
-        )}
-      </div>
-    );
-  }
-  // card
-  return (
-    <div
-      className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
-      style={{
-        background: showImg ? 'transparent' : gradientFromId(userId),
-        boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
-      }}
-      aria-label={userName || 'Bilinmiyor'}
-    >
-      {showImg ? (
         <img
-          src={src!}
+          src={finalSrc}
           alt=""
           className="w-full h-full object-cover"
           onError={() => setFailed(true)}
           referrerPolicy="no-referrer"
         />
-      ) : (
-        <span className="text-[14px] font-bold text-white/95 drop-shadow">
-          {getInitial(userName)}
-        </span>
-      )}
+      </div>
+    );
+  }
+  // card (36)
+  return (
+    <div
+      className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+      aria-label={userName || 'Bilinmiyor'}
+    >
+      <img
+        src={finalSrc}
+        alt=""
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+        referrerPolicy="no-referrer"
+      />
     </div>
   );
 }
@@ -1055,7 +1057,7 @@ function formatRemaining(expiresIso: string, nowMs: number): string {
   return `${m}dk ${s}sn`;
 }
 
-function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) {
+function ActivePunishmentsSection({ items, resolveStatusAvatar }: { items: ActiveAutoPunishment[]; resolveStatusAvatar: (userId: string | null) => string }) {
   // 1s tick — progress bar + countdown canlı azalsın
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -1115,7 +1117,7 @@ function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) 
         </div>
       ) : (
         <ul className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-          {live.map(ev => <ActivePunishmentCard key={ev.userId} ev={ev} nowMs={nowMs} />)}
+          {live.map(ev => <ActivePunishmentCard key={ev.userId} ev={ev} nowMs={nowMs} resolveStatusAvatar={resolveStatusAvatar} />)}
         </ul>
       )}
     </section>
@@ -1123,7 +1125,7 @@ function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) 
 }
 
 // ── Tek cezalı kullanıcı kart ──
-const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }> = ({ ev, nowMs }) => {
+const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number; resolveStatusAvatar: (userId: string | null) => string }> = ({ ev, nowMs, resolveStatusAvatar }) => {
   const start = Date.parse(ev.bannedAt);
   const end = Date.parse(ev.expiresAt);
   const total = Math.max(1, end - start);
@@ -1142,8 +1144,8 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
       }}
     >
       <div className="flex items-center gap-3">
-        {/* Avatar 36 — varsa image, bozuk URL veya yoksa initial + deterministik gradient */}
-        <SafeAvatar src={ev.userAvatar} userId={ev.userId} userName={ev.userName} variant="card" />
+        {/* Avatar 36 — varsa image, yoksa/bozuksa kullanıcının anlık durum PNG'si */}
+        <SafeAvatar src={ev.userAvatar} statusAvatar={resolveStatusAvatar(ev.userId)} userName={ev.userName} variant="card" />
 
         {/* Orta kolon: ad + pill + progress */}
         <div className="flex-1 min-w-0">
@@ -1243,7 +1245,7 @@ function formatRelativeTime(iso: string): string {
   return `${d} gün önce`;
 }
 
-const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
+const ModEventRow: React.FC<{ ev: ModerationEvent; resolveStatusAvatar: (userId: string | null) => string }> = ({ ev, resolveStatusAvatar }) => {
   const meta = EVENT_KIND_META[ev.kind] || { rgb: '123,139,168', label: ev.kind };
   const userLabel = ev.userName || (ev.userId ? ev.userId.slice(0, 8) : 'bilinmiyor');
   const channelLabel = ev.channelName ? `#${ev.channelName}` : '';
@@ -1253,8 +1255,8 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
     <li
       className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] ${isAuto ? 'modEventRow--auto' : ''}`}
     >
-      {/* Avatar (bozuk URL veya null → fallback ikon) */}
-      <SafeAvatar src={ev.userAvatar} userId={ev.userId} userName={ev.userName} variant="chip" />
+      {/* Avatar — bozuk URL veya null → kullanıcı durum PNG'si (online/pasif/dinliyor/...) */}
+      <SafeAvatar src={ev.userAvatar} statusAvatar={resolveStatusAvatar(ev.userId)} userName={ev.userName} variant="chip" />
 
       <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px]">
         <span className="font-semibold text-[var(--theme-text)] truncate">{userLabel}</span>
