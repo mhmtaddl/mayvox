@@ -730,6 +730,7 @@ export async function deleteInvite(serverId: string, inviteId: string): Promise<
 
 // ── Auto-moderation config (Faz 2) ──
 export interface FloodConfig {
+  enabled: boolean;
   cooldownMs: number;
   limit: number;
   windowMs: number;

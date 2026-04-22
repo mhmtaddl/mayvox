@@ -52,7 +52,7 @@ interface Props {
   showToast: (m: string) => void;
 }
 
-const FLOOD_DEFAULT: FloodConfig = { cooldownMs: 3000, limit: 5, windowMs: 5000 };
+const FLOOD_DEFAULT: FloodConfig = { enabled: true, cooldownMs: 3000, limit: 5, windowMs: 5000 };
 
 // UI'de gösterilecek limit/aralık sınırları — backend validation ile aynı.
 const BOUNDS = {
@@ -110,6 +110,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const initialWordsStr = initial ? (initial.profanity.words || []).join('\n') : '';
 
   const dirty = initial != null && (
+    flood.enabled    !== initial.flood.enabled ||
     flood.cooldownMs !== initial.flood.cooldownMs ||
     flood.limit      !== initial.flood.limit ||
     flood.windowMs   !== initial.flood.windowMs ||
@@ -157,16 +158,86 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
   return (
     <div className="max-w-[760px] mx-auto space-y-4 pb-8">
-      {/* Başlık */}
-      <div className="flex items-center gap-3 pb-1">
-        <div className="w-10 h-10 rounded-xl bg-[var(--theme-accent)]/12 border border-[var(--theme-accent)]/25 flex items-center justify-center">
-          <ShieldCheck size={18} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
+      {/* ── Hero (kontrol merkezi) ── */}
+      <div
+        className="relative rounded-2xl p-5 overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.12), rgba(var(--theme-accent-rgb),0.02) 55%, transparent)',
+          border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
+          boxShadow: '0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(var(--theme-accent-rgb),0.07)',
+        }}
+      >
+        {/* Dekoratif glow — sağ üst (yoğun) */}
+        <div
+          className="absolute -top-20 -right-16 w-56 h-56 rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb),0.18), transparent 70%)',
+            filter: 'blur(14px)',
+          }}
+          aria-hidden="true"
+        />
+        {/* İkinci katman glow — sol alt (derinlik) */}
+        <div
+          className="absolute -bottom-24 -left-10 w-64 h-64 rounded-full pointer-events-none opacity-60"
+          style={{
+            background: 'radial-gradient(circle, rgba(167,139,250,0.10), transparent 70%)',
+            filter: 'blur(20px)',
+          }}
+          aria-hidden="true"
+        />
+        {/* Üstte ince highlight çizgisi */}
+        <div
+          className="absolute top-0 left-6 right-6 h-px pointer-events-none"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)' }}
+          aria-hidden="true"
+        />
+        <div className="relative flex items-start gap-4">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.24), rgba(var(--theme-accent-rgb),0.08))',
+              border: '1px solid rgba(var(--theme-accent-rgb),0.32)',
+              boxShadow: '0 1px 0 rgba(255,255,255,0.10) inset, 0 4px 16px rgba(var(--theme-accent-rgb),0.18)',
+            }}
+          >
+            <ShieldCheck size={20} className="text-[var(--theme-accent)]" strokeWidth={1.8} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-[16px] font-bold text-[var(--theme-text)] leading-tight tracking-tight">Otomatik Moderasyon</h3>
+            <p className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-1 leading-relaxed font-mono">
+              3 katman aktif · flood · içerik filtresi · spam davranışı
+            </p>
+            {/* Modül durum rozetleri */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+              <StatusChip color="cyan"   label="Flood"  active={flood.enabled} />
+              <StatusChip color="rose"   label="Küfür"  active={profanityEnabled} />
+              <StatusChip color="violet" label="Spam"   active={spamEnabled} />
+            </div>
+          </div>
         </div>
-        <div>
-          <h3 className="text-[15px] font-bold text-[var(--theme-text)] leading-tight">Otomatik Moderasyon</h3>
-          <p className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-0.5">
-            Sunucu içi spam ve taşkın mesaj akışını otomatik sınırla.
-          </p>
+
+        {/* Mini istatistik şeridi (mock — telemetry ilerde bağlanacak) */}
+        <div
+          className="relative mt-4 pt-3 flex items-center justify-between gap-3"
+          style={{ borderTop: '1px solid rgba(var(--glass-tint),0.08)' }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"
+              style={{ boxShadow: '0 0 6px rgba(52,211,153,0.6)' }}
+              aria-hidden="true"
+            />
+            <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
+              Son 5 dk
+            </span>
+          </div>
+          <div className="flex items-center gap-3 tabular-nums">
+            <HeroStat color="cyan"   value={0} label="flood" />
+            <span className="w-px h-3 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
+            <HeroStat color="rose"   value={0} label="küfür" />
+            <span className="w-px h-3 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
+            <HeroStat color="violet" value={0} label="spam" />
+          </div>
         </div>
       </div>
 
@@ -178,16 +249,30 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <div className="flex items-center gap-2 mb-1">
-          <Zap size={14} className="text-amber-400" />
-          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Flood Control</h4>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-amber-400" />
+            <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Flood Control</h4>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFlood(prev => ({ ...prev, enabled: !prev.enabled }))}
+            role="switch"
+            aria-checked={flood.enabled}
+            className={`relative w-9 h-5 rounded-full transition-colors ${flood.enabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: flood.enabled ? 'translateX(16px)' : 'translateX(0)' }}
+            />
+          </button>
         </div>
         <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-5 leading-relaxed">
           Kısa sürede çok sayıda mesaj gönderenleri sessizce engeller. Limit aşılırsa mesaj kaydedilmez
           ve gönderene "biraz bekle" uyarısı gider.
         </p>
 
-        <div className="space-y-5">
+        <div className={`space-y-5 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
           <SliderRow
             icon={<MessageSquareWarning size={12} />}
             label="Mesaj limiti"
@@ -227,7 +312,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
         {/* Live preview */}
         <div
-          className="mt-5 px-3 py-2.5 rounded-lg text-[11px] text-[var(--theme-secondary-text)]/75 leading-relaxed"
+          className={`mt-5 px-3 py-2.5 rounded-lg text-[11px] text-[var(--theme-secondary-text)]/75 leading-relaxed transition-opacity ${flood.enabled ? '' : 'opacity-50'}`}
           style={{ background: 'rgba(var(--theme-accent-rgb),0.06)', border: '1px solid rgba(var(--theme-accent-rgb),0.12)' }}
         >
           <span className="font-semibold text-[var(--theme-text)]">Önizleme:</span>{' '}
@@ -383,7 +468,84 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           <Save size={12} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
       </div>
+
+      {/* Global keyframes — hero status chip pulse */}
+      <style>{`
+        @keyframes statusChipPulse {
+          0%   { transform: scale(1);   opacity: 0.55; }
+          70%  { transform: scale(2.2); opacity: 0;    }
+          100% { transform: scale(2.2); opacity: 0;    }
+        }
+      `}</style>
     </div>
+  );
+}
+
+// ── Status chip: modül aktif/pasif göstergesi (hero için) ──
+const CHIP_COLOR_MAP: Record<string, { rgb: string }> = {
+  cyan:   { rgb: '34,211,238'  },
+  rose:   { rgb: '251,113,133' },
+  violet: { rgb: '167,139,250' },
+};
+
+function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet'; label: string; active: boolean }) {
+  const c = CHIP_COLOR_MAP[color];
+  return (
+    <span
+      className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors"
+      style={active ? {
+        background: `rgba(${c.rgb}, 0.14)`,
+        border: `1px solid rgba(${c.rgb}, 0.40)`,
+        color: `rgb(${c.rgb})`,
+        boxShadow: `0 0 12px rgba(${c.rgb}, 0.18)`,
+      } : {
+        background: 'rgba(var(--glass-tint),0.04)',
+        border: '1px solid rgba(var(--glass-tint),0.10)',
+        color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.75)',
+      }}
+    >
+      <span className="relative flex items-center justify-center w-2 h-2">
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.35)',
+            boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.85)` : 'none',
+          }}
+        />
+        {active && (
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: `rgba(${c.rgb}, 0.55)`,
+              animation: 'statusChipPulse 2.4s ease-out infinite',
+            }}
+            aria-hidden="true"
+          />
+        )}
+      </span>
+      {label}
+      <span className="text-[9px] font-semibold tracking-[0.12em] opacity-50 uppercase">
+        {active ? 'açık' : 'kapalı'}
+      </span>
+    </span>
+  );
+}
+
+// ── Hero istatistik (mini sayaç) ──
+function HeroStat({ color, value, label }: { color: 'cyan' | 'rose' | 'violet'; value: number; label: string }) {
+  const c = CHIP_COLOR_MAP[color];
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="text-[13px] font-bold tabular-nums"
+        style={{ color: `rgb(${c.rgb})` }}
+      >
+        {value}
+      </span>
+      <span className="text-[9.5px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/55">
+        {label}
+      </span>
+    </span>
   );
 }
 

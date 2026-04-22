@@ -109,6 +109,7 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
     res.json({
       serverId: row.server_id,
       flood: {
+        enabled:    flood?.enabled    ?? true,
         cooldownMs: flood?.cooldownMs ?? FLOOD_DEFAULTS.cooldownMs,
         limit:      flood?.limit      ?? FLOOD_DEFAULTS.limit,
         windowMs:   flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,

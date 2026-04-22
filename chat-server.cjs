@@ -1075,9 +1075,11 @@ wss.on('connection', (ws) => {
       {
         const cfg = await getChannelFloodConfig(currentRoom);
         const bucketKey = `${cfg?.serverId || 'unknown'}:${userId}`;
-        const flood = floodControl.check('room_chat', bucketKey, {
-          override: cfg?.flood || undefined,
-        });
+        // Flood sadece enabled iken çalışır (default true — sahip explicit kapatmadıysa).
+        const floodEnabled = cfg?.flood?.enabled !== false;
+        const flood = floodEnabled
+          ? floodControl.check('room_chat', bucketKey, { override: cfg?.flood || undefined })
+          : { allowed: true, reason: null, retryAfterMs: 0, offenseCount: 0 };
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {

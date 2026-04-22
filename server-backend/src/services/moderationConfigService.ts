@@ -14,6 +14,7 @@ import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
 
 export interface FloodConfig {
+  enabled: boolean;
   cooldownMs: number;
   limit: number;
   windowMs: number;
@@ -28,6 +29,7 @@ export interface ModerationConfig {
 
 // Chat-server ile paylaşılan default. DB'de `{}` varsa bu devreye girer.
 export const FLOOD_DEFAULTS: FloodConfig = {
+  enabled: true,
   cooldownMs: 3000,
   limit: 5,
   windowMs: 5000,
@@ -57,6 +59,7 @@ function validateFlood(input: unknown): FloodConfig {
   }
   const o = input as Record<string, unknown>;
   return {
+    enabled:    typeof o.enabled === 'boolean' ? o.enabled : true,
     cooldownMs: assertFiniteInt(o.cooldownMs, 'cooldownMs', FLOOD_BOUNDS.cooldownMs),
     limit:      assertFiniteInt(o.limit,      'limit',      FLOOD_BOUNDS.limit),
     windowMs:   assertFiniteInt(o.windowMs,   'windowMs',   FLOOD_BOUNDS.windowMs),
@@ -123,6 +126,7 @@ export async function getServerModerationConfig(
   const cfg = row.moderation_config || {};
   return {
     flood: {
+      enabled:    cfg.flood?.enabled    ?? true,
       cooldownMs: cfg.flood?.cooldownMs ?? FLOOD_DEFAULTS.cooldownMs,
       limit:      cfg.flood?.limit      ?? FLOOD_DEFAULTS.limit,
       windowMs:   cfg.flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,
