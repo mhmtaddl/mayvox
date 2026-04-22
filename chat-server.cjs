@@ -433,9 +433,25 @@ function buildProfanityPattern(words) {
   }
 }
 
+// Sistem kara listesi — kullanıcı değiştiremez. Profanity.enabled=true ise her zaman aktif.
+// Boot'ta tek sefer compile; process-wide singleton.
+let SYSTEM_PROFANITY_PATTERN = null;
+try {
+  const list = require('./system-profanity.json');
+  SYSTEM_PROFANITY_PATTERN = buildProfanityPattern(list);
+  console.log(`[profanity] sistem kara listesi yüklendi: ${Array.isArray(list) ? list.length : 0} kelime`);
+} catch (err) {
+  console.warn('[profanity] sistem kara listesi yüklenemedi:', err?.message);
+}
+
 function messageHasProfanity(text, profanity) {
-  if (!profanity || !profanity.enabled || !profanity.pattern) return false;
-  return profanity.pattern.test(normalizeForProfanity(text));
+  if (!profanity || !profanity.enabled) return false;
+  const normalized = normalizeForProfanity(text);
+  // Sistem listesi: profanity aktifken her zaman çalışır (sahip silemez).
+  if (SYSTEM_PROFANITY_PATTERN && SYSTEM_PROFANITY_PATTERN.test(normalized)) return true;
+  // Sunucu özel kelimeler: sahip kendi ekledikleri.
+  if (profanity.pattern && profanity.pattern.test(normalized)) return true;
+  return false;
 }
 
 async function getChannelFloodConfig(channelId) {

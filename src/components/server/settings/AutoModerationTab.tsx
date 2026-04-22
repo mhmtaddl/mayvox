@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   getModerationConfig, updateModerationConfig,
 } from '../../../lib/serverService';
 import { Loader } from './shared';
+// Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
+// Vite JSON import native; build-time inline olur, runtime fetch yok.
+import SYSTEM_BLACKLIST from '../../../../system-profanity.json';
 
 interface Props {
   serverId: string;
@@ -20,6 +23,7 @@ const BOUNDS = {
   // windowMs min 6s — çok dar pencere normal konuşmayı yanlış pozitif flood sayar.
   windowMs:   { min: 6000, max: 60_000, step: 500 },
 };
+
 
 export default function AutoModerationTab({ serverId, showToast }: Props) {
   const [initial, setInitial] = useState<ModerationConfigResponse | null>(null);
@@ -97,6 +101,15 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setProfanityEnabled(initial.profanity.enabled);
     setProfanityText((initial.profanity.words || []).join('\n'));
   };
+
+  // Kara liste modal
+  const [showBlacklist, setShowBlacklist] = useState(false);
+  const [blacklistQuery, setBlacklistQuery] = useState('');
+  const filteredBlacklist = useMemo(() => {
+    const q = blacklistQuery.trim().toLowerCase();
+    if (!q) return SYSTEM_BLACKLIST as string[];
+    return (SYSTEM_BLACKLIST as string[]).filter(w => w.toLowerCase().includes(q));
+  }, [blacklistQuery]);
 
   if (loading) return <Loader />;
 
@@ -230,10 +243,46 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
             border: '1px solid rgba(var(--glass-tint), 0.10)',
           }}
         />
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 mt-1">
-          Büyük/küçük harf farkı yok; Türkçe ve Latin aksanları otomatik normalize edilir.
-        </p>
+        <div className="flex items-center justify-between mt-1.5 gap-3">
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 leading-snug">
+            Büyük/küçük harf farkı yok; Türkçe ve Latin aksanları otomatik normalize edilir.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowBlacklist(true)}
+            title="Küfür filtresi aktifken her sunucuda çalışan sistem listesi"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold shrink-0 transition-colors"
+            style={{
+              background: 'rgba(var(--glass-tint),0.06)',
+              border: '1px solid rgba(var(--glass-tint),0.15)',
+              color: 'var(--theme-text)',
+            }}
+          >
+            <BookLock size={11} /> Kara listeyi gör ({(SYSTEM_BLACKLIST as string[]).length})
+          </button>
+        </div>
+
+        {/* Sistem kara listesi bilgi notu */}
+        <div className="mt-3 px-3 py-2 rounded-lg text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-relaxed flex items-start gap-2"
+          style={{ background: 'rgba(var(--theme-accent-rgb),0.04)', border: '1px solid rgba(var(--theme-accent-rgb),0.10)' }}>
+          <BookLock size={12} className="mt-0.5 shrink-0 text-[var(--theme-accent)]/80" />
+          <span>
+            <strong className="text-[var(--theme-text)]">Sistem kara listesi</strong> ({(SYSTEM_BLACKLIST as string[]).length} kelime) küfür filtresi
+            aktifken her zaman çalışır — kaldırılamaz. Kendi kelimelerini yukarıdaki kutudan ekleyebilirsin.
+          </span>
+        </div>
       </section>
+
+      {/* ── Kara liste modal ── */}
+      {showBlacklist && (
+        <BlacklistModal
+          words={filteredBlacklist}
+          total={(SYSTEM_BLACKLIST as string[]).length}
+          query={blacklistQuery}
+          onQueryChange={setBlacklistQuery}
+          onClose={() => { setShowBlacklist(false); setBlacklistQuery(''); }}
+        />
+      )}
 
       {/* ── Spam koruması — placeholder (Faz 3) ── */}
       <section
@@ -321,6 +370,100 @@ function SliderRow({
         }}
       />
       <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 mt-1">{hint}</p>
+    </div>
+  );
+}
+
+// ── Sistem kara listesi modal (read-only + search) ──
+function BlacklistModal({
+  words, total, query, onQueryChange, onClose,
+}: {
+  words: string[];
+  total: number;
+  query: string;
+  onQueryChange: (v: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-[520px] max-h-[min(80vh,640px)] flex flex-col rounded-2xl overflow-hidden"
+        style={{
+          background: 'rgba(var(--glass-tint), 0.08)',
+          border: '1px solid rgba(var(--glass-tint), 0.15)',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(24px)',
+        }}
+      >
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-[rgba(var(--glass-tint),0.08)] flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/12 border border-[var(--theme-accent)]/25 flex items-center justify-center shrink-0">
+            <BookLock size={14} className="text-[var(--theme-accent)]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-[13px] font-bold text-[var(--theme-text)] leading-none">Sistem kara listesi</h4>
+            <p className="text-[10.5px] text-[var(--theme-secondary-text)]/65 mt-1">
+              {query ? `${words.length} eşleşti / ${total} toplam` : `${total} kelime — her zaman aktif, kaldırılamaz`}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Kapat"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors shrink-0"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-5 py-3 border-b border-[rgba(var(--glass-tint),0.05)] shrink-0">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => onQueryChange(e.target.value)}
+              autoFocus
+              placeholder="Kelime ara..."
+              className="w-full pl-7 pr-3 py-2 rounded-lg text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors"
+              style={{
+                background: 'rgba(var(--glass-tint), 0.06)',
+                border: '1px solid rgba(var(--glass-tint), 0.10)',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-5 py-3 custom-scrollbar">
+          {words.length === 0 ? (
+            <div className="text-center py-8 text-[11px] text-[var(--theme-secondary-text)]/50">
+              Bu arama için eşleşme yok
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {words.map((w, i) => (
+                <span
+                  key={`${i}-${w}`}
+                  className="px-2 py-1 rounded text-[11px] text-[var(--theme-text)]/85 font-mono truncate"
+                  style={{
+                    background: 'rgba(var(--glass-tint), 0.05)',
+                    border: '1px solid rgba(var(--glass-tint), 0.06)',
+                  }}
+                  title={w}
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
