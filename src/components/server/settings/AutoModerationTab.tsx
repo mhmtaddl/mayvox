@@ -1010,7 +1010,7 @@ function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) 
 }
 
 // ── Tek cezalı kullanıcı kart ──
-function ActivePunishmentCard({ ev, nowMs }: { ev: ActiveAutoPunishment; nowMs: number }) {
+const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }> = ({ ev, nowMs }) => {
   const start = Date.parse(ev.bannedAt);
   const end = Date.parse(ev.expiresAt);
   const total = Math.max(1, end - start);
@@ -1089,7 +1089,7 @@ function ActivePunishmentCard({ ev, nowMs }: { ev: ActiveAutoPunishment; nowMs: 
       </div>
     </li>
   );
-}
+};
 
 // ── Moderation event tek satır ──
 const EVENT_KIND_META: Record<string, { rgb: string; label: string }> = {
@@ -1098,6 +1098,22 @@ const EVENT_KIND_META: Record<string, { rgb: string; label: string }> = {
   spam:        { rgb: '167,139,250', label: 'spam' },
   auto_punish: { rgb: '251,191,36',  label: 'auto ceza' },
 };
+
+// Auto-punish rozetinin trigger kind'a göre dinamik label'ı.
+// Örn: "auto flood engeli", "auto küfür engeli", "auto spam engeli"
+const TRIGGER_LABEL: Record<string, string> = {
+  flood:     'flood',
+  profanity: 'küfür',
+  spam:      'spam',
+};
+
+function buildEventLabel(ev: ModerationEvent): string {
+  if (ev.kind === 'auto_punish') {
+    const tk = ev.triggerKind ? TRIGGER_LABEL[ev.triggerKind] : null;
+    return tk ? `auto ${tk} engeli` : 'auto ceza';
+  }
+  return EVENT_KIND_META[ev.kind]?.label || ev.kind;
+}
 
 function formatRelativeTime(iso: string): string {
   const t = Date.parse(iso);
@@ -1146,7 +1162,7 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
             border: `1px solid rgba(${meta.rgb}, 0.22)`,
           }}
         >
-          {meta.label}
+          {buildEventLabel(ev)}
         </span>
         {channelLabel && (
           <>

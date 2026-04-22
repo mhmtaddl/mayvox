@@ -35,28 +35,36 @@ export function isValidKind(k: unknown): k is ModKind {
   return k === 'flood' || k === 'profanity' || k === 'spam' || k === 'auto_punish';
 }
 
+export type TriggerKind = 'flood' | 'profanity' | 'spam';
+export function isValidTriggerKind(k: unknown): k is TriggerKind {
+  return k === 'flood' || k === 'profanity' || k === 'spam';
+}
+
 /**
  * Event yaz — chat-server'dan gelir.
  * serverId ve kind zaten endpoint'te valide edilir; bu fonksiyon sadece INSERT.
  * userId/channelId opsiyonel (eski chat-server sürümleri için geriye uyum).
+ * triggerKind: auto_punish satırlarında orijinal ihlal türünü saklar (flood/profanity/spam);
+ *   diğer kind'larda NULL bırakılır.
  * Mesaj içeriği ASLA yazılmaz — privacy-safe.
  */
 export async function recordEvent(
   serverId: string,
   kind: ModKind,
-  opts: { userId?: string | null; channelId?: string | null; at?: Date } = {},
+  opts: { userId?: string | null; channelId?: string | null; at?: Date; triggerKind?: TriggerKind | null } = {},
 ): Promise<void> {
   await queryOne(
-    `INSERT INTO moderation_stats (server_id, kind, user_id, channel_id, created_at)
-     VALUES ($1, $2, $3, $4, COALESCE($5, now()))
+    `INSERT INTO moderation_stats (server_id, kind, user_id, channel_id, trigger_kind, created_at)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6, now()))
      RETURNING id`,
-    [serverId, kind, opts.userId ?? null, opts.channelId ?? null, opts.at ?? null],
+    [serverId, kind, opts.userId ?? null, opts.channelId ?? null, opts.triggerKind ?? null, opts.at ?? null],
   );
 }
 
 export interface ModEvent {
   id: string;
   kind: ModKind;
+  triggerKind: TriggerKind | null;
   userId: string | null;
   userName: string | null;
   userAvatar: string | null;
@@ -88,12 +96,13 @@ export async function listEvents(
   const rows = await queryMany<{
     id: string;
     kind: ModKind;
+    trigger_kind: TriggerKind | null;
     user_id: string | null;
     channel_id: string | null;
     channel_name: string | null;
     created_at: string;
   }>(
-    `SELECT ms.id::text, ms.kind,
+    `SELECT ms.id::text, ms.kind, ms.trigger_kind,
             ms.user_id,
             ms.channel_id,
             c.name AS channel_name,
@@ -135,6 +144,7 @@ export async function listEvents(
     return {
       id: r.id,
       kind: r.kind,
+      triggerKind: r.trigger_kind,
       userId: r.user_id,
       userName: prof?.name ?? null,
       userAvatar: prof?.avatar ?? null,

@@ -784,9 +784,11 @@ export async function getModerationStats(serverId: string, range: ModStatRange):
 }
 
 export type ModEventKind = 'flood' | 'profanity' | 'spam' | 'auto_punish';
+export type ModTriggerKind = 'flood' | 'profanity' | 'spam';
 export interface ModerationEvent {
   id: string;
   kind: ModEventKind;
+  triggerKind: ModTriggerKind | null;
   userId: string | null;
   userName: string | null;
   userAvatar: string | null;

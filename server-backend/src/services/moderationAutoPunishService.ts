@@ -105,7 +105,11 @@ export async function applyAutoPunishFlood(
   // flood threshold'ından tetiklendi; orijinal kanal tek bir olay değil, birden
   // çok ihlalin toplamı). userId dolu, channelId null (Faz A).
   try {
-    await recordModStatEvent(serverId, 'auto_punish', { userId: targetUserId, channelId: null });
+    await recordModStatEvent(serverId, 'auto_punish', {
+      userId: targetUserId,
+      channelId: null,
+      triggerKind: 'flood', // MVP: sadece flood threshold'undan tetikleniyor
+    });
   } catch (err) {
     // Event yazımı best-effort — ceza zaten uygulandı, event fail olsa da sorun yok.
     console.warn('[auto-punish] event record fail:', err instanceof Error ? err.message : err);
