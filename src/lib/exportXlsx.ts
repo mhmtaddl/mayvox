@@ -1,19 +1,14 @@
 /**
  * Client-side XLSX export — Oto-Mod backend export stilini mirror eder.
- * (ExcelJS dynamic import; kullanıcı butona basmadan bundle'a inmez.)
+ * ExcelJS static import (Vite optimizeDeps ile prebundle): dynamic import
+ * 'Failed to fetch' hatası bu şekilde tamamen elimine edilir.
  *
  * Kullanım yerleri:
  *  - Denetim > Kayıtlar (audit_log)
  *  - Oto-Mod "Log indir" (moderation_events)
  *  - Denetim > Analiz "Dışa aktar" (moderation_events)
- *
- * Ortak stil:
- *  - Başlık (A1:G1 merge, slate-900 banner)
- *  - Meta bloğu (Sunucu/Oluşturulma/Filtre/Toplam Kayıt)
- *  - Header row (slate-800, white bold)
- *  - Table rows: zebra (slate-50) + opsiyonel kind tint
- *  - Frozen header, AutoFilter
  */
+import ExcelJS from 'exceljs';
 
 export interface ExportColumn {
   key: string;           // Data key (row[key] ile çekilir)
@@ -40,11 +35,8 @@ export interface ExportConfig {
 }
 
 export async function downloadXlsx(cfg: ExportConfig): Promise<void> {
-  // ExcelJS UMD — bundler'a göre default veya namespace'te olabilir. İkisini de dene.
-  const mod: any = await import('exceljs');
-  const ExcelJS: any = mod.default ?? mod;
   if (!ExcelJS?.Workbook) {
-    console.error('[exportXlsx] ExcelJS yüklenemedi:', mod);
+    console.error('[exportXlsx] ExcelJS yüklenemedi');
     throw new Error('XLSX kütüphanesi yüklenemedi');
   }
 

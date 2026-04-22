@@ -30,5 +30,12 @@ export default defineConfig(() => {
     // RNNoise WASM + AudioWorklet asset support (POC).
     // Feature flag default OFF olduğundan build etkisi yok; hazır.
     assetsInclude: ['**/*.wasm'],
+
+    // ExcelJS UMD bundle Vite dev server'da dynamic import ile bazen
+    // 'Failed to fetch dynamically imported module' hatası veriyor.
+    // optimizeDeps.include ile önceden prebundle edilir → chunk kararlı.
+    optimizeDeps: {
+      include: ['exceljs'],
+    },
   };
 });
