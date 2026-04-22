@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Search, X, ScrollText, AlertTriangle, EyeOff, Eye,
+  Download, Calendar, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { getAuditLog, type AuditLogItem } from '../../../lib/serverService';
 import { timeAgo } from './shared';
+import { useUser } from '../../../contexts/UserContext';
 
 interface Props { serverId: string; }
 
@@ -49,15 +51,30 @@ const ACTION_MAP: Record<string, ActionDef> = {
   'channel.access.grant':  { verb: 'kanal erişimi verdi',  category: 'channel' },
   'channel.access.revoke': { verb: 'kanal erişimini aldı', category: 'channel' },
   // Sunucu
-  'server.update':        { verb: 'sunucu ayarlarını değiştirdi', category: 'settings' },
-  'server.avatar_update': { verb: 'sunucu logosunu değiştirdi',   category: 'settings' },
-  'server.plan_change':   { verb: 'planı değiştirdi',             category: 'settings' },
-  'plan.limit_hit':       { verb: 'plan limitine takıldı',        category: 'settings' },
-  'moderation_history.reset': { verb: 'ceza geçmişini sıfırladı',  category: 'manual' },
+  'server.update':         { verb: 'sunucu ayarlarını değiştirdi', category: 'settings' },
+  'server.avatar_update':  { verb: 'sunucu logosunu değiştirdi',   category: 'settings' },
+  'server.plan_change':    { verb: 'planı değiştirdi',             category: 'settings' },
+  'plan.limit_hit':        { verb: 'plan limitine takıldı',        category: 'settings' },
+  // Oto-Mod ayarları
+  'server.moderation_config.update': { verb: 'Oto-Mod ayarlarını güncelledi', category: 'settings' },
+  'server.moderation_config.create': { verb: 'Oto-Mod kuralları oluşturdu',   category: 'settings' },
+  'server.moderation_config.reset':  { verb: 'Oto-Mod ayarlarını sıfırladı',  category: 'settings' },
+  'moderation_history.reset':        { verb: 'ceza geçmişini sıfırladı',      category: 'manual' },
 };
 
+// ═══════════════════════════════════════════
+// Action key prettify — ACTION_MAP'te olmayanlar için fallback
+// ═══════════════════════════════════════════
+function prettifyActionKey(action: string): string {
+  // member.chat_ban.auto -> 'chat ban (otomatik)'
+  const parts = action.split('.');
+  const tail = parts.slice(1).join(' ').replace(/_/g, ' ');
+  if (!tail) return action;
+  return `"${tail}" işlemi yaptı`;
+}
+
 function resolveAction(log: AuditLogItem): ActionDef {
-  return ACTION_MAP[log.action] ?? { verb: log.action, category: 'other' };
+  return ACTION_MAP[log.action] ?? { verb: prettifyActionKey(log.action), category: 'other' };
 }
 
 // Kategori renk haritası — Flood cyan, Küfür red, Spam purple, Auto amber, Manual blue
@@ -213,6 +230,9 @@ function bucketOf(iso: string, nowMs: number): Bucket {
 // ═══════════════════════════════════════════
 // Main component
 // ═══════════════════════════════════════════
+const PAGE_SIZE = 15;
+type DateBucketFilter = 'all' | Bucket; // Bucket = today | yesterday | older
+
 export default function AuditLogPanel({ serverId }: Props) {
   const [items, setItems] = useState<AuditLogItem[] | null>(null);
   const [error, setError] = useState('');
@@ -220,6 +240,27 @@ export default function AuditLogPanel({ serverId }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [hideLow, setHideLow] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateBucketFilter>('all');
+  const [page, setPage] = useState(1);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // Username resolver — actorName boşsa/UUID ise UserContext.allUsers'tan çöz
+  const { allUsers } = useUser();
+  const resolveName = useCallback((idOrName: string | null): string => {
+    if (!idOrName) return 'Bilinmiyor';
+    // actorId format'ı: UUID (150... gibi) veya özel: 'system:auto-mod'
+    if (idOrName.startsWith('system:')) return idOrName === 'system:auto-mod' ? 'Sistem' : 'Sistem';
+    // UUID pattern (8-4-4-4-12) veya kısaltılmış — allUsers'ta ara
+    const u = allUsers.find(x => x.id === idOrName);
+    if (u) {
+      const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+      if (full) return full;
+      if (u.name) return u.name;
+    }
+    // UUID gibi görünüyor mu? (tire içeriyor ya da 8+ hex karakter)
+    if (/^[0-9a-f-]{8,}$/i.test(idOrName)) return 'Bilinmiyor';
+    return idOrName;
+  }, [allUsers]);
 
   const load = useCallback(async () => {
     setError('');
@@ -239,34 +280,44 @@ export default function AuditLogPanel({ serverId }: Props) {
   const filtered = useMemo(() => {
     if (!items) return [];
     const q = query.trim().toLocaleLowerCase('tr-TR');
+    const nowMs = Date.now();
     return items.filter(log => {
       const def = resolveAction(log);
       const refined = refineCategory(log, def);
       if (hideLow && priorityOf(log, refined) === 'low') return false;
       if (!matchesFilter(def.category, refined, filter)) return false;
+      if (dateFilter !== 'all' && bucketOf(log.createdAt, nowMs) !== dateFilter) return false;
       if (q) {
-        const actor = (log.actorName ?? '').toLocaleLowerCase('tr-TR');
+        const actor = resolveName(log.actorId).toLocaleLowerCase('tr-TR');
         const target = (describeTarget(log) ?? '').toLocaleLowerCase('tr-TR');
         const reason = (extractReason(log) ?? '').toLocaleLowerCase('tr-TR');
         if (!actor.includes(q) && !target.includes(q) && !reason.includes(q) && !def.verb.toLocaleLowerCase('tr-TR').includes(q)) return false;
       }
       return true;
     });
-  }, [items, filter, query, hideLow]);
+  }, [items, filter, query, hideLow, dateFilter, resolveName]);
 
-  // Bucket → compress → her bucket kendi içinde sıkıştır
+  // Filter değişince sayfa 1'e dön
+  useEffect(() => { setPage(1); }, [filter, query, hideLow, dateFilter]);
+
+  // Compress globally (pagination sıkıştırılmış satır sayısı üzerinden), sonra bucket'la + slice
+  const allRows = useMemo(() => compressLogs(filtered), [filtered]);
+  const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = allRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const groups = useMemo(() => {
     const nowMs = Date.now();
-    const m = new Map<Bucket, AuditLogItem[]>();
+    const m = new Map<Bucket, CompressedRow[]>();
     m.set('today', []); m.set('yesterday', []); m.set('older', []);
-    for (const log of filtered) {
-      const b = bucketOf(log.createdAt, nowMs);
-      m.get(b)!.push(log);
+    for (const r of pageRows) {
+      const b = bucketOf(r.log.createdAt, nowMs);
+      m.get(b)!.push(r);
     }
     return (['today', 'yesterday', 'older'] as Bucket[])
-      .map(b => ({ bucket: b, rows: compressLogs(m.get(b)!) }))
+      .map(b => ({ bucket: b, rows: m.get(b)! }))
       .filter(g => g.rows.length > 0);
-  }, [filtered]);
+  }, [pageRows]);
 
   const totalLow = useMemo(() => {
     if (!items) return 0;
@@ -281,7 +332,7 @@ export default function AuditLogPanel({ serverId }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* ── Toolbar — search + filter chips + refresh ── */}
+      {/* ── Toolbar — search + filter + refresh + export ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div
           className="flex-1 min-w-[200px] flex items-center gap-2 h-8 rounded-lg px-2.5"
@@ -361,6 +412,50 @@ export default function AuditLogPanel({ serverId }: Props) {
         >
           <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
         </button>
+        <button
+          type="button"
+          onClick={() => setExportOpen(true)}
+          disabled={!items || items.length === 0}
+          title="Log indir (tarih aralığı / tamamı)"
+          className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-[10.5px] font-semibold transition-colors disabled:opacity-40"
+          style={{
+            background: 'rgba(var(--theme-accent-rgb),0.10)',
+            color: 'var(--theme-accent)',
+            border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
+          }}
+        >
+          <Download size={11} /> Log indir
+        </button>
+      </div>
+
+      {/* ── Tarih süzgeci (chips) ── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/50 mr-1">
+          Tarih
+        </span>
+        {(['all', 'today', 'yesterday', 'older'] as DateBucketFilter[]).map(d => {
+          const active = dateFilter === d;
+          const label = d === 'all' ? 'Tümü' : BUCKET_LABEL[d];
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDateFilter(d)}
+              className="px-2.5 h-7 rounded-full text-[10.5px] font-bold transition-all"
+              style={active ? {
+                background: 'rgba(var(--theme-accent-rgb),0.14)',
+                color: 'var(--theme-accent)',
+                border: '1px solid rgba(var(--theme-accent-rgb),0.28)',
+              } : {
+                background: 'transparent',
+                color: 'var(--theme-secondary-text)',
+                border: '1px solid rgba(var(--glass-tint),0.08)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Error ── */}
@@ -380,11 +475,54 @@ export default function AuditLogPanel({ serverId }: Props) {
       ) : groups.length === 0 ? (
         <EmptyLog hasAny={items.length > 0} hasQuery={!!query.trim() || filter !== 'all'} />
       ) : (
-        <div className="space-y-3">
-          {groups.map(g => (
-            <TimeGroup key={g.bucket} bucket={g.bucket} rows={g.rows} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {groups.map(g => (
+              <TimeGroup key={g.bucket} bucket={g.bucket} rows={g.rows} resolveName={resolveName} />
+            ))}
+          </div>
+          {/* ── Pagination ── */}
+          {totalPages > 1 && (
+            <div
+              className="flex items-center justify-between pt-2.5 mt-1"
+              style={{ borderTop: '1px solid rgba(var(--glass-tint),0.06)' }}
+            >
+              <span className="text-[10.5px] text-[var(--theme-secondary-text)]/60 tabular-nums">
+                {allRows.length} kayıt · sayfa {safePage}/{totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft size={11} /> Önceki
+                </button>
+                <span className="text-[10px] text-[var(--theme-secondary-text)]/55 tabular-nums px-1">
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  Sonraki <ChevronRight size={11} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Export modal ── */}
+      {exportOpen && items && (
+        <AuditExportModal
+          items={items}
+          resolveName={resolveName}
+          onClose={() => setExportOpen(false)}
+        />
       )}
     </div>
   );
@@ -393,7 +531,7 @@ export default function AuditLogPanel({ serverId }: Props) {
 // ═══════════════════════════════════════════
 // Time group — uppercase label + vertical timeline
 // ═══════════════════════════════════════════
-const TimeGroup: React.FC<{ bucket: Bucket; rows: CompressedRow[] }> = ({ bucket, rows }) => {
+const TimeGroup: React.FC<{ bucket: Bucket; rows: CompressedRow[]; resolveName: (id: string | null) => string }> = ({ bucket, rows, resolveName }) => {
   const total = rows.reduce((a, r) => a + r.count, 0);
   return (
     <section>
@@ -419,7 +557,7 @@ const TimeGroup: React.FC<{ bucket: Bucket; rows: CompressedRow[] }> = ({ bucket
           }}
         />
         {rows.map(r => (
-          <AuditLogRow key={r.id} row={r} />
+          <AuditLogRow key={r.id} row={r} resolveName={resolveName} />
         ))}
       </ul>
     </section>
@@ -431,14 +569,21 @@ const TimeGroup: React.FC<{ bucket: Bucket; rows: CompressedRow[] }> = ({ bucket
 // Priority-aware: HIGH subtle tint, MEDIUM normal, LOW faded.
 // Compressed: N>1 ise ×N badge.
 // ═══════════════════════════════════════════
-const AuditLogRow: React.FC<{ row: CompressedRow }> = ({ row }) => {
+const AuditLogRow: React.FC<{ row: CompressedRow; resolveName: (id: string | null) => string }> = ({ row, resolveName }) => {
   const { log, count } = row;
   const def = resolveAction(log);
   const refined = refineCategory(log, def);
   const palette = CATEGORY_COLOR[refined];
   const priority = priorityOf(log, refined);
-  const actor = log.actorId === 'system:auto-mod' ? 'Sistem' : (log.actorName || 'Kullanıcı');
-  const target = describeTarget(log);
+  // Actor: UserContext + log.actorName + actorId fallback chain
+  const actor = log.actorName && !/^[0-9a-f-]{8,}$/i.test(log.actorName)
+    ? (log.actorId === 'system:auto-mod' ? 'Sistem' : log.actorName)
+    : resolveName(log.actorId);
+  // Target: describeTarget metadata'ya bakar; UUID ise resolveName'e düşür
+  const rawTarget = describeTarget(log);
+  const target = rawTarget && /^[0-9a-f-]{8,}$/i.test(rawTarget.replace(/^[a-z]+:/, ''))
+    ? resolveName(rawTarget.replace(/^[a-z]+:/, ''))
+    : rawTarget;
   const reason = extractReason(log);
   const time = timeAgo(log.createdAt, { withDateFallback: true });
 
@@ -561,6 +706,240 @@ function LogSkeleton() {
           style={{ background: 'rgba(var(--glass-tint),0.04)' }}
         />
       ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Audit Export Modal — client-side CSV, date range VEYA tüm kayıtlar
+// ═══════════════════════════════════════════
+function AuditExportModal({
+  items, resolveName, onClose,
+}: {
+  items: AuditLogItem[];
+  resolveName: (id: string | null) => string;
+  onClose: () => void;
+}) {
+  // Default: son 7 gün
+  const today = new Date();
+  const weekAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+  const fmtInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const [mode, setMode] = useState<'range' | 'all'>('range');
+  const [startDate, setStartDate] = useState(fmtInput(weekAgo));
+  const [endDate, setEndDate] = useState(fmtInput(today));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Filter edilecek items
+  const filtered = (() => {
+    if (mode === 'all') return items;
+    const s = Date.parse(startDate + 'T00:00:00');
+    const e = Date.parse(endDate + 'T23:59:59');
+    if (!Number.isFinite(s) || !Number.isFinite(e) || s > e) return [];
+    return items.filter(log => {
+      const t = Date.parse(log.createdAt);
+      return t >= s && t <= e;
+    });
+  })();
+
+  const handleDownload = () => {
+    // CSV (Excel-dostu BOM + semicolon delimiter — TR locale)
+    const rows: string[][] = [
+      ['Tarih', 'Kişi', 'Aksiyon', 'Hedef', 'Sebep'],
+    ];
+    const escape = (v: string) => {
+      // semicolon / newline / quote için CSV escaping
+      if (/[";\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+      return v;
+    };
+    for (const log of filtered) {
+      const def = resolveAction(log);
+      const actor = log.actorName && !/^[0-9a-f-]{8,}$/i.test(log.actorName)
+        ? (log.actorId === 'system:auto-mod' ? 'Sistem' : log.actorName)
+        : resolveName(log.actorId);
+      const rawT = describeTarget(log) ?? '';
+      const target = rawT && /^[0-9a-f-]{8,}$/i.test(rawT.replace(/^[a-z]+:/, ''))
+        ? resolveName(rawT.replace(/^[a-z]+:/, ''))
+        : rawT;
+      const reason = extractReason(log) ?? '';
+      const dt = new Date(log.createdAt);
+      const date = dt.toLocaleString('tr-TR');
+      rows.push([date, actor, def.verb, target, reason].map(escape));
+    }
+    const csv = '﻿' + rows.map(r => r.join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileSuffix = mode === 'all' ? 'tumu' : `${startDate}_${endDate}`;
+    a.download = `denetim-kayitlari_${fileSuffix}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[700] flex items-center justify-center px-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+      onMouseDown={onClose}
+    >
+      <div
+        className="surface-elevated relative w-full max-w-[440px] rounded-2xl overflow-hidden"
+        style={{ animation: 'aemModalIn 200ms cubic-bezier(0.2,0.8,0.2,1)' }}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center gap-2 px-5 py-3.5"
+          style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}
+        >
+          <Download size={14} className="text-[var(--theme-accent)]/85" />
+          <h3 className="flex-1 text-[13px] font-bold text-[var(--theme-text)]">Log indir</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-7 h-7 rounded-md inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+            aria-label="Kapat"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-3">
+          {/* Mode selector */}
+          <div
+            className="inline-flex items-center gap-0.5 rounded-lg p-0.5 w-full"
+            style={{
+              background: 'rgba(var(--glass-tint),0.04)',
+              border: '1px solid rgba(var(--glass-tint),0.08)',
+            }}
+          >
+            {(['range', 'all'] as const).map(m => {
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  className="flex-1 h-8 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1.5"
+                  style={active ? {
+                    background: 'rgba(var(--theme-accent-rgb),0.16)',
+                    color: 'var(--theme-accent)',
+                  } : {
+                    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
+                  }}
+                >
+                  {m === 'range' ? <><Calendar size={11} /> Tarih aralığı</> : 'Tamamını indir'}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Range inputs */}
+          {mode === 'range' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/60 mb-1">
+                    Başlangıç
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    max={endDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full h-9 px-2.5 rounded-lg text-[12px] text-[var(--theme-text)] outline-none"
+                    style={{
+                      background: 'rgba(var(--glass-tint),0.04)',
+                      border: '1px solid rgba(var(--glass-tint),0.10)',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/60 mb-1">
+                    Bitiş
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate}
+                    max={fmtInput(new Date())}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full h-9 px-2.5 rounded-lg text-[12px] text-[var(--theme-text)] outline-none"
+                    style={{
+                      background: 'rgba(var(--glass-tint),0.04)',
+                      border: '1px solid rgba(var(--glass-tint),0.10)',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="text-[10.5px] text-[var(--theme-secondary-text)]/55">
+                Bu aralıkta <strong className="text-[var(--theme-text)] tabular-nums">{filtered.length}</strong> kayıt bulundu
+              </div>
+            </div>
+          )}
+
+          {mode === 'all' && (
+            <div
+              className="px-3 py-2 rounded-lg text-[11px] text-[var(--theme-text)]/85 leading-snug"
+              style={{
+                background: 'rgba(var(--theme-accent-rgb),0.05)',
+                border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
+              }}
+            >
+              Mevcut tüm <strong className="tabular-nums">{items.length}</strong> kayıt CSV olarak indirilecek.
+              <span className="block mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/60">
+                (Maksimum 200 kayıt — daha fazlası için aralık filtreleyebilirsin.)
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-end gap-2 px-5 py-3"
+          style={{ borderTop: '1px solid rgba(var(--glass-tint),0.08)' }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 px-3 rounded-lg text-[11.5px] font-semibold text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+          >
+            İptal
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
+            style={{
+              background: 'var(--theme-accent)',
+              color: 'var(--theme-text-on-accent, #000)',
+              boxShadow: '0 2px 10px rgba(var(--theme-accent-rgb),0.28)',
+            }}
+          >
+            <Download size={11} /> İndir ({filtered.length})
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes aemModalIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to   { opacity: 1; transform: scale(1);    }
+        }
+      `}</style>
     </div>
   );
 }
