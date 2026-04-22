@@ -221,110 +221,203 @@ router.get('/:id/moderation-events/export', async (req: Request, res: Response) 
         fitToWidth: 1,
         fitToHeight: 0,
         margins: { left: 0.5, right: 0.5, top: 0.55, bottom: 0.55, header: 0.3, footer: 0.3 },
-        printTitlesRow: '7:7', // header her sayfada tekrar
+        printTitlesRow: '7:7', // header her yazdırma sayfasında tekrar
       },
-      views: [{ state: 'frozen', ySplit: 7 }], // header sabit (scroll'da)
+      views: [{ state: 'frozen', ySplit: 7 }], // header sabit
     });
 
-    // Kolon genişlikleri (sabit, okunabilir)
+    // ── Kolon genişlikleri ──
+    // Meta blok için A geniş olsun (Sunucu/Oluşturulma/Filtre/Toplam label'ları
+    // hiç kesilmesin). Tablo için aynı sütunlar yeniden kullanılır.
     ws.columns = [
-      { key: 'id',          width: 10 },
-      { key: 'kind',        width: 12 },
-      { key: 'user',        width: 22 },
-      { key: 'userId',      width: 40 },
-      { key: 'channel',     width: 22 },
-      { key: 'channelId',   width: 40 },
-      { key: 'at',          width: 22 },
+      { width: 10 }, // A — Kayıt No (sıra no)
+      { width: 14 }, // B — Olay Türü
+      { width: 26 }, // C — Kullanıcı
+      { width: 40 }, // D — Kullanıcı ID
+      { width: 26 }, // E — Kanal
+      { width: 40 }, // F — Kanal ID
+      { width: 22 }, // G — Tarih / Saat
     ];
 
-    // ── Rapor başlığı bloğu (A1:G5) ──
-    const ACCENT = 'FF6366F1'; // indigo — MayVox accent'e yakın
+    // ── Rapor başlığı (A1:G1) ──
+    const TITLE_BG = 'FF0F172A';   // slate-900 (sakin kurumsal, indigo yerine)
+    const TITLE_FG = 'FFFFFFFF';
     ws.mergeCells('A1:G1');
     const titleCell = ws.getCell('A1');
     titleCell.value = 'Moderasyon Kayıtları Raporu';
-    titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
-    ws.getRow(1).height = 28;
+    titleCell.font = { bold: true, size: 15, color: { argb: TITLE_FG } };
+    titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TITLE_BG } };
+    ws.getRow(1).height = 30;
 
-    const metaLabelFont = { bold: true, color: { argb: 'FF334155' } };
-    const metaValueFont = { color: { argb: 'FF0F172A' } };
+    // ── Meta bloğu (A2:G5) ──
+    // Label (A kolonu, geniş), value (B:G merge). Sola hizalı, label bold.
+    const metaLabelFont = { bold: true, color: { argb: 'FF334155' }, size: 11 };
+    const metaValueFont = { color: { argb: 'FF0F172A' }, size: 11 };
     const metaPairs: Array<[string, string]> = [
-      ['Sunucu:',       serverName],
-      ['Oluşturulma:',  nowLabel],
-      ['Filtre:',       FILTER_LABEL],
-      ['Toplam Kayıt:', String(events.length)],
+      ['Sunucu',       serverName],
+      ['Oluşturulma',  nowLabel],
+      ['Filtre',       FILTER_LABEL],
+      ['Toplam Kayıt', String(events.length)],
     ];
     metaPairs.forEach((pair, i) => {
-      const row = i + 2;
-      const lbl = ws.getCell(`A${row}`);
+      const rowNum = i + 2;
+      const r = ws.getRow(rowNum);
+      r.height = 18;
+      const lbl = ws.getCell(`A${rowNum}`);
       lbl.value = pair[0];
       lbl.font = metaLabelFont;
-      lbl.alignment = { horizontal: 'right', vertical: 'middle' };
-      ws.mergeCells(`B${row}:G${row}`);
-      const val = ws.getCell(`B${row}`);
+      lbl.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      ws.mergeCells(`B${rowNum}:G${rowNum}`);
+      const val = ws.getCell(`B${rowNum}`);
       val.value = pair[1];
       val.font = metaValueFont;
       val.alignment = { horizontal: 'left', vertical: 'middle' };
     });
 
-    // Boş satır (row 6) — başlık bloğu ile veri arasında nefes
-    ws.getRow(6).height = 8;
-
-    // ── Header row 7 ──
-    ws.getRow(7).values = ['Kayıt No', 'Olay Türü', 'Kullanıcı', 'Kullanıcı ID', 'Kanal', 'Kanal ID', 'Tarih'];
-    ws.getRow(7).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    ws.getRow(7).alignment = { vertical: 'middle', horizontal: 'left' };
-    ws.getRow(7).height = 22;
-    ws.getRow(7).eachCell(c => {
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-      c.border = {
-        top: { style: 'thin', color: { argb: 'FF475569' } },
-        bottom: { style: 'medium', color: { argb: 'FF475569' } },
+    // Meta ↔ tablo arası ince ayırıcı (row 6: ince line + nefes)
+    const sepRow = ws.getRow(6);
+    sepRow.height = 6;
+    for (let col = 1; col <= 7; col++) {
+      sepRow.getCell(col).border = {
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } }, // slate-300
       };
-    });
+    }
 
-    // ── Veri satırları + zebra ──
-    const ZEBRA = 'FFF1F5F9'; // slate-100
-    events.forEach((ev, i) => {
-      const rowIdx = 8 + i;
-      const row = ws.getRow(rowIdx);
-      row.values = [
-        Number(ev.id) || ev.id,
-        KIND_TR[ev.kind] || ev.kind,
-        ev.userName || 'Bilinmiyor',
-        ev.userId || '',
-        ev.channelName || '',
-        ev.channelId || '',
-        fmtDate(ev.createdAt),
+    // ── Veri satırları (row 8+) — tarih Date nesnesi, olay türü TR ──
+    // Data boş değilse Excel Table kullanacağız (addTable); header row 7 bizzat Table tarafından yönetilir.
+    const tableRows = events.map((ev, i) => {
+      const d = new Date(ev.createdAt);
+      return [
+        i + 1,                                 // Kayıt No → 1'den başlayan sıra
+        KIND_TR[ev.kind] || ev.kind,           // Olay Türü
+        ev.userName || 'Bilinmiyor',           // Kullanıcı
+        ev.userId || '',                       // Kullanıcı ID
+        ev.channelName || '',                  // Kanal
+        ev.channelId || '',                    // Kanal ID
+        Number.isNaN(d.getTime()) ? ev.createdAt : d, // Date objesi (Excel native sort)
       ];
-      row.alignment = { vertical: 'middle' };
-      if (i % 2 === 1) {
-        row.eachCell(c => {
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
-        });
-      }
-      // Kind kolonuna renkli vurgu
-      const kindCell = row.getCell(2);
-      const kindColor = ev.kind === 'flood' ? 'FF0891B2'
-                     : ev.kind === 'profanity' ? 'FFE11D48'
-                     : ev.kind === 'spam' ? 'FF7C3AED'
-                     : 'FF475569';
-      kindCell.font = { bold: true, color: { argb: kindColor } };
-      // "Bilinmiyor" fallback italic+muted
-      if (!ev.userName) {
-        row.getCell(3).font = { italic: true, color: { argb: 'FF94A3B8' } };
-      }
     });
 
-    // Empty state mesajı (olay yoksa)
-    if (events.length === 0) {
+    if (events.length > 0) {
+      // ── Excel Table (AutoFilter + sıralama okları hazır) ──
+      ws.addTable({
+        name: 'ModerasyonKayitlari',
+        ref: 'A7',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          // Mevcut hafif mavi tema; ancak biz cell-level override'larla daha sade yapacağız.
+          theme: 'TableStyleMedium2',
+          showRowStripes: true,
+        },
+        columns: [
+          { name: 'Kayıt No' },
+          { name: 'Olay Türü' },
+          { name: 'Kullanıcı' },
+          { name: 'Kullanıcı ID' },
+          { name: 'Kanal' },
+          { name: 'Kanal ID' },
+          { name: 'Tarih / Saat' },
+        ],
+        rows: tableRows,
+      });
+
+      // ── Header row 7 stilini override (daha sakin, kurumsal) ──
+      const HEADER_BG = 'FF1E293B'; // slate-800
+      const HEADER_FG = 'FFFFFFFF';
+      ws.getRow(7).height = 24;
+      ws.getRow(7).eachCell((c, col) => {
+        if (col > 7) return;
+        c.font = { bold: true, color: { argb: HEADER_FG }, size: 11 };
+        c.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+        c.border = {
+          top:    { style: 'thin',   color: { argb: 'FF475569' } },
+          bottom: { style: 'medium', color: { argb: 'FF475569' } },
+        };
+      });
+      // Kayıt No ve Olay Türü başlıkları ortalı
+      ws.getRow(7).getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      ws.getRow(7).getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+      ws.getRow(7).getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // ── Veri satırı stilleri ──
+      // Olay Türü: her tür kendi soft tint'i + bold renkli text
+      const KIND_STYLE: Record<string, { bg: string; fg: string }> = {
+        Flood: { bg: 'FFE0F7FA', fg: 'FF0E7490' }, // cyan-50 / cyan-700
+        Küfür: { bg: 'FFFFE4E6', fg: 'FFBE123C' }, // rose-50 / rose-700
+        Spam:  { bg: 'FFF3E8FF', fg: 'FF7C3AED' }, // violet-100 / violet-600
+      };
+      // Zebra (Table style rows stripes) ÜZERİNE override — daha yumuşak slate-50
+      const ZEBRA_BG = 'FFF8FAFC'; // slate-50
+
+      for (let i = 0; i < events.length; i++) {
+        const ev = events[i];
+        const rowIdx = 8 + i;
+        const r = ws.getRow(rowIdx);
+        r.height = 20;
+
+        // Kolon-bazlı hizalama + font
+        // A: Kayıt No (ortalı, tabular)
+        r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        r.getCell(1).font = { color: { argb: 'FF64748B' }, size: 11 };
+        // B: Olay Türü (ortalı + renkli tint)
+        const kindKey = KIND_TR[ev.kind] || ev.kind;
+        const ks = KIND_STYLE[kindKey];
+        const kindCell = r.getCell(2);
+        kindCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        kindCell.font = { bold: true, size: 11, color: { argb: ks?.fg || 'FF475569' } };
+        if (ks) {
+          kindCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ks.bg } };
+        }
+        // C: Kullanıcı (sola, bilinmiyor ise italic muted)
+        const userCell = r.getCell(3);
+        userCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        userCell.font = !ev.userName
+          ? { italic: true, color: { argb: 'FF94A3B8' }, size: 11 }
+          : { color: { argb: 'FF0F172A' }, size: 11 };
+        // D: Kullanıcı ID (sola, mono görünüm — küçük renk)
+        r.getCell(4).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        r.getCell(4).font = { color: { argb: 'FF64748B' }, size: 10 };
+        // E: Kanal (sola)
+        r.getCell(5).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        r.getCell(5).font = { color: { argb: 'FF0F172A' }, size: 11 };
+        // F: Kanal ID (sola, muted)
+        r.getCell(6).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        r.getCell(6).font = { color: { argb: 'FF64748B' }, size: 10 };
+        // G: Tarih (ortalı, Türkçe format)
+        const dateCell = r.getCell(7);
+        dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        dateCell.font = { color: { argb: 'FF334155' }, size: 11 };
+        dateCell.numFmt = 'dd.mm.yyyy hh:mm';
+
+        // Zebra (Table'ın kendi stripe'ı üzerine soft override — alternatif satır)
+        if (i % 2 === 1) {
+          for (let col = 1; col <= 7; col++) {
+            // Olay Türü hücresinin tint'ini ezme
+            if (col === 2 && ks) continue;
+            const cell = r.getCell(col);
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA_BG } };
+          }
+        }
+      }
+    } else {
+      // ── Empty state: header satırını manuel yaz (Table boş rows ile çalışmıyor) ──
+      const HEADER_BG = 'FF1E293B';
+      ws.getRow(7).values = ['Kayıt No', 'Olay Türü', 'Kullanıcı', 'Kullanıcı ID', 'Kanal', 'Kanal ID', 'Tarih / Saat'];
+      ws.getRow(7).height = 24;
+      ws.getRow(7).eachCell(c => {
+        c.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        c.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      });
       ws.mergeCells('A8:G8');
       const empty = ws.getCell('A8');
       empty.value = 'Bu filtreyle eşleşen moderasyon olayı yok.';
       empty.alignment = { horizontal: 'center', vertical: 'middle' };
-      empty.font = { italic: true, color: { argb: 'FF94A3B8' } };
-      ws.getRow(8).height = 28;
+      empty.font = { italic: true, color: { argb: 'FF94A3B8' }, size: 11 };
+      ws.getRow(8).height = 32;
     }
 
     // ── Stream ──
