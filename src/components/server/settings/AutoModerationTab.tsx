@@ -908,9 +908,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           content: '';
           position: absolute;
           top: 0; bottom: 0; left: 0;
-          width: 60%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
-          animation: apShimmer 1.8s linear infinite;
+          width: 55%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+          animation: apShimmer 2.4s linear infinite;
           pointer-events: none;
         }
         @keyframes apShimmer {
@@ -1138,36 +1138,34 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number; 
     <li
       className="apCard relative rounded-[14px] px-3.5 py-3"
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(var(--glass-tint), 0.03)',
+        border: '1px solid rgba(var(--glass-tint), 0.08)',
         animation: 'apCardIn 260ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
       <div className="flex items-center gap-3">
-        {/* Avatar 36 — varsa image, yoksa/bozuksa kullanıcının anlık durum PNG'si */}
         <SafeAvatar src={ev.userAvatar} statusAvatar={resolveStatusAvatar(ev.userId)} userName={ev.userName} variant="card" />
 
-        {/* Orta kolon: ad + pill + progress */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[14px] font-semibold text-white truncate">
+            <span className="text-[14px] font-semibold text-[var(--theme-text)] truncate">
               {ev.userName || 'Bilinmiyor'}
             </span>
             <span
               className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
               style={{
-                background: 'rgba(251,191,36,0.15)',
+                background: 'rgba(251,191,36,0.12)',
                 color: '#fbbf24',
+                border: '1px solid rgba(251,191,36,0.24)',
               }}
             >
               Yazma Engeli
             </span>
           </div>
 
-          {/* Progress bar + shimmer overlay */}
           <div
             className="apProgress mt-2 h-1 rounded-full overflow-hidden relative"
-            style={{ background: 'rgba(255,255,255,0.08)' }}
+            style={{ background: 'rgba(var(--glass-tint), 0.08)' }}
           >
             <div
               className="apProgressFill h-full rounded-full relative"
@@ -1180,7 +1178,6 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number; 
           </div>
         </div>
 
-        {/* Sağda büyük countdown + "ceza bitimine" */}
         <div className="shrink-0 text-right">
           <div
             className={`text-[14px] font-semibold tabular-nums leading-none ${urgent ? 'apCountdown--urgent' : ''}`}

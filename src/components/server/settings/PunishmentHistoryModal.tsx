@@ -35,13 +35,13 @@ interface KindDef {
 }
 
 const KIND_DEF: Record<Kind, KindDef> = {
-  mute:          { label: 'sustur',         color: '#fb923c', rgb: '251,146,60',  icon: <MicOff size={11} />,          description: 'Sesli sohbette susturuldu' },
-  timeout:       { label: 'timeout',        color: '#a78bfa', rgb: '167,139,250', icon: <Clock size={11} />,           description: 'Zaman aşımı uygulandı' },
-  room_kick:     { label: 'odadan',         color: '#fb923c', rgb: '251,146,60',  icon: <DoorOpen size={11} />,        description: 'Sesli odadan çıkarıldı' },
-  chat_ban:      { label: 'yazma engeli',   color: '#f472b6', rgb: '244,114,182', icon: <MessageSquareOff size={11} />, description: 'Yazma engeli uygulandı' },
-  kick:          { label: 'kick',           color: '#f87171', rgb: '248,113,113', icon: <UserX size={11} />,           description: 'Sunucudan atıldı' },
-  ban:           { label: 'ban',            color: '#ef4444', rgb: '239,68,68',   icon: <Ban size={11} />,             description: 'Sunucudan yasaklandı' },
-  auto_chat_ban: { label: 'auto ceza',      color: '#fbbf24', rgb: '251,191,36',  icon: <Zap size={11} />,             description: 'Otomatik yazma engeli' },
+  mute:          { label: 'sustur',       color: '#fb923c', rgb: '251,146,60',  icon: <MicOff size={11} />,          description: 'Sesli sohbette susturuldu' },
+  timeout:       { label: 'timeout',      color: '#a78bfa', rgb: '167,139,250', icon: <Clock size={11} />,           description: 'Zaman aşımı uygulandı' },
+  room_kick:     { label: 'odadan',       color: '#fb923c', rgb: '251,146,60',  icon: <DoorOpen size={11} />,        description: 'Sesli odadan çıkarıldı' },
+  chat_ban:      { label: 'yazma engeli', color: '#f472b6', rgb: '244,114,182', icon: <MessageSquareOff size={11} />, description: 'Yazma engeli uygulandı' },
+  kick:          { label: 'kick',         color: '#f87171', rgb: '248,113,113', icon: <UserX size={11} />,           description: 'Sunucudan atıldı' },
+  ban:           { label: 'ban',          color: '#ef4444', rgb: '239,68,68',   icon: <Ban size={11} />,             description: 'Sunucudan yasaklandı' },
+  auto_chat_ban: { label: 'auto',         color: '#fbbf24', rgb: '251,191,36',  icon: <Zap size={11} />,             description: 'Otomatik yazma engeli uygulandı' },
 };
 
 const AUDIT_ACTIONS: readonly string[] = [
@@ -273,42 +273,34 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   const body = (
     <div
       className="fixed inset-0 z-[700] flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', animation: 'phmBackdropIn 180ms ease-out' }}
+      style={{ background: 'rgba(0,0,0,0.40)', animation: 'phmBackdropIn 160ms ease-out' }}
       onMouseDown={onClose}
     >
       <div
-        className="relative w-full max-w-[720px] rounded-2xl overflow-hidden"
-        style={{
-          background: 'rgba(18,20,24,0.92)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 30px 80px rgba(0,0,0,0.55), 0 2px 0 rgba(255,255,255,0.04) inset',
-          animation: 'phmModalIn 220ms cubic-bezier(0.2,0.8,0.2,1)',
-        }}
+        className="surface-elevated relative w-full max-w-[720px] rounded-2xl overflow-hidden"
+        style={{ animation: 'phmModalIn 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
         onMouseDown={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
         <div
           className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}
         >
-          {/* Avatar — bozuk URL'de fallback initial */}
           <HeaderAvatar src={member.avatar} initials={initials} />
 
-          {/* Name + meta */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <History size={13} className="text-amber-400 shrink-0" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-400/85">Ceza Geçmişi</span>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/65">
+              <History size={12} />
+              Ceza Geçmişi
             </div>
             <div className="mt-0.5 flex items-baseline gap-2 min-w-0">
-              <span className="text-[15px] font-semibold text-white truncate">{displayName}</span>
-              <span className="text-[11.5px] text-[var(--theme-secondary-text)]/65 shrink-0">
+              <span className="text-[15px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
+              <span className="text-[11.5px] text-[var(--theme-secondary-text)]/60 shrink-0">
                 {events === null ? 'yükleniyor…' : `son 24 saatte ${violations24h} ihlal`}
               </span>
             </div>
           </div>
 
-          {/* Reset + Close */}
           <button
             type="button"
             onClick={handleReset}
@@ -316,7 +308,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
             className={`shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center transition-colors ${
               confirmReset
                 ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                : 'text-[var(--theme-secondary-text)]/70 hover:text-white hover:bg-white/5'
+                : 'text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
             } disabled:opacity-30 disabled:pointer-events-none`}
             title={confirmReset ? 'Onaylamak için tekrar tıkla' : 'Ceza geçmişini sıfırla'}
             aria-label="Sıfırla"
@@ -326,7 +318,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-white hover:bg-white/5 transition-colors"
+            className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
             title="Kapat"
             aria-label="Kapat"
           >
@@ -335,8 +327,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
         </div>
 
         {/* ── Filter Bar ── */}
-        <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-          {/* Search */}
+        <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.06)' }}>
           <div className="relative flex-1 min-w-0">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
             <input
@@ -344,17 +335,16 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Ceza türü veya kanal ara…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg text-[12.5px] text-white placeholder:text-[var(--theme-secondary-text)]/40 outline-none transition-colors"
+              className="w-full h-9 pl-9 pr-3 rounded-lg text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 outline-none transition-colors"
               style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(var(--glass-tint), 0.04)',
+                border: '1px solid rgba(var(--glass-tint), 0.08)',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(251,191,36,0.30)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(var(--theme-accent-rgb), 0.35)'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(var(--glass-tint), 0.08)'; }}
             />
           </div>
 
-          {/* Chips */}
           <div className="flex items-center gap-1.5 shrink-0">
             {FILTERS.map(f => {
               const active = filter === f.key;
@@ -365,14 +355,13 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                   onClick={() => setFilter(f.key)}
                   className="phmChip px-2.5 h-7 rounded-full text-[11px] font-semibold transition-all"
                   style={active ? {
-                    background: 'rgba(251,191,36,0.16)',
-                    color: '#fbbf24',
-                    border: '1px solid rgba(251,191,36,0.35)',
-                    boxShadow: '0 0 14px rgba(251,191,36,0.14)',
+                    background: 'rgba(var(--theme-accent-rgb), 0.14)',
+                    color: 'var(--theme-accent)',
+                    border: '1px solid rgba(var(--theme-accent-rgb), 0.30)',
                   } : {
                     background: 'transparent',
-                    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.8)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'var(--theme-secondary-text)',
+                    border: '1px solid rgba(var(--glass-tint), 0.08)',
                   }}
                 >
                   {f.label}
@@ -400,11 +389,13 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
           )}
           {events !== null && !err && paged.length > 0 && (
             <ul className="relative" style={{ paddingLeft: 22 }}>
-              {/* Dikey çizgi */}
               <div
                 aria-hidden="true"
                 className="absolute top-2 bottom-2 w-px"
-                style={{ left: 9, background: 'linear-gradient(to bottom, rgba(255,255,255,0.04), rgba(255,255,255,0.10), rgba(255,255,255,0.04))' }}
+                style={{
+                  left: 9,
+                  background: 'linear-gradient(to bottom, rgba(var(--glass-tint),0.04), rgba(var(--glass-tint),0.10), rgba(var(--glass-tint),0.04))',
+                }}
               />
               {paged.map(ev => (
                 <TimelineItem key={ev.id} ev={ev} nowMs={nowMs} />
@@ -417,7 +408,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
         {events !== null && !err && filtered.length > 0 && (
           <div
             className="flex items-center justify-between px-5 py-3 text-[11.5px]"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.08)' }}
           >
             <span className="text-[var(--theme-secondary-text)]/60 tabular-nums">
               {filtered.length} kayıt · sayfa {safePage + 1}/{pageCount}
@@ -427,7 +418,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={safePage === 0}
-                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
                 <ChevronLeft size={13} /> Önceki
               </button>
@@ -441,13 +432,13 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                     onClick={() => setPage(p as number)}
                     className="w-7 h-7 rounded-md text-[11px] font-semibold tabular-nums transition-colors"
                     style={p === safePage ? {
-                      background: 'rgba(251,191,36,0.14)',
-                      color: '#fbbf24',
-                      border: '1px solid rgba(251,191,36,0.30)',
+                      background: 'rgba(var(--theme-accent-rgb), 0.14)',
+                      color: 'var(--theme-accent)',
+                      border: '1px solid rgba(var(--theme-accent-rgb), 0.28)',
                     } : {
                       background: 'transparent',
-                      color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.8)',
-                      border: '1px solid rgba(255,255,255,0.06)',
+                      color: 'var(--theme-secondary-text)',
+                      border: '1px solid rgba(var(--glass-tint), 0.06)',
                     }}
                   >
                     {(p as number) + 1}
@@ -458,7 +449,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                 type="button"
                 onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
                 disabled={safePage >= pageCount - 1}
-                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
                 Sonraki <ChevronRight size={13} />
               </button>
@@ -468,28 +459,21 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
       </div>
 
       <style>{`
-        @keyframes phmBackdropIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
+        @keyframes phmBackdropIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes phmModalIn {
-          from { opacity: 0; transform: scale(0.96); }
+          from { opacity: 0; transform: scale(0.97); }
           to   { opacity: 1; transform: scale(1);    }
         }
         @keyframes phmItemIn {
-          from { opacity: 0; transform: translateY(4px); }
+          from { opacity: 0; transform: translateY(3px); }
           to   { opacity: 1; transform: translateY(0);   }
         }
-        @keyframes phmActivePulse {
-          0%, 100% { box-shadow: 0 0 0 1px rgba(251,191,36,0.30), 0 0 24px rgba(251,191,36,0.14); }
-          50%      { box-shadow: 0 0 0 1px rgba(251,191,36,0.45), 0 0 30px rgba(251,191,36,0.22); }
-        }
-        .phmChip:hover { transform: translateY(-1px); }
-        .phmItem { transition: background 140ms ease, border-color 140ms ease; }
-        .phmItem:hover { background: rgba(255,255,255,0.04); }
+        .phmChip { transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; }
+        .phmChip:hover { transform: translateY(-0.5px); }
+        .phmItem { transition: background 150ms ease, border-color 150ms ease; }
+        .phmItem:hover { background: rgba(var(--glass-tint), 0.035); }
         .phmDot { transition: transform 160ms cubic-bezier(0.2,0.8,0.2,1); }
-        .phmItem:hover .phmDot { transform: scale(1.2); }
-        .phmActive { animation: phmActivePulse 2.2s ease-in-out infinite; }
+        .phmItem:hover .phmDot { transform: scale(1.15); }
       `}</style>
     </div>
   );
@@ -523,45 +507,31 @@ const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs 
     <li
       className="phmItem relative rounded-xl py-3 pr-3 pl-3 my-1.5"
       style={{
-        background: isActive ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.015)',
-        border: `1px solid ${isActive ? 'rgba(251,191,36,0.30)' : 'rgba(255,255,255,0.05)'}`,
-        animation: 'phmItemIn 240ms cubic-bezier(0.2,0.8,0.2,1)',
+        background: isActive ? 'rgba(251,191,36,0.05)' : 'rgba(var(--glass-tint), 0.02)',
+        border: `1px solid ${isActive ? 'rgba(251,191,36,0.24)' : 'rgba(var(--glass-tint), 0.06)'}`,
+        animation: 'phmItemIn 220ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
-      {/* Dot (solda, çizgi üstünde) */}
+      {/* Dot */}
       <span
         aria-hidden="true"
-        className="phmDot absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
+        className="phmDot absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full"
         style={{
-          left: -17,
+          left: -16,
           background: def.color,
-          boxShadow: `0 0 0 3px rgba(18,20,24,0.92), 0 0 10px ${def.color}88`,
+          boxShadow: `0 0 0 3px var(--theme-bg), 0 0 6px ${def.color}99`,
         }}
       />
-      {isActive && (
-        <span
-          aria-hidden="true"
-          className="absolute top-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            left: -21,
-            width: 20, height: 20,
-            background: 'radial-gradient(circle, rgba(251,191,36,0.45) 0%, transparent 70%)',
-            animation: 'phmActivePulse 1.8s ease-in-out infinite',
-          }}
-        />
-      )}
 
       <div className="flex items-start gap-3">
-        {/* Orta — badge + açıklama */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide shrink-0"
               style={{
-                background: `rgba(${def.rgb}, 0.14)`,
+                background: `rgba(${def.rgb}, 0.12)`,
                 color: def.color,
-                border: `1px solid rgba(${def.rgb}, 0.28)`,
-                boxShadow: `0 0 10px rgba(${def.rgb}, 0.18)`,
+                border: `1px solid rgba(${def.rgb}, 0.24)`,
               }}
             >
               <span className="inline-flex">{def.icon}</span>
@@ -576,9 +546,9 @@ const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs 
               <span
                 className="ml-auto px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider shrink-0"
                 style={{
-                  background: 'rgba(251,191,36,0.14)',
+                  background: 'rgba(251,191,36,0.12)',
                   color: '#fbbf24',
-                  border: '1px solid rgba(251,191,36,0.35)',
+                  border: '1px solid rgba(251,191,36,0.28)',
                 }}
               >
                 aktif
@@ -586,7 +556,7 @@ const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs 
             )}
           </div>
 
-          <div className="mt-1 text-[12.5px] text-white/88 leading-snug">
+          <div className="mt-1 text-[12.5px] text-[var(--theme-text)]/85 leading-snug">
             {ev.kind === 'auto_chat_ban' && ev.reason
               ? autoReasonText(ev.reason)
               : def.description}
@@ -599,7 +569,6 @@ const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs 
           </div>
         </div>
 
-        {/* Sağ — relative time + active countdown */}
         <div className="shrink-0 text-right">
           <div
             className="text-[10.5px] tabular-nums text-[var(--theme-secondary-text)]/65"
@@ -633,8 +602,9 @@ function HeaderAvatar({ src, initials }: { src: string | null; initials: string 
     <div
       className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
       style={{
-        background: showImg ? 'transparent' : 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(244,114,182,0.25))',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+        background: showImg ? 'transparent' : 'rgba(var(--glass-tint), 0.06)',
+        border: '1px solid rgba(var(--glass-tint), 0.10)',
+        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.05)',
       }}
     >
       {showImg ? (
@@ -646,7 +616,7 @@ function HeaderAvatar({ src, initials }: { src: string | null; initials: string 
           referrerPolicy="no-referrer"
         />
       ) : (
-        <span className="text-[13px] font-bold text-white/95 drop-shadow">{initials}</span>
+        <span className="text-[13px] font-bold text-[var(--theme-text)]/90">{initials}</span>
       )}
     </div>
   );
@@ -654,24 +624,25 @@ function HeaderAvatar({ src, initials }: { src: string | null; initials: string 
 
 // ── Empty state ──
 function EmptyState({ hasAny, hasQuery }: { hasAny: boolean; hasQuery: boolean }) {
+  const filtered = hasAny && hasQuery;
   return (
     <div className="h-[240px] flex flex-col items-center justify-center text-center px-6">
       <div
         className="w-12 h-12 rounded-2xl inline-flex items-center justify-center mb-3"
         style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(var(--glass-tint), 0.04)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
         <Shield size={20} className="text-[var(--theme-secondary-text)]/55" />
       </div>
-      <div className="text-[13.5px] font-semibold text-white/90">
-        {hasAny && hasQuery ? 'Filtreyle eşleşen kayıt yok' : 'Ceza geçmişi bulunmuyor'}
+      <div className="text-[13.5px] font-semibold text-[var(--theme-text)]/90">
+        {filtered ? 'Sonuç bulunamadı' : 'Ceza geçmişi bulunmuyor'}
       </div>
       <div className="mt-1 text-[11.5px] text-[var(--theme-secondary-text)]/55 max-w-[320px]">
-        {hasAny && hasQuery
-          ? 'Farklı bir filtre veya arama terimi dene.'
-          : 'Bu kullanıcı henüz herhangi bir moderasyon ihlali yapmamış.'}
+        {filtered
+          ? 'Bu filtrelerle eşleşen kayıt yok.'
+          : 'Bu kullanıcı için henüz moderasyon kaydı oluşmadı.'}
       </div>
     </div>
   );
