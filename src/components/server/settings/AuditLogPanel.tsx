@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  RefreshCw, Search, X, ScrollText, AlertTriangle,
+  RefreshCw, Search, X, ScrollText, AlertTriangle, EyeOff, Eye,
 } from 'lucide-react';
 import { getAuditLog, type AuditLogItem } from '../../../lib/serverService';
 import { timeAgo } from './shared';
@@ -126,6 +126,58 @@ function refineCategory(log: AuditLogItem, def: ActionDef): Category {
   return 'auto';
 }
 
+// ═══════════════════════════════════════════
+// Priority system — 3 level
+// ═══════════════════════════════════════════
+type Priority = 'high' | 'medium' | 'low';
+
+const HIGH_ACTIONS = new Set<string>([
+  'member.ban', 'member.kick', 'member.timeout', 'member.mute',
+  'member.chat_ban', 'member.room_kick',
+]);
+
+function priorityOf(log: AuditLogItem, refined: Category): Priority {
+  if (HIGH_ACTIONS.has(log.action)) return 'high';
+  if (refined === 'flood' || refined === 'profanity' || refined === 'spam' || refined === 'auto') return 'medium';
+  return 'low';
+}
+
+// ═══════════════════════════════════════════
+// Compression — aynı actor + action + ~1dk içinde ardışık event'leri tek satıra birleştir
+// ═══════════════════════════════════════════
+interface CompressedRow {
+  id: string;           // İlk log'un id'si (key için)
+  log: AuditLogItem;    // En son (en yeni) log
+  count: number;        // Kaç event birleşti (1+)
+  firstAt: string;      // İlk olayın zamanı
+}
+
+const COMPRESS_WINDOW_MS = 60_000; // 1 dakika
+
+function compressLogs(logs: AuditLogItem[]): CompressedRow[] {
+  // logs descending by createdAt
+  const out: CompressedRow[] = [];
+  for (const log of logs) {
+    const prev = out[out.length - 1];
+    if (prev) {
+      const sameActor = prev.log.actorId === log.actorId;
+      const sameAction = prev.log.action === log.action;
+      // Grup penceresi: en eski + en yeni arası <= COMPRESS_WINDOW_MS
+      const prevOldest = Date.parse(prev.firstAt);
+      const curAt = Date.parse(log.createdAt);
+      const inWindow = Number.isFinite(prevOldest) && Number.isFinite(curAt)
+        && (prevOldest - curAt) <= COMPRESS_WINDOW_MS;
+      if (sameActor && sameAction && inWindow) {
+        prev.count++;
+        prev.firstAt = log.createdAt; // eski olaya doğru kay
+        continue;
+      }
+    }
+    out.push({ id: log.id, log, count: 1, firstAt: log.createdAt });
+  }
+  return out;
+}
+
 function matchesFilter(cat: Category, refinedCat: Category, f: FilterKey): boolean {
   if (f === 'all') return true;
   if (f === 'flood')     return refinedCat === 'flood';
@@ -167,6 +219,7 @@ export default function AuditLogPanel({ serverId }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
+  const [hideLow, setHideLow] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -189,6 +242,7 @@ export default function AuditLogPanel({ serverId }: Props) {
     return items.filter(log => {
       const def = resolveAction(log);
       const refined = refineCategory(log, def);
+      if (hideLow && priorityOf(log, refined) === 'low') return false;
       if (!matchesFilter(def.category, refined, filter)) return false;
       if (q) {
         const actor = (log.actorName ?? '').toLocaleLowerCase('tr-TR');
@@ -198,9 +252,9 @@ export default function AuditLogPanel({ serverId }: Props) {
       }
       return true;
     });
-  }, [items, filter, query]);
+  }, [items, filter, query, hideLow]);
 
-  // Grupla
+  // Bucket → compress → her bucket kendi içinde sıkıştır
   const groups = useMemo(() => {
     const nowMs = Date.now();
     const m = new Map<Bucket, AuditLogItem[]>();
@@ -210,9 +264,20 @@ export default function AuditLogPanel({ serverId }: Props) {
       m.get(b)!.push(log);
     }
     return (['today', 'yesterday', 'older'] as Bucket[])
-      .map(b => ({ bucket: b, items: m.get(b)! }))
-      .filter(g => g.items.length > 0);
+      .map(b => ({ bucket: b, rows: compressLogs(m.get(b)!) }))
+      .filter(g => g.rows.length > 0);
   }, [filtered]);
+
+  const totalLow = useMemo(() => {
+    if (!items) return 0;
+    let n = 0;
+    for (const log of items) {
+      const def = resolveAction(log);
+      const refined = refineCategory(log, def);
+      if (priorityOf(log, refined) === 'low') n++;
+    }
+    return n;
+  }, [items]);
 
   return (
     <div className="space-y-3">
@@ -265,6 +330,28 @@ export default function AuditLogPanel({ serverId }: Props) {
         </div>
         <button
           type="button"
+          onClick={() => setHideLow(v => !v)}
+          title={hideLow ? 'Düşük öncelikli logları göster' : 'Düşük öncelikli logları gizle'}
+          aria-label="Düşük öncelikli toggle"
+          className="flex items-center gap-1 px-2 h-8 rounded-lg text-[10.5px] font-semibold transition-colors"
+          style={hideLow ? {
+            background: 'rgba(var(--theme-accent-rgb),0.12)',
+            color: 'var(--theme-accent)',
+            border: '1px solid rgba(var(--theme-accent-rgb),0.26)',
+          } : {
+            background: 'rgba(var(--glass-tint),0.04)',
+            color: 'var(--theme-secondary-text)',
+            border: '1px solid rgba(var(--glass-tint),0.08)',
+          }}
+        >
+          {hideLow ? <Eye size={11} /> : <EyeOff size={11} />}
+          {hideLow ? 'Göster' : 'Gizle'}
+          {totalLow > 0 && (
+            <span className="tabular-nums opacity-70">({totalLow})</span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={load}
           disabled={refreshing}
           title="Yenile"
@@ -295,7 +382,7 @@ export default function AuditLogPanel({ serverId }: Props) {
       ) : (
         <div className="space-y-3">
           {groups.map(g => (
-            <TimeGroup key={g.bucket} bucket={g.bucket} items={g.items} />
+            <TimeGroup key={g.bucket} bucket={g.bucket} rows={g.rows} />
           ))}
         </div>
       )}
@@ -306,10 +393,10 @@ export default function AuditLogPanel({ serverId }: Props) {
 // ═══════════════════════════════════════════
 // Time group — uppercase label + vertical timeline
 // ═══════════════════════════════════════════
-const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket, items }) => {
+const TimeGroup: React.FC<{ bucket: Bucket; rows: CompressedRow[] }> = ({ bucket, rows }) => {
+  const total = rows.reduce((a, r) => a + r.count, 0);
   return (
     <section>
-      {/* Group label — minimal, uppercase, low opacity */}
       <div className="flex items-center gap-2 px-1 pb-1.5 pt-1">
         <span className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-[var(--theme-secondary-text)]/55">
           {BUCKET_LABEL[bucket]}
@@ -319,10 +406,9 @@ const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket
           style={{ background: 'linear-gradient(90deg, rgba(var(--glass-tint),0.08), transparent 80%)' }}
         />
         <span className="text-[9.5px] tabular-nums text-[var(--theme-secondary-text)]/30">
-          {items.length}
+          {total}
         </span>
       </div>
-      {/* Timeline — tek dikey çizgi, sol kenar; her row çizgi üzerinde dot */}
       <ul className="relative" style={{ paddingLeft: 18 }}>
         <div
           aria-hidden="true"
@@ -332,8 +418,8 @@ const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket
             background: 'linear-gradient(to bottom, rgba(var(--glass-tint),0.04), rgba(var(--glass-tint),0.10) 10%, rgba(var(--glass-tint),0.10) 90%, rgba(var(--glass-tint),0.04))',
           }}
         />
-        {items.map(log => (
-          <AuditLogRow key={log.id} log={log} />
+        {rows.map(r => (
+          <AuditLogRow key={r.id} row={r} />
         ))}
       </ul>
     </section>
@@ -342,66 +428,89 @@ const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket
 
 // ═══════════════════════════════════════════
 // Single row — timeline dot + actor em-dash verb + target + reason subtext + time
+// Priority-aware: HIGH subtle tint, MEDIUM normal, LOW faded.
+// Compressed: N>1 ise ×N badge.
 // ═══════════════════════════════════════════
-// Önem derecesi — ban/kick/auto vurgulu, channel/settings muted
-const HIGH_IMPORTANCE: Set<string> = new Set([
-  'member.ban', 'member.kick', 'member.timeout', 'member.chat_ban',
-  'member.chat_ban.auto', 'member.mute', 'member.room_kick',
-]);
-
-const AuditLogRow: React.FC<{ log: AuditLogItem }> = ({ log }) => {
+const AuditLogRow: React.FC<{ row: CompressedRow }> = ({ row }) => {
+  const { log, count } = row;
   const def = resolveAction(log);
   const refined = refineCategory(log, def);
   const palette = CATEGORY_COLOR[refined];
+  const priority = priorityOf(log, refined);
   const actor = log.actorId === 'system:auto-mod' ? 'Sistem' : (log.actorName || 'Kullanıcı');
   const target = describeTarget(log);
   const reason = extractReason(log);
   const time = timeAgo(log.createdAt, { withDateFallback: true });
 
-  // Semantic badge: sadece flood/küfür/spam/auto (noise azalt)
   const showBadge = refined === 'flood' || refined === 'profanity' || refined === 'spam' || refined === 'auto';
-  // Önem: düşük olaylar (channel/settings) muted
-  const isHigh = HIGH_IMPORTANCE.has(log.action);
-  const verbTone = isHigh
-    ? 'text-[var(--theme-text)]/90'
-    : 'text-[var(--theme-text)]/75';
+
+  // Priority → typography + dot + row tint
+  const isHigh   = priority === 'high';
+  const isLow    = priority === 'low';
+  const verbTone = isHigh ? 'text-[var(--theme-text)]/90' : isLow ? 'text-[var(--theme-text)]/65' : 'text-[var(--theme-text)]/80';
   const actorTone = isHigh
     ? 'text-[var(--theme-text)] font-semibold'
-    : 'text-[var(--theme-text)]/85 font-semibold';
+    : isLow
+      ? 'text-[var(--theme-text)]/75 font-semibold'
+      : 'text-[var(--theme-text)]/90 font-semibold';
+  const actorSize = isLow ? 'text-[11.5px]' : 'text-[12.5px]';
+  const verbSize  = isLow ? 'text-[11.5px]' : 'text-[12.5px]';
+
+  // Dot: high = full + warm amber tint, medium = category color, low = muted
+  const dotColor = isHigh ? '#fb923c' : palette.color;
+  const dotOpacity = isLow ? 0.55 : isHigh ? 1 : 0.85;
+
+  // Row bg: HIGH subtle amber, MEDIUM clean, LOW clean faded
+  const rowBg = isHigh ? 'rgba(251,146,60,0.03)' : 'transparent';
+  const rowOpacity = isLow ? 0.72 : 1;
 
   const absTime = new Date(log.createdAt).toLocaleString('tr-TR');
+  const hint = count > 1
+    ? `${count} olay · ilk: ${new Date(row.firstAt).toLocaleString('tr-TR')} · son: ${absTime}`
+    : absTime;
 
   return (
     <li
       className="auditrow relative py-1 pr-1 transition-colors"
-      title={absTime}
+      style={{ background: rowBg, opacity: rowOpacity }}
+      title={hint}
     >
-      {/* Timeline dot — çizgi üzerinde, vertical-center */}
       <span
         aria-hidden="true"
         className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full"
         style={{
           left: -17,
-          background: palette.color,
-          boxShadow: `0 0 0 3px var(--theme-bg), 0 0 6px ${palette.color}66`,
-          opacity: isHigh ? 1 : 0.75,
+          background: dotColor,
+          boxShadow: `0 0 0 3px var(--theme-bg), 0 0 6px ${dotColor}66`,
+          opacity: dotOpacity,
         }}
       />
 
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          {/* Main line — actor — verb target */}
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className={`text-[12.5px] ${actorTone}`}>
+            <span className={`${actorSize} ${actorTone}`}>
               {actor}
             </span>
             <span className="text-[11px] text-[var(--theme-secondary-text)]/35">—</span>
-            <span className={`text-[12.5px] ${verbTone}`}>
+            <span className={`${verbSize} ${verbTone}`}>
               {def.verb}
             </span>
             {target && (
-              <span className="text-[11.5px] text-[var(--theme-text)]/70 font-semibold truncate max-w-[240px]">
+              <span className={`${verbSize} text-[var(--theme-text)]/70 font-semibold truncate max-w-[240px]`}>
                 {target}
+              </span>
+            )}
+            {count > 1 && (
+              <span
+                className="inline-flex items-center px-1.5 py-px rounded text-[9.5px] font-bold tabular-nums shrink-0"
+                style={{
+                  color: 'var(--theme-accent)',
+                  background: 'rgba(var(--theme-accent-rgb), 0.10)',
+                  border: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
+                }}
+              >
+                ×{count}
               </span>
             )}
             {showBadge && (
@@ -417,14 +526,12 @@ const AuditLogRow: React.FC<{ log: AuditLogItem }> = ({ log }) => {
               </span>
             )}
           </div>
-          {/* Subtext — reason, low opacity */}
           {reason && (
             <div className="mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug truncate">
               {reason}
             </div>
           )}
         </div>
-        {/* Time — right aligned, subtle */}
         <span className="shrink-0 mt-px text-[10.5px] tabular-nums text-[var(--theme-secondary-text)]/40">
           {time}
         </span>
@@ -433,7 +540,8 @@ const AuditLogRow: React.FC<{ log: AuditLogItem }> = ({ log }) => {
       <style>{`
         .auditrow { border-radius: 6px; }
         .auditrow:hover {
-          background: rgba(var(--glass-tint), 0.035);
+          background: rgba(var(--glass-tint), 0.045) !important;
+          opacity: 1 !important;
         }
       `}</style>
     </li>
