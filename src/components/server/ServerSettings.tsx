@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel, ShieldCheck, Save, RotateCcw } from 'lucide-react';
 import type { AutoModActions } from './settings/AutoModerationTab';
+import type { GeneralActions } from './settings/GeneralTab';
 import {
   type Server, type ServerOverview,
   getServerDetails, updateServer, deleteServer, leaveServer,
@@ -77,11 +78,18 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   // AutoMod tab — dirty/saving state + action handler'ları: butonları tab bar sağında göster.
   const [automodState, setAutomodState] = useState<{ dirty: boolean; saving: boolean }>({ dirty: false, saving: false });
   const automodActionsRef = useRef<AutoModActions | null>(null);
-  // Tab AutoMod'dan çıkınca ref'i temizle — stale handler çağrılmasın.
+  // Genel tab — aynı pattern (tab bar sağında Kaydet/Sıfırla pill)
+  const [generalState, setGeneralState] = useState<{ dirty: boolean; saving: boolean }>({ dirty: false, saving: false });
+  const generalActionsRef = useRef<GeneralActions | null>(null);
+  // Tab değişince stale handler/state sıfırlansın.
   useEffect(() => {
     if (tab !== 'automod') {
       automodActionsRef.current = null;
       setAutomodState({ dirty: false, saving: false });
+    }
+    if (tab !== 'general') {
+      generalActionsRef.current = null;
+      setGeneralState({ dirty: false, saving: false });
     }
   }, [tab]);
 
@@ -256,33 +264,22 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 </button>
               );
             })}
-            {/* Tab-bar sağı: aktif tab'a özgü action pill'leri (şu an sadece Oto-Mod Kaydet/Sıfırla) */}
+            {/* Tab-bar sağı: aktif tab'a özgü action pill'leri */}
             {tab === 'automod' && canKickMembers && (
-              <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => automodActionsRef.current?.onReset()}
-                  disabled={!automodState.dirty || automodState.saving}
-                  title="Değişiklikleri sıfırla"
-                  aria-label="Değişiklikleri sıfırla"
-                  className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-35 disabled:pointer-events-none transition-colors"
-                >
-                  <RotateCcw size={13} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => automodActionsRef.current?.onSave()}
-                  disabled={!automodState.dirty || automodState.saving}
-                  className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
-                  style={{
-                    background: 'var(--theme-accent)',
-                    color: 'var(--theme-text-on-accent, #000)',
-                    boxShadow: automodState.dirty ? '0 2px 10px rgba(var(--theme-accent-rgb),0.28)' : 'none',
-                  }}
-                >
-                  <Save size={12} /> {automodState.saving ? 'Kaydediliyor…' : 'Kaydet'}
-                </button>
-              </div>
+              <TabActionPills
+                dirty={automodState.dirty}
+                saving={automodState.saving}
+                onReset={() => automodActionsRef.current?.onReset()}
+                onSave={() => automodActionsRef.current?.onSave()}
+              />
+            )}
+            {tab === 'general' && canEdit && (
+              <TabActionPills
+                dirty={generalState.dirty}
+                saving={generalState.saving}
+                onReset={() => generalActionsRef.current?.onReset()}
+                onSave={() => generalActionsRef.current?.onSave()}
+              />
             )}
           </div>
         )}
@@ -295,7 +292,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             onSave={async u => { try { await updateServer(serverId, u); await loadServer(); onServerUpdated(); showToast('Kaydedildi'); } catch (e: any) { showToast(e.message); } }}
             onDelete={async () => { try { await deleteServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
             onLeave={async () => { try { await leaveServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
-            showToast={showToast} />}
+            showToast={showToast}
+            onStateChange={setGeneralState}
+            actionsRef={generalActionsRef} />}
           {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={(t) => setTab(t)} />}
           {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
           {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
@@ -400,5 +399,42 @@ function DisabledItem({ children }: { children: React.ReactNode }) {
       </span>
       {children}
     </li>
+  );
+}
+
+/**
+ * Tab bar sağı — Kaydet/Sıfırla pill grubu.
+ * disabled = !dirty || saving; shadow sadece dirty iken.
+ */
+function TabActionPills({
+  dirty, saving, onReset, onSave,
+}: { dirty: boolean; saving: boolean; onReset: () => void; onSave: () => void }) {
+  const disabled = !dirty || saving;
+  return (
+    <div className="ml-auto flex items-center gap-1.5 shrink-0">
+      <button
+        type="button"
+        onClick={onReset}
+        disabled={disabled}
+        title="Değişiklikleri sıfırla"
+        aria-label="Değişiklikleri sıfırla"
+        className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-35 disabled:pointer-events-none transition-colors"
+      >
+        <RotateCcw size={13} />
+      </button>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={disabled}
+        className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
+        style={{
+          background: 'var(--theme-accent)',
+          color: 'var(--theme-text-on-accent, #000)',
+          boxShadow: dirty ? '0 2px 10px rgba(var(--theme-accent-rgb),0.28)' : 'none',
+        }}
+      >
+        <Save size={12} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
+      </button>
+    </div>
   );
 }

@@ -1,12 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  Save, Trash2, Camera, Copy, Check,
+  Trash2, Camera, Copy, Check,
   Globe, Lock, Mail, UserPlus, LogOut,
 } from 'lucide-react';
 import { type Server } from '../../../lib/serverService';
 import { uploadServerLogo } from '../../../lib/supabase';
 import AvatarCropModal from '../../AvatarCropModal';
 import { fmtDate } from './shared';
+
+export interface GeneralActions {
+  onSave: () => void;
+  onReset: () => void;
+}
 
 interface Props {
   server: Server;
@@ -16,6 +21,10 @@ interface Props {
   onDelete: () => Promise<void>;
   onLeave: () => Promise<void>;
   showToast: (m: string) => void;
+  /** Parent'a dirty/saving state'ini iletir — tab bar sağında Kaydet pill'i göstermek için. */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
+  /** Parent'ın action pill'leri tetiklemesi için handler ref. Her render'da güncellenir. */
+  actionsRef?: React.MutableRefObject<GeneralActions | null>;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -43,15 +52,6 @@ const CARD_STYLE: React.CSSProperties = {
   WebkitBackdropFilter: 'blur(14px)',
 };
 
-const PRIMARY_BTN_STYLE: React.CSSProperties = {
-  background: 'var(--theme-accent)',
-  color: 'var(--theme-text-on-accent, #000)',
-  boxShadow:
-    'inset 0 1px 0 rgba(255,255,255,0.22), ' +
-    'inset 0 -1px 0 rgba(0,0,0,0.08), ' +
-    '0 1px 2px rgba(0,0,0,0.08), ' +
-    '0 6px 18px rgba(var(--theme-accent-rgb), 0.28)',
-};
 
 const DANGER_BTN_STYLE: React.CSSProperties = {
   background: 'linear-gradient(180deg, rgb(239,68,68), rgb(220,38,38))',
@@ -172,23 +172,6 @@ function StatCell({ label, value, accent, small }: { label: string; value: strin
   );
 }
 
-function PrimaryButton({
-  onClick, disabled, icon, children,
-}: { onClick: () => void; disabled?: boolean; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl text-[13px] font-semibold tracking-tight transition-all duration-200 ease-out active:scale-[0.97] hover:brightness-[1.06] disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
-      style={PRIMARY_BTN_STYLE}
-    >
-      {icon}
-      <span>{children}</span>
-    </button>
-  );
-}
-
 function DangerButton({
   onClick, disabled, children,
 }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
@@ -227,7 +210,7 @@ function GhostButton({
 // GENEL — UI redesign (logic 1:1 korunuyor)
 // ══════════════════════════════════════════════════════════════════
 
-export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, onLeave, showToast }: Props) {
+export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, onLeave, showToast, onStateChange, actionsRef }: Props) {
   const [name, setName] = useState(server.name);
   const [desc, setDesc] = useState(server.description);
   const [motto, setMotto] = useState(server.motto ?? '');
@@ -270,6 +253,22 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     if (joinPolicy !== (server.joinPolicy ?? 'invite_only')) u.joinPolicy = joinPolicy;
     try { await onSave(u); } finally { setSaving(false); }
   };
+
+  const handleReset = () => {
+    setName(server.name);
+    setDesc(server.description);
+    setMotto(server.motto ?? '');
+    setIsPublic(server.isPublic ?? true);
+    setJoinPolicy(server.joinPolicy ?? 'invite_only');
+  };
+
+  // Parent'a dirty/saving state + save/reset handler'larını ilet → tab bar sağı Kaydet pill'i.
+  useEffect(() => {
+    onStateChange?.({ dirty, saving });
+  }, [dirty, saving, onStateChange]);
+  if (actionsRef) {
+    actionsRef.current = { onSave: save, onReset: handleReset };
+  }
 
   const nameChanged = name.trim() !== server.name;
   const realSlug = (server.slug || '').replace(/\.mv$/, '');
@@ -429,34 +428,8 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
         </div>
       </GlassCard>
 
-      {/* ═════════════ Save area (dirty olduğunda) ═════════════ */}
-      {canEdit && dirty && (
-        <div
-          className="flex items-center justify-between gap-4 rounded-2xl px-5 py-3 animate-[fadeIn_200ms_ease-out]"
-          style={{
-            background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.06), rgba(var(--theme-accent-rgb), 0.025))',
-            border: '1px solid rgba(var(--theme-accent-rgb), 0.18)',
-            boxShadow: 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.08), 0 4px 14px rgba(var(--theme-accent-rgb), 0.10)',
-          }}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="relative flex shrink-0">
-              <span className="absolute inline-flex h-2 w-2 rounded-full bg-[var(--theme-accent)] opacity-60 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--theme-accent)]" />
-            </span>
-            <span className="text-[12px] font-semibold text-[var(--theme-text)]/85 truncate">
-              Kaydedilmemiş değişiklikler var
-            </span>
-          </div>
-          <PrimaryButton
-            onClick={save}
-            disabled={saving}
-            icon={<Save size={14} strokeWidth={2} />}
-          >
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </PrimaryButton>
-        </div>
-      )}
+      {/* Save area parent'a (ServerSettings tab bar sağı) taşındı.
+          User alt action bar'ı görmüyordu → tab bar'daki pill her zaman görünür. */}
 
       {/* ═════════════ Tehlikeli Bölge ═════════════ */}
       <section className="pt-2 space-y-3">
