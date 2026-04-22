@@ -308,6 +308,52 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
         />
         <RecentEventsCard events={recent} />
       </div>
+
+      {/* Micro-interactions — hover lift, peak pulse, tooltip + legend fade */}
+      <style>{`
+        .denetim-kpi {
+          transition: transform 160ms cubic-bezier(0.2,0.8,0.2,1),
+                      box-shadow 160ms ease,
+                      border-color 160ms ease;
+        }
+        .denetim-kpi:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.04) inset;
+        }
+        .denetim-card {
+          transition: transform 160ms cubic-bezier(0.2,0.8,0.2,1),
+                      border-color 160ms ease;
+        }
+        .denetim-card:hover {
+          transform: translateY(-1px);
+          border-color: rgba(var(--glass-tint), 0.12);
+        }
+        .denetim-leader {
+          transition: background 160ms ease, transform 160ms ease;
+        }
+        .denetim-leader:hover {
+          background: rgba(var(--glass-tint),0.045);
+        }
+        @keyframes denetim-peak-pulse {
+          0%, 100% { opacity: 0.55; transform: scale(1); }
+          50%      { opacity: 0.18; transform: scale(1.35); }
+        }
+        .denetim-peak-pulse {
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: denetim-peak-pulse 2.4s ease-in-out infinite;
+        }
+        @keyframes denetim-tooltip-in {
+          from { opacity: 0; transform: translateY(-2px); }
+          to   { opacity: 1; transform: translateY(0);    }
+        }
+        .denetim-tooltip { animation: denetim-tooltip-in 140ms ease-out; }
+        @keyframes denetim-series-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .denetim-series { animation: denetim-series-in 220ms ease-out; }
+      `}</style>
     </div>
   );
 }
@@ -362,18 +408,26 @@ function KpiBar({ kpi, prev }: { kpi: KindCounts; prev: KindCounts }) {
       {items.map(({ kind, value, delta }) => {
         const meta = KIND_META[kind];
         const d = formatDelta(delta);
+        const increasing = delta > 0;
+        const decreasing = delta < 0;
         return (
           <div
             key={kind}
-            className="denetim-kpi rounded-xl px-3.5 py-3 transition-all"
+            className="denetim-kpi rounded-xl px-3 py-2.5"
             style={{
               background: 'rgba(var(--glass-tint), 0.04)',
-              border: '1px solid rgba(var(--glass-tint), 0.08)',
+              border: `1px solid ${
+                increasing ? `rgba(${meta.rgb}, 0.22)` : 'rgba(var(--glass-tint), 0.08)'
+              }`,
+              boxShadow: increasing
+                ? `0 0 0 1px rgba(${meta.rgb}, 0.06), 0 1px 12px rgba(${meta.rgb}, 0.08)`
+                : 'none',
+              opacity: decreasing && value === 0 ? 0.65 : 1,
             }}
           >
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
-                <span style={{ color: meta.color }}>{meta.icon}</span>
+                <span style={{ color: meta.color, opacity: value === 0 ? 0.45 : 1 }}>{meta.icon}</span>
                 <span className="text-[10.5px] font-bold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/70">
                   {meta.label}
                 </span>
@@ -381,10 +435,13 @@ function KpiBar({ kpi, prev }: { kpi: KindCounts; prev: KindCounts }) {
               <DeltaPill text={d.text} tone={d.tone} icon={d.icon} />
             </div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-[22px] font-bold tabular-nums leading-none" style={{ color: meta.color }}>
+              <span
+                className="text-[24px] font-bold tabular-nums leading-none tracking-tight"
+                style={{ color: value === 0 ? 'var(--theme-secondary-text)' : meta.color }}
+              >
                 {value}
               </span>
-              <span className="text-[10px] text-[var(--theme-secondary-text)]/50">olay</span>
+              <span className="text-[10px] text-[var(--theme-secondary-text)]/45">olay</span>
             </div>
           </div>
         );
@@ -455,6 +512,18 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map(p => PAD_T + plotH - p * plotH);
   const gridLabels = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(p * maxSeries));
 
+  // Peak detect — visible series içinde en yüksek nokta (tek bir kind/bucket)
+  let peakKind: Kind | null = null;
+  let peakIdx = -1;
+  let peakVal = 0;
+  for (const k of KIND_ORDER) {
+    if (!visible[k]) continue;
+    for (let i = 0; i < n; i++) {
+      const v = (buckets[i] as any)[k] as number;
+      if (v > peakVal) { peakVal = v; peakKind = k; peakIdx = i; }
+    }
+  }
+
   // X labels — başlangıç, orta, son
   const xTicks = [0, Math.floor(n / 2), n - 1].filter(i => i >= 0 && i < n);
 
@@ -513,8 +582,8 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
       {/* Chart */}
       {!hasAny ? (
         <EmptyState
-          title="Bu zaman aralığında moderasyon verisi oluşmadı"
-          hint="Seçili range'de hiç ihlal/ceza yok. Range'i değiştirmeyi dene."
+          title="Sunucu şu anda sakin görünüyor"
+          hint="Bu zaman aralığında moderasyon aktivitesi yok. Daha geniş bir range seçebilirsin."
         />
       ) : (
         <div className="relative" onMouseLeave={() => setHoverIdx(null)}>
@@ -531,7 +600,7 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
               <line
                 key={`g-${i}`}
                 x1={PAD_L} x2={W - PAD_R} y1={y} y2={y}
-                stroke="rgba(var(--glass-tint),0.08)"
+                stroke="rgba(var(--glass-tint),0.12)"
                 strokeWidth={1}
                 strokeDasharray={i === 0 || i === gridLines.length - 1 ? '' : '3 4'}
               />
@@ -573,7 +642,7 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
               if (!visible[k]) return null;
               const meta = KIND_META[k];
               return (
-                <g key={k}>
+                <g key={k} className="denetim-series">
                   <path
                     d={buildArea(k)}
                     fill={`rgba(${meta.rgb}, 0.10)`}
@@ -583,13 +652,34 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
                     d={buildPath(k)}
                     fill="none"
                     stroke={meta.color}
-                    strokeWidth={1.6}
+                    strokeWidth={1.8}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 </g>
               );
             })}
+            {/* Peak marker — en yüksek nokta (hover üzerinde ise hover alır) */}
+            {peakKind && peakIdx >= 0 && peakVal > 0 && hoverIdx !== peakIdx && (
+              <g className="denetim-peak">
+                <circle
+                  cx={xOf(peakIdx)}
+                  cy={yOf(peakVal)}
+                  r={5}
+                  fill="none"
+                  stroke={KIND_META[peakKind].color}
+                  strokeWidth={1.2}
+                  opacity={0.55}
+                  className="denetim-peak-pulse"
+                />
+                <circle
+                  cx={xOf(peakIdx)}
+                  cy={yOf(peakVal)}
+                  r={2.5}
+                  fill={KIND_META[peakKind].color}
+                />
+              </g>
+            )}
             {/* Hover vertical line + dots */}
             {hoverIdx !== null && buckets[hoverIdx] && (
               <g>
@@ -604,15 +694,22 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
                   if (!visible[k]) return null;
                   const v = (buckets[hoverIdx] as any)[k] as number;
                   return (
-                    <circle
-                      key={`h-${k}`}
-                      cx={xOf(hoverIdx)}
-                      cy={yOf(v)}
-                      r={3}
-                      fill={KIND_META[k].color}
-                      stroke="var(--theme-bg)"
-                      strokeWidth={1.5}
-                    />
+                    <g key={`h-${k}`}>
+                      <circle
+                        cx={xOf(hoverIdx)}
+                        cy={yOf(v)}
+                        r={5.5}
+                        fill={`rgba(${KIND_META[k].rgb}, 0.18)`}
+                      />
+                      <circle
+                        cx={xOf(hoverIdx)}
+                        cy={yOf(v)}
+                        r={3.5}
+                        fill={KIND_META[k].color}
+                        stroke="var(--theme-bg)"
+                        strokeWidth={1.5}
+                      />
+                    </g>
                   );
                 })}
               </g>
@@ -635,26 +732,37 @@ function HoverTooltip({ bucket, visible, range }: { bucket: TrendBucket; visible
   const label = range === '24h'
     ? `${d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })} ${String(d.getHours()).padStart(2, '0')}:00`
     : d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: '2-digit' });
+  const total = KIND_ORDER.reduce((a, k) => a + (visible[k] ? (bucket as any)[k] as number : 0), 0);
   return (
     <div
-      className="absolute top-2 right-2 px-2.5 py-1.5 rounded-lg text-[10.5px] pointer-events-none"
+      className="denetim-tooltip absolute top-2 right-2 px-3 py-2 rounded-lg text-[11px] pointer-events-none min-w-[160px]"
       style={{
-        background: 'rgba(18,20,24,0.92)',
+        background: 'rgba(12,14,20,0.96)',
         border: '1px solid rgba(var(--glass-tint),0.10)',
-        boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.04) inset',
       }}
     >
-      <div className="text-[var(--theme-secondary-text)]/70 mb-1 font-semibold">{label}</div>
-      <ul className="space-y-0.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[var(--theme-secondary-text)]/75 font-semibold">{label}</span>
+        <span className="text-[10px] tabular-nums font-bold text-[var(--theme-text)]/85">
+          Σ {total}
+        </span>
+      </div>
+      <div
+        className="h-px w-full mb-1.5"
+        style={{ background: 'rgba(var(--glass-tint),0.08)' }}
+      />
+      <ul className="space-y-1">
         {KIND_ORDER.map(k => {
           if (!visible[k]) return null;
           const meta = KIND_META[k];
+          const v = (bucket as any)[k] as number;
           return (
-            <li key={k} className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
-              <span className="text-[var(--theme-text)]/80">{meta.label}</span>
-              <span className="ml-auto font-bold tabular-nums" style={{ color: meta.color }}>
-                {(bucket as any)[k]}
+            <li key={k} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.color, boxShadow: `0 0 4px ${meta.color}88` }} />
+              <span className="text-[var(--theme-text)]/85 text-[11px]">{meta.label}</span>
+              <span className="ml-auto font-bold tabular-nums text-[12px]" style={{ color: v > 0 ? meta.color : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.4)' }}>
+                {v}
               </span>
             </li>
           );
@@ -672,17 +780,17 @@ function InsightCardShell({ title, icon, action, children }: {
 }) {
   return (
     <section
-      className="rounded-2xl p-3.5 flex flex-col"
+      className="denetim-card rounded-2xl p-3 flex flex-col"
       style={{
         background: 'rgba(var(--glass-tint), 0.04)',
         border: '1px solid rgba(var(--glass-tint), 0.08)',
-        minHeight: 200,
+        minHeight: 190,
       }}
     >
-      <div className="flex items-center justify-between mb-2.5">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[var(--theme-accent)]/80">{icon}</span>
-          <h4 className="text-[12.5px] font-bold text-[var(--theme-text)]">{title}</h4>
+          <h4 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--theme-secondary-text)]/80">{title}</h4>
         </div>
         {action}
       </div>
@@ -700,33 +808,47 @@ function TopUsersCard({ users }: { users: UserStat[] }) {
   return (
     <InsightCardShell title="En çok ihlal yapan kullanıcılar" icon={<UsersIcon size={13} />}>
       {users.length === 0 ? (
-        <EmptyMini text="Bu zaman aralığında kullanıcı ihlali yok" />
+        <EmptyMini text="Kullanıcı ihlali yok — sunucu sakin" />
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {users.map((u, i) => {
             const dom = KIND_META[u.dominantKind];
+            const isTop = i === 0;
             return (
-              <li key={u.userId} className="flex items-center gap-2.5 px-1.5 py-1 rounded-md hover:bg-[rgba(var(--glass-tint),0.04)] transition-colors">
-                <span className="text-[10px] font-bold tabular-nums text-[var(--theme-secondary-text)]/45 w-4 shrink-0">#{i + 1}</span>
+              <li
+                key={u.userId}
+                className="denetim-leader flex items-center gap-2.5 px-1.5 py-1 rounded-md transition-all"
+                style={isTop ? {
+                  background: `rgba(${dom.rgb}, 0.04)`,
+                } : undefined}
+              >
+                <span
+                  className={`text-[10px] font-bold tabular-nums w-4 shrink-0 ${isTop ? '' : 'text-[var(--theme-secondary-text)]/40'}`}
+                  style={isTop ? { color: dom.color } : undefined}
+                >
+                  #{i + 1}
+                </span>
                 <SafeTinyAvatar
                   src={u.userAvatar}
                   statusPng={resolveStatusPng(u.userId)}
                   alt={u.userName || 'Kullanıcı'}
                 />
-                <span className="flex-1 min-w-0 text-[12px] font-semibold text-[var(--theme-text)] truncate">
+                <span
+                  className={`flex-1 min-w-0 text-[12px] truncate ${isTop ? 'font-bold text-[var(--theme-text)]' : 'font-semibold text-[var(--theme-text)]/90'}`}
+                >
                   {u.userName || u.userId.slice(0, 8)}
                 </span>
                 <span
                   className="px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide shrink-0"
                   style={{
                     color: dom.color,
-                    background: `rgba(${dom.rgb}, 0.10)`,
-                    border: `1px solid rgba(${dom.rgb}, 0.20)`,
+                    background: `rgba(${dom.rgb}, 0.14)`,
+                    border: `1px solid rgba(${dom.rgb}, 0.26)`,
                   }}
                 >
                   {dom.label}
                 </span>
-                <span className="text-[12px] font-bold tabular-nums text-[var(--theme-text)]/85 shrink-0 w-6 text-right">
+                <span className="text-[12.5px] font-bold tabular-nums shrink-0 w-7 text-right" style={{ color: isTop ? dom.color : 'var(--theme-text)' }}>
                   {u.total}
                 </span>
               </li>
@@ -745,30 +867,39 @@ function TopChannelsCard({ channels, totalCurrent }: { channels: ChannelStat[]; 
       {channels.length === 0 ? (
         <EmptyMini text="Kanal bazında ihlal kaydı yok" />
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {channels.map((c, i) => {
             const pct = Math.round((c.total / Math.max(1, max)) * 100);
             const share = totalCurrent > 0 ? Math.round((c.total / totalCurrent) * 100) : 0;
+            const isTop = i === 0;
             return (
-              <li key={c.channelId}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-bold tabular-nums text-[var(--theme-secondary-text)]/45 w-4 shrink-0">#{i + 1}</span>
+              <li key={c.channelId} className="denetim-leader px-1 py-0.5 rounded-md transition-all">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span
+                    className="text-[10px] font-bold tabular-nums w-4 shrink-0"
+                    style={isTop
+                      ? { color: 'var(--theme-accent)' }
+                      : { color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.40)' }}
+                  >
+                    #{i + 1}
+                  </span>
                   <HashIcon size={10} className="text-[var(--theme-secondary-text)]/60 shrink-0" />
-                  <span className="flex-1 min-w-0 text-[12px] font-semibold text-[var(--theme-text)] truncate">
+                  <span className={`flex-1 min-w-0 text-[12px] truncate ${isTop ? 'font-bold text-[var(--theme-text)]' : 'font-semibold text-[var(--theme-text)]/90'}`}>
                     {c.channelName || c.channelId.slice(0, 8)}
                   </span>
-                  <span className="text-[10px] text-[var(--theme-secondary-text)]/50 shrink-0">{share}%</span>
-                  <span className="text-[12px] font-bold tabular-nums text-[var(--theme-text)]/85 shrink-0 w-6 text-right">
+                  <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/55 shrink-0">{share}%</span>
+                  <span className="text-[12.5px] font-bold tabular-nums shrink-0 w-7 text-right" style={{ color: isTop ? 'var(--theme-accent)' : 'var(--theme-text)' }}>
                     {c.total}
                   </span>
                 </div>
-                <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.06)' }}>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(var(--glass-tint),0.06)' }}>
                   <div
                     className="h-full rounded-full"
                     style={{
                       width: `${pct}%`,
-                      background: 'var(--theme-accent)',
-                      transition: 'width 400ms ease',
+                      background: `linear-gradient(90deg, rgba(var(--theme-accent-rgb),0.85), var(--theme-accent))`,
+                      transition: 'width 400ms cubic-bezier(0.2,0.8,0.2,1)',
+                      boxShadow: isTop ? '0 0 8px rgba(var(--theme-accent-rgb),0.30)' : 'none',
                     }}
                   />
                 </div>
@@ -818,16 +949,52 @@ function AutoPunishImpactCard({
           hint="aktif ceza"
         />
       </div>
-      <p className="mt-2.5 text-[11px] text-[var(--theme-secondary-text)]/70 leading-snug">
-        {autoPunishCount === 0 && floodBlocked === 0 ? (
-          <>Bu aralıkta auto punishment tetiklenmedi. Flood ihlali de yoksa sistem sakin çalışıyor demektir.</>
-        ) : autoPunishCount === 0 ? (
-          <>Flood ihlali var ama eşik aşılmamış — eşiği düşürerek auto punishment'ı aktive edebilirsin.</>
-        ) : (
-          <>Son {rangeLabel} içinde <strong className="text-[var(--theme-text)]">{autoPunishCount}</strong> otomatik ceza uygulandı; bu tekrarlayan floodu engelledi.</>
-        )}
-      </p>
+      <div
+        className="mt-2.5 px-2.5 py-1.5 rounded-lg text-[11px] leading-snug"
+        style={{
+          background: 'rgba(var(--glass-tint),0.03)',
+          border: '1px solid rgba(var(--glass-tint),0.06)',
+        }}
+      >
+        <InsightText
+          autoPunishCount={autoPunishCount}
+          activeCount={activeCount}
+          floodBlocked={floodBlocked}
+          rangeLabel={rangeLabel}
+        />
+      </div>
     </InsightCardShell>
+  );
+}
+
+function InsightText({
+  autoPunishCount, activeCount, floodBlocked, rangeLabel,
+}: { autoPunishCount: number; activeCount: number; floodBlocked: number; rangeLabel: string }) {
+  // Dur-dök karar ağacı — tek satır insight
+  let tone: 'positive' | 'warn' | 'neutral' = 'neutral';
+  let text: React.ReactNode;
+  if (autoPunishCount > 0 && activeCount > 0) {
+    tone = 'positive';
+    text = <>Auto ceza <strong className="text-[var(--theme-text)]">{autoPunishCount}</strong> ihlal zincirini erken durdurdu · <strong className="text-[var(--theme-text)]">{activeCount}</strong> aktif</>;
+  } else if (autoPunishCount > 0) {
+    tone = 'positive';
+    text = <>Auto ceza son {rangeLabel} içinde <strong className="text-[var(--theme-text)]">{autoPunishCount}</strong> kez tetiklendi — flood akışı stabilize oldu</>;
+  } else if (floodBlocked >= 5) {
+    tone = 'warn';
+    text = <>Flood ihlali var ama eşik aşılmadı — eşiği düşürerek auto ceza aktive edilebilir</>;
+  } else if (floodBlocked > 0) {
+    tone = 'neutral';
+    text = <>Sistem aktif, flood izleniyor — otomatik ceza tetiklenmedi</>;
+  } else {
+    tone = 'neutral';
+    text = <>Sunucu şu anda sakin görünüyor · manuel müdahale gerekmiyor</>;
+  }
+  const dot = tone === 'positive' ? '#34d399' : tone === 'warn' ? '#fb923c' : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.55)';
+  return (
+    <div className="flex items-start gap-2">
+      <span className="inline-block w-1.5 h-1.5 rounded-full mt-[5px] shrink-0" style={{ background: dot, boxShadow: `0 0 4px ${dot}` }} />
+      <span className="text-[var(--theme-text)]/78">{text}</span>
+    </div>
   );
 }
 
@@ -907,17 +1074,22 @@ function RecentEventsCard({ events }: { events: ModerationEvent[] }) {
 // ═══════════════════════════════════════════
 function EmptyState({ title, hint }: { title: string; hint: string }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-10 px-6">
-      <ShieldCheck size={20} className="text-[var(--theme-secondary-text)]/35 mb-2" />
-      <div className="text-[12.5px] font-semibold text-[var(--theme-text)]/75">{title}</div>
-      <div className="text-[10.5px] text-[var(--theme-secondary-text)]/50 mt-1 max-w-[360px]">{hint}</div>
+    <div className="flex flex-col items-center justify-center text-center py-12 px-6">
+      <div
+        className="w-10 h-10 rounded-full inline-flex items-center justify-center mb-2.5"
+        style={{ background: 'rgba(var(--glass-tint),0.04)', border: '1px solid rgba(var(--glass-tint),0.08)' }}
+      >
+        <ShieldCheck size={16} className="text-[var(--theme-secondary-text)]/45" />
+      </div>
+      <div className="text-[12.5px] font-semibold text-[var(--theme-text)]/80">{title}</div>
+      <div className="text-[10.5px] text-[var(--theme-secondary-text)]/45 mt-1 max-w-[360px] leading-relaxed">{hint}</div>
     </div>
   );
 }
 
 function EmptyMini({ text }: { text: string }) {
   return (
-    <div className="text-[11px] text-[var(--theme-secondary-text)]/50 text-center py-6">
+    <div className="text-[11px] text-[var(--theme-secondary-text)]/45 text-center py-6 leading-relaxed">
       {text}
     </div>
   );
