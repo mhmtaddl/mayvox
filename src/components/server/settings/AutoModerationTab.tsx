@@ -5,9 +5,11 @@ import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
   type ModerationEvent,
+  type AutoPunishmentFloodConfig,
   getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
   exportModerationEventsXlsx,
 } from '../../../lib/serverService';
+import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
 // Vite JSON import native; build-time inline olur, runtime fetch yok.
@@ -61,6 +63,13 @@ interface Props {
 }
 
 const FLOOD_DEFAULT: FloodConfig = { enabled: true, cooldownMs: 3000, limit: 5, windowMs: 5000 };
+const AUTOPUNISH_FLOOD_DEFAULT: AutoPunishmentFloodConfig = {
+  enabled: false,
+  threshold: 3,
+  windowMinutes: 5,
+  action: 'chat_timeout',
+  durationMinutes: 10,
+};
 
 // UI'de gösterilecek limit/aralık sınırları — backend validation ile aynı.
 const BOUNDS = {
@@ -78,6 +87,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   // Textarea'da her satır bir kelime — state string olarak tutulur, save'de split edilir.
   const [profanityText, setProfanityText] = useState('');
   const [spamEnabled, setSpamEnabled] = useState(false);
+  const [autoPunishFlood, setAutoPunishFlood] = useState<AutoPunishmentFloodConfig>(AUTOPUNISH_FLOOD_DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +100,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       setProfanityEnabled(cfg.profanity.enabled);
       setProfanityText((cfg.profanity.words || []).join('\n'));
       setSpamEnabled(cfg.spam.enabled);
+      setAutoPunishFlood(cfg.autoPunishment?.flood ?? AUTOPUNISH_FLOOD_DEFAULT);
     } catch (err: any) {
       showToast(err?.message || 'Ayarlar yüklenemedi');
     } finally {
@@ -124,7 +135,12 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     flood.windowMs   !== initial.flood.windowMs ||
     profanityEnabled !== initial.profanity.enabled ||
     profanityText    !== initialWordsStr ||
-    spamEnabled      !== initial.spam.enabled
+    spamEnabled      !== initial.spam.enabled ||
+    autoPunishFlood.enabled         !== initial.autoPunishment.flood.enabled ||
+    autoPunishFlood.threshold       !== initial.autoPunishment.flood.threshold ||
+    autoPunishFlood.windowMinutes   !== initial.autoPunishment.flood.windowMinutes ||
+    autoPunishFlood.durationMinutes !== initial.autoPunishment.flood.durationMinutes ||
+    autoPunishFlood.action          !== initial.autoPunishment.flood.action
   );
 
   const handleSave = async () => {
@@ -134,12 +150,14 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         flood,
         profanity: { enabled: profanityEnabled, words: currentWords },
         spam: { enabled: spamEnabled },
+        autoPunishment: { flood: autoPunishFlood },
       });
       setInitial(prev => prev ? {
         ...prev,
         flood,
         profanity: { enabled: profanityEnabled, words: currentWords },
         spam: { enabled: spamEnabled },
+        autoPunishment: { flood: autoPunishFlood },
       } : prev);
       // UI'yi normalize sonuç ile hizala (dedup/trim eksik satır varsa).
       setProfanityText(currentWords.join('\n'));
@@ -157,6 +175,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setProfanityEnabled(initial.profanity.enabled);
     setProfanityText((initial.profanity.words || []).join('\n'));
     setSpamEnabled(initial.spam.enabled);
+    setAutoPunishFlood(initial.autoPunishment?.flood ?? AUTOPUNISH_FLOOD_DEFAULT);
   };
 
   // Moderation stats — time range + gerçek backend fetch + 30s refresh
@@ -549,6 +568,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           </li>
         </ul>
       </section>
+
+      {/* ── Otomatik Ceza (MVP: flood → chat_timeout) ── */}
+      <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (

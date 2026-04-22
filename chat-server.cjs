@@ -560,7 +560,7 @@ async function getChannelFloodConfig(channelId) {
 
   if (!INTERNAL_NOTIFY_SECRET) {
     // Secret yoksa server-backend ile konuşamayız → null dön (flood-control built-in).
-    const entry = { serverId: null, flood: null, profanity: null, spam: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
+    const entry = { serverId: null, flood: null, profanity: null, spam: null, autoPunishment: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -574,6 +574,8 @@ async function getChannelFloodConfig(channelId) {
     const body = await resp.json();
     const profanityRaw = body?.profanity && typeof body.profanity === 'object' ? body.profanity : null;
     const spamRaw = body?.spam && typeof body.spam === 'object' ? body.spam : null;
+    const apRaw = body?.autoPunishment && typeof body.autoPunishment === 'object' ? body.autoPunishment : null;
+    const apFloodRaw = apRaw?.flood && typeof apRaw.flood === 'object' ? apRaw.flood : null;
     const entry = {
       serverId: typeof body?.serverId === 'string' ? body.serverId : null,
       flood: body?.flood && typeof body.flood === 'object' ? body.flood : null,
@@ -584,6 +586,15 @@ async function getChannelFloodConfig(channelId) {
         liberalMatcher: profanityRaw.enabled ? buildLiberalMatcher(profanityRaw.words) : null,
       } : null,
       spam: spamRaw ? { enabled: !!spamRaw.enabled } : null,
+      autoPunishment: apFloodRaw ? {
+        flood: {
+          enabled: !!apFloodRaw.enabled,
+          threshold: Number(apFloodRaw.threshold) || 0,
+          windowMinutes: Number(apFloodRaw.windowMinutes) || 0,
+          action: typeof apFloodRaw.action === 'string' ? apFloodRaw.action : 'chat_timeout',
+          durationMinutes: Number(apFloodRaw.durationMinutes) || 0,
+        },
+      } : null,
       expiresAt: now + FLOOD_CONFIG_TTL_MS,
     };
     floodConfigCache.set(channelId, entry);
@@ -591,7 +602,7 @@ async function getChannelFloodConfig(channelId) {
   } catch (err) {
     // Ağ/timeout hatası — kısa TTL negative cache, tekrar denemeye girer.
     console.warn('[flood-config] fetch fail channel=%s err=%s', channelId, err?.message || err);
-    const entry = { serverId: null, flood: null, profanity: null, spam: null, expiresAt: now + 5_000 };
+    const entry = { serverId: null, flood: null, profanity: null, spam: null, autoPunishment: null, expiresAt: now + 5_000 };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -619,6 +630,99 @@ async function reportModStat(serverId, kind, meta = {}) {
     });
   } catch {
     // Sessizce yut — moderasyon kararı zaten yapıldı; istatistik best-effort.
+  }
+}
+
+// ── Auto-punishment bridge (fire-and-forget) ──
+// Flood threshold aşıldığında server-backend /internal/auto-punish çağrısı.
+// Timeout 1.5s; hata sessiz yutulur, moderation kararı zaten yapılmış.
+async function reportAutoPunish(serverId, userId, action, durationMinutes) {
+  if (!INTERNAL_NOTIFY_SECRET || !serverId || !userId) return;
+  try {
+    const resp = await fetch(`${SERVER_BACKEND_URL}/internal/auto-punish`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFY_SECRET,
+      },
+      body: JSON.stringify({ serverId, userId, action, durationMinutes }),
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!resp.ok) {
+      console.warn(`[auto-punish] HTTP ${resp.status} serverId=${serverId} userId=${userId}`);
+    }
+  } catch (err) {
+    // Timeout / network — sessiz swallow, sadece warn. Flow bozulmasın.
+    console.warn('[auto-punish] bridge err:', err?.message || err);
+  }
+}
+
+// ── Auto-punish state ──
+// sliding window: key `${serverId}:${userId}` → flood block timestamps[]
+// dedupe cooldown: aynı key → son punish timestamp (5dk cooldown)
+const autoPunishCounts = new Map();
+const lastAutoPunishAt = new Map();
+const AUTOPUNISH_COOLDOWN_MS = 5 * 60_000;
+// Sweep için en uzun anlamlı idle: 1 saat (cooldown + en uzun window 60dk)
+const AUTOPUNISH_STALE_MS = 60 * 60_000;
+
+/**
+ * Flood BLOCK tetiklendiğinde çağrılır. Sadece gerçek block'larda.
+ * Sliding window update + threshold + cooldown kontrolleri yapar.
+ * Eşik ve cooldown uygunsa reportAutoPunish tetikler (tek sefer).
+ */
+function maybeTriggerAutoPunish(cfg, userId) {
+  const ap = cfg?.autoPunishment?.flood;
+  if (!ap || !ap.enabled || !cfg.serverId || !userId) return;
+
+  const key = `${cfg.serverId}:${userId}`;
+  const now = Date.now();
+  const cutoff = now - ap.windowMinutes * 60_000;
+
+  // Window dışı timestamps'i at + yeni timestamp push. Array sürekli büyümez —
+  // her push'ta geriye dönük trim. Max N = threshold-1 boyutu aşıldığında zaten
+  // threshold trigger olur ve trigger sonrası reset'lenir (reuse).
+  let arr = autoPunishCounts.get(key);
+  if (!arr) { arr = []; autoPunishCounts.set(key, arr); }
+  // Trim in-place
+  let drop = 0;
+  while (drop < arr.length && arr[drop] <= cutoff) drop++;
+  if (drop > 0) arr.splice(0, drop);
+  arr.push(now);
+
+  // Dedupe cooldown — en az 5dk
+  const lastP = lastAutoPunishAt.get(key) || 0;
+  if (now - lastP < AUTOPUNISH_COOLDOWN_MS) return;
+
+  // Eşik aşıldı mı?
+  if (arr.length < ap.threshold) return;
+
+  // Trigger — SADECE 1 KEZ per eşik aşımı
+  lastAutoPunishAt.set(key, now);
+  // Trigger sonrası sayaç reset — aynı window içinde ikinci trigger olmasın.
+  // Kullanıcı yeni window'da yeniden threshold'a ulaşırsa ayrıca cooldown
+  // (5dk) geçmiş olmalı.
+  arr.length = 0;
+
+  console.log(`[auto-punish] trigger serverId=${cfg.serverId} userId=${userId} action=${ap.action} duration=${ap.durationMinutes}dk`);
+  void reportAutoPunish(cfg.serverId, userId, ap.action, ap.durationMinutes);
+}
+
+/** Memory sweep — stale entry'leri atar (heartbeat loop'tan çağrılır) */
+function autoPunishSweep(now) {
+  const cutoffStale = now - AUTOPUNISH_STALE_MS;
+  // Counts: boş veya tümü stale → sil
+  for (const [key, arr] of autoPunishCounts) {
+    // In-place trim window dışı
+    let drop = 0;
+    // Conservative: 1 saatten eski tüm timestamps stale (hiç config 60dk üstü değil)
+    while (drop < arr.length && arr[drop] <= cutoffStale) drop++;
+    if (drop > 0) arr.splice(0, drop);
+    if (arr.length === 0) autoPunishCounts.delete(key);
+  }
+  // Dedupe: cooldown + buffer sonra map'ten at
+  for (const [key, ts] of lastAutoPunishAt) {
+    if (ts < cutoffStale) lastAutoPunishAt.delete(key);
   }
 }
 
@@ -1111,6 +1215,8 @@ wss.on('connection', (ws) => {
             console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
             // Stat event sadece yeni offense'ta (cooldown içi red'ler sayaç şişirmesin).
             if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood', { userId, channelId: currentRoom });
+            // Auto-punishment: yeni offense'ta sayaç push; eşik + cooldown uygunsa punish.
+            maybeTriggerAutoPunish(cfg, userId);
           }
           return send(ws, {
             type: 'error',
@@ -1602,6 +1708,8 @@ const heartbeat = setInterval(() => {
   for (const [k, v] of floodConfigCache) { if (now > v.expiresAt) floodConfigCache.delete(k); }
   // Spam guard history cleanup (60s window)
   spamGuard.sweep(now);
+  // Auto-punish state sweep (1h stale cutoff)
+  autoPunishSweep(now);
 }, 30000);
 
 wss.on('close', () => clearInterval(heartbeat));

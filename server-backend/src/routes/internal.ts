@@ -2,8 +2,9 @@ import { Router, type Request, type Response } from 'express';
 import { config } from '../config';
 import { logAction } from '../services/auditLogService';
 import { queryOne } from '../repositories/db';
-import { FLOOD_DEFAULTS, type ModerationConfig } from '../services/moderationConfigService';
+import { FLOOD_DEFAULTS, AUTOPUNISH_FLOOD_DEFAULT, type ModerationConfig } from '../services/moderationConfigService';
 import { recordEvent, isValidKind, type ModKind } from '../services/moderationStatsService';
+import { applyAutoPunishFlood } from '../services/moderationAutoPunishService';
 
 const router = Router();
 
@@ -100,13 +101,15 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
        WHERE c.id = $1`,
       [channelId],
     );
+    const defaultAutoPunish = { flood: AUTOPUNISH_FLOOD_DEFAULT };
     if (!row) {
       // Default AÇIK — kanal bilinmiyorsa bile sistem listesi çalışsın.
-      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true } });
+      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true }, autoPunishment: defaultAutoPunish });
     }
     const flood = row.moderation_config?.flood;
     const profanity = row.moderation_config?.profanity;
     const spam = row.moderation_config?.spam;
+    const apFlood = row.moderation_config?.autoPunishment?.flood;
     res.json({
       serverId: row.server_id,
       flood: {
@@ -121,11 +124,20 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
         words:   Array.isArray(profanity?.words) ? profanity.words : [],
       },
       spam: { enabled: spam?.enabled ?? true },
+      autoPunishment: {
+        flood: {
+          enabled:         apFlood?.enabled         ?? AUTOPUNISH_FLOOD_DEFAULT.enabled,
+          threshold:       apFlood?.threshold       ?? AUTOPUNISH_FLOOD_DEFAULT.threshold,
+          windowMinutes:   apFlood?.windowMinutes   ?? AUTOPUNISH_FLOOD_DEFAULT.windowMinutes,
+          action:          apFlood?.action          ?? AUTOPUNISH_FLOOD_DEFAULT.action,
+          durationMinutes: apFlood?.durationMinutes ?? AUTOPUNISH_FLOOD_DEFAULT.durationMinutes,
+        },
+      },
     });
   } catch (err) {
     console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
     // Fail-safe: hata durumunda da sistem listesi aktif kalsın.
-    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true } });
+    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: true, words: [] }, spam: { enabled: true }, autoPunishment: { flood: AUTOPUNISH_FLOOD_DEFAULT } });
   }
 });
 
@@ -152,6 +164,47 @@ router.post('/moderation-stat-event', async (req: Request, res: Response) => {
   } catch (err) {
     console.warn('[internal/moderation-stat-event] err', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'record_failed' });
+  }
+});
+
+/**
+ * POST /internal/auto-punish
+ * Body: { serverId, userId, action: 'chat_timeout', durationMinutes }
+ * chat-server flood threshold aşıldığında çağrılır. MVP yalnız 'chat_timeout'.
+ * Guard'lar service içinde (owner/admin/mod skip, idempotent "zaten banlı" skip).
+ */
+router.post('/auto-punish', async (req: Request, res: Response) => {
+  if (!requireInternal(req, res)) return;
+  const { serverId, userId, action, durationMinutes } = req.body ?? {};
+
+  if (typeof serverId !== 'string' || !serverId) {
+    return res.status(400).json({ error: 'serverId required' });
+  }
+  if (typeof userId !== 'string' || !userId) {
+    return res.status(400).json({ error: 'userId required' });
+  }
+  if (action !== 'chat_timeout') {
+    // MVP whitelist — kick/ban/voice mute ileride
+    return res.status(400).json({ error: 'unsupported action' });
+  }
+  const dur = typeof durationMinutes === 'number' ? durationMinutes : NaN;
+  if (!Number.isFinite(dur) || dur < 1 || dur > 1440) {
+    return res.status(400).json({ error: 'invalid durationMinutes (1-1440)' });
+  }
+
+  try {
+    const result = await applyAutoPunishFlood(serverId, userId, dur);
+    // Debug log — sadece uygulandığında veya 'skipped_protected_role' durumunda.
+    // skipped_already_banned sık gelebilir (cooldown race); log spam önlemek için sessiz.
+    if (result.applied) {
+      console.log(`[auto-punish] APPLIED serverId=${serverId} userId=${userId} duration=${dur}dk expires=${result.expiresAt}`);
+    } else if (result.reason === 'skipped_protected_role') {
+      console.log(`[auto-punish] SKIP protected role=${result.role} serverId=${serverId} userId=${userId}`);
+    }
+    res.json(result);
+  } catch (err) {
+    console.warn('[auto-punish] err', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'punish_failed' });
   }
 });
 

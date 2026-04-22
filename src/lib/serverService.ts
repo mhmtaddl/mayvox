@@ -736,10 +736,20 @@ export interface FloodConfig {
   windowMs: number;
 }
 
+export type AutoPunishmentAction = 'chat_timeout';
+export interface AutoPunishmentFloodConfig {
+  enabled: boolean;
+  threshold: number;
+  windowMinutes: number;
+  action: AutoPunishmentAction;
+  durationMinutes: number;
+}
+
 export interface ModerationConfigResponse {
   flood: FloodConfig;
   profanity: { enabled: boolean; words: string[] };
   spam: { enabled: boolean };
+  autoPunishment: { flood: AutoPunishmentFloodConfig };
 }
 
 export async function getModerationConfig(serverId: string): Promise<ModerationConfigResponse> {
@@ -752,6 +762,7 @@ export async function updateModerationConfig(
     flood?: FloodConfig;
     profanity?: { enabled: boolean; words: string[] };
     spam?: { enabled: boolean };
+    autoPunishment?: { flood?: AutoPunishmentFloodConfig };
   },
 ): Promise<void> {
   await apiFetch<unknown>(`/servers/${serverId}/moderation-config`, {

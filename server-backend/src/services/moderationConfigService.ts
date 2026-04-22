@@ -20,11 +20,26 @@ export interface FloodConfig {
   windowMs: number;
 }
 
+// Auto-punishment: flood/spam/profanity eşiği aşıldığında sistem otomatik
+// ceza uygular. MVP sadece 'flood' + action='chat_timeout'.
+// Diğer action'lar (kick, ban) ve kind'lar (spam, profanity) ileride.
+export type AutoPunishmentAction = 'chat_timeout';
+
+export interface AutoPunishmentFloodConfig {
+  enabled: boolean;
+  threshold: number;        // Pencere içinde kaç ihlal → ceza
+  windowMinutes: number;    // Eşik penceresi (dakika)
+  action: AutoPunishmentAction;
+  durationMinutes: number;  // Ceza süresi (dakika)
+}
+
 export interface ModerationConfig {
   flood?: FloodConfig;
-  // profanity + spam: ileride (Faz 3); şimdilik client "yakında" gösterir.
   profanity?: { enabled: boolean; words?: string[] };
   spam?: { enabled: boolean };
+  autoPunishment?: {
+    flood?: AutoPunishmentFloodConfig;
+  };
 }
 
 // Chat-server ile paylaşılan default. DB'de `{}` varsa bu devreye girer.
@@ -64,6 +79,51 @@ function validateFlood(input: unknown): FloodConfig {
     limit:      assertFiniteInt(o.limit,      'limit',      FLOOD_BOUNDS.limit),
     windowMs:   assertFiniteInt(o.windowMs,   'windowMs',   FLOOD_BOUNDS.windowMs),
   };
+}
+
+// Auto-punishment default (opt-in — enabled=false varsayılan)
+export const AUTOPUNISH_FLOOD_DEFAULT: AutoPunishmentFloodConfig = {
+  enabled: false,
+  threshold: 3,
+  windowMinutes: 5,
+  action: 'chat_timeout',
+  durationMinutes: 10,
+};
+
+// Strict bounds — UI input limit'leriyle aynı.
+const AUTOPUNISH_BOUNDS = {
+  threshold:       { min: 1, max: 50 },
+  windowMinutes:   { min: 1, max: 60 },
+  durationMinutes: { min: 1, max: 1440 }, // 24 saat hard cap MVP
+};
+
+const AUTOPUNISH_ACTIONS: ReadonlySet<AutoPunishmentAction> = new Set(['chat_timeout']);
+
+function validateAutoPunishmentFlood(input: unknown): AutoPunishmentFloodConfig {
+  if (!input || typeof input !== 'object') {
+    throw new AppError(400, 'autoPunishment.flood obje olmalı');
+  }
+  const o = input as Record<string, unknown>;
+  const action = typeof o.action === 'string' && AUTOPUNISH_ACTIONS.has(o.action as AutoPunishmentAction)
+    ? (o.action as AutoPunishmentAction)
+    : 'chat_timeout';
+  return {
+    enabled:         typeof o.enabled === 'boolean' ? o.enabled : false,
+    threshold:       assertFiniteInt(o.threshold,       'threshold',       AUTOPUNISH_BOUNDS.threshold),
+    windowMinutes:   assertFiniteInt(o.windowMinutes,   'windowMinutes',   AUTOPUNISH_BOUNDS.windowMinutes),
+    action,
+    durationMinutes: assertFiniteInt(o.durationMinutes, 'durationMinutes', AUTOPUNISH_BOUNDS.durationMinutes),
+  };
+}
+
+function validateAutoPunishment(input: unknown): NonNullable<ModerationConfig['autoPunishment']> {
+  if (!input || typeof input !== 'object') {
+    throw new AppError(400, 'autoPunishment obje olmalı');
+  }
+  const o = input as Record<string, unknown>;
+  const out: NonNullable<ModerationConfig['autoPunishment']> = {};
+  if ('flood' in o) out.flood = validateAutoPunishmentFlood(o.flood);
+  return out;
 }
 
 // Profanity sınırları — UI textarea + prod DB satır boyutunu korumak için.
@@ -113,7 +173,12 @@ function validateProfanity(input: unknown): { enabled: boolean; words: string[] 
 export async function getServerModerationConfig(
   serverId: string,
   userId: string,
-): Promise<{ flood: FloodConfig; profanity: { enabled: boolean; words: string[] }; spam: { enabled: boolean } }> {
+): Promise<{
+  flood: FloodConfig;
+  profanity: { enabled: boolean; words: string[] };
+  spam: { enabled: boolean };
+  autoPunishment: { flood: AutoPunishmentFloodConfig };
+}> {
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.SERVER_MODERATION_UPDATE, 'Moderation ayarlarını görme yetkin yok');
 
@@ -138,6 +203,16 @@ export async function getServerModerationConfig(
     },
     spam: {
       enabled: cfg.spam?.enabled ?? true,
+    },
+    autoPunishment: {
+      flood: {
+        // Varsayılan KAPALI (opt-in) — sunucu sahibi bilinçli açar.
+        enabled:         cfg.autoPunishment?.flood?.enabled         ?? AUTOPUNISH_FLOOD_DEFAULT.enabled,
+        threshold:       cfg.autoPunishment?.flood?.threshold       ?? AUTOPUNISH_FLOOD_DEFAULT.threshold,
+        windowMinutes:   cfg.autoPunishment?.flood?.windowMinutes   ?? AUTOPUNISH_FLOOD_DEFAULT.windowMinutes,
+        action:          cfg.autoPunishment?.flood?.action          ?? AUTOPUNISH_FLOOD_DEFAULT.action,
+        durationMinutes: cfg.autoPunishment?.flood?.durationMinutes ?? AUTOPUNISH_FLOOD_DEFAULT.durationMinutes,
+      },
     },
   };
 }
@@ -177,6 +252,11 @@ export async function updateServerModerationConfig(
   }
   if ('spam' in input) {
     next.spam = validateSpam(input.spam);
+  }
+  if ('autoPunishment' in input) {
+    // Partial merge — mevcut autoPunishment'i koru, yeni kind'ları birleştir.
+    const validated = validateAutoPunishment(input.autoPunishment);
+    next.autoPunishment = { ...(current.autoPunishment || {}), ...validated };
   }
 
   await queryOne(
