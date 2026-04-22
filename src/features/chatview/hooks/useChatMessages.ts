@@ -11,11 +11,11 @@ interface UseChatMessagesOptions {
   isChatBanned?: boolean;
   /** Chat ban nedeniyle gönderim engellendiğinde kullanıcıya toast gösterme callback'i. */
   onChatBannedBlocked?: () => void;
-  /** Flood control (sunucu cooldown'u) — mesaj reddedildiğinde toast göster. */
-  onFloodBlocked?: (message: string) => void;
+  /** Sunucu tarafı send reddi (flood / profanity / generic). Toast göstermek için. */
+  onSendRejected?: (message: string, code?: string) => void;
 }
 
-export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onFloodBlocked }: UseChatMessagesOptions) {
+export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onSendRejected }: UseChatMessagesOptions) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -36,9 +36,9 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
   // DEĞİL (moderator'ın sohbeti yazma engelleme toggle'ı); ses için kullanma.
   const currentUserIdRef = useRef(currentUser.id);
   useEffect(() => { currentUserIdRef.current = currentUser.id; }, [currentUser.id]);
-  // onFloodBlocked callback stale olmasın — ref ile taşı (onMessage gibi tek-sefer handler).
-  const onFloodBlockedRef = useRef(onFloodBlocked);
-  useEffect(() => { onFloodBlockedRef.current = onFloodBlocked; }, [onFloodBlocked]);
+  // onSendRejected callback stale olmasın — ref ile taşı (onMessage gibi tek-sefer handler).
+  const onSendRejectedRef = useRef(onSendRejected);
+  useEffect(() => { onSendRejectedRef.current = onSendRejected; }, [onSendRejected]);
 
   // WebSocket chat bağlantısı
   useEffect(() => {
@@ -77,14 +77,16 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
         onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
         onClear: () => setChatMessages([]),
         onError: (err) => {
+          // Cooldown yalnızca flood_control için — diğer rejection'lar anlık reddedilir.
           if (err.code === 'flood_control') {
             const until = Date.now() + (err.retryAfter ?? 3000);
             setFloodCooldownUntil(prev => Math.max(prev, until));
             // Cooldown bitiminde state'i temizle → input tekrar açılır (re-render tetikler).
             if (floodTimerRef.current) clearTimeout(floodTimerRef.current);
             floodTimerRef.current = setTimeout(() => setFloodCooldownUntil(0), (err.retryAfter ?? 3000) + 50);
-            onFloodBlockedRef.current?.(err.message);
           }
+          // Her rejected send için toast (flood + profanity + generic).
+          onSendRejectedRef.current?.(err.message, err.code);
         },
       });
       connectChat();

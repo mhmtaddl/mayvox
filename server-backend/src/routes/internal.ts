@@ -80,9 +80,9 @@ router.post('/audit', async (req: Request, res: Response) => {
 /**
  * GET /internal/channel-flood-config?channelId=X
  *
- * chat-server'ın flood control için kullandığı config lookup köprüsü.
- * channelId → servers.moderation_config.flood (default ile merge edilmiş).
- * Bilinmeyen channel veya null moderation_config → default flood + serverId null.
+ * chat-server'ın moderation (flood + profanity) için kullandığı config lookup köprüsü.
+ * Endpoint adı geriye dönük uyumluluk için `flood-config` kalıyor; response artık profanity'yi de içeriyor.
+ * Bilinmeyen channel veya null moderation_config → default flood + profanity disabled + serverId null.
  * Fail-safe: hata durumunda default + serverId null (chat-server built-in default kullanır).
  */
 router.get('/channel-flood-config', async (req: Request, res: Response) => {
@@ -100,9 +100,10 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
       [channelId],
     );
     if (!row) {
-      return res.json({ serverId: null, flood: FLOOD_DEFAULTS });
+      return res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] } });
     }
     const flood = row.moderation_config?.flood;
+    const profanity = row.moderation_config?.profanity;
     res.json({
       serverId: row.server_id,
       flood: {
@@ -110,11 +111,15 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
         limit:      flood?.limit      ?? FLOOD_DEFAULTS.limit,
         windowMs:   flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,
       },
+      profanity: {
+        enabled: !!profanity?.enabled,
+        words:   Array.isArray(profanity?.words) ? profanity.words : [],
+      },
     });
   } catch (err) {
     console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
     // Fail-safe: chat-server built-in default ile devam edebilsin.
-    res.json({ serverId: null, flood: FLOOD_DEFAULTS });
+    res.json({ serverId: null, flood: FLOOD_DEFAULTS, profanity: { enabled: false, words: [] } });
   }
 });
 

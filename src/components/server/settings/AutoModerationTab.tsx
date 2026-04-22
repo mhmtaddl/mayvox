@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   getModerationConfig, updateModerationConfig,
@@ -24,6 +24,9 @@ const BOUNDS = {
 export default function AutoModerationTab({ serverId, showToast }: Props) {
   const [initial, setInitial] = useState<ModerationConfigResponse | null>(null);
   const [flood, setFlood] = useState<FloodConfig>(FLOOD_DEFAULT);
+  const [profanityEnabled, setProfanityEnabled] = useState(false);
+  // Textarea'da her satır bir kelime — state string olarak tutulur, save'de split edilir.
+  const [profanityText, setProfanityText] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -33,6 +36,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       const cfg = await getModerationConfig(serverId);
       setInitial(cfg);
       setFlood(cfg.flood);
+      setProfanityEnabled(cfg.profanity.enabled);
+      setProfanityText((cfg.profanity.words || []).join('\n'));
     } catch (err: any) {
       showToast(err?.message || 'Ayarlar yüklenemedi');
     } finally {
@@ -42,17 +47,42 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Textarea → temiz kelime listesi (boş satır at, trim, dedup).
+  const parseProfanityWords = useCallback(() => {
+    const set = new Set<string>();
+    const out: string[] = [];
+    for (const raw of profanityText.split(/\r?\n/)) {
+      const t = raw.trim();
+      if (!t) continue;
+      const key = t.toLowerCase();
+      if (set.has(key)) continue;
+      set.add(key);
+      out.push(t);
+    }
+    return out;
+  }, [profanityText]);
+
+  const currentWords = parseProfanityWords();
+  const initialWordsStr = initial ? (initial.profanity.words || []).join('\n') : '';
+
   const dirty = initial != null && (
     flood.cooldownMs !== initial.flood.cooldownMs ||
     flood.limit      !== initial.flood.limit ||
-    flood.windowMs   !== initial.flood.windowMs
+    flood.windowMs   !== initial.flood.windowMs ||
+    profanityEnabled !== initial.profanity.enabled ||
+    profanityText    !== initialWordsStr
   );
 
   const handleSave = async () => {
     try {
       setSaving(true);
-      await updateModerationConfig(serverId, { flood });
-      setInitial(prev => prev ? { ...prev, flood } : prev);
+      await updateModerationConfig(serverId, {
+        flood,
+        profanity: { enabled: profanityEnabled, words: currentWords },
+      });
+      setInitial(prev => prev ? { ...prev, flood, profanity: { enabled: profanityEnabled, words: currentWords } } : prev);
+      // UI'yi normalize sonuç ile hizala (dedup/trim eksik satır varsa).
+      setProfanityText(currentWords.join('\n'));
       showToast('Oto-Mod ayarları kaydedildi');
     } catch (err: any) {
       showToast(err?.message || 'Kaydedilemedi');
@@ -64,6 +94,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const handleReset = () => {
     if (!initial) return;
     setFlood(initial.flood);
+    setProfanityEnabled(initial.profanity.enabled);
+    setProfanityText((initial.profanity.words || []).join('\n'));
   };
 
   if (loading) return <Loader />;
@@ -149,25 +181,57 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         </div>
       </section>
 
-      {/* ── Küfür filtresi — placeholder (Faz 3) ── */}
+      {/* ── Küfür filtresi ── */}
       <section
-        className="rounded-2xl p-5 opacity-55 pointer-events-none"
+        className="rounded-2xl p-5"
         style={{
-          background: 'rgba(var(--glass-tint), 0.03)',
-          border: '1px dashed rgba(var(--glass-tint), 0.12)',
+          background: 'rgba(var(--glass-tint), 0.04)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <ShieldCheck size={14} className="text-[var(--theme-secondary-text)]/60" />
+            <Filter size={14} className="text-rose-400" />
             <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Küfür filtresi</h4>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-accent)]/80 px-2 py-0.5 rounded-full border border-[var(--theme-accent)]/30 bg-[var(--theme-accent)]/10">
-            Yakında
-          </span>
+          <button
+            type="button"
+            onClick={() => setProfanityEnabled(v => !v)}
+            role="switch"
+            aria-checked={profanityEnabled}
+            className={`relative w-9 h-5 rounded-full transition-colors ${profanityEnabled ? 'bg-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.15)]'}`}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: profanityEnabled ? 'translateX(16px)' : 'translateX(0)' }}
+            />
+          </button>
         </div>
-        <p className="text-[11px] text-[var(--theme-secondary-text)]/60 mt-2 leading-relaxed">
-          Belirlediğin kelime listesi mesajlarda tespit edildiğinde otomatik olarak engellenir veya sansürlenir.
+        <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-3 leading-relaxed">
+          Listedeki kelimeler mesajlarda tespit edilirse mesaj gönderilmez. Türkçe eklerle (salak
+          → salakça, salakların) otomatik uyumludur.
+        </p>
+
+        <label className="block text-[11px] font-semibold text-[var(--theme-text)] mb-1.5">
+          Kelime listesi
+          <span className="ml-2 text-[10px] font-normal text-[var(--theme-secondary-text)]/55 tabular-nums">
+            ({currentWords.length} kelime)
+          </span>
+        </label>
+        <textarea
+          value={profanityText}
+          onChange={e => setProfanityText(e.target.value)}
+          disabled={!profanityEnabled}
+          rows={6}
+          placeholder={'Her satıra bir kelime yaz…\naptal\nsalak'}
+          className="w-full rounded-lg px-3 py-2 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+          style={{
+            background: 'rgba(var(--glass-tint), 0.05)',
+            border: '1px solid rgba(var(--glass-tint), 0.10)',
+          }}
+        />
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 mt-1">
+          Büyük/küçük harf farkı yok; Türkçe ve Latin aksanları otomatik normalize edilir.
         </p>
       </section>
 

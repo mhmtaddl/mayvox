@@ -393,12 +393,50 @@ async function getProfiles(userIds) {
   return result;
 }
 
-// ── Per-channel flood config cache ──────────────────────────────────────
-// channelId -> { serverId: string|null, flood: {cooldownMs,limit,windowMs}, expiresAt }
+// ── Per-channel moderation config cache (flood + profanity) ─────────────
+// channelId -> { serverId, flood, profanity: { enabled, words, pattern }, expiresAt }
 // TTL 30s. Server-backend /internal/channel-flood-config üzerinden çekilir.
-// Fail durumunda flood-control built-in default'a düşer (fail-safe).
+// profanity.pattern → precompiled RegExp (cache miss'te inşa). Match O(1) regex test.
 const floodConfigCache = new Map();
 const FLOOD_CONFIG_TTL_MS = 30_000;
+
+// Türkçe + Latin-diakritik normalize: lowercase + aksan strip + noktalama → boşluk.
+// "Aptal!", "APTAL", "aptálsın" hepsi "aptal..." varyantı olarak match olur.
+function normalizeForProfanity(text) {
+  return String(text)
+    .normalize('NFD')                              // á → a + ́
+    .replace(/[̀-ͯ]/g, '')                // aksan karakterlerini sök
+    .toLowerCase()
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ');
+}
+
+function buildProfanityPattern(words) {
+  if (!Array.isArray(words) || words.length === 0) return null;
+  const escaped = [];
+  for (const w of words) {
+    if (typeof w !== 'string') continue;
+    const n = normalizeForProfanity(w).trim();
+    if (!n) continue;
+    escaped.push(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  }
+  if (escaped.length === 0) return null;
+  // Türkçe ekleri (aptal+sın, salak+ça) yakalamak için prefix-match:
+  //   kelime başı sınır ZORUNLU → "kaptı" "aptal"dan match vermez
+  //   kelime sonu serbest      → "aptalsın", "salakça" match olur
+  // (?:^|[^\p{L}\p{N}])(word1|word2|…) — sonu regex engine'ine bağlı, restriction yok.
+  const alt = escaped.join('|');
+  try {
+    return new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${alt})`, 'iu');
+  } catch {
+    return null;
+  }
+}
+
+function messageHasProfanity(text, profanity) {
+  if (!profanity || !profanity.enabled || !profanity.pattern) return false;
+  return profanity.pattern.test(normalizeForProfanity(text));
+}
 
 async function getChannelFloodConfig(channelId) {
   if (!channelId) return null;
@@ -408,7 +446,7 @@ async function getChannelFloodConfig(channelId) {
 
   if (!INTERNAL_NOTIFY_SECRET) {
     // Secret yoksa server-backend ile konuşamayız → null dön (flood-control built-in).
-    const entry = { serverId: null, flood: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
+    const entry = { serverId: null, flood: null, profanity: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -420,9 +458,16 @@ async function getChannelFloodConfig(channelId) {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const body = await resp.json();
+    const profanityRaw = body?.profanity && typeof body.profanity === 'object' ? body.profanity : null;
     const entry = {
       serverId: typeof body?.serverId === 'string' ? body.serverId : null,
       flood: body?.flood && typeof body.flood === 'object' ? body.flood : null,
+      profanity: profanityRaw ? {
+        enabled: !!profanityRaw.enabled,
+        words: Array.isArray(profanityRaw.words) ? profanityRaw.words : [],
+        // Precompile — aynı TTL süresince tüm mesajlarda reuse.
+        pattern: profanityRaw.enabled ? buildProfanityPattern(profanityRaw.words) : null,
+      } : null,
       expiresAt: now + FLOOD_CONFIG_TTL_MS,
     };
     floodConfigCache.set(channelId, entry);
@@ -430,7 +475,7 @@ async function getChannelFloodConfig(channelId) {
   } catch (err) {
     // Ağ/timeout hatası — kısa TTL negative cache, tekrar denemeye girer.
     console.warn('[flood-config] fetch fail channel=%s err=%s', channelId, err?.message || err);
-    const entry = { serverId: null, flood: null, expiresAt: now + 5_000 };
+    const entry = { serverId: null, flood: null, profanity: null, expiresAt: now + 5_000 };
     floodConfigCache.set(channelId, entry);
     return entry;
   }
@@ -909,8 +954,7 @@ wss.on('connection', (ws) => {
       const text = String(msg.text || '').trim();
       if (!text || text.length > 2000) return;
 
-      // Flood control: sliding window + cooldown (room_chat kind).
-      // Per-server config cache'den override alınır; bucket key `${serverId}:${userId}`.
+      // Flood control + profanity filter: sunucu config'inden alınan override + kelime listesi.
       // Reddedilen mesaj: DB'ye yazılmaz, broadcast edilmez, kullanıcıya hata döner.
       {
         const cfg = await getChannelFloodConfig(currentRoom);
@@ -928,6 +972,15 @@ wss.on('connection', (ws) => {
             code: 'flood_control',
             retryAfter: flood.retryAfterMs,
             message: `Çok hızlı mesaj gönderiyorsun. Lütfen ${waitSec} saniye bekle.`,
+          });
+        }
+        // Profanity: flood geçti, içerik kontrolü. Eşleşirse sessizce reddet (logla ama DB/broadcast yapma).
+        if (messageHasProfanity(text, cfg?.profanity)) {
+          console.log(`[profanity] block userId=${userId} server=${cfg?.serverId || '-'} len=${text.length}`);
+          return send(ws, {
+            type: 'error',
+            code: 'profanity_blocked',
+            message: 'Mesajında yasaklı bir ifade var.',
           });
         }
       }

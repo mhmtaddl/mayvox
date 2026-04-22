@@ -160,7 +160,7 @@ export default function ChatView() {
     activeChannel, channels, currentUser, chatMuted,
     isChatBanned: isChatBannedFromCtx,
     onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
-    onFloodBlocked: (message) => setToastMsg(message),
+    onSendRejected: (message) => setToastMsg(message),
   });
 
   // ── Dominant speaker hook ──

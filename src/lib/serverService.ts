@@ -747,7 +747,10 @@ export async function getModerationConfig(serverId: string): Promise<ModerationC
 
 export async function updateModerationConfig(
   serverId: string,
-  patch: { flood?: FloodConfig },
+  patch: {
+    flood?: FloodConfig;
+    profanity?: { enabled: boolean; words: string[] };
+  },
 ): Promise<void> {
   await apiFetch<unknown>(`/servers/${serverId}/moderation-config`, {
     method: 'PATCH',

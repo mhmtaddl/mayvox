@@ -63,6 +63,38 @@ function validateFlood(input: unknown): FloodConfig {
   };
 }
 
+// Profanity sınırları — UI textarea + prod DB satır boyutunu korumak için.
+const PROFANITY_MAX_WORDS = 500;
+const PROFANITY_MAX_WORD_LEN = 50;
+
+function validateProfanity(input: unknown): { enabled: boolean; words: string[] } {
+  if (!input || typeof input !== 'object') {
+    throw new AppError(400, 'profanity config obje olmalı');
+  }
+  const o = input as Record<string, unknown>;
+  const enabled = typeof o.enabled === 'boolean' ? o.enabled : false;
+  const out: string[] = [];
+  if (Array.isArray(o.words)) {
+    const seen = new Set<string>();
+    for (const w of o.words) {
+      if (typeof w !== 'string') continue;
+      const t = w.trim();
+      if (!t) continue;
+      if (t.length > PROFANITY_MAX_WORD_LEN) {
+        throw new AppError(400, `Her kelime en fazla ${PROFANITY_MAX_WORD_LEN} karakter olabilir`);
+      }
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue; // dedup (case-insensitive)
+      seen.add(key);
+      out.push(t);
+      if (out.length > PROFANITY_MAX_WORDS) {
+        throw new AppError(400, `En fazla ${PROFANITY_MAX_WORDS} kelime tanımlanabilir`);
+      }
+    }
+  }
+  return { enabled, words: out };
+}
+
 /**
  * DB'deki ham config'i UI'a uygun merged şekilde döndür.
  * Eksik alanlar default ile doldurulur — frontend her zaman tam obje alır.
@@ -127,7 +159,10 @@ export async function updateServerModerationConfig(
   if ('flood' in input) {
     next.flood = validateFlood(input.flood);
   }
-  // profanity/spam Faz 3'te açılacak; şu an patch no-op.
+  if ('profanity' in input) {
+    next.profanity = validateProfanity(input.profanity);
+  }
+  // spam Faz 3b'de açılacak.
 
   await queryOne(
     'UPDATE servers SET moderation_config = $1 WHERE id = $2 RETURNING id',
