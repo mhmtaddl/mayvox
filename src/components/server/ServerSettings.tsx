@@ -10,7 +10,7 @@ import {
 import { useChannel } from '../../contexts/ChannelContext';
 import OverviewTab from './settings/OverviewTab';
 import RolesTab from './settings/RolesTab';
-import AuditTab from './settings/AuditTab';
+import DenetimTab from './settings/DenetimTab';
 import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
 import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
@@ -317,7 +317,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               actionsRef={automodActionsRef}
             />
           )}
-          {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
+          {tab === 'audit' && canManageServer && (
+            <DenetimTab serverId={serverId} onOpenAutomod={() => setTab('automod')} />
+          )}
           </>)}
         </div>
         {toast && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-[11px] font-semibold text-[var(--theme-text)] z-[100] pointer-events-none" style={{ background: 'rgba(var(--theme-accent-rgb), 0.15)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)', backdropFilter: 'blur(12px)' }}>{toast}</div>}
