@@ -307,7 +307,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   if (loading) return <Loader />;
 
   return (
-    <div className="max-w-[760px] mx-auto space-y-3 pb-8">
+    <div className="max-w-[1280px] mx-auto space-y-3 pb-8">
       {/* ── Summary Bar — 3 stat pill + range, tek satır, ≤64px ── */}
       <div
         className="flex items-center gap-2 rounded-2xl px-3 py-2"
@@ -435,14 +435,13 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           )}
         </div>
 
-        {/* Flood tab */}
+        {/* Flood tab — 3 blok yan yana (grid) */}
         {activeRuleTab === 'flood' && (
           <div className="p-3.5">
-            <div className={`space-y-3 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
-              <SliderRow
+            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
+              <SliderBlock
                 icon={<MessageSquareWarning size={12} />}
                 label="Mesaj limiti"
-                hint="Pencere içinde izin verilen maksimum mesaj"
                 unit={`${flood.limit} mesaj`}
                 value={flood.limit}
                 min={BOUNDS.limit.min}
@@ -450,10 +449,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                 step={BOUNDS.limit.step}
                 onChange={v => setFlood(prev => ({ ...prev, limit: v }))}
               />
-              <SliderRow
+              <SliderBlock
                 icon={<ListFilter size={12} />}
                 label="Zaman penceresi"
-                hint="Limit bu süre içinde geçerli"
                 unit={`${(flood.windowMs / 1000).toFixed(1)} sn`}
                 value={flood.windowMs}
                 min={BOUNDS.windowMs.min}
@@ -461,10 +459,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                 step={BOUNDS.windowMs.step}
                 onChange={v => setFlood(prev => ({ ...prev, windowMs: v }))}
               />
-              <SliderRow
+              <SliderBlock
                 icon={<Zap size={12} />}
-                label="Cooldown (bekleme)"
-                hint="Limit aşıldığında kullanıcının beklemesi gereken süre"
+                label="Cooldown"
                 unit={`${(flood.cooldownMs / 1000).toFixed(1)} sn`}
                 value={flood.cooldownMs}
                 min={BOUNDS.cooldownMs.min}
@@ -545,18 +542,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
 
       {showBlacklist && <BlacklistModal onClose={() => setShowBlacklist(false)} />}
 
-      {/* ── Auto Punishment + Aktif cezalar (smart card) ── */}
-      <div className={`smart-punish ${!eventsDenied && activePunishments.length > 0 ? 'has-active' : ''}`}>
-        <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
-        {!eventsDenied && activePunishments.length > 0 && (
-          <ActivePunishmentsCompact
-            items={activePunishments}
-            resolveStatusAvatar={resolveStatusAvatar}
-            showAll={showAllActive}
-            onToggleShowAll={() => setShowAllActive(v => !v)}
-          />
-        )}
-      </div>
+      {/* ── Desktop: 2-kolon (Events solda | Auto Punishment sağda). Events yoksa tek kolon. ── */}
+      <div className={eventsDenied ? '' : 'grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-3 items-start'}>
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (
@@ -768,6 +755,20 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           )}
         </section>
       )}
+
+      {/* ── Sağ kolon: Auto Punishment + Aktif cezalar (seamless) ── */}
+      <div className={`smart-punish ${!eventsDenied && activePunishments.length > 0 ? 'has-active' : ''}`}>
+        <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
+        {!eventsDenied && activePunishments.length > 0 && (
+          <ActivePunishmentsCompact
+            items={activePunishments}
+            resolveStatusAvatar={resolveStatusAvatar}
+            showAll={showAllActive}
+            onToggleShowAll={() => setShowAllActive(v => !v)}
+          />
+        )}
+      </div>
+      </div>
 
       {/* Action bar */}
       <div className="flex items-center justify-end gap-2 pt-2">
@@ -1286,13 +1287,12 @@ function HeroStat({
   );
 }
 
-// ── Slider row ──
-function SliderRow({
-  icon, label, hint, unit, value, min, max, step, onChange,
+// ── Slider block — card-wrapped (horizontal grid layout için) ──
+function SliderBlock({
+  icon, label, unit, value, min, max, step, onChange,
 }: {
   icon: React.ReactNode;
   label: string;
-  hint: string;
   unit: string;
   value: number;
   min: number;
@@ -1300,14 +1300,21 @@ function SliderRow({
   step: number;
   onChange: (v: number) => void;
 }) {
+  const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <label className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--theme-text)]">
-          <span className="text-[var(--theme-accent)]/75">{icon}</span>
+    <div
+      className="rounded-xl px-3 py-2.5 flex flex-col gap-2"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.03)',
+        border: '1px solid rgba(var(--glass-tint), 0.07)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--theme-text)] min-w-0 truncate">
+          <span className="text-[var(--theme-accent)]/75 shrink-0">{icon}</span>
           {label}
         </label>
-        <span className="text-[11px] font-bold tabular-nums text-[var(--theme-accent)] px-2 py-0.5 rounded-md bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20">
+        <span className="text-[11px] font-bold tabular-nums text-[var(--theme-accent)] px-2 py-0.5 rounded-md bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 shrink-0">
           {unit}
         </span>
       </div>
@@ -1320,10 +1327,9 @@ function SliderRow({
         onChange={e => onChange(parseInt(e.target.value, 10))}
         className="w-full h-1.5 rounded-full appearance-none cursor-pointer automod-slider"
         style={{
-          background: `linear-gradient(to right, var(--theme-accent) 0%, var(--theme-accent) ${((value - min) / (max - min)) * 100}%, rgba(var(--glass-tint),0.15) ${((value - min) / (max - min)) * 100}%, rgba(var(--glass-tint),0.15) 100%)`,
+          background: `linear-gradient(to right, var(--theme-accent) 0%, var(--theme-accent) ${pct}%, rgba(var(--glass-tint),0.15) ${pct}%, rgba(var(--glass-tint),0.15) 100%)`,
         }}
       />
-      <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55 mt-1">{hint}</p>
     </div>
   );
 }
