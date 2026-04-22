@@ -17,7 +17,8 @@ const FLOOD_DEFAULT: FloodConfig = { cooldownMs: 3000, limit: 5, windowMs: 5000 
 const BOUNDS = {
   cooldownMs: { min: 1000, max: 60_000, step: 500 },
   limit:      { min: 1,    max: 50,     step: 1 },
-  windowMs:   { min: 1000, max: 60_000, step: 500 },
+  // windowMs min 6s — çok dar pencere normal konuşmayı yanlış pozitif flood sayar.
+  windowMs:   { min: 6000, max: 60_000, step: 500 },
 };
 
 export default function AutoModerationTab({ serverId, showToast }: Props) {

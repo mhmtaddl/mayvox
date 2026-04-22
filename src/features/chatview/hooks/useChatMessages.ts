@@ -11,9 +11,11 @@ interface UseChatMessagesOptions {
   isChatBanned?: boolean;
   /** Chat ban nedeniyle gönderim engellendiğinde kullanıcıya toast gösterme callback'i. */
   onChatBannedBlocked?: () => void;
+  /** Flood control (sunucu cooldown'u) — mesaj reddedildiğinde toast göster. */
+  onFloodBlocked?: (message: string) => void;
 }
 
-export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked }: UseChatMessagesOptions) {
+export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onFloodBlocked }: UseChatMessagesOptions) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -23,12 +25,20 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const lastSendRef = useRef(0);
   const lastSendTextRef = useRef('');
+  // Flood cooldown: server-side limit aşıldığında kullanıcı yazamaz / gönderemez.
+  // Timestamp (ms) — 0 ise cooldown aktif değil.
+  const [floodCooldownUntil, setFloodCooldownUntil] = useState(0);
+  // Cooldown bitince UI'ı uyandırmak için timer ref.
+  const floodTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // onMessage closure `[]` deps ile tek sefer kurulur — currentUser.id
   // değişiminde stale kalmaması için ref'te taşıyoruz. chatMuted ses gate'i
   // DEĞİL (moderator'ın sohbeti yazma engelleme toggle'ı); ses için kullanma.
   const currentUserIdRef = useRef(currentUser.id);
   useEffect(() => { currentUserIdRef.current = currentUser.id; }, [currentUser.id]);
+  // onFloodBlocked callback stale olmasın — ref ile taşı (onMessage gibi tek-sefer handler).
+  const onFloodBlockedRef = useRef(onFloodBlocked);
+  useEffect(() => { onFloodBlockedRef.current = onFloodBlocked; }, [onFloodBlocked]);
 
   // WebSocket chat bağlantısı
   useEffect(() => {
@@ -66,10 +76,23 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
         onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),
         onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
         onClear: () => setChatMessages([]),
+        onError: (err) => {
+          if (err.code === 'flood_control') {
+            const until = Date.now() + (err.retryAfter ?? 3000);
+            setFloodCooldownUntil(prev => Math.max(prev, until));
+            // Cooldown bitiminde state'i temizle → input tekrar açılır (re-render tetikler).
+            if (floodTimerRef.current) clearTimeout(floodTimerRef.current);
+            floodTimerRef.current = setTimeout(() => setFloodCooldownUntil(0), (err.retryAfter ?? 3000) + 50);
+            onFloodBlockedRef.current?.(err.message);
+          }
+        },
       });
       connectChat();
     });
-    return () => { import('../../../lib/chatService').then(({ disconnectChat }) => disconnectChat()); };
+    return () => {
+      import('../../../lib/chatService').then(({ disconnectChat }) => disconnectChat());
+      if (floodTimerRef.current) { clearTimeout(floodTimerRef.current); floodTimerRef.current = null; }
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Oda değişince WS'ye join/leave gönder
@@ -108,6 +131,8 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
       onChatBannedBlocked?.();
       return;
     }
+    // Flood cooldown — sunucu WS error dönmüş, UI mesajı gönderme (no-op, sessiz).
+    if (Date.now() < floodCooldownUntil) return;
     if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
     const text = chatInput.trim();
     if (!text) return;
@@ -119,7 +144,7 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     setChatInput('');
     import('../../../lib/chatService').then(({ sendMessage }) => sendMessage(text));
     setTimeout(scrollToBottom, 100);
-  }, [activeChannel, channels, chatMuted, isChatBanned, onChatBannedBlocked, currentUser.isAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
+  }, [activeChannel, channels, chatMuted, isChatBanned, onChatBannedBlocked, floodCooldownUntil, currentUser.isAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
 
   const deleteChatMessage = useCallback((id: string) => {
     setChatMessages(prev => prev.filter(m => m.id !== id));
@@ -168,5 +193,6 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     startEditMessage,
     saveEditMessage,
     cancelEdit,
+    isFloodCooling: floodCooldownUntil > Date.now(),
   };
 }

@@ -41,6 +41,8 @@ interface Props {
   isAtBottom: boolean;
   newMsgCount: number;
   onScrollToBottom: () => void;
+  /** Flood cooldown aktif mi — aktifse input disabled + send disabled. */
+  isFloodCooling?: boolean;
 }
 
 const EMOJI_LIST = ['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'];
@@ -78,6 +80,7 @@ export default function ChatPanel({
   isAtBottom,
   newMsgCount,
   onScrollToBottom,
+  isFloodCooling,
 }: Props) {
   const { avatarBorderColor } = useSettings();
   const { currentUser, allUsers } = useUser();
@@ -120,7 +123,9 @@ export default function ChatPanel({
     );
   }
 
-  const isChatDisabled = chatMuted && !isAdmin && !isModerator;
+  const isChatMutedDisabled = chatMuted && !isAdmin && !isModerator;
+  // Flood cooldown herkese uygulanır (admin/mod dahil) — sunucu reddi geldi, client bypass etmesin.
+  const isChatDisabled = isChatMutedDisabled || !!isFloodCooling;
   const fs = chatFontSize;
 
   return (
@@ -276,7 +281,7 @@ export default function ChatPanel({
               });
             }
           }}
-          placeholder={isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
+          placeholder={isFloodCooling ? 'Biraz yavaşla, kısa bir bekleme var…' : isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
           disabled={isChatDisabled}
           rows={1}
           className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed resize-none max-h-24 overflow-y-auto"

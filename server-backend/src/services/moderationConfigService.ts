@@ -37,7 +37,8 @@ export const FLOOD_DEFAULTS: FloodConfig = {
 const FLOOD_BOUNDS = {
   cooldownMs: { min: 1000, max: 60_000 },
   limit:      { min: 1,    max: 50 },
-  windowMs:   { min: 1000, max: 60_000 },
+  // windowMs alt sınırı 6s — çok dar pencere yanlış pozitif flood'a yol açar (normal konuşma hızı).
+  windowMs:   { min: 6000, max: 60_000 },
 };
 
 function assertFiniteInt(v: unknown, name: string, { min, max }: { min: number; max: number }): number {

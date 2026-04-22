@@ -23,6 +23,12 @@ export interface ChatMessage {
 
 type ChatStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
+export interface ChatErrorPayload {
+  code?: string;         // örn. 'flood_control' (programatik ayrım)
+  message: string;       // kullanıcıya gösterilebilir metin
+  retryAfter?: number;   // ms — cooldown süresi (flood_control için)
+}
+
 type ChatEventHandler = {
   onMessage?: (msg: ChatMessage) => void;
   onDelete?: (messageId: string) => void;
@@ -30,6 +36,7 @@ type ChatEventHandler = {
   onClear?: (roomId: string) => void;
   onHistory?: (roomId: string, messages: ChatMessage[]) => void;
   onStatusChange?: (status: ChatStatus) => void;
+  onError?: (err: ChatErrorPayload) => void;
 };
 
 const CHAT_WS_URL =
@@ -338,7 +345,12 @@ export async function connectChat() {
           break;
 
         case 'error':
-          console.warn('[chatService] Server error:', msg.message);
+          console.warn('[chatService] Server error:', msg.message, msg.code ? `(${msg.code})` : '');
+          handlers.onError?.({
+            code: typeof msg.code === 'string' ? msg.code : undefined,
+            message: typeof msg.message === 'string' ? msg.message : 'Bilinmeyen hata',
+            retryAfter: typeof msg.retryAfter === 'number' ? msg.retryAfter : undefined,
+          });
           break;
 
         default:

@@ -52,6 +52,8 @@ interface Props {
   newMsgCount: number;
   onScrollToBottom: () => void;
   isModerator: boolean;
+  /** Flood cooldown aktif mi — aktifse input + send disabled. */
+  isFloodCooling?: boolean;
 }
 
 function VoiceParticipants({
@@ -96,6 +98,7 @@ function VoiceParticipants({
   newMsgCount,
   onScrollToBottom,
   isModerator,
+  isFloodCooling,
 }: Props) {
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
@@ -227,6 +230,7 @@ function VoiceParticipants({
           isAtBottom={isAtBottom}
           newMsgCount={newMsgCount}
           onScrollToBottom={onScrollToBottom}
+          isFloodCooling={isFloodCooling}
         />
       </div>
 

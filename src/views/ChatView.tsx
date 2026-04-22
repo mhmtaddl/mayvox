@@ -155,10 +155,12 @@ export default function ChatView() {
     chatMessages, chatInput, setChatInput, editingMsgId, editingText, setEditingText,
     isAtBottom, newMsgCount, chatScrollRef, handleChatScroll, scrollToBottom,
     sendChatMessage, deleteChatMessage, clearAllMessages, startEditMessage, saveEditMessage, cancelEdit,
+    isFloodCooling,
   } = useChatMessages({
     activeChannel, channels, currentUser, chatMuted,
     isChatBanned: isChatBannedFromCtx,
     onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
+    onFloodBlocked: (message) => setToastMsg(message),
   });
 
   // ── Dominant speaker hook ──
@@ -1298,7 +1300,8 @@ export default function ChatView() {
                   onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
                   onDeleteMessage={deleteChatMessage} onClearAll={clearAllMessages} onSendMessage={sendChatMessage}
                   chatInput={chatInput} onChatInputChange={setChatInput} chatScrollRef={chatScrollRef} onChatScroll={handleChatScroll}
-                  isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom} />
+                  isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom}
+                  isFloodCooling={isFloodCooling} />
               </div>
             </div>
           ) : serverLoading ? (
