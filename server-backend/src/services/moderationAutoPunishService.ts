@@ -13,11 +13,12 @@
  * Dedupe (aynı user'a peş peşe ceza) chat-server tarafında (in-memory Map, 5dk cooldown).
  * Burada yine idempotent check (zaten banlı → skip) ikinci savunma katmanıdır.
  */
-import { pool, queryOne } from '../repositories/db';
+import { pool, queryOne, queryMany } from '../repositories/db';
 import { invalidateAccessContext } from './accessContextService';
 import { broadcastModeration } from './moderationBroadcast';
 import { logAction } from './auditLogService';
 import { recordEvent as recordModStatEvent } from './moderationStatsService';
+import { supabase } from '../supabaseClient';
 
 export type AutoPunishResult =
   | { applied: false; reason: 'skipped_not_member'   }
@@ -111,4 +112,63 @@ export async function applyAutoPunishFlood(
   }
 
   return { applied: true, reason: 'applied', expiresAt };
+}
+
+export interface ActiveAutoPunishment {
+  userId: string;
+  userName: string | null;
+  userAvatar: string | null;
+  expiresAt: string;
+}
+
+/**
+ * Şu an aktif auto-mod kaynaklı chat-ban'ları döndürür.
+ * Sadece chat_banned_by='system:auto-mod' VE chat_ban_expires_at > now().
+ * Profile enrichment Supabase'den batch.
+ */
+export async function listActiveAutoPunishments(serverId: string): Promise<ActiveAutoPunishment[]> {
+  const rows = await queryMany<{
+    user_id: string;
+    chat_ban_expires_at: string;
+  }>(
+    `SELECT user_id, chat_ban_expires_at::text
+     FROM server_members
+     WHERE server_id = $1
+       AND chat_banned_by = 'system:auto-mod'
+       AND chat_ban_expires_at IS NOT NULL
+       AND chat_ban_expires_at > now()
+     ORDER BY chat_ban_expires_at ASC`,
+    [serverId],
+  );
+  if (rows.length === 0) return [];
+
+  const userIds = rows.map(r => r.user_id);
+  const profileMap = new Map<string, { name: string; avatar: string | null }>();
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, name, avatar')
+      .in('id', userIds);
+    if (data) {
+      for (const p of data) {
+        const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+        profileMap.set(p.id as string, {
+          name: full || (p.name as string) || '',
+          avatar: (p.avatar as string) ?? null,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[auto-punish] active list profile enrich fail:', err instanceof Error ? err.message : err);
+  }
+
+  return rows.map(r => {
+    const prof = profileMap.get(r.user_id);
+    return {
+      userId: r.user_id,
+      userName: prof?.name ?? null,
+      userAvatar: prof?.avatar ?? null,
+      expiresAt: r.chat_ban_expires_at,
+    };
+  });
 }

@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon, Download } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon, Download, Gavel } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
   type ModerationEvent,
   type AutoPunishmentFloodConfig,
+  type ActiveAutoPunishment,
   getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
-  exportModerationEventsXlsx,
+  exportModerationEventsXlsx, getActiveAutoPunishments,
 } from '../../../lib/serverService';
 import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
@@ -241,6 +242,24 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
   const pagedEvents = filteredEvents.slice((eventCurrentPage - 1) * EVENTS_PER_PAGE, eventCurrentPage * EVENTS_PER_PAGE);
   // Filter/search değişince sayfa 1'e reset
   useEffect(() => { setEventPage(1); }, [eventSearch, eventKindFilter]);
+
+  // Aktif auto-ceza listesi — 30s refresh. 403 → section gizli (eventsDenied ile aynı gate).
+  const [activePunishments, setActivePunishments] = useState<ActiveAutoPunishment[]>([]);
+  useEffect(() => {
+    if (eventsDenied) return;
+    let cancelled = false;
+    const fetchActive = async () => {
+      try {
+        const list = await getActiveAutoPunishments(serverId);
+        if (!cancelled) setActivePunishments(list);
+      } catch {
+        // 403 eventsDenied ile zaten yakalanıyor; diğer hataları sessiz yut
+      }
+    };
+    fetchActive();
+    const t = setInterval(fetchActive, STATS_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [serverId, eventsDenied]);
 
   // CSV export — aktif kind filter URL'e yansır.
   const [exporting, setExporting] = useState(false);
@@ -572,6 +591,11 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       {/* ── Otomatik Ceza (MVP: flood → chat_timeout) ── */}
       <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
 
+      {/* ── Şu an cezalı (mod+ görür) ── */}
+      {!eventsDenied && (
+        <ActivePunishmentsSection items={activePunishments} />
+      )}
+
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (
         <section
@@ -900,6 +924,112 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
       </span>
       {label}
     </span>
+  );
+}
+
+// ── Şu an cezalı bölümü ──
+function formatRemaining(expiresIso: string, nowMs: number): string {
+  const exp = Date.parse(expiresIso);
+  if (!Number.isFinite(exp)) return '';
+  const diff = Math.max(0, Math.floor((exp - nowMs) / 1000));
+  if (diff === 0) return 'bitti';
+  const m = Math.floor(diff / 60);
+  const s = diff % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${h}s ${mm}dk`;
+  }
+  if (m === 0) return `${s} sn`;
+  return `${m}dk ${s}sn`;
+}
+
+function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) {
+  // 1s tick — countdown canlı azalsın
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  // Süresi bitmiş local olarak gizle (30s refresh sonrası server zaten düşürür)
+  const live = items.filter(ev => Date.parse(ev.expiresAt) > nowMs);
+
+  return (
+    <section
+      className="automod-card rounded-2xl p-5"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.04)',
+        border: '1px solid rgba(var(--glass-tint), 0.08)',
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Gavel size={14} className="text-amber-400" />
+          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Şu an cezalı</h4>
+        </div>
+        {live.length > 0 && (
+          <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
+            {live.length} kişi
+          </span>
+        )}
+      </div>
+
+      {live.length === 0 ? (
+        <div
+          className="px-3 py-6 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+          style={{ background: 'rgba(var(--glass-tint),0.03)' }}
+        >
+          Şu an otomatik ceza alan kimse yok
+        </div>
+      ) : (
+        <ul
+          className="space-y-1 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"
+        >
+          {live.map(ev => (
+            <li
+              key={ev.userId}
+              className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
+              style={{
+                background: 'rgba(251,191,36,0.05)',
+                border: '1px solid rgba(251,191,36,0.12)',
+              }}
+            >
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+                style={{
+                  background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
+                  border: '1px solid rgba(var(--glass-tint),0.12)',
+                }}
+              >
+                {ev.userAvatar ? (
+                  <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon size={12} className="text-[var(--theme-secondary-text)]/50" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                <span className="text-[12px] font-semibold text-[var(--theme-text)] truncate">
+                  {ev.userName || 'Bilinmiyor'}
+                </span>
+                <span
+                  className="text-[9.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
+                  style={{
+                    color: 'rgb(251,191,36)',
+                    background: 'rgba(251,191,36,0.10)',
+                    border: '1px solid rgba(251,191,36,0.22)',
+                  }}
+                >
+                  Yazma Engeli
+                </span>
+              </div>
+              <span className="text-[11px] font-bold tabular-nums text-amber-400 shrink-0">
+                {formatRemaining(ev.expiresAt, nowMs)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

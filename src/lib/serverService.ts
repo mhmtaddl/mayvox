@@ -795,6 +795,18 @@ export interface ModerationEvent {
   createdAt: string;
 }
 
+export interface ActiveAutoPunishment {
+  userId: string;
+  userName: string | null;
+  userAvatar: string | null;
+  expiresAt: string;
+}
+
+/** Şu an aktif auto-mod kaynaklı chat-ban'lar. 403 → mod değil. */
+export async function getActiveAutoPunishments(serverId: string): Promise<ActiveAutoPunishment[]> {
+  return apiFetch<ActiveAutoPunishment[]>(`/servers/${serverId}/active-auto-punishments`);
+}
+
 export async function getModerationEvents(
   serverId: string,
   opts: { limit?: number; kind?: ModEventKind } = {},

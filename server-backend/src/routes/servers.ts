@@ -14,6 +14,7 @@ import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
+import { listActiveAutoPunishments } from '../services/moderationAutoPunishService';
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
 
@@ -139,6 +140,26 @@ router.get('/:id/moderation-stats', async (req: Request, res: Response) => {
     }
     const stats = await getModerationStats(serverId, range);
     res.json(stats);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/active-auto-punishments
+ *  Şu an aktif auto-mod kaynaklı chat-ban'lar — sadece canKickMembers.
+ */
+router.get('/:id/active-auto-punishments', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    if (!ctx.flags.canKickMembers) {
+      res.status(403).json({ error: 'Aktif cezaları görme yetkin yok' });
+      return;
+    }
+    const rows = await listActiveAutoPunishments(serverId);
+    res.json(rows);
   } catch (err) { handleError(res, err); }
 });
 
