@@ -231,9 +231,9 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       await exportModerationEventsCsv(serverId, {
         kind: eventKindFilter === 'all' ? undefined : eventKindFilter,
       });
-      showToast('Moderasyon olayları dışa aktarıldı');
+      showToast('Log indirildi');
     } catch (err: any) {
-      showToast(err?.message || 'Dışa aktarım başarısız');
+      showToast(err?.message || 'Log indirme başarısız');
     } finally {
       setExporting(false);
     }
@@ -580,8 +580,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                   disabled={exporting}
                   title={
                     eventKindFilter === 'all'
-                      ? 'Tüm olayları CSV olarak dışa aktar (en fazla 50.000 satır)'
-                      : `"${eventKindFilter}" türündeki olayları CSV olarak dışa aktar`
+                      ? 'Tüm olay kayıtlarını Excel uyumlu CSV olarak indir (en fazla 50.000 satır)'
+                      : `"${eventKindFilter}" türündeki olay kayıtlarını indir`
                   }
                   className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
@@ -595,7 +595,7 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
                   ) : (
                     <Download size={11} />
                   )}
-                  {exporting ? 'Hazırlanıyor…' : 'CSV indir'}
+                  {exporting ? 'Hazırlanıyor…' : 'Log indir'}
                 </button>
               )}
             </div>

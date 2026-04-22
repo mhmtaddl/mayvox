@@ -184,22 +184,43 @@ router.get('/:id/moderation-events/export', async (req: Request, res: Response) 
     const rawKind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
     const kind = rawKind && isValidKind(rawKind) ? rawKind : undefined;
     const events = await listModerationEvents(serverId, { limit: 50_000, kind });
-    // CSV header + rows. Escape: double-quote wrap, içindeki " → ""
+    // CSV escape: double-quote wrap, içindeki " → ""
     const esc = (v: string | null | undefined): string => {
       const s = v ?? '';
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = 'id,kind,user_id,user_name,channel_id,channel_name,created_at';
+    // kind → TR etiket
+    const KIND_TR: Record<string, string> = { flood: 'Flood', profanity: 'Küfür', spam: 'Spam' };
+    // ISO → "22.04.2026 16:15:07" (Europe/Istanbul)
+    const fmtDate = (iso: string): string => {
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        return d.toLocaleString('tr-TR', {
+          timeZone: 'Europe/Istanbul',
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+      } catch { return iso; }
+    };
+    // TR Excel uyumlu: semicolon separator (Türkçe Windows Excel default ayırıcı)
+    const SEP = ';';
+    const header = ['Kayıt No', 'Olay Türü', 'Kullanıcı', 'Kullanıcı ID', 'Kanal', 'Kanal ID', 'Tarih'].join(SEP);
     const lines = events.map(ev => [
-      esc(ev.id), esc(ev.kind), esc(ev.userId), esc(ev.userName),
-      esc(ev.channelId), esc(ev.channelName), esc(ev.createdAt),
-    ].join(','));
+      esc(ev.id),
+      esc(KIND_TR[ev.kind] || ev.kind),
+      esc(ev.userName || 'Bilinmiyor'),
+      esc(ev.userId),
+      esc(ev.channelName || ''),
+      esc(ev.channelId),
+      esc(fmtDate(ev.createdAt)),
+    ].join(SEP));
     // UTF-8 BOM — Excel TR karakterleri doğru okur.
-    const csv = '﻿' + header + '\n' + lines.join('\n') + '\n';
+    const csv = '﻿' + header + '\r\n' + lines.join('\r\n') + '\r\n';
     const stamp = new Date().toISOString().slice(0, 10);
     const suffix = kind ? `-${kind}` : '';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="moderation-events${suffix}-${stamp}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="moderasyon-kayitlari${suffix}-${stamp}.csv"`);
     res.setHeader('Cache-Control', 'no-store');
     res.send(csv);
   } catch (err) { handleError(res, err); }
