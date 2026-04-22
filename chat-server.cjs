@@ -393,6 +393,49 @@ async function getProfiles(userIds) {
   return result;
 }
 
+// ── Per-channel flood config cache ──────────────────────────────────────
+// channelId -> { serverId: string|null, flood: {cooldownMs,limit,windowMs}, expiresAt }
+// TTL 30s. Server-backend /internal/channel-flood-config üzerinden çekilir.
+// Fail durumunda flood-control built-in default'a düşer (fail-safe).
+const floodConfigCache = new Map();
+const FLOOD_CONFIG_TTL_MS = 30_000;
+
+async function getChannelFloodConfig(channelId) {
+  if (!channelId) return null;
+  const now = Date.now();
+  const hit = floodConfigCache.get(channelId);
+  if (hit && hit.expiresAt > now) return hit;
+
+  if (!INTERNAL_NOTIFY_SECRET) {
+    // Secret yoksa server-backend ile konuşamayız → null dön (flood-control built-in).
+    const entry = { serverId: null, flood: null, expiresAt: now + FLOOD_CONFIG_TTL_MS };
+    floodConfigCache.set(channelId, entry);
+    return entry;
+  }
+  try {
+    const url = `${SERVER_BACKEND_URL}/internal/channel-flood-config?channelId=${encodeURIComponent(channelId)}`;
+    const resp = await fetch(url, {
+      headers: { 'x-internal-secret': INTERNAL_NOTIFY_SECRET },
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const body = await resp.json();
+    const entry = {
+      serverId: typeof body?.serverId === 'string' ? body.serverId : null,
+      flood: body?.flood && typeof body.flood === 'object' ? body.flood : null,
+      expiresAt: now + FLOOD_CONFIG_TTL_MS,
+    };
+    floodConfigCache.set(channelId, entry);
+    return entry;
+  } catch (err) {
+    // Ağ/timeout hatası — kısa TTL negative cache, tekrar denemeye girer.
+    console.warn('[flood-config] fetch fail channel=%s err=%s', channelId, err?.message || err);
+    const entry = { serverId: null, flood: null, expiresAt: now + 5_000 };
+    floodConfigCache.set(channelId, entry);
+    return entry;
+  }
+}
+
 // ── Audit bridge: chat-server → server-backend ──
 // Fire-and-forget. Audit başarısızsa DM devam eder — best-effort.
 // METADATA-ONLY: mesaj gövdesi (body/text) ASLA audit'e gönderilmez.
@@ -867,14 +910,18 @@ wss.on('connection', (ws) => {
       if (!text || text.length > 2000) return;
 
       // Flood control: sliding window + cooldown (room_chat kind).
+      // Per-server config cache'den override alınır; bucket key `${serverId}:${userId}`.
       // Reddedilen mesaj: DB'ye yazılmaz, broadcast edilmez, kullanıcıya hata döner.
       {
-        const flood = floodControl.check('room_chat', userId);
+        const cfg = await getChannelFloodConfig(currentRoom);
+        const bucketKey = `${cfg?.serverId || 'unknown'}:${userId}`;
+        const flood = floodControl.check('room_chat', bucketKey, {
+          override: cfg?.flood || undefined,
+        });
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
-          // Tekrarlı ihlali logla (sadece yeni offense'ta, log spam yok).
           if (flood.reason === 'flood_window') {
-            console.log(`[flood] room_chat block userId=${userId} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+            console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
           }
           return send(ws, {
             type: 'error',
@@ -1339,6 +1386,8 @@ const heartbeat = setInterval(() => {
   floodControl.sweep(now);
   for (const [k, v] of userJoinLimits) { if (now > v.resetAt) userJoinLimits.delete(k); }
   for (const [k, v] of userTypingLimits) { if (now > v.resetAt) userTypingLimits.delete(k); }
+  // Flood config cache TTL cleanup
+  for (const [k, v] of floodConfigCache) { if (now > v.expiresAt) floodConfigCache.delete(k); }
 }, 30000);
 
 wss.on('close', () => clearInterval(heartbeat));

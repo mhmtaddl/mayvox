@@ -64,17 +64,33 @@ function createFloodControl(overrides = {}) {
   /**
    * Event'i kabul et/reddet. Kabul edilirse timestamp bucket'a yazılır (yan etki).
    * @param {string} kind
-   * @param {string} userId
-   * @param {number} [now]
+   * @param {string} key       Bucket key — genelde userId; room_chat için `${serverId}:${userId}` (per-server izolasyon).
+   * @param {{ now?: number, override?: Partial<FloodKindConfig> }} [options]
+   *   - `now`: test/injection için (default Date.now())
+   *   - `override`: kind default'unu bu çağrıda ezen limit/windowMs/cooldownMs.
+   *                 Bucket memory'si ortak; sadece karşılaştırma eşikleri değişir.
    * @returns {CheckResult}
    */
-  function check(kind, userId, now = Date.now()) {
-    const cfg = config[kind];
-    if (!cfg || !userId) {
-      // Bilinmeyen kind veya userId yoksa fail-open — flood kontrolü auth sonrası çalışır.
+  function check(kind, key, options = {}) {
+    const baseCfg = config[kind];
+    if (!baseCfg || !key) {
+      // Bilinmeyen kind veya key yoksa fail-open — flood kontrolü auth sonrası çalışır.
       return { allowed: true, reason: null, retryAfterMs: 0, offenseCount: 0 };
     }
-    const bucket = getBucket(kind, userId);
+    // Legacy call signature desteği: 3. arg number ise eski `now` imzası.
+    const now = (typeof options === 'number')
+      ? options
+      : (typeof options.now === 'number' ? options.now : Date.now());
+    const override = (typeof options === 'object' && options && options.override) || null;
+    const cfg = override
+      ? {
+          limit:           typeof override.limit           === 'number' ? override.limit           : baseCfg.limit,
+          windowMs:        typeof override.windowMs        === 'number' ? override.windowMs        : baseCfg.windowMs,
+          cooldownMs:      typeof override.cooldownMs      === 'number' ? override.cooldownMs      : baseCfg.cooldownMs,
+          offenseDecayMs:  typeof override.offenseDecayMs  === 'number' ? override.offenseDecayMs  : baseCfg.offenseDecayMs,
+        }
+      : baseCfg;
+    const bucket = getBucket(kind, key);
 
     // Uzun sessizlikten sonra offense sayacını sıfırla (kademeli ceza reset).
     if (bucket.lastOffenseAt && now - bucket.lastOffenseAt > cfg.offenseDecayMs) {

@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { config } from '../config';
 import { logAction } from '../services/auditLogService';
+import { queryOne } from '../repositories/db';
+import { FLOOD_DEFAULTS, type ModerationConfig } from '../services/moderationConfigService';
 
 const router = Router();
 
@@ -72,6 +74,47 @@ router.post('/audit', async (req: Request, res: Response) => {
   } catch (err) {
     console.warn('[internal/audit] write failed', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'audit_failed' });
+  }
+});
+
+/**
+ * GET /internal/channel-flood-config?channelId=X
+ *
+ * chat-server'ın flood control için kullandığı config lookup köprüsü.
+ * channelId → servers.moderation_config.flood (default ile merge edilmiş).
+ * Bilinmeyen channel veya null moderation_config → default flood + serverId null.
+ * Fail-safe: hata durumunda default + serverId null (chat-server built-in default kullanır).
+ */
+router.get('/channel-flood-config', async (req: Request, res: Response) => {
+  if (!requireInternal(req, res)) return;
+
+  const channelId = typeof req.query.channelId === 'string' ? req.query.channelId : '';
+  if (!channelId) return res.status(400).json({ error: 'channelId required' });
+
+  try {
+    const row = await queryOne<{ server_id: string; moderation_config: ModerationConfig | null }>(
+      `SELECT c.server_id, s.moderation_config
+       FROM channels c
+       JOIN servers s ON s.id = c.server_id
+       WHERE c.id = $1`,
+      [channelId],
+    );
+    if (!row) {
+      return res.json({ serverId: null, flood: FLOOD_DEFAULTS });
+    }
+    const flood = row.moderation_config?.flood;
+    res.json({
+      serverId: row.server_id,
+      flood: {
+        cooldownMs: flood?.cooldownMs ?? FLOOD_DEFAULTS.cooldownMs,
+        limit:      flood?.limit      ?? FLOOD_DEFAULTS.limit,
+        windowMs:   flood?.windowMs   ?? FLOOD_DEFAULTS.windowMs,
+      },
+    });
+  } catch (err) {
+    console.warn('[internal/channel-flood-config] err', err instanceof Error ? err.message : err);
+    // Fail-safe: chat-server built-in default ile devam edebilsin.
+    res.json({ serverId: null, flood: FLOOD_DEFAULTS });
   }
 });
 

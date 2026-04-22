@@ -12,6 +12,7 @@ import * as joinRequestService from '../services/serverJoinRequestService';
 import { getServerOverview } from '../services/serverOverviewService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
+import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 
 const router = Router();
 
@@ -99,6 +100,22 @@ router.get('/:id/access-context', async (req: Request, res: Response) => {
   try {
     const ctx = await getServerAccessContext((req as any).userId, req.params.id as string);
     res.json(ctx);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/moderation-config — auto-mod ayarları (capability: server.moderation.update) */
+router.get('/:id/moderation-config', async (req: Request, res: Response) => {
+  try {
+    const cfg = await getServerModerationConfig(req.params.id as string, (req as any).userId);
+    res.json(cfg);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PATCH /servers/:id/moderation-config — flood limit vb. güncelle (partial) */
+router.patch('/:id/moderation-config', async (req: Request, res: Response) => {
+  try {
+    const next = await updateServerModerationConfig(req.params.id as string, (req as any).userId, req.body);
+    res.json(next);
   } catch (err) { handleError(res, err); }
 });
 

@@ -727,3 +727,30 @@ export async function createInvite(serverId: string, maxUses: number | null, exp
 export async function deleteInvite(serverId: string, inviteId: string): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/servers/${serverId}/invites/${inviteId}`, { method: 'DELETE' });
 }
+
+// ── Auto-moderation config (Faz 2) ──
+export interface FloodConfig {
+  cooldownMs: number;
+  limit: number;
+  windowMs: number;
+}
+
+export interface ModerationConfigResponse {
+  flood: FloodConfig;
+  profanity: { enabled: boolean; words: string[] };
+  spam: { enabled: boolean };
+}
+
+export async function getModerationConfig(serverId: string): Promise<ModerationConfigResponse> {
+  return apiFetch<ModerationConfigResponse>(`/servers/${serverId}/moderation-config`);
+}
+
+export async function updateModerationConfig(
+  serverId: string,
+  patch: { flood?: FloodConfig },
+): Promise<void> {
+  await apiFetch<unknown>(`/servers/${serverId}/moderation-config`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}

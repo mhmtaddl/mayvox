@@ -8,6 +8,7 @@ export const CAPABILITIES = {
   SERVER_VIEW: 'server.view',
   SERVER_JOIN: 'server.join',
   SERVER_MANAGE: 'server.manage',
+  SERVER_MODERATION_UPDATE: 'server.moderation.update',
 
   CHANNEL_CREATE: 'channel.create',
   CHANNEL_UPDATE: 'channel.update',

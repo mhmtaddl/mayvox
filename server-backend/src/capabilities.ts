@@ -12,6 +12,7 @@ export const CAPABILITIES = {
   SERVER_VIEW: 'server.view',
   SERVER_JOIN: 'server.join',
   SERVER_MANAGE: 'server.manage',
+  SERVER_MODERATION_UPDATE: 'server.moderation.update',
 
   CHANNEL_CREATE: 'channel.create',
   CHANNEL_UPDATE: 'channel.update',
@@ -52,6 +53,7 @@ export const SYSTEM_ROLE_CAPS: Record<string, Capability[]> = {
   moderator: [
     CAPABILITIES.SERVER_VIEW,
     CAPABILITIES.SERVER_JOIN,
+    CAPABILITIES.SERVER_MODERATION_UPDATE,
     CAPABILITIES.INVITE_REVOKE,
     CAPABILITIES.MEMBER_MOVE,
     CAPABILITIES.MEMBER_KICK,

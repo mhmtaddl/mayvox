@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel, ShieldCheck } from 'lucide-react';
 import {
   type Server, type ServerOverview,
   getServerDetails, updateServer, deleteServer, leaveServer,
@@ -13,9 +13,10 @@ import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
 import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
 import ModerationTab from './settings/ModerationTab';
+import AutoModerationTab from './settings/AutoModerationTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'moderation' | 'audit';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'moderation' | 'automod' | 'audit';
 // Legacy initialTab input:
 //   'bans'     → 'moderation' tab
 //   'requests' → 'invites' tab + Başvurular sub-section
@@ -145,6 +146,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
       badge: (canManageServer && pendingRequestCount > 0) ? pendingRequestCount : undefined,
     }] : []),
     ...(canKickMembers ? [{ id: 'moderation' as Tab, label: 'Moderasyon', icon: <Gavel size={13} /> }] : []),
+    ...(canKickMembers ? [{ id: 'automod' as Tab, label: 'Oto-Mod', icon: <ShieldCheck size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
   ];
 
@@ -268,6 +270,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             />
           )}
           {tab === 'moderation' && canKickMembers && <ModerationTab serverId={serverId} showToast={showToast} />}
+          {tab === 'automod' && canKickMembers && <AutoModerationTab serverId={serverId} showToast={showToast} />}
           {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
           </>)}
         </div>
