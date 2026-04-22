@@ -230,14 +230,17 @@ router.get('/:id/moderation-events/export', async (req: Request, res: Response) 
     // Meta blok için A geniş olsun (Sunucu/Oluşturulma/Filtre/Toplam label'ları
     // hiç kesilmesin). Tablo için aynı sütunlar yeniden kullanılır.
     ws.columns = [
-      { width: 10 }, // A — Kayıt No (sıra no)
+      { width: 14 }, // A — Kayıt No (override aşağıda)
       { width: 14 }, // B — Olay Türü
-      { width: 26 }, // C — Kullanıcı
+      { width: 26 }, // C — Kullanıcı (override aşağıda)
       { width: 40 }, // D — Kullanıcı ID
       { width: 26 }, // E — Kanal
       { width: 40 }, // F — Kanal ID
       { width: 22 }, // G — Tarih / Saat
     ];
+    // Manuel override — user talebi
+    ws.getColumn(1).width = 20; // Kayıt No
+    ws.getColumn(3).width = 30; // Kullanıcı
 
     // ── Rapor başlığı (A1:G1) ──
     const TITLE_BG = 'FF0F172A';   // slate-900 (sakin kurumsal, indigo yerine)
