@@ -14,6 +14,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { createPresenceService, loadStore } = require('./presence');
+const { createFloodControl } = require('./flood-control.cjs');
 
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
@@ -303,9 +304,9 @@ const rooms = new Map();          // roomId -> Set<ws>
 const cleanupTimers = new Map();  // roomId -> timeout
 
 // ── Per-user rate limits ──────────────────────────────────────────────────
-// userId -> { count, resetAt }
-const userChatLimits = new Map();   // room chat: 10 msg / 5s
-const userDmLimits = new Map();     // DM: 8 msg / 10s
+// Room chat + DM → flood-control modülü (sliding window + cooldown + offense).
+// Join + typing → lightweight fixed-window (farklı amaç, bozmuyoruz).
+const floodControl = createFloodControl();
 const userJoinLimits = new Map();   // join: 5 / 15s
 const userTypingLimits = new Map(); // DM typing relay: 5 / 10s (burst guard)
 
@@ -865,9 +866,23 @@ wss.on('connection', (ws) => {
       const text = String(msg.text || '').trim();
       if (!text || text.length > 2000) return;
 
-      // Per-user chat rate limit: 10 mesaj / 5 saniye
-      if (checkRateLimit(userChatLimits, userId, 10, 5000)) {
-        return send(ws, { type: 'error', message: 'Çok hızlı mesaj gönderiyorsun, biraz bekle' });
+      // Flood control: sliding window + cooldown (room_chat kind).
+      // Reddedilen mesaj: DB'ye yazılmaz, broadcast edilmez, kullanıcıya hata döner.
+      {
+        const flood = floodControl.check('room_chat', userId);
+        if (!flood.allowed) {
+          const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
+          // Tekrarlı ihlali logla (sadece yeni offense'ta, log spam yok).
+          if (flood.reason === 'flood_window') {
+            console.log(`[flood] room_chat block userId=${userId} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+          }
+          return send(ws, {
+            type: 'error',
+            code: 'flood_control',
+            retryAfter: flood.retryAfterMs,
+            message: `Çok hızlı mesaj gönderiyorsun. Lütfen ${waitSec} saniye bekle.`,
+          });
+        }
       }
 
       try {
@@ -1089,9 +1104,21 @@ wss.on('connection', (ws) => {
         return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
       }
 
-      // Per-user DM rate limit: 8 mesaj / 10 saniye
-      if (checkRateLimit(userDmLimits, userId, 8, 10000)) {
-        return send(ws, { type: 'dm:error', message: 'Çok hızlı mesaj gönderiyorsun, biraz bekle' });
+      // Flood control: DM sliding window.
+      {
+        const flood = floodControl.check('dm', userId);
+        if (!flood.allowed) {
+          const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
+          if (flood.reason === 'flood_window') {
+            console.log(`[flood] dm block userId=${userId} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+          }
+          return send(ws, {
+            type: 'dm:error',
+            code: 'flood_control',
+            retryAfter: flood.retryAfterMs,
+            message: `Çok hızlı mesaj gönderiyorsun. Lütfen ${waitSec} saniye bekle.`,
+          });
+        }
       }
 
       // Duplicate-send guard — çift ENTER / rapid click sessizce yutulur.
@@ -1309,9 +1336,9 @@ const heartbeat = setInterval(() => {
   });
   // Stale rate limit entry'leri temizle
   const now = Date.now();
-  for (const [k, v] of userChatLimits) { if (now > v.resetAt) userChatLimits.delete(k); }
-  for (const [k, v] of userDmLimits) { if (now > v.resetAt) userDmLimits.delete(k); }
+  floodControl.sweep(now);
   for (const [k, v] of userJoinLimits) { if (now > v.resetAt) userJoinLimits.delete(k); }
+  for (const [k, v] of userTypingLimits) { if (now > v.resetAt) userTypingLimits.delete(k); }
 }, 30000);
 
 wss.on('close', () => clearInterval(heartbeat));
