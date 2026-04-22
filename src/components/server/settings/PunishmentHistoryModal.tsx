@@ -11,7 +11,10 @@ import {
   getAuditLog,
   resetMemberModerationHistory,
 } from '../../../lib/serverService';
-import { memberDisplayName, memberInitials, timeAgo } from './shared';
+import { memberDisplayName, timeAgo } from './shared';
+import { useUser } from '../../../contexts/UserContext';
+import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
+import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 
 interface Props {
   serverId: string;
@@ -248,7 +251,10 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   useEffect(() => { setPage(0); }, [filter, search]);
 
   const displayName = memberDisplayName(member);
-  const initials = memberInitials(member);
+  // Avatar fallback için: kullanıcının anlık durum PNG'sini UserContext.allUsers'tan çöz.
+  const { allUsers } = useUser();
+  const memberStatusText = allUsers.find(u => u.id === member.userId)?.statusText ?? null;
+  const memberStatusPng = getStatusAvatar(memberStatusText) ?? cevrimdisiPng;
 
   const handleReset = async () => {
     if (resetting) return;
@@ -273,7 +279,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   const body = (
     <div
       className="fixed inset-0 z-[700] flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.40)', animation: 'phmBackdropIn 160ms ease-out' }}
+      style={{ background: 'rgba(0,0,0,0.65)', animation: 'phmBackdropIn 160ms ease-out' }}
       onMouseDown={onClose}
     >
       <div
@@ -286,7 +292,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
           className="flex items-center gap-3 px-5 py-4"
           style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}
         >
-          <HeaderAvatar src={member.avatar} initials={initials} />
+          <HeaderAvatar src={member.avatar} statusPng={memberStatusPng} displayName={displayName} />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/65">
@@ -594,30 +600,28 @@ function autoReasonText(reason: string): string {
   return 'Otomatik yazma engeli uygulandı';
 }
 
-// ── Header avatar (bozuk URL → initial fallback) ──
-function HeaderAvatar({ src, initials }: { src: string | null; initials: string }) {
+// ── Header avatar — kural: kullanıcı avatar yüklememişse varsayılan durum PNG'si göster (initial YASAK) ──
+function HeaderAvatar({ src, statusPng, displayName }: { src: string | null; statusPng: string; displayName: string }) {
   const [failed, setFailed] = useState(false);
-  const showImg = !!src && !failed;
+  const useCustom = hasCustomAvatar(src) && !failed;
+  const finalSrc = useCustom ? src! : statusPng;
   return (
     <div
       className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
       style={{
-        background: showImg ? 'transparent' : 'rgba(var(--glass-tint), 0.06)',
+        background: 'rgba(var(--glass-tint), 0.06)',
         border: '1px solid rgba(var(--glass-tint), 0.10)',
         boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.05)',
       }}
+      aria-label={displayName}
     >
-      {showImg ? (
-        <img
-          src={src!}
-          alt=""
-          className="w-full h-full object-cover"
-          onError={() => setFailed(true)}
-          referrerPolicy="no-referrer"
-        />
-      ) : (
-        <span className="text-[13px] font-bold text-[var(--theme-text)]/90">{initials}</span>
-      )}
+      <img
+        src={finalSrc}
+        alt=""
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+        referrerPolicy="no-referrer"
+      />
     </div>
   );
 }
