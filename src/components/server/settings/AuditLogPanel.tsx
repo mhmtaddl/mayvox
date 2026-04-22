@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  RefreshCw, Search, X, ScrollText,
-  Ban, Shield, UserX, UserPlus, UserCheck, MicOff, Clock, Link2,
-  Hash, Settings as SettingsIcon, AlertTriangle, Zap, Filter, MessageSquareWarning, Gavel,
-  DoorOpen, MessageSquareOff,
+  RefreshCw, Search, X, ScrollText, AlertTriangle,
 } from 'lucide-react';
 import { getAuditLog, type AuditLogItem } from '../../../lib/serverService';
 import { timeAgo } from './shared';
@@ -18,50 +15,49 @@ type Category = 'flood' | 'profanity' | 'spam' | 'auto' | 'manual' | 'role' | 'i
 interface ActionDef {
   verb: string;        // "Otomatik yazma engeli uygulandı"
   category: Category;
-  icon: React.ReactNode;
 }
 
 const ACTION_MAP: Record<string, ActionDef> = {
   // Moderasyon — manuel (mod/admin tarafından)
-  'member.ban':       { verb: 'kullanıcıyı yasakladı',      category: 'manual', icon: <Ban size={11} /> },
-  'member.unban':     { verb: 'yasağı kaldırdı',            category: 'manual', icon: <Shield size={11} /> },
-  'member.kick':      { verb: 'sunucudan attı',             category: 'manual', icon: <UserX size={11} /> },
-  'member.mute':      { verb: 'sesini kapattı',             category: 'manual', icon: <MicOff size={11} /> },
-  'member.unmute':    { verb: 'sesi açtı',                  category: 'manual', icon: <MicOff size={11} /> },
-  'member.timeout':   { verb: 'zaman aşımı verdi',          category: 'manual', icon: <Clock size={11} /> },
-  'member.timeout_clear': { verb: 'zaman aşımını kaldırdı', category: 'manual', icon: <Clock size={11} /> },
-  'member.room_kick': { verb: 'sesli odadan çıkardı',       category: 'manual', icon: <DoorOpen size={11} /> },
-  'member.chat_ban':  { verb: 'yazma engeli uyguladı',      category: 'manual', icon: <MessageSquareOff size={11} /> },
-  'member.chat_unban':{ verb: 'yazma engelini kaldırdı',    category: 'manual', icon: <MessageSquareOff size={11} /> },
+  'member.ban':       { verb: 'kullanıcıyı yasakladı',      category: 'manual' },
+  'member.unban':     { verb: 'yasağı kaldırdı',            category: 'manual' },
+  'member.kick':      { verb: 'sunucudan attı',             category: 'manual' },
+  'member.mute':      { verb: 'sesini kapattı',             category: 'manual' },
+  'member.unmute':    { verb: 'sesi açtı',                  category: 'manual' },
+  'member.timeout':   { verb: 'zaman aşımı verdi',          category: 'manual' },
+  'member.timeout_clear': { verb: 'zaman aşımını kaldırdı', category: 'manual' },
+  'member.room_kick': { verb: 'sesli odadan çıkardı',       category: 'manual' },
+  'member.chat_ban':  { verb: 'yazma engeli uyguladı',      category: 'manual' },
+  'member.chat_unban':{ verb: 'yazma engelini kaldırdı',    category: 'manual' },
   // Otomatik moderasyon (system:auto-mod actor)
-  'member.chat_ban.auto': { verb: 'Otomatik yazma engeli uygulandı', category: 'auto', icon: <Gavel size={11} /> },
+  'member.chat_ban.auto': { verb: 'Otomatik yazma engeli uygulandı', category: 'auto' },
   // Roller
-  'role.change':        { verb: 'rolü değiştirdi', category: 'role', icon: <Shield size={11} /> },
-  'member.role_change': { verb: 'rolü değiştirdi', category: 'role', icon: <Shield size={11} /> },
+  'role.change':        { verb: 'rolü değiştirdi', category: 'role' },
+  'member.role_change': { verb: 'rolü değiştirdi', category: 'role' },
   // Davetler
-  'invite.create':       { verb: 'davet oluşturdu',      category: 'invite', icon: <Link2 size={11} /> },
-  'invite.revoke':       { verb: 'daveti iptal etti',    category: 'invite', icon: <Link2 size={11} /> },
-  'invite.accept':       { verb: 'daveti kabul etti',    category: 'invite', icon: <UserPlus size={11} /> },
-  'join_request.submit': { verb: 'başvuru gönderdi',     category: 'invite', icon: <UserPlus size={11} /> },
-  'join_request.accept': { verb: 'başvuruyu kabul etti', category: 'invite', icon: <UserCheck size={11} /> },
-  'join_request.reject': { verb: 'başvuruyu reddetti',   category: 'invite', icon: <UserX size={11} /> },
+  'invite.create':       { verb: 'davet oluşturdu',      category: 'invite' },
+  'invite.revoke':       { verb: 'daveti iptal etti',    category: 'invite' },
+  'invite.accept':       { verb: 'daveti kabul etti',    category: 'invite' },
+  'join_request.submit': { verb: 'başvuru gönderdi',     category: 'invite' },
+  'join_request.accept': { verb: 'başvuruyu kabul etti', category: 'invite' },
+  'join_request.reject': { verb: 'başvuruyu reddetti',   category: 'invite' },
   // Kanal
-  'channel.create':        { verb: 'kanal oluşturdu',      category: 'channel', icon: <Hash size={11} /> },
-  'channel.update':        { verb: 'kanalı güncelledi',    category: 'channel', icon: <Hash size={11} /> },
-  'channel.delete':        { verb: 'kanalı sildi',         category: 'channel', icon: <Hash size={11} /> },
-  'channel.reorder':       { verb: 'kanalları sıraladı',   category: 'channel', icon: <Hash size={11} /> },
-  'channel.access.grant':  { verb: 'kanal erişimi verdi',  category: 'channel', icon: <Hash size={11} /> },
-  'channel.access.revoke': { verb: 'kanal erişimini aldı', category: 'channel', icon: <Hash size={11} /> },
+  'channel.create':        { verb: 'kanal oluşturdu',      category: 'channel' },
+  'channel.update':        { verb: 'kanalı güncelledi',    category: 'channel' },
+  'channel.delete':        { verb: 'kanalı sildi',         category: 'channel' },
+  'channel.reorder':       { verb: 'kanalları sıraladı',   category: 'channel' },
+  'channel.access.grant':  { verb: 'kanal erişimi verdi',  category: 'channel' },
+  'channel.access.revoke': { verb: 'kanal erişimini aldı', category: 'channel' },
   // Sunucu
-  'server.update':        { verb: 'sunucu ayarlarını değiştirdi', category: 'settings', icon: <SettingsIcon size={11} /> },
-  'server.avatar_update': { verb: 'sunucu logosunu değiştirdi',   category: 'settings', icon: <SettingsIcon size={11} /> },
-  'server.plan_change':   { verb: 'planı değiştirdi',             category: 'settings', icon: <SettingsIcon size={11} /> },
-  'plan.limit_hit':       { verb: 'plan limitine takıldı',        category: 'settings', icon: <AlertTriangle size={11} /> },
-  'moderation_history.reset': { verb: 'ceza geçmişini sıfırladı',  category: 'manual',  icon: <RefreshCw size={11} /> },
+  'server.update':        { verb: 'sunucu ayarlarını değiştirdi', category: 'settings' },
+  'server.avatar_update': { verb: 'sunucu logosunu değiştirdi',   category: 'settings' },
+  'server.plan_change':   { verb: 'planı değiştirdi',             category: 'settings' },
+  'plan.limit_hit':       { verb: 'plan limitine takıldı',        category: 'settings' },
+  'moderation_history.reset': { verb: 'ceza geçmişini sıfırladı',  category: 'manual' },
 };
 
 function resolveAction(log: AuditLogItem): ActionDef {
-  return ACTION_MAP[log.action] ?? { verb: log.action, category: 'other', icon: <ScrollText size={11} /> };
+  return ACTION_MAP[log.action] ?? { verb: log.action, category: 'other' };
 }
 
 // Kategori renk haritası — Flood cyan, Küfür red, Spam purple, Auto amber, Manual blue
@@ -308,27 +304,34 @@ export default function AuditLogPanel({ serverId }: Props) {
 }
 
 // ═══════════════════════════════════════════
-// Time group — sticky header + dense list
+// Time group — uppercase label + vertical timeline
 // ═══════════════════════════════════════════
 const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket, items }) => {
   return (
     <section>
-      <div
-        className="sticky top-0 z-10 flex items-center gap-2 px-1 py-1 backdrop-blur-sm"
-        style={{ background: 'rgba(var(--theme-bg-rgb, 10, 14, 26), 0.78)' }}
-      >
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/70">
+      {/* Group label — minimal, uppercase, low opacity */}
+      <div className="flex items-center gap-2 px-1 pb-1.5 pt-1">
+        <span className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-[var(--theme-secondary-text)]/55">
           {BUCKET_LABEL[bucket]}
         </span>
         <span
-          className="h-px flex-1 ml-1"
-          style={{ background: 'linear-gradient(90deg, rgba(var(--glass-tint),0.12), transparent)' }}
+          className="h-px flex-1"
+          style={{ background: 'linear-gradient(90deg, rgba(var(--glass-tint),0.08), transparent 80%)' }}
         />
-        <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/40">
+        <span className="text-[9.5px] tabular-nums text-[var(--theme-secondary-text)]/30">
           {items.length}
         </span>
       </div>
-      <ul className="mt-1">
+      {/* Timeline — tek dikey çizgi, sol kenar; her row çizgi üzerinde dot */}
+      <ul className="relative" style={{ paddingLeft: 18 }}>
+        <div
+          aria-hidden="true"
+          className="absolute top-1 bottom-1 w-px"
+          style={{
+            left: 6,
+            background: 'linear-gradient(to bottom, rgba(var(--glass-tint),0.04), rgba(var(--glass-tint),0.10) 10%, rgba(var(--glass-tint),0.10) 90%, rgba(var(--glass-tint),0.04))',
+          }}
+        />
         {items.map(log => (
           <AuditLogRow key={log.id} log={log} />
         ))}
@@ -338,20 +341,13 @@ const TimeGroup: React.FC<{ bucket: Bucket; items: AuditLogItem[] }> = ({ bucket
 };
 
 // ═══════════════════════════════════════════
-// Single row — dot + actor → verb + (target) + reason meta + time
+// Single row — timeline dot + actor em-dash verb + target + reason subtext + time
 // ═══════════════════════════════════════════
-const CATEGORY_ICON: Record<Category, React.ReactNode> = {
-  flood:     <Zap size={9} />,
-  profanity: <Filter size={9} />,
-  spam:      <MessageSquareWarning size={9} />,
-  auto:      <Gavel size={9} />,
-  manual:    <Shield size={9} />,
-  role:      <Shield size={9} />,
-  invite:    <Link2 size={9} />,
-  channel:   <Hash size={9} />,
-  settings:  <SettingsIcon size={9} />,
-  other:     <ScrollText size={9} />,
-};
+// Önem derecesi — ban/kick/auto vurgulu, channel/settings muted
+const HIGH_IMPORTANCE: Set<string> = new Set([
+  'member.ban', 'member.kick', 'member.timeout', 'member.chat_ban',
+  'member.chat_ban.auto', 'member.mute', 'member.room_kick',
+]);
 
 const AuditLogRow: React.FC<{ log: AuditLogItem }> = ({ log }) => {
   const def = resolveAction(log);
@@ -362,66 +358,82 @@ const AuditLogRow: React.FC<{ log: AuditLogItem }> = ({ log }) => {
   const reason = extractReason(log);
   const time = timeAgo(log.createdAt, { withDateFallback: true });
 
-  // Badge sadece flood/profanity/spam/auto için — diğer kategorilerde dot yeter (visual noise azalt)
+  // Semantic badge: sadece flood/küfür/spam/auto (noise azalt)
   const showBadge = refined === 'flood' || refined === 'profanity' || refined === 'spam' || refined === 'auto';
+  // Önem: düşük olaylar (channel/settings) muted
+  const isHigh = HIGH_IMPORTANCE.has(log.action);
+  const verbTone = isHigh
+    ? 'text-[var(--theme-text)]/90'
+    : 'text-[var(--theme-text)]/75';
+  const actorTone = isHigh
+    ? 'text-[var(--theme-text)] font-semibold'
+    : 'text-[var(--theme-text)]/85 font-semibold';
+
+  const absTime = new Date(log.createdAt).toLocaleString('tr-TR');
 
   return (
     <li
-      className="auditrow flex items-start gap-2.5 px-2 py-1.5 rounded-md transition-colors"
-      style={{ cursor: 'default' }}
+      className="auditrow relative py-1 pr-1 transition-colors"
+      title={absTime}
     >
-      {/* Dot */}
+      {/* Timeline dot — çizgi üzerinde, vertical-center */}
       <span
-        className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
-        style={{ background: palette.color, boxShadow: `0 0 4px ${palette.color}88` }}
+        aria-hidden="true"
+        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full"
+        style={{
+          left: -17,
+          background: palette.color,
+          boxShadow: `0 0 0 3px var(--theme-bg), 0 0 6px ${palette.color}66`,
+          opacity: isHigh ? 1 : 0.75,
+        }}
       />
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[12.5px] font-semibold text-[var(--theme-text)]">
-            {actor}
-          </span>
-          <span className="text-[var(--theme-secondary-text)]/40 text-[11px]">→</span>
-          <span className="text-[12.5px] text-[var(--theme-text)]/85">
-            {def.verb}
-          </span>
-          {target && (
-            <span className="text-[11.5px] text-[var(--theme-secondary-text)]/70">
-              <span className="text-[var(--theme-secondary-text)]/35">·</span>{' '}
-              <strong className="text-[var(--theme-text)]/80 font-semibold">{target}</strong>
+
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          {/* Main line — actor — verb target */}
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className={`text-[12.5px] ${actorTone}`}>
+              {actor}
             </span>
-          )}
-          {showBadge && (
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-bold uppercase tracking-wide shrink-0"
-              style={{
-                color: palette.color,
-                background: `rgba(${palette.rgb}, 0.10)`,
-                border: `1px solid rgba(${palette.rgb}, 0.22)`,
-              }}
-            >
-              {CATEGORY_ICON[refined]}
-              {palette.label}
+            <span className="text-[11px] text-[var(--theme-secondary-text)]/35">—</span>
+            <span className={`text-[12.5px] ${verbTone}`}>
+              {def.verb}
             </span>
+            {target && (
+              <span className="text-[11.5px] text-[var(--theme-text)]/70 font-semibold truncate max-w-[240px]">
+                {target}
+              </span>
+            )}
+            {showBadge && (
+              <span
+                className="inline-flex items-center px-1.5 py-px rounded text-[9px] font-bold uppercase tracking-wide shrink-0"
+                style={{
+                  color: palette.color,
+                  background: `rgba(${palette.rgb}, 0.10)`,
+                  border: `1px solid rgba(${palette.rgb}, 0.22)`,
+                }}
+              >
+                {palette.label}
+              </span>
+            )}
+          </div>
+          {/* Subtext — reason, low opacity */}
+          {reason && (
+            <div className="mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug truncate">
+              {reason}
+            </div>
           )}
         </div>
-        {reason && (
-          <div className="mt-0.5 text-[11px] text-[var(--theme-secondary-text)]/55 leading-snug truncate">
-            {reason}
-          </div>
-        )}
+        {/* Time — right aligned, subtle */}
+        <span className="shrink-0 mt-px text-[10.5px] tabular-nums text-[var(--theme-secondary-text)]/40">
+          {time}
+        </span>
       </div>
-      {/* Time */}
-      <span
-        className="shrink-0 mt-0.5 text-[10.5px] tabular-nums text-[var(--theme-secondary-text)]/45"
-        title={new Date(log.createdAt).toLocaleString('tr-TR')}
-      >
-        {time}
-      </span>
 
       <style>{`
+        .auditrow { border-radius: 6px; }
         .auditrow:hover {
-          background: rgba(var(--glass-tint), 0.04);
+          background: rgba(var(--glass-tint), 0.035);
         }
       `}</style>
     </li>
