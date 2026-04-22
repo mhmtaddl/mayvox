@@ -118,6 +118,7 @@ export interface ActiveAutoPunishment {
   userId: string;
   userName: string | null;
   userAvatar: string | null;
+  bannedAt: string;
   expiresAt: string;
 }
 
@@ -129,9 +130,10 @@ export interface ActiveAutoPunishment {
 export async function listActiveAutoPunishments(serverId: string): Promise<ActiveAutoPunishment[]> {
   const rows = await queryMany<{
     user_id: string;
+    chat_banned_at: string;
     chat_ban_expires_at: string;
   }>(
-    `SELECT user_id, chat_ban_expires_at::text
+    `SELECT user_id, chat_banned_at::text, chat_ban_expires_at::text
      FROM server_members
      WHERE server_id = $1
        AND chat_banned_by = 'system:auto-mod'
@@ -168,6 +170,7 @@ export async function listActiveAutoPunishments(serverId: string): Promise<Activ
       userId: r.user_id,
       userName: prof?.name ?? null,
       userAvatar: prof?.avatar ?? null,
+      bannedAt: r.chat_banned_at,
       expiresAt: r.chat_ban_expires_at,
     };
   });

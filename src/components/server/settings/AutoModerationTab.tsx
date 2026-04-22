@@ -871,6 +871,13 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           transform: translateY(-1px);
           box-shadow: 0 6px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
         }
+        /* Aktif ceza kartı hover — hafif scale + bg vurgusu */
+        .apCard { transition: background 150ms ease, transform 150ms ease, border-color 150ms ease; }
+        .apCard:hover {
+          background: rgba(255,255,255,0.06) !important;
+          transform: scale(1.01);
+          border-color: rgba(255,255,255,0.10);
+        }
       `}</style>
     </div>
   );
@@ -945,13 +952,13 @@ function formatRemaining(expiresIso: string, nowMs: number): string {
 }
 
 function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) {
-  // 1s tick — countdown canlı azalsın
+  // 1s tick — progress bar + countdown canlı azalsın
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  // Süresi bitmiş local olarak gizle (30s refresh sonrası server zaten düşürür)
+  // Süresi bitmiş local gizle (30s refresh server'dan da düşer)
   const live = items.filter(ev => Date.parse(ev.expiresAt) > nowMs);
 
   return (
@@ -965,71 +972,122 @@ function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Gavel size={14} className="text-amber-400" />
-          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Şu an cezalı</h4>
+          <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Aktif cezalar</h4>
         </div>
         {live.length > 0 && (
-          <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
-            {live.length} kişi
+          <span
+            className="text-[10px] font-bold tabular-nums px-2 py-0.5 rounded-full"
+            style={{
+              background: 'rgba(251,191,36,0.12)',
+              border: '1px solid rgba(251,191,36,0.25)',
+              color: 'rgb(251,191,36)',
+            }}
+          >
+            {live.length} aktif
           </span>
         )}
       </div>
 
       {live.length === 0 ? (
         <div
-          className="px-3 py-6 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
-          style={{ background: 'rgba(var(--glass-tint),0.03)' }}
+          className="px-4 py-8 rounded-xl text-center"
+          style={{ background: 'rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint),0.06)' }}
         >
-          Şu an otomatik ceza alan kimse yok
+          <div className="text-[12.5px] font-semibold text-[var(--theme-text)]/75">
+            Şu anda aktif otomatik ceza bulunmuyor
+          </div>
+          <div className="mt-1 text-[10.5px] text-[var(--theme-secondary-text)]/50">
+            Kuralları ihlal eden kullanıcılar burada listelenir
+          </div>
         </div>
       ) : (
-        <ul
-          className="space-y-1 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"
-        >
-          {live.map(ev => (
-            <li
-              key={ev.userId}
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
-              style={{
-                background: 'rgba(251,191,36,0.05)',
-                border: '1px solid rgba(251,191,36,0.12)',
-              }}
-            >
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden shrink-0"
-                style={{
-                  background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
-                  border: '1px solid rgba(var(--glass-tint),0.12)',
-                }}
-              >
-                {ev.userAvatar ? (
-                  <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <UserIcon size={12} className="text-[var(--theme-secondary-text)]/50" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                <span className="text-[12px] font-semibold text-[var(--theme-text)] truncate">
-                  {ev.userName || 'Bilinmiyor'}
-                </span>
-                <span
-                  className="text-[9.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
-                  style={{
-                    color: 'rgb(251,191,36)',
-                    background: 'rgba(251,191,36,0.10)',
-                    border: '1px solid rgba(251,191,36,0.22)',
-                  }}
-                >
-                  Yazma Engeli
-                </span>
-              </div>
-              <span className="text-[11px] font-bold tabular-nums text-amber-400 shrink-0">
-                {formatRemaining(ev.expiresAt, nowMs)}
-              </span>
-            </li>
-          ))}
+        <ul className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+          {live.map(ev => <ActivePunishmentCard key={ev.userId} ev={ev} nowMs={nowMs} />)}
         </ul>
       )}
     </section>
+  );
+}
+
+// ── Tek cezalı kullanıcı kart ──
+function ActivePunishmentCard({ ev, nowMs }: { ev: ActiveAutoPunishment; nowMs: number }) {
+  const start = Date.parse(ev.bannedAt);
+  const end = Date.parse(ev.expiresAt);
+  const total = Math.max(1, end - start);
+  const remaining = Math.max(0, end - nowMs);
+  const pct = Math.max(0, Math.min(100, (remaining / total) * 100));
+
+  return (
+    <li
+      className="apCard relative rounded-[14px] px-3.5 py-3"
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {/* Avatar 36px rounded-lg */}
+        <div
+          className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
+          style={{
+            background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+          }}
+        >
+          {ev.userAvatar ? (
+            <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <UserIcon size={14} className="text-[var(--theme-secondary-text)]/50" />
+          )}
+        </div>
+
+        {/* Orta kolon: ad + pill */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[14px] font-semibold text-white truncate">
+              {ev.userName || 'Bilinmiyor'}
+            </span>
+            <span
+              className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
+              style={{
+                background: 'rgba(251,191,36,0.15)',
+                color: '#fbbf24',
+              }}
+            >
+              Yazma Engeli
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div
+            className="mt-2 h-1 rounded-full overflow-hidden"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${pct}%`,
+                background: '#fbbf24',
+                transition: 'width 1s linear',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Sağda büyük countdown */}
+        <div className="shrink-0 text-right">
+          <div
+            className="text-[14px] font-semibold tabular-nums leading-none"
+            style={{ color: '#fbbf24' }}
+          >
+            {formatRemaining(ev.expiresAt, nowMs)}
+          </div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/45 mt-1">
+            kaldı
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 

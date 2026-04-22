@@ -799,6 +799,7 @@ export interface ActiveAutoPunishment {
   userId: string;
   userName: string | null;
   userAvatar: string | null;
+  bannedAt: string;
   expiresAt: string;
 }
 
