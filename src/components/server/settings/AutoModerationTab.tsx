@@ -878,6 +878,38 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
           transform: scale(1.01);
           border-color: rgba(255,255,255,0.10);
         }
+        /* Aktif ceza kartı mount — fade + hafif yukarı kaydır */
+        @keyframes apCardIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0);   }
+        }
+        /* Progress bar shimmer — parlak band akar */
+        .apProgressFill { overflow: hidden; }
+        .apProgressFill::after {
+          content: '';
+          position: absolute;
+          top: 0; bottom: 0; left: 0;
+          width: 60%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+          animation: apShimmer 1.8s linear infinite;
+          pointer-events: none;
+        }
+        @keyframes apShimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(220%);  }
+        }
+        /* Countdown <60sn pulse */
+        @keyframes apUrgentPulse {
+          0%, 100% { opacity: 1;    transform: scale(1);    }
+          50%      { opacity: 0.55; transform: scale(1.04); }
+        }
+        .apCountdown--urgent { animation: apUrgentPulse 1s ease-in-out infinite; transform-origin: right center; }
+        /* Event list — auto_punish satırına hafif amber highlight */
+        .modEventRow--auto {
+          background: linear-gradient(90deg, rgba(251,191,36,0.06), rgba(251,191,36,0.015) 60%, transparent);
+          border-left: 2px solid rgba(251,191,36,0.55);
+          padding-left: calc(0.625rem - 2px);
+        }
       `}</style>
     </div>
   );
@@ -934,6 +966,19 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
   );
 }
 
+// ── Avatar fallback (initial + deterministik gradient) ──
+function getInitial(name: string | null | undefined): string {
+  const t = (name || '').trim();
+  return t ? t[0].toUpperCase() : '?';
+}
+function gradientFromId(id: string | null | undefined): string {
+  const s = id || '?';
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return `linear-gradient(135deg, hsl(${hue}, 52%, 48%), hsl(${(hue + 45) % 360}, 55%, 34%))`;
+}
+
 // ── Şu an cezalı bölümü ──
 function formatRemaining(expiresIso: string, nowMs: number): string {
   const exp = Date.parse(expiresIso);
@@ -973,6 +1018,15 @@ function ActivePunishmentsSection({ items }: { items: ActiveAutoPunishment[] }) 
         <div className="flex items-center gap-2">
           <Gavel size={14} className="text-amber-400" />
           <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Aktif cezalar</h4>
+          {live.length > 0 && (
+            <span className="relative inline-flex items-center justify-center w-2 h-2 ml-1" aria-hidden="true">
+              <span className="absolute inset-0 rounded-full bg-amber-400" style={{ boxShadow: '0 0 6px rgba(251,191,36,0.8)' }} />
+              <span
+                className="absolute inset-0 rounded-full"
+                style={{ background: 'rgba(251,191,36,0.55)', animation: 'statusChipPulse 2.2s ease-out infinite' }}
+              />
+            </span>
+          )}
         </div>
         {live.length > 0 && (
           <span
@@ -1016,6 +1070,8 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
   const total = Math.max(1, end - start);
   const remaining = Math.max(0, end - nowMs);
   const pct = Math.max(0, Math.min(100, (remaining / total) * 100));
+  const remainingSec = Math.floor(remaining / 1000);
+  const urgent = remainingSec <= 60;
 
   return (
     <li
@@ -1023,25 +1079,29 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
       style={{
         background: 'rgba(255,255,255,0.03)',
         border: '1px solid rgba(255,255,255,0.06)',
+        animation: 'apCardIn 260ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
       <div className="flex items-center gap-3">
-        {/* Avatar 36px rounded-lg */}
+        {/* Avatar 36 — varsa image, yoksa initial + deterministik gradient */}
         <div
           className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
           style={{
-            background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+            background: ev.userAvatar ? 'transparent' : gradientFromId(ev.userId),
+            boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
           }}
+          aria-label={ev.userName || 'Bilinmiyor'}
         >
           {ev.userAvatar ? (
             <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
           ) : (
-            <UserIcon size={14} className="text-[var(--theme-secondary-text)]/50" />
+            <span className="text-[14px] font-bold text-white/95 drop-shadow">
+              {getInitial(ev.userName)}
+            </span>
           )}
         </div>
 
-        {/* Orta kolon: ad + pill */}
+        {/* Orta kolon: ad + pill + progress */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[14px] font-semibold text-white truncate">
@@ -1058,13 +1118,13 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
             </span>
           </div>
 
-          {/* Progress bar */}
+          {/* Progress bar + shimmer overlay */}
           <div
-            className="mt-2 h-1 rounded-full overflow-hidden"
+            className="apProgress mt-2 h-1 rounded-full overflow-hidden relative"
             style={{ background: 'rgba(255,255,255,0.08)' }}
           >
             <div
-              className="h-full rounded-full"
+              className="apProgressFill h-full rounded-full relative"
               style={{
                 width: `${pct}%`,
                 background: '#fbbf24',
@@ -1074,16 +1134,16 @@ const ActivePunishmentCard: React.FC<{ ev: ActiveAutoPunishment; nowMs: number }
           </div>
         </div>
 
-        {/* Sağda büyük countdown */}
+        {/* Sağda büyük countdown + "ceza bitimine" */}
         <div className="shrink-0 text-right">
           <div
-            className="text-[14px] font-semibold tabular-nums leading-none"
+            className={`text-[14px] font-semibold tabular-nums leading-none ${urgent ? 'apCountdown--urgent' : ''}`}
             style={{ color: '#fbbf24' }}
           >
             {formatRemaining(ev.expiresAt, nowMs)}
           </div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/45 mt-1">
-            kaldı
+          <div className="text-[9px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/45 mt-1">
+            ceza bitimine
           </div>
         </div>
       </div>
@@ -1099,20 +1159,31 @@ const EVENT_KIND_META: Record<string, { rgb: string; label: string }> = {
   auto_punish: { rgb: '251,191,36',  label: 'auto ceza' },
 };
 
-// Auto-punish rozetinin trigger kind'a göre dinamik label'ı.
-// Örn: "auto flood engeli", "auto küfür engeli", "auto spam engeli"
+// Auto-punish rozetinin tooltip'inde gösterilecek trigger metni.
 const TRIGGER_LABEL: Record<string, string> = {
   flood:     'flood',
   profanity: 'küfür',
   spam:      'spam',
 };
 
+// Rozet metni — kısa ve sabit. Auto-punish → "auto ceza".
 function buildEventLabel(ev: ModerationEvent): string {
+  if (ev.kind === 'auto_punish') return 'auto ceza';
+  return EVENT_KIND_META[ev.kind]?.label || ev.kind;
+}
+
+// Tooltip metni — hover'da uzun açıklama.
+function buildEventTooltip(ev: ModerationEvent): string {
   if (ev.kind === 'auto_punish') {
     const tk = ev.triggerKind ? TRIGGER_LABEL[ev.triggerKind] : null;
-    return tk ? `auto ${tk} engeli` : 'auto ceza';
+    return tk
+      ? `${tk.charAt(0).toUpperCase()}${tk.slice(1)} ihlalinden otomatik yazma engeli`
+      : 'Otomatik yazma engeli';
   }
-  return EVENT_KIND_META[ev.kind]?.label || ev.kind;
+  if (ev.kind === 'flood')     return 'Flood (hız) engeli — aynı kullanıcı kısa sürede çok mesaj attı';
+  if (ev.kind === 'profanity') return 'Küfür/hakaret filtresi — mesaj engellendi';
+  if (ev.kind === 'spam')      return 'Spam filtresi — link/tekrar/CAPS heuristic';
+  return '';
 }
 
 function formatRelativeTime(iso: string): string {
@@ -1132,9 +1203,11 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
   const meta = EVENT_KIND_META[ev.kind] || { rgb: '123,139,168', label: ev.kind };
   const userLabel = ev.userName || (ev.userId ? ev.userId.slice(0, 8) : 'bilinmiyor');
   const channelLabel = ev.channelName ? `#${ev.channelName}` : '';
+  const tooltip = buildEventTooltip(ev);
+  const isAuto = ev.kind === 'auto_punish';
   return (
     <li
-      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)]"
+      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] ${isAuto ? 'modEventRow--auto' : ''}`}
     >
       {/* Avatar (veya fallback ikon) */}
       <div
@@ -1155,12 +1228,13 @@ const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
         <span className="font-semibold text-[var(--theme-text)] truncate">{userLabel}</span>
         <span className="text-[var(--theme-secondary-text)]/35">·</span>
         <span
-          className="font-bold px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide shrink-0"
+          className="font-bold px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide shrink-0 cursor-help"
           style={{
             color: `rgb(${meta.rgb})`,
             background: `rgba(${meta.rgb}, 0.10)`,
             border: `1px solid rgba(${meta.rgb}, 0.22)`,
           }}
+          title={tooltip}
         >
           {buildEventLabel(ev)}
         </span>
