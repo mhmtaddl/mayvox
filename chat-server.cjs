@@ -598,9 +598,9 @@ async function getChannelFloodConfig(channelId) {
 }
 
 // ── Moderation stats bridge (fire-and-forget) ──
-// Block olayı gerçekleştiğinde server-backend'e event push. Timeout kısa (500ms);
-// başarısız olursa sessizce yutulur, moderation kararını etkilemez.
-async function reportModStat(serverId, kind) {
+// Block olayı gerçekleştiğinde server-backend'e event push.
+// Metadata-only: serverId, kind, userId, channelId. Mesaj içeriği ASLA yollanmaz.
+async function reportModStat(serverId, kind, meta = {}) {
   if (!INTERNAL_NOTIFY_SECRET || !serverId) return;
   try {
     await fetch(`${SERVER_BACKEND_URL}/internal/moderation-stat-event`, {
@@ -609,7 +609,12 @@ async function reportModStat(serverId, kind) {
         'Content-Type': 'application/json',
         'x-internal-secret': INTERNAL_NOTIFY_SECRET,
       },
-      body: JSON.stringify({ serverId, kind }),
+      body: JSON.stringify({
+        serverId,
+        kind,
+        userId: typeof meta.userId === 'string' ? meta.userId : undefined,
+        channelId: typeof meta.channelId === 'string' ? meta.channelId : undefined,
+      }),
       signal: AbortSignal.timeout(500),
     });
   } catch {
@@ -1105,7 +1110,7 @@ wss.on('connection', (ws) => {
           if (flood.reason === 'flood_window') {
             console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
             // Stat event sadece yeni offense'ta (cooldown içi red'ler sayaç şişirmesin).
-            if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood');
+            if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood', { userId, channelId: currentRoom });
           }
           return send(ws, {
             type: 'error',
@@ -1117,7 +1122,7 @@ wss.on('connection', (ws) => {
         // Profanity: flood geçti, içerik kontrolü. Eşleşirse sessizce reddet (logla ama DB/broadcast yapma).
         if (messageHasProfanity(text, cfg?.profanity)) {
           console.log(`[profanity] block userId=${userId} server=${cfg?.serverId || '-'} len=${text.length}`);
-          if (cfg?.serverId) void reportModStat(cfg.serverId, 'profanity');
+          if (cfg?.serverId) void reportModStat(cfg.serverId, 'profanity', { userId, channelId: currentRoom });
           return send(ws, {
             type: 'error',
             code: 'profanity_blocked',
@@ -1129,7 +1134,7 @@ wss.on('connection', (ws) => {
           const spamRes = spamGuard.checkSpam(userId, text);
           if (spamRes.spam) {
             console.log(`[spam] block userId=${userId} server=${cfg?.serverId || '-'} reason=${spamRes.reason} len=${text.length}`);
-            if (cfg?.serverId) void reportModStat(cfg.serverId, 'spam');
+            if (cfg?.serverId) void reportModStat(cfg.serverId, 'spam', { userId, channelId: currentRoom });
             return send(ws, {
               type: 'error',
               code: 'spam_blocked',

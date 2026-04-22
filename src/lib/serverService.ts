@@ -771,3 +771,26 @@ export interface ModerationStats {
 export async function getModerationStats(serverId: string, range: ModStatRange): Promise<ModerationStats> {
   return apiFetch<ModerationStats>(`/servers/${serverId}/moderation-stats?range=${encodeURIComponent(range)}`);
 }
+
+export type ModEventKind = 'flood' | 'profanity' | 'spam';
+export interface ModerationEvent {
+  id: string;
+  kind: ModEventKind;
+  userId: string | null;
+  userName: string | null;
+  userAvatar: string | null;
+  channelId: string | null;
+  channelName: string | null;
+  createdAt: string;
+}
+
+export async function getModerationEvents(
+  serverId: string,
+  opts: { limit?: number; kind?: ModEventKind } = {},
+): Promise<ModerationEvent[]> {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.kind)  params.set('kind', opts.kind);
+  const qs = params.toString();
+  return apiFetch<ModerationEvent[]>(`/servers/${serverId}/moderation-events${qs ? `?${qs}` : ''}`);
+}

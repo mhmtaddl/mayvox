@@ -136,15 +136,18 @@ router.get('/channel-flood-config', async (req: Request, res: Response) => {
  */
 router.post('/moderation-stat-event', async (req: Request, res: Response) => {
   if (!requireInternal(req, res)) return;
-  const { serverId, kind } = req.body ?? {};
+  const { serverId, kind, userId, channelId } = req.body ?? {};
   if (typeof serverId !== 'string' || !serverId) {
     return res.status(400).json({ error: 'serverId required' });
   }
   if (!isValidKind(kind)) {
     return res.status(400).json({ error: 'invalid kind' });
   }
+  // userId/channelId opsiyonel (eski chat-server sürümleri için geriye uyum)
+  const uid = typeof userId === 'string' && userId ? userId : null;
+  const cid = typeof channelId === 'string' && channelId ? channelId : null;
   try {
-    await recordEvent(serverId, kind as ModKind);
+    await recordEvent(serverId, kind as ModKind, { userId: uid, channelId: cid });
     res.status(204).end();
   } catch (err) {
     console.warn('[internal/moderation-stat-event] err', err instanceof Error ? err.message : err);

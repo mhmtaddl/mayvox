@@ -13,7 +13,7 @@ import { getServerOverview } from '../services/serverOverviewService';
 import * as mgmt from '../services/managementService';
 import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
-import { getStats as getModerationStats, isValidRange } from '../services/moderationStatsService';
+import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
 
 const router = Router();
 
@@ -137,6 +137,31 @@ router.get('/:id/moderation-stats', async (req: Request, res: Response) => {
     }
     const stats = await getModerationStats(serverId, range);
     res.json(stats);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/moderation-events?limit=50&kind=flood|profanity|spam
+ *  Detaylı olay feed'i — sadece owner/admin/mod (canKickMembers) görür.
+ *  Mesaj içeriği ASLA dönülmez; sadece metadata (user/channel/time).
+ */
+router.get('/:id/moderation-events', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    if (!ctx.flags.canKickMembers) {
+      res.status(403).json({ error: 'Moderasyon olaylarını görme yetkin yok' });
+      return;
+    }
+    const rawLimit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 50;
+    const limit = Number.isFinite(rawLimit) ? rawLimit : 50;
+    const rawKind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
+    const kind = rawKind && isValidKind(rawKind) ? rawKind : undefined;
+    const events = await listModerationEvents(serverId, { limit, kind });
+    res.json(events);
   } catch (err) { handleError(res, err); }
 });
 

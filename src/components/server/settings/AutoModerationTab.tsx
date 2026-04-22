@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, User as UserIcon } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
-  getModerationConfig, updateModerationConfig, getModerationStats,
+  type ModerationEvent,
+  getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
 } from '../../../lib/serverService';
 import { Loader } from './shared';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
@@ -174,6 +175,31 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     const t = setInterval(fetchStats, STATS_REFRESH_MS);
     return () => { cancelled = true; clearInterval(t); };
   }, [serverId, timeRange]);
+
+  // Moderation events (detay feed) — sadece mod+ görür.
+  // 403 dönerse section hiç render edilmez (gate'li).
+  const [events, setEvents] = useState<ModerationEvent[] | null>(null);
+  const [eventsDenied, setEventsDenied] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchEvents = async () => {
+      try {
+        const list = await getModerationEvents(serverId, { limit: 50 });
+        if (!cancelled) { setEvents(list); setEventsDenied(false); }
+      } catch (err: any) {
+        // 403 → kullanıcı mod değil; section kalıcı gizlenir.
+        if (!cancelled && /yetkin yok|üyesi değil/i.test(err?.message || '')) {
+          setEventsDenied(true);
+        }
+      } finally {
+        if (!cancelled) setEventsLoading(false);
+      }
+    };
+    fetchEvents();
+    const t = setInterval(fetchEvents, STATS_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [serverId]);
 
   // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
@@ -494,6 +520,52 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
         </ul>
       </section>
 
+      {/* ── Son moderasyon olayları (mod+ görür) ── */}
+      {!eventsDenied && (
+        <section
+          className="automod-card rounded-2xl p-5"
+          style={{
+            background: 'rgba(var(--glass-tint), 0.04)',
+            border: '1px solid rgba(var(--glass-tint), 0.08)',
+          }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ScrollText size={14} className="text-[var(--theme-accent)]/80" />
+              <h4 className="text-[13px] font-bold text-[var(--theme-text)]">Son moderasyon olayları</h4>
+            </div>
+            {events && events.length > 0 && (
+              <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
+                {events.length} olay
+              </span>
+            )}
+          </div>
+
+          {eventsLoading && events === null ? (
+            <div className="space-y-1.5">
+              {[0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  className="h-9 rounded-lg animate-pulse"
+                  style={{ background: 'rgba(var(--glass-tint),0.04)' }}
+                />
+              ))}
+            </div>
+          ) : !events || events.length === 0 ? (
+            <div
+              className="px-3 py-6 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+              style={{ background: 'rgba(var(--glass-tint),0.03)' }}
+            >
+              Henüz moderasyon olayı yok
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {events.map(ev => <ModEventRow key={ev.id} ev={ev} />)}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* Action bar */}
       <div className="flex items-center justify-end gap-2 pt-2">
         <button
@@ -616,6 +688,77 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
     </span>
   );
 }
+
+// ── Moderation event tek satır ──
+const EVENT_KIND_META: Record<string, { rgb: string; label: string }> = {
+  flood:     { rgb: '34,211,238',  label: 'flood' },
+  profanity: { rgb: '251,113,133', label: 'küfür' },
+  spam:      { rgb: '167,139,250', label: 'spam' },
+};
+
+function formatRelativeTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diffSec < 60) return `${diffSec} sn önce`;
+  const m = Math.floor(diffSec / 60);
+  if (m < 60) return `${m} dk önce`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} sa önce`;
+  const d = Math.floor(h / 24);
+  return `${d} gün önce`;
+}
+
+const ModEventRow: React.FC<{ ev: ModerationEvent }> = ({ ev }) => {
+  const meta = EVENT_KIND_META[ev.kind] || { rgb: '123,139,168', label: ev.kind };
+  const userLabel = ev.userName || (ev.userId ? ev.userId.slice(0, 8) : 'bilinmiyor');
+  const channelLabel = ev.channelName ? `#${ev.channelName}` : '';
+  return (
+    <li
+      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[rgba(var(--glass-tint),0.05)]"
+    >
+      {/* Avatar (veya fallback ikon) */}
+      <div
+        className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+        style={{
+          background: ev.userAvatar ? 'transparent' : 'rgba(var(--glass-tint),0.08)',
+          border: '1px solid rgba(var(--glass-tint),0.12)',
+        }}
+      >
+        {ev.userAvatar ? (
+          <img src={ev.userAvatar} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <UserIcon size={11} className="text-[var(--theme-secondary-text)]/50" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px]">
+        <span className="font-semibold text-[var(--theme-text)] truncate">{userLabel}</span>
+        <span className="text-[var(--theme-secondary-text)]/35">·</span>
+        <span
+          className="font-bold px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide shrink-0"
+          style={{
+            color: `rgb(${meta.rgb})`,
+            background: `rgba(${meta.rgb}, 0.10)`,
+            border: `1px solid rgba(${meta.rgb}, 0.22)`,
+          }}
+        >
+          {meta.label}
+        </span>
+        {channelLabel && (
+          <>
+            <span className="text-[var(--theme-secondary-text)]/35">·</span>
+            <span className="text-[var(--theme-secondary-text)]/70 truncate">{channelLabel}</span>
+          </>
+        )}
+      </div>
+
+      <span className="text-[10px] text-[var(--theme-secondary-text)]/45 tabular-nums shrink-0">
+        {formatRelativeTime(ev.createdAt)}
+      </span>
+    </li>
+  );
+};
 
 // ── Hero istatistik pill (kompakt: renk noktası + sayı + label) ──
 // Hover rules + value fade animasyonu için className kullanır (statPill + statValue).
