@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 import {
   type ModerationEvent, type ActiveAutoPunishment,
-  getModerationEvents, getActiveAutoPunishments, exportModerationEventsXlsx,
+  getModerationEvents, getActiveAutoPunishments, getServerDetails,
 } from '../../../lib/serverService';
+import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
+import { buildModEventsXlsx, countModEventsInRange } from '../../../lib/buildModEventsXlsx';
 import { useUser } from '../../../contexts/UserContext';
 import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
 import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
@@ -152,8 +154,13 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
   const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [serverName, setServerName] = useState('Sunucu');
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+  }, [serverId]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -189,13 +196,6 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
     fetchData();
   };
 
-  const handleExport = async () => {
-    try {
-      setExporting(true);
-      await exportModerationEventsXlsx(serverId, {});
-    } catch {/* sessiz */}
-    finally { setExporting(false); }
-  };
 
   // Current vs previous window split
   const { current, previous } = useMemo(() => {
@@ -288,16 +288,16 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
           </button>
           <button
             type="button"
-            onClick={handleExport}
-            disabled={exporting || !hasAny}
-            title="Tüm olay kayıtlarını XLSX olarak indir"
+            onClick={() => setExportOpen(true)}
+            disabled={!events || events.length === 0}
+            title="Dışa aktar (tarih aralığı / tüm log kaydı)"
             className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[11px] font-semibold text-[var(--theme-accent)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
               background: 'rgba(var(--theme-accent-rgb),0.08)',
               border: '1px solid rgba(var(--theme-accent-rgb),0.20)',
             }}
           >
-            <Download size={12} /> {exporting ? 'Hazırlanıyor…' : 'Dışa Aktar'}
+            <Download size={12} /> Dışa Aktar
           </button>
         </div>
       </div>
@@ -324,6 +324,17 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
         />
         <RecentEventsCard events={recent} />
       </div>
+
+      {exportOpen && events && (
+        <ExportDialog
+          title="Dışa aktar"
+          totalCount={events.length}
+          countInRange={(r: DateRange) => countModEventsInRange(events, r)}
+          onClose={() => setExportOpen(false)}
+          onDownload={(mode: ExportMode, r: DateRange) => buildModEventsXlsx({ mode, range: r, events, serverName })}
+          allHint="Maksimum 1000 kayıt — daha fazlası için takvimden aralık seçebilirsin."
+        />
+      )}
 
       {/* Micro-interactions — hover lift, peak pulse, tooltip + legend fade */}
       <style>{`

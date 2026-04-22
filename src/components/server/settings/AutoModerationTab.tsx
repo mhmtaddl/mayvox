@@ -8,8 +8,10 @@ import {
   type AutoPunishmentFloodConfig,
   type ActiveAutoPunishment,
   getModerationConfig, updateModerationConfig, getModerationStats, getModerationEvents,
-  exportModerationEventsXlsx, getActiveAutoPunishments,
+  getActiveAutoPunishments, getServerDetails,
 } from '../../../lib/serverService';
+import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
+import { buildModEventsXlsx } from '../../../lib/buildModEventsXlsx';
 import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
 import { useUser } from '../../../contexts/UserContext';
@@ -303,21 +305,12 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
     return () => { cancelled = true; clearInterval(t); };
   }, [serverId, eventsDenied]);
 
-  // CSV export — aktif kind filter URL'e yansır.
-  const [exporting, setExporting] = useState(false);
-  const handleExportCsv = async () => {
-    try {
-      setExporting(true);
-      await exportModerationEventsXlsx(serverId, {
-        kind: eventKindFilter === 'all' ? undefined : eventKindFilter,
-      });
-      showToast('Log indirildi');
-    } catch (err: any) {
-      showToast(err?.message || 'Log indirme başarısız');
-    } finally {
-      setExporting(false);
-    }
-  };
+  // XLSX export — ExportDialog (tek takvim + Tüm log kaydı)
+  const [exportOpen, setExportOpen] = useState(false);
+  const [serverName, setServerName] = useState('Sunucu');
+  useEffect(() => {
+    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+  }, [serverId]);
 
   // Kara liste modal (dil-tab + sayfalama)
   const [showBlacklist, setShowBlacklist] = useState(false);
@@ -560,6 +553,25 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
 
       {showBlacklist && <BlacklistModal onClose={() => setShowBlacklist(false)} />}
 
+      {exportOpen && events && (
+        <ExportDialog
+          title="Log indir"
+          totalCount={events.length}
+          countInRange={(range: DateRange) => countRangeModEvents(events, range)}
+          onClose={() => setExportOpen(false)}
+          onDownload={async (mode: ExportMode, range: DateRange) => {
+            const kindLabel = eventKindFilter === 'all' ? undefined : `Tür: ${eventKindFilter}`;
+            await buildModEventsXlsx({
+              mode, range,
+              events: eventKindFilter === 'all' ? events : events.filter(e => e.kind === eventKindFilter),
+              serverName,
+              kindFilterLabel: kindLabel,
+            });
+          }}
+          allHint="Maksimum 1000 kayıt — daha fazlası için takvimden aralık seçebilirsin."
+        />
+      )}
+
       {/* ── Desktop: 2-kolon (Events solda | Auto Punishment sağda). Events yoksa tek kolon. ── */}
       <div className={eventsDenied ? '' : 'grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-3 items-start'}>
 
@@ -589,26 +601,16 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
               {events && events.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleExportCsv}
-                  disabled={exporting}
-                  title={
-                    eventKindFilter === 'all'
-                      ? 'Tüm olay kayıtlarını Excel (XLSX) raporu olarak indir (en fazla 50.000 satır)'
-                      : `"${eventKindFilter}" türündeki olay kayıtlarını Excel raporu olarak indir`
-                  }
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setExportOpen(true)}
+                  title="Log indir (tarih aralığı / tüm log kaydı)"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors"
                   style={{
                     background: 'rgba(var(--theme-accent-rgb),0.10)',
                     border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
                     color: 'var(--theme-accent)',
                   }}
                 >
-                  {exporting ? (
-                    <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                  ) : (
-                    <Download size={11} />
-                  )}
-                  {exporting ? 'Hazırlanıyor…' : 'Log indir'}
+                  <Download size={11} /> Log indir
                 </button>
               )}
             </div>
@@ -1578,4 +1580,16 @@ function buildPageNumbers(current: number, total: number): (number | '…')[] {
   if (end < total - 1) out.push('…');
   out.push(total);
   return out;
+}
+
+// Export dialog için — tarih aralığında kaç event var
+function countRangeModEvents(events: ModerationEvent[], range: [string, string]): number {
+  const s = Date.parse(range[0] + 'T00:00:00');
+  const e = Date.parse(range[1] + 'T23:59:59');
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return 0;
+  const lo = Math.min(s, e), hi = Math.max(s, e);
+  return events.filter(ev => {
+    const t = Date.parse(ev.createdAt);
+    return t >= lo && t <= hi;
+  }).length;
 }

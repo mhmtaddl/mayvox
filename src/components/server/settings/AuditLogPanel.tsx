@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Search, X, ScrollText, AlertTriangle, EyeOff, Eye,
-  Download, Calendar, ChevronLeft, ChevronRight,
+  Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { getAuditLog, type AuditLogItem } from '../../../lib/serverService';
+import { getAuditLog, getServerDetails, type AuditLogItem } from '../../../lib/serverService';
 import { timeAgo } from './shared';
 import { useUser } from '../../../contexts/UserContext';
+import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
+import { downloadXlsx } from '../../../lib/exportXlsx';
 
 interface Props { serverId: string; }
 
@@ -243,6 +245,12 @@ export default function AuditLogPanel({ serverId }: Props) {
   const [dateFilter, setDateFilter] = useState<DateBucketFilter>('all');
   const [page, setPage] = useState(1);
   const [exportOpen, setExportOpen] = useState(false);
+  const [serverName, setServerName] = useState('Sunucu');
+
+  // Sunucu adını 1 kez çek (export meta'sı için)
+  useEffect(() => {
+    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+  }, [serverId]);
 
   // Username resolver — actorName boşsa/UUID ise UserContext.allUsers'tan çöz
   const { allUsers } = useUser();
@@ -518,14 +526,96 @@ export default function AuditLogPanel({ serverId }: Props) {
 
       {/* ── Export modal ── */}
       {exportOpen && items && (
-        <AuditExportModal
-          items={items}
-          resolveName={resolveName}
+        <ExportDialog
+          title="Log indir"
+          totalCount={items.length}
+          countInRange={(range: DateRange) => countInRangeAudit(items, range)}
           onClose={() => setExportOpen(false)}
+          onDownload={(mode: ExportMode, range: DateRange) => handleAuditExport(mode, range, items, serverName, resolveName)}
+          allHint="Maksimum 200 kayıt — daha fazlası için takvimden aralık seçebilirsin."
         />
       )}
     </div>
   );
+}
+
+// ═══════════════════════════════════════════
+// Export helpers
+// ═══════════════════════════════════════════
+function countInRangeAudit(items: AuditLogItem[], range: DateRange): number {
+  const s = Date.parse(range[0] + 'T00:00:00');
+  const e = Date.parse(range[1] + 'T23:59:59');
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return 0;
+  const lo = Math.min(s, e), hi = Math.max(s, e);
+  return items.filter(log => {
+    const t = Date.parse(log.createdAt);
+    return t >= lo && t <= hi;
+  }).length;
+}
+
+async function handleAuditExport(
+  mode: ExportMode,
+  range: DateRange,
+  items: AuditLogItem[],
+  serverName: string,
+  resolveName: (id: string | null) => string,
+) {
+  let filtered: AuditLogItem[];
+  let filterLabel: string;
+  let fileSuffix: string;
+  if (mode === 'all') {
+    filtered = items;
+    filterLabel = 'Tüm log kaydı';
+    fileSuffix = 'tum-kayitlar';
+  } else {
+    const s = Date.parse(range[0] + 'T00:00:00');
+    const e = Date.parse(range[1] + 'T23:59:59');
+    const lo = Math.min(s, e), hi = Math.max(s, e);
+    filtered = items.filter(log => {
+      const t = Date.parse(log.createdAt);
+      return t >= lo && t <= hi;
+    });
+    filterLabel = range[0] === range[1]
+      ? `Tek tarih: ${range[0]}`
+      : `Aralık: ${range[0]} → ${range[1]}`;
+    fileSuffix = range[0] === range[1] ? range[0] : `${range[0]}_${range[1]}`;
+  }
+
+  const rows = filtered.map(log => {
+    const def = resolveAction(log);
+    const actor = log.actorName && !/^[0-9a-f-]{8,}$/i.test(log.actorName)
+      ? (log.actorId === 'system:auto-mod' ? 'Sistem' : log.actorName)
+      : resolveName(log.actorId);
+    const rawT = describeTarget(log) ?? '';
+    const target = rawT && /^[0-9a-f-]{8,}$/i.test(rawT.replace(/^[a-z]+:/, ''))
+      ? resolveName(rawT.replace(/^[a-z]+:/, ''))
+      : rawT;
+    const reason = extractReason(log) ?? '';
+    return {
+      tarih: new Date(log.createdAt),
+      kisi: actor,
+      aksiyon: def.verb,
+      hedef: target,
+      sebep: reason,
+    };
+  });
+
+  await downloadXlsx({
+    title: 'Denetim Kayıtları Raporu',
+    sheetName: 'Denetim Kayıtları',
+    tableName: 'DenetimKayitlari',
+    serverName,
+    filterLabel,
+    columns: [
+      { key: 'tarih',    header: 'Tarih / Saat', width: 22, align: 'center', dateFormat: 'dd.mm.yyyy hh:mm' },
+      { key: 'kisi',     header: 'Kişi',         width: 22 },
+      { key: 'aksiyon',  header: 'Aksiyon',      width: 38 },
+      { key: 'hedef',    header: 'Hedef',        width: 22 },
+      { key: 'sebep',    header: 'Sebep',        width: 40 },
+    ],
+    rows,
+    filename: `denetim-kayitlari_${fileSuffix}.xlsx`,
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -710,387 +800,6 @@ function LogSkeleton() {
   );
 }
 
-// ═══════════════════════════════════════════
-// Audit Export Modal — tek takvim range picker + XLSX export
-// Behavior:
-//   Mode 'day' (default): takvimde 1 tık -> sadece o gün · 2. tık -> aralık
-//   Mode 'all': tüm log kaydı
-// ═══════════════════════════════════════════
-function AuditExportModal({
-  items, resolveName, onClose,
-}: {
-  items: AuditLogItem[];
-  resolveName: (id: string | null) => string;
-  onClose: () => void;
-}) {
-  const today = new Date();
-  const todayKey = dateKey(today);
-  const [mode, setMode] = useState<'day' | 'all'>('day');
-  // range[0] = başlangıç, range[1] = bitiş (aynı olabilir)
-  const [range, setRange] = useState<[string, string]>([todayKey, todayKey]);
-  const [viewMonth, setViewMonth] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1));
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  // Filter edilecek items
-  const filtered = useMemo(() => {
-    if (mode === 'all') return items;
-    const s = Date.parse(range[0] + 'T00:00:00');
-    const e = Date.parse(range[1] + 'T23:59:59');
-    if (!Number.isFinite(s) || !Number.isFinite(e)) return [];
-    const lo = Math.min(s, e), hi = Math.max(s, e);
-    return items.filter(log => {
-      const t = Date.parse(log.createdAt);
-      return t >= lo && t <= hi;
-    });
-  }, [items, mode, range]);
-
-  // Takvim tıklama mantığı:
-  //  - Eğer range.start === range.end (tek gün seçili) ve farklı bir gün tıklandı → range genişler
-  //  - Aksi halde (aralık zaten seçili) → yeni tek gün seçimi başlar
-  const handleDayClick = (k: string) => {
-    if (range[0] === range[1]) {
-      if (k === range[0]) {
-        // aynı güne tekrar tık — no-op (veya deselect)
-        return;
-      }
-      const a = Date.parse(range[0]);
-      const b = Date.parse(k);
-      if (a < b) setRange([range[0], k]);
-      else       setRange([k, range[0]]);
-    } else {
-      setRange([k, k]);
-    }
-  };
-
-  const handleDownload = async () => {
-    const XLSX = await import('xlsx');
-    const aoa: (string | number)[][] = [
-      ['#', 'Tarih', 'Kişi', 'Aksiyon', 'Hedef', 'Sebep'],
-    ];
-    let i = 1;
-    for (const log of filtered) {
-      const def = resolveAction(log);
-      const actor = log.actorName && !/^[0-9a-f-]{8,}$/i.test(log.actorName)
-        ? (log.actorId === 'system:auto-mod' ? 'Sistem' : log.actorName)
-        : resolveName(log.actorId);
-      const rawT = describeTarget(log) ?? '';
-      const target = rawT && /^[0-9a-f-]{8,}$/i.test(rawT.replace(/^[a-z]+:/, ''))
-        ? resolveName(rawT.replace(/^[a-z]+:/, ''))
-        : rawT;
-      const reason = extractReason(log) ?? '';
-      const dt = new Date(log.createdAt);
-      aoa.push([i++, dt.toLocaleString('tr-TR'), actor, def.verb, target, reason]);
-    }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    // Kolon genişliği
-    (ws as any)['!cols'] = [
-      { wch: 5 }, { wch: 20 }, { wch: 22 }, { wch: 38 }, { wch: 22 }, { wch: 40 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Denetim Kayıtları');
-    const suffix = mode === 'all'
-      ? 'tum-kayitlar'
-      : range[0] === range[1]
-        ? range[0]
-        : `${range[0]}_${range[1]}`;
-    XLSX.writeFile(wb, `denetim-kayitlari_${suffix}.xlsx`);
-    onClose();
-  };
-
-  const rangeLabel = range[0] === range[1]
-    ? `Tek tarih · ${fmtDay(range[0])}`
-    : `Aralık · ${fmtDay(range[0])} — ${fmtDay(range[1])}`;
-
-  return (
-    <div
-      className="fixed inset-0 z-[700] flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={onClose}
-    >
-      <div
-        className="surface-elevated relative w-full max-w-[400px] rounded-2xl overflow-hidden"
-        style={{ animation: 'aemModalIn 200ms cubic-bezier(0.2,0.8,0.2,1)' }}
-        onMouseDown={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center gap-2 px-5 py-3.5"
-          style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}
-        >
-          <Download size={14} className="text-[var(--theme-accent)]/85" />
-          <h3 className="flex-1 text-[13px] font-bold text-[var(--theme-text)]">Log indir</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-md inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
-            aria-label="Kapat"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-5 py-4 space-y-3">
-          {/* Mode selector */}
-          <div
-            className="inline-flex items-center gap-0.5 rounded-lg p-0.5 w-full"
-            style={{
-              background: 'rgba(var(--glass-tint),0.04)',
-              border: '1px solid rgba(var(--glass-tint),0.08)',
-            }}
-          >
-            {(['day', 'all'] as const).map(m => {
-              const active = mode === m;
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className="flex-1 h-8 rounded-md text-[11px] font-bold transition-all flex items-center justify-center gap-1.5"
-                  style={active ? {
-                    background: 'rgba(var(--theme-accent-rgb),0.16)',
-                    color: 'var(--theme-accent)',
-                  } : {
-                    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
-                  }}
-                >
-                  {m === 'day' ? <><Calendar size={11} /> Takvimden seç</> : 'Tüm log kaydı'}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Calendar */}
-          {mode === 'day' && (
-            <div className="space-y-2">
-              <InlineCalendar
-                viewMonth={viewMonth}
-                onViewMonthChange={setViewMonth}
-                range={range}
-                onDayClick={handleDayClick}
-                todayKey={todayKey}
-              />
-              <div
-                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px]"
-                style={{
-                  background: 'rgba(var(--theme-accent-rgb),0.06)',
-                  border: '1px solid rgba(var(--theme-accent-rgb),0.16)',
-                }}
-              >
-                <span className="text-[var(--theme-text)]/85">{rangeLabel}</span>
-                <span className="text-[var(--theme-accent)] font-bold tabular-nums">
-                  {filtered.length} kayıt
-                </span>
-              </div>
-              <div className="text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
-                Bir tarih → o günü indir · iki tarih → aralığı indir
-              </div>
-            </div>
-          )}
-
-          {mode === 'all' && (
-            <div
-              className="px-3 py-2 rounded-lg text-[11px] text-[var(--theme-text)]/85 leading-snug"
-              style={{
-                background: 'rgba(var(--theme-accent-rgb),0.05)',
-                border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
-              }}
-            >
-              Toplam <strong className="tabular-nums">{items.length}</strong> kayıt XLSX olarak indirilecek.
-              <span className="block mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/60">
-                (Maksimum 200 kayıt — daha fazlası için takvimden aralık seçebilirsin.)
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end gap-2 px-5 py-3"
-          style={{ borderTop: '1px solid rgba(var(--glass-tint),0.08)' }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 px-3 rounded-lg text-[11.5px] font-semibold text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
-          >
-            İptal
-          </button>
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={filtered.length === 0}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
-            style={{
-              background: 'var(--theme-accent)',
-              color: 'var(--theme-text-on-accent, #000)',
-              boxShadow: '0 2px 10px rgba(var(--theme-accent-rgb),0.28)',
-            }}
-          >
-            <Download size={11} /> XLSX indir ({filtered.length})
-          </button>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes aemModalIn {
-          from { opacity: 0; transform: scale(0.97); }
-          to   { opacity: 1; transform: scale(1);    }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════
-// Inline Calendar — tema-uyumlu aylık grid, tek/aralık seçim
-// ═══════════════════════════════════════════
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function fmtDay(key: string): string {
-  const d = new Date(key + 'T00:00:00');
-  if (!Number.isFinite(d.getTime())) return key;
-  const months = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-  return `${d.getDate()} ${months[d.getMonth()]}`;
-}
-const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-const TR_DAYS = ['Pt','Sa','Ça','Pe','Cu','Ct','Pz'];
-
-function InlineCalendar({
-  viewMonth, onViewMonthChange, range, onDayClick, todayKey,
-}: {
-  viewMonth: Date;
-  onViewMonthChange: (d: Date) => void;
-  range: [string, string];
-  onDayClick: (k: string) => void;
-  todayKey: string;
-}) {
-  const year = viewMonth.getFullYear();
-  const month = viewMonth.getMonth();
-  const first = new Date(year, month, 1);
-  // Pazartesi = 0 → JS Sun=0 → (day+6)%7
-  const firstDow = (first.getDay() + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  // Önceki ay dolgu + bu ay + sonraki ay dolgu = 6 haftalık grid
-  const cells: Array<{ key: string; day: number; inMonth: boolean }> = [];
-  // Önceki ay
-  const prevDays = new Date(year, month, 0).getDate();
-  for (let i = firstDow - 1; i >= 0; i--) {
-    const d = prevDays - i;
-    const dd = new Date(year, month - 1, d);
-    cells.push({ key: dateKey(dd), day: d, inMonth: false });
-  }
-  // Bu ay
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dd = new Date(year, month, d);
-    cells.push({ key: dateKey(dd), day: d, inMonth: true });
-  }
-  // Sonraki ay (42 hücreye tamamla)
-  let nd = 1;
-  while (cells.length < 42) {
-    const dd = new Date(year, month + 1, nd);
-    cells.push({ key: dateKey(dd), day: nd, inMonth: false });
-    nd++;
-  }
-
-  const rangeStart = range[0];
-  const rangeEnd = range[1];
-  const isInRange = (k: string) => {
-    if (rangeStart === rangeEnd) return k === rangeStart;
-    return k >= rangeStart && k <= rangeEnd;
-  };
-
-  const canGoForward = new Date(year, month + 1, 1).getTime() <= Date.now();
-
-  return (
-    <div
-      className="rounded-lg p-3"
-      style={{
-        background: 'rgba(var(--glass-tint),0.03)',
-        border: '1px solid rgba(var(--glass-tint),0.08)',
-      }}
-    >
-      {/* Header: month nav */}
-      <div className="flex items-center justify-between mb-2">
-        <button
-          type="button"
-          onClick={() => onViewMonthChange(new Date(year, month - 1, 1))}
-          className="w-7 h-7 rounded-md inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
-          aria-label="Önceki ay"
-        >
-          <ChevronLeft size={13} />
-        </button>
-        <span className="text-[12px] font-bold text-[var(--theme-text)] tabular-nums">
-          {TR_MONTHS[month]} {year}
-        </span>
-        <button
-          type="button"
-          onClick={() => onViewMonthChange(new Date(year, month + 1, 1))}
-          disabled={!canGoForward}
-          className="w-7 h-7 rounded-md inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          aria-label="Sonraki ay"
-        >
-          <ChevronRight size={13} />
-        </button>
-      </div>
-
-      {/* Weekday labels */}
-      <div className="grid grid-cols-7 gap-0.5 mb-1">
-        {TR_DAYS.map(d => (
-          <div key={d} className="text-[9px] font-bold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/40 text-center py-0.5">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Days grid */}
-      <div className="grid grid-cols-7 gap-0.5">
-        {cells.map((c, i) => {
-          const inRange = isInRange(c.key);
-          const isStart = c.key === rangeStart;
-          const isEnd = c.key === rangeEnd;
-          const isEndpoint = isStart || isEnd;
-          const isToday = c.key === todayKey;
-          const isFuture = c.key > todayKey;
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => !isFuture && onDayClick(c.key)}
-              disabled={isFuture}
-              className="h-8 rounded-md text-[11px] tabular-nums font-semibold transition-colors"
-              style={
-                isEndpoint && c.inMonth ? {
-                  background: 'var(--theme-accent)',
-                  color: 'var(--theme-text-on-accent, #000)',
-                  boxShadow: '0 1px 6px rgba(var(--theme-accent-rgb),0.30)',
-                } : inRange && c.inMonth ? {
-                  background: 'rgba(var(--theme-accent-rgb),0.14)',
-                  color: 'var(--theme-accent)',
-                } : c.inMonth ? {
-                  color: isToday ? 'var(--theme-accent)' : 'var(--theme-text)',
-                  background: isToday ? 'rgba(var(--theme-accent-rgb),0.06)' : 'transparent',
-                  border: isToday ? '1px solid rgba(var(--theme-accent-rgb),0.20)' : '1px solid transparent',
-                } : {
-                  color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.30)',
-                }
-              }
-            >
-              {c.day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function EmptyLog({ hasAny, hasQuery }: { hasAny: boolean; hasQuery: boolean }) {
   return (
