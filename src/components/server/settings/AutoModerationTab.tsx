@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Save, RotateCcw, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
@@ -61,9 +61,18 @@ const RANGE_LABELS: Record<ModStatRange, string> = { '5m': '5 dk', '1h': '1 saat
 const STATS_REFRESH_MS = 30_000;
 const EMPTY_STATS: ModerationStats = { floodBlocked: 0, profanityBlocked: 0, spamBlocked: 0 };
 
+export interface AutoModActions {
+  onSave: () => void;
+  onReset: () => void;
+}
+
 interface Props {
   serverId: string;
   showToast: (m: string) => void;
+  /** Parent'a dirty/saving state'ini iletir — tab bar sağında action pill göstermek için. */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
+  /** Parent'ın action pill'leri tetiklemesi için handler ref. Her render'da güncellenir. */
+  actionsRef?: React.MutableRefObject<AutoModActions | null>;
 }
 
 const FLOOD_DEFAULT: FloodConfig = { enabled: true, cooldownMs: 3000, limit: 5, windowMs: 5000 };
@@ -84,7 +93,7 @@ const BOUNDS = {
 };
 
 
-export default function AutoModerationTab({ serverId, showToast }: Props) {
+export default function AutoModerationTab({ serverId, showToast, onStateChange, actionsRef }: Props) {
   // Presence: kullanıcıların anlık durumları (statusText) avatar fallback'te kullanılır.
   const { allUsers } = useUser();
   const userStatusMap = useMemo(() => {
@@ -197,6 +206,15 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
     setSpamEnabled(initial.spam.enabled);
     setAutoPunishFlood(initial.autoPunishment?.flood ?? AUTOPUNISH_FLOOD_DEFAULT);
   };
+
+  // Parent'a dirty/saving state'ini ve save/reset handler'larını ilet.
+  // Bu sayede ServerSettings tab bar'ındaki Kaydet/Sıfırla pill'leri dirty-aware olur.
+  useEffect(() => {
+    onStateChange?.({ dirty, saving });
+  }, [dirty, saving, onStateChange]);
+  if (actionsRef) {
+    actionsRef.current = { onSave: handleSave, onReset: handleReset };
+  }
 
   // Refactor: Rules merged card — sadece bir sekme açık
   const [activeRuleTab, setActiveRuleTab] = useState<'flood' | 'profanity' | 'spam'>('flood');
@@ -770,28 +788,8 @@ export default function AutoModerationTab({ serverId, showToast }: Props) {
       </div>
       </div>
 
-      {/* Action bar */}
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <button
-          onClick={handleReset}
-          disabled={!dirty || saving}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-40 disabled:pointer-events-none transition-colors"
-        >
-          <RotateCcw size={12} /> Sıfırla
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!dirty || saving}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
-          style={{
-            background: 'var(--theme-accent)',
-            color: 'var(--theme-text-on-accent, #000)',
-            boxShadow: '0 2px 12px rgba(var(--theme-accent-rgb),0.25)',
-          }}
-        >
-          <Save size={12} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
-      </div>
+      {/* Action bar parent'a (ServerSettings tab bar sağı) taşındı —
+          dirty/saving state parent'a iletilir, user "aşağıda görünmüyor" dedi. */}
 
       {/* Global keyframes + hover rules (saf CSS, library yok) */}
       <style>{`

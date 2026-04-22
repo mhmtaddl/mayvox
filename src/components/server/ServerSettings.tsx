@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, Gavel, ShieldCheck, Save, RotateCcw } from 'lucide-react';
+import type { AutoModActions } from './settings/AutoModerationTab';
 import {
   type Server, type ServerOverview,
   getServerDetails, updateServer, deleteServer, leaveServer,
@@ -72,6 +73,17 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const sameServerCtx = accessContext && accessContext.serverId === serverId ? accessContext : null;
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); }, []);
+
+  // AutoMod tab — dirty/saving state + action handler'ları: butonları tab bar sağında göster.
+  const [automodState, setAutomodState] = useState<{ dirty: boolean; saving: boolean }>({ dirty: false, saving: false });
+  const automodActionsRef = useRef<AutoModActions | null>(null);
+  // Tab AutoMod'dan çıkınca ref'i temizle — stale handler çağrılmasın.
+  useEffect(() => {
+    if (tab !== 'automod') {
+      automodActionsRef.current = null;
+      setAutomodState({ dirty: false, saving: false });
+    }
+  }, [tab]);
 
   const loadServer = useCallback(async () => {
     try { setLoading(true); setServer(await getServerDetails(serverId)); }
@@ -216,7 +228,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
         {/* Restricted modunda tab navigasyonu render edilmez — settings tek kilitli panel olur. */}
         {!server.isBanned && (
-          <div className="flex gap-0.5 px-4 md:px-6 py-2 border-b border-[rgba(var(--glass-tint),0.04)] overflow-x-auto custom-scrollbar"
+          <div className="flex items-center gap-0.5 px-4 md:px-6 py-2 border-b border-[rgba(var(--glass-tint),0.04)] overflow-x-auto custom-scrollbar"
             style={{ background: 'rgba(var(--glass-tint), 0.015)' }}
           >
             {tabs.map(t => {
@@ -244,6 +256,34 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 </button>
               );
             })}
+            {/* Tab-bar sağı: aktif tab'a özgü action pill'leri (şu an sadece Oto-Mod Kaydet/Sıfırla) */}
+            {tab === 'automod' && canKickMembers && (
+              <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => automodActionsRef.current?.onReset()}
+                  disabled={!automodState.dirty || automodState.saving}
+                  title="Değişiklikleri sıfırla"
+                  aria-label="Değişiklikleri sıfırla"
+                  className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-35 disabled:pointer-events-none transition-colors"
+                >
+                  <RotateCcw size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => automodActionsRef.current?.onSave()}
+                  disabled={!automodState.dirty || automodState.saving}
+                  className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-40 disabled:pointer-events-none"
+                  style={{
+                    background: 'var(--theme-accent)',
+                    color: 'var(--theme-text-on-accent, #000)',
+                    boxShadow: automodState.dirty ? '0 2px 10px rgba(var(--theme-accent-rgb),0.28)' : 'none',
+                  }}
+                >
+                  <Save size={12} /> {automodState.saving ? 'Kaydediliyor…' : 'Kaydet'}
+                </button>
+              </div>
+            )}
           </div>
         )}
         {/* Content */}
@@ -270,7 +310,14 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             />
           )}
           {tab === 'moderation' && canKickMembers && <ModerationTab serverId={serverId} showToast={showToast} />}
-          {tab === 'automod' && canKickMembers && <AutoModerationTab serverId={serverId} showToast={showToast} />}
+          {tab === 'automod' && canKickMembers && (
+            <AutoModerationTab
+              serverId={serverId}
+              showToast={showToast}
+              onStateChange={setAutomodState}
+              actionsRef={automodActionsRef}
+            />
+          )}
           {tab === 'audit' && canManageServer && <AuditTab serverId={serverId} />}
           </>)}
         </div>
