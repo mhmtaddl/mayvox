@@ -346,7 +346,10 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
     <div
       className="phmOverlay fixed inset-0 z-[700] flex items-center justify-center px-4"
       style={{
-        background: 'rgba(10,15,25,0.55)',
+        // Arka plan katmanı YOK — uygulamanın geri kalanı blur/dim'lenmesin.
+        // fixed inset-0 yalnızca modal'ı merkezlemek ve click-outside-close için
+        // kullanılır; görsel olarak şeffaf.
+        background: 'transparent',
         backdropFilter: 'none',
         WebkitBackdropFilter: 'none',
       }}
@@ -355,10 +358,12 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
       <div
         className="phmModal relative w-full max-w-[720px] rounded-[22px] overflow-hidden"
         style={{
-          background: 'rgba(255,255,255,0.04)',
+          // Opak tema arkaplan + subtle accent tint — okunabilirlik tam, arka plan görünmez
+          background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.04), transparent 45%), var(--theme-bg, #0a0e18)',
           boxShadow:
-            '0 20px 60px rgba(0,0,0,0.45), ' +
-            'inset 0 1px 0 rgba(255,255,255,0.06)',
+            '0 24px 72px rgba(0,0,0,0.6), ' +
+            'inset 0 1px 0 rgba(255,255,255,0.06), ' +
+            '0 0 0 1px rgba(var(--glass-tint), 0.10)',
         }}
         onMouseDown={e => e.stopPropagation()}
       >

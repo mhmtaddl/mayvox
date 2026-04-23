@@ -280,14 +280,75 @@ export function useAppSettings() {
     setShowLastSeenState(v);
   };
 
-  // ── Otomatik oyun algılama (Electron desktop only, opt-in default KAPALI) ──
+  // ── Otomatik oyun algılama (Electron desktop, default AÇIK) ──
   // Kapalıyken main process polling başlatmaz, presence'a gameActivity gitmez.
-  const [gameActivityEnabled, setGameActivityEnabledState] = useState(() =>
-    localStorage.getItem('gameActivityEnabled') === 'true'
-  );
+  // Default true: ilk açılışta desteklenen oyunlar otomatik algılanır; kullanıcı
+  // isterse ayarlardan kapatır (localStorage explicit 'false' set edilirse korunur).
+  const [gameActivityEnabled, setGameActivityEnabledState] = useState(() => {
+    const v = localStorage.getItem('gameActivityEnabled');
+    return v === null ? true : v === 'true';
+  });
   const setGameActivityEnabled = (v: boolean) => {
     localStorage.setItem('gameActivityEnabled', String(v));
     setGameActivityEnabledState(v);
+  };
+
+  // ── Oyun içi ses overlay (Electron desktop, default AÇIK) ──
+  // Default konum: sol kenar üst-orta hizası (left-top-mid).
+  // Kullanıcı ilk açılışta hemen görebilsin, overlay sola hizalı üst bölgede.
+  const [overlayEnabled, setOverlayEnabledState] = useState(() => {
+    const v = localStorage.getItem('overlayEnabled');
+    return v === null ? true : v === 'true';
+  });
+  const setOverlayEnabled = (v: boolean) => {
+    localStorage.setItem('overlayEnabled', String(v));
+    setOverlayEnabledState(v);
+  };
+  const VALID_POSITIONS = new Set([
+    'top-left', 'top-mid-left', 'top-mid-right', 'top-right',
+    'right-top-mid', 'right-bot-mid',
+    'bottom-right', 'bottom-mid-right', 'bottom-mid-left', 'bottom-left',
+    'left-bot-mid', 'left-top-mid',
+  ]);
+  const [overlayPosition, setOverlayPositionState] = useState<'top-left' | 'top-mid-left' | 'top-mid-right' | 'top-right' | 'right-top-mid' | 'right-bot-mid' | 'bottom-right' | 'bottom-mid-right' | 'bottom-mid-left' | 'bottom-left' | 'left-bot-mid' | 'left-top-mid'>(() => {
+    const v = localStorage.getItem('overlayPosition');
+    if (v && VALID_POSITIONS.has(v)) return v as any;
+    // Legacy 'top-center' → 'top-mid-left' (eski anchor set'inden migration)
+    if (v === 'top-center') return 'top-mid-left';
+    return 'left-top-mid'; // yeni default
+  });
+  const setOverlayPosition = (v: 'top-left' | 'top-mid-left' | 'top-mid-right' | 'top-right' | 'right-top-mid' | 'right-bot-mid' | 'bottom-right' | 'bottom-mid-right' | 'bottom-mid-left' | 'bottom-left' | 'left-bot-mid' | 'left-top-mid') => {
+    localStorage.setItem('overlayPosition', v);
+    setOverlayPositionState(v);
+  };
+  const [overlaySize, setOverlaySizeState] = useState<'small' | 'medium' | 'large'>(() => {
+    const v = localStorage.getItem('overlaySize');
+    return (v === 'small' || v === 'medium' || v === 'large') ? v : 'medium';
+  });
+  const setOverlaySize = (v: 'small' | 'medium' | 'large') => {
+    localStorage.setItem('overlaySize', v);
+    setOverlaySizeState(v);
+  };
+  const [overlayShowOnlySpeaking, setOverlayShowOnlySpeakingState] = useState(() =>
+    localStorage.getItem('overlayShowOnlySpeaking') === 'true'
+  );
+  const setOverlayShowOnlySpeaking = (v: boolean) => {
+    localStorage.setItem('overlayShowOnlySpeaking', String(v));
+    setOverlayShowOnlySpeakingState(v);
+  };
+  const [overlayShowSelf, setOverlayShowSelfState] = useState(() =>
+    localStorage.getItem('overlayShowSelf') !== 'false'
+  );
+  const setOverlayShowSelf = (v: boolean) => {
+    localStorage.setItem('overlayShowSelf', String(v));
+    setOverlayShowSelfState(v);
+  };
+  const [overlayClickThrough, setOverlayClickThroughState] = useState(() =>
+    localStorage.getItem('overlayClickThrough') !== 'false'
+  );
+  const setOverlayClickThrough = (v: boolean) => {
+    localStorage.setItem('overlayClickThrough', String(v));
+    setOverlayClickThroughState(v);
   };
 
   return {
@@ -316,5 +377,11 @@ export function useAppSettings() {
     autoLeaveMinutes, setAutoLeaveMinutes,
     showLastSeen, setShowLastSeenLocal,
     gameActivityEnabled, setGameActivityEnabled,
+    overlayEnabled, setOverlayEnabled,
+    overlayPosition, setOverlayPosition,
+    overlaySize, setOverlaySize,
+    overlayShowOnlySpeaking, setOverlayShowOnlySpeaking,
+    overlayShowSelf, setOverlayShowSelf,
+    overlayClickThrough, setOverlayClickThrough,
   };
 }

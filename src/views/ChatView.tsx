@@ -132,8 +132,18 @@ export default function ChatView() {
       setSettingsInitialTab(undefined);
       if (view === 'settings') setView('chat');
     };
+    // Sunucu ayarlarını kapat ama view'e dokunma — self panel'dan "Hesap Ayarları"
+    // tıklandığında ServerSettings overlay'i temizlenmeli, SettingsView açılmalı.
+    const onCloseServerSettings = () => {
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+    };
     window.addEventListener('mayvox:goto-chat', onGoto);
-    return () => window.removeEventListener('mayvox:goto-chat', onGoto);
+    window.addEventListener('mayvox:close-server-settings', onCloseServerSettings);
+    return () => {
+      window.removeEventListener('mayvox:goto-chat', onGoto);
+      window.removeEventListener('mayvox:close-server-settings', onCloseServerSettings);
+    };
   }, [view, setView]);
 
   // ── Mouse geri tuşu ile ayarlardan / discover'dan çık ──

@@ -403,7 +403,15 @@ export default function DesktopDock({
                   }
                   isInRoom={!!activeChannel}
                   onStatusChange={(s) => { setSelfStatus(s); setSelfPanelOpen(false); }}
-                  onOpenSettings={() => { setSettingsTarget('account'); setView('settings'); setSelfPanelOpen(false); }}
+                  onOpenSettings={() => {
+                    // Sunucu ayarları açıksa onu kapat — yoksa ServerSettings overlay'i
+                    // SettingsView'ı maskeler. ChatView 'mayvox:close-server-settings'
+                    // event'ini dinler ve settingsServerId'yi null'a çeker.
+                    try { window.dispatchEvent(new CustomEvent('mayvox:close-server-settings')); } catch {}
+                    setSettingsTarget('account');
+                    setView('settings');
+                    setSelfPanelOpen(false);
+                  }}
                   onClose={() => setSelfPanelOpen(false)}
                 />
               )}

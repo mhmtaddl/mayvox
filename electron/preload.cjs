@@ -62,6 +62,15 @@ contextBridge.exposeInMainWorld('electronGame', {
   removeAllListeners: () => ipcRenderer.removeAllListeners('game:activity-changed'),
 });
 
+// ── Voice Overlay host bridge — ana renderer → main (settings + snapshot) ──
+// update() snapshot'ı throttled renderer tarafında gönderir; ham LiveKit
+// state / token / audio buradan GEÇMEZ. applySettings() overlay pencere
+// yaşam döngüsü ve bounds için.
+contextBridge.exposeInMainWorld('electronOverlayHost', {
+  applySettings: (settings) => ipcRenderer.send('overlay:apply-settings', settings || {}),
+  update: (snapshot) => ipcRenderer.send('overlay:update', snapshot || {}),
+});
+
 // Harici link açıcı — sadece http/https, main tarafında çift protokol guard'ı var.
 contextBridge.exposeInMainWorld('electronShell', {
   openExternal: (url) => {

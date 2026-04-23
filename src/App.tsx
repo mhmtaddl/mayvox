@@ -96,6 +96,7 @@ import { AppErrorBoundary } from './components/ErrorBoundary';
 import { activatePresence } from './lib/presenceLifecycle';
 import { useAppSettings } from './features/app/hooks/useAppSettings';
 import { useGameActivity } from './features/game-activity/useGameActivity';
+import { useOverlaySync } from './features/overlay/useOverlaySync';
 import { useAdminPanel } from './features/app/hooks/useAdminPanel';
 import { useChannelActions } from './features/app/hooks/useChannelActions';
 import {
@@ -1185,6 +1186,33 @@ export default function App() {
     });
   }, [isPttPressed, isMuted, isDeafened, currentUser.isVoiceBanned, activeChannel, currentUser.id]);
 
+  // ── Ses odası overlay — ayrı Electron BrowserWindow'a sanitize snapshot ───
+  // Electron dışında no-op; toggle kapalıyken IPC durur.
+  useOverlaySync({
+    settings: {
+      enabled: settings.overlayEnabled,
+      position: settings.overlayPosition,
+      size: settings.overlaySize,
+      showOnlySpeaking: settings.overlayShowOnlySpeaking,
+      showSelf: settings.overlayShowSelf,
+      clickThrough: settings.overlayClickThrough,
+    },
+    currentUserId: currentUser.id,
+    activeChannelId: activeChannel,
+    activeChannelName: currentChannel?.name ?? null,
+    roomMembers: channelMembers,
+    selfSpeaking: isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener,
+    selfMuted: isMuted,
+    selfDeafened: isDeafened,
+    selfUser: {
+      id: currentUser.id,
+      firstName: currentUser.firstName,
+      lastName: currentUser.lastName,
+      name: currentUser.name,
+      avatar: currentUser.avatar,
+    },
+  });
+
   // ── Ses bildirimleri ──────────────────────────────────────────────────────
   const soundMountedRef = useRef(false);
   useEffect(() => {
@@ -2111,6 +2139,19 @@ export default function App() {
     // Oyun algılama toggle — localStorage-only, DB sync yok (privacy: local pref).
     gameActivityEnabled: settings.gameActivityEnabled,
     setGameActivityEnabled: settings.setGameActivityEnabled,
+    // Ses overlay — localStorage-only local preferences
+    overlayEnabled: settings.overlayEnabled,
+    setOverlayEnabled: settings.setOverlayEnabled,
+    overlayPosition: settings.overlayPosition,
+    setOverlayPosition: settings.setOverlayPosition,
+    overlaySize: settings.overlaySize,
+    setOverlaySize: settings.setOverlaySize,
+    overlayShowOnlySpeaking: settings.overlayShowOnlySpeaking,
+    setOverlayShowOnlySpeaking: settings.setOverlayShowOnlySpeaking,
+    overlayShowSelf: settings.overlayShowSelf,
+    setOverlayShowSelf: settings.setOverlayShowSelf,
+    overlayClickThrough: settings.overlayClickThrough,
+    setOverlayClickThrough: settings.setOverlayClickThrough,
   };
 
   const appStateValue: AppStateContextType = {

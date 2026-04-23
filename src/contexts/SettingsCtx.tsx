@@ -70,6 +70,19 @@ export interface SettingsContextType {
   /** Otomatik oyun algılama — Electron desktop only, default kapalı. */
   gameActivityEnabled: boolean;
   setGameActivityEnabled: (v: boolean) => void;
+  /** Oyun içi ses overlay — Electron desktop only, default kapalı. */
+  overlayEnabled: boolean;
+  setOverlayEnabled: (v: boolean) => void;
+  overlayPosition: 'top-left' | 'top-mid-left' | 'top-mid-right' | 'top-right' | 'right-top-mid' | 'right-bot-mid' | 'bottom-right' | 'bottom-mid-right' | 'bottom-mid-left' | 'bottom-left' | 'left-bot-mid' | 'left-top-mid';
+  setOverlayPosition: (v: 'top-left' | 'top-mid-left' | 'top-mid-right' | 'top-right' | 'right-top-mid' | 'right-bot-mid' | 'bottom-right' | 'bottom-mid-right' | 'bottom-mid-left' | 'bottom-left' | 'left-bot-mid' | 'left-top-mid') => void;
+  overlaySize: 'small' | 'medium' | 'large';
+  setOverlaySize: (v: 'small' | 'medium' | 'large') => void;
+  overlayShowOnlySpeaking: boolean;
+  setOverlayShowOnlySpeaking: (v: boolean) => void;
+  overlayShowSelf: boolean;
+  setOverlayShowSelf: (v: boolean) => void;
+  overlayClickThrough: boolean;
+  setOverlayClickThrough: (v: boolean) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

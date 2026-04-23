@@ -37,5 +37,16 @@ export default defineConfig(() => {
     optimizeDeps: {
       include: ['exceljs'],
     },
+
+    // Multi-entry: ana app + ses odası overlay (Electron desktop)
+    // Overlay ayrı BrowserWindow'da yüklenir, kendi minimal React bundle'ı var.
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          overlay: path.resolve(__dirname, 'overlay.html'),
+        },
+      },
+    },
   };
 });

@@ -3,6 +3,7 @@ const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
 const { setupGameDetection, getDetector } = require("./game-detection.cjs");
+const { setupOverlayWindow, getOverlayManager } = require("./overlay-window.cjs");
 
 // ── Global PTT Hook (uiohook-napi) ────────────────────────────────────────────
 let uIOhook = null;
@@ -409,6 +410,10 @@ function createMainWindow() {
   win.on("blur", sendWinState);
   win.webContents.on("did-finish-load", sendWinState);
 
+  // Ana pencere minimize/restore → overlay visibility gating
+  win.on("minimize", () => { try { getOverlayManager()?.setMainWindowMinimized(true); } catch {} });
+  win.on("restore",  () => { try { getOverlayManager()?.setMainWindowMinimized(false); } catch {} });
+
   const saveState = () => {
     if (win.isMaximized() || win.isMinimized()) return;
     const { width, height } = win.getBounds();
@@ -616,6 +621,26 @@ ipcMain.on("game:set-enabled", (_event, enabled) => {
     if (det) det.setEnabled(!!enabled);
   } catch (err) {
     logger.warn?.("[game] set-enabled hatası: " + (err?.message || err));
+  }
+});
+
+// ── Ses Overlay — renderer IPC ──────────────────────────────────────────────
+// applySettings: toggle / position / size / clickThrough değişimlerinde.
+// update: participant snapshot'ı (throttled renderer tarafında).
+ipcMain.on("overlay:apply-settings", (_event, settings) => {
+  try {
+    const mgr = getOverlayManager();
+    if (mgr && settings && typeof settings === 'object') mgr.applySettings(settings);
+  } catch (err) {
+    logger.warn?.("[overlay] apply-settings hatası: " + (err?.message || err));
+  }
+});
+ipcMain.on("overlay:update", (_event, snapshot) => {
+  try {
+    const mgr = getOverlayManager();
+    if (mgr && snapshot && typeof snapshot === 'object') mgr.sendSnapshot(snapshot);
+  } catch (err) {
+    logger.warn?.("[overlay] update hatası: " + (err?.message || err));
   }
 });
 
@@ -849,6 +874,8 @@ app.whenReady().then(() => {
   setupTray(mainWin);
   // Oyun algılama — opt-in; renderer enable komutu gelene kadar polling durur.
   setupGameDetection(mainWin, logger);
+  // Ses overlay — opt-in; settings update gelmediği sürece window oluşturulmaz.
+  setupOverlayWindow({ isDev, logger });
 
   // İkinci instance tetiklenirse
   app.on("second-instance", (_event, argv) => {
@@ -901,6 +928,7 @@ app.on("before-quit", () => {
     uIOhook = null;
   }
   if (tray) { try { tray.destroy(); } catch {} tray = null; }
+  try { getOverlayManager()?.dispose(); } catch {}
 });
 
 app.on("will-quit", () => {

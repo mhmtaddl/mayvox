@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2 } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -88,6 +88,245 @@ function LastSeenCard() {
         </p>
       </div>
       <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
+    </div>
+  );
+}
+
+// ── Görsel konum seçici — ekran mockup'ı + 12 anchor noktası ──
+// 4 köşe + her kenarda 2 ara nokta = 12 unique anchor. Fraction-based konum.
+type OverlayAnchor =
+  | 'top-left' | 'top-mid-left' | 'top-mid-right' | 'top-right'
+  | 'right-top-mid' | 'right-bot-mid'
+  | 'bottom-right' | 'bottom-mid-right' | 'bottom-mid-left' | 'bottom-left'
+  | 'left-bot-mid' | 'left-top-mid';
+
+const ANCHOR_POINTS: Array<{ v: OverlayAnchor; fx: number; fy: number; label: string }> = [
+  { v: 'top-left',         fx: 0,    fy: 0,    label: 'Sol üst' },
+  { v: 'top-mid-left',     fx: 0.33, fy: 0,    label: 'Üst (sol orta)' },
+  { v: 'top-mid-right',    fx: 0.67, fy: 0,    label: 'Üst (sağ orta)' },
+  { v: 'top-right',        fx: 1,    fy: 0,    label: 'Sağ üst' },
+  { v: 'right-top-mid',    fx: 1,    fy: 0.33, label: 'Sağ (üst orta)' },
+  { v: 'right-bot-mid',    fx: 1,    fy: 0.67, label: 'Sağ (alt orta)' },
+  { v: 'bottom-right',     fx: 1,    fy: 1,    label: 'Sağ alt' },
+  { v: 'bottom-mid-right', fx: 0.67, fy: 1,    label: 'Alt (sağ orta)' },
+  { v: 'bottom-mid-left',  fx: 0.33, fy: 1,    label: 'Alt (sol orta)' },
+  { v: 'bottom-left',      fx: 0,    fy: 1,    label: 'Sol alt' },
+  { v: 'left-bot-mid',     fx: 0,    fy: 0.67, label: 'Sol (alt orta)' },
+  { v: 'left-top-mid',     fx: 0,    fy: 0.33, label: 'Sol (üst orta)' },
+];
+
+function OverlayPositionPicker({ value, onChange, disabled }: {
+  value: OverlayAnchor;
+  onChange: (v: OverlayAnchor) => void;
+  disabled?: boolean;
+}) {
+  // Sadece dikey büyüme — genişlik sabit
+  const W = 190, H = 160;
+  const pad = 14;
+  const inner = { w: W - pad * 2, h: H - pad * 2 };
+  // Hit area — görsel pill'den daha büyük (Fitts yasası)
+  const HIT_W = 26, HIT_H = 18;
+  return (
+    <div
+      className="relative rounded-xl shrink-0"
+      style={{
+        width: W,
+        height: H,
+        background: 'rgba(0, 0, 0, 0.16)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.07)',
+        opacity: disabled ? 0.45 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+        transition: 'opacity 180ms ease-out',
+      }}
+      aria-label="Ekran konum seçici"
+    >
+      {ANCHOR_POINTS.map(p => {
+        const active = value === p.v;
+        const x = pad + p.fx * inner.w;
+        const y = pad + p.fy * inner.h;
+        // Button wrapper'ı anchor noktasının etrafında HIT_W × HIT_H tampon alanda yayılır;
+        // fx/fy oranına göre button'u kendi referans noktasına kaydırırız.
+        const tx = `${-p.fx * 100}%`;
+        const ty = `${-p.fy * 100}%`;
+        return (
+          <button
+            key={p.v}
+            onClick={() => onChange(p.v)}
+            title={p.label}
+            style={{
+              position: 'absolute',
+              left: x,
+              top: y,
+              width: HIT_W,
+              height: HIT_H,
+              transform: `translate(${tx}, ${ty})`,
+              // Görsel pill button içinde ortalanır (ama hit area tam button'un kendisi)
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 0,
+              padding: 0,
+              cursor: 'pointer',
+              zIndex: active ? 3 : 2,
+            }}
+            aria-label={p.label}
+            aria-pressed={active}
+          >
+            {/* Görsel indicator — pill (rounded rectangle) */}
+            <span
+              aria-hidden="true"
+              className="anchor-pill"
+              style={{
+                display: 'block',
+                width: active ? 20 : 14,
+                height: active ? 12 : 8,
+                borderRadius: 4,
+                background: active
+                  ? 'rgba(var(--theme-accent-rgb), 0.22)'
+                  : 'rgba(var(--glass-tint), 0.26)',
+                boxShadow: active
+                  ? '0 0 0 1px rgba(var(--theme-accent-rgb), 0.85), 0 0 8px rgba(var(--theme-accent-rgb), 0.35)'
+                  : 'inset 0 0 0 1px rgba(var(--glass-tint), 0.16)',
+                opacity: active ? 1 : 0.75,
+                transition: 'all 140ms cubic-bezier(0.22, 1, 0.36, 1)',
+              }}
+            />
+            <style>{`
+              button:hover > .anchor-pill { transform: scale(1.08); opacity: 1; }
+            `}</style>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// İç-kart "Segmented control" (iOS tarzı)
+function OverlaySizeSegmented({ value, onChange, disabled }: {
+  value: 'small' | 'medium' | 'large';
+  onChange: (v: 'small' | 'medium' | 'large') => void;
+  disabled?: boolean;
+}) {
+  const opts: Array<{ v: 'small' | 'medium' | 'large'; label: string }> = [
+    { v: 'small',  label: 'Küçük' },
+    { v: 'medium', label: 'Orta' },
+    { v: 'large',  label: 'Büyük' },
+  ];
+  return (
+    <div
+      className="inline-flex p-[2px] rounded-lg w-full"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.06)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.05)',
+        opacity: disabled ? 0.5 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+      }}
+    >
+      {opts.map(o => {
+        const active = value === o.v;
+        return (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            className="flex-1 text-[11px] font-medium h-8 rounded-[6px]"
+            style={{
+              background: active ? 'rgba(var(--theme-accent-rgb), 0.16)' : 'transparent',
+              color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
+              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.22)' : 'none',
+              transition: 'all 140ms ease-out',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// İnce toggle satırı — label + switch
+function OverlayToggleRow({ label, checked, onChange, disabled }: {
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className="flex items-center justify-between"
+      style={{
+        height: 34,
+        opacity: disabled ? 0.55 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+      }}
+    >
+      <span className="text-[11px] text-[var(--theme-text)]/85 select-none">{label}</span>
+      <Toggle checked={checked} onChange={onChange} />
+    </label>
+  );
+}
+
+// Oyun içi ses overlay — Electron desktop only — 2 kolon premium layout
+function VoiceOverlayCard() {
+  const {
+    overlayEnabled, setOverlayEnabled,
+    overlayPosition, setOverlayPosition,
+    overlaySize, setOverlaySize,
+    overlayShowOnlySpeaking, setOverlayShowOnlySpeaking,
+    overlayShowSelf, setOverlayShowSelf,
+    overlayClickThrough, setOverlayClickThrough,
+  } = useSettings();
+  const off = !overlayEnabled;
+  return (
+    <div className="surface-card rounded-xl px-4 py-4">
+      {/* Header — tek satır, separator yok */}
+      <div className="flex items-center gap-3">
+        <div className="w-7 h-7 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+          <Layers size={13} className="text-[var(--theme-accent)]/80" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-medium text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
+          <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mt-[2px] leading-snug truncate">
+            Ses odasındaki kullanıcıları oyun üstünde gösterir.
+          </p>
+        </div>
+        <Toggle checked={overlayEnabled} onChange={() => setOverlayEnabled(!overlayEnabled)} />
+      </div>
+
+      {/* Body — 2 kolon: preview (sol) + kontroller (sağ) */}
+      <div
+        className="mt-4 flex gap-4"
+        style={{ opacity: off ? 0.5 : 1, transition: 'opacity 180ms ease-out' }}
+      >
+        {/* Sol: preview */}
+        <OverlayPositionPicker value={overlayPosition} onChange={setOverlayPosition} disabled={off} />
+
+        {/* Sağ: kontroller — dikey stack */}
+        <div className="flex-1 flex flex-col gap-2 min-w-0">
+          <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} />
+          <div className="flex flex-col gap-0.5 mt-0.5">
+            <OverlayToggleRow
+              label="Sadece konuşanları göster"
+              checked={overlayShowOnlySpeaking}
+              onChange={() => !off && setOverlayShowOnlySpeaking(!overlayShowOnlySpeaking)}
+              disabled={off}
+            />
+            <OverlayToggleRow
+              label="Kendimi göster"
+              checked={overlayShowSelf}
+              onChange={() => !off && setOverlayShowSelf(!overlayShowSelf)}
+              disabled={off}
+            />
+            <OverlayToggleRow
+              label="Tıklanamaz overlay"
+              checked={overlayClickThrough}
+              onChange={() => !off && setOverlayClickThrough(!overlayClickThrough)}
+              disabled={off}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -219,6 +458,12 @@ export default function SettingsView() {
                       <VoiceModeSection />
                     </section>
                   )}
+                  {isElectron() && (
+                    <section>
+                      <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                      <VoiceOverlayCard />
+                    </section>
+                  )}
                 </div>
               </div>
 
@@ -240,6 +485,12 @@ export default function SettingsView() {
                   <section>
                     <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
                     <VoiceModeSection />
+                  </section>
+                )}
+                {isElectron() && (
+                  <section>
+                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                    <VoiceOverlayCard />
                   </section>
                 )}
               </div>
