@@ -1,5 +1,5 @@
-import React, { useState, memo } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect, memo } from 'react';
+import { ChevronDown, ChevronUp, Crown } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import type { InsightsUser } from '../../../lib/serverService';
 
@@ -23,16 +23,24 @@ const COLLAPSED_LIMIT = 5;
 
 function TopUsersCardInner({ users }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const maxSec = users.reduce((m, u) => Math.max(m, u.totalSec), 0);
   const visibleUsers = expanded ? users : users.slice(0, COLLAPSED_LIMIT);
   const canExpand = users.length > COLLAPSED_LIMIT;
 
+  // Bar fill animation mount'ta — 0% → gerçek değer
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
   return (
-    <div className="relative overflow-hidden rounded-[18px] p-5"
+    <div className="relative overflow-hidden rounded-[18px] p-5 flex flex-col"
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.06)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 8px 24px rgba(0,0,0,0.12)',
+        minHeight: '100%',
       }}
     >
       <div className="mb-4">
@@ -52,14 +60,15 @@ function TopUsersCardInner({ users }: Props) {
           </div>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {visibleUsers.map((u, idx) => {
             const pct = maxSec > 0 ? (u.totalSec / maxSec) * 100 : 0;
             const displayName = u.displayName || 'Bilinmeyen';
+            const isFirst = idx === 0;
             return (
               <div
                 key={u.userId}
-                className="flex items-center gap-3 px-2 py-1.5 -mx-2 rounded-lg user-row"
+                className="flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg user-row"
                 style={{
                   transition: 'transform 180ms ease-out, background 180ms ease-out, box-shadow 180ms ease-out',
                   willChange: 'transform',
@@ -75,41 +84,64 @@ function TopUsersCardInner({ users }: Props) {
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                {/* Rank */}
-                <span className="w-5 text-[10.5px] font-bold tabular-nums text-[var(--theme-secondary-text)]/45 shrink-0 text-right">
-                  {idx + 1}
+                {/* Rank — #1 için Crown, diğerleri sayı */}
+                <span className="w-5 shrink-0 text-right flex items-center justify-end">
+                  {isFirst ? (
+                    <Crown size={11} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
+                  ) : (
+                    <span className="text-[10.5px] font-bold tabular-nums text-[var(--theme-secondary-text)]/45">
+                      {idx + 1}
+                    </span>
+                  )}
                 </span>
 
-                {/* Avatar — 8→10 (+8px) */}
-                <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}
+                {/* Avatar — #1 için halka glow */}
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0"
+                  style={{
+                    background: 'rgba(var(--glass-tint), 0.06)',
+                    border: isFirst
+                      ? '1px solid rgba(var(--theme-accent-rgb), 0.35)'
+                      : '1px solid rgba(var(--glass-tint), 0.10)',
+                    boxShadow: isFirst ? '0 0 12px rgba(var(--theme-accent-rgb), 0.22)' : 'none',
+                  }}
                 >
                   <AvatarContent avatar={u.avatarUrl} statusText="Çevrimdışı" name={displayName} alt={displayName} />
                 </div>
 
-                {/* Name + progress */}
+                {/* Name + bar with overlay duration */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[12px] font-medium text-[var(--theme-text)]/90 truncate">{displayName}</span>
-                    <span className="text-[10.5px] font-semibold tabular-nums text-[var(--theme-text)]/75 shrink-0">
-                      {formatDuration(u.totalSec)}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className={`text-[12px] truncate tracking-tight ${isFirst ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/90'}`}>
+                      {displayName}
+                    </span>
+                    <span className="text-[9.5px] text-[var(--theme-secondary-text)]/55 tabular-nums shrink-0">
+                      {u.sessionCount} oturum · ~{u.avgSessionMin} dk
                     </span>
                   </div>
-                  {/* Bar — 3px → 5px, soft blue-cyan gradient */}
-                  <div className="relative h-[5px] rounded-full overflow-hidden"
+                  {/* Bar + sağ overlay duration (glyph) */}
+                  <div className="relative h-[10px] rounded-full overflow-hidden"
                     style={{ background: 'rgba(var(--glass-tint), 0.05)' }}
                   >
                     <div className="absolute inset-y-0 left-0 rounded-full"
                       style={{
-                        width: `${pct}%`,
-                        background: 'linear-gradient(90deg, rgba(130, 180, 230, 0.55), rgba(var(--theme-accent-rgb), 0.92))',
-                        transition: 'width 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+                        width: mounted ? `${pct}%` : '0%',
+                        background: isFirst
+                          ? 'linear-gradient(90deg, rgba(140, 200, 250, 0.65), rgba(var(--theme-accent-rgb), 1))'
+                          : 'linear-gradient(90deg, rgba(130, 180, 230, 0.50), rgba(var(--theme-accent-rgb), 0.85))',
+                        transition: 'width 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+                        boxShadow: isFirst ? 'inset 0 0 6px rgba(var(--theme-accent-rgb), 0.22)' : 'none',
                       }}
                     />
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-[9.5px] text-[var(--theme-secondary-text)]/55 tabular-nums">
-                      {u.sessionCount} oturum · ~{u.avgSessionMin} dk/oturum
+                    {/* Duration overlay — bar içinde sağ, bar rengine göre contrast */}
+                    <span
+                      className="absolute inset-y-0 right-2 flex items-center text-[9.5px] font-bold tabular-nums"
+                      style={{
+                        color: 'rgba(255,255,255,0.95)',
+                        textShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {formatDuration(u.totalSec)}
                     </span>
                   </div>
                 </div>

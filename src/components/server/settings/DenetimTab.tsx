@@ -1168,7 +1168,7 @@ function SafeTinyAvatar({ src, statusPng, alt }: { src: string | null; statusPng
   const finalSrc = useCustom ? src! : statusPng;
   return (
     <div
-      className="w-6 h-6 rounded-full overflow-hidden shrink-0"
+      className="w-6 h-6 rounded-lg overflow-hidden shrink-0"
       style={{
         background: 'rgba(var(--glass-tint),0.06)',
         border: '1px solid rgba(var(--glass-tint),0.10)',

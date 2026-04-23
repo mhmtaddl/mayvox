@@ -952,7 +952,7 @@ function SafeAvatar({
   if (variant === 'chip') {
     return (
       <div
-        className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+        className="w-6 h-6 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
         style={{
           background: 'rgba(var(--glass-tint),0.08)',
           border: '1px solid rgba(var(--glass-tint),0.12)',

@@ -623,6 +623,8 @@ export default function ChatView() {
   // activeChannel korunur (voice kesilmez). Return sonradan aynı odaya döner.
   const handleGoHome = useCallback(() => {
     if (view === 'settings') setView('chat');
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
     if (showDiscover) setShowDiscover(false);
     if (activeChannel) setIsServerHomeView(true);
     // activeChannel yoksa zaten natural server_home — ek aksiyon yok
@@ -633,6 +635,8 @@ export default function ChatView() {
   const handleReturnToRoom = useCallback(() => {
     if (!activeChannel) return;
     if (view === 'settings') setView('chat');
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
     if (showDiscover) setShowDiscover(false);
     setIsServerHomeView(false);
   }, [activeChannel, view, setView, showDiscover]);
