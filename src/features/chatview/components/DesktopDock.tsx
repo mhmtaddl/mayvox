@@ -18,6 +18,7 @@ import {
   Plus,
   X,
   Users,
+  Gamepad2,
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
 import InactivityCountdownBanner from './InactivityCountdownBanner';
@@ -379,9 +380,15 @@ export default function DesktopDock({
                   </div>
                 );
               })()}
-              <div className="flex flex-col leading-tight min-w-0 max-w-[120px] text-left">
+              <div className="flex flex-col leading-tight min-w-0 max-w-[140px] text-left">
                 <span className="text-[11px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
                 <span className={`text-[9px] font-medium ${statusColorClass} truncate`}>{effStatus}</span>
+                {currentUser.gameActivity && (
+                  <span className="flex items-center gap-0.5 text-[9px] font-medium text-[var(--theme-accent)]/75 truncate mt-[1px]">
+                    <Gamepad2 size={8} strokeWidth={2.2} className="shrink-0" />
+                    <span className="truncate">{currentUser.gameActivity}</span>
+                  </span>
+                )}
               </div>
             </button>
             <AnimatePresence>

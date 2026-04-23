@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
-import { isCapacitor, isMobile } from '../lib/platform';
+import { isCapacitor, isMobile, isElectron } from '../lib/platform';
 import { Toggle } from '../components/settings/shared';
+import { isGameActivityAvailable } from '../features/game-activity/useGameActivity';
 
 // ── Components ──
 import AccountSection from '../components/settings/sections/AccountSection';
@@ -91,6 +92,25 @@ function LastSeenCard() {
   );
 }
 
+// Otomatik oyun algılama — sadece Electron desktop'ta görünür (opt-in)
+function GameActivityCard() {
+  const { gameActivityEnabled, setGameActivityEnabled } = useSettings();
+  return (
+    <div className="surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
+      <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+        <Gamepad2 size={14} className="text-[var(--theme-accent)]/80" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Otomatik Oyun Algılama</p>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+          Açık oyunları algılayıp durum olarak gösterebilir. Sadece desteklenen oyunlar için; veriler cihazında kalır.
+        </p>
+      </div>
+      <Toggle checked={gameActivityEnabled} onChange={() => setGameActivityEnabled(!gameActivityEnabled)} />
+    </div>
+  );
+}
+
 export default function SettingsView() {
   const { currentUser } = useUser();
   const { settingsTarget, setSettingsTarget } = useUI();
@@ -161,7 +181,10 @@ export default function SettingsView() {
               </section>
               <section>
                 <DomainTitle icon={<Eye size={11} strokeWidth={2.2} />} title="Gizlilik" />
-                <LastSeenCard />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <LastSeenCard />
+                  {isElectron() && isGameActivityAvailable() && <GameActivityCard />}
+                </div>
               </section>
               {showPermissions && (
                 <section>

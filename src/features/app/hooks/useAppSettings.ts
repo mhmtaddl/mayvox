@@ -280,6 +280,16 @@ export function useAppSettings() {
     setShowLastSeenState(v);
   };
 
+  // ── Otomatik oyun algılama (Electron desktop only, opt-in default KAPALI) ──
+  // Kapalıyken main process polling başlatmaz, presence'a gameActivity gitmez.
+  const [gameActivityEnabled, setGameActivityEnabledState] = useState(() =>
+    localStorage.getItem('gameActivityEnabled') === 'true'
+  );
+  const setGameActivityEnabled = (v: boolean) => {
+    localStorage.setItem('gameActivityEnabled', String(v));
+    setGameActivityEnabledState(v);
+  };
+
   return {
     appearanceMode, setAppearanceMode,
     themePackId, setThemePackId,
@@ -305,5 +315,6 @@ export function useAppSettings() {
     autoLeaveEnabled, setAutoLeaveEnabled,
     autoLeaveMinutes, setAutoLeaveMinutes,
     showLastSeen, setShowLastSeenLocal,
+    gameActivityEnabled, setGameActivityEnabled,
   };
 }

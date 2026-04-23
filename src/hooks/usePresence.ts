@@ -180,7 +180,7 @@ export function usePresence({
     presenceChannelRef.current = channel;
 
     const applyPresenceState = () => {
-      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number; autoStatus?: string; serverId?: string; statusText?: string }>();
+      const state = channel.presenceState<{ userId: string; appVersion?: string; selfMuted?: boolean; selfDeafened?: boolean; currentRoom?: string; userName?: string; platform?: string; onlineSince?: number; autoStatus?: string; serverId?: string; statusText?: string; gameActivity?: string }>();
       const presenceData = Object.values(state).flatMap(s => s);
       const onlineIds = new Set(presenceData.map(p => p.userId));
       const versionMap = new Map(
@@ -226,6 +226,11 @@ export function usePresence({
         presenceData.filter(p => p.serverId).map(p => [p.userId, p.serverId!]),
       );
 
+      // Oyun aktivitesi — opt-in, sadece whitelist eşleşmesi olan kullanıcılarda dolu
+      const gameActivityMap = new Map(
+        presenceData.filter(p => p.gameActivity).map(p => [p.userId, p.gameActivity!]),
+      );
+
       setAllUsers(prev =>
         prev.map(u => {
           const audio = audioMap.get(u.id);
@@ -240,6 +245,9 @@ export function usePresence({
             appVersion: versionMap.get(u.id) ?? knownVersionsRef.current.get(u.id) ?? u.appVersion,
             platform: platformMap.get(u.id) ?? u.platform,
             serverId: serverIdMap.get(u.id) ?? u.serverId,
+            gameActivity: u.id === user.id
+              ? u.gameActivity // self: App.tsx state authoritative
+              : (gameActivityMap.get(u.id) ?? undefined), // others: presence authoritative, yoksa clear
             statusText: (() => {
               if (u.id === user.id) return u.statusText;
               // willBeOnline false ise presence'ta yok — status text korunur (backend

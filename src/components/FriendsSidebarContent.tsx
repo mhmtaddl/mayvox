@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
-  UserPlus, Star, MessageSquare, PhoneCall, Server as ServerIcon,
+  UserPlus, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -187,6 +187,14 @@ export default function FriendsSidebarContent({
                   }
                   return raw;
                 })()}
+              </span>
+            </div>
+          )}
+          {user.gameActivity && (
+            <div className="flex items-center gap-1 mt-0.5 min-w-0">
+              <Gamepad2 size={9} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.2} />
+              <span className="text-[9.5px] font-medium truncate text-[var(--theme-text)]/75">
+                {user.gameActivity} oynuyor
               </span>
             </div>
           )}

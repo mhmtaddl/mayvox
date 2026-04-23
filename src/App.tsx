@@ -95,6 +95,7 @@ import { FavoriteFriendsProvider } from './contexts/FavoriteFriendsContext';
 import { AppErrorBoundary } from './components/ErrorBoundary';
 import { activatePresence } from './lib/presenceLifecycle';
 import { useAppSettings } from './features/app/hooks/useAppSettings';
+import { useGameActivity } from './features/game-activity/useGameActivity';
 import { useAdminPanel } from './features/app/hooks/useAdminPanel';
 import { useChannelActions } from './features/app/hooks/useChannelActions';
 import {
@@ -262,6 +263,10 @@ export default function App() {
     }
   };
 
+  // Oyun algılama hook'u (IPC dinleyici) — currentUser declaration'ından ÖNCE
+  // çağrılmalı ki hook sırası sabit kalsın; reflect effect aşağıda.
+  const detectedGame = useGameActivity(settings.gameActivityEnabled);
+
   // avatarBorderColor değişimini izle → currentUser + allUsers + broadcast sync
   const prevFrameColorRef = useRef(settings.avatarBorderColor);
   useEffect(() => {
@@ -277,6 +282,19 @@ export default function App() {
       payload: { userId: currentUser.id, updates: { avatarBorderColor: color } },
     });
   }, [settings.avatarBorderColor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Oyun algılama — detected game değişince self user state'e yansıt ───────
+  // Toggle kapalıyken detectedGame null → gameActivity undefined → presence'ta
+  // alan bile gitmez (backward-compat). Deps avatarBorderColor effect pattern'iyle
+  // uyumlu — eslint-disable ile minimal deps.
+  useEffect(() => {
+    if (!currentUser.id) return;
+    const next = detectedGame ?? undefined;
+    setCurrentUser(prev => prev.gameActivity === next ? prev : { ...prev, gameActivity: next });
+    setAllUsers(prev => prev.map(u => u.id === currentUser.id
+      ? (u.gameActivity === next ? u : { ...u, gameActivity: next })
+      : u));
+  }, [detectedGame]); // eslint-disable-line react-hooks/exhaustive-deps
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -1892,8 +1910,11 @@ export default function App() {
       platform: platformRef.current,
       // Manuel statusText presence'ta taşınır (Çevrimdışı/Rahatsız Etmeyin/AFK).
       statusText: currentUser.statusText || 'Online',
+      // Otomatik oyun algılama — yalnız toggle açıksa + whitelist eşleşmesi varsa.
+      // Kapalıyken undefined → presence payload'ta alan gitmez (backward-compat).
+      gameActivity: settings.gameActivityEnabled ? (currentUser.gameActivity || undefined) : undefined,
     });
-  }, [currentUser.id, currentUser.name, currentUser.statusText, appVersion, isMuted, isDeafened, activeChannel, activeServerId, presenceChannelRef, onlineSinceRef, platformRef]);
+  }, [currentUser.id, currentUser.name, currentUser.statusText, currentUser.gameActivity, appVersion, isMuted, isDeafened, activeChannel, activeServerId, settings.gameActivityEnabled, presenceChannelRef, onlineSinceRef, platformRef]);
 
   const trackDebounceRef = useRef<number | null>(null);
   useEffect(() => {
@@ -2087,6 +2108,9 @@ export default function App() {
     // showLastSeen'in DB sync wrapper'ı — hook'taki setShowLastSeenLocal yerine
     showLastSeen: settings.showLastSeen,
     setShowLastSeen,
+    // Oyun algılama toggle — localStorage-only, DB sync yok (privacy: local pref).
+    gameActivityEnabled: settings.gameActivityEnabled,
+    setGameActivityEnabled: settings.setGameActivityEnabled,
   };
 
   const appStateValue: AppStateContextType = {

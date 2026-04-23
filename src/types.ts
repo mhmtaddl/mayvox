@@ -47,6 +47,12 @@ export interface User {
   userLevel?: string | null;
   /** Seçilen avatar çerçeve rengi (hex veya boş). Profiles tablosunda persist, tüm kullanıcılara görünür. */
   avatarBorderColor?: string;
+  /**
+   * Whitelist'te eşleşen aktif oyunun display name'i (ör "Valorant").
+   * Sadece Electron desktop kullanıcılarında dolu; toggle kapalıyken veya
+   * oyun yokken undefined. Ham process adı ASLA burada taşınmaz.
+   */
+  gameActivity?: string;
 }
 
 export type ServerCreationPlan = 'none' | 'free' | 'pro' | 'ultra';

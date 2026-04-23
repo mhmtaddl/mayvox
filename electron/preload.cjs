@@ -50,6 +50,18 @@ contextBridge.exposeInMainWorld('electronApp', {
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),
 });
 
+// ── Game Activity bridge — minimum IPC yüzeyi ──
+// Renderer yalnızca sanitize edilmiş { name: string | null } alır; ham
+// process listesi bu köprü üzerinden ASLA geçmez.
+contextBridge.exposeInMainWorld('electronGame', {
+  setEnabled: (enabled) => ipcRenderer.send('game:set-enabled', !!enabled),
+  onActivity: (cb) => {
+    ipcRenderer.removeAllListeners('game:activity-changed');
+    ipcRenderer.on('game:activity-changed', (_e, info) => cb(info || { name: null }));
+  },
+  removeAllListeners: () => ipcRenderer.removeAllListeners('game:activity-changed'),
+});
+
 // Harici link açıcı — sadece http/https, main tarafında çift protokol guard'ı var.
 contextBridge.exposeInMainWorld('electronShell', {
   openExternal: (url) => {

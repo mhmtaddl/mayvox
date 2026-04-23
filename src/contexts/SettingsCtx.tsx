@@ -67,6 +67,9 @@ export interface SettingsContextType {
   setShowLastSeen: (v: boolean) => void;
   activeBackground: string;
   setActiveBackground: (v: string) => void;
+  /** Otomatik oyun algılama — Electron desktop only, default kapalı. */
+  gameActivityEnabled: boolean;
+  setGameActivityEnabled: (v: boolean) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

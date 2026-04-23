@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require(
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
+const { setupGameDetection, getDetector } = require("./game-detection.cjs");
 
 // ── Global PTT Hook (uiohook-napi) ────────────────────────────────────────────
 let uIOhook = null;
@@ -606,6 +607,18 @@ function setupAutoUpdater(win) {
   });
 }
 
+// ── Game Activity — renderer toggle IPC ─────────────────────────────────────
+// Renderer setEnabled(true/false) gönderir; detector toggle'a göre polling
+// başlatır/durdurur. Kapalıyken hiçbir tarama/publish olmaz (privacy-first).
+ipcMain.on("game:set-enabled", (_event, enabled) => {
+  try {
+    const det = getDetector();
+    if (det) det.setEnabled(!!enabled);
+  } catch (err) {
+    logger.warn?.("[game] set-enabled hatası: " + (err?.message || err));
+  }
+});
+
 // ── Startup Update Gate (Discord-vari sessiz akış) ──────────────────────────
 // Splash açıldıktan sonra main pencere göstermeden önce tetiklenir.
 // - update-not-available / error / timeout → onResolve('none'|'error'|'timeout')
@@ -834,6 +847,8 @@ app.whenReady().then(() => {
   setupAutoUpdater(mainWin);
   setupGlobalPtt(mainWin);
   setupTray(mainWin);
+  // Oyun algılama — opt-in; renderer enable komutu gelene kadar polling durur.
+  setupGameDetection(mainWin, logger);
 
   // İkinci instance tetiklenirse
   app.on("second-instance", (_event, argv) => {
