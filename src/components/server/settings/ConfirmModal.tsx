@@ -87,21 +87,19 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
     <div
       className="fixed inset-0 z-[700] flex items-center justify-center p-4"
       style={{
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        background: 'rgba(10,15,25,0.55)',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
       }}
       onClick={onCancel}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-[420px] rounded-2xl p-6 animate-[confirmIn_200ms_cubic-bezier(0.2,0.8,0.2,1)]"
+        className="w-full max-w-[420px] rounded-[22px] p-6 animate-[confirmIn_220ms_cubic-bezier(0.22,1,0.36,1)]"
         style={{
-          background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-          border: '1px solid rgba(255,255,255,0.10)',
+          background: 'rgba(22,26,40,0.98)',
           boxShadow:
-            '0 24px 60px rgba(0,0,0,0.55), ' +
-            '0 8px 24px rgba(0,0,0,0.30), ' +
+            '0 20px 60px rgba(0,0,0,0.45), ' +
             'inset 0 1px 0 rgba(255,255,255,0.06)',
         }}
       >
@@ -193,8 +191,8 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
 
       <style>{`
         @keyframes confirmIn {
-          from { opacity: 0; transform: scale(0.96) translateY(8px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
+          from { opacity: 0; transform: scale(0.96) translateY(6px); }
+          to   { opacity: 1; transform: scale(1)    translateY(0);   }
         }
       `}</style>
     </div>

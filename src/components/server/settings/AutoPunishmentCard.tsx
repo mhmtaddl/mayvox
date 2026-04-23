@@ -36,7 +36,7 @@ export default function AutoPunishmentCard({ value, onChange }: Props) {
 
   return (
     <section
-      className="automod-card rounded-2xl p-3.5"
+      className="automod-card rounded-2xl p-3.5 h-full flex flex-col"
       style={{
         background: 'rgba(var(--glass-tint), 0.04)',
         border: '1px solid rgba(var(--glass-tint), 0.08)',

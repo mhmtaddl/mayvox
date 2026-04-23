@@ -25,8 +25,15 @@ export const CAPABILITIES = {
   MEMBER_MUTE: 'member.mute',
   MEMBER_TIMEOUT: 'member.timeout',
   MEMBER_ROOM_KICK: 'member.room_kick',
+  MEMBER_CHAT_BAN: 'member.chat_ban',
 
   ROLE_MANAGE: 'role.manage',
+
+  // 7-rol genişleme — hiyerarşi-bazlı alt-rol yönetimi.
+  // Bu cap'ler kapı bileti; canManageRole(actor, target) hiyerarşi guard'ı da şart.
+  ROLE_MANAGE_LOWER: 'role.manage.lower',
+  ROLE_ASSIGN_LOWER: 'role.assign.lower',
+  ROLE_PERMISSIONS_EDIT_LOWER: 'role.permissions.edit.lower',
 } as const;
 
 export type Capability = typeof CAPABILITIES[keyof typeof CAPABILITIES];

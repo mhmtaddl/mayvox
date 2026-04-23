@@ -287,20 +287,78 @@ function emptyContext(userId: string, serverId: string): ServerAccessContext {
   };
 }
 
-/** Backfill edilmemiş kullanıcılar için fallback — server_members.role'dan capability üret */
+/**
+ * Backfill edilmemiş kullanıcılar için fallback — server_members.role'dan
+ * capability üret. 7 rol için kapsayıcı; SYSTEM_ROLE_CAPS ile aynı mental
+ * model (wire 'mod' → sistem 'moderator' eşlemesi).
+ *
+ * Bilinmeyen rol → boş set (güvenli default). server_members.role kolonu
+ * eskiden constraint'siz olduğu için bozuk veri olabilir.
+ */
 export function legacyCapabilitiesFor(legacyRole: string): Capability[] {
   switch (legacyRole) {
     case 'owner':
       return Object.values(CAPABILITIES);
-    case 'admin':
+    case 'super_admin':
       return Object.values(CAPABILITIES).filter(c => c !== CAPABILITIES.ROLE_MANAGE);
-    case 'mod':
+    case 'admin':
       return [
         CAPABILITIES.SERVER_VIEW,
         CAPABILITIES.SERVER_JOIN,
+        CAPABILITIES.SERVER_MANAGE,
+        CAPABILITIES.SERVER_MODERATION_UPDATE,
+        CAPABILITIES.CHANNEL_CREATE,
+        CAPABILITIES.CHANNEL_UPDATE,
+        CAPABILITIES.CHANNEL_DELETE,
+        CAPABILITIES.CHANNEL_REORDER,
+        CAPABILITIES.CHANNEL_VIEW_PRIVATE,
+        CAPABILITIES.CHANNEL_JOIN_PRIVATE,
+        CAPABILITIES.INVITE_CREATE,
         CAPABILITIES.INVITE_REVOKE,
         CAPABILITIES.MEMBER_MOVE,
         CAPABILITIES.MEMBER_KICK,
+        CAPABILITIES.MEMBER_MUTE,
+        CAPABILITIES.MEMBER_TIMEOUT,
+        CAPABILITIES.MEMBER_ROOM_KICK,
+        CAPABILITIES.MEMBER_CHAT_BAN,
+        CAPABILITIES.ROLE_MANAGE_LOWER,
+        CAPABILITIES.ROLE_ASSIGN_LOWER,
+        CAPABILITIES.ROLE_PERMISSIONS_EDIT_LOWER,
+      ];
+    case 'super_mod':
+      return [
+        CAPABILITIES.SERVER_VIEW,
+        CAPABILITIES.SERVER_JOIN,
+        CAPABILITIES.SERVER_MODERATION_UPDATE,
+        CAPABILITIES.INVITE_CREATE,
+        CAPABILITIES.INVITE_REVOKE,
+        CAPABILITIES.MEMBER_MOVE,
+        CAPABILITIES.MEMBER_KICK,
+        CAPABILITIES.MEMBER_MUTE,
+        CAPABILITIES.MEMBER_TIMEOUT,
+        CAPABILITIES.MEMBER_ROOM_KICK,
+        CAPABILITIES.MEMBER_CHAT_BAN,
+        CAPABILITIES.ROLE_ASSIGN_LOWER,
+      ];
+    case 'mod':
+    case 'moderator': // legacy alias — migration 030 öncesi roles.name satırları
+      return [
+        CAPABILITIES.SERVER_VIEW,
+        CAPABILITIES.SERVER_JOIN,
+        CAPABILITIES.SERVER_MODERATION_UPDATE,
+        CAPABILITIES.INVITE_REVOKE,
+        CAPABILITIES.MEMBER_MOVE,
+        CAPABILITIES.MEMBER_KICK,
+        CAPABILITIES.MEMBER_MUTE,
+        CAPABILITIES.MEMBER_TIMEOUT,
+        CAPABILITIES.MEMBER_ROOM_KICK,
+        CAPABILITIES.MEMBER_CHAT_BAN,
+      ];
+    case 'super_member':
+      return [
+        CAPABILITIES.SERVER_VIEW,
+        CAPABILITIES.SERVER_JOIN,
+        CAPABILITIES.INVITE_CREATE,
       ];
     case 'member':
       return [CAPABILITIES.SERVER_VIEW, CAPABILITIES.SERVER_JOIN];

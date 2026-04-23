@@ -17,6 +17,9 @@ export interface Server {
   capacity: number;
   level: number;
   createdAt: string;
+  /** Son güncelleme zamanı (ISO). Backend `updated_at` kolonunun camelize hali.
+   *  Eski response formatlarında gelmeyebilir → callsite optional fallback. */
+  updatedAt?: string;
   inviteCode?: string;
   isPublic?: boolean;
   joinPolicy?: string;

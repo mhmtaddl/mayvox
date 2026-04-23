@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Trash2, Camera, Copy, Check,
-  Globe, Lock, Mail, UserPlus, LogOut,
+  Globe, Lock, Mail, UserPlus, LogOut, Sparkles,
 } from 'lucide-react';
-import { type Server } from '../../../lib/serverService';
+import { type Server, type ServerMember, getMembers } from '../../../lib/serverService';
 import { uploadServerLogo } from '../../../lib/supabase';
 import AvatarCropModal from '../../AvatarCropModal';
-import { fmtDate } from './shared';
+import AvatarContent from '../../AvatarContent';
+import { fmtDate, memberDisplayName } from './shared';
+import { useUser } from '../../../contexts/UserContext';
 
 export interface GeneralActions {
   onSave: () => void;
@@ -32,64 +34,49 @@ interface Props {
 // ══════════════════════════════════════════════════════════════════
 
 const INPUT_BASE =
-  'w-full h-11 bg-[rgba(var(--glass-tint),0.035)] border border-[rgba(var(--glass-tint),0.08)] ' +
-  'rounded-xl px-4 text-[13px] text-[var(--theme-text)] tracking-tight ' +
-  'placeholder:text-[var(--theme-secondary-text)]/30 ' +
-  'outline-none transition-all duration-200 ease-out ' +
-  'hover:border-[rgba(var(--glass-tint),0.14)] ' +
-  'focus:border-[var(--theme-accent)]/45 focus:bg-[rgba(var(--glass-tint),0.055)] ' +
-  'focus:shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.08)] ' +
-  'disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:border-[rgba(var(--glass-tint),0.08)]';
-
-const CARD_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.045), rgba(var(--glass-tint), 0.02))',
-  border: '1px solid rgba(var(--glass-tint), 0.08)',
-  boxShadow:
-    '0 1px 2px rgba(0,0,0,0.04), ' +
-    '0 8px 24px rgba(0,0,0,0.08), ' +
-    'inset 0 1px 0 rgba(var(--glass-tint), 0.05)',
-  backdropFilter: 'blur(14px)',
-  WebkitBackdropFilter: 'blur(14px)',
-};
-
+  'w-full h-10 rounded-lg px-3.5 text-[13px] text-[#e8ecf4]/92 tracking-tight ' +
+  'placeholder:text-[#e8ecf4]/30 outline-none gtInput ' +
+  'disabled:opacity-55 disabled:cursor-not-allowed';
 
 const DANGER_BTN_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(180deg, rgb(239,68,68), rgb(220,38,38))',
-  color: '#fff',
-  boxShadow:
-    'inset 0 1px 0 rgba(255,255,255,0.18), ' +
-    'inset 0 -1px 0 rgba(0,0,0,0.12), ' +
-    '0 1px 2px rgba(0,0,0,0.10), ' +
-    '0 6px 18px rgba(239,68,68,0.30)',
+  background: 'rgba(248,113,113,0.12)',
+  color: 'rgba(248,113,113,0.95)',
+  boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.22)',
 };
 
 // ══════════════════════════════════════════════════════════════════
 // Primitives (local)
 // ══════════════════════════════════════════════════════════════════
 
-function GlassCard({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl p-6" style={CARD_STYLE}>
-      <header className="flex items-baseline justify-between mb-5">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/70">
-          {title}
-        </h3>
-        {hint && (
-          <span className="text-[10.5px] text-[var(--theme-secondary-text)]/45 truncate ml-4">{hint}</span>
-        )}
-      </header>
-      {children}
-    </section>
-  );
-}
-
 function Field({ label, children, locked }: { label: string; children: React.ReactNode; locked?: boolean }) {
   return (
-    <div className={locked ? 'opacity-50 pointer-events-none' : ''}>
-      <label className="block text-[10.5px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/55 mb-2">
+    <div className={locked ? 'opacity-55 pointer-events-none' : ''}>
+      <label className="block text-[11px] font-medium text-[#e8ecf4]/50 mb-1.5 tracking-normal">
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function GroupLabel({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'danger'; key?: React.Key }) {
+  const color = tone === 'danger' ? 'rgba(248,113,113,0.75)' : 'rgba(232,236,244,0.55)';
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="w-[3px] h-[11px] rounded-full shrink-0"
+        style={{
+          background: color,
+          boxShadow: tone === 'danger' ? '0 0 6px rgba(248,113,113,0.30)' : 'none',
+        }}
+        aria-hidden="true"
+      />
+      <h3
+        className="text-[11px] font-semibold uppercase"
+        style={{ color, letterSpacing: '0.12em' }}
+      >
+        {children}
+      </h3>
     </div>
   );
 }
@@ -108,11 +95,10 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
 }) {
   return (
     <div
-      className="inline-flex p-1 rounded-xl w-full"
+      className="inline-flex p-[3px] rounded-full w-full"
       style={{
-        background: 'rgba(var(--glass-tint), 0.03)',
-        border: '1px solid rgba(var(--glass-tint), 0.07)',
-        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
+        background: 'rgba(255,255,255,0.022)',
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
       }}
     >
       {options.map(opt => {
@@ -123,20 +109,19 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
             type="button"
             onClick={() => !disabled && onChange(opt.value)}
             disabled={disabled}
-            className={`relative flex-1 h-9 px-3 rounded-lg text-[12px] font-semibold transition-all duration-200 ease-out inline-flex items-center justify-center gap-2 ${
-              active
-                ? 'text-[var(--theme-text)]'
-                : 'text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-text)]/85'
-            } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+            className={`gtSegBtn relative flex-1 h-[30px] px-3 rounded-full text-[12px] font-medium inline-flex items-center justify-center gap-1.5 ${
+              disabled ? 'cursor-not-allowed opacity-60' : ''
+            }`}
             style={active ? {
-              background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.16), rgba(var(--glass-tint), 0.08))',
-              boxShadow:
-                'inset 0 1px 0 rgba(var(--glass-tint), 0.14), ' +
-                '0 1px 2px rgba(0,0,0,0.08), ' +
-                '0 2px 6px rgba(0,0,0,0.04)',
-            } : undefined}
+              background: 'rgba(96,165,250,0.12)',
+              color: '#93c5fd',
+              boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.22)',
+            } : {
+              color: 'rgba(232,236,244,0.55)',
+              background: 'transparent',
+            }}
           >
-            <span className={active ? 'text-[var(--theme-accent)]' : ''}>{opt.icon}</span>
+            <span className="opacity-80 shrink-0">{opt.icon}</span>
             {opt.label}
           </button>
         );
@@ -145,42 +130,82 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
   );
 }
 
-function StatCell({ label, value, accent, small }: { label: string; value: string; accent?: boolean; small?: boolean }) {
+function PlanRow({
+  plan, capacity, createdAt, current,
+}: {
+  plan: string;
+  capacity: number;
+  createdAt: string;
+  current: number;
+}) {
+  const pct = Math.max(0, Math.min(100, capacity > 0 ? (current / capacity) * 100 : 0));
+  const near = pct >= 85;
+  const full = pct >= 98;
+  const fillColor = full
+    ? 'rgba(248,113,113,0.65)'
+    : near
+      ? 'rgba(251,191,36,0.65)'
+      : 'rgba(96,165,250,0.60)';
+
   return (
     <div
-      className="relative overflow-hidden rounded-xl p-4"
+      className="rounded-lg px-3.5 pt-2.5 pb-2"
       style={{
-        background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.035), rgba(var(--glass-tint), 0.015))',
-        border: '1px solid rgba(var(--glass-tint), 0.06)',
-        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.05)',
+        background: 'rgba(255,255,255,0.025)',
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.045)',
       }}
     >
-      {/* accent-row için üst şerit */}
-      {accent && (
+      <div className="flex items-center gap-3 h-6">
         <span
-          className="absolute inset-x-4 top-0 h-px"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.40), transparent)' }}
-        />
-      )}
-      <div className={`${small ? 'text-[13px]' : 'text-[18px]'} font-bold tabular-nums tracking-tight ${accent ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
-        {value}
+          className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide"
+          style={{
+            background: 'rgba(96,165,250,0.12)',
+            color: '#93c5fd',
+            boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.24)',
+          }}
+        >
+          {plan.toUpperCase()}
+        </span>
+        <span className="text-[#e8ecf4]/18">·</span>
+        <span className="text-[13px] font-semibold text-[#e8ecf4]/90 tabular-nums">
+          {current} <span className="text-[#e8ecf4]/40 font-medium">/</span> {capacity}
+          <span className="font-medium text-[#e8ecf4]/55 ml-1 text-[12px]">üye</span>
+        </span>
+        <span className="text-[#e8ecf4]/18 hidden sm:inline">·</span>
+        <span className="text-[12px] text-[#e8ecf4]/50 tabular-nums truncate hidden sm:inline">
+          {fmtDate(createdAt)}
+        </span>
       </div>
-      <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/50 mt-1">
-        {label}
+      {/* Thin progress bar */}
+      <div
+        className="mt-2 h-1 rounded-full overflow-hidden"
+        style={{ background: 'rgba(255,255,255,0.06)' }}
+        aria-label={`Üye kullanımı: ${current} / ${capacity}`}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: fillColor,
+            transition: 'width 400ms cubic-bezier(0.22, 1, 0.36, 1), background 300ms ease',
+          }}
+        />
       </div>
     </div>
   );
 }
 
 function DangerButton({
-  onClick, disabled, children,
-}: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+  onClick, disabled, children, size = 'md',
+}: { onClick: () => void; disabled?: boolean; children: React.ReactNode; size?: 'sm' | 'md' }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-[12.5px] font-semibold tracking-tight transition-all duration-200 ease-out active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
+      className={`gtPressable inline-flex items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-semibold tracking-tight disabled:opacity-35 disabled:cursor-not-allowed ${
+        size === 'sm' ? 'h-8 px-3.5' : 'h-9 px-4'
+      }`}
       style={DANGER_BTN_STYLE}
     >
       {children}
@@ -189,17 +214,25 @@ function DangerButton({
 }
 
 function GhostButton({
-  onClick, children, tone = 'neutral',
-}: { onClick: () => void; children: React.ReactNode; tone?: 'neutral' | 'danger' }) {
+  onClick, children, tone = 'neutral', size = 'md',
+}: { onClick: () => void; children: React.ReactNode; tone?: 'neutral' | 'danger'; size?: 'sm' | 'md' }) {
+  const isDanger = tone === 'danger';
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-[12.5px] font-semibold tracking-tight transition-all duration-200 ease-out active:scale-[0.97] ${
-        tone === 'danger'
-          ? 'bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.14] hover:text-red-200 border border-red-500/20 hover:border-red-500/30'
-          : 'bg-[rgba(var(--glass-tint),0.05)] text-[var(--theme-text)]/75 hover:bg-[rgba(var(--glass-tint),0.10)] hover:text-[var(--theme-text)] border border-[rgba(var(--glass-tint),0.08)]'
+      className={`gtPressable inline-flex items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-semibold tracking-tight ${
+        size === 'sm' ? 'h-8 px-3.5' : 'h-9 px-4'
       }`}
+      style={isDanger ? {
+        background: 'rgba(248,113,113,0.10)',
+        color: 'rgba(248,113,113,0.92)',
+        boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.22)',
+      } : {
+        background: 'rgba(255,255,255,0.04)',
+        color: 'rgba(232,236,244,0.80)',
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+      }}
     >
       {children}
     </button>
@@ -227,6 +260,47 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   const [logoLoading, setLogoLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Owner bilgisi — read-only, hafif fetch (getMembers mevcut endpoint)
+  const [ownerMember, setOwnerMember] = useState<ServerMember | null>(null);
+  const { allUsers } = useUser();
+  useEffect(() => {
+    let cancelled = false;
+    getMembers(server.id).then(list => {
+      if (cancelled) return;
+      const o = list.find(m => m.role === 'owner');
+      setOwnerMember(o ?? null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [server.id]);
+
+  // AI Insight — contextual, single sentence, null ise hiç render edilmez
+  // Dev preview: import.meta.env.DEV ise eşikler düşürülür ki geliştirme sırasında örnek görünür.
+  // Production'da spec'e uygun (normal = null).
+  const insight = ((): string | null => {
+    const cap = server.capacity;
+    const cur = server.memberCount;
+    const isDev = import.meta.env.DEV;
+    if (cap > 0) {
+      const pct = (cur / cap) * 100;
+      if (pct >= 98) return 'Sunucu kapasitesi neredeyse dolu.';
+      if (pct >= 85) return `Sunucu kapasitesinin %${Math.round(pct)}'i dolu.`;
+      if (pct >= 75) return 'Sunucu kapasitesi dolmaya yaklaşıyor.';
+      if (isDev && pct >= 15) return `Sunucu kapasitesinin %${Math.round(pct)}'i kullanılıyor.`;
+    }
+    if (cur <= 2 && cap >= 10) return 'Sunucu aktivitesi düşük görünüyor.';
+    return null;
+  })();
+
+  // Last updated — Server.updatedAt varsa kullan (backend camelize), yoksa createdAt'a düş.
+  const lastUpdatedIso = server.updatedAt ?? server.createdAt;
+  const lastUpdatedLabel = (() => {
+    const d = new Date(lastUpdatedIso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const months = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })();
+
   // Otomatik slug — backend `generateBaseSlug` ile paralel: max 6 karakter, no hyphen.
   const autoSlug = name.trim().toLowerCase()
     .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
@@ -239,6 +313,21 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     || motto !== (server.motto ?? '')
     || isPublic !== (server.isPublic ?? true)
     || joinPolicy !== (server.joinPolicy ?? 'invite_only');
+
+  // Prop-sync: server prop dışarıdan güncellenince (parent save sonrası reload,
+  // concurrent update, realtime refresh) local state'i uyumla. Dirty iken kullanıcının
+  // düzenlemesini ezmemek için yalnızca clean state'te override et.
+  useEffect(() => {
+    if (dirty) return;
+    setName(server.name);
+    setDesc(server.description);
+    setMotto(server.motto ?? '');
+    setIsPublic(server.isPublic ?? true);
+    setJoinPolicy(server.joinPolicy ?? 'invite_only');
+    // `dirty` comparison sırasında mevcut state okunur — effect zamanlama güvenli:
+    // eğer dirty true ise hiçbir setState çağrılmaz, infinite loop riski yok.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server.name, server.description, server.motto, server.isPublic, server.joinPolicy]);
 
   const save = async () => {
     if (!dirty || saving) return;
@@ -282,34 +371,38 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   };
 
   return (
-    <div className="space-y-6 pb-4">
-      {/* ═════════════ Card 1 — Sunucu Kimliği ═════════════ */}
-      <GlassCard title="Sunucu Kimliği" hint="Görünür isim ve tanıtım metinleri">
-        <div className="flex items-start gap-5">
-          {/* Avatar dropzone */}
+    <div className="max-w-[880px] mx-auto pb-3 generalTab">
+
+      {/* ═════════════ GROUP 1 — Temel Bilgiler ═════════════ */}
+      <section>
+        <GroupLabel>Temel Bilgiler</GroupLabel>
+
+        {/* Avatar block — üstte, left-aligned, belirgin */}
+        <div className="mt-3 flex items-center gap-4">
           <button
             type="button"
             onClick={() => canEdit && logoRef.current?.click()}
             disabled={!canEdit}
-            className="group relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 transition-all duration-200 ease-out disabled:cursor-not-allowed enabled:hover:scale-[1.02] enabled:active:scale-[0.98]"
+            className="gtAvatar group relative w-[76px] h-[76px] rounded-2xl overflow-hidden shrink-0 disabled:cursor-not-allowed"
             style={{
               background: server.avatarUrl
                 ? 'transparent'
-                : 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.10), rgba(var(--theme-accent-rgb), 0.04))',
-              border: `1px ${server.avatarUrl ? 'solid' : 'dashed'} rgba(var(--theme-accent-rgb), ${server.avatarUrl ? '0.12' : '0.22'})`,
-              boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06), 0 2px 8px rgba(0,0,0,0.06)',
+                : 'linear-gradient(160deg, rgba(96,165,250,0.10), rgba(96,165,250,0.03))',
+              boxShadow: server.avatarUrl
+                ? 'inset 0 0 0 1px rgba(255,255,255,0.06), 0 4px 14px rgba(0,0,0,0.22)'
+                : 'inset 0 0 0 1px rgba(96,165,250,0.20), 0 2px 10px rgba(96,165,250,0.08)',
             }}
           >
             {server.avatarUrl
               ? <img src={server.avatarUrl} alt="" className="w-full h-full object-cover" />
-              : <span className="flex items-center justify-center w-full h-full text-[22px] font-bold text-[var(--theme-accent)]/60 tracking-tight">{server.shortName}</span>
+              : <span className="flex items-center justify-center w-full h-full text-[22px] font-semibold text-[#93c5fd]/80 tracking-tight">{server.shortName}</span>
             }
             {canEdit && (
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}>
+                style={{ background: 'rgba(0,0,0,0.55)' }}>
                 {logoLoading
                   ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Camera size={18} className="text-white" strokeWidth={1.8} />}
+                  : <Camera size={17} className="text-white" strokeWidth={1.8} />}
               </div>
             )}
             <input
@@ -325,7 +418,61 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             />
           </button>
 
-          <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[13.5px] font-semibold text-[#e8ecf4]/92 tracking-tight truncate">
+              {name || server.name}
+            </div>
+            <div className="mt-1 inline-flex items-center gap-2 h-7 pl-2.5 pr-1 rounded-md"
+              style={{
+                background: 'rgba(96,165,250,0.05)',
+                boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.14)',
+              }}
+            >
+              <span className="text-[11.5px] font-mono font-medium text-[#93c5fd] truncate">
+                {shownSlug || '...'}<span className="opacity-55">.mv</span>
+                {nameChanged && <span className="opacity-50 ml-1.5 text-[10px] font-sans">(önizleme)</span>}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopySlug}
+                className="gtIconBtn w-6 h-6 rounded flex items-center justify-center text-[#e8ecf4]/45 shrink-0"
+                aria-label="Adresi kopyala"
+              >
+                {copied ? <Check size={11} strokeWidth={2.5} className="text-emerald-400" /> : <Copy size={11} />}
+              </button>
+            </div>
+
+            {/* Owner info — read-only inline */}
+            {ownerMember && (
+              <div className="mt-1.5 flex items-center gap-2 opacity-70">
+                <span className="text-[10.5px] font-medium text-[#e8ecf4]/50 shrink-0">Sahip</span>
+                <span className="text-[#e8ecf4]/20">·</span>
+                <div
+                  className="w-[22px] h-[22px] rounded-full overflow-hidden flex items-center justify-center shrink-0"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <AvatarContent
+                    avatar={ownerMember.avatar}
+                    statusText={allUsers.find(u => u.id === ownerMember.userId)?.statusText ?? 'Online'}
+                    firstName={ownerMember.firstName}
+                    name={memberDisplayName(ownerMember)}
+                    letterClassName="text-[9px] font-semibold text-[#e8ecf4]/70"
+                  />
+                </div>
+                <span className="text-[12px] font-medium text-[#e8ecf4]/80 truncate">
+                  {memberDisplayName(ownerMember)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 6/6 grid — balanced */}
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-3.5">
+          <div className="md:col-span-6">
             <Field label="Sunucu Adı" locked={!canEdit}>
               <input
                 value={name}
@@ -335,190 +482,185 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                 className={INPUT_BASE}
               />
             </Field>
-
-            {/* Adres önizleme */}
-            <div
-              className="group flex items-center gap-3 h-11 pl-4 pr-2 rounded-xl transition-all duration-200 hover:border-[rgba(var(--theme-accent-rgb),0.20)]"
-              style={{
-                background: 'rgba(var(--theme-accent-rgb), 0.04)',
-                border: '1px solid rgba(var(--theme-accent-rgb), 0.12)',
-              }}
-            >
-              <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/55 uppercase tracking-[0.18em] shrink-0">
-                Adres
-              </span>
-              <div className="h-4 w-px shrink-0" style={{ background: 'rgba(var(--theme-accent-rgb), 0.18)' }} />
-              <span className="text-[12.5px] font-mono font-semibold text-[var(--theme-accent)] flex-1 truncate">
-                {shownSlug || '...'}<span className="opacity-55">.mv</span>
-                {nameChanged && <span className="opacity-50 ml-1.5 text-[10.5px] font-sans not-italic">(önizleme)</span>}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopySlug}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/50 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all duration-150 active:scale-[0.92] shrink-0"
-                aria-label="Adresi kopyala"
-              >
-                {copied ? <Check size={13} strokeWidth={2.5} className="text-emerald-400" /> : <Copy size={13} />}
-              </button>
-            </div>
+          </div>
+          <div className="md:col-span-6">
+            <Field label="Motto" locked={!canEdit}>
+              <input
+                value={motto}
+                onChange={e => setMotto(e.target.value.slice(0, 15))}
+                maxLength={15}
+                disabled={!canEdit}
+                placeholder="voice & chat"
+                className={INPUT_BASE}
+              />
+            </Field>
+          </div>
+          <div className="md:col-span-12">
+            <Field label="Açıklama" locked={!canEdit}>
+              <input
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+                maxLength={200}
+                disabled={!canEdit}
+                placeholder="Kısa açıklama"
+                className={INPUT_BASE}
+              />
+            </Field>
           </div>
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-          <Field label="Açıklama" locked={!canEdit}>
-            <input
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-              maxLength={200}
-              disabled={!canEdit}
-              placeholder="Kısa açıklama"
-              className={INPUT_BASE}
-            />
-          </Field>
-          <Field label="Motto" locked={!canEdit}>
-            <input
-              value={motto}
-              onChange={e => setMotto(e.target.value.slice(0, 15))}
-              maxLength={15}
-              disabled={!canEdit}
-              placeholder="voice & chat"
-              className={INPUT_BASE}
-            />
-          </Field>
-        </div>
-      </GlassCard>
-
-      {/* ═════════════ Card 2 — Erişim ═════════════ */}
-      <GlassCard title="Erişim" hint="Sunucunun nasıl bulunabildiği ve katılım kuralları">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Field label="Görünürlük" locked={!canEdit}>
-            <Segmented<'public' | 'private'>
-              value={isPublic ? 'public' : 'private'}
-              disabled={!canEdit}
-              onChange={v => setIsPublic(v === 'public')}
-              options={[
-                { value: 'public', label: 'Açık', icon: <Globe size={13} strokeWidth={1.8} /> },
-                { value: 'private', label: 'Gizli', icon: <Lock size={13} strokeWidth={1.8} /> },
-              ]}
-            />
-          </Field>
-          <Field label="Katılım" locked={!canEdit}>
-            <Segmented<'invite_only' | 'open'>
-              value={joinPolicy === 'open' ? 'open' : 'invite_only'}
-              disabled={!canEdit}
-              onChange={v => setJoinPolicy(v)}
-              options={[
-                { value: 'invite_only', label: 'Davetli', icon: <Mail size={13} strokeWidth={1.8} /> },
-                { value: 'open', label: 'Açık', icon: <UserPlus size={13} strokeWidth={1.8} /> },
-              ]}
-            />
-          </Field>
-        </div>
-      </GlassCard>
-
-      {/* ═════════════ Card 3 — Plan ve Kapasite ═════════════ */}
-      <GlassCard
-        title="Plan ve Kapasite"
-        hint={server.plan === 'ultra' ? 'Maksimum tier' : 'Detay için Özet sekmesi'}
-      >
-        <div className="grid grid-cols-3 gap-3">
-          <StatCell label="Plan" value={(server.plan ?? 'free').toUpperCase()} accent />
-          <StatCell label="Üye Kapasitesi" value={String(server.capacity)} />
-          <StatCell label="Kuruluş" value={fmtDate(server.createdAt)} small />
-        </div>
-      </GlassCard>
-
-      {/* Save area parent'a (ServerSettings tab bar sağı) taşındı.
-          User alt action bar'ı görmüyordu → tab bar'daki pill her zaman görünür. */}
-
-      {/* ═════════════ Tehlikeli Bölge ═════════════ */}
-      <section className="pt-2 space-y-3">
-        <header className="flex items-center gap-2">
-          <span className="w-1 h-4 rounded-full bg-red-500/60" />
-          <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-400/90">Tehlikeli Bölge</h3>
-        </header>
-
-        {isOwner ? (
-          <div
-            className="rounded-2xl p-5 flex items-center justify-between gap-4"
-            style={{
-              background: 'linear-gradient(180deg, rgba(239,68,68,0.08), rgba(239,68,68,0.03))',
-              border: '1px solid rgba(239,68,68,0.22)',
-              boxShadow: 'inset 0 1px 0 rgba(239,68,68,0.08), 0 4px 14px rgba(0,0,0,0.06)',
-            }}
-          >
-            <div className="flex items-center gap-4 min-w-0">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'rgba(239,68,68,0.15)',
-                  border: '1px solid rgba(239,68,68,0.22)',
-                  boxShadow: 'inset 0 1px 0 rgba(239,68,68,0.10)',
-                }}
-              >
-                <Trash2 size={16} className="text-red-400" strokeWidth={1.8} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-[var(--theme-text)] tracking-tight">Sunucuyu Sil</div>
-                <div className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-0.5 leading-snug">
-                  Bu işlem geri alınamaz. Tüm kanallar, üyeler, mesajlar ve davetler kalıcı olarak silinir.
-                </div>
-              </div>
-            </div>
-            <DangerButton onClick={() => setDeleteModal(true)}>
-              Sil
-            </DangerButton>
+      {/* ═════════════ GROUP 2 — Erişim ═════════════ */}
+      <section className="mt-7">
+        <GroupLabel>Erişim</GroupLabel>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-3.5">
+          <div className="md:col-span-6">
+            <Field label="Görünürlük" locked={!canEdit}>
+              <Segmented<'public' | 'private'>
+                value={isPublic ? 'public' : 'private'}
+                disabled={!canEdit}
+                onChange={v => setIsPublic(v === 'public')}
+                options={[
+                  { value: 'public', label: 'Açık', icon: <Globe size={12} strokeWidth={1.8} /> },
+                  { value: 'private', label: 'Gizli', icon: <Lock size={12} strokeWidth={1.8} /> },
+                ]}
+              />
+            </Field>
           </div>
-        ) : (
+          <div className="md:col-span-6">
+            <Field label="Katılım" locked={!canEdit}>
+              <Segmented<'invite_only' | 'open'>
+                value={joinPolicy === 'open' ? 'open' : 'invite_only'}
+                disabled={!canEdit}
+                onChange={v => setJoinPolicy(v)}
+                options={[
+                  { value: 'invite_only', label: 'Davetli', icon: <Mail size={12} strokeWidth={1.8} /> },
+                  { value: 'open', label: 'Açık', icon: <UserPlus size={12} strokeWidth={1.8} /> },
+                ]}
+              />
+            </Field>
+          </div>
+        </div>
+      </section>
+
+      {/* ═════════════ GROUP 3 — Plan ═════════════ */}
+      <section className="mt-7">
+        <GroupLabel>Plan</GroupLabel>
+        <div className="mt-3">
+          <PlanRow
+            plan={server.plan ?? 'free'}
+            capacity={server.capacity}
+            createdAt={server.createdAt}
+            current={server.memberCount}
+          />
+        </div>
+
+        {/* AI Insight — subtle, single sentence, only when contextually relevant */}
+        {insight && (
           <div
-            className="rounded-2xl p-5 flex items-center justify-between gap-4"
+            className="gtInsight mt-2.5 flex items-center gap-1.5 px-0.5 text-[11.5px] font-medium leading-relaxed"
             style={{
-              background: 'linear-gradient(180deg, rgba(239,68,68,0.05), rgba(239,68,68,0.02))',
-              border: '1px solid rgba(239,68,68,0.16)',
-              boxShadow: 'inset 0 1px 0 rgba(239,68,68,0.05)',
+              color: 'rgba(147,197,253,0.68)',
             }}
           >
-            <div className="flex items-center gap-4 min-w-0">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: 'rgba(239,68,68,0.10)',
-                  border: '1px solid rgba(239,68,68,0.18)',
-                }}
-              >
-                <LogOut size={16} className="text-red-400" strokeWidth={1.8} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-[var(--theme-text)] tracking-tight">Sunucudan Ayrıl</div>
-                <div className="text-[11px] text-[var(--theme-secondary-text)]/70 mt-0.5 leading-snug">
-                  Üyelik ve rollerin kaldırılır. Tekrar katılmak için davet gerekir.
-                </div>
-              </div>
-            </div>
-            <GhostButton onClick={() => setLeaveModal(true)} tone="danger">
-              Ayrıl
-            </GhostButton>
+            <Sparkles size={11} strokeWidth={1.9} className="shrink-0 opacity-80" />
+            <span className="truncate">{insight}</span>
           </div>
         )}
       </section>
+
+      {/* ═════════════ GROUP 4 — Tehlikeli Bölge ═════════════ */}
+      <section className="mt-7">
+        <GroupLabel tone="danger">Tehlikeli Bölge</GroupLabel>
+        <div className="mt-3">
+          {isOwner ? (
+            <div
+              className="rounded-xl h-14 flex items-center justify-between gap-3 px-4"
+              style={{
+                background: 'rgba(248,113,113,0.08)',
+                boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.18)',
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{
+                    background: 'rgba(248,113,113,0.12)',
+                    boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.22)',
+                  }}
+                >
+                  <Trash2 size={14} className="text-red-400/90" strokeWidth={1.9} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-[#e8ecf4]/92 tracking-tight truncate">
+                    Sunucuyu Sil
+                  </div>
+                  <div className="text-[10.5px] text-[#e8ecf4]/45 mt-0.5 leading-snug truncate">
+                    Bu işlem geri alınamaz — tüm veriler kalıcı olarak silinir.
+                  </div>
+                </div>
+              </div>
+              <DangerButton onClick={() => setDeleteModal(true)}>
+                Sil
+              </DangerButton>
+            </div>
+          ) : (
+            <div
+              className="rounded-xl h-14 flex items-center justify-between gap-3 px-4"
+              style={{
+                background: 'rgba(248,113,113,0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.14)',
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{
+                    background: 'rgba(248,113,113,0.10)',
+                    boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.18)',
+                  }}
+                >
+                  <LogOut size={14} className="text-red-400/90" strokeWidth={1.9} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-[#e8ecf4]/92 tracking-tight truncate">
+                    Sunucudan Ayrıl
+                  </div>
+                  <div className="text-[10.5px] text-[#e8ecf4]/45 mt-0.5 leading-snug truncate">
+                    Üyelik kaldırılır — tekrar katılmak için davet gerekir.
+                  </div>
+                </div>
+              </div>
+              <GhostButton tone="danger" onClick={() => setLeaveModal(true)}>
+                Ayrıl
+              </GhostButton>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Last updated — subtle bottom-right ── */}
+      {lastUpdatedLabel && (
+        <div className="mt-6 text-right text-[11px] text-[#e8ecf4]/35 tabular-nums">
+          Son güncelleme: {lastUpdatedLabel}
+        </div>
+      )}
 
       {/* ═════════════ Silme Modal ═════════════ */}
       {deleteModal && (
         <div
           className="fixed inset-0 z-[400] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ background: 'rgba(10,15,25,0.55)', backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
           onClick={() => setDeleteModal(false)}
         >
           <div
-            className="w-full max-w-[400px] rounded-2xl p-6 animate-[modalIn_220ms_cubic-bezier(0.2,0.8,0.2,1)]"
+            className="w-full max-w-[400px] rounded-[22px] p-6 animate-[modalIn_220ms_cubic-bezier(0.22,1,0.36,1)]"
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-              border: '1px solid rgba(var(--glass-tint), 0.10)',
+              background: 'rgba(22,26,40,0.98)',
               boxShadow:
-                '0 24px 60px rgba(0,0,0,0.55), ' +
-                '0 8px 24px rgba(0,0,0,0.30), ' +
-                'inset 0 1px 0 rgba(var(--glass-tint), 0.08)',
+                '0 20px 60px rgba(0,0,0,0.45), ' +
+                'inset 0 1px 0 rgba(255,255,255,0.06)',
             }}
           >
             <div
@@ -570,19 +712,17 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
       {leaveModal && (
         <div
           className="fixed inset-0 z-[400] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ background: 'rgba(10,15,25,0.55)', backdropFilter: 'none', WebkitBackdropFilter: 'none' }}
           onClick={() => setLeaveModal(false)}
         >
           <div
-            className="w-full max-w-[400px] rounded-2xl p-6 animate-[modalIn_220ms_cubic-bezier(0.2,0.8,0.2,1)]"
+            className="w-full max-w-[400px] rounded-[22px] p-6 animate-[modalIn_220ms_cubic-bezier(0.22,1,0.36,1)]"
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'linear-gradient(180deg, rgba(22,26,40,0.98), rgba(14,18,30,0.98))',
-              border: '1px solid rgba(var(--glass-tint), 0.10)',
+              background: 'rgba(22,26,40,0.98)',
               boxShadow:
-                '0 24px 60px rgba(0,0,0,0.55), ' +
-                '0 8px 24px rgba(0,0,0,0.30), ' +
-                'inset 0 1px 0 rgba(var(--glass-tint), 0.08)',
+                '0 20px 60px rgba(0,0,0,0.45), ' +
+                'inset 0 1px 0 rgba(255,255,255,0.06)',
             }}
           >
             <div
@@ -631,15 +771,98 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
         />
       )}
 
-      {/* Local keyframes — Tailwind config'e eklenmediği için inline */}
+      {/* Local keyframes + interaction utilities */}
       <style>{`
+        .generalTab { --ease: cubic-bezier(0.22, 1, 0.36, 1); }
+
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes modalIn {
-          from { opacity: 0; transform: scale(0.96) translateY(8px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
+          from { opacity: 0; transform: scale(0.96) translateY(6px); }
+          to   { opacity: 1; transform: scale(1) translateY(0);    }
+        }
+
+        /* Inputs — borderless inset ring + focus accent */
+        .gtInput {
+          background: rgba(255,255,255,0.03);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+          transition: background 180ms var(--ease), box-shadow 220ms var(--ease);
+        }
+        .gtInput:hover:not(:disabled):not(:focus) {
+          background: rgba(255,255,255,0.04);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+        }
+        .gtInput:focus {
+          background: rgba(255,255,255,0.045);
+          box-shadow:
+            inset 0 0 0 1px rgba(96,165,250,0.28),
+            0 0 0 4px rgba(96,165,250,0.08);
+        }
+
+        /* Segmented buttons */
+        .gtSegBtn {
+          transition:
+            background 200ms var(--ease) 40ms,
+            color 200ms var(--ease) 40ms,
+            box-shadow 220ms var(--ease);
+        }
+        .gtSegBtn:hover:not(:disabled) {
+          color: rgba(232,236,244,0.90);
+        }
+        .gtSegBtn:active:not(:disabled) { transform: scale(0.97); }
+        .gtSegBtn:focus-visible {
+          outline: none;
+          box-shadow:
+            inset 0 0 0 1px rgba(96,165,250,0.32),
+            0 0 0 4px rgba(96,165,250,0.08) !important;
+        }
+
+        /* Pressable buttons (Danger + Ghost) */
+        .gtPressable {
+          transition:
+            filter 180ms var(--ease),
+            background 180ms var(--ease),
+            transform 140ms var(--ease);
+        }
+        .gtPressable:hover:not(:disabled) { filter: brightness(1.08); }
+        .gtPressable:active:not(:disabled) { transform: scale(0.97); }
+        .gtPressable:focus-visible {
+          outline: none;
+          box-shadow:
+            inset 0 0 0 1px rgba(96,165,250,0.32),
+            0 0 0 4px rgba(96,165,250,0.08) !important;
+        }
+
+        /* Icon button (slug copy) */
+        .gtIconBtn {
+          transition: background 180ms var(--ease), color 180ms var(--ease);
+        }
+        .gtIconBtn:hover {
+          color: rgba(147,197,253,0.95);
+          background: rgba(96,165,250,0.08);
+        }
+        .gtIconBtn:active { transform: scale(0.94); }
+
+        /* Avatar hover scale — subtle */
+        .gtAvatar {
+          transition: transform 180ms var(--ease);
+        }
+        .gtAvatar:not(:disabled):hover { transform: scale(1.02); }
+        .gtAvatar:not(:disabled):active { transform: scale(0.98); }
+
+        /* AI Insight — calm, low weight */
+        @keyframes gtInsightIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .gtInsight {
+          animation: gtInsightIn 140ms ease-out;
+          transition: color 150ms ease, opacity 150ms ease;
+        }
+        .gtInsight:hover {
+          color: rgba(147,197,253,0.92) !important;
         }
       `}</style>
     </div>

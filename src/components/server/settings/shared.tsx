@@ -7,13 +7,6 @@ import { type ServerMember } from '../../../lib/serverService';
 
 export const IC = 'w-full bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-3.5 py-2.5 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/20 outline-none focus:border-[var(--theme-accent)]/20 transition-colors';
 
-export const ROLE_TR: Record<string, string> = {
-  owner: 'Sahip',
-  admin: 'Yönetici',
-  mod: 'Moderatör',
-  member: 'Üye',
-};
-
 export const ROLE_CLS: Record<string, string> = {
   owner: 'bg-amber-500/12 text-amber-400',
   admin: 'bg-blue-500/12 text-blue-400',

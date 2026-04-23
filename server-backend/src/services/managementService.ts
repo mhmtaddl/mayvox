@@ -4,9 +4,13 @@ import { nanoid } from 'nanoid';
 import { AppError } from './serverService';
 import { supabase } from '../supabaseClient';
 import { notifyClient } from './realtimeNotify';
-import { assignSystemRoleToMember } from './roleSeedService';
+import { assignSystemRoleToMember, type SystemRoleName } from './roleSeedService';
 import { getServerAccessContext, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
 import { CAPABILITIES, type Capability } from '../capabilities';
+import {
+  ROLE_PRIORITY, canManageRole, canAssignRole, isKnownRole, normalizeRole,
+  type SystemRole,
+} from './roleHierarchy';
 import { logAction } from './auditLogService';
 import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 import { removeParticipantFromAllServerRooms, removeParticipantFromChannel, setPublishPermissionInAllServerRooms } from './livekitService';
@@ -14,15 +18,17 @@ import { broadcastModeration } from './moderationBroadcast';
 
 // ── Yetki kontrol ──
 
-async function requireRole(serverId: string, userId: string, minRole: 'owner' | 'admin' | 'mod'): Promise<string> {
+async function requireRole(serverId: string, userId: string, minRole: SystemRole): Promise<string> {
   const member = await queryOne<{ role: string }>(
     'SELECT role FROM server_members WHERE server_id = $1 AND user_id = $2',
     [serverId, userId]
   );
   if (!member) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
 
-  const hierarchy: Record<string, number> = { owner: 4, admin: 3, mod: 2, member: 1 };
-  if ((hierarchy[member.role] ?? 0) < (hierarchy[minRole] ?? 0)) {
+  // 7-level hiyerarşi — roleHierarchy.ROLE_PRIORITY tek kaynak.
+  // Bilinmeyen rol → priority 0 (yetersiz).
+  const actorPri = isKnownRole(member.role) ? ROLE_PRIORITY[member.role] : 0;
+  if (actorPri < ROLE_PRIORITY[minRole]) {
     throw new AppError(403, 'Bu işlem için yetkin yok');
   }
   return member.role;
@@ -136,10 +142,9 @@ export async function kickMember(serverId: string, userId: string, targetUserId:
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
 
-  // Hierarchy: legacy baseRole üzerinden karşılaştır — mevcut semantiği koru.
-  const hierarchy: Record<string, number> = { owner: 4, admin: 3, mod: 2, member: 1 };
-  const callerRank = hierarchy[ctx.membership.baseRole ?? 'member'] ?? 0;
-  if ((hierarchy[target.role] ?? 0) >= callerRank) {
+  // Hierarchy: 7-level canonical (roleHierarchy). Owner guard + same-level yasak
+  // + unknown fallback hepsi canManageRole içinde.
+  if (!canManageRole(ctx.membership.baseRole, target.role)) {
     throw new AppError(403, 'Kendi seviyendeki veya üstündeki kullanıcıyı atamazsın');
   }
 
@@ -158,10 +163,20 @@ export async function kickMember(serverId: string, userId: string, targetUserId:
 
 export async function changeRole(serverId: string, userId: string, targetUserId: string, newRole: string): Promise<void> {
   const ctx = await getServerAccessContext(userId, serverId);
-  assertCapability(ctx, CAPABILITIES.ROLE_MANAGE, 'Rol değiştirmek için yetkin yok');
+  // Capability kapısı: ROLE_ASSIGN_LOWER (owner'ın full set içinde var; admin,
+  // super_admin, super_mod explicit listesinde var). Tek başına yetmez —
+  // hiyerarşi guard'ları aşağıda ayrıca gerekli.
+  assertCapability(ctx, CAPABILITIES.ROLE_ASSIGN_LOWER, 'Rol atamak için yetkin yok');
   if (userId === targetUserId) throw new AppError(400, 'Kendi rolünü değiştiremezsin');
   if (newRole === 'owner') throw new AppError(400, 'Owner rolü atanamaz');
-  if (!['admin', 'mod', 'member'].includes(newRole)) throw new AppError(400, 'Geçersiz rol');
+
+  // Kabul listesi — 7 rol (owner hariç)
+  const ASSIGNABLE: readonly SystemRole[] = [
+    'super_admin', 'admin', 'super_mod', 'mod', 'super_member', 'member',
+  ] as const;
+  if (!(ASSIGNABLE as readonly string[]).includes(newRole)) {
+    throw new AppError(400, 'Geçersiz rol');
+  }
 
   const target = await queryOne<{ id: string; role: string }>(
     'SELECT id, role FROM server_members WHERE server_id = $1 AND user_id = $2',
@@ -169,11 +184,30 @@ export async function changeRole(serverId: string, userId: string, targetUserId:
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
 
+  // Hiyerarşi — iki kapı birlikte zorunlu:
+  //   (a) actor target'ın MEVCUT rolünü yönetebilir mi?
+  //   (b) actor NEW ROLE'ü atayabilir mi?
+  // Aksi halde örn. alt-mod üst-mod'u "downgrade" edebilir veya admin'i yaratabilir.
+  const actorRole = normalizeRole(ctx.membership.baseRole);
+  if (!canManageRole(actorRole, target.role)) {
+    throw new AppError(403, 'Bu kullanıcının rolünü değiştirme yetkin yok');
+  }
+  if (!canAssignRole(actorRole, newRole)) {
+    throw new AppError(403, 'Bu rolü atayabilmek için yeterli yetkin yok');
+  }
+
   await pool.query('UPDATE server_members SET role = $1 WHERE server_id = $2 AND user_id = $3', [newRole, serverId, targetUserId]);
 
-  // member_roles'ı da senkronla: eski sistem rolünü kaldır, yeniyi ekle
-  const legacyToSystem: Record<string, 'admin' | 'moderator' | 'member'> = { admin: 'admin', mod: 'moderator', member: 'member' };
-  const targetSysRole = legacyToSystem[newRole];
+  // member_roles senkronizasyonu — migration 030 sonrası wire ve roles.name aynı.
+  const wireToSystem: Record<string, SystemRoleName> = {
+    super_admin: 'super_admin',
+    admin: 'admin',
+    super_mod: 'super_mod',
+    mod: 'mod',
+    super_member: 'super_member',
+    member: 'member',
+  };
+  const targetSysRole = wireToSystem[newRole];
   if (targetSysRole) {
     await pool.query(
       `DELETE FROM member_roles WHERE server_id = $1 AND user_id = $2
@@ -219,7 +253,8 @@ export async function getMyModerationState(
 
 const TIMEOUT_PRESETS_SECONDS = [60, 300, 600, 3600, 86400, 604800] as const;
 type TimeoutPresetSeconds = typeof TIMEOUT_PRESETS_SECONDS[number];
-const HIERARCHY: Record<string, number> = { owner: 4, admin: 3, mod: 2, member: 1 };
+// Hiyerarşi 7-level roleHierarchy.ROLE_PRIORITY üzerinden çözülür.
+// Canonical guard: canManageRole(actorRole, targetRole).
 
 /**
  * Voice moderation için ortak preflight: permission + self-check + owner-guard + hierarchy.
@@ -244,11 +279,11 @@ async function requireModerationTarget(
   );
   if (!target) throw new AppError(404, 'Kullanıcı bu sunucuda değil');
 
-  // Owner asla moderate edilemez — herkesten korumalı
+  // Owner asla moderate edilemez — canManageRole içindeki guard da yakalar;
+  // user-facing mesajı ayrı tutmak için önce bu kapı.
   if (target.role === 'owner') throw new AppError(403, 'Sunucu sahibine moderation aksiyonu uygulanamaz');
 
-  const callerRank = HIERARCHY[ctx.membership.baseRole ?? 'member'] ?? 0;
-  if ((HIERARCHY[target.role] ?? 0) >= callerRank) {
+  if (!canManageRole(ctx.membership.baseRole, target.role)) {
     throw new AppError(403, hierarchyMsg);
   }
   return target;
@@ -586,8 +621,7 @@ export async function banMember(serverId: string, userId: string, targetUserId: 
     [serverId, targetUserId]
   );
   if (target) {
-    const hierarchy: Record<string, number> = { owner: 4, admin: 3, mod: 2, member: 1 };
-    if ((hierarchy[target.role] ?? 0) >= (hierarchy[role] ?? 0)) {
+    if (!canManageRole(role, target.role)) {
       throw new AppError(403, 'Kendi seviyendeki veya üstündeki kullanıcıyı banlayamazsın');
     }
   }

@@ -47,11 +47,23 @@ const KIND_DEF: Record<Kind, KindDef> = {
   auto_chat_ban: { label: 'auto',         color: '#fbbf24', rgb: '251,191,36',  icon: <Zap size={11} />,             description: 'Otomatik yazma engeli uygulandı' },
 };
 
-const AUDIT_ACTIONS: readonly string[] = [
+// Ceza olayları — timeline'da render edilenler.
+const PUNISH_ACTIONS: readonly string[] = [
   'member.mute', 'member.timeout', 'member.room_kick',
   'member.chat_ban', 'member.kick', 'member.ban',
   'member.chat_ban.auto',
 ];
+
+// Karşıt (temizleyici) olaylar — timeline'da GÖRÜNMEZ, yalnızca "aktif" rozetini
+// yanlış pozitiflerden korumak için fetch edilir ve tespit için kullanılır.
+const CLEAR_ACTIONS: readonly string[] = [
+  'member.unmute',
+  'member.timeout_clear',
+  'member.chat_unban',
+];
+
+// Fetch kümesi — PUNISH_ACTIONS + CLEAR_ACTIONS
+const AUDIT_ACTIONS: readonly string[] = [...PUNISH_ACTIONS, ...CLEAR_ACTIONS];
 
 function actionToKind(action: string): Kind | null {
   if (action === 'member.chat_ban.auto') return 'auto_chat_ban';
@@ -62,6 +74,47 @@ function actionToKind(action: string): Kind | null {
   if (action === 'member.kick')         return 'kick';
   if (action === 'member.ban')          return 'ban';
   return null;
+}
+
+// "Aktif" durumu için tracker — punish kind → clear action → epoch ms timestamp listesi.
+type ClearKind = 'mute' | 'timeout' | 'chat_ban';
+interface ClearEvent { kind: ClearKind; at: number }
+
+function clearActionToKind(action: string): ClearKind | null {
+  if (action === 'member.unmute')        return 'mute';
+  if (action === 'member.timeout_clear') return 'timeout';
+  if (action === 'member.chat_unban')    return 'chat_ban';
+  return null;
+}
+
+// Punish kind → karşı clear kind. Kick/ban/room_kick anlık aksiyon; aktif kavramı yok.
+const PUNISH_TO_CLEAR_KIND: Partial<Record<Kind, ClearKind>> = {
+  mute: 'mute',
+  timeout: 'timeout',
+  chat_ban: 'chat_ban',
+  auto_chat_ban: 'chat_ban', // Auto chat-ban manuel unban ile kalkar
+};
+
+/**
+ * Bir ceza olayının HÂLÂ aktif olup olmadığını hesaplar.
+ *
+ * Kurallar:
+ *  - Karşılığı clear action'ı olmayan (kick/ban/room_kick) → false (anlık aksiyon)
+ *  - expiresAt varsa ve süresi geçmişse → false
+ *  - Bu event'ten SONRA aynı kategoride clear event varsa → false (temizlenmiş)
+ *  - Aksi halde → true
+ *
+ * Böylece: mute + hemen unmute / timeout + clear / chat_ban + chat_unban
+ * senaryolarında "aktif" rozeti yanlış pozitif üretmez.
+ */
+function computeIsActive(ev: PunishEvent, clears: ClearEvent[], nowMs: number): boolean {
+  const clearKind = PUNISH_TO_CLEAR_KIND[ev.kind];
+  if (!clearKind) return false;
+  if (ev.expiresAt && Date.parse(ev.expiresAt) <= nowMs) return false;
+  const eventAt = Date.parse(ev.createdAt);
+  if (!Number.isFinite(eventAt)) return false;
+  const cleared = clears.some(c => c.kind === clearKind && c.at > eventAt);
+  return !cleared;
 }
 
 // ── Kart verisi (UI render için) ──
@@ -166,6 +219,8 @@ const PAGE_SIZE = 15;
 
 export default function PunishmentHistoryModal({ serverId, member, onClose, onToast }: Props) {
   const [events, setEvents] = useState<PunishEvent[] | null>(null);
+  // Clear event'leri ayrı tut — timeline'da render ETMEZ, yalnız isActive hesabında kullanılır.
+  const [clears, setClears] = useState<ClearEvent[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -188,10 +243,12 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Audit log fetch (paralel, action başına)
+  // Audit log fetch (paralel, action başına). Punish + clear action'ları aynı
+  // fetch kümesinden gelir; ayrıştırılır — punishler timeline'a, clear'lar "aktif" hesabına.
   useEffect(() => {
     let cancelled = false;
     setEvents(null);
+    setClears([]);
     setErr(null);
     (async () => {
       try {
@@ -200,15 +257,24 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
         );
         if (cancelled) return;
         const merged: PunishEvent[] = [];
+        const clearList: ClearEvent[] = [];
         for (const rs of results) {
           for (const log of rs) {
             if (log.resourceId !== member.userId) continue;
+            // Önce clear mı diye kontrol et — clear ise punish event'e DÖNÜŞTÜRME.
+            const ck = clearActionToKind(log.action);
+            if (ck) {
+              const at = Date.parse(log.createdAt);
+              if (Number.isFinite(at)) clearList.push({ kind: ck, at });
+              continue;
+            }
             const ev = toPunishEvent(log);
             if (ev) merged.push(ev);
           }
         }
         merged.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         setEvents(merged);
+        setClears(clearList);
       } catch (e: unknown) {
         if (!cancelled) setErr(e instanceof Error ? e.message : 'Geçmiş yüklenemedi');
       }
@@ -278,31 +344,48 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
 
   const body = (
     <div
-      className="fixed inset-0 z-[700] flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.65)', animation: 'phmBackdropIn 160ms ease-out' }}
+      className="phmOverlay fixed inset-0 z-[700] flex items-center justify-center px-4"
+      style={{
+        background: 'rgba(10,15,25,0.55)',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+      }}
       onMouseDown={onClose}
     >
       <div
-        className="surface-elevated relative w-full max-w-[720px] rounded-2xl overflow-hidden"
-        style={{ animation: 'phmModalIn 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
+        className="phmModal relative w-full max-w-[720px] rounded-[22px] overflow-hidden"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          boxShadow:
+            '0 20px 60px rgba(0,0,0,0.45), ' +
+            'inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
         onMouseDown={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
         <div
           className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}
+          style={{ boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.05)' }}
         >
           <HeaderAvatar src={member.avatar} statusPng={memberStatusPng} displayName={displayName} />
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/65">
-              <History size={12} />
+            <div
+              className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-[#e8ecf4]/45"
+              style={{ letterSpacing: '0.14em' }}
+            >
+              <History size={11} strokeWidth={2} />
               Ceza Geçmişi
             </div>
-            <div className="mt-0.5 flex items-baseline gap-2 min-w-0">
-              <span className="text-[15px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
-              <span className="text-[11.5px] text-[var(--theme-secondary-text)]/60 shrink-0">
-                {events === null ? 'yükleniyor…' : `son 24 saatte ${violations24h} ihlal`}
+            <div className="mt-1 flex items-baseline gap-2 min-w-0">
+              <span
+                className="text-[14.5px] font-medium text-[#e8ecf4]/92 truncate"
+                style={{ letterSpacing: '-0.005em' }}
+              >
+                {displayName}
+              </span>
+              <span className="text-[11px] text-[#e8ecf4]/40 shrink-0">
+                {events === null ? 'yükleniyor' : `son 24 saatte ${violations24h} ihlal`}
               </span>
             </div>
           </div>
@@ -311,47 +394,50 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
             type="button"
             onClick={handleReset}
             disabled={resetting || events === null || events.length === 0}
-            className={`shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center transition-colors ${
-              confirmReset
-                ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                : 'text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
-            } disabled:opacity-30 disabled:pointer-events-none`}
+            className={`phmIconBtn shrink-0 w-9 h-9 rounded-xl inline-flex items-center justify-center ${
+              confirmReset ? 'is-danger-confirm' : ''
+            } disabled:opacity-25 disabled:pointer-events-none`}
             title={confirmReset ? 'Onaylamak için tekrar tıkla' : 'Ceza geçmişini sıfırla'}
             aria-label="Sıfırla"
           >
-            <RotateCcw size={14} strokeWidth={2.2} />
+            <RotateCcw size={14} strokeWidth={1.9} />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+            className="phmIconBtn shrink-0 w-9 h-9 rounded-xl inline-flex items-center justify-center"
             title="Kapat"
             aria-label="Kapat"
           >
-            <X size={16} />
+            <X size={15} strokeWidth={1.9} />
           </button>
         </div>
 
         {/* ── Filter Bar ── */}
-        <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.06)' }}>
-          <div className="relative flex-1 min-w-0">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
+        <div
+          className="flex items-center gap-3 px-5 py-3.5"
+          style={{ boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.04)' }}
+        >
+          <div className="phmSearch relative flex-1 min-w-0">
+            <Search
+              size={13}
+              strokeWidth={2}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#e8ecf4]/35 pointer-events-none"
+            />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Ceza türü veya kanal ara…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 outline-none transition-colors"
+              placeholder="Ceza türü veya kanal ara"
+              className="w-full h-10 pl-9 pr-3 rounded-full text-[12px] text-[#e8ecf4]/90 placeholder:text-[#e8ecf4]/35 outline-none"
               style={{
-                background: 'rgba(var(--glass-tint), 0.04)',
-                border: '1px solid rgba(var(--glass-tint), 0.08)',
+                background: 'rgba(255,255,255,0.028)',
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.045)',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(var(--theme-accent-rgb), 0.35)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(var(--glass-tint), 0.08)'; }}
             />
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {FILTERS.map(f => {
               const active = filter === f.key;
               return (
@@ -359,15 +445,16 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                   key={f.key}
                   type="button"
                   onClick={() => setFilter(f.key)}
-                  className="phmChip px-2.5 h-7 rounded-full text-[11px] font-semibold transition-all"
+                  className="phmChip px-3.5 h-[34px] rounded-full text-[11px] font-medium"
                   style={active ? {
-                    background: 'rgba(var(--theme-accent-rgb), 0.14)',
-                    color: 'var(--theme-accent)',
-                    border: '1px solid rgba(var(--theme-accent-rgb), 0.30)',
+                    background: 'rgba(96,165,250,0.10)',
+                    color: '#93c5fd',
+                    boxShadow:
+                      'inset 0 0 0 1px rgba(96,165,250,0.22), ' +
+                      '0 0 16px rgba(96,165,250,0.10)',
                   } : {
                     background: 'transparent',
-                    color: 'var(--theme-secondary-text)',
-                    border: '1px solid rgba(var(--glass-tint), 0.08)',
+                    color: 'rgba(232,236,244,0.50)',
                   }}
                 >
                   {f.label}
@@ -379,32 +466,24 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
 
         {/* ── Timeline list ── */}
         <div
-          className="px-5 py-3 custom-scrollbar"
+          className="px-5 py-4 phmScroll"
           style={{ maxHeight: 420, minHeight: 220, overflowY: 'auto' }}
         >
           {events === null && !err && (
-            <div className="h-[220px] flex items-center justify-center text-[12px] text-[var(--theme-secondary-text)]/65">
-              Yükleniyor…
+            <div className="h-[220px] flex items-center justify-center text-[12px] text-[#e8ecf4]/45">
+              Yükleniyor
             </div>
           )}
           {err && (
-            <div className="h-[220px] flex items-center justify-center text-[12.5px] text-red-400">{err}</div>
+            <div className="h-[220px] flex items-center justify-center text-[12.5px] text-red-400/80">{err}</div>
           )}
           {events !== null && !err && filtered.length === 0 && (
             <EmptyState hasAny={events.length > 0} hasQuery={!!search.trim() || filter !== 'all'} />
           )}
           {events !== null && !err && paged.length > 0 && (
-            <ul className="relative" style={{ paddingLeft: 22 }}>
-              <div
-                aria-hidden="true"
-                className="absolute top-2 bottom-2 w-px"
-                style={{
-                  left: 9,
-                  background: 'linear-gradient(to bottom, rgba(var(--glass-tint),0.04), rgba(var(--glass-tint),0.10), rgba(var(--glass-tint),0.04))',
-                }}
-              />
+            <ul className="space-y-1.5">
               {paged.map(ev => (
-                <TimelineItem key={ev.id} ev={ev} nowMs={nowMs} />
+                <TimelineItem key={ev.id} ev={ev} nowMs={nowMs} clears={clears} />
               ))}
             </ul>
           )}
@@ -413,38 +492,37 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
         {/* ── Pagination footer ── */}
         {events !== null && !err && filtered.length > 0 && (
           <div
-            className="flex items-center justify-between px-5 py-3 text-[11.5px]"
-            style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.08)' }}
+            className="flex items-center justify-between px-5 py-3 text-[11px]"
+            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
           >
-            <span className="text-[var(--theme-secondary-text)]/60 tabular-nums">
+            <span className="text-[#e8ecf4]/40 tabular-nums">
               {filtered.length} kayıt · sayfa {safePage + 1}/{pageCount}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={safePage === 0}
-                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="phmIconBtn h-8 px-2.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-25 disabled:pointer-events-none"
               >
-                <ChevronLeft size={13} /> Önceki
+                <ChevronLeft size={13} strokeWidth={2} /> Önceki
               </button>
               {pageCountButtons(pageCount, safePage).map((p, i) =>
                 p === '…' ? (
-                  <span key={`ell-${i}`} className="px-1 text-[var(--theme-secondary-text)]/45">…</span>
+                  <span key={`ell-${i}`} className="px-1 text-[#e8ecf4]/35">…</span>
                 ) : (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setPage(p as number)}
-                    className="w-7 h-7 rounded-md text-[11px] font-semibold tabular-nums transition-colors"
+                    className="phmPageNum w-8 h-8 rounded-lg text-[11px] font-medium tabular-nums"
                     style={p === safePage ? {
-                      background: 'rgba(var(--theme-accent-rgb), 0.14)',
-                      color: 'var(--theme-accent)',
-                      border: '1px solid rgba(var(--theme-accent-rgb), 0.28)',
+                      background: 'rgba(96,165,250,0.10)',
+                      color: '#93c5fd',
+                      boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.22)',
                     } : {
                       background: 'transparent',
-                      color: 'var(--theme-secondary-text)',
-                      border: '1px solid rgba(var(--glass-tint), 0.06)',
+                      color: 'rgba(232,236,244,0.55)',
                     }}
                   >
                     {(p as number) + 1}
@@ -455,9 +533,9 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
                 type="button"
                 onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
                 disabled={safePage >= pageCount - 1}
-                className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[var(--theme-secondary-text)]/80 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="phmIconBtn h-8 px-2.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-25 disabled:pointer-events-none"
               >
-                Sonraki <ChevronRight size={13} />
+                Sonraki <ChevronRight size={13} strokeWidth={2} />
               </button>
             </div>
           </div>
@@ -465,21 +543,116 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
       </div>
 
       <style>{`
-        @keyframes phmBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Apple easing token */
+        .phmOverlay, .phmModal, .phmItem, .phmChip, .phmIconBtn, .phmSearch input, .phmPageNum {
+          --phm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes phmBackdropIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
         @keyframes phmModalIn {
-          from { opacity: 0; transform: scale(0.97); }
+          from { opacity: 0; transform: scale(0.96); }
           to   { opacity: 1; transform: scale(1);    }
         }
         @keyframes phmItemIn {
           from { opacity: 0; transform: translateY(3px); }
           to   { opacity: 1; transform: translateY(0);   }
         }
-        .phmChip { transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; }
-        .phmChip:hover { transform: translateY(-0.5px); }
-        .phmItem { transition: background 150ms ease, border-color 150ms ease; }
-        .phmItem:hover { background: rgba(var(--glass-tint), 0.035); }
-        .phmDot { transition: transform 160ms cubic-bezier(0.2,0.8,0.2,1); }
-        .phmItem:hover .phmDot { transform: scale(1.15); }
+
+        .phmOverlay {
+          animation: phmBackdropIn 200ms var(--phm-ease);
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        .phmModal {
+          animation: phmModalIn 220ms var(--phm-ease);
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+
+        /* Filter pills */
+        .phmChip {
+          transition:
+            background 200ms var(--phm-ease) 40ms,
+            color 200ms var(--phm-ease) 40ms,
+            box-shadow 220ms var(--phm-ease);
+        }
+        .phmChip:hover {
+          color: rgba(232,236,244,0.90) !important;
+          background: rgba(255,255,255,0.04) !important;
+        }
+        .phmChip:active { transform: scale(0.97); }
+        .phmChip:focus-visible {
+          outline: none;
+          box-shadow:
+            inset 0 0 0 1px rgba(96,165,250,0.32),
+            0 0 0 4px rgba(96,165,250,0.08);
+        }
+
+        /* Search — focus ring */
+        .phmSearch input {
+          transition: background 200ms var(--phm-ease), box-shadow 220ms var(--phm-ease);
+        }
+        .phmSearch input:focus {
+          background: rgba(255,255,255,0.045) !important;
+          box-shadow:
+            inset 0 0 0 1px rgba(96,165,250,0.28),
+            0 0 0 4px rgba(96,165,250,0.08) !important;
+        }
+
+        /* Icon buttons (close/reset/page nav) */
+        .phmIconBtn {
+          color: rgba(232,236,244,0.55);
+          transition:
+            background 180ms var(--phm-ease) 40ms,
+            color 180ms var(--phm-ease) 40ms;
+        }
+        .phmIconBtn:hover {
+          color: rgba(232,236,244,0.95);
+          background: rgba(255,255,255,0.04);
+        }
+        .phmIconBtn:active { transform: scale(0.96); }
+        .phmIconBtn.is-danger-confirm {
+          color: rgba(248,113,113,0.90);
+          background: rgba(248,113,113,0.08);
+        }
+        .phmIconBtn.is-danger-confirm:hover {
+          background: rgba(248,113,113,0.14);
+        }
+
+        .phmPageNum {
+          transition:
+            background 180ms var(--phm-ease) 40ms,
+            color 180ms var(--phm-ease) 40ms,
+            box-shadow 200ms var(--phm-ease);
+        }
+        .phmPageNum:hover {
+          background: rgba(255,255,255,0.04) !important;
+          color: rgba(232,236,244,0.90) !important;
+        }
+
+        /* List item — row background + hover fade */
+        .phmItem {
+          animation: phmItemIn 240ms var(--phm-ease);
+          transition: background 200ms var(--phm-ease) 50ms, box-shadow 220ms var(--phm-ease);
+        }
+        .phmItem:not(.is-active):hover {
+          background: rgba(255,255,255,0.035) !important;
+        }
+
+        /* Scrollbar — thin, muted */
+        .phmScroll::-webkit-scrollbar { width: 6px; }
+        .phmScroll::-webkit-scrollbar-track { background: transparent; }
+        .phmScroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.06);
+          border-radius: 999px;
+        }
+        .phmScroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.10);
+        }
+        .phmScroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
       `}</style>
     </div>
   );
@@ -503,58 +676,52 @@ function pageCountButtons(total: number, current: number): Array<number | '…'>
 }
 
 // ── Tek timeline item ──
-const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs }) => {
+const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number; clears: ClearEvent[] }> = ({ ev, nowMs, clears }) => {
   const def = KIND_DEF[ev.kind];
-  const isActive = !!ev.expiresAt && Date.parse(ev.expiresAt) > nowMs;
+  // Yeni doğruluk kuralı: expiresAt + karşıt clear event kontrolü birlikte.
+  // Ayrıntı: computeIsActive tanımı yukarıda.
+  const isActive = computeIsActive(ev, clears, nowMs);
   const durationText = ev.durationSeconds ? formatDurationShort(ev.durationSeconds) : null;
   const remaining = isActive && ev.expiresAt ? formatRemaining(ev.expiresAt, nowMs) : null;
 
   return (
     <li
-      className="phmItem relative rounded-xl py-3 pr-3 pl-3 my-1.5"
-      style={{
-        background: isActive ? 'rgba(251,191,36,0.05)' : 'rgba(var(--glass-tint), 0.02)',
-        border: `1px solid ${isActive ? 'rgba(251,191,36,0.24)' : 'rgba(var(--glass-tint), 0.06)'}`,
-        animation: 'phmItemIn 220ms cubic-bezier(0.2,0.8,0.2,1)',
+      className={`phmItem relative rounded-[13px] px-3.5 py-3 ${isActive ? 'is-active' : ''}`}
+      style={isActive ? {
+        background: 'rgba(251,191,36,0.04)',
+        boxShadow: 'inset 0 0 0 1px rgba(251,191,36,0.18)',
+      } : {
+        background: 'rgba(255,255,255,0.02)',
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.035)',
       }}
     >
-      {/* Dot */}
-      <span
-        aria-hidden="true"
-        className="phmDot absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full"
-        style={{
-          left: -16,
-          background: def.color,
-          boxShadow: `0 0 0 3px var(--theme-bg), 0 0 6px ${def.color}99`,
-        }}
-      />
-
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium shrink-0"
               style={{
-                background: `rgba(${def.rgb}, 0.12)`,
-                color: def.color,
-                border: `1px solid rgba(${def.rgb}, 0.24)`,
+                background: `rgba(${def.rgb}, 0.10)`,
+                color: `rgba(${def.rgb}, 0.92)`,
+                boxShadow: `inset 0 0 0 1px rgba(${def.rgb}, 0.18)`,
               }}
             >
-              <span className="inline-flex">{def.icon}</span>
+              <span className="inline-flex opacity-85">{def.icon}</span>
               {def.label}
             </span>
             {ev.channel && (
-              <span className="text-[11.5px] text-[var(--theme-secondary-text)]/70 truncate">
+              <span className="text-[11px] text-[#e8ecf4]/55 truncate">
                 #{ev.channel}
               </span>
             )}
             {isActive && (
               <span
-                className="ml-auto px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider shrink-0"
+                className="ml-auto px-2 py-0.5 rounded-full text-[9.5px] font-medium uppercase shrink-0"
                 style={{
-                  background: 'rgba(251,191,36,0.12)',
-                  color: '#fbbf24',
-                  border: '1px solid rgba(251,191,36,0.28)',
+                  background: 'rgba(251,191,36,0.08)',
+                  color: 'rgba(251,191,36,0.88)',
+                  boxShadow: 'inset 0 0 0 1px rgba(251,191,36,0.22)',
+                  letterSpacing: '0.10em',
                 }}
               >
                 aktif
@@ -562,28 +729,31 @@ const TimelineItem: React.FC<{ ev: PunishEvent; nowMs: number }> = ({ ev, nowMs 
             )}
           </div>
 
-          <div className="mt-1 text-[12.5px] text-[var(--theme-text)]/85 leading-snug">
+          <div
+            className="mt-1.5 text-[12.5px] font-medium text-[#e8ecf4]/88 leading-snug"
+            style={{ letterSpacing: '-0.005em' }}
+          >
             {ev.kind === 'auto_chat_ban' && ev.reason
               ? autoReasonText(ev.reason)
               : def.description}
           </div>
 
-          <div className="mt-1 flex items-center gap-2 text-[10.5px] text-[var(--theme-secondary-text)]/55">
+          <div className="mt-1 flex items-center gap-2 text-[10.5px] text-[#e8ecf4]/40 leading-relaxed">
             {durationText && <span>{durationText} süre</span>}
-            {durationText && <span className="opacity-40">·</span>}
+            {durationText && <span className="opacity-50">·</span>}
             <span>{ev.isAuto ? 'sistem tarafından' : `${ev.actorName} tarafından`}</span>
           </div>
         </div>
 
         <div className="shrink-0 text-right">
           <div
-            className="text-[10.5px] tabular-nums text-[var(--theme-secondary-text)]/65"
+            className="text-[10.5px] tabular-nums text-[#e8ecf4]/35"
             title={absoluteTimestamp(ev.createdAt)}
           >
             {timeAgo(ev.createdAt)}
           </div>
           {remaining && (
-            <div className="mt-1 text-[11.5px] font-semibold tabular-nums" style={{ color: '#fbbf24' }}>
+            <div className="mt-1 text-[11px] font-medium tabular-nums" style={{ color: 'rgba(251,191,36,0.88)' }}>
               {remaining} kaldı
             </div>
           )}
@@ -607,11 +777,12 @@ function HeaderAvatar({ src, statusPng, displayName }: { src: string | null; sta
   const finalSrc = useCustom ? src! : statusPng;
   return (
     <div
-      className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
+      className="w-11 h-11 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
       style={{
-        background: 'rgba(var(--glass-tint), 0.06)',
-        border: '1px solid rgba(var(--glass-tint), 0.10)',
-        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.05)',
+        background: 'linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+        boxShadow:
+          'inset 0 1px 0 rgba(255,255,255,0.05), ' +
+          '0 2px 8px rgba(0,0,0,0.18)',
       }}
       aria-label={displayName}
     >
@@ -634,16 +805,16 @@ function EmptyState({ hasAny, hasQuery }: { hasAny: boolean; hasQuery: boolean }
       <div
         className="w-12 h-12 rounded-2xl inline-flex items-center justify-center mb-3"
         style={{
-          background: 'rgba(var(--glass-tint), 0.04)',
-          border: '1px solid rgba(var(--glass-tint), 0.08)',
+          background: 'rgba(255,255,255,0.03)',
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
         }}
       >
-        <Shield size={20} className="text-[var(--theme-secondary-text)]/55" />
+        <Shield size={18} className="text-[#e8ecf4]/45" strokeWidth={1.9} />
       </div>
-      <div className="text-[13.5px] font-semibold text-[var(--theme-text)]/90">
+      <div className="text-[13px] font-medium text-[#e8ecf4]/90" style={{ letterSpacing: '-0.005em' }}>
         {filtered ? 'Sonuç bulunamadı' : 'Ceza geçmişi bulunmuyor'}
       </div>
-      <div className="mt-1 text-[11.5px] text-[var(--theme-secondary-text)]/55 max-w-[320px]">
+      <div className="mt-1 text-[11.5px] text-[#e8ecf4]/45 max-w-[320px] leading-relaxed">
         {filtered
           ? 'Bu filtrelerle eşleşen kayıt yok.'
           : 'Bu kullanıcı için henüz moderasyon kaydı oluşmadı.'}

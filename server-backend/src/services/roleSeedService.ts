@@ -40,12 +40,24 @@ export async function seedSystemRolesForServer(client: Executor, serverId: strin
 /**
  * Üyeyi sistem rolüne bağla. Rol yoksa (örn. eski migration uygulanmamış sunucu)
  * sessizce skip — resolver fallback capability'si legacy server_members.role üzerinden çalışır.
+ *
+ * Migration 030 sonrası roles.name ve wire format 1-1 aynı (eski 'moderator' satırları
+ * 030'da 'mod'a rename edildi).
  */
+export type SystemRoleName =
+  | 'owner'
+  | 'super_admin'
+  | 'admin'
+  | 'super_mod'
+  | 'mod'
+  | 'super_member'
+  | 'member';
+
 export async function assignSystemRoleToMember(
   client: Executor,
   serverId: string,
   userId: string,
-  roleName: 'owner' | 'admin' | 'moderator' | 'member',
+  roleName: SystemRoleName,
 ): Promise<void> {
   const { rows } = await client.query<{ id: string }>(
     'SELECT id FROM roles WHERE server_id = $1 AND name = $2 AND is_system = true',

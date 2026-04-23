@@ -280,7 +280,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
       return true;
     });
   }, [events, eventSearch, eventKindFilter]);
-  const EVENTS_PER_PAGE = 15;
+  const EVENTS_PER_PAGE = 10;
   const eventTotalPages = Math.max(1, Math.ceil(filteredEvents.length / EVENTS_PER_PAGE));
   const eventCurrentPage = Math.min(eventPage, eventTotalPages);
   const pagedEvents = filteredEvents.slice((eventCurrentPage - 1) * EVENTS_PER_PAGE, eventCurrentPage * EVENTS_PER_PAGE);
@@ -319,22 +319,22 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
 
   return (
     <div className="max-w-[1280px] mx-auto space-y-3 pb-8">
-      {/* ── Summary Bar — 3 stat pill + range, tek satır, ≤64px ── */}
+      {/* ── Summary Bar — 3 stat pill + range, tek satır ── */}
       <div
-        className="flex items-center gap-2 rounded-2xl px-3 py-2"
+        className="flex items-center gap-3 rounded-2xl px-4 py-3"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <ShieldCheck size={14} className="text-[var(--theme-accent)]/80 shrink-0" strokeWidth={2} />
-        <div className="flex-1 grid grid-cols-3 gap-1.5 min-w-0">
+        <ShieldCheck size={16} className="text-[var(--theme-accent)]/80 shrink-0" strokeWidth={2} />
+        <div className="flex-1 grid grid-cols-3 gap-2 min-w-0">
           <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  active={flood.enabled} />
           <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  active={profanityEnabled} />
           <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   active={spamEnabled} />
         </div>
         <div
-          className="inline-flex items-center gap-0.5 rounded-lg p-0.5 shrink-0"
+          className="inline-flex items-center gap-0.5 rounded-lg p-1 shrink-0"
           style={{
             background: 'rgba(var(--glass-tint),0.05)',
             border: '1px solid rgba(var(--glass-tint),0.08)',
@@ -347,7 +347,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                 key={r}
                 type="button"
                 onClick={() => setTimeRange(r)}
-                className={`rangeBtn px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
+                className={`rangeBtn px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
                 style={active ? {
                   background: 'rgba(var(--theme-accent-rgb),0.18)',
                   color: 'var(--theme-accent)',
@@ -573,12 +573,12 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
       )}
 
       {/* ── Desktop: 2-kolon (Events solda | Auto Punishment sağda). Events yoksa tek kolon. ── */}
-      <div className={eventsDenied ? '' : 'grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-3 items-start'}>
+      <div className={eventsDenied ? '' : 'grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-3 items-stretch'}>
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (
         <section
-          className="automod-card rounded-2xl p-3.5"
+          className="automod-card rounded-2xl p-3.5 h-full flex flex-col"
           style={{
             background: 'rgba(var(--glass-tint), 0.04)',
             border: '1px solid rgba(var(--glass-tint), 0.08)',
@@ -777,7 +777,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
       )}
 
       {/* ── Sağ kolon: Auto Punishment + Aktif cezalar (seamless) ── */}
-      <div className={`smart-punish ${!eventsDenied && activePunishments.length > 0 ? 'has-active' : ''}`}>
+      <div className={`smart-punish h-full flex flex-col ${!eventsDenied && activePunishments.length > 0 ? 'has-active' : ''}`}>
         <AutoPunishmentCard value={autoPunishFlood} onChange={setAutoPunishFlood} />
         {!eventsDenied && activePunishments.length > 0 && (
           <ActivePunishmentsCompact
@@ -1251,7 +1251,7 @@ function HeroStat({
   const c = CHIP_COLOR_MAP[color];
   return (
     <div
-      className="statPill relative flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+      className="statPill relative flex items-center gap-2.5 rounded-lg px-3 py-2.5"
       style={{
         background: active ? `rgba(${c.rgb}, 0.04)` : 'rgba(var(--glass-tint),0.03)',
         border: active ? `1px solid rgba(${c.rgb}, 0.12)` : '1px solid rgba(var(--glass-tint),0.08)',
@@ -1261,25 +1261,25 @@ function HeroStat({
       }}
     >
       <span
-        className="w-1.5 h-1.5 rounded-full shrink-0"
+        className="w-2 h-2 rounded-full shrink-0"
         style={{
           background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.45)',
-          boxShadow: active ? `0 0 7px rgba(${c.rgb}, 0.75)` : 'none',
+          boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.75)` : 'none',
         }}
         aria-hidden="true"
       />
       {/* Key = value → sayı değişiminde React remount + CSS fade-in animation */}
       <span
         key={value}
-        className="statValue text-[15px] font-bold tabular-nums leading-none"
+        className="statValue text-[17px] font-bold tabular-nums leading-none"
         style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)' }}
       >
         {value}
       </span>
-      <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/65">
+      <span className="text-[11px] font-semibold text-[var(--theme-secondary-text)]/65">
         {label}
       </span>
-      <span className="ml-auto text-[9px] font-semibold uppercase tracking-[0.1em] pl-1.5 shrink-0"
+      <span className="ml-auto text-[9.5px] font-semibold uppercase tracking-[0.1em] pl-1.5 shrink-0"
         style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)', opacity: active ? 0.75 : 0.4 }}>
         {active ? 'açık' : 'kapalı'}
       </span>

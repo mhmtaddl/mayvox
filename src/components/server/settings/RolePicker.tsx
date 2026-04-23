@@ -1,8 +1,13 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Crown, Shield, ShieldCheck, User, Check } from 'lucide-react';
+import {
+  Crown, Shield, ShieldCheck, ShieldPlus, ShieldAlert,
+  User as UserIcon, UserCheck, Check,
+} from 'lucide-react';
 import type { ServerRole } from '../../../lib/permissionBundles';
-import { canSetRole } from '../../../lib/permissionBundles';
+import {
+  canAssignRole, rolesActorCanManage, ROLE_LABEL, ROLE_SHORT,
+} from '../../../lib/permissionBundles';
 
 interface Props {
   currentRole: ServerRole;
@@ -20,15 +25,37 @@ interface Option {
   icon: React.ReactNode;
 }
 
-const OPTIONS: readonly Option[] = [
-  { value: 'admin', label: 'Yönetici', hint: 'Sunucu ayarları + tam moderasyon', icon: <Shield size={14} className="text-blue-400" /> },
-  { value: 'mod', label: 'Moderatör', hint: 'Ses moderasyonu + davet yönetimi', icon: <ShieldCheck size={14} className="text-purple-400" /> },
-  { value: 'member', label: 'Üye', hint: 'Temel erişim — sesli kanallar, mesaj', icon: <User size={14} className="text-[#7b8ba8]" /> },
-];
+// Her rol için sabit visual — picker görselini ayrı tuttuk; MembersTab chip'ı ile simetri
+const ROLE_ICON: Record<ServerRole, React.ReactNode> = {
+  owner:        <Crown size={14} className="text-amber-400" />,
+  super_admin:  <ShieldPlus size={14} className="text-blue-300" />,
+  admin:        <Shield size={14} className="text-blue-400" />,
+  super_mod:    <ShieldAlert size={14} className="text-purple-300" />,
+  mod:          <ShieldCheck size={14} className="text-purple-400" />,
+  super_member: <UserCheck size={14} className="text-slate-300" />,
+  member:       <UserIcon size={14} className="text-[#7b8ba8]" />,
+};
 
 export default function RolePicker({ currentRole, actorRole, anchorRect, onSelect, onClose, busy }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: anchorRect.bottom + 6, left: anchorRect.right - 280 });
+  const [pos, setPos] = useState({ top: anchorRect.bottom + 6, left: anchorRect.right - 300 });
+
+  // Sadece actor'ın atayabildiği roller — priority-desc sıralı.
+  // Current role de listede görünür (seçili işareti için) — atanamazsa disabled değil,
+  // sadece "mevcut rol" rozeti gösterilir.
+  const options = useMemo<Option[]>(() => {
+    const assignable = rolesActorCanManage(actorRole);
+    const set = new Set<ServerRole>(assignable);
+    // currentRole assignable değilse de görünür — kullanıcıya rolünün ne olduğu gösterilir.
+    const list: ServerRole[] = [...assignable];
+    if (!set.has(currentRole) && currentRole !== 'owner') list.unshift(currentRole);
+    return list.map(value => ({
+      value,
+      label: ROLE_LABEL[value],
+      hint: ROLE_SHORT[value],
+      icon: ROLE_ICON[value],
+    }));
+  }, [actorRole, currentRole]);
 
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -70,9 +97,11 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
         position: 'fixed',
         top: pos.top,
         left: pos.left,
-        width: 280,
+        width: 300,
         zIndex: 600,
         padding: '10px',
+        maxHeight: 'min(80vh, 540px)',
+        overflowY: 'auto',
         animation: 'rolePickerIn 140ms cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
@@ -81,9 +110,13 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
         <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]">Rol Ata</span>
       </div>
 
-      {OPTIONS.map(opt => {
+      {options.length === 0 ? (
+        <div className="px-3 py-4 text-[11.5px] text-[#7b8ba8]/70 leading-snug text-center">
+          Rol atamaya yetkiniz yok.
+        </div>
+      ) : options.map(opt => {
         const isSelected = opt.value === currentRole;
-        const canAssign = canSetRole(actorRole, opt.value);
+        const canAssign = canAssignRole(actorRole, opt.value);
         const disabled = !canAssign || busy || isSelected;
 
         return (
@@ -111,9 +144,6 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
                 )}
               </div>
               <div className="text-[10.5px] text-[#7b8ba8]/75 mt-0.5 leading-snug">{opt.hint}</div>
-              {!canAssign && !isSelected && (
-                <div className="text-[9.5px] text-amber-400/70 mt-1 italic">Yalnızca sahip atayabilir</div>
-              )}
             </div>
           </button>
         );
