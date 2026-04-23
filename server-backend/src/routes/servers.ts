@@ -15,6 +15,7 @@ import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
 import { listActiveAutoPunishments } from '../services/moderationAutoPunishService';
+import { getInsights } from '../services/voiceActivityService';
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
 
@@ -120,6 +121,32 @@ router.patch('/:id/moderation-config', async (req: Request, res: Response) => {
   try {
     const next = await updateServerModerationConfig(req.params.id as string, (req as any).userId, req.body);
     res.json(next);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/insights?range=7d|30d|90d — voice activity + social graph
+ *  Yetki: insights.view (owner/super_admin/admin/super_mod). Normal üyeler 403. */
+router.get('/:id/insights', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const rangeStr = typeof req.query.range === 'string' ? req.query.range : '30d';
+    const rangeMap: Record<string, 7 | 30 | 90> = { '7d': 7, '30d': 30, '90d': 90 };
+    const rangeDays = rangeMap[rangeStr];
+    if (!rangeDays) {
+      res.status(400).json({ error: 'range must be 7d|30d|90d' });
+      return;
+    }
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    if (!ctx.flags.canViewInsights) {
+      res.status(403).json({ error: 'İçgörüleri görme yetkin yok' });
+      return;
+    }
+    const insights = await getInsights(serverId, rangeDays);
+    res.json(insights);
   } catch (err) { handleError(res, err); }
 });
 

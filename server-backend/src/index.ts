@@ -6,11 +6,19 @@ import serverRoutes from './routes/servers';
 import inviteLinkRoutes from './routes/inviteLinks';
 import internalRoutes from './routes/internal';
 import adminRoutes from './routes/admin';
+import webhookRoutes from './routes/webhooks';
 import { assertCapabilitySyncOnStartup } from './services/capabilitySyncService';
+import { reconcileOrphanSessions, refreshActivityHeatmap } from './services/voiceActivityService';
 
 const app = express();
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
+
+// ── LiveKit webhook — JSON parser'dan ÖNCE raw body ile mount ──
+// WebhookReceiver HMAC verify raw string gerektirir; express.json() tüketirse bozulur.
+app.use('/webhooks', express.raw({ type: '*/*', limit: '256kb' }), webhookRoutes);
+
+// ── Genel JSON parser (diğer route'lar) ──
 app.use(express.json({ limit: '1mb' }));
 
 // ── Health check ──
@@ -42,11 +50,27 @@ app.listen(config.port, config.host, () => {
   }
 
   // Capability sync — code ↔ DB drift protection (capabilities.ts ↔ role_capabilities).
-  // CAPABILITY_SYNC_STRICT=1 iken drift → process exit. Default: warn only.
   const strict = process.env.CAPABILITY_SYNC_STRICT === '1';
   void assertCapabilitySyncOnStartup(strict).catch(err => {
     console.warn('[capabilitySync] validator error', err instanceof Error ? err.message : err);
   });
+
+  // Voice activity — orphan cleanup + heatmap MV günlük refresh
+  void reconcileOrphanSessions().then(r => {
+    if (r.closedCount > 0) {
+      console.log(`[voice-activity] ${r.closedCount} orphan session kapatıldı (startup)`);
+    }
+  }).catch(err => console.warn('[voice-activity] reconcile hata:', err instanceof Error ? err.message : err));
+
+  // MV refresh: 24 saatte bir. Restart'ta sayaç sıfırlanır; ilk çağrı startup'tan 60s sonra.
+  setTimeout(() => {
+    void refreshActivityHeatmap().catch(err =>
+      console.warn('[voice-activity] heatmap refresh hata:', err instanceof Error ? err.message : err));
+    setInterval(() => {
+      void refreshActivityHeatmap().catch(err =>
+        console.warn('[voice-activity] heatmap refresh hata:', err instanceof Error ? err.message : err));
+    }, 24 * 60 * 60 * 1000);
+  }, 60_000);
 });
 
 // Graceful shutdown

@@ -40,6 +40,10 @@ export const CAPABILITIES = {
   ROLE_MANAGE_LOWER: 'role.manage.lower',
   ROLE_ASSIGN_LOWER: 'role.assign.lower',
   ROLE_PERMISSIONS_EDIT_LOWER: 'role.permissions.edit.lower',
+
+  // Voice Activity / Insights dashboard (Sunucu Ayarları → İçgörüler sekmesi).
+  // Grant: owner / super_admin / admin / super_mod. Normal üye/mod görmez.
+  INSIGHTS_VIEW: 'insights.view',
 } as const;
 
 export type Capability = typeof CAPABILITIES[keyof typeof CAPABILITIES];
@@ -93,6 +97,7 @@ export const SYSTEM_ROLE_CAPS: Record<string, Capability[]> = {
     CAPABILITIES.MEMBER_CHAT_BAN,
     CAPABILITIES.ROLE_MANAGE_LOWER,
     CAPABILITIES.ROLE_ASSIGN_LOWER,
+    CAPABILITIES.INSIGHTS_VIEW,
   ],
 
   // admin → tam yönetim (sunucu + kanal + davet + moderasyon), alt-rol yönetimi
@@ -118,6 +123,7 @@ export const SYSTEM_ROLE_CAPS: Record<string, Capability[]> = {
     CAPABILITIES.ROLE_MANAGE_LOWER,
     CAPABILITIES.ROLE_ASSIGN_LOWER,
     CAPABILITIES.ROLE_PERMISSIONS_EDIT_LOWER,
+    CAPABILITIES.INSIGHTS_VIEW,
   ],
 
   // super_mod → admin eksi server.manage / channel mgmt; gelişmiş moderasyon + alt-rol ata
@@ -134,6 +140,7 @@ export const SYSTEM_ROLE_CAPS: Record<string, Capability[]> = {
     CAPABILITIES.MEMBER_ROOM_KICK,
     CAPABILITIES.MEMBER_CHAT_BAN,
     CAPABILITIES.ROLE_ASSIGN_LOWER,
+    CAPABILITIES.INSIGHTS_VIEW,
   ],
 
   // mod → ses moderasyonu + davet; sunucu/rol yönetimi yok

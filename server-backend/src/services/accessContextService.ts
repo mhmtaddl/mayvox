@@ -31,6 +31,7 @@ export interface AccessFlags {
   canMoveMembers: boolean;
   canKickMembers: boolean;
   canManageRoles: boolean;
+  canViewInsights: boolean;
 }
 
 /**
@@ -114,6 +115,7 @@ export function computeFlags(
     canMoveMembers: has(CAPABILITIES.MEMBER_MOVE),
     canKickMembers: has(CAPABILITIES.MEMBER_KICK),
     canManageRoles: has(CAPABILITIES.ROLE_MANAGE),
+    canViewInsights: has(CAPABILITIES.INSIGHTS_VIEW),
   };
 }
 
