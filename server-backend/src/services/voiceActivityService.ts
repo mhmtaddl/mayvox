@@ -186,9 +186,9 @@ export async function reconcileOrphanSessions(): Promise<{ closedCount: number }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Activity Heatmap MV refresh — günlük cron
+// Activity Heatmap MV refresh — saatlik cron + manuel "Yenile" endpoint'i
 // ════════════════════════════════════════════════════════════════════════════
-export async function refreshActivityHeatmap(): Promise<void> {
+export async function refreshActivityHeatmap(): Promise<Date> {
   try {
     await pool.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY activity_heatmap`);
   } catch (err) {
@@ -196,6 +196,16 @@ export async function refreshActivityHeatmap(): Promise<void> {
     await pool.query(`REFRESH MATERIALIZED VIEW activity_heatmap`);
   }
   lastHeatmapRefresh = new Date();
+  return lastHeatmapRefresh;
+}
+
+// Manuel refresh'in concurrent spam'ını backend tarafında da tek in-flight promise
+// ile serialize et — frontend disabled state'inden bağımsız race-safe garanti.
+let inflightRefresh: Promise<Date> | null = null;
+export function refreshActivityHeatmapOnce(): Promise<Date> {
+  if (inflightRefresh) return inflightRefresh;
+  inflightRefresh = refreshActivityHeatmap().finally(() => { inflightRefresh = null; });
+  return inflightRefresh;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

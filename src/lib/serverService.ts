@@ -462,6 +462,12 @@ export async function getServerInsights(serverId: string, range: InsightsRangeDa
   return apiFetch<InsightsResponse>(`/servers/${serverId}/insights?range=${rangeStr}`);
 }
 
+/** Aktivite haritası MV'sini manuel refresh et. Backend { refreshedAt } döner;
+ *  UI bunu anında "Son güncelleme" etiketine yansıtır, ardından insights'ı tekrar çeker. */
+export async function refreshServerInsights(serverId: string): Promise<{ refreshedAt: string }> {
+  return apiFetch<{ refreshedAt: string }>(`/servers/${serverId}/insights/refresh`, { method: 'POST' });
+}
+
 export async function getServerAccessContext(serverId: string): Promise<ServerAccessContext> {
   return apiFetch<ServerAccessContext>(`/servers/${serverId}/access-context`);
 }

@@ -62,15 +62,16 @@ app.listen(config.port, config.host, () => {
     }
   }).catch(err => console.warn('[voice-activity] reconcile hata:', err instanceof Error ? err.message : err));
 
-  // MV refresh: 24 saatte bir. Restart'ta sayaç sıfırlanır; ilk çağrı startup'tan 60s sonra.
+  // MV refresh: saatte bir. Restart'ta sayaç sıfırlanır; ilk çağrı startup'tan 5s sonra
+  // (aktivite verisi release/restart sonrası hızla tazelensin diye; REFRESH CONCURRENTLY ucuz).
   setTimeout(() => {
     void refreshActivityHeatmap().catch(err =>
       console.warn('[voice-activity] heatmap refresh hata:', err instanceof Error ? err.message : err));
     setInterval(() => {
       void refreshActivityHeatmap().catch(err =>
         console.warn('[voice-activity] heatmap refresh hata:', err instanceof Error ? err.message : err));
-    }, 24 * 60 * 60 * 1000);
-  }, 60_000);
+    }, 60 * 60 * 1000);
+  }, 5_000);
 });
 
 // Graceful shutdown

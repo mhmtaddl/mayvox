@@ -3,6 +3,7 @@ import { BarChart3, AlertCircle, RefreshCw, RotateCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   getServerInsights,
+  refreshServerInsights,
   type InsightsResponse,
   type InsightsRangeDays,
 } from '../../../lib/serverService';
@@ -42,6 +43,7 @@ export default function InsightsTab({ serverId }: Props) {
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string>('');
   const [profiles, setProfiles] = useState<Map<string, ProfileRecord>>(new Map());
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchInsights = useCallback(async (force = false) => {
     const key = `${serverId}:${range}`;
@@ -65,6 +67,27 @@ export default function InsightsTab({ serverId }: Props) {
   }, [serverId, range]);
 
   useEffect(() => { fetchInsights(); }, [fetchInsights]);
+
+  // Manuel MV refresh — backend tarafında da tek in-flight promise ile serialize;
+  // frontend guard'ı concurrent buton spam'ını engeller (disabled + early return).
+  const handleManualRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const { refreshedAt } = await refreshServerInsights(serverId);
+      // "Son güncelleme" etiketini anında güncelle — fetch dönmeden kullanıcı görsün.
+      setData(prev => prev ? { ...prev, heatmapRefreshedAt: refreshedAt } : prev);
+      // Tüm range cache'lerini invalidate et (MV global refresh olduğu için).
+      for (const k of Array.from(cache.keys())) {
+        if (k.startsWith(`${serverId}:`)) cache.delete(k);
+      }
+      await fetchInsights(true);
+    } catch (err: any) {
+      setError(err?.message || 'Yenileme başarısız');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [serverId, refreshing, fetchInsights]);
 
   // Supabase profile enrichment — backend user_id'lere name + avatar ekle.
   useEffect(() => {
@@ -122,7 +145,10 @@ export default function InsightsTab({ serverId }: Props) {
             Ses odası aktivitesi ve sosyal etkileşim özetleri
           </p>
         </div>
-        <RangePills value={range} onChange={setRange} disabled={phase === 'loading'} />
+        <div className="flex items-center gap-2">
+          <RefreshButton onClick={handleManualRefresh} pending={refreshing} disabled={phase === 'loading'} />
+          <RangePills value={range} onChange={setRange} disabled={phase === 'loading' || refreshing} />
+        </div>
       </div>
 
       {/* İçerik */}
@@ -163,6 +189,36 @@ function isEmpty(d: InsightsResponse): boolean {
   return d.topActiveUsers.length === 0
       && d.topSocialPairs.length === 0
       && d.peakHours.length === 0;
+}
+
+// ── Yenile butonu — MV refresh tetikler, pending state + concurrent guard ──
+function RefreshButton({ onClick, pending, disabled }: {
+  onClick: () => void;
+  pending: boolean;
+  disabled?: boolean;
+}) {
+  const isDisabled = !!disabled || pending;
+  return (
+    <button
+      onClick={onClick}
+      disabled={isDisabled}
+      title={pending ? 'Yenileniyor…' : 'Aktivite haritasını yenile'}
+      aria-busy={pending}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide disabled:cursor-not-allowed"
+      style={{
+        color: 'var(--theme-text)',
+        background: pending
+          ? 'rgba(var(--theme-accent-rgb), 0.18)'
+          : 'rgba(var(--glass-tint), 0.04)',
+        border: `1px solid rgba(var(--${pending ? 'theme-accent-rgb' : 'glass-tint'}), ${pending ? 0.32 : 0.08})`,
+        opacity: isDisabled && !pending ? 0.5 : 1,
+        transition: 'all 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+      }}
+    >
+      <RefreshCw size={12} className={pending ? 'animate-spin' : ''} />
+      {pending ? 'Yenileniyor' : 'Yenile'}
+    </button>
+  );
 }
 
 // ── Range Pills (segmented control) ──

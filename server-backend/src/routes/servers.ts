@@ -15,7 +15,7 @@ import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
 import { listActiveAutoPunishments } from '../services/moderationAutoPunishService';
-import { getInsights } from '../services/voiceActivityService';
+import { getInsights, refreshActivityHeatmapOnce } from '../services/voiceActivityService';
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
 
@@ -147,6 +147,26 @@ router.get('/:id/insights', async (req: Request, res: Response) => {
     }
     const insights = await getInsights(serverId, rangeDays);
     res.json(insights);
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/insights/refresh — aktivite haritası MV'sini manuel refresh et.
+ *  Yetki: insights.view (GET ile aynı gate). Backend tek in-flight promise ile spam'i
+ *  serialize eder; { refreshedAt } döner, frontend UI'ı anında günceller. */
+router.post('/:id/insights/refresh', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) {
+      res.status(403).json({ error: 'Bu sunucunun üyesi değilsin' });
+      return;
+    }
+    if (!ctx.flags.canViewInsights) {
+      res.status(403).json({ error: 'İçgörüleri yenileme yetkin yok' });
+      return;
+    }
+    const refreshedAt = await refreshActivityHeatmapOnce();
+    res.json({ refreshedAt: refreshedAt.toISOString() });
   } catch (err) { handleError(res, err); }
 });
 
