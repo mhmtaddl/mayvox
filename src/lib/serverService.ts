@@ -426,6 +426,11 @@ export interface InsightsPair {
   totalSec: number;
   lastOverlapAt: string | null;
 }
+export interface InsightsGroup {
+  members: Array<{ id: string; name: string | null; avatar: string | null }>;
+  totalSec: number;
+  lastTogetherAt: string | null;
+}
 export interface InsightsHourCell {
   dow: number;
   hour: number;
@@ -436,6 +441,7 @@ export interface InsightsResponse {
   range: { days: number; start: string; end: string };
   topActiveUsers: InsightsUser[];
   topSocialPairs: InsightsPair[];
+  topSocialGroups: InsightsGroup[];
   peakHours: InsightsHourCell[];
   userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
   /** Materialized view son refresh zamanı (ISO). null = henüz refresh olmamış / bilinmiyor. */

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart3, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { BarChart3, AlertCircle, RefreshCw, RotateCw, Trophy, ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   getServerInsights,
@@ -8,7 +8,7 @@ import {
 } from '../../../lib/serverService';
 import ActivityHeatmap from './ActivityHeatmap';
 import TopUsersCard from './TopUsersCard';
-import SocialPairsCard from './SocialPairsCard';
+import SocialGroupsCard from './SocialGroupsCard';
 
 type Phase = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -71,6 +71,7 @@ export default function InsightsTab({ serverId }: Props) {
     const ids = new Set<string>();
     data.topActiveUsers.forEach(u => ids.add(u.userId));
     data.topSocialPairs.forEach(p => { ids.add(p.userA.id); ids.add(p.userB.id); });
+    (data.topSocialGroups ?? []).forEach(g => g.members.forEach(m => ids.add(m.id)));
     Object.keys(data.userActivityMap).forEach(id => ids.add(id));
     if (ids.size === 0) return;
 
@@ -97,17 +98,15 @@ export default function InsightsTab({ serverId }: Props) {
     });
   }, [data, profiles]);
 
-  const enrichedPairs = useMemo(() => {
+  const enrichedGroups = useMemo(() => {
     if (!data) return [];
-    return data.topSocialPairs.map(p => {
-      const a = profiles.get(p.userA.id);
-      const b = profiles.get(p.userB.id);
-      return {
-        ...p,
-        userA: { ...p.userA, name: a?.name ?? p.userA.name, avatar: a?.avatar ?? p.userA.avatar },
-        userB: { ...p.userB, name: b?.name ?? p.userB.name, avatar: b?.avatar ?? p.userB.avatar },
-      };
-    });
+    return (data.topSocialGroups ?? []).map(g => ({
+      ...g,
+      members: g.members.map(m => {
+        const p = profiles.get(m.id);
+        return { ...m, name: p?.name ?? m.name, avatar: p?.avatar ?? m.avatar };
+      }),
+    }));
   }, [data, profiles]);
 
   return (
@@ -131,14 +130,28 @@ export default function InsightsTab({ serverId }: Props) {
       {phase === 'empty' && <EmptyState />}
       {phase === 'ready' && data && (
         <>
+          {/* Minimal summary strip — ince, küçük */}
+          <SummaryStrip
+            topUser={enrichedUsers[0]}
+            topGroup={enrichedGroups[0]}
+          />
+
+          {/* 1) Aktivite Haritası — FULL WIDTH, üstte */}
           <ActivityHeatmap peakHours={data.peakHours} />
+
+          {/* 2) İki kolon: TopUsers + SocialGroups, eşit boy */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <TopUsersCard users={enrichedUsers} />
-            <SocialPairsCard pairs={enrichedPairs} />
+            <SocialGroupsCard groups={enrichedGroups} />
           </div>
-          {/* Stale data banner — minimal footer */}
-          <div className="flex items-center justify-center gap-1.5 pt-1 pb-2">
-            <span className="text-[10.5px] text-[var(--theme-secondary-text)]/40 tracking-wide" title="Veriler performans için günde bir kez derleniyor.">
+
+          {/* Footer */}
+          <div className="flex items-center justify-center gap-1.5 pt-2 pb-1">
+            <span
+              className="inline-flex items-center gap-1.5 text-[10.5px] text-[var(--theme-secondary-text)]/60 tracking-wide tabular-nums cursor-default"
+              title="Veriler periyodik olarak güncellenir"
+            >
+              <RotateCw size={10} className="opacity-70" />
               Son güncelleme: {relativeTime(data.heatmapRefreshedAt)}
             </span>
           </div>
@@ -153,6 +166,57 @@ function isEmpty(d: InsightsResponse): boolean {
       && d.topSocialPairs.length === 0
       && d.peakHours.length === 0;
 }
+
+// ── Summary Strip — ince, minimal, tek-satırlık ──
+// "🏆 En aktif: X     ↔ En çok birlikte: A, B, C"
+const SummaryStrip = memo(function SummaryStrip({
+  topUser, topGroup,
+}: {
+  topUser?: { displayName: string | null };
+  topGroup?: { members: Array<{ name: string | null }> };
+}) {
+  const hasUser = !!topUser;
+  const hasGroup = !!topGroup && topGroup.members.length > 0;
+  if (!hasUser && !hasGroup) return null;
+
+  const groupLabel = hasGroup
+    ? topGroup!.members.map(m => m.name || 'Bilinmeyen').join(', ')
+    : '';
+
+  return (
+    <div
+      className="rounded-[12px] px-3.5 py-2 flex items-center gap-4 flex-wrap text-[11.5px]"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.025)',
+        border: '1px solid rgba(var(--glass-tint), 0.06)',
+      }}
+    >
+      {hasUser && (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Trophy size={11} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.5} />
+          <span className="text-[var(--theme-secondary-text)]/55 shrink-0">En aktif:</span>
+          <span className="font-semibold text-[var(--theme-text)]/90 tracking-tight truncate">
+            {topUser!.displayName || 'Bilinmeyen'}
+          </span>
+        </div>
+      )}
+
+      {hasUser && hasGroup && (
+        <span className="text-[var(--theme-secondary-text)]/20 shrink-0 hidden sm:inline">·</span>
+      )}
+
+      {hasGroup && (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <ArrowLeftRight size={11} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.5} />
+          <span className="text-[var(--theme-secondary-text)]/55 shrink-0">En çok birlikte:</span>
+          <span className="font-semibold text-[var(--theme-text)]/90 tracking-tight truncate">
+            {groupLabel}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ── Range Pills (segmented control) ──
 function RangePills({ value, onChange, disabled }: {
@@ -208,18 +272,22 @@ function LoadingSkeleton() {
   );
 }
 
-// ── Empty state ──
+// ── Empty state — iki satır premium ──
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-        style={{ background: 'rgba(var(--glass-tint), 0.05)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}
+        style={{
+          background: 'rgba(var(--glass-tint), 0.05)',
+          border: '1px solid rgba(var(--glass-tint), 0.08)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
+        }}
       >
-        <BarChart3 size={22} className="text-[var(--theme-secondary-text)]/40" />
+        <BarChart3 size={22} className="text-[var(--theme-secondary-text)]/45" />
       </div>
-      <p className="text-[13px] font-semibold text-[var(--theme-text)]/80 mb-1.5">Henüz yeterli veri yok</p>
+      <p className="text-[13px] font-semibold text-[var(--theme-text)]/85 mb-1.5 tracking-tight">Henüz yeterli veri yok</p>
       <p className="text-[11px] text-[var(--theme-secondary-text)]/55 max-w-[380px] leading-relaxed">
-        Ses odaları kullanılmaya başladığında buradaki metrikler birikecek.
+        Ses odaları kullanılmaya başladığında<br />burada saatlik yoğunluk ve sosyal eşleşmeler görünecek.
       </p>
     </div>
   );

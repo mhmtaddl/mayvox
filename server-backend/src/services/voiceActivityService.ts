@@ -33,6 +33,13 @@ export interface InsightsPair {
   totalSec: number;
   lastOverlapAt: string | null;
 }
+export interface InsightsGroup {
+  /** Grup üyeleri (sorted). 2 → pair, 3 → trio, 4+ → cluster. */
+  members: Array<{ id: string; name: string | null; avatar: string | null }>;
+  totalSec: number;
+  /** Grubun son birlikte olduğu zaman (ISO). */
+  lastTogetherAt: string | null;
+}
 export interface InsightsHourCell {
   dow: number;   // 0-6 (Pazar=0, Europe/Istanbul TZ)
   hour: number;  // 0-23
@@ -43,6 +50,7 @@ export interface InsightsResponse {
   range: { days: number; start: string; end: string };
   topActiveUsers: InsightsUser[];
   topSocialPairs: InsightsPair[];
+  topSocialGroups: InsightsGroup[];
   peakHours: InsightsHourCell[];
   userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
   heatmapRefreshedAt: string | null;
@@ -302,14 +310,99 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     }
   }
 
+  // 5) Social Groups — voice_sessions event stream walking (2/3/4/5+ kişilik gruplar)
+  const topSocialGroups = await computeTopSocialGroups(serverId, rangeDays);
+
   const now = new Date();
   const start = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
   return {
     range: { days: rangeDays, start: start.toISOString(), end: now.toISOString() },
     topActiveUsers,
     topSocialPairs,
+    topSocialGroups,
     peakHours,
     userActivityMap,
     heatmapRefreshedAt: lastHeatmapRefresh ? lastHeatmapRefresh.toISOString() : null,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// computeTopSocialGroups — her voice room için event stream walk yaparak
+// aynı anda odada bulunan user-set'lerinin (2+ kişi) kümülatif süresini hesaplar.
+// Pair (co_presence) tablosu 2-kişilik; bu fonksiyon 3-4-5+ grupları da yakalar.
+// Runtime hesap — günde 1 MV'ye göre ekstra CPU maliyeti var ama 90-gün range'de
+// ~birkaç bin session için ms mertebesinde kalır.
+// ════════════════════════════════════════════════════════════════════════════
+const GROUP_MIN_SEC = 30;         // kısa session/geçiş gürültüsünü at
+const GROUP_TOP_LIMIT = 15;
+const GROUP_MIN_SIZE = 2;
+
+async function computeTopSocialGroups(serverId: string, rangeDays: number): Promise<InsightsGroup[]> {
+  const sessions = await queryMany<{
+    room_id: string;
+    user_id: string;
+    joined_at: string;
+    left_at: string;
+  }>(
+    `SELECT room_id, user_id, joined_at, left_at
+     FROM voice_sessions
+     WHERE server_id = $1
+       AND left_at IS NOT NULL
+       AND joined_at > now() - ($2 || ' days')::INTERVAL`,
+    [serverId, String(rangeDays)],
+  );
+
+  if (sessions.length === 0) return [];
+
+  // Room bazlı event stream: { time, userId, op: 'in' | 'out' }
+  type Event = { time: number; userId: string; op: 'in' | 'out' };
+  const byRoom = new Map<string, Event[]>();
+  for (const s of sessions) {
+    const evts = byRoom.get(s.room_id) ?? [];
+    evts.push({ time: new Date(s.joined_at).getTime(), userId: s.user_id, op: 'in' });
+    evts.push({ time: new Date(s.left_at).getTime(), userId: s.user_id, op: 'out' });
+    byRoom.set(s.room_id, evts);
+  }
+
+  // key = sorted userIds joined by ','  →  { totalSec, lastTime }
+  const groupStats = new Map<string, { totalSec: number; lastTime: number }>();
+
+  for (const events of byRoom.values()) {
+    events.sort((a, b) => a.time - b.time || (a.op === 'out' ? -1 : 1));
+    // 'out' event 'in' event'ten önce işlenirse aynı timestamp'te geçişler doğru olur
+
+    const current = new Set<string>();
+    let lastTime = events[0]?.time ?? 0;
+
+    for (const e of events) {
+      const duration = Math.floor((e.time - lastTime) / 1000);
+      if (duration >= GROUP_MIN_SEC && current.size >= GROUP_MIN_SIZE) {
+        const key = [...current].sort().join(',');
+        const entry = groupStats.get(key);
+        if (entry) {
+          entry.totalSec += duration;
+          entry.lastTime = Math.max(entry.lastTime, e.time);
+        } else {
+          groupStats.set(key, { totalSec: duration, lastTime: e.time });
+        }
+      }
+      if (e.op === 'in') current.add(e.userId);
+      else current.delete(e.userId);
+      lastTime = e.time;
+    }
+  }
+
+  if (groupStats.size === 0) return [];
+
+  const sorted = Array.from(groupStats.entries())
+    .map(([key, v]) => ({ userIds: key.split(','), totalSec: v.totalSec, lastTime: v.lastTime }))
+    .sort((a, b) => b.totalSec - a.totalSec)
+    .slice(0, GROUP_TOP_LIMIT);
+
+  // Profile enrichment frontend tarafında yapılır (moderationEvents pattern).
+  return sorted.map(g => ({
+    members: g.userIds.map(id => ({ id, name: null, avatar: null })),
+    totalSec: g.totalSec,
+    lastTogetherAt: new Date(g.lastTime).toISOString(),
+  }));
 }
