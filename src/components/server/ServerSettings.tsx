@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, ShieldCheck, Save, RotateCcw } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, ShieldCheck, Save, RotateCcw, BarChart3 } from 'lucide-react';
 import type { AutoModActions } from './settings/AutoModerationTab';
 import type { GeneralActions } from './settings/GeneralTab';
 import {
@@ -15,9 +15,10 @@ import GeneralTab from './settings/GeneralTab';
 import MembersTab from './settings/MembersTab';
 import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
 import AutoModerationTab from './settings/AutoModerationTab';
+import InsightsTab from './settings/InsightsTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'audit';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'audit' | 'insights';
 // Legacy initialTab input:
 //   'bans'     → 'members' tab (banlı kullanıcılar MembersTab altında)
 //   'requests' → 'invites' tab + Başvurular sub-section
@@ -152,6 +153,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const canCreateInvite = sameServerCtx?.flags.canCreateInvite ?? (server.role === 'owner' || server.role === 'admin');
   const canRevokeInvite = sameServerCtx?.flags.canRevokeInvite ?? (server.role === 'owner' || server.role === 'admin' || server.role === 'mod');
   const canKickMembers = sameServerCtx?.flags.canKickMembers ?? (server.role === 'owner' || server.role === 'admin' || server.role === 'mod');
+  // insights.view — owner/super_admin/admin/super_mod. Legacy fallback: canManageServer eşdeğeri.
+  const canViewInsights = sameServerCtx?.flags.canViewInsights ?? (server.role === 'owner' || server.role === 'admin');
 
   // Tabs dinamik — capability'ye göre görünür
   const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -168,6 +171,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     }] : []),
     ...(canKickMembers ? [{ id: 'automod' as Tab, label: 'Oto-Mod', icon: <ShieldCheck size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
+    ...(canViewInsights ? [{ id: 'insights' as Tab, label: 'İçgörüler', icon: <BarChart3 size={13} /> }] : []),
   ];
 
   return (
@@ -318,6 +322,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           )}
           {tab === 'audit' && canManageServer && (
             <DenetimTab serverId={serverId} onOpenAutomod={() => setTab('automod')} />
+          )}
+          {tab === 'insights' && canViewInsights && (
+            <InsightsTab serverId={serverId} />
           )}
           </>)}
         </div>

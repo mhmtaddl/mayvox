@@ -45,7 +45,11 @@ export interface InsightsResponse {
   topSocialPairs: InsightsPair[];
   peakHours: InsightsHourCell[];
   userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
+  heatmapRefreshedAt: string | null;
 }
+
+// Module-scope: son heatmap refresh zamanı. Restart'ta null, 24h cron güncelledikçe artar.
+let lastHeatmapRefresh: Date | null = null;
 
 // ── Server-side serverId resolution (webhook'ta room_id gelir, server_id gerekir) ──
 const roomToServerCache = new Map<string, { serverId: string; ts: number }>();
@@ -180,6 +184,7 @@ export async function refreshActivityHeatmap(): Promise<void> {
     // İlk REFRESH'i (populate edilmemiş MV) CONCURRENTLY ile yapılamaz — fallback.
     await pool.query(`REFRESH MATERIALIZED VIEW activity_heatmap`);
   }
+  lastHeatmapRefresh = new Date();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -305,5 +310,6 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     topSocialPairs,
     peakHours,
     userActivityMap,
+    heatmapRefreshedAt: lastHeatmapRefresh ? lastHeatmapRefresh.toISOString() : null,
   };
 }

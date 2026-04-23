@@ -34,6 +34,10 @@ export const CAPABILITIES = {
   ROLE_MANAGE_LOWER: 'role.manage.lower',
   ROLE_ASSIGN_LOWER: 'role.assign.lower',
   ROLE_PERMISSIONS_EDIT_LOWER: 'role.permissions.edit.lower',
+
+  // Voice aktivite içgörüleri (ServerSettings → İçgörüler sekmesi).
+  // Grant: owner / super_admin / admin / super_mod.
+  INSIGHTS_VIEW: 'insights.view',
 } as const;
 
 export type Capability = typeof CAPABILITIES[keyof typeof CAPABILITIES];

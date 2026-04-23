@@ -1,0 +1,253 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { BarChart3, AlertCircle, RefreshCw } from 'lucide-react';
+import { supabase } from '../../../lib/supabase';
+import {
+  getServerInsights,
+  type InsightsResponse,
+  type InsightsRangeDays,
+} from '../../../lib/serverService';
+import ActivityHeatmap from './ActivityHeatmap';
+import TopUsersCard from './TopUsersCard';
+import SocialPairsCard from './SocialPairsCard';
+
+type Phase = 'loading' | 'ready' | 'empty' | 'error';
+
+interface ProfileRecord { id: string; name: string | null; avatar: string | null; }
+
+interface Props {
+  serverId: string;
+}
+
+// Apple easing + 5 dk memory cache. Range değişiminde invalidate.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const cache = new Map<string, { data: InsightsResponse; ts: number }>();
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return 'az önce';
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'az önce';
+  if (min < 60) return `${min} dakika önce`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} saat önce`;
+  const d = Math.floor(h / 24);
+  return `${d} gün önce`;
+}
+
+export default function InsightsTab({ serverId }: Props) {
+  const [range, setRange] = useState<InsightsRangeDays>(30);
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [data, setData] = useState<InsightsResponse | null>(null);
+  const [error, setError] = useState<string>('');
+  const [profiles, setProfiles] = useState<Map<string, ProfileRecord>>(new Map());
+
+  const fetchInsights = useCallback(async (force = false) => {
+    const key = `${serverId}:${range}`;
+    const cached = cache.get(key);
+    if (!force && cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      setData(cached.data);
+      setPhase(isEmpty(cached.data) ? 'empty' : 'ready');
+      return;
+    }
+    setPhase('loading');
+    setError('');
+    try {
+      const res = await getServerInsights(serverId, range);
+      cache.set(key, { data: res, ts: Date.now() });
+      setData(res);
+      setPhase(isEmpty(res) ? 'empty' : 'ready');
+    } catch (err: any) {
+      setError(err?.message || 'Bağlantı hatası, tekrar deneyin');
+      setPhase('error');
+    }
+  }, [serverId, range]);
+
+  useEffect(() => { fetchInsights(); }, [fetchInsights]);
+
+  // Supabase profile enrichment — backend user_id'lere name + avatar ekle.
+  useEffect(() => {
+    if (!data) return;
+    const ids = new Set<string>();
+    data.topActiveUsers.forEach(u => ids.add(u.userId));
+    data.topSocialPairs.forEach(p => { ids.add(p.userA.id); ids.add(p.userB.id); });
+    Object.keys(data.userActivityMap).forEach(id => ids.add(id));
+    if (ids.size === 0) return;
+
+    const needed = Array.from(ids).filter(id => !profiles.has(id));
+    if (needed.length === 0) return;
+
+    supabase.from('profiles').select('id, name, avatar').in('id', needed).then(({ data: rows }) => {
+      if (!rows) return;
+      setProfiles(prev => {
+        const next = new Map(prev);
+        for (const r of rows) {
+          next.set(r.id, { id: r.id, name: r.name ?? null, avatar: r.avatar ?? null });
+        }
+        return next;
+      });
+    });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enrichedUsers = useMemo(() => {
+    if (!data) return [];
+    return data.topActiveUsers.map(u => {
+      const p = profiles.get(u.userId);
+      return { ...u, displayName: p?.name ?? u.displayName, avatarUrl: p?.avatar ?? u.avatarUrl };
+    });
+  }, [data, profiles]);
+
+  const enrichedPairs = useMemo(() => {
+    if (!data) return [];
+    return data.topSocialPairs.map(p => {
+      const a = profiles.get(p.userA.id);
+      const b = profiles.get(p.userB.id);
+      return {
+        ...p,
+        userA: { ...p.userA, name: a?.name ?? p.userA.name, avatar: a?.avatar ?? p.userA.avatar },
+        userB: { ...p.userB, name: b?.name ?? p.userB.name, avatar: b?.avatar ?? p.userB.avatar },
+      };
+    });
+  }, [data, profiles]);
+
+  return (
+    <div className="max-w-[1040px] mx-auto space-y-4">
+      {/* Header: başlık + range pills */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-[15px] font-semibold text-[var(--theme-text)] tracking-tight leading-none flex items-center gap-2">
+            <BarChart3 size={14} className="text-[var(--theme-accent)]" /> İçgörüler
+          </h2>
+          <p className="text-[11px] text-[var(--theme-secondary-text)]/55 mt-1.5 tracking-wide">
+            Ses odası aktivitesi ve sosyal etkileşim özetleri
+          </p>
+        </div>
+        <RangePills value={range} onChange={setRange} disabled={phase === 'loading'} />
+      </div>
+
+      {/* İçerik */}
+      {phase === 'loading' && <LoadingSkeleton />}
+      {phase === 'error' && <ErrorState message={error} onRetry={() => fetchInsights(true)} />}
+      {phase === 'empty' && <EmptyState />}
+      {phase === 'ready' && data && (
+        <>
+          <ActivityHeatmap peakHours={data.peakHours} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <TopUsersCard users={enrichedUsers} />
+            <SocialPairsCard pairs={enrichedPairs} />
+          </div>
+          {/* Stale data banner — minimal footer */}
+          <div className="flex items-center justify-center gap-1.5 pt-1 pb-2">
+            <span className="text-[10.5px] text-[var(--theme-secondary-text)]/40 tracking-wide" title="Veriler performans için günde bir kez derleniyor.">
+              Son güncelleme: {relativeTime(data.heatmapRefreshedAt)}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function isEmpty(d: InsightsResponse): boolean {
+  return d.topActiveUsers.length === 0
+      && d.topSocialPairs.length === 0
+      && d.peakHours.length === 0;
+}
+
+// ── Range Pills (segmented control) ──
+function RangePills({ value, onChange, disabled }: {
+  value: InsightsRangeDays;
+  onChange: (v: InsightsRangeDays) => void;
+  disabled?: boolean;
+}) {
+  const options: { v: InsightsRangeDays; label: string }[] = [
+    { v: 7, label: '7 gün' },
+    { v: 30, label: '30 gün' },
+    { v: 90, label: '90 gün' },
+  ];
+  return (
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-xl"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.04)',
+        border: '1px solid rgba(var(--glass-tint), 0.08)',
+      }}
+    >
+      {options.map(o => {
+        const active = o.v === value;
+        return (
+          <button
+            key={o.v}
+            onClick={() => !disabled && onChange(o.v)}
+            disabled={disabled}
+            className="relative px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide disabled:opacity-50"
+            style={{
+              color: active ? 'var(--theme-text)' : 'var(--theme-secondary-text)',
+              background: active ? 'rgba(var(--theme-accent-rgb), 0.12)' : 'transparent',
+              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.25)' : 'none',
+              transition: 'all 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Loading skeleton ──
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-[220px] rounded-[18px] animate-pulse" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="h-[280px] rounded-[18px] animate-pulse" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+        <div className="h-[280px] rounded-[18px] animate-pulse" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Empty state ──
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+        style={{ background: 'rgba(var(--glass-tint), 0.05)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}
+      >
+        <BarChart3 size={22} className="text-[var(--theme-secondary-text)]/40" />
+      </div>
+      <p className="text-[13px] font-semibold text-[var(--theme-text)]/80 mb-1.5">Henüz yeterli veri yok</p>
+      <p className="text-[11px] text-[var(--theme-secondary-text)]/55 max-w-[380px] leading-relaxed">
+        Ses odaları kullanılmaya başladığında buradaki metrikler birikecek.
+      </p>
+    </div>
+  );
+}
+
+// ── Error state ──
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+        style={{ background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.18)' }}
+      >
+        <AlertCircle size={22} className="text-amber-400/70" />
+      </div>
+      <p className="text-[13px] font-semibold text-[var(--theme-text)]/80 mb-1.5">İçgörüler yüklenemedi</p>
+      <p className="text-[11px] text-[var(--theme-secondary-text)]/55 max-w-[380px] leading-relaxed mb-4">{message}</p>
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[11px] font-semibold"
+        style={{
+          color: 'var(--theme-text)',
+          background: 'rgba(var(--theme-accent-rgb), 0.12)',
+          border: '1px solid rgba(var(--theme-accent-rgb), 0.25)',
+          transition: 'all 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        <RefreshCw size={12} /> Tekrar dene
+      </button>
+    </div>
+  );
+}

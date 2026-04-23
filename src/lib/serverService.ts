@@ -404,8 +404,47 @@ export interface ServerAccessContext {
     canMoveMembers: boolean;
     canKickMembers: boolean;
     canManageRoles: boolean;
+    canViewInsights: boolean;
   };
   isBanned?: boolean;
+}
+
+// ── Insights (voice aktivite içgörüleri) ──
+export type InsightsRangeDays = 7 | 30 | 90;
+
+export interface InsightsUser {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  totalSec: number;
+  sessionCount: number;
+  avgSessionMin: number;
+}
+export interface InsightsPair {
+  userA: { id: string; name: string | null; avatar: string | null };
+  userB: { id: string; name: string | null; avatar: string | null };
+  totalSec: number;
+  lastOverlapAt: string | null;
+}
+export interface InsightsHourCell {
+  dow: number;
+  hour: number;
+  totalSec: number;
+  sessionCount: number;
+}
+export interface InsightsResponse {
+  range: { days: number; start: string; end: string };
+  topActiveUsers: InsightsUser[];
+  topSocialPairs: InsightsPair[];
+  peakHours: InsightsHourCell[];
+  userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
+  /** Materialized view son refresh zamanı (ISO). null = henüz refresh olmamış / bilinmiyor. */
+  heatmapRefreshedAt?: string | null;
+}
+
+export async function getServerInsights(serverId: string, range: InsightsRangeDays): Promise<InsightsResponse> {
+  const rangeStr = `${range}d` as '7d' | '30d' | '90d';
+  return apiFetch<InsightsResponse>(`/servers/${serverId}/insights?range=${rangeStr}`);
 }
 
 export async function getServerAccessContext(serverId: string): Promise<ServerAccessContext> {
