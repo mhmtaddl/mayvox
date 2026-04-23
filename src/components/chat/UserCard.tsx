@@ -168,7 +168,7 @@ function UserCardInner({
         >
           <AvatarContent avatar={user.avatar} statusText={userStatusText} firstName={user.firstName} name={user.name} letterClassName="text-[var(--theme-text)] font-bold" />
         </div>
-        <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" borderColor="var(--theme-bg)" />
+        <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" />
       </div>
 
       {/* Name + status */}

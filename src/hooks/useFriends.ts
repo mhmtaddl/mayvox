@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { playNotification } from '../lib/audio/SoundManager';
+import { playNotifyBeep } from '../features/notifications/notificationSound';
 
 export type RequestDirection = 'incoming' | 'outgoing';
 
@@ -92,6 +94,18 @@ export function useFriends(currentUserId: string | undefined) {
           // Bu kullanıcıyla ilgili mi kontrol et
           const isRelevant = row.sender_id === currentUserId || row.receiver_id === currentUserId;
           if (!isRelevant) return;
+
+          // Yeni gelen arkadaşlık isteği → bildirim sesi çal.
+          // INSERT + ben receiver + başkasından + pending. MP3 (bildirim_gelme.mp3)
+          // playNotification; başarısızsa beep fallback (NotificationSound).
+          if (payload.eventType === 'INSERT'
+              && row.receiver_id === currentUserId
+              && row.sender_id !== currentUserId
+              && row.status === 'pending') {
+            const ok = playNotification();
+            if (!ok) playNotifyBeep();
+          }
+
           // State'i tam yeniden fetch et — en güvenli yol
           fetchRequests();
           // Eğer accepted ise friendships da değişmiş olabilir

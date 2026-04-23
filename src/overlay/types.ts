@@ -10,6 +10,9 @@ export type OverlayPosition =
 
 export type OverlaySize = 'small' | 'medium' | 'large';
 
+/** Overlay görünüm stili — 3 tasarım + "Yok" (kart/waveform yok, sade avatar+isim). */
+export type OverlayVariant = 'capsule' | 'card' | 'badge' | 'none';
+
 export interface OverlaySettings {
   enabled: boolean;
   position: OverlayPosition;
@@ -17,6 +20,10 @@ export interface OverlaySettings {
   showOnlySpeaking: boolean;
   showSelf: boolean;
   clickThrough: boolean;
+  /** Kart şeffaflığı 0-100 (idle görünürlük). Konuşan satırda otomatik 100'e çıkar. */
+  cardOpacity: number;
+  /** Görünüm stili — capsule (pill), card (info-dense kare), badge (ultra minimal). */
+  variant: OverlayVariant;
 }
 
 export interface OverlayParticipant {
@@ -36,6 +43,10 @@ export interface OverlaySnapshot {
   roomName: string | null;
   participants: OverlayParticipant[];
   size: OverlaySize;
+  /** Kart şeffaflığı — 0-100 (idle görünürlük). Konuşan satırda otomatik 100'e çıkar. */
+  cardOpacity: number;
+  /** Render stili — overlay renderer buna göre component dispatch eder. */
+  variant: OverlayVariant;
 }
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
@@ -45,6 +56,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showOnlySpeaking: false,
   showSelf: true,
   clickThrough: true,
+  cardOpacity: 50,
+  variant: 'capsule',
 };
 
 /** Tüm anchor'lar + preview picker konumları (0..1 fraction, sol-üst kökenli). */

@@ -1196,6 +1196,8 @@ export default function App() {
       showOnlySpeaking: settings.overlayShowOnlySpeaking,
       showSelf: settings.overlayShowSelf,
       clickThrough: settings.overlayClickThrough,
+      cardOpacity: settings.overlayCardOpacity,
+      variant: settings.overlayVariant,
     },
     currentUserId: currentUser.id,
     activeChannelId: activeChannel,

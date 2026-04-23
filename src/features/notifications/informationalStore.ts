@@ -29,6 +29,9 @@ export interface InformationalItem {
   serverId?: string;
   serverAvatar?: string | null;
   createdAt: number;
+  /** Okundu zamanı (ms). null/undefined = yeni. Kullanıcı çanı açıp kapadığında set edilir;
+   *  item silinmez, sadece görsel olarak "compact" gösterilir ve sağda zaman damgası çıkar. */
+  readAt?: number | null;
 }
 
 let items: InformationalItem[] = [];
@@ -56,6 +59,30 @@ export function pushInformational(item: InformationalItem): void {
 export function clearAllInformational(): void {
   if (items.length === 0) return;
   items = [];
+  emit();
+}
+
+/** Tüm informational item'ları "okundu" işaretler — silmez.
+ *  Popover kapandığında çağrılır. Zaten okunmuşlar dokunulmaz. */
+export function markAllInformationalRead(): void {
+  const now = Date.now();
+  let changed = false;
+  const next = items.map(i => {
+    if (i.readAt) return i;
+    changed = true;
+    return { ...i, readAt: now };
+  });
+  if (!changed) return;
+  items = next;
+  emit();
+}
+
+/** Sadece "okundu" işaretlenmiş item'ları siler; yeni (readAt=null) olanlar kalır.
+ *  "Temizle" butonu çağırır. */
+export function clearReadInformational(): void {
+  const next = items.filter(i => !i.readAt);
+  if (next.length === items.length) return;
+  items = next;
   emit();
 }
 

@@ -187,7 +187,13 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
         return (
           <button
             onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'cancel'); }}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold text-blue-400/60 bg-blue-500/8 border border-blue-400/15 hover:border-blue-400/30 transition-all cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-all cursor-pointer hover:border-[rgba(var(--theme-accent-rgb),0.30)]"
+            style={{
+              color: 'var(--theme-accent)',
+              opacity: 0.7,
+              background: 'rgba(var(--theme-accent-rgb), 0.08)',
+              border: '1px solid rgba(var(--theme-accent-rgb), 0.15)',
+            }}
             title="İsteği iptal et"
           >
             <Clock size={10} />
@@ -231,8 +237,8 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const getStatusBadge = (userId: string) => {
     const rel = getRelationship(userId);
     if (rel === 'friend') return <span className="text-[8px] font-bold text-emerald-400/60 uppercase tracking-wide">Arkadaş</span>;
-    if (rel === 'incoming') return <span className="text-[8px] font-bold text-blue-400/60 uppercase tracking-wide">İstek geldi</span>;
-    if (rel === 'outgoing') return <span className="text-[8px] font-bold text-blue-400/40 uppercase tracking-wide">İstek gönderildi</span>;
+    if (rel === 'incoming') return <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', opacity: 0.7 }}>İstek geldi</span>;
+    if (rel === 'outgoing') return <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', opacity: 0.5 }}>İstek gönderildi</span>;
     return null;
   };
 

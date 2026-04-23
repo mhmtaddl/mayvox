@@ -119,15 +119,15 @@ function SubNav({
                 '0 2px 6px rgba(0,0,0,0.04)',
             } : undefined}
           >
-            <span className={active ? 'text-[#60a5fa]' : ''}>{opt.icon}</span>
+            <span className={active ? 'text-[var(--theme-accent)]' : ''}>{opt.icon}</span>
             <span className="truncate">{opt.label}</span>
             {typeof opt.badge === 'number' && opt.badge > 0 && (
               <span
                 className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold shrink-0"
                 style={{
-                  background: '#60a5fa',
+                  background: 'var(--theme-accent)',
                   color: '#0a0f1e',
-                  boxShadow: '0 0 6px rgba(96,165,250,0.45)',
+                  boxShadow: '0 0 6px rgba(var(--theme-accent-rgb),0.45)',
                 }}
               >
                 {opt.badge > 99 ? '99+' : opt.badge}
@@ -204,17 +204,17 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
       <div
         className="rounded-2xl p-4"
         style={{
-          background: 'linear-gradient(180deg, rgba(96,165,250,0.06), rgba(96,165,250,0.02))',
-          border: '1px solid rgba(96,165,250,0.18)',
-          boxShadow: 'inset 0 1px 0 rgba(96,165,250,0.08)',
+          background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.06), rgba(var(--theme-accent-rgb),0.02))',
+          border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
+          boxShadow: 'inset 0 1px 0 rgba(var(--theme-accent-rgb),0.08)',
         }}
       >
         <div className="flex items-center gap-2 mb-3">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-            style={{ background: 'rgba(96,165,250,0.14)', border: '1px solid rgba(96,165,250,0.22)' }}
+            style={{ background: 'rgba(var(--theme-accent-rgb),0.14)', border: '1px solid rgba(var(--theme-accent-rgb),0.22)' }}
           >
-            <Plus size={13} className="text-blue-400" strokeWidth={2} />
+            <Plus size={13} className="text-[var(--theme-accent)]" strokeWidth={2} />
           </div>
           <span className="text-[11.5px] font-bold text-[#e8ecf4] tracking-tight">Yeni Davet Kodu</span>
           <span className="ml-auto text-[10px] text-[#7b8ba8]/55">Boş bırakılanlar sınırsız</span>
@@ -238,12 +238,14 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
             disabled={creating}
             className="h-10 px-5 rounded-xl text-[12px] font-semibold text-white inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 self-end"
             style={{
-              background: 'linear-gradient(180deg, rgb(96,165,250), rgb(59,130,246))',
+              // Tema accent — düz renk + inset highlight/shadow ile depth, tema değişimine uyumlu.
+              background: 'var(--theme-accent)',
+              color: 'var(--theme-text-on-accent, #fff)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.20), ' +
-                'inset 0 -1px 0 rgba(0,0,0,0.08), ' +
-                '0 1px 2px rgba(0,0,0,0.08), ' +
-                '0 6px 18px rgba(59,130,246,0.28)',
+                'inset 0 1px 0 rgba(255,255,255,0.22), ' +
+                'inset 0 -1px 0 rgba(0,0,0,0.10), ' +
+                '0 1px 2px rgba(0,0,0,0.10), ' +
+                '0 6px 18px rgba(var(--theme-accent-rgb), 0.30)',
             }}
           >
             {creating
@@ -286,7 +288,7 @@ function InviteField({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-10 bg-[rgba(255,255,255,0.035)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3.5 text-[12.5px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/30 outline-none transition-all duration-200 ease-out hover:border-[rgba(255,255,255,0.14)] focus:border-[#60a5fa]/45 focus:bg-[rgba(255,255,255,0.055)] focus:shadow-[0_0_0_4px_rgba(96,165,250,0.10)]"
+        className="w-full h-10 bg-[rgba(255,255,255,0.035)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3.5 text-[12.5px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/30 outline-none transition-all duration-200 ease-out hover:border-[rgba(255,255,255,0.14)] focus:border-[var(--theme-accent)]/45 focus:bg-[rgba(255,255,255,0.055)] focus:shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.10)]"
       />
     </div>
   );
@@ -311,9 +313,9 @@ function CodeInviteRow({
       {/* Icon */}
       <div
         className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
-        style={{ background: 'rgba(96,165,250,0.10)', border: '1px solid rgba(96,165,250,0.18)' }}
+        style={{ background: 'rgba(var(--theme-accent-rgb),0.10)', border: '1px solid rgba(var(--theme-accent-rgb),0.18)' }}
       >
-        <Link2 size={14} className="text-blue-400/80" strokeWidth={1.8} />
+        <Link2 size={14} className="text-[var(--theme-accent)]/80" strokeWidth={1.8} />
       </div>
 
       {/* Code + meta */}
@@ -328,7 +330,7 @@ function CodeInviteRow({
           <button
             type="button"
             onClick={onCopy}
-            className="text-[#60a5fa]/60 hover:text-[#60a5fa] transition-colors shrink-0 active:scale-[0.92]"
+            className="text-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)] transition-colors shrink-0 active:scale-[0.92]"
             aria-label="Kodu kopyala"
           >
             <Copy size={11} />
@@ -477,7 +479,7 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
           className="flex-1 bg-transparent text-[12px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/40 outline-none"
         />
         {searching && (
-          <div className="w-3.5 h-3.5 border-2 border-[#60a5fa]/30 border-t-[#60a5fa] rounded-full animate-spin shrink-0" />
+          <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />
         )}
         {query && !searching && (
           <button
@@ -629,9 +631,9 @@ function SearchResultRow({
           disabled={inviting}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
-            background: 'rgba(96,165,250,0.12)',
-            color: '#60a5fa',
-            border: '1px solid rgba(96,165,250,0.22)',
+            background: 'rgba(var(--theme-accent-rgb),0.12)',
+            color: 'var(--theme-accent)',
+            border: '1px solid rgba(var(--theme-accent-rgb),0.22)',
           }}
         >
           {inviting

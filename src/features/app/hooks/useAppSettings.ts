@@ -351,6 +351,31 @@ export function useAppSettings() {
     setOverlayClickThroughState(v);
   };
 
+  // ── Overlay görünüm stili ──
+  // capsule: pill (default), card: info-dense kare, badge: ultra minimal, none: kart yok / sade.
+  const [overlayVariant, setOverlayVariantState] = useState<'capsule' | 'card' | 'badge' | 'none'>(() => {
+    const v = localStorage.getItem('overlayVariant');
+    return (v === 'card' || v === 'badge' || v === 'capsule' || v === 'none') ? v : 'capsule';
+  });
+  const setOverlayVariant = (v: 'capsule' | 'card' | 'badge' | 'none') => {
+    localStorage.setItem('overlayVariant', v);
+    setOverlayVariantState(v);
+  };
+
+  // ── Overlay kart şeffaflığı ──
+  // 0-100 slider. Overlay'deki isim-arkası kartın + avatar+isim görünürlüğünün
+  // ortak ayarı. Kart rengi overlay içinde sabit koyu tondur, kullanıcı değiştiremez.
+  const [overlayCardOpacity, setOverlayCardOpacityState] = useState<number>(() => {
+    const saved = localStorage.getItem('overlayCardOpacity');
+    const n = saved ? parseInt(saved) : 50;
+    return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 50));
+  });
+  const setOverlayCardOpacity = (v: number) => {
+    const c = Math.max(0, Math.min(100, Math.round(v)));
+    localStorage.setItem('overlayCardOpacity', String(c));
+    setOverlayCardOpacityState(c);
+  };
+
   return {
     appearanceMode, setAppearanceMode,
     themePackId, setThemePackId,
@@ -383,5 +408,7 @@ export function useAppSettings() {
     overlayShowOnlySpeaking, setOverlayShowOnlySpeaking,
     overlayShowSelf, setOverlayShowSelf,
     overlayClickThrough, setOverlayClickThrough,
+    overlayCardOpacity, setOverlayCardOpacity,
+    overlayVariant, setOverlayVariant,
   };
 }

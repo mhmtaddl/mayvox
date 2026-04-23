@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -120,105 +120,159 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   onChange: (v: OverlayAnchor) => void;
   disabled?: boolean;
 }) {
-  // Sadece dikey büyüme — genişlik sabit
-  const W = 190, H = 160;
+  const W = 232, H = 164;
   const pad = 14;
   const inner = { w: W - pad * 2, h: H - pad * 2 };
-  // Hit area — görsel pill'den daha büyük (Fitts yasası)
-  const HIT_W = 26, HIT_H = 18;
+  const HIT = 24;
+  const activeLabel = ANCHOR_POINTS.find(p => p.v === value)?.label ?? '';
+
+  // Picker zemini her temada koyu — gerçek bir oyun ekranı simulasyonu (oyunlar genelde
+  // koyu) ve beyaz anchor dot'ları her temada görünür kalır. Açık tema seçildiğinde de
+  // bg değişmez; dot'lar her zaman beyaz kontrast sağlar. Accent tint hafif ton verir.
+  const bg = 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.14) 0%, rgba(var(--theme-accent-rgb), 0.04) 100%), linear-gradient(180deg, #0f1522 0%, #080b14 100%)';
+  const gridColor = 'rgba(255,255,255,0.028)';
+  const vignette = 'inset 0 0 60px rgba(0,0,0,0.55)';
+  const ringColor = 'rgba(var(--glass-tint), 0.08)';
+  // Tüm anchor noktaları + aktif pip dot'ları beyaz — koyu zemin üzerinde net kontrast.
+  const pipSecondaryDot = 'rgba(255,255,255,0.85)';
+  const pipPrimaryDot   = 'rgba(255,255,255,1)';
+  const inactiveDotBg     = 'rgba(255,255,255,0.78)';
+  const inactiveDotRing   = 'rgba(255,255,255,0.30)';
+
   return (
-    <div
-      className="relative rounded-xl shrink-0"
-      style={{
-        width: W,
-        height: H,
-        background: 'rgba(0, 0, 0, 0.16)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.07)',
-        opacity: disabled ? 0.45 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
-        transition: 'opacity 180ms ease-out',
-      }}
-      aria-label="Ekran konum seçici"
-    >
-      {ANCHOR_POINTS.map(p => {
-        const active = value === p.v;
-        const x = pad + p.fx * inner.w;
-        const y = pad + p.fy * inner.h;
-        // Button wrapper'ı anchor noktasının etrafında HIT_W × HIT_H tampon alanda yayılır;
-        // fx/fy oranına göre button'u kendi referans noktasına kaydırırız.
-        const tx = `${-p.fx * 100}%`;
-        const ty = `${-p.fy * 100}%`;
-        return (
-          <button
-            key={p.v}
-            onClick={() => onChange(p.v)}
-            title={p.label}
-            style={{
-              position: 'absolute',
-              left: x,
-              top: y,
-              width: HIT_W,
-              height: HIT_H,
-              transform: `translate(${tx}, ${ty})`,
-              // Görsel pill button içinde ortalanır (ama hit area tam button'un kendisi)
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'transparent',
-              border: 0,
-              padding: 0,
-              cursor: 'pointer',
-              zIndex: active ? 3 : 2,
-            }}
-            aria-label={p.label}
-            aria-pressed={active}
-          >
-            {/* Görsel indicator — pill (rounded rectangle) */}
-            <span
-              aria-hidden="true"
-              className="anchor-pill"
+    <div className="flex flex-col gap-1.5 shrink-0" style={{ width: W }}>
+      <div
+        className="relative rounded-xl overflow-hidden"
+        style={{
+          width: W,
+          height: H,
+          background: bg,
+          boxShadow: `inset 0 0 0 1px ${ringColor}, ${vignette}`,
+          opacity: disabled ? 0.45 : 1,
+          pointerEvents: disabled ? 'none' : 'auto',
+          transition: 'opacity 180ms ease-out',
+        }}
+        aria-label="Ekran konum seçici"
+      >
+        {/* İnce grid — ekran hissi (tema duyarlı) */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0,
+            backgroundImage:
+              `linear-gradient(${gridColor} 1px, transparent 1px),` +
+              ` linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
+            backgroundSize: '16px 16px',
+            maskImage: 'radial-gradient(ellipse at center, black 55%, transparent 95%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 55%, transparent 95%)',
+          }}
+        />
+        {/* Accent aura */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0,
+            background: 'radial-gradient(circle at 15% 25%, rgba(var(--theme-accent-rgb), 0.10), transparent 55%)',
+          }}
+        />
+
+        <style>{`
+          .anchor-hit:hover .anchor-dot { transform: scale(1.6); background: rgba(var(--theme-accent-rgb), 0.55); }
+          .anchor-hit:hover .anchor-dot.is-active { transform: none; }
+        `}</style>
+
+        {ANCHOR_POINTS.map(p => {
+          const active = value === p.v;
+          const x = pad + p.fx * inner.w;
+          const y = pad + p.fy * inner.h;
+          const tx = `${-p.fx * 100}%`;
+          const ty = `${-p.fy * 100}%`;
+          return (
+            <button
+              key={p.v}
+              onClick={() => onChange(p.v)}
+              title={p.label}
+              className="anchor-hit"
               style={{
-                display: 'block',
-                width: active ? 20 : 14,
-                height: active ? 12 : 8,
-                borderRadius: 4,
-                background: active
-                  ? 'rgba(var(--theme-accent-rgb), 0.22)'
-                  : 'rgba(var(--glass-tint), 0.26)',
-                boxShadow: active
-                  ? '0 0 0 1px rgba(var(--theme-accent-rgb), 0.85), 0 0 8px rgba(var(--theme-accent-rgb), 0.35)'
-                  : 'inset 0 0 0 1px rgba(var(--glass-tint), 0.16)',
-                opacity: active ? 1 : 0.75,
-                transition: 'all 140ms cubic-bezier(0.22, 1, 0.36, 1)',
+                position: 'absolute',
+                left: x, top: y,
+                width: HIT, height: HIT,
+                transform: `translate(${tx}, ${ty})`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'transparent', border: 0, padding: 0, cursor: 'pointer',
+                zIndex: active ? 3 : 2,
               }}
-            />
-            <style>{`
-              button:hover > .anchor-pill { transform: scale(1.08); opacity: 1; }
-            `}</style>
-          </button>
-        );
-      })}
+              aria-label={p.label}
+              aria-pressed={active}
+            >
+              {active ? (
+                // Mini overlay pip — 3 avatar dot, ilk dot konuşuyor (accent glow)
+                <span
+                  aria-hidden
+                  className="anchor-dot is-active flex items-center gap-[3px] rounded-md"
+                  style={{
+                    padding: '3px 4px',
+                    background: 'rgba(var(--theme-accent-rgb), 0.22)',
+                    boxShadow:
+                      '0 0 0 1px rgba(var(--theme-accent-rgb), 0.80),' +
+                      ' 0 0 12px rgba(var(--theme-accent-rgb), 0.45)',
+                    transition: 'all 140ms cubic-bezier(0.22,1,0.36,1)',
+                  }}
+                >
+                  {[0, 1, 2].map(i => (
+                    <span
+                      key={i}
+                      style={{
+                        width: 5, height: 5, borderRadius: '50%',
+                        background: i === 0 ? pipPrimaryDot : pipSecondaryDot,
+                      }}
+                    />
+                  ))}
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className="anchor-dot"
+                  style={{
+                    display: 'block',
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: inactiveDotBg,
+                    boxShadow: `inset 0 0 0 1px ${inactiveDotRing}`,
+                    transition: 'all 140ms cubic-bezier(0.22,1,0.36,1)',
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between px-0.5">
+        <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">Konum</span>
+        <span className="text-[10px] font-semibold text-[var(--theme-text)]/80 truncate ml-2">{activeLabel}</span>
+      </div>
     </div>
   );
 }
 
-// İç-kart "Segmented control" (iOS tarzı)
-function OverlaySizeSegmented({ value, onChange, disabled }: {
-  value: 'small' | 'medium' | 'large';
-  onChange: (v: 'small' | 'medium' | 'large') => void;
+// Stil segmented — 3 mini preview: Capsule (pill) / Card (kare+bar) / Badge (minimal dot).
+// Her buton aktif varyantı küçük mockup ile gösterir → kullanıcı seçerken ne alacağını görür.
+function OverlayVariantSegmented({ value, onChange, disabled }: {
+  value: 'capsule' | 'card' | 'badge' | 'none';
+  onChange: (v: 'capsule' | 'card' | 'badge' | 'none') => void;
   disabled?: boolean;
 }) {
-  const opts: Array<{ v: 'small' | 'medium' | 'large'; label: string }> = [
-    { v: 'small',  label: 'Küçük' },
-    { v: 'medium', label: 'Orta' },
-    { v: 'large',  label: 'Büyük' },
+  const opts: Array<{ v: 'capsule' | 'card' | 'badge' | 'none'; label: string }> = [
+    { v: 'capsule', label: 'Kapsül' },
+    { v: 'card',    label: 'Kart' },
+    { v: 'badge',   label: 'Rozet' },
+    { v: 'none',    label: 'Yok' },
   ];
   return (
     <div
-      className="inline-flex p-[2px] rounded-lg w-full"
+      className="flex p-[4px] rounded-xl w-full gap-1"
       style={{
-        background: 'rgba(var(--glass-tint), 0.06)',
-        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.05)',
+        background: 'rgba(var(--glass-tint), 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
         opacity: disabled ? 0.5 : 1,
         pointerEvents: disabled ? 'none' : 'auto',
       }}
@@ -229,15 +283,26 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
           <button
             key={o.v}
             onClick={() => onChange(o.v)}
-            className="flex-1 text-[11px] font-medium h-8 rounded-[6px]"
+            className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[10px]"
             style={{
-              background: active ? 'rgba(var(--theme-accent-rgb), 0.16)' : 'transparent',
-              color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
-              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.22)' : 'none',
-              transition: 'all 140ms ease-out',
+              height: 50,
+              background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
+              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.28)' : 'none',
+              transition: 'all 160ms ease-out',
             }}
+            aria-pressed={active}
+            title={o.label}
           >
-            {o.label}
+            <VariantPreview variant={o.v} active={active} />
+            <span
+              className="text-[10px] font-semibold tracking-wide"
+              style={{
+                color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
+                opacity: active ? 1 : 0.8,
+              }}
+            >
+              {o.label}
+            </span>
           </button>
         );
       })}
@@ -245,29 +310,178 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
   );
 }
 
-// İnce toggle satırı — label + switch
-function OverlayToggleRow({ label, checked, onChange, disabled }: {
+// Mini preview mockup — her varyantın karakteristik formu
+function VariantPreview({ variant, active }: { variant: 'capsule' | 'card' | 'badge' | 'none'; active: boolean }) {
+  const accent = active ? 'var(--theme-accent)' : 'rgba(var(--glass-tint), 0.42)';
+  const fill = active ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--glass-tint), 0.10)';
+  const dot = active ? 'var(--theme-accent)' : 'rgba(var(--glass-tint), 0.55)';
+  if (variant === 'capsule') {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        background: fill, borderRadius: 999, padding: '2px 6px 2px 2px',
+        boxShadow: `inset 0 0 0 1px ${accent}`,
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: '26%', background: dot }} />
+        <span style={{ width: 14, height: 2, borderRadius: 2, background: dot, opacity: 0.75 }} />
+        <span style={{ display: 'flex', gap: 1 }}>
+          <span style={{ width: 1.5, height: 5, background: dot, borderRadius: 1 }} />
+          <span style={{ width: 1.5, height: 7, background: dot, borderRadius: 1 }} />
+          <span style={{ width: 1.5, height: 4, background: dot, borderRadius: 1 }} />
+        </span>
+      </span>
+    );
+  }
+  if (variant === 'card') {
+    return (
+      <span style={{
+        display: 'inline-flex', flexDirection: 'column', gap: 2,
+        background: fill, borderRadius: 4, padding: '3px 4px',
+        boxShadow: `inset 0 0 0 1px ${accent}`,
+      }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '26%', background: dot }} />
+          <span style={{ width: 14, height: 1.5, borderRadius: 1, background: dot, opacity: 0.8 }} />
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2, paddingLeft: 10 }}>
+          <span style={{ width: 3, height: 3, borderRadius: '50%', background: dot, opacity: 0.75 }} />
+          <span style={{ width: 8, height: 1.5, borderRadius: 1, background: dot, opacity: 0.55 }} />
+        </span>
+      </span>
+    );
+  }
+  if (variant === 'badge') {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        background: fill, borderRadius: 999, padding: '2px 2px',
+        boxShadow: `inset 0 0 0 1px ${accent}`,
+      }}>
+        <span style={{ width: 7, height: 7, borderRadius: '26%', background: dot }} />
+        <span style={{ display: 'flex', gap: 1, marginRight: 2 }}>
+          <span style={{ width: 1.5, height: 4, background: dot, borderRadius: 1, opacity: 0.8 }} />
+          <span style={{ width: 1.5, height: 6, background: dot, borderRadius: 1, opacity: 0.9 }} />
+        </span>
+      </span>
+    );
+  }
+  // none — sadece avatar + isim çizgisi (kart yok, waveform yok)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{
+        width: 9, height: 9, borderRadius: '26%', background: dot,
+        boxShadow: `inset 0 0 0 1px ${accent}`,
+      }} />
+      <span style={{ width: 16, height: 2, borderRadius: 2, background: dot, opacity: 0.85 }} />
+    </span>
+  );
+}
+
+// Boyut segmented — 3 buton, her biri avatar-dot ölçeğiyle görsel hiyerarşi.
+// Konum kartının yanında dikey ortalanır; yükseklik picker'la eşleşir.
+function OverlaySizeSegmented({ value, onChange, disabled }: {
+  value: 'small' | 'medium' | 'large';
+  onChange: (v: 'small' | 'medium' | 'large') => void;
+  disabled?: boolean;
+}) {
+  const opts: Array<{ v: 'small' | 'medium' | 'large'; label: string; dot: number; gap: number }> = [
+    { v: 'small',  label: 'Küçük', dot: 4, gap: 2 },
+    { v: 'medium', label: 'Orta',  dot: 6, gap: 3 },
+    { v: 'large',  label: 'Büyük', dot: 8, gap: 4 },
+  ];
+  return (
+    <div
+      className="flex p-[4px] rounded-xl w-full gap-1"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
+        opacity: disabled ? 0.5 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+      }}
+    >
+      {opts.map(o => {
+        const active = value === o.v;
+        return (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[10px]"
+            style={{
+              height: 50,
+              background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
+              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.28)' : 'none',
+              transition: 'all 160ms ease-out',
+            }}
+            aria-pressed={active}
+          >
+            <span className="flex items-center" style={{ gap: o.gap }}>
+              {[0, 1, 2].map(i => (
+                <span key={i} style={{
+                  width: o.dot, height: o.dot, borderRadius: '50%',
+                  background: active
+                    ? (i === 0 ? 'var(--theme-accent)' : 'rgba(var(--theme-accent-rgb), 0.55)')
+                    : 'rgba(var(--glass-tint), 0.36)',
+                  boxShadow: active && i === 0 ? '0 0 5px rgba(var(--theme-accent-rgb), 0.85)' : 'none',
+                  transition: 'all 160ms ease-out',
+                }} />
+              ))}
+            </span>
+            <span
+              className="text-[10.5px] font-semibold tracking-wide"
+              style={{
+                color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
+                opacity: active ? 1 : 0.8,
+              }}
+            >
+              {o.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// İkonlu + açıklamalı toggle satırı
+function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled }: {
+  icon: React.ReactNode;
   label: string;
+  hint: string;
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
 }) {
   return (
     <label
-      className="flex items-center justify-between"
+      className="flex items-center gap-3"
       style={{
-        height: 34,
+        minHeight: 42,
+        paddingLeft: 2,
+        paddingRight: 2,
         opacity: disabled ? 0.55 : 1,
         pointerEvents: disabled ? 'none' : 'auto',
       }}
     >
-      <span className="text-[11px] text-[var(--theme-text)]/85 select-none">{label}</span>
+      <span
+        className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+        style={{
+          background: 'rgba(var(--glass-tint), 0.06)',
+          color: 'var(--theme-secondary-text)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.05)',
+        }}
+      >
+        {icon}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11.5px] font-medium text-[var(--theme-text)]/90 leading-tight truncate">{label}</p>
+        <p className="text-[9.5px] text-[var(--theme-secondary-text)]/55 leading-tight mt-0.5 truncate">{hint}</p>
+      </div>
       <Toggle checked={checked} onChange={onChange} />
     </label>
   );
 }
 
-// Oyun içi ses overlay — Electron desktop only — 2 kolon premium layout
+// Oyun içi ses overlay — Electron desktop only — preview + kontroller
 function VoiceOverlayCard() {
   const {
     overlayEnabled, setOverlayEnabled,
@@ -276,55 +490,136 @@ function VoiceOverlayCard() {
     overlayShowOnlySpeaking, setOverlayShowOnlySpeaking,
     overlayShowSelf, setOverlayShowSelf,
     overlayClickThrough, setOverlayClickThrough,
+    overlayCardOpacity, setOverlayCardOpacity,
+    overlayVariant, setOverlayVariant,
   } = useSettings();
   const off = !overlayEnabled;
   return (
     <div className="surface-card rounded-xl px-4 py-4">
-      {/* Header — tek satır, separator yok */}
-      <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-          <Layers size={13} className="text-[var(--theme-accent)]/80" />
+      {/* Header — ikon + başlık + Masaüstü rozeti + ana toggle */}
+      <div className="flex items-start gap-3">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: 'rgba(var(--theme-accent-rgb), 0.12)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.22)',
+          }}
+        >
+          <Layers size={15} className="text-[var(--theme-accent)]" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-medium text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
-          <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mt-[2px] leading-snug truncate">
-            Ses odasındaki kullanıcıları oyun üstünde gösterir.
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
+            <span
+              className="text-[8.5px] font-bold uppercase tracking-[0.14em] px-1.5 py-[2px] rounded leading-none"
+              style={{
+                color: 'var(--theme-secondary-text)',
+                background: 'rgba(var(--glass-tint), 0.06)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.08)',
+              }}
+            >
+              Masaüstü
+            </span>
+          </div>
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-1 leading-snug">
+            Ses odasındaki üyeleri oyun üstünde küçük bir panelde göster.
           </p>
         </div>
-        <Toggle checked={overlayEnabled} onChange={() => setOverlayEnabled(!overlayEnabled)} />
+        <div className="pt-0.5">
+          <Toggle checked={overlayEnabled} onChange={() => setOverlayEnabled(!overlayEnabled)} />
+        </div>
       </div>
 
-      {/* Body — 2 kolon: preview (sol) + kontroller (sağ) */}
+      {/* Body — iki satır:
+          1) Üst satır (wrap): konum picker (sol, sabit 232px) + boyut (sağ, flex-1, dikey ortalı)
+          2) Alt satır: toggles full-width (konum altından sağa uzar)
+          Küçük pencerede üst satır flex-wrap ile stack'e düşer; birbirine girmez. */}
       <div
-        className="mt-4 flex gap-4"
-        style={{ opacity: off ? 0.5 : 1, transition: 'opacity 180ms ease-out' }}
+        className="mt-4 flex flex-col gap-3"
+        style={{
+          opacity: off ? 0.55 : 1,
+          transition: 'opacity 180ms ease-out',
+        }}
       >
-        {/* Sol: preview */}
-        <OverlayPositionPicker value={overlayPosition} onChange={setOverlayPosition} disabled={off} />
+        <div className="flex flex-nowrap gap-4 items-stretch">
+          <OverlayPositionPicker
+            value={overlayPosition}
+            onChange={setOverlayPosition}
+            disabled={off}
+          />
+          <div className="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
+            <div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
+              <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} />
+            </div>
 
-        {/* Sağ: kontroller — dikey stack */}
-        <div className="flex-1 flex flex-col gap-2 min-w-0">
-          <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} />
-          <div className="flex flex-col gap-0.5 mt-0.5">
-            <OverlayToggleRow
-              label="Sadece konuşanları göster"
-              checked={overlayShowOnlySpeaking}
-              onChange={() => !off && setOverlayShowOnlySpeaking(!overlayShowOnlySpeaking)}
-              disabled={off}
-            />
-            <OverlayToggleRow
-              label="Kendimi göster"
-              checked={overlayShowSelf}
-              onChange={() => !off && setOverlayShowSelf(!overlayShowSelf)}
-              disabled={off}
-            />
-            <OverlayToggleRow
-              label="Tıklanamaz overlay"
-              checked={overlayClickThrough}
-              onChange={() => !off && setOverlayClickThrough(!overlayClickThrough)}
-              disabled={off}
-            />
+            <div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Boyut</div>
+              <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} />
+            </div>
+
+            {/* Kart şeffaflık — tek slider, sabit koyu renk. Overlay'de isim
+                arkasındaki kartın + avatar/isim görünürlüğünün ortak ayarı. */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
+                  <Droplet size={10} /> Kart Şeffaflığı
+                </span>
+                <span className="text-[10px] font-semibold tabular-nums text-[var(--theme-text)]/75">%{overlayCardOpacity}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={overlayCardOpacity}
+                disabled={off}
+                onChange={(e) => setOverlayCardOpacity(parseInt(e.target.value) || 0)}
+                className="w-full"
+                style={{
+                  accentColor: 'var(--theme-accent)',
+                  opacity: off ? 0.5 : 1,
+                  cursor: off ? 'not-allowed' : 'pointer',
+                }}
+                aria-label="Kart şeffaflık ayarı"
+              />
+            </div>
           </div>
+        </div>
+
+        <div
+          className="rounded-xl px-3 py-0.5 w-full"
+          style={{
+            background: 'rgba(var(--glass-tint), 0.03)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.05)',
+          }}
+        >
+          <OverlayToggleRow
+            icon={<Mic size={13} strokeWidth={2} />}
+            label="Sadece konuşanları göster"
+            hint="Sessiz üyeler overlay'de görünmez"
+            checked={overlayShowOnlySpeaking}
+            onChange={() => !off && setOverlayShowOnlySpeaking(!overlayShowOnlySpeaking)}
+            disabled={off}
+          />
+          <div style={{ height: 1, background: 'rgba(var(--glass-tint), 0.05)', marginLeft: 34 }} />
+          <OverlayToggleRow
+            icon={<UserIcon size={13} strokeWidth={2} />}
+            label="Kendimi göster"
+            hint="Kendi avatarın da overlay'e eklenir"
+            checked={overlayShowSelf}
+            onChange={() => !off && setOverlayShowSelf(!overlayShowSelf)}
+            disabled={off}
+          />
+          <div style={{ height: 1, background: 'rgba(var(--glass-tint), 0.05)', marginLeft: 34 }} />
+          <OverlayToggleRow
+            icon={<MousePointer2 size={13} strokeWidth={2} />}
+            label="Tıklamaları oyuna geçir"
+            hint="Overlay fare tıklamalarını yakalamaz"
+            checked={overlayClickThrough}
+            onChange={() => !off && setOverlayClickThrough(!overlayClickThrough)}
+            disabled={off}
+          />
         </div>
       </div>
     </div>
@@ -436,35 +731,39 @@ export default function SettingsView() {
 
           {effectiveTab === 'app' && (
             <div className="flex flex-col gap-5 md:gap-6">
-              <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5 items-start">
-                <div className="flex flex-col gap-5">
-                  <section>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
+              {/* Row-by-row grid: Görünüm + Performans aynı satırda, grid stretch ile
+                  yükseklikleri otomatik eşit. AppearanceSection (Tema Paketleri) içeriği
+                  küçük olsa da kart Performans kartının yüksekliğine kadar uzar. */}
+              <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
+                <section className="flex flex-col h-full">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
+                  <div className="flex-1 flex flex-col">
                     <AppearanceSection />
-                  </section>
-                  <section>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
-                    <SoundsSection />
-                  </section>
-                </div>
-                <div className="flex flex-col gap-5">
-                  <section>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  </div>
+                </section>
+                <section className="flex flex-col h-full">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  <div className="flex-1 flex flex-col">
                     <PerformanceSection />
+                  </div>
+                </section>
+
+                <section>
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
+                  <SoundsSection />
+                </section>
+                {showVoiceMode && (
+                  <section>
+                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
+                    <VoiceModeSection />
                   </section>
-                  {showVoiceMode && (
-                    <section>
-                      <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
-                      <VoiceModeSection />
-                    </section>
-                  )}
-                  {isElectron() && (
-                    <section>
-                      <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
-                      <VoiceOverlayCard />
-                    </section>
-                  )}
-                </div>
+                )}
+                {isElectron() && (
+                  <section>
+                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                    <VoiceOverlayCard />
+                  </section>
+                )}
               </div>
 
               {/* base–lg: tek kolon */}

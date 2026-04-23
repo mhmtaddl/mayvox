@@ -6,6 +6,7 @@ import {
   subscribeInformational,
   type InformationalItem,
 } from '../features/notifications/informationalStore';
+import type { UserInvite } from '../lib/serverService';
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
@@ -24,6 +25,13 @@ export interface NotifItem {
   serverId?: string;
   /** Informational item'lardan geliyorsa timestamp — relative time render için. */
   createdAt?: number;
+  /** Aksiyon gerektiren item'larda ilgili kullanıcı (ör. arkadaşlık isteğini gönderen). */
+  actorId?: string;
+  /** Item avatar — arkadaşlık isteği item'ında gönderenin avatarı. */
+  avatarUrl?: string | null;
+  /** Okundu zamanı (ms). Informational item'lar için store'dan forward edilir; bildirim
+   *  görüntülendikten sonra item silinmez, sadece "compact" gösterilir. */
+  readAt?: number | null;
 }
 
 // ── Priority sıralama ağırlıkları ──
@@ -65,10 +73,10 @@ export interface JoinRequestSource {
 export function useNotificationCenter(
   dmUnreadCount: number = 0,
   updateActionable: boolean = false,
-  inviteReceivedCount: number = 0,
+  incomingInvites: UserInvite[] = [],
   joinRequestSources: JoinRequestSource[] = [],
 ): NotificationSummary {
-  const { incomingRequests, currentUser } = useUser();
+  const { incomingRequests, currentUser, allUsers } = useUser();
   const { inviteRequests, passwordResetRequests } = useAppState();
   const informational = useSyncExternalStore<InformationalItem[]>(
     subscribeInformational,
@@ -80,8 +88,12 @@ export function useNotificationCenter(
     const isAdmin = !!(currentUser.isAdmin || currentUser.isPrimaryAdmin);
 
     const friendRequestCount = incomingRequests.length;
+    const inviteReceivedCount = incomingInvites.length;
     const joinRequestCount = joinRequestSources.reduce((s, it) => s + it.pendingCount, 0);
-    const informationalCount = informational.length;
+    // Informational badge: sadece OKUNMAMIŞ olanları say — kullanıcı çanı açınca readAt
+    // set edilir (markAllInformationalRead), bir sonraki sayımdan düşer. Onay/ret gerektiren
+    // aksiyon tipleri (friend/invite/joinRequest) readAt'tan bağımsız, kaynaktan düşene kadar sayılır.
+    const informationalCount = informational.filter(i => !i.readAt).length;
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
     // DM unread'leri artık bell badge'ine beslenmez — Mesajlar bölümüne özel.
@@ -91,27 +103,39 @@ export function useNotificationCenter(
     // ── Item listesi oluştur ──
     const items: NotifItem[] = [];
 
-    if (friendRequestCount > 0) {
+    // Her arkadaşlık isteği için ayrı item — popover'da inline Kabul/Reddet'e olanak verir.
+    // Kullanıcı aksiyonu almadığı sürece item silinmez (incomingRequests source of truth).
+    for (const req of incomingRequests) {
+      const sender = allUsers.find(u => u.id === req.senderId);
+      const senderName = sender?.name || sender?.firstName || 'Bilinmeyen kullanıcı';
       items.push({
-        key: 'friends',
+        key: `friend-req:${req.id}`,
         kind: 'social',
         priority: 'medium',
-        label: friendRequestCount === 1 ? 'Arkadaşlık isteği' : 'Arkadaşlık istekleri',
-        detail: friendRequestCount === 1 ? 'Bekleyen bir istek var' : `${friendRequestCount} bekleyen istek`,
-        count: friendRequestCount,
+        label: senderName,
+        detail: 'Arkadaş olmak istiyor',
+        count: 0,
         isActionable: true,
+        actorId: req.senderId,
+        avatarUrl: sender?.avatar ?? null,
+        createdAt: new Date(req.createdAt).getTime(),
       });
     }
 
-    if (inviteReceivedCount > 0) {
+    // Her sunucu daveti için ayrı item — popover'da inline Kabul/Reddet.
+    // Kullanıcı aksiyon almadan silinmez (incomingInvites source of truth).
+    for (const inv of incomingInvites) {
       items.push({
-        key: 'invites',
+        key: `server-inv:${inv.id}`,
         kind: 'invite',
         priority: 'medium',
-        label: 'Sunucu davetleri',
-        detail: inviteReceivedCount === 1 ? 'Bekleyen 1 davet var' : `Bekleyen ${inviteReceivedCount} davet var`,
-        count: inviteReceivedCount,
+        label: inv.serverName || 'Sunucu daveti',
+        detail: inv.invitedByName ? `${inv.invitedByName} seni davet etti` : 'Yeni davet',
+        count: 0,
         isActionable: true,
+        actorId: inv.id,
+        avatarUrl: inv.serverAvatar ?? null,
+        createdAt: new Date(inv.createdAt).getTime(),
       });
     }
 
@@ -147,6 +171,7 @@ export function useNotificationCenter(
         isActionable: !!info.serverId,
         serverId: info.serverId,
         createdAt: info.createdAt,
+        readAt: info.readAt ?? null,
       });
     }
 
@@ -191,10 +216,11 @@ export function useNotificationCenter(
       items,
     };
   }, [
-    incomingRequests.length,
+    incomingRequests,
+    allUsers,
     dmUnreadCount,
     updateActionable,
-    inviteReceivedCount,
+    incomingInvites,
     joinRequestSources,
     informational,
     inviteRequests.length,

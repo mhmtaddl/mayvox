@@ -60,10 +60,10 @@ export default function AppChrome() {
         background: focused
           ? 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.92) 0%, rgba(var(--theme-bg-rgb), 0.78) 100%)'
           : 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.85) 0%, rgba(var(--theme-bg-rgb), 0.68) 100%)',
-        borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.10)',
+        borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
         boxShadow: focused
-          ? 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.10), 0 1px 0 rgba(0,0,0,0.35)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+          ? 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.18), 0 1px 0 rgba(0,0,0,0.35), 0 0 14px rgba(var(--theme-accent-rgb), 0.12)'
+          : 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.06)',
         backdropFilter: 'blur(18px) saturate(140%)',
         transition: 'background 200ms ease, box-shadow 200ms ease',
       } as React.CSSProperties}
@@ -75,7 +75,7 @@ export default function AppChrome() {
           className="absolute inset-0 pointer-events-none overflow-hidden"
           style={{
             background:
-              'radial-gradient(ellipse 220px 28px at 50% 0%, rgba(var(--theme-accent-rgb), 0.12), transparent 70%)',
+              'radial-gradient(ellipse 260px 32px at 50% 0%, rgba(var(--theme-accent-rgb), 0.22), transparent 75%)',
             mixBlendMode: 'screen',
           }}
         />
@@ -122,9 +122,9 @@ function BrandMark({ focused }: { focused: boolean }) {
     <div
       className="relative w-5 h-5 rounded-md flex items-center justify-center"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22), rgba(var(--theme-accent-rgb),0.06))',
-        border: '1px solid rgba(var(--theme-accent-rgb), 0.30)',
-        boxShadow: focused ? '0 0 10px rgba(var(--theme-accent-rgb), 0.30), inset 0 1px 0 rgba(255,255,255,0.06)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+        background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.32), rgba(var(--theme-accent-rgb),0.10))',
+        border: '1px solid rgba(var(--theme-accent-rgb), 0.42)',
+        boxShadow: focused ? '0 0 12px rgba(var(--theme-accent-rgb), 0.40), inset 0 1px 0 rgba(255,255,255,0.08)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         transition: 'box-shadow 200ms ease',
       }}
     >

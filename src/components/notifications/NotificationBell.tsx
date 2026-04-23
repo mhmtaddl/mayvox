@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, UserCheck, ShieldAlert, PhoneMissed } from 'lucide-react';
+import { UserPlus, MessageSquare, Download, AtSign, Mail, ChevronRight, ChevronLeft, UserCheck, ShieldAlert, PhoneMissed, Check, X as XIcon, Trash2 } from 'lucide-react';
 import NotificationBadge from './NotificationBadge';
 import type { NotificationSummary, NotifItem, NotifKind } from '../../hooks/useNotificationCenter';
-import { clearAllInformational, removeInformational } from '../../features/notifications/informationalStore';
+import { markAllInformationalRead, clearReadInformational } from '../../features/notifications/informationalStore';
 
 interface Props {
   summary: NotificationSummary;
@@ -16,6 +16,14 @@ interface Props {
   onOpenJoinRequest?: (serverId: string) => void;
   /** Informational "kabul edildin" bildirimi tıklanınca sunucuya geç. */
   onOpenServer?: (serverId: string) => void;
+  /** Popover'da inline Kabul butonu — senderId geçer, promise dönerse loading state tutulur. */
+  onAcceptFriendRequest?: (senderId: string) => void | Promise<unknown>;
+  /** Popover'da inline Reddet butonu. */
+  onRejectFriendRequest?: (senderId: string) => void | Promise<unknown>;
+  /** Popover'da inline Sunucu Daveti Kabul — inviteId geçer. */
+  onAcceptServerInvite?: (inviteId: string) => void | Promise<unknown>;
+  /** Popover'da inline Sunucu Daveti Reddet. */
+  onDeclineServerInvite?: (inviteId: string) => void | Promise<unknown>;
 }
 
 // ── Kind → ikon eşlemesi ──
@@ -56,7 +64,7 @@ const PRIORITY_ACCENT = {
   low: 'bg-transparent',
 } as const;
 
-export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer }: Props) {
+export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite }: Props) {
   const [open, setOpen] = useState(false);
   const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,26 +87,31 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
   }, [open]);
 
   // ── Session seen-state: panel açılınca mevcut key'ler "görüldü" olur ──
+  // Informational store ayrıca readAt ile persist ediyor; burası session-level.
   const seenRef = useRef<Set<string>>(new Set());
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(new Set());
 
-  // Panel açıldığında seen snapshot'ı güncelle; KAPANDIĞINDA okundu sayılıp temizle.
-  // Açılış anında temizlersek kullanıcı okumaya vakit bulamadan siliniyor — yanlıştı.
+  // Pagination (5 item / sayfa)
+  const PAGE_SIZE = 5;
+  const [page, setPage] = useState(0);
+
+  // Panel açıldığında seen snapshot'ı güncelle + sayfayı 0'a al.
+  // Kapandığında: seen güncellenir + informational'lara readAt set edilir (silinmez).
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (open) {
       setSeenSnapshot(new Set(seenRef.current));
+      setPage(0);
       wasOpenRef.current = true;
       return;
     }
-    // open → closed geçişi:
     if (wasOpenRef.current) {
       wasOpenRef.current = false;
-      // Görülen item'ları seen set'ine ekle (sonraki açılışta "yeni" olarak görünmesin).
+      // Görülen item'ları seen set'ine ekle (sonraki açılışta "yeni" rozeti çıkmasın).
       summary.items.forEach(item => seenRef.current.add(item.key));
-      // Informational kayıtları temizle (aksiyon gerektirmez, çana bakmak okundu demektir).
-      // Aksiyon tipi item'lar KAYNAĞA bağlı olarak kendiliğinden düşer — onları temizleme.
-      clearAllInformational();
+      // Informational kayıtları SİLMEZ, sadece "okundu" işaretler — kullanıcı tarih+saat ile
+      // sonradan görebilir. Temizleme başlıktaki "Sil" butonuyla manuel yapılır.
+      markAllInformationalRead();
     }
   }, [open, summary.items]);
 
@@ -116,24 +129,44 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
 
   const { bellCount, items } = summary;
 
+  // Pagination state — items veya page değişince clamp et (liste küçüldüyse son sayfa boşalmış olabilir).
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = useMemo(
+    () => items.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [items, safePage],
+  );
+  useEffect(() => {
+    if (safePage !== page) setPage(safePage);
+  }, [safePage, page]);
+
+  // "Temizle" butonu — informational store'daki okunmuşları siler. Friend-req / server-inv
+  // itemları source-based (accept/reject gerekli) olduğu için etkilenmez.
+  const handleClearRead = useCallback(() => {
+    clearReadInformational();
+    setPage(0);
+  }, []);
+  // Buton sadece okunmuş informational items varsa aktif — items.some ile tespit.
+  const hasClearableRead = useMemo(
+    () => items.some(it => it.key.startsWith('info:') && it.readAt != null),
+    [items],
+  );
+
   // ── Callback resolver ──
   const getOnClick = useCallback((item: NotifItem): (() => void) | undefined => {
     if (!item.isActionable) return undefined;
-    // Informational "kabul edildin" kayıtları: key `info:joinreq-accepted:<sid>` ile gelir.
+    // Informational bildirimler: tıklansa da SİLİNMEZ; manuel "Temizle" butonuna kadar
+    // çanda kalır. Sadece ilgili sunucuya geçiş yapılır ve popover kapanır.
     if (item.key.startsWith('info:joinreq-accepted:') && item.serverId && onOpenServer) {
       const sid = item.serverId;
-      const infoKey = item.key.slice('info:'.length);
-      return () => { onOpenServer(sid); removeInformational(infoKey); setOpen(false); };
+      return () => { onOpenServer(sid); setOpen(false); };
     }
     if (item.key.startsWith('info:joinreq-rejected:')) {
-      const infoKey = item.key.slice('info:'.length);
-      return () => { removeInformational(infoKey); setOpen(false); };
+      return () => { setOpen(false); };
     }
-    // Restriction informational items — sunucuya geç + bildirimi sil.
     if ((item.key.startsWith('info:restricted:') || item.key.startsWith('info:unrestricted:')) && item.serverId && onOpenServer) {
       const sid = item.serverId;
-      const infoKey = item.key.slice('info:'.length);
-      return () => { onOpenServer(sid); removeInformational(infoKey); setOpen(false); };
+      return () => { onOpenServer(sid); setOpen(false); };
     }
     // joinRequest: her sunucu için ayrı item, serverId ile sunucu ayarlarına git
     if (item.kind === 'joinRequest' && item.serverId && onOpenJoinRequest) {
@@ -230,16 +263,27 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   ' inset 0 1px 0 rgba(255,255,255,0.04)',
               }}
             >
-            {/* Başlık — title + counter */}
-            <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}>
-              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
-                Bildirimler
-              </span>
-              {items.length > 0 && (
-                <span className="text-[9.5px] font-bold tabular-nums bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] px-1.5 py-0.5 rounded-full leading-none">
-                  {items.length}
+            {/* Başlık — title + counter + Temizle butonu */}
+            <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
+                  Bildirimler
                 </span>
-              )}
+                {items.length > 0 && (
+                  <span className="text-[9.5px] font-bold tabular-nums bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] px-1.5 py-0.5 rounded-full leading-none">
+                    {items.length}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleClearRead}
+                disabled={!hasClearableRead}
+                title="Okunmuş bildirimleri temizle"
+                aria-label="Okunmuş bildirimleri temizle"
+                className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/65 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <Trash2 size={12} strokeWidth={2} />
+              </button>
             </div>
 
             {/* İçerik */}
@@ -267,8 +311,11 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   </div>
                 </div>
               ) : (
-                items.map(item => {
-                  const isNew = !seenSnapshot.has(item.key);
+                pageItems.map(item => {
+                  // "Yeni" = session'da görülmedi VE store'da readAt yok.
+                  // Bakıldıktan sonra üste doğru kısalır (compact layout), içeriği kalır.
+                  const isNew = !seenSnapshot.has(item.key) && !item.readAt;
+                  const compact = !isNew;
                   const onClick = getOnClick(item);
 
                   // Missed call → Apple-grade floating notification item
@@ -276,21 +323,52 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                     return <MissedCallItem key={item.key} item={item} />;
                   }
 
+                  // Arkadaşlık isteği — aksiyon-pending, compact'laştırılmaz.
+                  if (item.kind === 'social' && item.key.startsWith('friend-req:') && item.actorId) {
+                    return (
+                      <FriendRequestItem
+                        key={item.key}
+                        item={item}
+                        isNew={isNew}
+                        onAccept={onAcceptFriendRequest}
+                        onReject={onRejectFriendRequest}
+                      />
+                    );
+                  }
+
+                  // Sunucu daveti — aksiyon-pending, compact'laştırılmaz.
+                  if (item.kind === 'invite' && item.key.startsWith('server-inv:') && item.actorId) {
+                    return (
+                      <ServerInviteItem
+                        key={item.key}
+                        item={item}
+                        isNew={isNew}
+                        onAccept={onAcceptServerInvite}
+                        onDecline={onDeclineServerInvite}
+                      />
+                    );
+                  }
+
+                  // Standart item — "yeni" full padding, "okunmuş" compact + tarih-saat pilli.
+                  const timeLabel = item.createdAt ? formatNotifTime(item.createdAt) : '';
                   return (
-                    <button
+                    <motion.button
                       key={item.key}
+                      layout
+                      transition={{ type: 'spring', stiffness: 380, damping: 34 }}
                       onClick={onClick}
                       disabled={!onClick}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left group/row transition-colors duration-150 ${
-                        onClick ? 'hover:bg-[var(--theme-panel-hover)] cursor-pointer' : 'cursor-default'
-                      }`}
+                      className={`w-full flex items-center gap-3 text-left group/row transition-colors duration-150 ${
+                        compact ? 'px-4 py-1.5' : 'px-4 py-2.5'
+                      } ${onClick ? 'hover:bg-[var(--theme-panel-hover)] cursor-pointer' : 'cursor-default'}`}
+                      style={{ opacity: compact ? 0.78 : 1 }}
                     >
                       {/* Sol priority çizgisi */}
                       <div className={`w-[2px] self-stretch rounded-full shrink-0 ${PRIORITY_ACCENT[item.priority]} transition-opacity duration-300`} />
 
-                      {/* İkon */}
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors duration-100 ${
-                        item.priority === 'high'
+                      {/* İkon — compact'ta daha küçük */}
+                      <div className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg flex items-center justify-center shrink-0 transition-colors duration-100 ${
+                        item.priority === 'high' && !compact
                           ? 'bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] group-hover/row:bg-[var(--theme-accent)]/12'
                           : 'bg-[rgba(var(--glass-tint),0.05)] text-[var(--theme-secondary-text)] group-hover/row:text-[var(--theme-accent)] group-hover/row:bg-[var(--theme-accent)]/8'
                       }`}>
@@ -300,7 +378,7 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                       {/* Metin */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-[11px] font-semibold block truncate leading-tight ${
+                          <span className={`${compact ? 'text-[10.5px]' : 'text-[11px]'} font-semibold block truncate leading-tight ${
                             isNew ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)]/70'
                           }`}>
                             {item.label}
@@ -311,27 +389,72 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                             </span>
                           )}
                         </div>
-                        {item.detail && (
-                          <span className={`text-[10px] block truncate leading-tight mt-0.5 ${
-                            isNew ? 'text-[var(--theme-secondary-text)]/50' : 'text-[var(--theme-secondary-text)]/35'
-                          }`}>
+                        {item.detail && !compact && (
+                          <span className="text-[10px] block truncate leading-tight mt-0.5 text-[var(--theme-secondary-text)]/50">
                             {item.detail}
                           </span>
                         )}
                       </div>
 
-                      {/* Sağ taraf */}
+                      {/* Sağ taraf — compact modda tarih/saat pilli; yeni modda count + chevron */}
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {item.count > 0 && <NotificationBadge count={item.count} mode="count" variant="accent" size="sm" />}
-                        {onClick && (
+                        {compact && timeLabel && (
+                          <span
+                            className="tabular-nums select-none"
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 500,
+                              padding: '2px 6px',
+                              borderRadius: 999,
+                              background: 'rgba(var(--glass-tint), 0.06)',
+                              color: 'var(--theme-secondary-text)',
+                              opacity: 0.72,
+                              letterSpacing: '0.01em',
+                            }}
+                          >
+                            {timeLabel}
+                          </span>
+                        )}
+                        {!compact && item.count > 0 && <NotificationBadge count={item.count} mode="count" variant="accent" size="sm" />}
+                        {!compact && onClick && (
                           <ChevronRight size={12} className="text-[var(--theme-secondary-text)]/20 group-hover/row:text-[var(--theme-secondary-text)]/50 transition-colors duration-100" />
                         )}
                       </div>
-                    </button>
+                    </motion.button>
                   );
                 })
               )}
             </div>
+
+            {/* Pagination control — sadece 5+ bildirim varsa göster */}
+            {totalPages > 1 && (
+              <div
+                className="flex items-center justify-between gap-2 px-3 py-2"
+                style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}
+              >
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  aria-label="Önceki sayfa"
+                  title="Önceki sayfa"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-[10.5px] font-semibold tabular-nums text-[var(--theme-secondary-text)]/75 select-none">
+                  {safePage + 1} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  aria-label="Sonraki sayfa"
+                  title="Sonraki sayfa"
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
             </motion.div>
           )}
         </AnimatePresence>,
@@ -354,11 +477,11 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
 //  - Hover: y -1 + bg tint lift + shadow growth — NO scale bounce
 //  - Click: scale 0.98 + dismiss (bu item'ı hafif sıyır)
 const MissedCallItem: React.FC<{ item: NotifItem }> = ({ item }) => {
+  // Bildirim artık tıklamayla silinmiyor — "Temizle" butonu manuel silmeye ayrıldı.
   const handleDismiss = React.useCallback(() => {
-    if (!item.key.startsWith('info:')) return;
-    const infoKey = item.key.slice('info:'.length);
-    removeInformational(infoKey);
-  }, [item.key]);
+    // no-op; missed call item çanda kalır, kullanıcı isterse Temizle ile siler.
+    void item;
+  }, [item]);
 
   const relativeLabel = React.useMemo(() => {
     if (!item.createdAt) return '';
@@ -482,6 +605,244 @@ const MissedCallItem: React.FC<{ item: NotifItem }> = ({ item }) => {
     </motion.button>
   );
 };
+
+// ── FriendRequestItem ───────────────────────────────────────────────────
+// Popover içinde inline Kabul/Reddet butonlu arkadaşlık isteği item'ı.
+// Kullanıcı aksiyon almadan silinmez — accept/reject başarılıysa incomingRequests
+// array'inden düşer ve item doğal olarak kaybolur.
+const FriendRequestItem: React.FC<{
+  item: NotifItem;
+  isNew: boolean;
+  onAccept?: (senderId: string) => void | Promise<unknown>;
+  onReject?: (senderId: string) => void | Promise<unknown>;
+}> = ({ item, isNew, onAccept, onReject }) => {
+  const [pending, setPending] = useState<'accept' | 'reject' | null>(null);
+  const senderId = item.actorId!;
+  const initial = (item.label || '?').trim().charAt(0).toUpperCase();
+
+  const handle = async (action: 'accept' | 'reject') => {
+    if (pending) return;
+    setPending(action);
+    try {
+      const fn = action === 'accept' ? onAccept : onReject;
+      await fn?.(senderId);
+      // Başarı → item source'tan (incomingRequests) düşer; component unmount olur.
+    } catch {
+      setPending(null);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full flex items-center gap-3 px-4 py-2.5"
+    >
+      {/* Sol priority çizgisi — medium */}
+      <div className="w-[2px] self-stretch rounded-full shrink-0 bg-[var(--theme-secondary-text)]/20" />
+
+      {/* Avatar — gönderen ya da fallback initial */}
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
+        style={{
+          background: item.avatarUrl ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.12)',
+          border: '1px solid rgba(var(--glass-tint), 0.10)',
+        }}
+      >
+        {item.avatarUrl ? (
+          <img src={item.avatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="text-[12px] font-bold text-[var(--theme-accent)]">{initial}</span>
+        )}
+      </div>
+
+      {/* Metin */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[11px] font-semibold block truncate leading-tight ${
+            isNew ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)]/70'
+          }`}>
+            {item.label}
+          </span>
+          {isNew && (
+            <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--theme-accent)] opacity-70 shrink-0">
+              yeni
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] block truncate leading-tight mt-0.5 text-[var(--theme-secondary-text)]/55">
+          {item.detail}
+        </span>
+      </div>
+
+      {/* Aksiyon butonları — Kabul (accent) + Reddet (subtle) */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => handle('accept')}
+          disabled={!!pending || !onAccept}
+          title="Kabul et"
+          aria-label="Arkadaşlık isteğini kabul et"
+          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          style={{
+            color: 'var(--theme-accent)',
+            background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
+          }}
+          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.18)'; }}
+          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.10)'; }}
+        >
+          <Check size={13} strokeWidth={2.5} className={pending === 'accept' ? 'animate-pulse' : ''} />
+        </button>
+        <button
+          onClick={() => handle('reject')}
+          disabled={!!pending || !onReject}
+          title="Reddet"
+          aria-label="Arkadaşlık isteğini reddet"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          style={{
+            background: pending === 'reject' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
+            border: '1px solid rgba(var(--glass-tint), 0.10)',
+          }}
+          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)'; }}
+          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--glass-tint), 0.05)'; }}
+        >
+          <XIcon size={13} strokeWidth={2.5} className={pending === 'reject' ? 'animate-pulse' : ''} />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+// ── ServerInviteItem ────────────────────────────────────────────────────
+// Sunucu daveti — inline Kabul (✓) / Reddet (✗). Friend-req ile aynı pattern,
+// avatar rounded-square (sunucu logosu), actorId = inviteId.
+const ServerInviteItem: React.FC<{
+  item: NotifItem;
+  isNew: boolean;
+  onAccept?: (inviteId: string) => void | Promise<unknown>;
+  onDecline?: (inviteId: string) => void | Promise<unknown>;
+}> = ({ item, isNew, onAccept, onDecline }) => {
+  const [pending, setPending] = useState<'accept' | 'decline' | null>(null);
+  const inviteId = item.actorId!;
+  const initial = (item.label || '?').trim().charAt(0).toUpperCase();
+
+  const handle = async (action: 'accept' | 'decline') => {
+    if (pending) return;
+    setPending(action);
+    try {
+      const fn = action === 'accept' ? onAccept : onDecline;
+      await fn?.(inviteId);
+    } catch {
+      setPending(null);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full flex items-center gap-3 px-4 py-2.5"
+    >
+      {/* Sol priority çizgisi — medium */}
+      <div className="w-[2px] self-stretch rounded-full shrink-0 bg-[var(--theme-secondary-text)]/20" />
+
+      {/* Avatar — sunucu logosu (rounded square) */}
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
+        style={{
+          background: item.avatarUrl ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.12)',
+          border: '1px solid rgba(var(--glass-tint), 0.10)',
+        }}
+      >
+        {item.avatarUrl ? (
+          <img src={item.avatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="text-[12px] font-bold text-[var(--theme-accent)]">{initial}</span>
+        )}
+      </div>
+
+      {/* Metin */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[11px] font-semibold block truncate leading-tight ${
+            isNew ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)]/70'
+          }`}>
+            {item.label}
+          </span>
+          {isNew && (
+            <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--theme-accent)] opacity-70 shrink-0">
+              yeni
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] block truncate leading-tight mt-0.5 text-[var(--theme-secondary-text)]/55">
+          {item.detail}
+        </span>
+      </div>
+
+      {/* Aksiyon butonları — Kabul (accent) + Reddet (subtle) */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => handle('accept')}
+          disabled={!!pending || !onAccept}
+          title="Daveti kabul et"
+          aria-label="Sunucu davetini kabul et"
+          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          style={{
+            color: 'var(--theme-accent)',
+            background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
+          }}
+          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.18)'; }}
+          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.10)'; }}
+        >
+          <Check size={13} strokeWidth={2.5} className={pending === 'accept' ? 'animate-pulse' : ''} />
+        </button>
+        <button
+          onClick={() => handle('decline')}
+          disabled={!!pending || !onDecline}
+          title="Reddet"
+          aria-label="Sunucu davetini reddet"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          style={{
+            background: pending === 'decline' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
+            border: '1px solid rgba(var(--glass-tint), 0.10)',
+          }}
+          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)'; }}
+          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--glass-tint), 0.05)'; }}
+        >
+          <XIcon size={13} strokeWidth={2.5} className={pending === 'decline' ? 'animate-pulse' : ''} />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+// Bildirim zaman formatı (TR): okunmuş bildirim sağ pillinde gösterilir.
+//   < 1 dk → "şimdi"
+//   < 60 dk → "N dk"
+//   < 24 sa → "N sa"
+//   24-48 sa → "Dün HH:mm"
+//   2-6 gün → "N gün"
+//   ≥ 7 gün → "DD MMM HH:mm" (ör. "12 May 09:15")
+function formatNotifTime(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return 'şimdi';
+  const min = Math.floor(diff / 60_000);
+  if (min < 60) return `${min} dk`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} sa`;
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const days = Math.floor(hr / 24);
+  if (days === 1) return `Dün ${time}`;
+  if (days < 7) return `${days} gün`;
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' }) + ' ' + time;
+}
 
 // Relative time formatter (TR): "şimdi" / "N dk" / "N sa" / "N gün"
 function formatRelativeTime(createdAtMs: number): string {

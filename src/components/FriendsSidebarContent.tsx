@@ -39,7 +39,6 @@ export default function FriendsSidebarContent({
 }: Props) {
   const {
     currentUser, allUsers, friendIds, friendsLoading, getStatusColor,
-    incomingRequests, acceptRequest, rejectRequest,
   } = useUser();
   const { setToastMsg } = useUI();
   const { avatarBorderColor, showLastSeen } = useSettings();
@@ -98,16 +97,6 @@ export default function FriendsSidebarContent({
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [friendMenu]);
-
-  const handleAcceptRequest = async (userId: string, name: string) => {
-    const ok = await acceptRequest(userId);
-    setToastMsg(ok ? `${name} artık arkadaşın` : 'İşlem başarısız');
-  };
-
-  const handleRejectRequest = async (userId: string) => {
-    const ok = await rejectRequest(userId);
-    setToastMsg(ok ? 'İstek reddedildi' : 'İşlem başarısız');
-  };
 
   const isDesktop = variant === 'desktop';
 
@@ -315,41 +304,10 @@ export default function FriendsSidebarContent({
   );
   };
 
-  // ── Render pending request ─────────────────────────────────────────────
-  const renderPendingRequest = (req: typeof incomingRequests[number]) => {
-    const user = allUsers.find(u => u.id === req.senderId);
-    if (!user) return null;
-    const name = formatFullName(user.firstName, user.lastName);
-    return (
-      <div key={req.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-[rgba(var(--glass-tint),0.04)] transition-all">
-        <div className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-          <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-medium text-[var(--theme-text)] truncate leading-tight">{name}</p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => handleAcceptRequest(req.senderId, name)}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-            title="Kabul et"
-          >
-            <Check size={13} strokeWidth={2.5} />
-          </button>
-          <button
-            onClick={() => handleRejectRequest(req.senderId)}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
-            title="Reddet"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   // ── Group section header ───────────────────────────────────────────────
-  const hasContent = friendUsers.length > 0 || incomingRequests.length > 0;
+  // Not: Bekleyen arkadaşlık istekleri artık SADECE bildirim çanında görünür
+  // (NotificationBell'de inline Kabul/Reddet). Sağ panelde duplicate gösterim yok.
+  const hasContent = friendUsers.length > 0;
 
   return (
     <>
@@ -366,21 +324,7 @@ export default function FriendsSidebarContent({
             <p className="text-[10px] text-[var(--theme-secondary-text)] opacity-30 leading-relaxed">Kullanıcı ara ve arkadaş ekleyerek burada gör.</p>
           </div>
         ) : <>
-          {/* 1. Pending requests */}
-          {incomingRequests.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2 px-2">
-                <span className="text-[9px] font-bold text-blue-400/60 uppercase tracking-[0.14em]">Bekleyen İstekler</span>
-                <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-full font-bold">{incomingRequests.length}</span>
-                <div className="flex-1 h-px bg-blue-400/10" />
-              </div>
-              <div className="space-y-0.5">
-                {incomingRequests.map(renderPendingRequest)}
-              </div>
-            </div>
-          )}
-
-          {/* 2. Favorites — online + offline (favorite olan herkes burada) */}
+          {/* Favorites — online + offline (favorite olan herkes burada) */}
           {favoriteUsers.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2 px-2">

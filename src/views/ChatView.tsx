@@ -86,7 +86,7 @@ import JoinServerModal from '../components/server/JoinServerModal';
 import DiscoverPanel from '../components/server/DiscoverPanel';
 
 export default function ChatView() {
-  const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests } = useUser();
+  const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests, acceptRequest, rejectRequest } = useUser();
   const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
@@ -589,7 +589,7 @@ export default function ChatView() {
   const notifications = useNotificationCenter(
     dmUnreadCount,
     false,
-    incomingInvites.invites.length,
+    incomingInvites.invites,
     myPendingJoinRequests.items.map(it => ({ serverId: it.serverId, serverName: it.serverName, pendingCount: it.pendingCount })),
   );
 
@@ -1142,7 +1142,6 @@ export default function ChatView() {
                     <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
                     <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
                   </div>
-                  {incomingRequests.length > 0 && <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>}
                 </div>
                 <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
                   onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
@@ -1178,6 +1177,61 @@ export default function ChatView() {
                     onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); setMobileRightOpen(false); }}
                     onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); setMobileRightOpen(false); }}
                     onOpenServer={(sid) => { setActiveServerId(sid); setMobileRightOpen(false); }}
+                    onAcceptFriendRequest={async (senderId) => {
+                      const sender = allUsers.find(u => u.id === senderId);
+                      const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                      await acceptRequest(senderId);
+                      pushInformational({
+                        key: `friend-accepted:${senderId}`,
+                        kind: 'generic',
+                        label: name,
+                        detail: 'Artık arkadaşsınız',
+                        createdAt: Date.now(),
+                      });
+                    }}
+                    onRejectFriendRequest={async (senderId) => {
+                      const sender = allUsers.find(u => u.id === senderId);
+                      const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                      await rejectRequest(senderId);
+                      pushInformational({
+                        key: `friend-rejected:${senderId}`,
+                        kind: 'generic',
+                        label: name,
+                        detail: 'Arkadaşlık isteğini reddettin',
+                        createdAt: Date.now(),
+                      });
+                    }}
+                    onAcceptServerInvite={async (invId) => {
+                      const inv = incomingInvites.invites.find(i => i.id === invId);
+                      const serverName = inv?.serverName ?? 'Sunucu';
+                      await incomingInvites.acceptInvite(invId);
+                      refreshServers();
+                      setToastMsg(`${serverName} sunucusuna katıldın`);
+                      pushInformational({
+                        key: `inv-accepted:${invId}`,
+                        kind: 'generic',
+                        label: serverName,
+                        detail: 'Sunucuya katıldın',
+                        serverId: inv?.serverId,
+                        serverAvatar: inv?.serverAvatar ?? null,
+                        createdAt: Date.now(),
+                      });
+                    }}
+                    onDeclineServerInvite={async (invId) => {
+                      const inv = incomingInvites.invites.find(i => i.id === invId);
+                      const serverName = inv?.serverName ?? 'Sunucu';
+                      await incomingInvites.declineInvite(invId);
+                      setToastMsg('Davet reddedildi');
+                      pushInformational({
+                        key: `inv-declined:${invId}`,
+                        kind: 'generic',
+                        label: serverName,
+                        detail: 'Daveti reddettin',
+                        serverId: inv?.serverId,
+                        serverAvatar: inv?.serverAvatar ?? null,
+                        createdAt: Date.now(),
+                      });
+                    }}
                   />
                   <button onClick={() => { setMobileRightOpen(false); confirmLogout(); }} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
                 </div>
@@ -1365,7 +1419,6 @@ export default function ChatView() {
               <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
               <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
             </div>
-            {incomingRequests.length > 0 && <span className="text-[9px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-bold animate-pulse">{incomingRequests.length}</span>}
           </div>
           <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
             onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }} channels={channels} activeChannel={activeChannel}
@@ -1398,6 +1451,61 @@ export default function ChatView() {
               onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
               onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
               onOpenServer={(sid) => setActiveServerId(sid)}
+              onAcceptFriendRequest={async (senderId) => {
+                const sender = allUsers.find(u => u.id === senderId);
+                const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                await acceptRequest(senderId);
+                pushInformational({
+                  key: `friend-accepted:${senderId}`,
+                  kind: 'generic',
+                  label: name,
+                  detail: 'Artık arkadaşsınız',
+                  createdAt: Date.now(),
+                });
+              }}
+              onRejectFriendRequest={async (senderId) => {
+                const sender = allUsers.find(u => u.id === senderId);
+                const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                await rejectRequest(senderId);
+                pushInformational({
+                  key: `friend-rejected:${senderId}`,
+                  kind: 'generic',
+                  label: name,
+                  detail: 'Arkadaşlık isteğini reddettin',
+                  createdAt: Date.now(),
+                });
+              }}
+              onAcceptServerInvite={async (invId) => {
+                const inv = incomingInvites.invites.find(i => i.id === invId);
+                const serverName = inv?.serverName ?? 'Sunucu';
+                await incomingInvites.acceptInvite(invId);
+                refreshServers();
+                setToastMsg(`${serverName} sunucusuna katıldın`);
+                pushInformational({
+                  key: `inv-accepted:${invId}`,
+                  kind: 'generic',
+                  label: serverName,
+                  detail: 'Sunucuya katıldın',
+                  serverId: inv?.serverId,
+                  serverAvatar: inv?.serverAvatar ?? null,
+                  createdAt: Date.now(),
+                });
+              }}
+              onDeclineServerInvite={async (invId) => {
+                const inv = incomingInvites.invites.find(i => i.id === invId);
+                const serverName = inv?.serverName ?? 'Sunucu';
+                await incomingInvites.declineInvite(invId);
+                setToastMsg('Davet reddedildi');
+                pushInformational({
+                  key: `inv-declined:${invId}`,
+                  kind: 'generic',
+                  label: serverName,
+                  detail: 'Daveti reddettin',
+                  serverId: inv?.serverId,
+                  serverAvatar: inv?.serverAvatar ?? null,
+                  createdAt: Date.now(),
+                });
+              }}
             />
             <button onClick={confirmLogout} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
           </div>

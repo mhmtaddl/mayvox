@@ -2,21 +2,21 @@ import React, { useEffect, useState } from 'react';
 import {
   Crown, Users, Hash, Lock, Link2, AlertCircle, Activity,
   Sparkles, ArrowUpRight, Settings as SettingsIcon, Trash2, ChevronRight,
-  TrendingUp, Gauge, ShieldAlert, Zap, Gavel, Ban, MicOff,
+  TrendingUp, Gauge, ShieldAlert, Zap, ShieldCheck, BarChart3, Clock,
 } from 'lucide-react';
 import {
-  getServerOverview, getBans, getMembers, getAuditLog,
-  type ServerOverview, type Server, type ServerBan, type ServerMember, type AuditLogItem,
+  getServerOverview, getModerationConfig, getModerationStats, getServerInsights,
+  type ServerOverview, type Server,
+  type ModerationConfigResponse, type ModerationStats, type InsightsResponse,
 } from '../../../lib/serverService';
 import { PLAN_LIMITS, PLAN_NAME, PLAN_TAGLINE, type PlanKey } from '../../../lib/planLimits';
-import { timeAgo } from './shared';
 
 interface Props {
   serverId: string;
   server: Server;
   isOwner: boolean;
   initialOverview?: ServerOverview | null;
-  onSwitchTab?: (tab: 'general' | 'invites' | 'moderation') => void;
+  onSwitchTab?: (tab: 'general' | 'invites' | 'automod' | 'insights') => void;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -42,71 +42,98 @@ function audioQualityLabel(plan: PlanKey): string {
 }
 
 // ══════════════════════════════════════════════════════════
-// Moderation insight — ek fetch, lightweight
+// Oto-Mod insight — config + 24s stats
 // ══════════════════════════════════════════════════════════
 
-interface ModerationSummary {
-  banCount: number;
-  mutedCount: number;
-  lastEvent: AuditLogItem | null;
+interface AutoModSummary {
+  activeCount: number;   // 0-3: flood + profanity + spam
+  blocked24h: number;    // son 24 saatte engellenen toplam olay
+  autoPunishEnabled: boolean;
 }
 
-function isModerationEvent(action: string): boolean {
-  if (action === 'member.kick' || action === 'member.mute' || action === 'member.unmute') return true;
-  if (action === 'member.ban' || action === 'member.unban') return true;
-  if (action === 'member.timeout' || action === 'member.timeout_clear') return true;
-  if (action === 'member.role_change' || action === 'role.change') return true;
-  return false;
-}
-
-const MOD_ACTION_VERB: Record<string, string> = {
-  'member.ban': 'yasakladı',
-  'member.unban': 'yasak kaldırdı',
-  'member.kick': 'attı',
-  'member.mute': 'susturdu',
-  'member.unmute': 'sesi açtı',
-  'member.timeout': 'zaman aşımı verdi',
-  'member.timeout_clear': 'zaman aşımını kaldırdı',
-  'member.role_change': 'rol değiştirdi',
-  'role.change': 'rol değiştirdi',
-};
-
-function describeLastModEvent(log: AuditLogItem): string {
-  const actor = log.actorName || 'Bilinmiyor';
-  const verb = MOD_ACTION_VERB[log.action] ?? log.action;
-  return `${actor} · ${verb}`;
-}
-
-function useModerationSummary(serverId: string): ModerationSummary | null {
-  const [data, setData] = useState<ModerationSummary | null>(null);
-
+function useAutoModSummary(serverId: string): AutoModSummary | null {
+  const [data, setData] = useState<AutoModSummary | null>(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [b, m, a] = await Promise.allSettled([
-          getBans(serverId),
-          getMembers(serverId),
-          getAuditLog(serverId, { limit: 10 }),
+        const [c, s] = await Promise.allSettled([
+          getModerationConfig(serverId),
+          getModerationStats(serverId, '24h'),
         ]);
         if (cancelled) return;
-        const bans: ServerBan[] = b.status === 'fulfilled' ? b.value : [];
-        const members: ServerMember[] = m.status === 'fulfilled' ? m.value : [];
-        const logs: AuditLogItem[] = a.status === 'fulfilled' ? a.value : [];
-        const lastEvent = logs.find(l => isModerationEvent(l.action)) ?? null;
+        const cfg: ModerationConfigResponse | null = c.status === 'fulfilled' ? c.value : null;
+        const stats: ModerationStats | null = s.status === 'fulfilled' ? s.value : null;
+        const activeCount = cfg
+          ? (cfg.flood.enabled ? 1 : 0) + (cfg.profanity.enabled ? 1 : 0) + (cfg.spam.enabled ? 1 : 0)
+          : 0;
+        const blocked24h = stats
+          ? stats.floodBlocked + stats.profanityBlocked + stats.spamBlocked
+          : 0;
         setData({
-          banCount: bans.length,
-          mutedCount: members.filter(x => x.isMuted).length,
-          lastEvent,
+          activeCount,
+          blocked24h,
+          autoPunishEnabled: !!cfg?.autoPunishment?.flood?.enabled,
         });
       } catch {
-        if (!cancelled) setData({ banCount: 0, mutedCount: 0, lastEvent: null });
+        if (!cancelled) setData({ activeCount: 0, blocked24h: 0, autoPunishEnabled: false });
       }
     })();
     return () => { cancelled = true; };
   }, [serverId]);
-
   return data;
+}
+
+// ══════════════════════════════════════════════════════════
+// İçgörüler özeti — 7 günlük heatmap'ten peak + toplam aktivite
+// ══════════════════════════════════════════════════════════
+
+interface InsightsSummary {
+  peakDow: number;          // 0-6 (0 = Pazar)
+  peakHour: number;         // 0-23
+  totalActivitySec: number; // 7 gün toplam saniye
+  activeDays: number;       // aktivite görülen gün sayısı (0-7)
+  hasData: boolean;         // MIN eşik üstünde mi
+}
+
+const INSIGHTS_MIN_SEC = 10 * 60; // 10 dk altı → veri yok kabul
+
+function useInsightsSummary(serverId: string): InsightsSummary | null {
+  const [data, setData] = useState<InsightsSummary | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res: InsightsResponse = await getServerInsights(serverId, 7);
+        if (cancelled) return;
+        const total = res.peakHours.reduce((s, c) => s + c.totalSec, 0);
+        const peak = res.peakHours.reduce<null | { dow: number; hour: number; totalSec: number }>(
+          (acc, c) => (!acc || c.totalSec > acc.totalSec ? c : acc), null);
+        const activeDays = new Set(res.peakHours.filter(c => c.totalSec > 0).map(c => c.dow)).size;
+        setData({
+          peakDow: peak?.dow ?? 0,
+          peakHour: peak?.hour ?? 0,
+          totalActivitySec: total,
+          activeDays,
+          hasData: total >= INSIGHTS_MIN_SEC && !!peak,
+        });
+      } catch {
+        if (!cancelled) setData({ peakDow: 0, peakHour: 0, totalActivitySec: 0, activeDays: 0, hasData: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [serverId]);
+  return data;
+}
+
+const DOW_FULL = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+function formatActivity(sec: number): string {
+  if (sec < 60) return `${sec} sn`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} dk`;
+  const h = Math.floor(min / 60);
+  return `${h} saat`;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -116,7 +143,8 @@ function useModerationSummary(serverId: string): ModerationSummary | null {
 export default function OverviewTab({ serverId, server, isOwner, initialOverview, onSwitchTab }: Props) {
   const [data, setData] = useState<ServerOverview | null>(initialOverview ?? null);
   const [error, setError] = useState('');
-  const modSummary = useModerationSummary(serverId);
+  const autoModSummary = useAutoModSummary(serverId);
+  const insightsSummary = useInsightsSummary(serverId);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,13 +187,13 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
       {/* ── HERO ── */}
       <Hero server={server} data={data} status={status} />
 
-      {/* ── AKILLI KARTLAR (2x2) ── */}
+      {/* ── AKILLI KARTLAR (2x2 + featured İçgörüler) ── */}
       <Section title="Akıllı Kartlar" icon={<Sparkles size={11} />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CapacityCard memberPct={memberPct} channelPct={channelPct} peakPct={peakPct} plan={data.plan} />
-          <ActiveModerationCard
-            summary={modSummary}
-            onOpen={onSwitchTab ? () => onSwitchTab('moderation') : undefined}
+          <AutoModCard
+            summary={autoModSummary}
+            onOpen={onSwitchTab ? () => onSwitchTab('automod') : undefined}
           />
           <ActivityCard
             invites24h={data.counts.inviteLinksLast24h}
@@ -178,40 +206,46 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
             count={data.counts.activeInviteLinks}
             onOpen={onSwitchTab ? () => onSwitchTab('invites') : undefined}
           />
+          <div className="sm:col-span-2">
+            <InsightsSummaryCard
+              summary={insightsSummary}
+              onOpen={onSwitchTab ? () => onSwitchTab('insights') : undefined}
+            />
+          </div>
         </div>
       </Section>
 
-      {/* ── PLAN (tek satır özet) ── */}
-      <Section title="Plan" icon={<Crown size={11} />} hint="Plan değişikliği için sistem yönetimine başvurun">
-        <PlanSummaryRow plan={data.plan} />
-      </Section>
+      {/* ── PLAN · AYARLAR · TEHLİKELİ BÖLGE (yan yana) ── */}
+      <div className={`grid grid-cols-1 ${isOwner ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-5`}>
+        <Section title="Plan" icon={<Crown size={11} />} hint="Plan değişikliği için sistem yönetimine başvurun">
+          <PlanSummaryRow plan={data.plan} />
+        </Section>
 
-      {/* ── AYARLAR ── */}
-      <Section title="Ayarlar" icon={<SettingsIcon size={11} />}>
-        <NavRow
-          icon={<SettingsIcon size={14} />}
-          iconBg="rgba(var(--theme-accent-rgb), 0.12)"
-          iconColor="var(--theme-accent)"
-          title="Sunucu Kimliği & Erişim"
-          hint="Ad, adres, açıklama, motto, görünürlük ve katılım politikası"
-          onClick={() => onSwitchTab?.('general')}
-        />
-      </Section>
-
-      {/* ── TEHLİKELİ BÖLGE ── */}
-      {isOwner && (
-        <Section title="Tehlikeli Bölge" icon={<ShieldAlert size={11} />} danger>
+        <Section title="Ayarlar" icon={<SettingsIcon size={11} />}>
           <NavRow
-            icon={<Trash2 size={14} />}
-            iconBg="rgba(239,68,68,0.15)"
-            iconColor="#f87171"
-            title="Sunucuyu Sil"
-            hint="Tüm kanallar, üyeler, mesajlar ve davetler kalıcı olarak silinir. Bu işlem geri alınamaz."
-            tone="danger"
+            icon={<SettingsIcon size={14} />}
+            iconBg="rgba(var(--theme-accent-rgb), 0.12)"
+            iconColor="var(--theme-accent)"
+            title="Sunucu Kimliği & Erişim"
+            hint="Ad, adres, açıklama, motto, görünürlük ve katılım politikası"
             onClick={() => onSwitchTab?.('general')}
           />
         </Section>
-      )}
+
+        {isOwner && (
+          <Section title="Tehlikeli Bölge" icon={<ShieldAlert size={11} />} danger>
+            <NavRow
+              icon={<Trash2 size={14} />}
+              iconBg="rgba(239,68,68,0.15)"
+              iconColor="#f87171"
+              title="Sunucuyu Sil"
+              hint="Tüm kanallar, üyeler, mesajlar ve davetler kalıcı olarak silinir. Bu işlem geri alınamaz."
+              tone="danger"
+              onClick={() => onSwitchTab?.('general')}
+            />
+          </Section>
+        )}
+      </div>
     </div>
   );
 }
@@ -382,83 +416,132 @@ function CapacityCard({ memberPct, channelPct, peakPct, plan }: { memberPct: num
   );
 }
 
-function ActiveModerationCard({
+function AutoModCard({
   summary, onOpen,
-}: { summary: ModerationSummary | null; onOpen?: () => void }) {
+}: { summary: AutoModSummary | null; onOpen?: () => void }) {
   if (!summary) {
-    // loading skeleton
     return (
-      <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone="neutral">
+      <InsightCard title="Oto-Mod" icon={<ShieldCheck size={12} />} tone="neutral">
         <div className="flex items-end gap-2 mb-2">
           <span className="text-[24px] font-bold leading-none text-[var(--theme-secondary-text)]/30 tabular-nums">–</span>
           <span className="text-[10px] text-[var(--theme-secondary-text)]/40 leading-none mb-0.5">yükleniyor</span>
         </div>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug">Moderasyon özeti hazırlanıyor...</p>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug">Oto-Mod durumu okunuyor…</p>
       </InsightCard>
     );
   }
 
-  const total = summary.banCount + summary.mutedCount;
-  const hasActivity = total > 0 || summary.lastEvent != null;
+  const { activeCount, blocked24h, autoPunishEnabled } = summary;
+  const allActive = activeCount === 3;
+  const tone: InsightTone =
+    activeCount === 0 ? 'amber'
+    : blocked24h > 0 ? 'accent'
+    : allActive ? 'accent'
+    : 'amber';
+  const valueCls =
+    tone === 'amber' ? 'text-amber-400'
+    : tone === 'accent' ? 'text-[var(--theme-text)]'
+    : 'text-[var(--theme-text)]';
 
-  if (!hasActivity) {
+  return (
+    <InsightCard title="Oto-Mod" icon={<ShieldCheck size={12} />} tone={tone}>
+      <div className="flex items-end gap-2 mb-2">
+        <span className={`text-[24px] font-bold leading-none tabular-nums ${valueCls}`}>{activeCount}</span>
+        <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">/ 3 kural aktif</span>
+      </div>
+
+      <p className="text-[10.5px] text-[var(--theme-secondary-text)]/80 leading-snug mb-2">
+        {activeCount === 0
+          ? 'Hiç kural aktif değil — sunucu korumasız.'
+          : allActive
+            ? (blocked24h > 0 ? `Tüm kurallar aktif, son 24s ${blocked24h} engelleme.` : 'Tüm kurallar aktif, sakin geçti.')
+            : (blocked24h > 0 ? `${activeCount}/3 kural aktif · son 24s ${blocked24h} engelleme.` : `${activeCount}/3 kural aktif — bazı katmanlar kapalı.`)}
+      </p>
+
+      {autoPunishEnabled && (
+        <div className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-wide text-[var(--theme-accent)]/85 mb-2">
+          <ShieldCheck size={9} /> Otomatik ceza aktif
+        </div>
+      )}
+
+      {onOpen && (
+        <div>
+          <button
+            onClick={onOpen}
+            className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-accent)] hover:underline"
+          >
+            Oto-Mod'u aç <ArrowUpRight size={10} />
+          </button>
+        </div>
+      )}
+    </InsightCard>
+  );
+}
+
+function InsightsSummaryCard({
+  summary, onOpen,
+}: { summary: InsightsSummary | null; onOpen?: () => void }) {
+  if (!summary) {
     return (
-      <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone="neutral">
-        <div className="text-[13px] font-bold text-emerald-400 mb-1">Ceza yok</div>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">
-          Sunucu huzurlu — son dönemde moderasyon işlemi yapılmadı.
+      <InsightCard title="İçgörüler" icon={<BarChart3 size={12} />} tone="purple">
+        <div className="flex items-end gap-2 mb-2">
+          <span className="text-[24px] font-bold leading-none text-[var(--theme-secondary-text)]/30 tabular-nums">–</span>
+          <span className="text-[10px] text-[var(--theme-secondary-text)]/40 leading-none mb-0.5">yükleniyor</span>
+        </div>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug">Son 7 günün özeti hazırlanıyor…</p>
+      </InsightCard>
+    );
+  }
+
+  if (!summary.hasData) {
+    return (
+      <InsightCard title="İçgörüler" icon={<BarChart3 size={12} />} tone="neutral">
+        <div className="text-[13px] font-bold text-[var(--theme-secondary-text)]/75 mb-1">Henüz yeterli veri yok</div>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/70 leading-snug mb-2">
+          Ses odaları kullanılmaya başladığında burada saatlik yoğunluk ve sosyal eşleşmeler görünecek.
         </p>
         {onOpen && (
           <button onClick={onOpen} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/75 hover:text-[var(--theme-text)] transition-colors">
-            Moderasyonu aç <ArrowUpRight size={10} />
+            İçgörüleri aç <ArrowUpRight size={10} />
           </button>
         )}
       </InsightCard>
     );
   }
 
-  const tone: InsightTone = summary.banCount > 0 ? 'red' : summary.mutedCount > 0 ? 'amber' : 'accent';
-  const valueCls = tone === 'red' ? 'text-red-400' : tone === 'amber' ? 'text-amber-400' : 'text-[var(--theme-text)]';
+  const hourRange = `${String(summary.peakHour).padStart(2, '0')}:00-${String((summary.peakHour + 1) % 24).padStart(2, '0')}:00`;
 
   return (
-    <InsightCard title="Aktif Moderasyon" icon={<Gavel size={12} />} tone={tone}>
-      <div className="flex items-end gap-2 mb-2">
-        <span className={`text-[24px] font-bold leading-none tabular-nums ${valueCls}`}>{total}</span>
-        <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none mb-0.5">aktif ceza</span>
+    <InsightCard title="İçgörüler" icon={<BarChart3 size={12} />} tone="purple">
+      <div className="flex flex-wrap items-end gap-x-5 gap-y-2 mb-2">
+        <div>
+          <div className="inline-flex items-center gap-1.5 text-[10px] text-[var(--theme-secondary-text)]/65 mb-0.5">
+            <Clock size={10} /> En yoğun saat
+          </div>
+          <div className="text-[16px] font-bold text-[var(--theme-text)] tracking-tight leading-none">
+            {DOW_FULL[summary.peakDow]} · {hourRange}
+          </div>
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[16px] font-bold text-[var(--theme-text)] tabular-nums leading-none">{formatActivity(summary.totalActivitySec)}</span>
+          <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none">son 7 gün</span>
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[16px] font-bold text-[var(--theme-text)] tabular-nums leading-none">{summary.activeDays}</span>
+          <span className="text-[10px] text-[var(--theme-secondary-text)]/60 leading-none">/ 7 aktif gün</span>
+        </div>
       </div>
 
-      {(summary.banCount > 0 || summary.mutedCount > 0) && (
-        <div className="flex items-center gap-3 text-[10.5px] mb-2">
-          {summary.banCount > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <Ban size={10} className="text-red-400" />
-              <span className="text-[var(--theme-secondary-text)]">{summary.banCount} yasaklı</span>
-            </span>
-          )}
-          {summary.mutedCount > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <MicOff size={10} className="text-orange-400" />
-              <span className="text-[var(--theme-secondary-text)]">{summary.mutedCount} susturma</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {summary.lastEvent && (
-        <p
-          className="text-[10px] text-[var(--theme-secondary-text)]/70 leading-snug mb-2 truncate"
-          title={describeLastModEvent(summary.lastEvent)}
-        >
-          Son: {describeLastModEvent(summary.lastEvent)} · {timeAgo(summary.lastEvent.createdAt)}
-        </p>
-      )}
+      <p className="text-[10.5px] text-[var(--theme-secondary-text)]/75 leading-snug mb-2">
+        Ses odası aktivitesi özetlendi — detaylı harita, kişi ve grup kırılımı için İçgörüler sekmesine bak.
+      </p>
 
       {onOpen && (
         <button
           onClick={onOpen}
-          className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--theme-accent)] hover:underline"
+          className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-purple-400 hover:underline"
         >
-          Moderasyonu aç <ArrowUpRight size={10} />
+          İçgörüleri aç <ArrowUpRight size={10} />
         </button>
       )}
     </InsightCard>

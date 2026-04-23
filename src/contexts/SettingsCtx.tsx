@@ -83,6 +83,13 @@ export interface SettingsContextType {
   setOverlayShowSelf: (v: boolean) => void;
   overlayClickThrough: boolean;
   setOverlayClickThrough: (v: boolean) => void;
+  /** Overlay kart şeffaflığı — 0 (tamamen şeffaf / görünmez) ile 100 arası.
+   *  Kart rengi sabit koyu tondur; yalnızca şeffaflık kullanıcı tarafından ayarlanır. */
+  overlayCardOpacity: number;
+  setOverlayCardOpacity: (v: number) => void;
+  /** Overlay görünüm stili — 3 premium tasarım + "Yok" (sade avatar+isim). */
+  overlayVariant: 'capsule' | 'card' | 'badge' | 'none';
+  setOverlayVariant: (v: 'capsule' | 'card' | 'badge' | 'none') => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

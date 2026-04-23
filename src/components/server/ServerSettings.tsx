@@ -137,7 +137,15 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     };
     tick();
     const interval = setInterval(tick, 30_000);
-    return () => { cancelled = true; clearInterval(interval); };
+    // JoinRequestsTab accept/reject sonrası local event fırlatıyor — 30s polling beklemeden
+    // "1" rozeti anında güncellenir.
+    const onLocalUpdate = () => tick();
+    window.addEventListener('pigevox:join-request:local-update', onLocalUpdate);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('pigevox:join-request:local-update', onLocalUpdate);
+    };
   }, [serverId, canManageServerEarly]);
 
   if (loading || !server) return (

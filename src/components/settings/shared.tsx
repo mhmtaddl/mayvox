@@ -45,14 +45,17 @@ export const CardSection = ({
   badge,
   subtitle,
   children,
+  className,
 }: {
   icon: React.ReactNode;
   title: string;
   badge?: React.ReactNode;
   subtitle?: string;
   children: React.ReactNode;
+  /** Ek sınıflar — ör. "xl:h-full" ile grid cell'e stretch için. */
+  className?: string;
 }) => (
-  <section className={cardCls}>
+  <section className={`${cardCls} ${className ?? ''}`}>
     {/* Header satırı — title boşsa hiç render etme (outer DomainTitle zaten var).
         subtitle tek başına anlamlı olmadığı için o da gizli. Padding üst tarafta
         header yokken artsın diye children wrapper'da pt büyür. */}

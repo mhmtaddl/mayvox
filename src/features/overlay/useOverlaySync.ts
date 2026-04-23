@@ -54,11 +54,15 @@ export function useOverlaySync({
     const host = getHost();
     if (!host) return;
     host.applySettings(settings);
-  }, [settings.enabled, settings.position, settings.size, settings.clickThrough]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [settings.enabled, settings.position, settings.size, settings.clickThrough, settings.cardOpacity, settings.variant]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Snapshot göndericisi — throttle (son state 250ms'de bir)
+  // Snapshot göndericisi — LEADING-EDGE throttle.
+  // State değişince ANINDA flush (PTT gecikme hissi yok), sonra min 40ms aralık.
+  // Spam update'lerde (hızlı speaking flicker) trailing-edge fallback devreye girer.
   const lastSentRef = useRef<string>('');
   const throttleTimerRef = useRef<number | null>(null);
+  const lastFlushAtRef = useRef<number>(0);
+  const MIN_GAP_MS = 40;
 
   useEffect(() => {
     const host = getHost();
@@ -72,7 +76,11 @@ export function useOverlaySync({
 
     const build = (): OverlaySnapshot => {
       if (!activeChannelId) {
-        return { roomId: null, roomName: null, participants: [], size: settings.size };
+        return {
+          roomId: null, roomName: null, participants: [], size: settings.size,
+          cardOpacity: settings.cardOpacity,
+          variant: settings.variant,
+        };
       }
       const partList: OverlayParticipant[] = [];
       // Self (eğer showSelf ise)
@@ -109,11 +117,22 @@ export function useOverlaySync({
           isSelf: false,
         });
       }
+      // Öncelik sıralaması — overlay MAX_VISIBLE=6 üst sınırla. Aktif/durumlu kullanıcılar
+      // her zaman görünür kalsın (kalabalık odada konuşan biri overflow'a düşmesin).
+      // Sıra: speaking → muted/deafened → self → diğer idle.
+      partList.sort((a, b) => {
+        const pa = a.isSpeaking ? 0 : (a.isMuted || a.isDeafened) ? 1 : a.isSelf ? 2 : 3;
+        const pb = b.isSpeaking ? 0 : (b.isMuted || b.isDeafened) ? 1 : b.isSelf ? 2 : 3;
+        return pa - pb;
+      });
+
       return {
         roomId: activeChannelId,
         roomName: activeChannelName || null,
         participants: partList,
         size: settings.size, // main process kendi mevcut size'ını enjekte eder; bu yine de defensive
+        cardOpacity: settings.cardOpacity,
+        variant: settings.variant,
       };
     };
 
@@ -125,12 +144,22 @@ export function useOverlaySync({
       host.update(snap);
     };
 
-    // Throttle: hızlı değişimlerde (speaking flicker) IPC spam olmasın
-    if (throttleTimerRef.current) window.clearTimeout(throttleTimerRef.current);
-    throttleTimerRef.current = window.setTimeout(() => {
-      throttleTimerRef.current = null;
+    // Leading-edge throttle — state değişince anında flush, sonra MIN_GAP_MS koruma.
+    const now = performance.now();
+    const elapsed = now - lastFlushAtRef.current;
+    if (elapsed >= MIN_GAP_MS) {
+      if (throttleTimerRef.current) { window.clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null; }
+      lastFlushAtRef.current = now;
       flush();
-    }, 120);
+    } else {
+      // Yakın zamanda flush yapıldı — kalan gap için trailing timer planla (flicker absorbe).
+      if (throttleTimerRef.current) window.clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = window.setTimeout(() => {
+        lastFlushAtRef.current = performance.now();
+        throttleTimerRef.current = null;
+        flush();
+      }, MIN_GAP_MS - elapsed);
+    }
 
     return () => {
       if (throttleTimerRef.current) { window.clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null; }
@@ -139,6 +168,8 @@ export function useOverlaySync({
     settings.enabled,
     settings.showSelf,
     settings.showOnlySpeaking,
+    settings.cardOpacity,
+    settings.variant,
     currentUserId,
     activeChannelId,
     activeChannelName,

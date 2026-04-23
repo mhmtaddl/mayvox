@@ -274,7 +274,7 @@ function ProfileCard() {
   return (
     <CardSection icon={<UserIcon size={12} />} title="">
       {/* ── Avatar + Ad Soyad + Çerçeve — tek akış ── */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex items-center gap-3 mb-2">
         {/* Avatar — sol */}
         <div className="flex flex-col items-center shrink-0">
           <div
@@ -285,7 +285,7 @@ function ProfileCard() {
               className={activeColor ? getFrameClassName(frameTier) : ''}
               style={activeColor ? { ...getFrameStyle(activeColor, frameTier), borderRadius: '22%' } : undefined}
             >
-              <div className="avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base" style={{ width: 72, height: 72 }}>
+              <div className="avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base" style={{ width: 56, height: 56 }}>
                 {customAvatarUrl ? (
                   <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
@@ -307,8 +307,8 @@ function ProfileCard() {
         </div>
 
         {/* Ad + Soyad + Çerçeve — sağ taraf, genişler */}
-        <div className="flex-1 min-w-0 space-y-3">
-          <div className="space-y-2">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="space-y-1.5">
             <div className="space-y-1">
               <label className={labelCls}>Ad</label>
               <input type="text" maxLength={NAME_INPUT_MAX_LENGTH} value={settingsFirstName} onChange={e => setSettingsFirstName(normalizeNameInput(e.target.value))} className={inputCls} />
@@ -371,8 +371,8 @@ function AccountInfoCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined}>
-      <div className="space-y-3">
+    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined} className="xl:h-full xl:flex xl:flex-col">
+      <div className="space-y-2">
         <div className="space-y-1">
           <label className={labelCls}>Kullanıcı Adı</label>
           <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={inputCls} />
@@ -415,8 +415,8 @@ function SecurityCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<Shield size={12} />} title="">
-      <div className="space-y-3">
+    <CardSection icon={<Shield size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
+      <div className="space-y-2">
         <div className="space-y-1">
           <label className={labelCls}>Yeni Şifre</label>
           <div className="relative">
@@ -479,24 +479,32 @@ export default function AccountSection() {
           onCancel={() => state.setCropSrc(null)}
         />
       )}
-      <div className="flex flex-col gap-5 md:gap-6">
+      <div className="flex flex-col gap-3 md:gap-4">
         <ProfileCard />
 
-        <section>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <span className="text-[var(--theme-accent)]/70"><ClipboardList size={11} strokeWidth={2.2} /></span>
-            <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Hesap Bilgileri</h3>
-          </div>
-          <AccountInfoCard />
-        </section>
+        {/* Hesap Bilgileri ve Güvenlik — XL'de yan yana, grid stretch ile aynı yükseklik.
+            Daha küçük ekranlarda alt alta tek sütun. */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 md:gap-4">
+          <section className="flex flex-col h-full">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <span className="text-[var(--theme-accent)]/70"><ClipboardList size={11} strokeWidth={2.2} /></span>
+              <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Hesap Bilgileri</h3>
+            </div>
+            <div className="flex-1 flex flex-col">
+              <AccountInfoCard />
+            </div>
+          </section>
 
-        <section>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <span className="text-[var(--theme-accent)]/70"><Shield size={11} strokeWidth={2.2} /></span>
-            <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Güvenlik</h3>
-          </div>
-          <SecurityCard />
-        </section>
+          <section className="flex flex-col h-full">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <span className="text-[var(--theme-accent)]/70"><Shield size={11} strokeWidth={2.2} /></span>
+              <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Güvenlik</h3>
+            </div>
+            <div className="flex-1 flex flex-col">
+              <SecurityCard />
+            </div>
+          </section>
+        </div>
       </div>
     </AccountCtx.Provider>
   );

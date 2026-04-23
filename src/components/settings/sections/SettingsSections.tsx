@@ -24,7 +24,7 @@ export function AppearanceSection() {
   const isCustomMode = appearanceMode === 'custom';
 
   return (
-    <CardSection icon={<Recycle size={12} />} title="">
+    <CardSection icon={<Recycle size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
 
       {/* ═══ THEME PACKS ═══ */}
       <div className="mb-1">
