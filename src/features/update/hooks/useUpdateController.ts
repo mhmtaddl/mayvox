@@ -19,6 +19,7 @@ import {
   electronOnProgress,
   electronOnDownloaded,
   electronOnError,
+  electronOnIdle,
   electronRemoveAllListeners,
 } from '../adapters/electronUpdater';
 import {
@@ -135,6 +136,17 @@ export function useUpdateController(currentVersion: string): UpdateController {
       scheduleRetry();
     });
 
+    // Main'den gelen idle sinyali — startup gate bittiğinde ya da splash kapandığında
+    // state'i state machine bypass'ı ile sıfırlar. Main busy olduğu için response
+    // gelmemiş bir 'checking' state'inin sonsuz spinner'a dönmesini engeller.
+    electronOnIdle(() => {
+      if (!mountedRef.current) return;
+      checkingRef.current = false;
+      downloadingRef.current = false;
+      retryCountRef.current = 0;
+      setState(INITIAL_STATE);
+    });
+
     return () => {
       mountedRef.current = false;
       electronRemoveAllListeners();
@@ -170,6 +182,15 @@ export function useUpdateController(currentVersion: string): UpdateController {
     if (isElectron() && isElectronUpdateAvailable()) {
       safeSetState(s => ({ ...s, phase: 'checking', error: null }));
       electronCheck();
+      // Main tarafı busy ise (startup gate vs.) IPC response HİÇ gelmeyebilir —
+      // 15s içinde transition olmazsa state'i idle'a düşür (sonsuz spinner önleme).
+      setTimeout(() => {
+        if (!mountedRef.current) return;
+        if (!checkingRef.current) return;
+        logger.warn('Electron check timeout — state idle\'a reset ediliyor');
+        checkingRef.current = false;
+        setState(prev => prev.phase === 'checking' ? INITIAL_STATE : prev);
+      }, 15_000);
       return; // event listener'lar devralır, checkingRef orada sıfırlanır
     }
 

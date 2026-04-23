@@ -35,8 +35,12 @@ contextBridge.exposeInMainWorld('electronUpdate', {
     ipcRenderer.removeAllListeners('update:error');
     ipcRenderer.on('update:error', (_e, info) => cb(info));
   },
+  onIdle: (cb) => {
+    ipcRenderer.removeAllListeners('update:idle');
+    ipcRenderer.on('update:idle', () => cb());
+  },
   removeAllListeners: () => {
-    ['update:checking', 'update:available', 'update:not-available', 'update:progress', 'update:downloaded', 'update:error']
+    ['update:checking', 'update:available', 'update:not-available', 'update:progress', 'update:downloaded', 'update:error', 'update:idle']
       .forEach(ch => ipcRenderer.removeAllListeners(ch));
   },
 });

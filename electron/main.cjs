@@ -309,8 +309,9 @@ const mainWebPrefs = {
 
 function createSplashWindow() {
   const splash = new BrowserWindow({
-    width: 148,
-    height: 148,
+    // Update durumu etiketi + progress bar için height biraz arttırıldı; logo alanı aynı.
+    width: 200,
+    height: 200,
     frame: false,
     resizable: false,
     minimizable: false,
@@ -321,12 +322,14 @@ function createSplashWindow() {
     center: true,
     show: false,
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload-splash.cjs"),
+    },
   });
   splash.loadFile(path.join(__dirname, "splash.html"));
   splash.once("ready-to-show", () => splash.show());
-  // Fallback: ready-to-show gelmezse (örn. asset yükleme sorunu) 100ms içinde yine göster
-  // — aksi halde splash hiç görünmeyebilir ve kullanıcı "direkt büyük pencere" görür.
   setTimeout(() => { try { if (!splash.isDestroyed() && !splash.isVisible()) splash.show(); } catch {} }, 100);
   return splash;
 }
@@ -497,11 +500,17 @@ ipcMain.on("notify:flash", (event, on) => {
 });
 
 // ── Auto-updater ───────────────────────────────────────────────────────────
-function setupAutoUpdater(win) {
-  if (isDev) return;
+// Tek autoUpdater örneği; başlatılma + busy flag module-scope.
+// Startup gate (Discord-vari sessiz güncelleme) + renderer-driven secondary UI
+// aynı örneği dinler, aynı busy flag'ini paylaşır — çift check/download yok.
+let autoUpdaterInitialized = false;
+let setupAutoUpdaterInitialized = false; // listener/ipc handler duplicate önleme
+let isUpdaterBusy = false;
+let mainWinRef = null; // setupAutoUpdater listener'ları buraya yazar; activate'te referans güncellenir
 
-  let isCheckingOrDownloading = false;
-
+function initAutoUpdater() {
+  if (autoUpdaterInitialized) return;
+  autoUpdaterInitialized = true;
   autoUpdater.logger = {
     info:  (msg) => logger.info("[updater] " + msg),
     warn:  (msg) => logger.warn("[updater] " + msg),
@@ -511,83 +520,212 @@ function setupAutoUpdater(win) {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
-  // Güvenli send — window destroy olduysa crash önle
+  // Busy flag'i her terminal event'te sıfırla — hangi listener önce gelirse
+  // gelsin, sonraki check/download guard'ı tutarlı davransın.
+  autoUpdater.on("update-available",     () => { isUpdaterBusy = false; });
+  autoUpdater.on("update-not-available", () => { isUpdaterBusy = false; });
+  autoUpdater.on("update-downloaded",    () => { isUpdaterBusy = false; });
+  autoUpdater.on("error",                () => { isUpdaterBusy = false; });
+}
+
+function setupAutoUpdater(win) {
+  if (isDev) return;
+  initAutoUpdater();
+  // Activate handler veya benzeri bir yerde tekrar çağrılırsa sadece win referansını
+  // güncelle — listener/ipc handler'ları BİR DEFA bağlı kalır (duplicate önleme).
+  mainWinRef = win;
+  if (setupAutoUpdaterInitialized) return;
+  setupAutoUpdaterInitialized = true;
+
   const safeSend = (channel, data) => {
     try {
-      if (!win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-        win.webContents.send(channel, data);
+      const w = mainWinRef;
+      if (w && !w.isDestroyed() && w.webContents && !w.webContents.isDestroyed()) {
+        w.webContents.send(channel, data);
       }
     } catch {}
   };
 
-  // Event'leri renderer'a ilet + guard sıfırla
-  autoUpdater.on("checking-for-update", () => {
-    safeSend("update:checking");
-  });
+  autoUpdater.on("checking-for-update", () => safeSend("update:checking"));
 
   autoUpdater.on("update-available", (info) => {
-    isCheckingOrDownloading = false;
     logger.info("Update available", { version: info.version });
     const size = info.files?.[0]?.size;
     safeSend("update:available", { version: info.version, size });
   });
 
-  autoUpdater.on("update-not-available", () => {
-    isCheckingOrDownloading = false;
-    safeSend("update:not-available");
-  });
+  autoUpdater.on("update-not-available", () => safeSend("update:not-available"));
 
   autoUpdater.on("download-progress", (progress) => {
     safeSend("update:progress", { percent: Math.round(progress.percent) });
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    isCheckingOrDownloading = false;
     logger.info("Update downloaded", { version: info.version });
     safeSend("update:downloaded", { version: info.version });
   });
 
   autoUpdater.on("error", (err) => {
-    isCheckingOrDownloading = false;
     logger.error("Update error", { message: err?.message });
     safeSend("update:error", { message: err?.message || "Bilinmeyen hata" });
   });
 
-  // Renderer'dan gelen komutlar — duplicate guard
   ipcMain.on("update:check", () => {
-    if (isCheckingOrDownloading) return;
-    isCheckingOrDownloading = true;
+    if (isUpdaterBusy) return;
+    isUpdaterBusy = true;
     autoUpdater.checkForUpdates().catch(e => {
-      isCheckingOrDownloading = false;
+      isUpdaterBusy = false;
       logger.warn("Check failed", { message: e?.message });
     });
   });
 
   ipcMain.on("update:download", () => {
-    if (isCheckingOrDownloading) return;
-    isCheckingOrDownloading = true;
+    if (isUpdaterBusy) return;
+    isUpdaterBusy = true;
     autoUpdater.downloadUpdate().catch(e => {
-      isCheckingOrDownloading = false;
+      isUpdaterBusy = false;
       logger.error("Download failed", { message: e?.message });
     });
   });
 
   ipcMain.on("update:install", () => {
+    // Gate install başlattıysa isQuitting = true olur — çift quitAndInstall engellenir.
+    if (isQuitting) return;
     try {
       const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log');
       const diag = [
-        `[${new Date().toISOString()}] update:install tetiklendi`,
+        `[${new Date().toISOString()}] update:install tetiklendi (renderer)`,
         `execPath: ${process.execPath}`,
         `exePath: ${app.getPath('exe')}`,
-        `userData: ${app.getPath('userData')}`,
         `isPackaged: ${app.isPackaged}`,
-        `pid: ${process.pid}`,
-        `quitAndInstall(true, true) çağrılacak`,
       ].join('\n') + '\n';
       fs.appendFileSync(diagPath, diag, 'utf8');
     } catch {}
     isQuitting = true;
     autoUpdater.quitAndInstall(true, true);
+  });
+}
+
+// ── Startup Update Gate (Discord-vari sessiz akış) ──────────────────────────
+// Splash açıldıktan sonra main pencere göstermeden önce tetiklenir.
+// - update-not-available / error / timeout → onResolve('none'|'error'|'timeout')
+//   ardından normal splash→main geçişi yapılır.
+// - update-available → splash "updating" moduna geçer, download başlar,
+//   bittiğinde quitAndInstall çağrılır; onResolve HİÇ çağrılmaz (app restart).
+//
+// NOT: NSIS `oneClick: false` olduğu için Windows'ta UAC prompt + kısa süreli
+// installer penceresi görünebilir; tam sessiz kurulum GARANTİ edilemez.
+// `quitAndInstall(true, true)` mümkün olan en sessiz + auto-restart davranışını
+// talep eder. Bunu `oneClick: true`'ya çevirmek daha sessiz yapar ama
+// release/installer UX sözleşmesini değiştirir — kapsam dışı.
+function runStartupUpdateGate(splash, mainWin, onResolve, onDownloadingChange) {
+  if (isDev) { onResolve('none'); return; }
+
+  initAutoUpdater();
+
+  const TIMEOUT_MS = 7000;
+  let resolved = false;
+  let downloading = false;
+
+  const splashSend = (channel, data) => {
+    try {
+      if (splash && !splash.isDestroyed() && splash.webContents && !splash.webContents.isDestroyed()) {
+        splash.webContents.send(channel, data);
+      }
+    } catch {}
+  };
+
+  const setDownloading = (v) => {
+    downloading = v;
+    try { onDownloadingChange?.(v); } catch {}
+  };
+
+  const resolveOnce = (decision) => {
+    if (resolved) return;
+    resolved = true;
+    cleanup();
+    // Busy flag'i terminal path'lerde (timeout/error dahil) kesin resetle —
+    // aksi halde renderer'ın sonraki check'leri sonsuz skip edilir.
+    isUpdaterBusy = false;
+    setDownloading(false);
+    onResolve(decision);
+  };
+
+  const onChecking      = ()     => splashSend('splash:update-mode', 'checking');
+  const onNotAvailable  = ()     => resolveOnce('none');
+  const onAvailable     = (info) => {
+    setDownloading(true);
+    logger.info("[startup-gate] update available, download başlıyor", { version: info?.version });
+    splashSend('splash:update-mode', 'downloading');
+    splashSend('splash:update-progress', 0);
+    isUpdaterBusy = true;
+    autoUpdater.downloadUpdate().catch(e => {
+      logger.error("[startup-gate] download fail", { message: e?.message });
+      resolveOnce('error');
+    });
+  };
+  const onProgress      = (p)    => splashSend('splash:update-progress', Math.round(p?.percent || 0));
+  const onDownloaded    = ()     => {
+    if (resolved) return;
+    resolved = true;
+    cleanup(); // 300ms içinde gelebilecek error event'i terminal path'e girmesin
+    logger.info("[startup-gate] download tamam, install başlıyor");
+    splashSend('splash:update-mode', 'installing');
+    try {
+      const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log');
+      fs.appendFileSync(diagPath, `[${new Date().toISOString()}] startup-gate quitAndInstall\n`, 'utf8');
+    } catch {}
+    // quitAndInstall garantili çağrı — setTimeout içinde çift quit guard'ı.
+    setTimeout(() => {
+      if (isQuitting) return;
+      isQuitting = true;
+      try {
+        autoUpdater.quitAndInstall(true, true);
+      } catch (e) {
+        logger.error("[startup-gate] quitAndInstall fail", { message: e?.message });
+        isQuitting = false;
+        setDownloading(false);
+        onResolve('error');
+      }
+    }, 300); // Splash'ın installing animasyonunu gösterebilmesi için küçük delay.
+  };
+  const onError         = (err)  => {
+    logger.warn("[startup-gate] error → normal açılışa düşülüyor", { message: err?.message });
+    splashSend('splash:update-mode', 'error');
+    resolveOnce('error');
+  };
+
+  autoUpdater.on('checking-for-update', onChecking);
+  autoUpdater.on('update-not-available', onNotAvailable);
+  autoUpdater.on('update-available', onAvailable);
+  autoUpdater.on('download-progress', onProgress);
+  autoUpdater.on('update-downloaded', onDownloaded);
+  autoUpdater.on('error', onError);
+
+  function cleanup() {
+    autoUpdater.removeListener('checking-for-update', onChecking);
+    autoUpdater.removeListener('update-not-available', onNotAvailable);
+    autoUpdater.removeListener('update-available', onAvailable);
+    autoUpdater.removeListener('download-progress', onProgress);
+    autoUpdater.removeListener('update-downloaded', onDownloaded);
+    autoUpdater.removeListener('error', onError);
+  }
+
+  // Timeout: update-available aldıysak (download sürüyorsa) timeout'u IPTAL,
+  // yoksa 7s içinde karar gelmezse normal açılışa düşürelim.
+  const timer = setTimeout(() => {
+    if (resolved) return;
+    if (downloading) return; // Download devam ediyorsa timeout'u yeme — bitmesini bekle.
+    logger.info("[startup-gate] timeout → normal açılış");
+    resolveOnce('timeout');
+  }, TIMEOUT_MS);
+  const origCleanup = cleanup;
+  cleanup = () => { try { clearTimeout(timer); } catch {} origCleanup(); };
+
+  isUpdaterBusy = true;
+  autoUpdater.checkForUpdates().catch(e => {
+    logger.warn("[startup-gate] checkForUpdates reject", { message: e?.message });
+    resolveOnce('error');
   });
 }
 
@@ -613,40 +751,85 @@ process.on("unhandledRejection", (reason) => {
 app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
 
-  // ── Splash + Main paralel başlatma ──
-  // 1. Splash anında açılır (sadece HTML + CSS, çok hızlı)
+  // ── Splash + Main paralel başlatma + Startup Update Gate ──
+  // 1. Splash anında açılır
   // 2. Main window arka planda React yükler (show: false)
-  // 3. Main ready-to-show → splash fade-out → main show
+  // 3. Startup update gate paralelde çalışır (prod only)
+  // 4. İKİ koşul da sağlanınca splash→main geçişi olur:
+  //    - mainReady = main window ready-to-show
+  //    - updateGateResolved = gate 'none'/'error'/'timeout' döndü
+  // 5. Gate 'downloading' yoluna girerse splash kalır, download/install akışı
+  //    kendi içinde ilerler, app restart olur — transition çağrılmaz.
   const splash = createSplashWindow();
   const mainWin = createMainWindow();
   const startTs = Date.now();
   const MIN_SPLASH_MS = 1200;
 
   let transitioned = false;
+  let mainReady = false;
+  let updateGateResolved = isDev; // dev'de gate bypass
+  let gateDownloading = false;    // download/install devam ediyorsa safety timeout ezmesin
+
   function doTransition() {
     if (transitioned) return;
     transitioned = true;
-    // Overlap: splash fade-out başlarken main fade-in de başlar
-    // → boş masaüstü asla görünmez
     fadeSplashOut(splash);
     if (mainWin && !mainWin.isDestroyed()) fadeMainIn(mainWin);
+    // Renderer'a update state'i idle'a çek — aksi halde startup sırasında
+    // tetiklenen check'lerden kalan 'checking' state'i versiyon barında
+    // sonsuz spinner'a döner.
+    try {
+      if (mainWin && !mainWin.isDestroyed() && mainWin.webContents && !mainWin.webContents.isDestroyed()) {
+        mainWin.webContents.once('did-finish-load', () => {
+          try { mainWin.webContents.send('update:idle'); } catch {}
+        });
+        // Eğer zaten yüklendiyse (ready-to-show sonrası) doğrudan gönder
+        if (!mainWin.webContents.isLoading()) {
+          setTimeout(() => { try { mainWin.webContents.send('update:idle'); } catch {} }, 50);
+        }
+      }
+    } catch {}
+  }
+
+  function attemptTransition() {
+    if (transitioned) return;
+    if (!mainReady || !updateGateResolved) return;
+    const elapsed = Date.now() - startTs;
+    if (elapsed < MIN_SPLASH_MS) {
+      setTimeout(attemptTransition, MIN_SPLASH_MS - elapsed);
+      return;
+    }
+    doTransition();
   }
 
   mainWin.once("ready-to-show", () => {
-    // Warm cache'de React çok hızlı yüklenebilir — splash göz kırpıp kaybolmasın diye
-    // minimum görünür süre garanti et.
-    const elapsed = Date.now() - startTs;
-    const wait = Math.max(0, MIN_SPLASH_MS - elapsed);
-    setTimeout(doTransition, wait);
+    mainReady = true;
+    attemptTransition();
   });
 
-  // Güvenlik: 12s içinde ready-to-show gelmezse yine de geçiş yap
+  // Güvenlik: 12s içinde transition olmadıysa zorla geç.
+  // ANCAK gate hâlâ download/install yapıyorsa main'i açmak quitAndInstall
+  // sonrası restart yolunu bozar → splash açık kalır, gate kendi terminal
+  // path'ini takip eder.
   setTimeout(() => {
-    if (!transitioned) {
-      logger.info("Splash timeout — ana pencereye geçiliyor");
-      doTransition();
+    if (transitioned) return;
+    if (gateDownloading) {
+      logger.info("Splash 12s safety geçti ama update download/install devam ediyor — bekleme sürüyor");
+      return;
     }
+    logger.info("Splash timeout 12s — zorla normal açılışa geçiliyor");
+    mainReady = true;
+    updateGateResolved = true;
+    doTransition();
   }, 12000);
+
+  // ── Discord-vari sessiz startup update check ──
+  // Fail-safe: herhangi bir error/timeout → updateGateResolved=true → normal akış.
+  runStartupUpdateGate(splash, mainWin, (decision) => {
+    logger.info("[startup-gate] resolved", { decision });
+    updateGateResolved = true;
+    attemptTransition();
+  }, (v) => { gateDownloading = v; });
 
   setupAutoUpdater(mainWin);
   setupGlobalPtt(mainWin);

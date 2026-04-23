@@ -10,6 +10,7 @@ interface ElectronUpdateAPI {
   onProgress: (cb: (info: { percent: number }) => void) => void;
   onDownloaded: (cb: (info: { version: string }) => void) => void;
   onError: (cb: (info: { message: string }) => void) => void;
+  onIdle: (cb: () => void) => void;
   check: () => void;
   download: () => void;
   install: () => void;
@@ -58,6 +59,10 @@ export function electronOnDownloaded(cb: UpdateCallback<{ version: string }>): v
 
 export function electronOnError(cb: UpdateCallback<{ message: string }>): void {
   getApi()?.onError(cb);
+}
+
+export function electronOnIdle(cb: UpdateCallback): void {
+  getApi()?.onIdle(cb);
 }
 
 export function electronRemoveAllListeners(): void {

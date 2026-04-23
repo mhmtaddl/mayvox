@@ -13,6 +13,7 @@
     overflow: hidden;
     background: transparent;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     -webkit-app-region: drag;
@@ -27,9 +28,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    animation: breathe 1400ms ease-in-out infinite;
   }
 
-  /* Arkada hafif glow — derinlik için, abartısız */
   .mark::before {
     content: '';
     position: absolute;
@@ -38,16 +39,6 @@
     background: radial-gradient(circle, rgba(180,190,210,0.06) 0%, transparent 70%);
     animation: glowPulse 2.5s ease-in-out infinite;
     pointer-events: none;
-  }
-
-  /* 5 frame üst üste — sadece aktif olanın opacity'si 1, diğerleri 0.
-   * Scale logo kutusunda (.mark) uygulanıyor — tüm frame'ler tek solukta büyüyüp küçülüyor,
-   * frame switch sırasında zıplama yaşanmıyor.
-   */
-  /* Bir nefes = bir frame. Peak'te (scale=max) JS frame swap yapar,
-   * böylece her büyüme-küçülme sonunda yeni frame gelir. */
-  .mark {
-    animation: breathe 1400ms ease-in-out infinite;
   }
 
   .frame {
@@ -61,9 +52,67 @@
     will-change: opacity;
   }
   .frame.active { opacity: 1; }
-
-  /* Fallback — bütün JS/frame yüklenmezse ilk frame yine görünür */
   .frame:first-child:not(.active) { opacity: 1; }
+
+  /* ── Update bar — logo altında, küçük, sakin ──
+   * Width 100px (logo 120px'ten 20px dar), height 5px, margin 8px.
+   * Premium / Apple-vari — zıplama yok, bar .mark dışında (breathe scale'inden bağımsız).
+   * Renk mode'a göre CSS değişkenleri ile geçer; transition yumuşak. */
+  .update-bar {
+    margin-top: 8px;
+    width: 96px;
+    max-width: 96px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 3px;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 260ms ease-out;
+    pointer-events: none;
+    --bar-c1: rgba(180, 195, 220, 0.55);
+    --bar-c2: rgba(230, 236, 245, 0.92);
+  }
+  body.updating .update-bar {
+    opacity: 1;
+  }
+
+  .update-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--bar-c1), var(--bar-c2));
+    border-radius: 3px;
+    /* width: progress güncellemesi; background: mode rengi geçişi — ikisi de ease-out */
+    transition: width 220ms ease-out, background 180ms ease-out;
+    will-change: width;
+  }
+
+  /* Mode renkleri — soft, doygunluğu düşük, premium */
+  body.mode-checking    .update-bar { --bar-c1: rgba(140, 200, 230, 0.55); --bar-c2: rgba(180, 225, 242, 0.92); }
+  body.mode-downloading .update-bar { --bar-c1: rgba(150, 165, 225, 0.55); --bar-c2: rgba(195, 175, 240, 0.92); }
+  body.mode-installing  .update-bar { --bar-c1: rgba(225, 185, 130, 0.60); --bar-c2: rgba(245, 215, 160, 0.95); }
+  body.mode-error       .update-bar { --bar-c1: rgba(225, 155, 130, 0.55); --bar-c2: rgba(240, 180, 155, 0.90); }
+
+  /* Indeterminate — checking veya error kısa anlarında */
+  body.updating.indeterminate .update-bar-fill {
+    width: 40%;
+    animation: slide 1500ms ease-in-out infinite;
+  }
+
+  /* Installing — bar dolu, üstünden shimmer geçer (dondu hissi vermesin).
+   * Süre %20 yavaşlatıldı (1600 → 1920ms) — daha sakin, premium his. */
+  body.mode-installing .update-bar-fill {
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--bar-c1) 0%,
+      var(--bar-c2) 50%,
+      var(--bar-c1) 100%
+    );
+    background-size: 220% 100%;
+    animation: installShimmer 1920ms linear infinite;
+    /* Width transition'ı kapatma; background 180ms ease-out mode geçişinde çalışsın */
+    transition: background 180ms ease-out;
+  }
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -79,6 +128,16 @@
     0%, 100% { opacity: 0.4; transform: scale(0.96); }
     50%      { opacity: 1;   transform: scale(1.04); }
   }
+
+  @keyframes slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+  }
+
+  @keyframes installShimmer {
+    0%   { background-position: 100% 0; }
+    100% { background-position: -120% 0; }
+  }
 </style>
 </head>
 <body>
@@ -89,12 +148,8 @@
     <img class="frame"        src="splash-frame-3.png" alt="" draggable="false">
     <img class="frame"        src="splash-frame-4.png" alt="" draggable="false">
   </div>
+  <div class="update-bar" id="updateBar"><div class="update-bar-fill" id="updateBarFill"></div></div>
   <script>
-    // 5 frame rotasyonu — 1 nefes = 1 frame (1400ms döngü).
-    // Peak'te (scale max, cycle'ın %50'si = 700ms) frame swap yapılır;
-    // büyüyüp küçülürken sakin kalır, zirvede yeni frame belirir.
-    // Fast preload'da kullanıcı ilk frame'i görür ve sorunsuz kapanır;
-    // yavaş load'da 5 frame akıcı loop eder. Toplam bir tam tur ≈ 7s.
     (function () {
       var frames = document.querySelectorAll('.frame');
       if (!frames || frames.length < 2) return;
@@ -106,7 +161,6 @@
         frames[prev].classList.remove('active');
         frames[idx].classList.add('active');
       };
-      // İlk swap breath'in peak'inde (yarıda); sonra her cycle başında.
       var kickoff = setTimeout(function () {
         swap();
         interval = setInterval(swap, CYCLE_MS);
@@ -115,6 +169,41 @@
       var cleanup = function () { clearTimeout(kickoff); if (interval) clearInterval(interval); };
       window.addEventListener('pagehide', cleanup);
       window.addEventListener('beforeunload', cleanup);
+    })();
+
+    (function () {
+      var api = window.splashUpdate;
+      if (!api) return;
+      var body = document.body;
+      var fill = document.getElementById('updateBarFill');
+      var MODES = ['mode-checking', 'mode-downloading', 'mode-installing', 'mode-error'];
+
+      function setMode(next) {
+        MODES.forEach(function (m) { body.classList.remove(m); });
+        body.classList.remove('updating', 'indeterminate');
+        if (!next) return;
+        body.classList.add('updating');
+        if (next === 'checking' || next === 'error') {
+          body.classList.add('indeterminate', 'mode-' + next);
+        } else if (next === 'installing') {
+          body.classList.add('mode-installing'); // shimmer CSS'te kendi animasyonu
+        } else if (next === 'downloading') {
+          body.classList.add('mode-downloading');
+          if (fill) fill.style.width = '0%';
+        }
+      }
+
+      api.onMode(setMode);
+
+      api.onProgress(function (percent) {
+        if (!fill) return;
+        // Progress sadece downloading modunda width değiştirir;
+        // installing modunda shimmer çalışır ve width: 100% CSS'te sabit
+        if (!body.classList.contains('mode-downloading')) return;
+        var p = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        body.classList.remove('indeterminate');
+        fill.style.width = p + '%';
+      });
     })();
   </script>
 </body>

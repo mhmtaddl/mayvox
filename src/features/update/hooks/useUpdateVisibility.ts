@@ -46,7 +46,7 @@ export function useUpdateVisibility(
       return {
         ...base,
         label: `v${currentVersion}`,
-        sublabel: 'Kontrol ediliyor...',
+        sublabel: '',
       };
 
     case 'available':
@@ -83,7 +83,7 @@ export function useUpdateVisibility(
       return {
         ...base,
         showUpdateHub: true,
-        label: 'Kuruluyor...',
+        label: `v${currentVersion}`,
         sublabel: '',
       };
 
