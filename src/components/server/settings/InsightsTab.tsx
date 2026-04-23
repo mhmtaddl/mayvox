@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { BarChart3, AlertCircle, RefreshCw, RotateCw, Trophy, ArrowLeftRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { BarChart3, AlertCircle, RefreshCw, RotateCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   getServerInsights,
@@ -9,6 +9,7 @@ import {
 import ActivityHeatmap from './ActivityHeatmap';
 import TopUsersCard from './TopUsersCard';
 import SocialGroupsCard from './SocialGroupsCard';
+import AiInsightsRow from './AiInsightsRow';
 
 type Phase = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -130,16 +131,13 @@ export default function InsightsTab({ serverId }: Props) {
       {phase === 'empty' && <EmptyState />}
       {phase === 'ready' && data && (
         <>
-          {/* Minimal summary strip — ince, küçük */}
-          <SummaryStrip
-            topUser={enrichedUsers[0]}
-            topGroup={enrichedGroups[0]}
-          />
-
-          {/* 1) Aktivite Haritası — FULL WIDTH, üstte */}
+          {/* 1) Aktivite Haritası — en üstte, full-width */}
           <ActivityHeatmap peakHours={data.peakHours} />
 
-          {/* 2) İki kolon: TopUsers + SocialGroups, eşit boy */}
+          {/* 2) Sadece Aktivite Paterni — tek kart, full-width bar */}
+          <AiInsightsRow narratives={data.narratives?.filter(n => n.id === 'peak-pattern')} />
+
+          {/* 3) Detay: TopUsers + SocialGroups, eşit boy */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <TopUsersCard users={enrichedUsers} />
             <SocialGroupsCard groups={enrichedGroups} />
@@ -166,57 +164,6 @@ function isEmpty(d: InsightsResponse): boolean {
       && d.topSocialPairs.length === 0
       && d.peakHours.length === 0;
 }
-
-// ── Summary Strip — ince, minimal, tek-satırlık ──
-// "🏆 En aktif: X     ↔ En çok birlikte: A, B, C"
-const SummaryStrip = memo(function SummaryStrip({
-  topUser, topGroup,
-}: {
-  topUser?: { displayName: string | null };
-  topGroup?: { members: Array<{ name: string | null }> };
-}) {
-  const hasUser = !!topUser;
-  const hasGroup = !!topGroup && topGroup.members.length > 0;
-  if (!hasUser && !hasGroup) return null;
-
-  const groupLabel = hasGroup
-    ? topGroup!.members.map(m => m.name || 'Bilinmeyen').join(', ')
-    : '';
-
-  return (
-    <div
-      className="rounded-[12px] px-3.5 py-2 flex items-center gap-4 flex-wrap text-[11.5px]"
-      style={{
-        background: 'rgba(var(--glass-tint), 0.025)',
-        border: '1px solid rgba(var(--glass-tint), 0.06)',
-      }}
-    >
-      {hasUser && (
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Trophy size={11} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.5} />
-          <span className="text-[var(--theme-secondary-text)]/55 shrink-0">En aktif:</span>
-          <span className="font-semibold text-[var(--theme-text)]/90 tracking-tight truncate">
-            {topUser!.displayName || 'Bilinmeyen'}
-          </span>
-        </div>
-      )}
-
-      {hasUser && hasGroup && (
-        <span className="text-[var(--theme-secondary-text)]/20 shrink-0 hidden sm:inline">·</span>
-      )}
-
-      {hasGroup && (
-        <div className="flex items-center gap-1.5 min-w-0">
-          <ArrowLeftRight size={11} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.5} />
-          <span className="text-[var(--theme-secondary-text)]/55 shrink-0">En çok birlikte:</span>
-          <span className="font-semibold text-[var(--theme-text)]/90 tracking-tight truncate">
-            {groupLabel}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-});
 
 // ── Range Pills (segmented control) ──
 function RangePills({ value, onChange, disabled }: {

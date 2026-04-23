@@ -42,7 +42,7 @@ function SocialGroupsCardInner({ groups }: Props) {
   const canExpand = groups.length > COLLAPSED_LIMIT;
 
   return (
-    <div className="relative overflow-hidden rounded-[18px] p-5 flex flex-col"
+    <div className="relative rounded-[18px] p-5 flex flex-col"
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.06)',
@@ -151,16 +151,16 @@ function SocialGroupsCardInner({ groups }: Props) {
                   {formatDuration(g.totalSec)}
                 </span>
 
-                {/* Hover tooltip — üye isimleri burada */}
+                {/* Hover tooltip — YUKARI açılır (kart altına taşmaz) + opak */}
                 {isHover && (
-                  <div className="absolute right-2 top-full mt-1.5 z-10 pointer-events-none"
+                  <div className="absolute right-2 bottom-full mb-1.5 z-10 pointer-events-none"
                     style={{
-                      background: 'rgba(12, 16, 24, 0.94)',
-                      border: '1px solid rgba(var(--glass-tint), 0.14)',
+                      background: 'var(--theme-bg, #0a0e18)',
+                      border: '1px solid rgba(var(--theme-accent-rgb), 0.28)',
                       borderRadius: 10,
                       padding: '9px 11px',
-                      backdropFilter: 'blur(10px)',
-                      boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
+                      boxShadow: '0 12px 30px rgba(0,0,0,0.55), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.08)',
+                      color: 'var(--theme-text)',
                       fontSize: 10.5,
                       lineHeight: 1.5,
                       minWidth: 200,

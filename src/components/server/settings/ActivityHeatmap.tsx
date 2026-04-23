@@ -88,7 +88,9 @@ function ActivityHeatmapInner({ peakHours }: Props) {
         </div>
       </div>
 
-      {mode === 'summary' ? <SummaryView dailyTotals={dailyTotals} maxDaily={maxDaily} /> : <DetailGrid cellMap={cellMap} maxSec={maxSec} />}
+      <div className="heatmap-grid relative">
+        {mode === 'summary' ? <SummaryView dailyTotals={dailyTotals} maxDaily={maxDaily} /> : <DetailGrid cellMap={cellMap} maxSec={maxSec} />}
+      </div>
     </div>
   );
 }
@@ -130,51 +132,74 @@ function SummaryView({ dailyTotals, maxDaily }: { dailyTotals: Map<number, numbe
   );
 }
 
-// ── Detail grid: 7×24 hücre ──
+// ── Detail grid: 7×24 hücre, 5-seviye GitHub-style intensity + custom hover tooltip ──
+// Level 0 = empty (faint base), 1-4 = data presence (soft → strong)
+// maxSec'e göre quantile-based level seçimi (düşük/yüksek aktivite dengesi için).
+const LEVEL_ALPHAS = [0, 0.22, 0.42, 0.64, 0.88];
+
+function intensityLevel(sec: number, maxSec: number): 0 | 1 | 2 | 3 | 4 {
+  if (sec <= 0 || maxSec <= 0) return 0;
+  const r = sec / maxSec;
+  if (r < 0.25) return 1;
+  if (r < 0.5)  return 2;
+  if (r < 0.75) return 3;
+  return 4;
+}
+
 function DetailGrid({ cellMap, maxSec }: { cellMap: Map<string, InsightsHourCell>; maxSec: number }) {
+  const [hover, setHover] = useState<{ dow: number; hour: number; x: number; y: number; cell: InsightsHourCell | null } | null>(null);
+
   return (
-    <div className="space-y-1">
+    <div className="relative space-y-1">
       {/* Saat header */}
-      <div className="grid items-center gap-0.5" style={{ gridTemplateColumns: '28px repeat(24, minmax(0, 1fr))' }}>
+      <div className="grid items-center gap-[3px]" style={{ gridTemplateColumns: '32px repeat(24, minmax(0, 1fr))' }}>
         <div />
         {Array.from({ length: 24 }, (_, h) => (
-          <div key={h} className="text-center text-[8.5px] text-[var(--theme-secondary-text)]/40 tabular-nums"
+          <div key={h} className="text-center text-[8.5px] text-[var(--theme-secondary-text)]/45 tabular-nums"
             style={{ opacity: h % 3 === 0 ? 1 : 0 }}>
             {h}
           </div>
         ))}
       </div>
       {DOW_ORDER.map(dow => (
-        <div key={dow} className="grid items-center gap-0.5" style={{ gridTemplateColumns: '28px repeat(24, minmax(0, 1fr))' }}>
-          <div className="text-[9.5px] font-semibold text-[var(--theme-secondary-text)]/50 tracking-wide">
+        <div key={dow} className="grid items-center gap-[3px]" style={{ gridTemplateColumns: '32px repeat(24, minmax(0, 1fr))' }}>
+          <div className="text-[9.5px] font-semibold text-[var(--theme-secondary-text)]/55 tracking-wide">
             {DOW_LABELS[dow]}
           </div>
           {Array.from({ length: 24 }, (_, h) => {
-            const cell = cellMap.get(`${dow}:${h}`);
-            const intensity = cell && maxSec > 0 ? cell.totalSec / maxSec : 0;
-            const hasData = !!cell && cell.totalSec > 0;
-            const alpha = hasData ? 0.15 + intensity * 0.75 : 0;
+            const cell = cellMap.get(`${dow}:${h}`) ?? null;
+            const level = intensityLevel(cell?.totalSec ?? 0, maxSec);
+            const alpha = LEVEL_ALPHAS[level];
+            const hasData = level > 0;
             return (
               <div
                 key={h}
-                title={hasData
-                  ? `${DOW_FULL_LABELS[dow]} · ${String(h).padStart(2, '0')}:00\nToplam: ${formatDuration(cell!.totalSec)} (${cell!.sessionCount} oturum)`
-                  : `${DOW_FULL_LABELS[dow]} · ${String(h).padStart(2, '0')}:00 — aktivite yok`
-                }
                 className="rounded-[3px] cursor-default"
                 style={{
                   height: 18,
-                  background: hasData ? `rgba(var(--theme-accent-rgb), ${alpha})` : 'rgba(var(--glass-tint), 0.05)',
+                  background: hasData
+                    ? `rgba(var(--theme-accent-rgb), ${alpha})`
+                    : 'rgba(var(--glass-tint), 0.06)',
                   transition: 'transform 140ms ease-out, box-shadow 140ms ease-out',
                   willChange: 'transform',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'scale(1.1)';
-                  if (hasData) e.currentTarget.style.boxShadow = '0 0 8px rgba(var(--theme-accent-rgb), 0.35)';
+                  if (hasData) e.currentTarget.style.boxShadow = `0 0 10px rgba(var(--theme-accent-rgb), 0.32)`;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const parentRect = e.currentTarget.closest('.heatmap-grid')?.getBoundingClientRect();
+                  if (parentRect) {
+                    setHover({
+                      dow, hour: h, cell,
+                      x: rect.left + rect.width / 2 - parentRect.left,
+                      y: rect.top - parentRect.top,
+                    });
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'scale(1)';
                   e.currentTarget.style.boxShadow = 'none';
+                  setHover(null);
                 }}
               />
             );
@@ -182,18 +207,51 @@ function DetailGrid({ cellMap, maxSec }: { cellMap: Map<string, InsightsHourCell
         </div>
       ))}
 
-      {/* Legend */}
+      {/* Custom hover tooltip — opak tema rengi, accent vurgulu */}
+      {hover && (
+        <div
+          className="absolute pointer-events-none z-20"
+          style={{
+            left: hover.x,
+            top: hover.y - 8,
+            transform: 'translate(-50%, -100%)',
+            background: 'var(--theme-bg, #0a0e18)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.28)',
+            borderRadius: 8,
+            padding: '6px 9px',
+            boxShadow: '0 10px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.08)',
+            color: 'var(--theme-text)',
+            fontSize: 10.5,
+            lineHeight: 1.35,
+            whiteSpace: 'nowrap',
+            animation: 'hmFade 140ms ease-out both',
+          }}
+        >
+          <div className="font-semibold text-[var(--theme-text)]/95">
+            {DOW_FULL_LABELS[hover.dow]} • {String(hover.hour).padStart(2, '0')}:00
+          </div>
+          <div className="text-[var(--theme-secondary-text)]/75 tabular-nums">
+            {hover.cell
+              ? `${formatDuration(hover.cell.totalSec)} · ${hover.cell.uniqueUsers ?? 0} kişi · ${hover.cell.sessionCount} oturum`
+              : 'Aktivite yok'}
+          </div>
+        </div>
+      )}
+
+      {/* Legend — 5-level */}
       <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[rgba(var(--glass-tint),0.04)]">
-        <span className="text-[9.5px] text-[var(--theme-secondary-text)]/40">az</span>
-        <div className="flex gap-0.5">
-          {[0.15, 0.33, 0.52, 0.71, 0.9].map(i => (
+        <span className="text-[9.5px] text-[var(--theme-secondary-text)]/45">Az</span>
+        <div className="flex gap-[3px]">
+          {LEVEL_ALPHAS.slice(1).map((a, i) => (
             <div key={i} className="w-3 h-3 rounded-[2px]"
-              style={{ background: `rgba(var(--theme-accent-rgb), ${i})` }}
+              style={{ background: `rgba(var(--theme-accent-rgb), ${a})` }}
             />
           ))}
         </div>
-        <span className="text-[9.5px] text-[var(--theme-secondary-text)]/40">çok</span>
+        <span className="text-[9.5px] text-[var(--theme-secondary-text)]/45">Çok</span>
       </div>
+
+      <style>{`@keyframes hmFade { from { opacity: 0; transform: translate(-50%, calc(-100% - 3px)); } to { opacity: 1; transform: translate(-50%, -100%); } }`}</style>
     </div>
   );
 }

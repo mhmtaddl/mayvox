@@ -431,11 +431,18 @@ export interface InsightsGroup {
   totalSec: number;
   lastTogetherAt: string | null;
 }
+export interface InsightNarrative {
+  id: string;
+  type: 'highlight' | 'insight' | 'warning';
+  title: string;
+  text: string;
+}
 export interface InsightsHourCell {
   dow: number;
   hour: number;
   totalSec: number;
   sessionCount: number;
+  uniqueUsers: number;
 }
 export interface InsightsResponse {
   range: { days: number; start: string; end: string };
@@ -446,6 +453,8 @@ export interface InsightsResponse {
   userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
   /** Materialized view son refresh zamanı (ISO). null = henüz refresh olmamış / bilinmiyor. */
   heatmapRefreshedAt?: string | null;
+  /** Rule-based kısa insight cümleleri (3-4 adet). Backend eski sürümde yoksa undefined. */
+  narratives?: InsightNarrative[];
 }
 
 export async function getServerInsights(serverId: string, range: InsightsRangeDays): Promise<InsightsResponse> {

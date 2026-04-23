@@ -14,6 +14,7 @@
  *     (mevcut açık session varsa close edilmez, üzerine yazılmaz — race-safe)
  */
 import { pool, queryOne, queryMany } from '../repositories/db';
+import { buildNarratives, type InsightNarrative } from './insightsNarrativeService';
 
 const CO_PRESENCE_MIN_SEC = 30; // Altı gürültü — social pair olarak sayma
 const INSIGHTS_TOP_USERS = 20;
@@ -45,6 +46,7 @@ export interface InsightsHourCell {
   hour: number;  // 0-23
   totalSec: number;
   sessionCount: number;
+  uniqueUsers: number;
 }
 export interface InsightsResponse {
   range: { days: number; start: string; end: string };
@@ -54,6 +56,7 @@ export interface InsightsResponse {
   peakHours: InsightsHourCell[];
   userActivityMap: Record<string, { displayName: string | null; hourlyDistribution: number[] }>;
   heatmapRefreshedAt: string | null;
+  narratives: InsightNarrative[];
 }
 
 // Module-scope: son heatmap refresh zamanı. Restart'ta null, 24h cron güncelledikçe artar.
@@ -267,8 +270,9 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     hour: number;
     total_sec: string;
     session_count: number;
+    unique_users: number;
   }>(
-    `SELECT dow, hour, total_sec::BIGINT, session_count
+    `SELECT dow, hour, total_sec::BIGINT, session_count, unique_users
      FROM activity_heatmap
      WHERE server_id = $1
      ORDER BY dow, hour`,
@@ -280,6 +284,7 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     hour: r.hour,
     totalSec: Number(r.total_sec) || 0,
     sessionCount: r.session_count,
+    uniqueUsers: r.unique_users ?? 0,
   }));
 
   // 4) User Activity Map — top user'ların saatlik dağılımı
@@ -313,6 +318,9 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
   // 5) Social Groups — voice_sessions event stream walking (2/3/4/5+ kişilik gruplar)
   const topSocialGroups = await computeTopSocialGroups(serverId, rangeDays);
 
+  // 6) AI-style narratives — deterministic rule-based (şimdilik LLM yok)
+  const narratives = buildNarratives({ topActiveUsers, topSocialGroups, peakHours, rangeDays });
+
   const now = new Date();
   const start = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
   return {
@@ -323,6 +331,7 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     peakHours,
     userActivityMap,
     heatmapRefreshedAt: lastHeatmapRefresh ? lastHeatmapRefresh.toISOString() : null,
+    narratives,
   };
 }
 
