@@ -57,14 +57,11 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
   const isUpdateActive = hasUpdate && (state.phase === 'available' || state.phase === 'downloading' || state.phase === 'downloaded');
 
   // Faza göre buton aksiyonu — popover yerine doğrudan tetiklenir.
+  // İdle / up-to-date durumda version tıklaması release notes AÇMAZ (kullanıcı talebi).
   const handleClick = () => {
     if (state.phase === 'available') { download(); return; }
     if (state.phase === 'downloaded') { install(); return; }
     if (state.phase === 'error') { check(); return; }
-    // İdle / up-to-date → release notes varsa göster
-    if (getReleaseNotes(currentVersion)) {
-      setShowReleaseNotes(prev => !prev);
-    }
   };
 
   // Faz etiketi — buton içinde gösterilen kısa metin
@@ -84,9 +81,7 @@ export default function UpdateVersionHub({ currentVersion, isAdmin, autoShowNote
           className={`mv-sidebar-version flex items-center gap-1.5 text-[9px] font-medium transition-all duration-150 rounded px-1.5 py-0.5 -mx-1.5 ${
             hasUpdate
               ? 'text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 cursor-pointer'
-              : getReleaseNotes(currentVersion)
-                ? 'text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] cursor-pointer'
-                : 'text-[var(--theme-secondary-text)]/50 cursor-default'
+              : 'text-[var(--theme-secondary-text)]/50 cursor-default'
           }`}
         >
           {/* Progress ring — indirme sırasında */}

@@ -31,14 +31,11 @@ export default function MobileUpdateHub({ currentVersion, isAdmin, autoShowNotes
     }
   }, [autoShowNotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Idle version tıklaması release notes AÇMAZ (kullanıcı talebi) — sadece
+  // bekleyen güncelleme varsa sheet açılır.
   const handleClick = () => {
     if (hasUpdate && vis.canOpenDetails) {
       setSheetOpen(true);
-      return;
-    }
-    // Normal: release notes
-    if (getReleaseNotes(currentVersion)) {
-      setShowReleaseNotes(prev => !prev);
     }
   };
 
