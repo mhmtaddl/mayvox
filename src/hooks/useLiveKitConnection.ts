@@ -328,6 +328,33 @@ export function useLiveKitConnection({
         }
       });
 
+      // ── AudioPlaybackStatusChanged — autoplay blocked recovery ──
+      // Prod Electron'da autoplay-policy flag'i ile default olarak sorunsuz,
+      // ama güvenlik ağı: eğer bir sebepten remote audio elementler play()
+      // yapamadıysa (canPlaybackAudio=false), ilk kullanıcı gesture'ında
+      // room.startAudio() ile hepsini unlock et. Kullanıcı "başkalarını
+      // duyamıyorum" durumundan otomatik kurtulur.
+      room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+        if (!room.canPlaybackAudio) {
+          console.warn('[audio] canPlaybackAudio=false — awaiting user gesture to startAudio');
+          const unlock = () => {
+            room.startAudio().then(() => {
+              console.log('[audio] startAudio unlocked');
+            }).catch(err => {
+              console.warn('[audio] startAudio failed:', err);
+            });
+            window.removeEventListener('click', unlock, true);
+            window.removeEventListener('keydown', unlock, true);
+            window.removeEventListener('touchstart', unlock, true);
+          };
+          window.addEventListener('click', unlock, { capture: true, once: true });
+          window.addEventListener('keydown', unlock, { capture: true, once: true });
+          window.addEventListener('touchstart', unlock, { capture: true, once: true });
+        } else {
+          console.log('[audio] canPlaybackAudio=true');
+        }
+      });
+
       room.on(RoomEvent.ParticipantConnected, (participant) => {
         updateMembers();
         syncUsers();

@@ -1,5 +1,14 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
+
+// ── Chromium autoplay policy ─────────────────────────────────────────────────
+// Prod packaged build'de default autoplay policy 'document-user-activation-required'.
+// Ses odasına join gesture'ı ilk AudioContext/ilk audio elementini unlock ediyor
+// ama TrackSubscribed ile SONRADAN oluşturulan remote audio elementler yeni
+// element olduğu için play() autoplay'e takılıyor → kullanıcı diğerlerinin sesini
+// duymuyor (kendi mic'i gönderilmeye devam ediyor). Bu flag onu kaldırır.
+// Mutlaka app.whenReady ÖNCESİ set edilmeli.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require("path");
 const fs = require("fs");
 const { setupGameDetection, getDetector } = require("./game-detection.cjs");
