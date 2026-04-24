@@ -795,8 +795,41 @@ process.on("unhandledRejection", (reason) => {
   });
 });
 
+// ── Windows Audio Ducking opt-out ────────────────────────────────────────────
+// Windows varsayılan: bir app mic açınca ("communications activity") diğer
+// uygulamaların sesini %80 kısar. PUBG vb. oyun sesleri kısılmasın diye HKCU
+// UserDuckingPreference'ı "Hiçbir şey yapma" (3) değerine çekiyoruz.
+// İlk runda bir kere; sonraki runlarda kullanıcı manuel değiştirdiyse saygı duy.
+// Değerler: 0=mute other, 1=-80% (default), 2=-50%, 3=do nothing.
+function applyWindowsDuckingOptOut() {
+  if (process.platform !== 'win32') return;
+  try {
+    const flagFile = path.join(app.getPath('userData'), '.ducking-optout-applied');
+    if (fs.existsSync(flagFile)) return;
+
+    const { execFile } = require('child_process');
+    execFile('reg', [
+      'add', 'HKCU\\Software\\Microsoft\\Multimedia\\Audio',
+      '/v', 'UserDuckingPreference',
+      '/t', 'REG_DWORD',
+      '/d', '3',
+      '/f',
+    ], { windowsHide: true }, (err) => {
+      if (err) {
+        logger.warn("Windows ducking opt-out başarısız", { error: err.message });
+        return;
+      }
+      try { fs.writeFileSync(flagFile, new Date().toISOString()); } catch {}
+      logger.info("Windows ducking opt-out uygulandı (UserDuckingPreference=3)");
+    });
+  } catch (e) {
+    logger.warn("Windows ducking opt-out exception", { error: e.message });
+  }
+}
+
 app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
+  applyWindowsDuckingOptOut();
 
   // ── Media & speaker-selection permissions ────────────────────────────────
   // Production build file:// origin'inde yükleniyor; dev'de http://127.0.0.1:3000.
