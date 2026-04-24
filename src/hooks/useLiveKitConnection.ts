@@ -294,7 +294,9 @@ export function useLiveKitConnection({
           if (currentSink) {
             const sinkEl = audioEl as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
             if (typeof sinkEl.setSinkId === 'function') {
-              sinkEl.setSinkId(currentSink).catch(() => { /* cihaz bulunamadı — safe no-op */ });
+              sinkEl.setSinkId(currentSink).catch(err => {
+                console.warn('[audio] TrackSubscribed setSinkId failed:', err);
+              });
             }
           }
 

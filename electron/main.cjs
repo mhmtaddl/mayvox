@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
@@ -788,6 +788,23 @@ process.on("unhandledRejection", (reason) => {
 
 app.whenReady().then(() => {
   logger.info("Uygulama başlatıldı", { version: app.getVersion(), isDev });
+
+  // ── Media & speaker-selection permissions ────────────────────────────────
+  // Production build file:// origin'inde yükleniyor; dev'de http://127.0.0.1:3000.
+  // Chromium file:// origin'inde 'speaker-selection' iznini default vermiyor →
+  // HTMLAudioElement.setSinkId() ve Room.switchActiveDevice('audiooutput') silently
+  // reject oluyor → kullanıcı çıkış cihazını seçmesine rağmen ses hoparlörden gelmeye
+  // devam ediyor. Hem request hem check handler'ı ile media + speaker-selection
+  // explicit grant edilir; diğer izinler Electron default davranışına (grant) uyar.
+  const mediaPermissions = new Set(['media', 'speaker-selection', 'audioCapture', 'videoCapture']);
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (mediaPermissions.has(permission)) return callback(true);
+    return callback(true);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    if (mediaPermissions.has(permission)) return true;
+    return true;
+  });
 
   // ── Splash + Main paralel başlatma + Startup Update Gate ──
   // 1. Splash anında açılır
