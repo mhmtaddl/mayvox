@@ -159,7 +159,7 @@ function CalendarPicker({ value, onChange, onClose }: { value: string; onChange:
   const next = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
 
   return (
-    <div className="p-3 rounded-xl border border-[var(--theme-accent)]/15 w-[260px] backdrop-blur-xl" style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', boxShadow: '0 12px 40px rgba(var(--shadow-base),0.7), 0 0 0 1px rgba(var(--glass-tint),0.06)' }} onClick={e => e.stopPropagation()}>
+    <div className="p-3 rounded-xl border w-[260px]" style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={prev} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors text-xs">&lt;</button>
         <span className="text-[12px] font-bold text-[var(--theme-text)]">{MONTHS_TR[viewMonth]} {viewYear}</span>
@@ -201,7 +201,7 @@ function TimePicker({ value, onChange, onClose }: { value: string; onChange: (v:
   const apply = () => { onChange(`${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`); onClose(); };
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--theme-accent)]/15 w-[200px] backdrop-blur-xl" style={{ background: 'rgba(var(--theme-bg-rgb), 0.92)', boxShadow: '0 12px 40px rgba(var(--shadow-base),0.7), 0 0 0 1px rgba(var(--glass-tint),0.06)' }} onClick={e => e.stopPropagation()}>
+    <div className="p-4 rounded-xl border w-[200px]" style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
       <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/70 uppercase tracking-wider mb-3 text-center">Saat Seç</p>
       <div className="flex items-center justify-center gap-2 mb-4">
         <div className="flex flex-col items-center">
@@ -278,7 +278,7 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40"
       onClick={onClose}
     >
       <motion.div
@@ -286,8 +286,8 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 12 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="w-full max-w-md rounded-2xl border border-[var(--theme-accent)]/15 max-h-[85vh] flex flex-col overflow-hidden"
-        style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
+        className="w-full max-w-md rounded-2xl border max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top accent line */}
@@ -484,7 +484,7 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40"
       onClick={onClose}
     >
       <motion.div
@@ -492,8 +492,8 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 12 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="w-full max-w-sm rounded-2xl border border-[var(--theme-accent)]/15 p-5"
-        style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 95%, black) 0%, var(--theme-bg) 100%)', boxShadow: '0 32px 80px rgba(var(--shadow-base),0.6), 0 8px 24px rgba(var(--shadow-base),0.3), 0 0 0 1px rgba(var(--glass-tint),0.04)' }}
+        className="w-full max-w-sm rounded-2xl border p-5"
+        style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm text-[var(--theme-text)] mb-4">Bu öğeyi silmek istediğinize emin misiniz?</p>

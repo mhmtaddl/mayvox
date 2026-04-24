@@ -347,7 +347,7 @@ function HeroStat({ icon, label, current, limit }: { icon: React.ReactNode; labe
 
 function Section({ title, icon, hint, danger, children }: { title: string; icon: React.ReactNode; hint?: string; danger?: boolean; children: React.ReactNode }) {
   return (
-    <section>
+    <section className="h-full flex flex-col">
       <div className="flex items-baseline justify-between mb-2">
         <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] ${danger ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/75'}`}>
           <span className="opacity-80">{icon}</span>
@@ -355,7 +355,7 @@ function Section({ title, icon, hint, danger, children }: { title: string; icon:
         </div>
         {hint && <span className="text-[9.5px] text-[var(--theme-secondary-text)]/55 truncate ml-3">{hint}</span>}
       </div>
-      {children}
+      <div className="flex-1 flex flex-col">{children}</div>
     </section>
   );
 }
@@ -639,7 +639,7 @@ function PlanSummaryRow({ plan }: { plan: string }) {
 
   return (
     <div
-      className="flex items-center gap-3.5 p-3.5 rounded-xl"
+      className="flex-1 flex items-center gap-3.5 p-3.5 rounded-xl"
       style={{
         background: `linear-gradient(180deg, rgba(${visual.rgb}, 0.05), rgba(${visual.rgb}, 0.015))`,
         border: `1px solid rgba(${visual.rgb}, 0.18)`,
@@ -713,7 +713,7 @@ function NavRow({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left ${baseCls}`}
+      className={`w-full flex-1 flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left ${baseCls}`}
     >
       <div
         className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"

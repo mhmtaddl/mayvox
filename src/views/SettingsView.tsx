@@ -120,10 +120,9 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   onChange: (v: OverlayAnchor) => void;
   disabled?: boolean;
 }) {
-  // Responsive: küçük pencerede 180px'e iner, büyük pencerede 360px'e kadar genişler.
-  // Parent flex-wrap olduğu için küçük pencerede picker tek satır, sağ blok alt satıra
-  // wrap olur → Stil 4-buton tam genişlikte rahat sığar.
-  const MAX_W = 360, MIN_W = 180;
+  // Responsive: picker genişliği grid kolonu tarafından yönetilir (min-width 0 ile
+  // taşmaz). Aspect-ratio ile yükseklik orantılı; min/max height ara genişliklerde
+  // picker'ın saçma büyümesini/küçülmesini engeller.
   const ASPECT = '232 / 164';
   const pad = 14;
   const HIT = 24;
@@ -145,7 +144,6 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   return (
     <div
       className="flex flex-col gap-1.5 w-full min-w-0"
-      style={{ maxWidth: MAX_W }}
     >
       {/* KONUM başlığı — picker'ın dışında üst-orta (Stil/Boyut/Şeffaflık ile aynı stil) */}
       <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Konum</div>
@@ -154,6 +152,8 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
         className="relative rounded-xl overflow-hidden w-full"
         style={{
           aspectRatio: ASPECT,
+          minHeight: 150,
+          maxHeight: 240,
           background: bg,
           boxShadow: `inset 0 0 0 1px ${ringColor}, ${vignette}`,
           opacity: disabled ? 0.45 : 1,
@@ -531,26 +531,37 @@ function VoiceOverlayCard() {
     <div
       className="surface-card rounded-xl px-4 py-4 w-full"
       style={{
-        maxWidth: 520,
+        maxWidth: 600,
         minWidth: 0,
+        marginInline: 'auto',
         overflow: 'hidden',
         containerType: 'inline-size',
       } as React.CSSProperties}
     >
-      {/* Container query based layout — kart genişliği küçüldükçe grid'ler kendi
+      {/* Container-query tabanlı layout — kart genişliği küçüldükçe grid'ler kendi
           içinde adapt olur, hiçbir eleman üst üste binmez.
-          - vox-body: dar alanda 1 kolon, geniş alanda 2 kolon (Konum + Stil/Boyut).
-          - vox-variant-grid: dar alanda 2x2, geniş alanda 4 kolon.
-          - vox-size-grid: her zaman 3 kolon (3 Boyut seçeneği). */}
+          Tier'lar:
+          - card ≥ 500: vox-body 2 kolon (picker sol, kontroller sağ)
+          - card < 500: vox-body 1 kolon stack (picker üstte, kontroller altta)
+          Variant grid kendi kolonunun genişliğini ölçer (.vox-right container):
+          - col ≥ 260: 4 kolon
+          - col < 260: 2x2 */}
       <style>{`
         .vox-body {
           display: grid;
-          grid-template-columns: minmax(180px, 1fr) minmax(160px, 1fr);
-          gap: 16px;
+          grid-template-columns: 1fr;
+          gap: 12px;
           align-items: stretch;
         }
-        @container (max-width: 440px) {
-          .vox-body { grid-template-columns: 1fr; gap: 12px; }
+        @container (min-width: 500px) {
+          .vox-body {
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 16px;
+          }
+        }
+        .vox-right {
+          container-type: inline-size;
+          min-width: 0;
         }
         .vox-variant-grid {
           display: grid;
@@ -559,7 +570,7 @@ function VoiceOverlayCard() {
           padding: 4px;
           border-radius: 12px;
         }
-        @container (min-width: 380px) {
+        @container (min-width: 260px) {
           .vox-variant-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
         .vox-size-grid {
@@ -621,7 +632,7 @@ function VoiceOverlayCard() {
             onChange={setOverlayPosition}
             disabled={off}
           />
-          <div className="w-full min-w-0 flex flex-col gap-3">
+          <div className="vox-right w-full min-w-0 flex flex-col gap-3">
             <div>
               <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
               <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} />

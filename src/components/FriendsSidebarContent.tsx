@@ -135,9 +135,9 @@ export default function FriendsSidebarContent({
           <DeviceBadge platform={user.platform} size={isDesktop ? 12 : 13} className="absolute -bottom-0.5 -right-0.5" />
         </div>
           ); })()}
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0">
           <div className="flex items-center gap-1 min-w-0">
-            <span className="text-[13px] font-medium text-[var(--theme-text)] leading-none truncate">
+            <span className="text-[13px] font-medium text-[var(--theme-text)] leading-[18px] truncate">
               {formatFullName(user.firstName, user.lastName)}
             </span>
             <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)] shrink-0">{user.age}</span>
@@ -152,7 +152,7 @@ export default function FriendsSidebarContent({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 mt-0.5">
+          <div className="flex items-center gap-1 mt-[3px]">
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
             {user.statusText && user.statusText !== 'Online' && user.statusText !== 'Aktif' && (
@@ -267,9 +267,9 @@ export default function FriendsSidebarContent({
         {isDesktop && <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />}
       </div>
         ); })()}
-      <div className="min-w-0">
-        <div className="flex items-center gap-1">
-          <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-none truncate`}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1 min-w-0">
+          <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate`}>
             {formatFullName(user.firstName, user.lastName)}
           </span>
           <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0`}>{user.age}</span>
@@ -286,7 +286,7 @@ export default function FriendsSidebarContent({
           {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-          <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-none mt-0.5 block">
+          <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-[14px] mt-[3px] block truncate">
             {(() => {
               const d = new Date(user.lastSeenAt);
               const now = new Date();
