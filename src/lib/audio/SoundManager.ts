@@ -15,6 +15,8 @@
  *   önler. Slider %100 → effective gain MASTER_BOOST (1.5x).
  */
 
+import { createManagedAudioContext } from './audioOutputRegistry';
+
 export type CallVariant = '1' | '2' | '3';
 export type MessageVariant = '1' | '2' | '3';
 export type NotificationVariant = '1' | '2' | '3';
@@ -136,11 +138,10 @@ function ensureAudioBus(): AudioContext | null {
   if (audioContext) return audioContext;
   if (typeof window === 'undefined') return null;
   try {
-    const Ctor: typeof AudioContext | undefined =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return null;
-    const ctx = new Ctor();
+    // Managed factory — selectedOutput cihazına route edilir. Aksi halde MP3
+    // ses efektleri (mesaj/çağrı/bildirim) destination → sistem default'a gidiyordu.
+    const ctx = createManagedAudioContext();
+    if (!ctx) return null;
     const gain = ctx.createGain();
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.setValueAtTime(-3, ctx.currentTime);

@@ -34,6 +34,7 @@ import {
   supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
+import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
@@ -1386,19 +1387,26 @@ export default function App() {
   }, [isDeafened, allUsers, userVolumes, livekitRoomRef]);
 
   // ── Output device routing: selectedOutput değişince runtime'da sink'i değiştir ──
-  // Room constructor'daki audioOutput sadece initial connect için; runtime değişimler
-  // için room.switchActiveDevice VE audioEl.setSinkId iki katmandan uygulanmalı.
+  // Üç katman paralel uygulanır:
+  //   1. AudioContext registry → SoundManager/sounds/notificationSound tümü seçili
+  //      cihaza route olur (MP3 + oscillator bildirim/çağrı sesleri için KRİTİK —
+  //      aksi halde Web Audio destination sistem default output'una gidiyordu).
+  //   2. LiveKit Room.switchActiveDevice('audiooutput') — voice akışı.
+  //   3. Tüm [data-livekit-audio] elementlere HTMLAudioElement.setSinkId — voice belt-and-suspenders.
   // Deafen sırasında sink'e dokunmuyoruz — zaten mute/pause/volume 0 ile sessiz.
   useEffect(() => {
     if (!selectedOutput) return;
+    // 1. Managed AudioContext registry'ye broadcast
+    setAudioOutputDevice(selectedOutput);
+
     const room = livekitRoomRef.current;
     if (room) {
-      // LiveKit v2 API — webAudioMix modunda Web Audio destination'ını da günceller.
+      // 2. LiveKit v2 API — webAudioMix modunda Web Audio destination'ını da günceller.
       room.switchActiveDevice('audiooutput', selectedOutput).catch(err => {
         console.warn('[audio] switchActiveDevice audiooutput failed:', err);
       });
     }
-    // Tüm mevcut LiveKit audio element'lere sinkId uygula (setSinkId destekliyorsa).
+    // 3. Tüm mevcut LiveKit audio element'lere sinkId uygula (setSinkId destekliyorsa).
     document.querySelectorAll<HTMLAudioElement>('[data-livekit-audio]').forEach(el => {
       const sinkEl = el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
       if (typeof sinkEl.setSinkId === 'function') {

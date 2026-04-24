@@ -8,6 +8,8 @@
  *  - Çoklu overlap yok, clipping yok, racey re-entry yok.
  */
 
+import { createManagedAudioContext } from '../../lib/audio/audioOutputRegistry';
+
 const SOUND_PREF_KEY = 'notify:sound';
 const SOUND_VARIANT_KEY = 'notify:sound-variant';
 const SOUND_VOLUME_KEY = 'notify:sound-volume';
@@ -82,11 +84,10 @@ function ensureCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (audioCtx && audioCtx.state !== 'closed') return audioCtx;
   try {
-    const Ctor: typeof AudioContext | undefined =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return null;
-    audioCtx = new Ctor();
+    // Managed factory — selectedOutput cihazına route edilir.
+    const ctx = createManagedAudioContext();
+    if (!ctx) return null;
+    audioCtx = ctx;
     if (audioCtx.state === 'suspended') {
       audioCtx.resume().catch(() => { /* no-op */ });
     }

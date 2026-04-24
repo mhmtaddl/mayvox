@@ -1,3 +1,5 @@
+import { createManagedAudioContext, unregisterAudioContext } from './audio/audioOutputRegistry';
+
 export type SoundCategory = 'JoinLeave' | 'MuteDeafen' | 'Ptt';
 export type SoundVariant = 1 | 2 | 3;
 type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 'ptt-on' | 'ptt-off' | 'moderation';
@@ -5,7 +7,13 @@ type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 
 let audioCtx: AudioContext | null = null;
 
 function getCtx(): AudioContext {
-  if (!audioCtx || audioCtx.state === 'closed') audioCtx = new AudioContext();
+  if (!audioCtx || audioCtx.state === 'closed') {
+    if (audioCtx) unregisterAudioContext(audioCtx);
+    // Managed factory — selectedOutput cihazına route edilir (AudioContext.setSinkId).
+    const ctx = createManagedAudioContext();
+    if (!ctx) throw new Error('AudioContext desteklenmiyor');
+    audioCtx = ctx;
+  }
   return audioCtx;
 }
 
