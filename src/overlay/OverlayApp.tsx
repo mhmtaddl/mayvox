@@ -66,11 +66,18 @@ export default function OverlayApp() {
         display: 'flex', flexDirection: 'column',
         justifyContent: 'flex-start', alignItems: 'flex-start',
         gap: rowGap,
-        padding: '10px 12px',
+        // Clamp padding — küçük overlay penceresinde sıkışmasın, büyükte abartmasın.
+        padding: 'clamp(8px, 1.2vw, 14px) clamp(10px, 1.4vw, 16px)',
         background: 'transparent',
         boxSizing: 'border-box',
         overflow: 'visible',
-      }}
+        // Text rendering — farklı DPI'lerde (100/125/150%) stabil render.
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+        textRendering: 'optimizeLegibility',
+        // Transform/opacity tabanlı animasyonları GPU katmanına al.
+        contain: 'layout paint',
+      } as React.CSSProperties}
     >
       {visible.map((p) => (
         <ParticipantRow
@@ -99,16 +106,35 @@ export default function OverlayApp() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Apple-grade subtle vertical gradient — top hafif açık, bottom mat siyah.
-// Aynı opacity her iki tona uygulanır → gradient korunur ama yarı saydam olur.
+// Apple-grade glassmorphism — macOS Control Center / VisionOS floating panel.
+// İki katman: üstte çok subtle beyaz radial glow (ambient highlight) + altta
+// koyu mat linear gradient. Backdrop-filter container'da uygulanır.
 // Opacity 0 → 'transparent' (kart yok).
-const CARD_TOP_RGB    = '23, 26, 34';   // #171a22 — üst hafif açık
-const CARD_BOTTOM_RGB = '10, 12, 16';   // #0a0c10 — alt mat siyah
-function buildCardGradient(opacity: number): string {
+const GLASS_TOP_RGB    = '20, 20, 25';  // hafif gri-lacivert, pür siyah değil
+const GLASS_BOTTOM_RGB = '10, 10, 15';
+// Idle iken glass (translucent 0.65/0.55), speaking iken TAM OPAK (1.0/0.95) —
+// konuşan/muted/deafened satırda arka plan kesin görünür, slider değeriyle kesişmez.
+function buildCardGradient(opacity: number, solid = false): string {
   if (!opacity) return 'transparent';
-  const a = (Math.max(0, Math.min(100, opacity)) / 100).toFixed(3);
-  return `linear-gradient(180deg, rgba(${CARD_TOP_RGB}, ${a}) 0%, rgba(${CARD_BOTTOM_RGB}, ${a}) 100%)`;
+  const a = Math.max(0, Math.min(100, opacity)) / 100;
+  const topA  = (solid ? 1.0  : 0.65 * a).toFixed(3);
+  const botA  = (solid ? 0.95 : 0.55 * a).toFixed(3);
+  const glowA = (solid ? 0.12 : 0.08 * a).toFixed(3);
+  return (
+    `radial-gradient(circle at 30% 20%, rgba(255,255,255,${glowA}), transparent 60%),`
+    + ` linear-gradient(180deg, rgba(${GLASS_TOP_RGB}, ${topA}) 0%, rgba(${GLASS_BOTTOM_RGB}, ${botA}) 100%)`
+  );
 }
+
+// Glass container ortak stili — her variant (capsule/card/badge) kullanır.
+// backdrop-filter blur(20) + saturate(140) macOS Control Center hissi verir.
+// Border 0.08 white + inset highlight + layered depth shadow ile "floating panel".
+const GLASS_BACKDROP = 'blur(20px) saturate(140%)';
+const GLASS_BORDER = '1px solid rgba(255, 255, 255, 0.08)';
+const GLASS_SHADOW =
+  '0 10px 30px rgba(0, 0, 0, 0.35),'
+  + ' 0 2px 8px rgba(0, 0, 0, 0.25),'
+  + ' inset 0 1px 0 rgba(255, 255, 255, 0.06)';
 
 // ══════════════════════════════════════════════════════════════════════════
 // Shared subcomponents
@@ -174,6 +200,7 @@ const Waveform: React.FC<{ active: boolean; height: number; color: string }> = (
             transition: 'transform 130ms cubic-bezier(0.22, 1, 0.36, 1)',
             opacity: active ? 1 : 0.5,
             boxShadow: active ? `0 0 4px ${color}` : 'none',
+            willChange: active ? 'transform' : 'auto',
           }}
         />
       ))}
@@ -247,7 +274,9 @@ const ParticipantRow: React.FC<{
   // Konuşan / muted / deafened iken şeffaflık tamamen kalkar (bilgi state'i okunmalı).
   const visible = speaking || muted || deafened;
   const effectiveOpacityPct = visible ? 100 : idleOpacityPct;
-  const cardBg = buildCardGradient(effectiveOpacityPct);
+  // visible (speaking/muted/deafened) iken kart TAM OPAK — kullanıcı istediği "konuşunca
+  // görünsün" garantisi. Idle'da slider değerine göre glass translucent kalır.
+  const cardBg = buildCardGradient(effectiveOpacityPct, visible);
   const rowOpacity = effectiveOpacityPct / 100;
   const hasCard = cardBg !== 'transparent';
 
@@ -336,7 +365,7 @@ const NoneRow: React.FC<{
         textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.5)',
         letterSpacing: '-0.01em',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        maxWidth: 200, lineHeight: 1.15,
+        maxWidth: 'clamp(160px, 26vw, 240px)', lineHeight: 1.15,
       }}
     >
       {p.displayName}
@@ -385,11 +414,13 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
         // Spesifik transition'lar max 120ms — Apple-grade snappy his. "background" animasyonu
         // yok (cardBg'deki alpha değişimi anlık uygulansın, paint spam önlenir).
         transition: 'opacity 100ms ease-out, transform 120ms ease-out',
-        // Sabit box-shadow — idle/speaking farkı yok (paint cost azaltma).
-        boxShadow: hasCard ? '0 3px 10px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06)' : 'none',
-        border: hasCard ? '1px solid rgba(255,255,255,0.08)' : 'none',
+        // macOS Control Center glass — layered depth shadow + inner highlight.
+        boxShadow: hasCard ? GLASS_SHADOW : 'none',
+        border: hasCard ? GLASS_BORDER : 'none',
+        backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
+        WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         willChange: 'transform, opacity',
-      }}
+      } as React.CSSProperties}
     >
       <Avatar p={p} size={cfg.avatar} />
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.15 }}>
@@ -400,8 +431,9 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
             color: 'rgba(255,255,255,0.96)',
             textShadow: hasCard ? 'none' : '0 1px 2px rgba(0,0,0,0.85)',
             letterSpacing: '-0.01em',
+          fontFeatureSettings: '"kern" 1, "liga" 1',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            maxWidth: 180,
+            maxWidth: 'clamp(140px, 22vw, 220px)',
           }}
         >
           {p.displayName}
@@ -452,9 +484,11 @@ const CardRow: React.FC<RowVariantProps> = ({
         transform: speaking ? 'scale(1.03)' : 'scale(1)',
         transformOrigin: 'left center',
         transition: 'opacity 100ms ease-out, transform 120ms ease-out',
-        boxShadow: hasCard ? '0 4px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)' : 'none',
-        border: hasCard ? '1px solid rgba(255,255,255,0.08)' : 'none',
-        maxWidth: 220,
+        boxShadow: hasCard ? GLASS_SHADOW : 'none',
+        border: hasCard ? GLASS_BORDER : 'none',
+        backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
+        WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
+        maxWidth: 'clamp(170px, 24vw, 250px)',
         alignItems: 'center', // İçerik (avatar+name ve alt mic-row) yatay ortalı.
         willChange: 'transform, opacity',
       }}
@@ -468,6 +502,7 @@ const CardRow: React.FC<RowVariantProps> = ({
             fontWeight: speaking ? 700 : 600,
             color: 'rgba(255,255,255,0.96)',
             letterSpacing: '-0.01em',
+          fontFeatureSettings: '"kern" 1, "liga" 1',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             textShadow: hasCard ? 'none' : '0 1px 2px rgba(0,0,0,0.85)',
           }}
@@ -538,9 +573,11 @@ const BadgeRow: React.FC<RowVariantProps> = ({
         // "all" yerine spesifik — layout-shift'e sebep olan max-width için ayrı süre.
         // Max-width 120ms (Apple-ish snappy), opacity/transform 100ms.
         transition: 'max-width 120ms ease-out, opacity 100ms ease-out, transform 100ms ease-out, padding 120ms ease-out, gap 120ms ease-out',
-        boxShadow: hasCard ? '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05)' : 'none',
-        border: hasCard ? '1px solid rgba(255,255,255,0.07)' : 'none',
-        maxWidth: expanded ? 220 : avSize + padV * 2,
+        boxShadow: hasCard ? GLASS_SHADOW : 'none',
+        border: hasCard ? GLASS_BORDER : 'none',
+        backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
+        WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
+        maxWidth: expanded ? 'clamp(160px, 26vw, 240px)' : avSize + padV * 2,
         overflow: 'hidden',
         willChange: 'transform, max-width, opacity',
       }}
@@ -563,7 +600,8 @@ const BadgeRow: React.FC<RowVariantProps> = ({
             fontWeight: 600,
             color: 'rgba(255,255,255,0.96)',
             letterSpacing: '-0.01em',
-            maxWidth: 140,
+          fontFeatureSettings: '"kern" 1, "liga" 1',
+            maxWidth: 'clamp(110px, 18vw, 180px)',
             overflow: 'hidden', textOverflow: 'ellipsis',
             textShadow: hasCard ? 'none' : '0 1px 2px rgba(0,0,0,0.85)',
           }}

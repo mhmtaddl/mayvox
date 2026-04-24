@@ -120,9 +120,12 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   onChange: (v: OverlayAnchor) => void;
   disabled?: boolean;
 }) {
-  const W = 232, H = 164;
+  // Responsive: küçük pencerede 180px'e iner, büyük pencerede 360px'e kadar genişler.
+  // Parent flex-wrap olduğu için küçük pencerede picker tek satır, sağ blok alt satıra
+  // wrap olur → Stil 4-buton tam genişlikte rahat sığar.
+  const MAX_W = 360, MIN_W = 180;
+  const ASPECT = '232 / 164';
   const pad = 14;
-  const inner = { w: W - pad * 2, h: H - pad * 2 };
   const HIT = 24;
   const activeLabel = ANCHOR_POINTS.find(p => p.v === value)?.label ?? '';
 
@@ -140,18 +143,25 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   const inactiveDotRing   = 'rgba(255,255,255,0.30)';
 
   return (
-    <div className="flex flex-col gap-1.5 shrink-0" style={{ width: W }}>
+    <div
+      className="flex flex-col gap-1.5 w-full min-w-0"
+      style={{ maxWidth: MAX_W }}
+    >
+      {/* KONUM başlığı — picker'ın dışında üst-orta (Stil/Boyut/Şeffaflık ile aynı stil) */}
+      <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Konum</div>
+
       <div
-        className="relative rounded-xl overflow-hidden"
+        className="relative rounded-xl overflow-hidden w-full"
         style={{
-          width: W,
-          height: H,
+          aspectRatio: ASPECT,
           background: bg,
           boxShadow: `inset 0 0 0 1px ${ringColor}, ${vignette}`,
           opacity: disabled ? 0.45 : 1,
           pointerEvents: disabled ? 'none' : 'auto',
           transition: 'opacity 180ms ease-out',
-        }}
+          // Container queries — içindeki center label container width'e göre küçülür.
+          containerType: 'inline-size',
+        } as React.CSSProperties}
         aria-label="Ekran konum seçici"
       >
         {/* İnce grid — ekran hissi (tema duyarlı) */}
@@ -181,10 +191,11 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
           .anchor-hit:hover .anchor-dot.is-active { transform: none; }
         `}</style>
 
+        {/* Anchor noktaları %-bazlı pozisyonlanır → container küçüldüğünde
+            anchor'lar oranlı kalır, hit area sabit (24px). Inset = picker padding. */}
+        <div style={{ position: 'absolute', inset: pad }}>
         {ANCHOR_POINTS.map(p => {
           const active = value === p.v;
-          const x = pad + p.fx * inner.w;
-          const y = pad + p.fy * inner.h;
           const tx = `${-p.fx * 100}%`;
           const ty = `${-p.fy * 100}%`;
           return (
@@ -195,7 +206,8 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
               className="anchor-hit"
               style={{
                 position: 'absolute',
-                left: x, top: y,
+                left: `${p.fx * 100}%`,
+                top: `${p.fy * 100}%`,
                 width: HIT, height: HIT,
                 transform: `translate(${tx}, ${ty})`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -245,10 +257,31 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
             </button>
           );
         })}
-      </div>
-      <div className="flex items-center justify-between px-0.5">
-        <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">Konum</span>
-        <span className="text-[10px] font-semibold text-[var(--theme-text)]/80 truncate ml-2">{activeLabel}</span>
+        </div>
+
+        {/* Seçili konum (Sol alt orta) — picker'ın TAM ortasında, arka plansız.
+            Picker bg'sinin tema tint'i kapanmasın diye sadece text + text-shadow. */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            maxWidth: 'calc(100% - 24px)',
+          }}
+        >
+          <span
+            className="font-semibold text-white/95 truncate block"
+            style={{
+              // Container query — picker küçülünce yazı orantılı küçülür.
+              fontSize: 'clamp(10px, 8cqw, 13px)',
+              textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)',
+            }}
+          >
+            {activeLabel}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -269,7 +302,7 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
   ];
   return (
     <div
-      className="flex p-[4px] rounded-xl w-full gap-1"
+      className="vox-variant-grid w-full"
       style={{
         background: 'rgba(var(--glass-tint), 0.05)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
@@ -283,9 +316,9 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
           <button
             key={o.v}
             onClick={() => onChange(o.v)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[10px]"
+            className="min-w-0 flex flex-col items-center justify-center gap-0.5 rounded-[10px] px-1"
             style={{
-              height: 50,
+              height: 44,
               background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
               boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.28)' : 'none',
               transition: 'all 160ms ease-out',
@@ -295,7 +328,7 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
           >
             <VariantPreview variant={o.v} active={active} />
             <span
-              className="text-[10px] font-semibold tracking-wide"
+              className="text-[9.5px] font-semibold tracking-wide truncate w-full text-center"
               style={{
                 color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
                 opacity: active ? 1 : 0.8,
@@ -391,7 +424,7 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
   ];
   return (
     <div
-      className="flex p-[4px] rounded-xl w-full gap-1"
+      className="vox-size-grid w-full"
       style={{
         background: 'rgba(var(--glass-tint), 0.05)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
@@ -405,9 +438,9 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
           <button
             key={o.v}
             onClick={() => onChange(o.v)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 rounded-[10px]"
+            className="min-w-0 flex flex-col items-center justify-center gap-1 rounded-[10px] px-1"
             style={{
-              height: 50,
+              height: 44,
               background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
               boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.28)' : 'none',
               transition: 'all 160ms ease-out',
@@ -427,7 +460,7 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
               ))}
             </span>
             <span
-              className="text-[10.5px] font-semibold tracking-wide"
+              className="text-[10px] font-semibold tracking-wide truncate w-full text-center"
               style={{
                 color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
                 opacity: active ? 1 : 0.8,
@@ -472,9 +505,9 @@ function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled }: {
       >
         {icon}
       </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-[11.5px] font-medium text-[var(--theme-text)]/90 leading-tight truncate">{label}</p>
-        <p className="text-[9.5px] text-[var(--theme-secondary-text)]/55 leading-tight mt-0.5 truncate">{hint}</p>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <p className="text-[11.5px] font-medium text-[var(--theme-text)]/90 leading-tight truncate" style={{ whiteSpace: 'nowrap' }}>{label}</p>
+        <p className="text-[9.5px] text-[var(--theme-secondary-text)]/55 leading-tight mt-0.5 truncate" style={{ whiteSpace: 'nowrap' }}>{hint}</p>
       </div>
       <Toggle checked={checked} onChange={onChange} />
     </label>
@@ -495,7 +528,48 @@ function VoiceOverlayCard() {
   } = useSettings();
   const off = !overlayEnabled;
   return (
-    <div className="surface-card rounded-xl px-4 py-4">
+    <div
+      className="surface-card rounded-xl px-4 py-4 w-full"
+      style={{
+        maxWidth: 520,
+        minWidth: 0,
+        overflow: 'hidden',
+        containerType: 'inline-size',
+      } as React.CSSProperties}
+    >
+      {/* Container query based layout — kart genişliği küçüldükçe grid'ler kendi
+          içinde adapt olur, hiçbir eleman üst üste binmez.
+          - vox-body: dar alanda 1 kolon, geniş alanda 2 kolon (Konum + Stil/Boyut).
+          - vox-variant-grid: dar alanda 2x2, geniş alanda 4 kolon.
+          - vox-size-grid: her zaman 3 kolon (3 Boyut seçeneği). */}
+      <style>{`
+        .vox-body {
+          display: grid;
+          grid-template-columns: minmax(180px, 1fr) minmax(160px, 1fr);
+          gap: 16px;
+          align-items: stretch;
+        }
+        @container (max-width: 440px) {
+          .vox-body { grid-template-columns: 1fr; gap: 12px; }
+        }
+        .vox-variant-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 4px;
+          padding: 4px;
+          border-radius: 12px;
+        }
+        @container (min-width: 380px) {
+          .vox-variant-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+        .vox-size-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 4px;
+          padding: 4px;
+          border-radius: 12px;
+        }
+      `}</style>
       {/* Header — ikon + başlık + Masaüstü rozeti + ana toggle */}
       <div className="flex items-start gap-3">
         <div
@@ -541,13 +615,13 @@ function VoiceOverlayCard() {
           transition: 'opacity 180ms ease-out',
         }}
       >
-        <div className="flex flex-nowrap gap-4 items-stretch">
+        <div className="vox-body">
           <OverlayPositionPicker
             value={overlayPosition}
             onChange={setOverlayPosition}
             disabled={off}
           />
-          <div className="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
+          <div className="w-full min-w-0 flex flex-col gap-3">
             <div>
               <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
               <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} />
