@@ -80,3 +80,26 @@ DM tonu araya girmesin. Odada **oturmak** ses suppression'ına neden olmaz.
 
 Bu kural kullanıcı talebidir: "sohbet odasında dahi olsa o ses, ton çalacak.
 mesaj sesini duyacak herkes." Bozan refactor PR'ları reddedilir.
+
+## Oyun-içi Overlay Görünürlük Kuralı — ASLA BOZULMAMALI
+
+Oyun-içi ses göstergesi (overlay) toggle'ı açıksa, **ana pencere hangi durumda
+olursa olsun** (minimize, tray'e alınmış, gizli, focus kaybetmiş) overlay oyun
+üzerinde görünür kalır. Tek suppression kaynağı: kullanıcının kendi `enabled=false`
+yapması veya ses odasında olmaması (snapshot yok).
+
+### Zorunlu davranış
+`electron/overlay-window.cjs` → `_shouldBeVisible()` sadece şuna bakar:
+- `currentSettings.enabled === true`
+- `lastSnapshot` ve `lastSnapshot.roomId` var
+- `lastSnapshot.participants.length > 0`
+
+### YASAK
+- `mainWinMinimized` veya benzeri pencere-durumu gate'i eklemek
+- `main.cjs`'te `win.on('minimize'/'hide'/'blur')` → overlay hide eventi bind etmek
+- Ana pencere tray'e atılınca overlay'i destroy/hide etmek
+- Overlay snapshot akışını main window state'ine bağlamak
+
+Bu kural kullanıcı talebidir: "oyun içi ses göstergesi açıksa uygulama hangi
+simge de hangi boyutta olursa olsun oyun üzerinde gösterim açık olmasını
+istiyorum." Bozan refactor PR'ları reddedilir.

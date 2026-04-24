@@ -419,10 +419,6 @@ function createMainWindow() {
   win.on("blur", sendWinState);
   win.webContents.on("did-finish-load", sendWinState);
 
-  // Ana pencere minimize/restore → overlay visibility gating
-  win.on("minimize", () => { try { getOverlayManager()?.setMainWindowMinimized(true); } catch {} });
-  win.on("restore",  () => { try { getOverlayManager()?.setMainWindowMinimized(false); } catch {} });
-
   const saveState = () => {
     if (win.isMaximized() || win.isMinimized()) return;
     const { width, height } = win.getBounds();

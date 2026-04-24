@@ -65,7 +65,6 @@ class OverlayWindowManager {
     this.win = null;
     this.ready = false;
     this.lastSnapshot = null;
-    this.mainWinMinimized = false; // ana pencere minimized ise overlay'i gizleriz
     this.currentSettings = {
       enabled: false,
       position: 'top-right',
@@ -79,19 +78,15 @@ class OverlayWindowManager {
   // Overlay gerçekten görünmesi gereken durum mu?
   // - settings.enabled
   // - lastSnapshot.participants.length > 0 (oda + katılımcı var)
-  // - ana pencere minimized değil
+  // Ana pencere minimize/tray/hidden olsa bile overlay bağımsız görünür —
+  // kullanıcı "oyun içi gösterim" toggle'ı açıksa pencere durumundan bağımsız
+  // oyun üzerinde her zaman görünmeli (kullanıcı talebi, KURAL).
   _shouldBeVisible() {
     if (!this.currentSettings.enabled) return false;
-    if (this.mainWinMinimized) return false;
     if (!this.lastSnapshot) return false;
     if (!this.lastSnapshot.roomId) return false;
     if (!Array.isArray(this.lastSnapshot.participants) || this.lastSnapshot.participants.length === 0) return false;
     return true;
-  }
-
-  setMainWindowMinimized(v) {
-    this.mainWinMinimized = !!v;
-    this._syncVisibility();
   }
 
   _syncVisibility() {
