@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
+import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { useAppState } from '../contexts/AppStateContext';
 import { useAudio } from '../contexts/AudioContext';
 import { useUser } from '../contexts/UserContext';
@@ -1015,7 +1016,13 @@ export default function ChatView() {
                           const speakers = channel.speakerIds || [];
                           const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
                           const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
-                          let memberUsers = (channel.members ?? []).map(id => allUsers.find(u => u.id === id)).filter(Boolean) as typeof allUsers;
+                          let memberUsers = (channel.members ?? []).map(memberKey => {
+                            const user = resolveUserByMemberKey(memberKey, allUsers);
+                            if (!user) {
+                              logMemberIdentityDebug('chat_view_unresolved_member', { memberKey }, `chat_view:${memberKey}`);
+                            }
+                            return user;
+                          }).filter(Boolean) as typeof allUsers;
                           if (!memberUsers.length) return null;
                           if (isBc) memberUsers = [...memberUsers].sort((a, b) => (isSpeakerFn(b.id) ? 1 : 0) - (isSpeakerFn(a.id) ? 1 : 0));
                           let shownSpLabel = false, shownLsLabel = false;

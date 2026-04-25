@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Clock } from 'lucide-react';
+import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
 
 interface Props {
   menu: { userId: string; x: number; y: number };
@@ -39,8 +40,10 @@ export default function ChatViewUserActionMenu({
   // (codebase'de tutarsız). İki kontrolü birden yap.
   const targetUserName = allUsers.find(u => u.id === uid)?.name;
   const isInRoom = !!(
-    activeCh?.members?.includes(uid) ||
-    (targetUserName && activeCh?.members?.includes(targetUserName))
+    activeCh?.members?.some(memberKey => {
+      const user = resolveUserByMemberKey(memberKey, allUsers);
+      return user?.id === uid || memberKey === uid || (!!targetUserName && memberKey === targetUserName);
+    })
   );
 
   return (

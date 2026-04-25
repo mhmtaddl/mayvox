@@ -21,6 +21,7 @@ interface UsePttAudioParams {
   isLowDataMode: boolean;
   pttReleaseDelay: number;
   voiceMode: VoiceMode;
+  visualMeterEnabled?: boolean;
   onMicError?: (msg: string) => void;
 }
 
@@ -48,7 +49,7 @@ export function usePttAudio(params: UsePttAudioParams) {
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
     isMuted, isVoiceBanned, isServerMuted, isVoiceConnected, selectedInput,
     isNoiseSuppressionEnabled, noiseThreshold, isLowDataMode,
-    pttReleaseDelay, voiceMode, onMicError,
+    pttReleaseDelay, voiceMode, visualMeterEnabled = true, onMicError,
   } = params;
 
   const [isPttPressed, setIsPttPressed] = useState(false);
@@ -183,15 +184,15 @@ export function usePttAudio(params: UsePttAudioParams) {
     // Voice pipeline guard — server bloğu varken getUserMedia'ya hiç gitme.
     // Mic stream açılmaz, analyser çalışmaz, VAD tetiklenmez.
     if (isMuted || isVoiceBanned || isServerMuted) return false;
-    return voiceMode === 'vad' ? isVoiceConnected : isPttPressed;
+    return voiceMode === 'vad' ? isVoiceConnected : (isPttPressed && visualMeterEnabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode, isMuted, isVoiceBanned, isServerMuted, isVoiceConnected, isPttPressed]);
+  }, [voiceMode, isMuted, isVoiceBanned, isServerMuted, isVoiceConnected, isPttPressed, visualMeterEnabled]);
 
   // ── Ses analizi effect — shouldCapture değişince start/stop ──
   useEffect(() => {
     if (!shouldCapture) {
       // Durdur
-      if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+      if (animationRef.current) { window.clearTimeout(animationRef.current); animationRef.current = null; }
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       if (vadSilenceTimerRef.current) { clearTimeout(vadSilenceTimerRef.current); vadSilenceTimerRef.current = null; }
       setVolumeLevel(0);
@@ -241,23 +242,35 @@ export function usePttAudio(params: UsePttAudioParams) {
 
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
-        let lastUpdateTime = 0;
+        let lastVolumeValue = 0;
+        let lastVolumeEmitAt = 0;
+        const MIN_VOLUME_DELTA = 3;
+        const MIN_VOLUME_EMIT_MS = 100;
 
         const updateVolume = () => {
           if (cancelled || !analyserRef.current) return;
           const now = performance.now();
           const interval = document.hidden ? 500 : isLowDataRef.current ? 66 : 50;
 
-          if (now - lastUpdateTime >= interval) {
-            lastUpdateTime = now;
-            analyserRef.current.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-            const average = sum / bufferLength;
+          analyserRef.current.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+          const average = sum / bufferLength;
 
-            const threshold = isNoiseSupRef.current ? noiseThresholdRef.current : 2;
-            if (average < threshold) {
-              setVolumeLevel(0);
+          const threshold = isNoiseSupRef.current ? noiseThresholdRef.current : 2;
+          const nextVolume = average < threshold ? 0 : Math.min(100, (average - threshold) * 1.5);
+          const volumeDelta = Math.abs(nextVolume - lastVolumeValue);
+          const shouldEmitVolume =
+            (volumeDelta >= MIN_VOLUME_DELTA || (nextVolume === 0 && lastVolumeValue !== 0))
+            && now - lastVolumeEmitAt >= MIN_VOLUME_EMIT_MS;
+
+          if (shouldEmitVolume) {
+            lastVolumeValue = nextVolume;
+            lastVolumeEmitAt = now;
+            setVolumeLevel(nextVolume);
+          }
+
+          if (average < threshold) {
               // VAD: sessizlik algılandı → timer başlat
               if (voiceMode === 'vad' && isPttPressedRef.current && !vadSilenceTimerRef.current) {
                 vadSilenceTimerRef.current = setTimeout(() => {
@@ -266,9 +279,7 @@ export function usePttAudio(params: UsePttAudioParams) {
                   vadSilenceTimerRef.current = null;
                 }, VAD_SILENCE_TIMEOUT);
               }
-            } else {
-              const normalized = Math.min(100, (average - threshold) * 1.5);
-              setVolumeLevel(normalized);
+          } else {
               // VAD: ses algılandı → konuşma başlat
               if (voiceMode === 'vad') {
                 if (vadSilenceTimerRef.current) {
@@ -283,9 +294,8 @@ export function usePttAudio(params: UsePttAudioParams) {
                   setIsPttPressed(true);
                 }
               }
-            }
           }
-          animationRef.current = requestAnimationFrame(updateVolume);
+          animationRef.current = window.setTimeout(updateVolume, interval);
         };
         updateVolume();
       } catch (err) {
@@ -305,7 +315,7 @@ export function usePttAudio(params: UsePttAudioParams) {
 
     return () => {
       cancelled = true;
-      if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
+      if (animationRef.current) { window.clearTimeout(animationRef.current); animationRef.current = null; }
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       // VAD silence timer'ı KORUYORUZ — cleanup'ta temizlemiyoruz
       // Böylece sessizlik algılama effect restart'tan etkilenmez

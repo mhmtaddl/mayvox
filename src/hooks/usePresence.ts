@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type React from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, updateUserAppVersion } from '../lib/supabase';
+import { normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
 import type { User, VoiceChannel } from '../types';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   /** Kanal sırası token'ı — reorder broadcast'ı geldiğinde remote token ile senkron tut. */
   channelOrderTokenRef: React.MutableRefObject<string | null>;
   disconnectFromLiveKit: () => Promise<void>;
+  allUsersRef: React.MutableRefObject<User[]>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setCurrentUser: React.Dispatch<React.SetStateAction<User>>;
   setChannels: React.Dispatch<React.SetStateAction<VoiceChannel[]>>;
@@ -53,6 +55,7 @@ export function usePresence({
   activeServerIdRef,
   channelOrderTokenRef,
   disconnectFromLiveKit,
+  allUsersRef,
   setAllUsers,
   setCurrentUser,
   setChannels,
@@ -541,7 +544,11 @@ export function usePresence({
               // o kanalda artık olan üyeleri diğer tüm kanallardan temizle.
               // Bu, oda taşıma sırasında "iki odada birden görünme" race condition'ını önler.
               if (Array.isArray(payload.updates?.members)) {
-                const incomingMembers = payload.updates.members as string[];
+                const incomingMembers = normalizeMemberKeysToUserIds(
+                  payload.updates.members as string[],
+                  allUsersRef.current,
+                  'presence_channel_update_incoming',
+                );
                 const filtered = (c.members || []).filter(
                   // Kendi ID'mizi yalnızca activeChannelRef'e göre yönetiyoruz —
                   // başkasının broadcast'i bizi yanlış yerden silmesin.
@@ -556,6 +563,11 @@ export function usePresence({
 
             const updates = { ...payload.updates };
             if (Array.isArray(updates.members)) {
+              updates.members = normalizeMemberKeysToUserIds(
+                updates.members as string[],
+                allUsersRef.current,
+                'presence_channel_update_target',
+              );
               // Remove own ID then re-add based on actual channel membership.
               // This prevents stale broadcasts causing duplicate member entries.
               updates.members = (updates.members as string[]).filter(

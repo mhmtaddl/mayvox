@@ -5,7 +5,7 @@ import { hasCustomAvatar, getStatusAvatar } from '../lib/statusAvatar';
 // ── Overlay renderer ──────────────────────────────────────────────────────
 // 3 premium varyant: Capsule (pill), Card (info-dense), Badge (minimal floating).
 // Tüm variant'lar cardColorHex (tema accent) + cardOpacity (idle) ile boyanır.
-// Konuşan satırda opacity otomatik %100'e çıkar, scale + ring glow vurgu uygulanır.
+// Konuşan satırda opacity otomatik %100'e çıkar; ekstra animasyon/gösterge yoktur.
 
 declare global {
   interface Window {
@@ -34,6 +34,7 @@ const SIZE_CONFIG: Record<OverlaySize, SizeCfg> = {
 // ══════════════════════════════════════════════════════════════════════════
 export default function OverlayApp() {
   const [snap, setSnap] = useState<OverlaySnapshot | null>(null);
+  const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' ? true : !document.hidden);
 
   useEffect(() => {
     const api = window.electronOverlay;
@@ -42,7 +43,13 @@ export default function OverlayApp() {
     return () => { try { api.removeAll(); } catch { /* no-op */ } };
   }, []);
 
-  if (!snap || snap.participants.length === 0) {
+  useEffect(() => {
+    const onVisibility = () => setPageVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  if (!pageVisible || !snap || snap.participants.length === 0) {
     return <div style={{ width: '100%', height: '100%' }} />;
   }
 
@@ -97,6 +104,12 @@ export default function OverlayApp() {
           fontWeight: 600,
           textShadow: '0 1px 2px rgba(0,0,0,0.55)',
           paddingLeft: cfg.avatar + cfg.gap,
+          maxWidth: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}>
           +{overflow} kişi daha
         </div>
@@ -148,7 +161,7 @@ const Avatar: React.FC<{
   const statusSrc = useCustom ? null : (getStatusAvatar(p.statusText || 'Çevrimdışı') || getStatusAvatar('Çevrimdışı'));
   const imgSrc = useCustom ? p.avatarUrl! : statusSrc;
 
-  // Avatar etrafında speaking/muted çizgisi YOK — vurgu waveform + status metni + scale ile.
+  // Avatar etrafında animasyon yok — vurgu opak kart + status metni ile.
   return (
     <div
       style={{
@@ -169,42 +182,25 @@ const Avatar: React.FC<{
   );
 };
 
-// 4 barlı ses dalgası — state-driven, ses seviyesine duyarlı simülasyon.
-// Speaking iken her ~120ms'de yeni rastgele yükseklikler üretilir → her bar bağımsız
-// "amplitude" ile hareket eder, gerçek ses dalgası hissi verir.
+// Statik durum göstergesi — animasyon/timer yok. Speaking durumunda ekstra yeşil
+// ikon gösterilmez; muted/deafened gibi durumlarda sakin işaret alanı korunur.
 const Waveform: React.FC<{ active: boolean; height: number; color: string }> = ({ active, height, color }) => {
-  const [heights, setHeights] = useState<number[]>([0.32, 0.32, 0.32, 0.32]);
-  useEffect(() => {
-    if (!active) {
-      setHeights([0.32, 0.32, 0.32, 0.32]);
-      return;
-    }
-    const tick = () => setHeights(Array.from({ length: 4 }, () => 0.30 + Math.random() * 0.70));
-    tick();
-    const id = window.setInterval(tick, 120);
-    return () => window.clearInterval(id);
-  }, [active]);
-
+  if (active) return null;
   return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'center', height, flexShrink: 0 }}>
-      {heights.map((h, i) => (
-        <span
-          key={i}
-          style={{
-            width: 2,
-            height: '100%',
-            borderRadius: 2,
-            background: color,
-            transformOrigin: 'center',
-            transform: `scaleY(${h})`,
-            transition: 'transform 130ms cubic-bezier(0.22, 1, 0.36, 1)',
-            opacity: active ? 1 : 0.5,
-            boxShadow: active ? `0 0 4px ${color}` : 'none',
-            willChange: active ? 'transform' : 'auto',
-          }}
-        />
-      ))}
-    </div>
+  <div style={{ display: 'flex', gap: 2, alignItems: 'center', height, flexShrink: 0 }}>
+    {[0.42, 0.72, 0.52, 0.62].map((h, i) => (
+      <span
+        key={i}
+        style={{
+          width: 2,
+          height: `${Math.round(height * h)}px`,
+          borderRadius: 2,
+          background: color,
+          opacity: active ? 0.95 : 0.45,
+        }}
+      />
+    ))}
+  </div>
   );
 };
 
@@ -283,8 +279,8 @@ const ParticipantRow: React.FC<{
   // Status öncelik: deafened (duymuyor) > muted (dinliyor) > speaking (konuşuyor).
   // Deafened genelde mic'i de kapatır ama kulağın kapalı olduğunu vurgulamak öncelikli.
   const statusText = deafened ? 'Duymuyor' : muted ? 'Dinliyor' : speaking ? 'Konuşuyor' : '';
-  const statusColor = deafened ? '#ef4444' : muted ? '#fb923c' : speaking ? '#7bd389' : 'rgba(220,228,240,0.65)';
-  const waveColor = deafened ? '#ef4444' : muted ? '#fb923c' : speaking ? '#7bd389' : 'rgba(220,228,240,0.65)';
+  const statusColor = deafened ? '#ef4444' : muted ? '#fb923c' : 'rgba(220,228,240,0.65)';
+  const waveColor = deafened ? '#ef4444' : muted ? '#fb923c' : 'rgba(220,228,240,0.65)';
 
   if (variant === 'capsule') {
     return (
@@ -337,7 +333,7 @@ const ParticipantRow: React.FC<{
 
 // ══════════════════════════════════════════════════════════════════════════
 // Variant 0 — NONE (kart yok / sade avatar + isim — eski minimal görünüm)
-// Kart, waveform, status metni yok. Sadece slider opacity + speaking scale.
+// Kart, waveform ve animasyon yok. Sadece slider opacity kullanılır.
 // ══════════════════════════════════════════════════════════════════════════
 
 const NoneRow: React.FC<{
@@ -350,10 +346,11 @@ const NoneRow: React.FC<{
     style={{
       display: 'inline-flex', alignItems: 'center', gap: cfg.gap,
       background: 'transparent',
+      maxWidth: '100%',
+      minWidth: 0,
+      boxSizing: 'border-box',
       opacity: rowOpacity,
-      transform: speaking ? 'scale(1.04)' : 'scale(1)',
-      transformOrigin: 'left center',
-      transition: 'opacity 100ms ease-out, transform 120ms ease-out',
+      transition: 'opacity 100ms ease-out',
     }}
   >
     <Avatar p={p} size={cfg.avatar} />
@@ -365,6 +362,7 @@ const NoneRow: React.FC<{
         textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.5)',
         letterSpacing: '-0.01em',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        minWidth: 0,
         maxWidth: 'clamp(160px, 26vw, 240px)', lineHeight: 1.15,
       }}
     >
@@ -375,8 +373,8 @@ const NoneRow: React.FC<{
 
 // ══════════════════════════════════════════════════════════════════════════
 // Variant 1 — MODERN CAPSULE (default)
-// Horizontal pill: avatar (hafif yukarıda durur hissi) + name/status + waveform.
-// Idle'da minimal, speaking'de scale(1.04) + subtle glow.
+// Horizontal pill: avatar (hafif yukarıda durur hissi) + name/status.
+// Idle'da minimal, speaking'de animasyonsuz opak kart.
 // ══════════════════════════════════════════════════════════════════════════
 interface RowVariantProps {
   p: OverlayParticipant;
@@ -399,7 +397,7 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
   const padR = Math.max(8, Math.round(cfg.name * 0.85));
   const cardRadius = Math.round(cfg.avatar * 0.42);
   // Status sadece speaking DIŞI ve metin varsa göster (Dinliyor / Duymuyor).
-  // Konuşurken status text gizli — waveform yeterli vurgu (kullanıcı kuralı).
+  // Konuşurken status text gizli — opak kart yeterli vurgu verir.
   const showStatus = !speaking && !!statusText;
   return (
     <div
@@ -408,18 +406,18 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
         background: cardBg,
         borderRadius: cardRadius,
         padding: `${padV}px ${padR}px ${padV}px ${padV}px`,
+        maxWidth: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
         opacity: rowOpacity,
-        transform: speaking ? 'scale(1.04)' : 'scale(1)',
-        transformOrigin: 'left center',
         // Spesifik transition'lar max 120ms — Apple-grade snappy his. "background" animasyonu
         // yok (cardBg'deki alpha değişimi anlık uygulansın, paint spam önlenir).
-        transition: 'opacity 100ms ease-out, transform 120ms ease-out',
+        transition: 'opacity 100ms ease-out',
         // macOS Control Center glass — layered depth shadow + inner highlight.
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
         border: hasCard ? GLASS_BORDER : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
-        willChange: 'transform, opacity',
       } as React.CSSProperties}
     >
       <Avatar p={p} size={cfg.avatar} />
@@ -433,6 +431,7 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
             letterSpacing: '-0.01em',
           fontFeatureSettings: '"kern" 1, "liga" 1',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            minWidth: 0,
             maxWidth: 'clamp(140px, 22vw, 220px)',
           }}
         >
@@ -461,7 +460,7 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
 
 // ══════════════════════════════════════════════════════════════════════════
 // Variant 2 — COMPACT CARD
-// Dikey kompakt kart: üst satır avatar + name, alt satır mic icon + waveform.
+// Dikey kompakt kart: üst satır avatar + name, alt satır mic icon + durum metni.
 // Daha bilgi yoğun; hafif drop shadow ile depth.
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -480,21 +479,20 @@ const CardRow: React.FC<RowVariantProps> = ({
         background: cardBg,
         borderRadius: cardRadius,
         padding: `${padY}px ${padX}px`,
+        boxSizing: 'border-box',
         opacity: rowOpacity,
-        transform: speaking ? 'scale(1.03)' : 'scale(1)',
-        transformOrigin: 'left center',
-        transition: 'opacity 100ms ease-out, transform 120ms ease-out',
+        transition: 'opacity 100ms ease-out',
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
         border: hasCard ? GLASS_BORDER : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
-        maxWidth: 'clamp(170px, 24vw, 250px)',
+        maxWidth: 'min(250px, 100%)',
+        minWidth: 0,
         alignItems: 'center', // İçerik (avatar+name ve alt mic-row) yatay ortalı.
-        willChange: 'transform, opacity',
       }}
     >
       {/* Üst satır: avatar + name — ortalı blok */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap, minWidth: 0, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap, minWidth: 0, maxWidth: '100%', justifyContent: 'center' }}>
         <Avatar p={p} size={cfg.avatar} />
         <span
           style={{
@@ -504,6 +502,7 @@ const CardRow: React.FC<RowVariantProps> = ({
             letterSpacing: '-0.01em',
           fontFeatureSettings: '"kern" 1, "liga" 1',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            minWidth: 0,
             textShadow: hasCard ? 'none' : '0 1px 2px rgba(0,0,0,0.85)',
           }}
         >
@@ -511,16 +510,16 @@ const CardRow: React.FC<RowVariantProps> = ({
         </span>
       </div>
 
-      {/* Alt satır: durum ikonu + status text + waveform — yatay ortalı.
+      {/* Alt satır: durum ikonu + status text — yatay ortalı.
           Deafened → kulaklık-off ikonu (kırmızı), muted → mic-off (turuncu),
           speaking → mic (yeşil), idle → mic (gri). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap - 2, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap - 2, justifyContent: 'center', minWidth: 0, maxWidth: '100%' }}>
         {deafened ? (
           <HeadphonesOffIcon size={cfg.name + 1} color="#ef4444" />
         ) : (
           <MicIcon
             size={cfg.name + 1}
-            color={muted ? '#fb923c' : speaking ? '#7bd389' : 'rgba(220,228,240,0.60)'}
+            color={muted ? '#fb923c' : 'rgba(220,228,240,0.60)'}
             off={muted}
           />
         )}
@@ -532,6 +531,7 @@ const CardRow: React.FC<RowVariantProps> = ({
             whiteSpace: 'nowrap',
             textOverflow: 'ellipsis',
             overflow: 'hidden',
+            minWidth: 0,
             letterSpacing: '0.01em',
           }}
         >
@@ -545,8 +545,8 @@ const CardRow: React.FC<RowVariantProps> = ({
 
 // ══════════════════════════════════════════════════════════════════════════
 // Variant 3 — FLOATING BADGE
-// Idle: sadece küçük avatar (isim gizli). Speaking: isim ve waveform açılır.
-// En az dikkat dağıtıcı stil — smooth genişleme animasyonu.
+// Idle: sadece küçük avatar (isim gizli). Speaking: isim açılır.
+// En az dikkat dağıtıcı stil — animasyonsuz durum değişimi.
 // ══════════════════════════════════════════════════════════════════════════
 
 const BadgeRow: React.FC<RowVariantProps> = ({
@@ -567,31 +567,30 @@ const BadgeRow: React.FC<RowVariantProps> = ({
         background: cardBg,
         borderRadius: cardRadius,
         padding: `${padV}px ${padR}px ${padV}px ${padV}px`,
+        boxSizing: 'border-box',
         opacity: expanded ? rowOpacity : Math.max(0.35, rowOpacity * 0.7),
-        transform: speaking ? 'scale(1.04)' : 'scale(1)',
-        transformOrigin: 'left center',
         // "all" yerine spesifik — layout-shift'e sebep olan max-width için ayrı süre.
-        // Max-width 120ms (Apple-ish snappy), opacity/transform 100ms.
-        transition: 'max-width 120ms ease-out, opacity 100ms ease-out, transform 100ms ease-out, padding 120ms ease-out, gap 120ms ease-out',
+        // Max-width/padding/gap sadece state değişiminde kısa geçiş yapar; sürekli animasyon yok.
+        transition: 'max-width 120ms ease-out, opacity 100ms ease-out, padding 120ms ease-out, gap 120ms ease-out',
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
         border: hasCard ? GLASS_BORDER : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
-        maxWidth: expanded ? 'clamp(160px, 26vw, 240px)' : avSize + padV * 2,
+        maxWidth: expanded ? 'min(240px, 100%)' : avSize + padV * 2,
         overflow: 'hidden',
-        willChange: 'transform, max-width, opacity',
       }}
     >
       <Avatar p={p} size={avSize} />
 
-      {/* İsim + waveform — sadece expanded iken görünür (animate width/opacity) */}
+      {/* İsim — sadece expanded iken görünür */}
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: cfg.gap - 2,
           width: expanded ? 'auto' : 0,
           opacity: expanded ? 1 : 0,
-          transition: 'opacity 220ms ease-out 40ms',
+          transition: 'opacity 160ms ease-out 30ms',
           whiteSpace: 'nowrap',
+          minWidth: 0,
         }}
       >
         <span
@@ -602,6 +601,7 @@ const BadgeRow: React.FC<RowVariantProps> = ({
             letterSpacing: '-0.01em',
           fontFeatureSettings: '"kern" 1, "liga" 1',
             maxWidth: 'clamp(110px, 18vw, 180px)',
+            minWidth: 0,
             overflow: 'hidden', textOverflow: 'ellipsis',
             textShadow: hasCard ? 'none' : '0 1px 2px rgba(0,0,0,0.85)',
           }}

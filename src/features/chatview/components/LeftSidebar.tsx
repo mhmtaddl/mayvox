@@ -12,6 +12,7 @@ import {
   Power,
 } from 'lucide-react';
 import { formatFullName } from '../../../lib/formatName';
+import { logMemberIdentityDebug, resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import AvatarContent from '../../../components/AvatarContent';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
@@ -390,7 +391,10 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 return (
                 <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
                   {sorted.map((memberId, idx) => {
-                    const user = allUsers.find(u => u.id === memberId);
+                    const user = resolveUserByMemberKey(memberId, allUsers);
+                    if (!user) {
+                      logMemberIdentityDebug('left_sidebar_unresolved_member', { memberId }, `left_sidebar:${memberId}`);
+                    }
                     const isSp = isBc && user ? isSpeakerFn(user.id) : false;
 
                     let groupLabel: string | null = null;
@@ -420,7 +424,9 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                         {/* Placeholder layer */}
                         <div className={`absolute inset-0 flex items-center gap-2 py-1 px-1.5 transition-opacity duration-150 ${user ? 'opacity-0' : 'opacity-40'}`}>
                           <div className="h-5 w-5 rounded-[6px] bg-[rgba(var(--glass-tint),0.08)] shrink-0" />
-                          <div className="h-2.5 w-16 rounded bg-[rgba(var(--glass-tint),0.06)]" />
+                          <div className="text-[10px] font-medium text-[var(--theme-secondary-text)] truncate">
+                            Bilinmeyen kullanıcı
+                          </div>
                         </div>
                         {/* Real user layer */}
                         <div

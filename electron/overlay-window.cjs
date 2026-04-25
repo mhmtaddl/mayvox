@@ -18,9 +18,9 @@ const path = require('path');
 // Pencere boyutları — speaking scale/glow için +iç padding content tarafında
 // absorbe edilir. Yükseklik satır başına yaklaşık avatar + gap + guard ile hesap.
 const SIZE_PRESETS = {
-  small:  { width: 200, height: 240 },
-  medium: { width: 240, height: 300 },
-  large:  { width: 280, height: 360 },
+  small:  { width: 200, height: 276 },
+  medium: { width: 260, height: 340 },
+  large:  { width: 320, height: 410 },
 };
 // Ekran kenarından boşluk — overlay "HUD öğesi" gibi dursun, çerçeveye yapışmasın
 const EDGE_MARGIN = 24;
@@ -42,19 +42,24 @@ const ANCHOR_FRAC = {
 };
 
 function computeBounds(position, size) {
-  const { width, height } = SIZE_PRESETS[size] || SIZE_PRESETS.medium;
+  const preset = SIZE_PRESETS[size] || SIZE_PRESETS.medium;
   let display;
   try {
     display = screen.getPrimaryDisplay();
   } catch {
-    return { width, height, x: EDGE_MARGIN, y: EDGE_MARGIN };
+    return { ...preset, x: EDGE_MARGIN, y: EDGE_MARGIN };
   }
   const wa = display.workArea;
+  const margin = Math.min(EDGE_MARGIN, Math.floor(Math.min(wa.width, wa.height) / 8));
+  const maxWidth = Math.max(1, wa.width - margin * 2);
+  const maxHeight = Math.max(1, wa.height - margin * 2);
+  const width = Math.min(preset.width, maxWidth);
+  const height = Math.min(preset.height, maxHeight);
   const frac = ANCHOR_FRAC[position] || ANCHOR_FRAC['left-top-mid'];
-  const usableW = Math.max(0, wa.width  - width  - EDGE_MARGIN * 2);
-  const usableH = Math.max(0, wa.height - height - EDGE_MARGIN * 2);
-  const x = Math.round(wa.x + EDGE_MARGIN + frac.fx * usableW);
-  const y = Math.round(wa.y + EDGE_MARGIN + frac.fy * usableH);
+  const usableW = Math.max(0, wa.width  - width  - margin * 2);
+  const usableH = Math.max(0, wa.height - height - margin * 2);
+  const x = Math.round(wa.x + margin + frac.fx * usableW);
+  const y = Math.round(wa.y + margin + frac.fy * usableH);
   return { width, height, x, y };
 }
 
@@ -162,6 +167,8 @@ class OverlayWindowManager {
 
     // Toggle kapalıysa pencere yaratmaya gerek yok — varsa gizle.
     if (!this.currentSettings.enabled) {
+      this.lastSnapshot = null;
+      this._flushInactiveSnapshot();
       if (this.win && !this.win.isDestroyed()) this.win.hide();
       return;
     }
@@ -196,6 +203,23 @@ class OverlayWindowManager {
     try {
       if (this.win.webContents && !this.win.webContents.isDestroyed()) {
         this.win.webContents.send('overlay:data', this.lastSnapshot);
+      }
+    } catch {}
+  }
+
+  _flushInactiveSnapshot() {
+    if (!this.ready) return;
+    if (!this.win || this.win.isDestroyed()) return;
+    try {
+      if (this.win.webContents && !this.win.webContents.isDestroyed()) {
+        this.win.webContents.send('overlay:data', {
+          roomId: null,
+          roomName: null,
+          participants: [],
+          size: this.currentSettings.size,
+          cardOpacity: this.currentSettings.cardOpacity ?? 50,
+          variant: this.currentSettings.variant || 'capsule',
+        });
       }
     } catch {}
   }

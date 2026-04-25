@@ -64,6 +64,7 @@ let pttKeycode = null;       // uiohook keycode (klavye)
 let pttMouseButton = null;   // uiohook button (fare)
 let isListeningForPtt = false;
 let pttWindow = null;
+let pttDownActive = false;   // OS key-repeat aynı basışta ptt:down spam'lemesin
 
 // Tray & quit state
 let tray = null;
@@ -85,6 +86,7 @@ if (!gotTheLock) {
 
 function parseSavedPttKey(keyStr) {
   if (!keyStr) return;
+  pttDownActive = false;
   const upper = keyStr.trim().toUpperCase();
   if (upper.startsWith("MOUSE ")) {
     const browserBtn = parseInt(upper.replace("MOUSE ", ""));
@@ -111,12 +113,16 @@ function setupGlobalPtt(win) {
       return;
     }
     if (pttKeycode !== null && e.keycode === pttKeycode) {
+      if (pttDownActive) return;
+      pttDownActive = true;
       win.webContents.send("ptt:down");
     }
   });
 
   uIOhook.on("keyup", (e) => {
     if (pttKeycode !== null && e.keycode === pttKeycode) {
+      if (!pttDownActive) return;
+      pttDownActive = false;
       win.webContents.send("ptt:up");
     }
   });
@@ -131,12 +137,16 @@ function setupGlobalPtt(win) {
       return;
     }
     if (pttMouseButton !== null && e.button === pttMouseButton) {
+      if (pttDownActive) return;
+      pttDownActive = true;
       win.webContents.send("ptt:down");
     }
   });
 
   uIOhook.on("mouseup", (e) => {
     if (pttMouseButton !== null && e.button === pttMouseButton) {
+      if (!pttDownActive) return;
+      pttDownActive = false;
       win.webContents.send("ptt:up");
     }
   });
@@ -155,6 +165,7 @@ ipcMain.on("ptt:init", (_event, keyStr) => {
 // Raw keycode tabanlı init — isim çakışmalarını (sol/sağ CTRL gibi) önler
 ipcMain.on("ptt:initRaw", (_event, rawCode) => {
   if (!rawCode) return;
+  pttDownActive = false;
   if (rawCode.startsWith("k")) {
     pttKeycode = parseInt(rawCode.slice(1));
     pttMouseButton = null;

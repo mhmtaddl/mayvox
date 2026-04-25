@@ -13,6 +13,7 @@ import {
 } from 'livekit-client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
+import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { buildAudioCaptureOptions } from '../lib/audioConstraints';
 import { AUDIO_FLAGS } from '../lib/audioFlags';
 import { RNNoiseTrackProcessor } from '../lib/audio/rnnoiseProcessor';
@@ -233,10 +234,21 @@ export function useLiveKitConnection({
       const updateMembers = () => {
         const localIdentity =
           room.localParticipant.identity || currentUserRef.current.id;
-        const participants = [
+        const identities = [
           localIdentity,
           ...Array.from(room.remoteParticipants.values()).map(p => p.identity),
-        ].filter(Boolean);
+        ].filter((identity): identity is string => Boolean(identity));
+        const participants: string[] = [];
+        identities.forEach(identity => {
+          const resolved = identity === currentUserRef.current.name || identity === currentUserRef.current.id
+            ? currentUserRef.current
+            : resolveUserByMemberKey(identity, allUsersRef.current);
+          const memberId = resolved?.id ?? identity;
+          if (!resolved) {
+            logMemberIdentityDebug('unresolved_livekit_identity', { channelId, identity }, `lk_identity:${channelId}:${identity}`);
+          }
+          if (!participants.includes(memberId)) participants.push(memberId);
+        });
         setChannels(prev =>
           prev.map(c =>
             c.id === channelId
@@ -254,6 +266,7 @@ export function useLiveKitConnection({
         remoteIdentities.forEach(identity => {
           setAllUsers(prev => {
             if (prev.find(u => u.id === identity)) return prev;
+            logMemberIdentityDebug('synthetic_user_created', { identity }, `synthetic_user:${identity}`);
             const newUser: User = {
               id: identity,
               name: identity,
@@ -369,10 +382,17 @@ export function useLiveKitConnection({
         if (!participant?.isLocal) playSound('leave');
       });
 
-      // ─── Throttled speaker levels (~30fps) ───────────────────
+      // ─── Throttled speaker levels (~8fps UI update) ───────────────────
       let pendingLevels: Record<string, number> = {};
       let speakingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
-      const SPEAKING_THROTTLE_MS = 33;
+      let lastSpeakingLevels: Record<string, number> = {};
+      const SPEAKING_THROTTLE_MS = 120;
+      const levelsChanged = (a: Record<string, number>, b: Record<string, number>) => {
+        const ak = Object.keys(a);
+        const bk = Object.keys(b);
+        if (ak.length !== bk.length) return true;
+        return ak.some(k => Math.abs((a[k] ?? 0) - (b[k] ?? 0)) > 0.01);
+      };
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const levels: Record<string, number> = {};
@@ -385,7 +405,10 @@ export function useLiveKitConnection({
         pendingLevels = levels;
         if (!speakingThrottleTimer) {
           speakingThrottleTimer = setTimeout(() => {
-            setSpeakingLevels(pendingLevels);
+            if (levelsChanged(pendingLevels, lastSpeakingLevels)) {
+              lastSpeakingLevels = pendingLevels;
+              setSpeakingLevels(pendingLevels);
+            }
             speakingThrottleTimer = null;
           }, SPEAKING_THROTTLE_MS);
         }

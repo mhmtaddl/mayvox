@@ -89,6 +89,7 @@ import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr, formatFullName } from './lib/formatName';
+import { logMemberIdentityDebug, resolveUserByMemberKey } from './lib/memberIdentity';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
 import { ConfirmProvider } from './contexts/ConfirmContext';
@@ -203,6 +204,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       avatarBorderColor: (profile as { avatar_border_color?: string }).avatar_border_color ?? '',
     };
   }
+  logMemberIdentityDebug('missing_profile_fallback', { userId: id, email }, `missing_profile:${id}`);
   return {
     id,
     name: email,
@@ -354,7 +356,18 @@ export default function App() {
     [channels, activeChannel]
   );
   const channelMembers = useMemo(
-    () => allUsers.filter(u => currentChannel?.members?.includes(u.id)),
+    () => {
+      const members = currentChannel?.members ?? [];
+      const resolved: User[] = [];
+      members.forEach(memberKey => {
+        const user = resolveUserByMemberKey<User>(memberKey, allUsers);
+        if (user && !resolved.some(u => u.id === user.id)) resolved.push(user);
+        if (!user) {
+          logMemberIdentityDebug('app_channel_members_unresolved', { memberKey }, `app_channel_members:${memberKey}`);
+        }
+      });
+      return resolved;
+    },
     [allUsers, currentChannel]
   );
 
@@ -682,6 +695,7 @@ export default function App() {
     isLowDataMode,
     pttReleaseDelay,
     voiceMode: effectiveVoiceMode,
+    visualMeterEnabled: settings.overlayEnabled,
     onMicError: (msg) => {
       setToastMsg(msg);
       // auto-dismiss dock useEffect'te yönetiliyor
@@ -741,6 +755,7 @@ export default function App() {
     activeServerIdRef,
     channelOrderTokenRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
+    allUsersRef,
     setAllUsers,
     setCurrentUser,
     setChannels,
@@ -2246,7 +2261,7 @@ export default function App() {
     inviteStatuses,
   };
 
-  const audioValue: AudioContextType = {
+  const audioValue: AudioContextType = useMemo(() => ({
     volumeLevel,
     setVolumeLevel: () => {},
     isPttPressed,
@@ -2268,7 +2283,25 @@ export default function App() {
     speakingLevels,
     mobileVoiceModeOverride,
     setMobileVoiceModeOverride,
-  };
+  }), [
+    volumeLevel,
+    isPttPressed,
+    connectionLevel,
+    selectedInput,
+    selectedOutput,
+    inputDevices,
+    outputDevices,
+    showInputSettings,
+    showOutputSettings,
+    speakingLevels,
+    mobileVoiceModeOverride,
+    setPttPressed,
+    setSelectedInput,
+    setSelectedOutput,
+    setShowInputSettings,
+    setShowOutputSettings,
+    setMobileVoiceModeOverride,
+  ]);
 
   return (
     <AppErrorBoundary>
