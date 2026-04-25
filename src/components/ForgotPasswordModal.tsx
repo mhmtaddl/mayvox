@@ -74,27 +74,32 @@ export default function ForgotPasswordModal({ onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/30 flex items-center justify-center z-[200] p-4"
+      className="fixed inset-0 z-[500] flex items-center justify-center bg-black/65 p-3 sm:p-4 backdrop-blur-sm"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-sm bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-[400px] max-h-[calc(100vh-32px)] overflow-hidden rounded-2xl border border-[rgba(var(--glass-tint),0.06)] bg-[linear-gradient(180deg,rgb(var(--theme-sidebar-rgb))_0%,rgb(var(--theme-bg-rgb))_100%)] shadow-[0_24px_70px_rgba(0,0,0,0.62),0_1px_0_rgba(var(--glass-tint),0.04)_inset]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--theme-border)]">
-          <div className="flex items-center gap-2">
-            <KeyRound size={16} className="text-[var(--theme-accent)]" />
-            <span className="text-sm font-bold text-[var(--theme-text)]">Şifremi Unuttum</span>
+        <div className="flex items-center justify-between border-b border-[rgba(var(--glass-tint),0.06)] px-5 py-3.5 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[rgba(var(--theme-accent-rgb),0.10)] text-[var(--theme-accent)]">
+              <KeyRound size={15} />
+            </div>
+            <div>
+              <span className="block text-[14px] font-semibold text-[var(--theme-text)]">Şifremi Unuttum</span>
+              <span className="block text-[11px] text-[var(--theme-secondary-text)]">Parola sıfırlama</span>
+            </div>
           </div>
-          <button onClick={onClose} className="text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors">
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-secondary-text)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text)]">
             <X size={16} />
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="max-h-[calc(100vh-104px)] overflow-y-auto p-5 sm:p-6">
           <AnimatePresence mode="wait">
             {submitted ? (
               <motion.div
@@ -104,20 +109,20 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 className="flex flex-col items-center gap-3 py-4 text-center"
               >
                 <CheckCircle2 size={40} className="text-emerald-500" />
-                <p className="text-sm font-bold text-[var(--theme-text)]">E-posta Gönderildi!</p>
-                <p className="text-xs text-[var(--theme-secondary-text)]">
+                <p className="text-[15px] font-bold text-[var(--theme-text)]">E-posta Gönderildi!</p>
+                <p className="max-w-[320px] text-[12px] leading-relaxed text-[var(--theme-secondary-text)]">
                   E-posta adresinize yeni parola gönderildi. Spam klasörünü de kontrol etmeyi unutmayınız.
                 </p>
                 <button
                   onClick={onClose}
-                  className="mt-2 px-6 py-2 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl text-sm font-bold hover:opacity-90 transition-all"
+                  className="mt-2 h-10 px-6 rounded-xl bg-[var(--theme-accent)] text-sm font-bold text-[var(--theme-btn-primary-text)] transition-all hover:opacity-90"
                 >
                   Kapat
                 </button>
               </motion.div>
             ) : (
               <motion.div key="form" className="space-y-4">
-                <p className="text-xs text-[var(--theme-secondary-text)]">
+                <p className="max-w-[330px] text-[12px] font-medium leading-relaxed text-[var(--theme-text)]/82">
                   Kayıtlı kullanıcı adınızı veya e-posta adresinizi girin. Geçici parolanız hemen e-posta ile gönderilecektir.
                 </p>
 
@@ -133,7 +138,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                       onChange={e => setIdentifier(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && triggerSubmit()}
                       placeholder="kullaniciadi veya mail@ornek.com"
-                      className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl py-3 pl-9 pr-4 text-sm text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                      className="h-11 w-full rounded-xl border border-[rgba(var(--glass-tint),0.08)] bg-[rgb(var(--theme-bg-rgb))] py-3 pl-9 pr-4 text-sm text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/55 focus:border-[rgba(var(--theme-accent-rgb),0.52)] focus:ring-2 focus:ring-[rgba(var(--theme-accent-rgb),0.16)]"
                     />
                   </div>
 
@@ -162,7 +167,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <button
                   onClick={handleSubmit}
                   disabled={!foundUser}
-                  className={`w-full py-3 bg-[var(--theme-accent)] text-[var(--theme-btn-primary-text)] rounded-xl font-bold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-90'}`}
+                  className={`h-11 w-full rounded-xl bg-[var(--theme-accent)] px-5 text-sm font-semibold text-[var(--theme-btn-primary-text)] shadow-[0_10px_24px_rgba(var(--theme-accent-rgb),0.18)] transition-all disabled:cursor-not-allowed disabled:bg-[rgba(var(--theme-accent-rgb),0.28)] disabled:text-[var(--theme-btn-primary-text)]/55 disabled:shadow-none active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-95'}`}
                 >
                   Şifremi Sıfırla
                 </button>

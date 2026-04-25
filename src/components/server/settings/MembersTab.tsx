@@ -46,13 +46,13 @@ const ROLE_FILTERS: readonly { value: string; label: string }[] = [
 ];
 
 const ROLE_CHIP: Record<ServerRole, { icon: React.ReactNode; bg: string; color: string; border: string }> = {
-  owner:        { icon: <Crown size={11} strokeWidth={1.9} />,       bg: 'rgba(245,158,11,0.09)',  color: '#fbbf24', border: 'rgba(245,158,11,0.22)' },
-  super_admin:  { icon: <ShieldPlus size={11} strokeWidth={1.9} />,  bg: 'rgba(99,179,252,0.10)',  color: '#93c5fd', border: 'rgba(99,179,252,0.22)' },
-  admin:        { icon: <Shield size={11} strokeWidth={1.9} />,      bg: 'rgba(59,130,246,0.09)',  color: '#60a5fa', border: 'rgba(59,130,246,0.22)' },
-  super_mod:    { icon: <ShieldAlert size={11} strokeWidth={1.9} />, bg: 'rgba(139,92,246,0.10)',  color: '#c4b5fd', border: 'rgba(139,92,246,0.22)' },
-  mod:          { icon: <ShieldCheck size={11} strokeWidth={1.9} />, bg: 'rgba(167,139,250,0.09)', color: '#a78bfa', border: 'rgba(167,139,250,0.22)' },
-  super_member: { icon: <UserCheck size={11} strokeWidth={1.9} />,   bg: 'rgba(148,180,220,0.08)', color: '#cbd5e1', border: 'rgba(148,180,220,0.18)' },
-  member:       { icon: <UserIcon size={11} strokeWidth={1.9} />,    bg: 'rgba(255,255,255,0.035)', color: 'rgba(232,236,244,0.65)', border: 'rgba(255,255,255,0.06)' },
+  owner:        { icon: <Crown size={11} strokeWidth={1.9} />,       bg: 'rgba(245,158,11,0.10)',  color: '#a16207', border: 'rgba(245,158,11,0.24)' },
+  super_admin:  { icon: <ShieldPlus size={11} strokeWidth={1.9} />,  bg: 'rgba(99,179,252,0.10)',  color: '#1d4ed8', border: 'rgba(99,179,252,0.24)' },
+  admin:        { icon: <Shield size={11} strokeWidth={1.9} />,      bg: 'rgba(59,130,246,0.10)',  color: '#2563eb', border: 'rgba(59,130,246,0.24)' },
+  super_mod:    { icon: <ShieldAlert size={11} strokeWidth={1.9} />, bg: 'rgba(139,92,246,0.10)',  color: '#6d28d9', border: 'rgba(139,92,246,0.24)' },
+  mod:          { icon: <ShieldCheck size={11} strokeWidth={1.9} />, bg: 'rgba(167,139,250,0.10)', color: '#7c3aed', border: 'rgba(167,139,250,0.24)' },
+  super_member: { icon: <UserCheck size={11} strokeWidth={1.9} />,   bg: 'rgba(148,180,220,0.10)', color: '#475569', border: 'rgba(148,180,220,0.22)' },
+  member:       { icon: <UserIcon size={11} strokeWidth={1.9} />,    bg: 'rgba(var(--glass-tint),0.035)', color: 'var(--theme-secondary-text)', border: 'rgba(var(--glass-tint),0.08)' },
 };
 
 type PopoverState =
@@ -353,21 +353,21 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         <div
           className="flex-1 min-w-[220px] flex items-center gap-2.5 h-11 rounded-full px-4 searchInput"
           style={{
-            background: 'rgba(255,255,255,0.028)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.045)',
+            background: 'rgba(var(--glass-tint),0.028)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
           }}
         >
-          <Search size={14} className="text-[#e8ecf4]/40 shrink-0" strokeWidth={2} />
+          <Search size={14} className="text-[var(--theme-secondary-text)] shrink-0" strokeWidth={2} />
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Üye ara..."
-            className="flex-1 bg-transparent text-[12.5px] text-[#e8ecf4]/90 placeholder:text-[#e8ecf4]/35 outline-none"
+            className="flex-1 bg-transparent text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="text-[#e8ecf4]/40 hover:text-[#e8ecf4]/85 transition-colors"
+              className="text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors"
               aria-label="Aramayı temizle"
             >
               <X size={13} />
@@ -385,11 +385,11 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
                 onClick={() => setRoleFilter(rf.value)}
                 className="filterPill h-9 px-3.5 rounded-full text-[11px] font-medium shrink-0 whitespace-nowrap"
                 style={active ? {
-                  background: 'rgba(96,165,250,0.10)',
-                  color: '#93c5fd',
-                  boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.22), 0 0 16px rgba(96,165,250,0.10)',
+                  background: 'rgba(var(--theme-accent-rgb),0.10)',
+                  color: 'var(--theme-accent)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.22), 0 0 16px rgba(var(--theme-accent-rgb),0.10)',
                 } : {
-                  color: 'rgba(232,236,244,0.55)',
+                  color: 'var(--theme-secondary-text)',
                   background: 'transparent',
                 }}
               >
@@ -400,7 +400,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         </div>
 
         {/* Count — subtle */}
-        <div className="text-[10.5px] font-medium text-[#e8ecf4]/40 tabular-nums shrink-0 px-1">
+        <div className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/75 tabular-nums shrink-0 px-1">
           {sorted.length === members.length
             ? `${members.length} üye`
             : `${sorted.length} / ${members.length}`}
@@ -429,11 +429,11 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
         <div
           className="rounded-2xl overflow-hidden"
           style={{
-            background: 'rgba(255,255,255,0.018)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+            background: 'rgba(var(--glass-tint),0.018)',
+            boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.06)',
           }}
         >
-          <div className="divide-y divide-[rgba(255,255,255,0.035)]">
+          <div className="divide-y divide-[rgba(var(--glass-tint),0.06)]">
             {sorted.map(m => {
               const targetRole = m.role as ServerRole;
               const isSelf = currentUser?.id === m.userId;
@@ -516,10 +516,10 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
         /* Search — focus ring */
         .searchInput:focus-within {
-          background: rgba(255,255,255,0.045) !important;
+          background: rgba(var(--glass-tint),0.045) !important;
           box-shadow:
-            inset 0 0 0 1px rgba(96,165,250,0.30),
-            0 0 0 4px rgba(96,165,250,0.08) !important;
+            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.30),
+            0 0 0 4px rgba(var(--theme-accent-rgb),0.08) !important;
           transition: background 180ms var(--ease), box-shadow 220ms var(--ease);
         }
         .searchInput {
@@ -534,15 +534,15 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
             box-shadow 220ms var(--ease);
         }
         .filterPill:hover {
-          color: #e8ecf4 !important;
-          background: rgba(255,255,255,0.035) !important;
+          color: var(--theme-text) !important;
+          background: rgba(var(--glass-tint),0.035) !important;
         }
         .filterPill:active { transform: scale(0.97); }
         .filterPill:focus-visible {
           outline: none;
           box-shadow:
-            inset 0 0 0 1px rgba(96,165,250,0.35),
-            0 0 0 4px rgba(96,165,250,0.10);
+            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.35),
+            0 0 0 4px rgba(var(--theme-accent-rgb),0.10);
         }
 
         /* Member row — hover glow + actions fade in */
@@ -550,7 +550,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           transition: background 220ms var(--ease) 50ms;
         }
         .memberRow.is-busy {
-          background: rgba(96,165,250,0.04);
+          background: rgba(var(--theme-accent-rgb),0.04);
         }
         .rowActions {
           opacity: 0.35;
@@ -575,7 +575,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           outline: none;
           box-shadow:
             inset 0 0 0 1px currentColor,
-            0 0 0 4px rgba(255,255,255,0.06);
+            0 0 0 4px rgba(var(--glass-tint),0.06);
         }
       `}</style>
     </div>
@@ -619,7 +619,7 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
 
   const rowCls = busy
     ? 'is-busy'
-    : 'hover:bg-[rgba(255,255,255,0.032)]';
+    : 'hover:bg-[rgba(var(--glass-tint),0.032)]';
 
   return (
     <div className={`memberRow flex items-center gap-3.5 px-5 py-3.5 group ${rowCls}`}>
@@ -627,9 +627,9 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
       <div
         className="w-11 h-11 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
         style={{
-          background: 'linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+          background: 'linear-gradient(160deg, rgba(var(--glass-tint),0.06), rgba(var(--glass-tint),0.02))',
           boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.05), ' +
+            'inset 0 1px 0 rgba(var(--glass-tint),0.08), ' +
             '0 2px 8px rgba(0,0,0,0.18)',
         }}
       >
@@ -638,14 +638,14 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
           statusText={statusText}
           firstName={member.firstName}
           name={dn}
-          letterClassName="text-[12px] font-semibold text-[#e8ecf4]/75"
+          letterClassName="text-[12px] font-semibold text-[var(--theme-text)]"
         />
       </div>
 
       {/* Name + meta */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[13px] font-medium text-[#e8ecf4]/92 truncate" style={{ letterSpacing: '-0.005em' }}>{dn}</span>
+          <span className="text-[13px] font-medium text-[var(--theme-text)] truncate" style={{ letterSpacing: '-0.005em' }}>{dn}</span>
           {/* Moderasyon ikonları — sade ikon badge. Renkler:
               sistem mute = turuncu, sunucu mute = turuncu, timeout = mor + canlı countdown. */}
           {member.isMuted && (
@@ -716,12 +716,12 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
         </div>
         <div className="flex items-center gap-2 mt-1 leading-relaxed">
           {member.username && member.username !== dn && (
-            <span className="text-[10.5px] text-[#e8ecf4]/45 truncate">@{member.username}</span>
+            <span className="text-[10.5px] text-[var(--theme-secondary-text)] truncate">@{member.username}</span>
           )}
           {member.username && member.username !== dn && (
-            <span className="text-[#e8ecf4]/20 shrink-0">·</span>
+            <span className="text-[var(--theme-secondary-text)]/40 shrink-0">·</span>
           )}
-          <span className="text-[10.5px] text-[#e8ecf4]/35 shrink-0">
+          <span className="text-[10.5px] text-[var(--theme-secondary-text)]/75 shrink-0">
             {fmtDate(member.joinedAt)}
           </span>
         </div>
@@ -771,7 +771,7 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
               e.stopPropagation();
               if (historyRef.current) onOpenHistory(historyRef.current.getBoundingClientRect());
             }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#e8ecf4]/45 hover:text-[#a78bfa] hover:bg-[rgba(167,139,250,0.08)] transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-colors"
             title="Ceza geçmişi"
             aria-label="Ceza geçmişi"
           >
@@ -789,13 +789,13 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
           }}
           className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
             canAnyAction && !busy
-              ? 'text-[#e8ecf4]/45 hover:text-[#e8ecf4] hover:bg-[rgba(255,255,255,0.06)]'
-              : 'text-[#e8ecf4]/15 cursor-default'
+              ? 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
+              : 'text-[var(--theme-secondary-text)]/35 cursor-default'
           }`}
           aria-label="Daha fazla aksiyon"
         >
           {busy
-            ? <div className="w-3.5 h-3.5 border-2 border-[#60a5fa]/25 border-t-[#60a5fa] rounded-full animate-spin" />
+            ? <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/25 border-t-[var(--theme-accent)] rounded-full animate-spin" />
             : <MoreHorizontal size={15} strokeWidth={1.9} />}
         </button>
       </div>

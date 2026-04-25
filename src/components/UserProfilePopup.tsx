@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall } from 'lucide-react';
+import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2 } from 'lucide-react';
 import type { User } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { formatFullName } from '../lib/formatName';
@@ -25,10 +25,11 @@ interface Props {
   cooldownRemaining: number;
   isMe: boolean;
   currentAppVersion?: string;
+  serverName?: string | null;
 }
 
 const POPUP_W = 240;
-const POPUP_H = 300;
+const POPUP_H = 340;
 
 const formatOnlineDuration = (onlineSince: number) => {
   const rawMins = Math.floor((Date.now() - onlineSince) / 60000);
@@ -60,7 +61,7 @@ const formatTotalUsage = (minutes: number) => {
 
 export default function UserProfilePopup({
   user, position, onClose, onInvite, onDM, canInvite, inviteStatus,
-  onCooldown, cooldownRemaining, isMe, currentAppVersion,
+  onCooldown, cooldownRemaining, isMe, currentAppVersion, serverName,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
@@ -256,6 +257,23 @@ export default function UserProfilePopup({
             <div className={`text-[11px] font-medium tracking-wide ${statusColor} mb-2.5`}>
               {statusText}
             </div>
+
+            {(serverName || user.gameActivity) && (
+              <div className="w-full mb-2.5 space-y-1.5">
+                {serverName && (
+                  <div className="flex items-center justify-center gap-1.5 min-w-0 text-[11px] font-semibold text-[var(--theme-text)]/85">
+                    <ServerIcon size={11} className="shrink-0 text-[var(--theme-accent)]/75" />
+                    <span className="truncate">{serverName}</span>
+                  </div>
+                )}
+                {user.gameActivity && (
+                  <div className="flex items-center justify-center gap-1.5 min-w-0 text-[10.5px] font-medium text-[var(--theme-secondary-text)]/80">
+                    <Gamepad2 size={11} className="shrink-0 text-[var(--theme-accent)]/65" />
+                    <span className="truncate">{user.gameActivity}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Meta chips — hairline, borderless */}
             <div className="flex flex-wrap items-center justify-center gap-1 mb-2.5">

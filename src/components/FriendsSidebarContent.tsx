@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
-  UserPlus, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2,
+  UserPlus, Star, MessageSquare, PhoneCall, Gamepad2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatFullName } from '../lib/formatName';
@@ -38,7 +38,7 @@ export default function FriendsSidebarContent({
   servers = [],
 }: Props) {
   const {
-    currentUser, allUsers, friendIds, friendsLoading, getStatusColor,
+    currentUser, allUsers, friendIds, friendsLoading,
   } = useUser();
   const { setToastMsg } = useUI();
   const { avatarBorderColor, showLastSeen } = useSettings();
@@ -104,11 +104,16 @@ export default function FriendsSidebarContent({
   const renderOnlineUser = (user: User) => {
     const isMe = user.id === currentUser.id;
     const userServerName = !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
+    const statusLabel = user.statusText && user.statusText !== 'Aktif' ? user.statusText : 'Online';
+    const statusDotColor =
+      statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor' ? '#ef4444'
+      : statusLabel === 'AFK' || statusLabel === 'Pasif' ? '#f59e0b'
+      : '#22c55e';
 
     return (
       <div
         key={user.id}
-        className={`flex items-center gap-3 ${isDesktop ? 'px-2.5 py-2 rounded-xl' : 'px-2 py-2 rounded-lg'} transition-all duration-200 group hover:bg-[rgba(var(--glass-tint),0.05)] cursor-pointer`}
+        className={`flex items-center gap-2.5 ${isDesktop ? 'px-3 py-2 rounded-lg border border-[rgba(var(--glass-tint),0.04)]' : 'px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
         onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
         onContextMenu={(e) => {
           if (isMe) return;
@@ -128,19 +133,19 @@ export default function FriendsSidebarContent({
           style={uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
         >
           <div
-            className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
+            className={`${isDesktop ? 'h-[34px] w-[34px]' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           >
             <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
-          <DeviceBadge platform={user.platform} size={isDesktop ? 12 : 13} className="absolute -bottom-0.5 -right-0.5" />
+          <DeviceBadge platform={user.platform} size={isDesktop ? 11 : 13} className="absolute -top-0.5 -right-0.5" />
         </div>
           ); })()}
         <div className="flex flex-col flex-1 min-w-0">
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="text-[13px] font-medium text-[var(--theme-text)] leading-[18px] truncate">
+          <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+            <span className="text-[13px] font-semibold text-[var(--theme-text)] leading-[18px] truncate min-w-0 shrink">
               {formatFullName(user.firstName, user.lastName)}
             </span>
-            <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)] shrink-0">{user.age}</span>
+            <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/70 shrink-0 tabular-nums">{user.age}</span>
             {user.isAdmin && (
               <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
                 <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
@@ -152,41 +157,28 @@ export default function FriendsSidebarContent({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 mt-[3px]">
+          <div className="flex items-center gap-1.5 mt-[2px] min-w-0 overflow-hidden whitespace-nowrap text-[11px] leading-[13px] font-medium text-[var(--theme-secondary-text)]/75">
+            <span className="inline-flex items-center shrink-0" title={statusLabel} aria-label={statusLabel}>
+              <span
+                className="h-1.5 w-1.5 rounded-full shrink-0"
+                style={{ background: statusDotColor }}
+              />
+            </span>
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-            {user.statusText && user.statusText !== 'Online' && user.statusText !== 'Aktif' && (
-              <span className={`text-[9px] font-bold uppercase tracking-tight ${getStatusColor(user.statusText)}`}>{user.statusText}</span>
+            {userServerName && (
+              <span className="truncate min-w-0 flex-1 text-[var(--theme-text)]/72">
+                {userServerName}
+              </span>
             )}
           </div>
-          {userServerName && (
-            <div className="flex items-center gap-1 mt-0.5 min-w-0">
-              <ServerIcon size={8} className="text-[var(--theme-accent)]/60 shrink-0" />
-              <span className="text-[9.5px] font-semibold truncate text-[var(--theme-text)]/85">
-                {(() => {
-                  const raw = userServerName;
-                  const spaceIdx = raw.indexOf(' ');
-                  if (spaceIdx > 0) {
-                    const first = raw.slice(0, spaceIdx);
-                    const rest = raw.slice(spaceIdx + 1);
-                    return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
-                  }
-                  if (raw.toUpperCase() === 'MAYVOX') {
-                    return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
-                  }
-                  return raw;
-                })()}
-              </span>
-            </div>
-          )}
           {user.gameActivity && (
-            <div className="flex items-center gap-1 mt-0.5 min-w-0">
-              <Gamepad2 size={9} className="text-[var(--theme-accent)]/70 shrink-0" strokeWidth={2.2} />
-              <span className="text-[9.5px] font-medium truncate text-[var(--theme-text)]/75">
-                {user.gameActivity} oynuyor
-              </span>
+            <div className="mt-[1px] min-w-0 overflow-hidden whitespace-nowrap text-[10.5px] leading-[13px] font-medium text-[var(--theme-text)]/62 flex items-center gap-1">
+              <Gamepad2 size={10} className="shrink-0 text-[var(--theme-accent)]/75" strokeWidth={2.2} />
+              <span className="block truncate min-w-0">{user.gameActivity}</span>
             </div>
           )}
+          {!user.gameActivity && <div className="h-[1px]" />}
         </div>
         {/* Desktop invite button */}
         {isDesktop && handleInviteUser && (() => {
@@ -239,7 +231,7 @@ export default function FriendsSidebarContent({
     return (
     <div
       key={user.id}
-      className={`flex items-center gap-3 ${isDesktop ? 'px-2 py-1.5 rounded-lg' : 'px-2 py-2 rounded-lg'} opacity-50 transition-all duration-200 group hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer`}
+      className={`flex items-center gap-3 ${isDesktop ? 'px-3 py-2 rounded-lg border border-transparent' : 'px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
       onContextMenu={(e) => {
         if (isMe) return;
@@ -268,11 +260,11 @@ export default function FriendsSidebarContent({
       </div>
         ); })()}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1 min-w-0">
-          <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate`}>
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+          <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate min-w-0 shrink`}>
             {formatFullName(user.firstName, user.lastName)}
           </span>
-          <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0`}>{user.age}</span>
+          <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0 tabular-nums`}>{user.age}</span>
           {user.isAdmin && (
             <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
               <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />

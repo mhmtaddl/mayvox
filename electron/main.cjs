@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session, screen } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 // ── Chromium autoplay policy ─────────────────────────────────────────────────
@@ -69,6 +69,8 @@ let pttDownActive = false;   // OS key-repeat aynı basışta ptt:down spam'leme
 // Tray & quit state
 let tray = null;
 let isQuitting = false;
+let authWindowMode = false;
+let preAuthBounds = null;
 
 // Installer/uninstall kaynaklı başlatma mı?
 function isInstallerArgs(argv) {
@@ -410,7 +412,11 @@ function createMainWindow() {
     // controls sağlar. Resize/snap davranışı OS tarafından korunur.
     frame: false,
     titleBarStyle: "hidden",
-    backgroundColor: "#060a14",
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: true,
     icon: path.join(__dirname, "../build/icon.ico"),
     webPreferences: mainWebPrefs,
   });
@@ -421,6 +427,7 @@ function createMainWindow() {
       win.webContents.send("window:state", {
         maximized: win.isMaximized(),
         focused: win.isFocused(),
+        authMode: authWindowMode,
       });
     } catch { /* no-op */ }
   };
@@ -431,6 +438,7 @@ function createMainWindow() {
   win.webContents.on("did-finish-load", sendWinState);
 
   const saveState = () => {
+    if (authWindowMode) return;
     if (win.isMaximized() || win.isMinimized()) return;
     const { width, height } = win.getBounds();
     const [x, y] = win.getPosition();
@@ -440,7 +448,8 @@ function createMainWindow() {
   win.on("move", saveState);
 
   win.on("close", (e) => {
-    if (isQuitting) {
+    if (isQuitting || authWindowMode) {
+      isQuitting = true;
       logger.info("Window close: quitting mode — pencere kapanacak");
       return;
     }
@@ -492,11 +501,74 @@ function withWin(event, fn) {
     logger.warn?.("[window] control error: " + (err?.message || err));
   }
 }
+function toggleMaximize(win) {
+  if (win.isMaximized()) win.unmaximize(); else win.maximize();
+}
 ipcMain.on("window:minimize", (e) => withWin(e, (w) => w.minimize()));
-ipcMain.on("window:maximize-restore", (e) => withWin(e, (w) => {
-  if (w.isMaximized()) w.unmaximize(); else w.maximize();
+ipcMain.on("window:maximize-restore", (e) => withWin(e, toggleMaximize));
+ipcMain.on("window:toggle-maximize", (e) => withWin(e, toggleMaximize));
+ipcMain.handle("window:toggle-maximize", (e) => withWin(e, toggleMaximize));
+ipcMain.on("window:close", (e) => withWin(e, (w) => {
+  if (authWindowMode) {
+    isQuitting = true;
+    app.quit();
+    return;
+  }
+  w.close();
 }));
-ipcMain.on("window:close", (e) => withWin(e, (w) => w.close()));
+ipcMain.on("window:set-auth-mode", (e, payload) => withWin(e, (w) => {
+  const enabled = !!payload?.enabled;
+
+  if (enabled) {
+    const alreadyAuth = authWindowMode;
+    if (!authWindowMode && !w.isMaximized() && !w.isMinimized()) {
+      preAuthBounds = w.getBounds();
+    }
+    authWindowMode = true;
+    if (w.isMaximized()) w.unmaximize();
+
+    const display = screen.getDisplayMatching(w.getBounds());
+    const workArea = display?.workArea || { width: 1400, height: 900 };
+    const target = { width: 540, height: 760 };
+    const width = Math.max(540, Math.min(target.width, workArea.width - 40));
+    const height = Math.max(760, Math.min(target.height, workArea.height - 40));
+
+    w.setResizable(false);
+    w.setMaximizable(true);
+    w.setMinimumSize(width, height);
+    w.setMaximumSize(10000, 10000);
+    if (!alreadyAuth) {
+      w.setSize(width, height, true);
+      w.center();
+    }
+    try {
+      w.webContents.send("window:state", { maximized: false, focused: w.isFocused(), authMode: true });
+    } catch { /* no-op */ }
+    return;
+  }
+
+  if (!authWindowMode) return;
+  authWindowMode = false;
+  w.setResizable(true);
+  w.setMaximizable(true);
+  w.setMaximumSize(10000, 10000);
+  w.setMinimumSize(1100, 700);
+
+  const saved = Store.get();
+  const bounds = preAuthBounds || saved;
+  const width = Math.max(1100, bounds.width || saved.width || 1400);
+  const height = Math.max(700, bounds.height || saved.height || 900);
+  if (typeof bounds.x === "number" && typeof bounds.y === "number") {
+    w.setBounds({ x: bounds.x, y: bounds.y, width, height }, true);
+  } else {
+    w.setSize(width, height, true);
+    w.center();
+  }
+  preAuthBounds = null;
+  try {
+    w.webContents.send("window:state", { maximized: w.isMaximized(), focused: w.isFocused(), authMode: false });
+  } catch { /* no-op */ }
+}));
 ipcMain.handle("window:is-maximized", (e) => {
   try {
     const w = BrowserWindow.fromWebContents(e.sender) || BrowserWindow.getAllWindows()[0];

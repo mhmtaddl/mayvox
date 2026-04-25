@@ -41,17 +41,17 @@ const InsightCard = memo(function InsightCard({ narrative }: { narrative: Insigh
       style={{
         background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.06), rgba(var(--glass-tint), 0.03))',
         border: '1px solid rgba(var(--theme-accent-rgb), 0.14)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 12px rgba(var(--theme-accent-rgb), 0.05)',
+        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.03), 0 2px 12px rgba(var(--theme-accent-rgb), 0.05)',
         transition: 'transform 180ms ease-out, box-shadow 180ms ease-out',
         willChange: 'transform',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px rgba(var(--theme-accent-rgb), 0.10)';
+        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint),0.04), 0 6px 18px rgba(var(--theme-accent-rgb), 0.10)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 12px rgba(var(--theme-accent-rgb), 0.05)';
+        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint),0.03), 0 2px 12px rgba(var(--theme-accent-rgb), 0.05)';
       }}
     >
       <span

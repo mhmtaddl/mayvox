@@ -318,23 +318,23 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   if (loading) return <Loader />;
 
   return (
-    <div className="max-w-[1280px] mx-auto space-y-3 pb-8">
+    <div className="max-w-[1280px] mx-auto space-y-3 pb-8 min-w-0">
       {/* ── Summary Bar — 3 stat pill + range, tek satır ── */}
       <div
-        className="flex items-center gap-3 rounded-2xl px-4 py-3"
+        className="flex items-center gap-1.5 sm:gap-3 rounded-2xl px-2.5 sm:px-4 py-3"
         style={{
           background: 'rgba(var(--glass-tint), 0.04)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
         }}
       >
-        <ShieldCheck size={16} className="text-[var(--theme-accent)]/80 shrink-0" strokeWidth={2} />
-        <div className="flex-1 grid grid-cols-3 gap-2 min-w-0">
+        <ShieldCheck size={16} className="hidden min-[520px]:block text-[var(--theme-accent)]/80 shrink-0" strokeWidth={2} />
+        <div className="flex-1 grid grid-cols-3 gap-1 sm:gap-2 min-w-0">
           <HeroStat color="cyan"   value={stats.floodBlocked}     label="Flood"  active={flood.enabled} />
           <HeroStat color="rose"   value={stats.profanityBlocked} label="Küfür"  active={profanityEnabled} />
           <HeroStat color="violet" value={stats.spamBlocked}      label="Spam"   active={spamEnabled} />
         </div>
         <div
-          className="inline-flex items-center gap-0.5 rounded-lg p-1 shrink-0"
+          className="ml-auto inline-flex items-center gap-0.5 rounded-lg p-0.5 sm:p-1 shrink-0"
           style={{
             background: 'rgba(var(--glass-tint),0.05)',
             border: '1px solid rgba(var(--glass-tint),0.08)',
@@ -347,15 +347,16 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                 key={r}
                 type="button"
                 onClick={() => setTimeRange(r)}
-                className={`rangeBtn px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
+                className={`rangeBtn px-1.5 min-[520px]:px-2 sm:px-3 py-1.5 rounded-md text-[10px] sm:text-[11px] font-bold transition-all ${active ? 'rangeBtn--active' : ''}`}
                 style={active ? {
                   background: 'rgba(var(--theme-accent-rgb),0.18)',
                   color: 'var(--theme-accent)',
                 } : {
-                  color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.58)',
+                  color: 'var(--theme-secondary-text)',
                 }}
               >
-                {RANGE_LABELS[r]}
+                <span className="sm:hidden">{r}</span>
+                <span className="hidden sm:inline">{RANGE_LABELS[r]}</span>
               </button>
             );
           })}
@@ -372,10 +373,10 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
       >
         {/* Tab header + aktif tab toggle */}
         <div
-          className="flex items-center justify-between px-3 pt-2.5 pb-2"
+          className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2.5 pb-2"
           style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.06)' }}
         >
-          <div className="inline-flex items-center gap-0.5 rounded-lg p-0.5" style={{ background: 'rgba(var(--glass-tint),0.04)' }}>
+          <div className="inline-flex flex-1 min-w-0 items-center gap-0.5 rounded-lg p-0.5" style={{ background: 'rgba(var(--glass-tint),0.04)' }}>
             {([
               { k: 'flood',     label: 'Flood',   icon: <Zap size={11} />,                 rgb: '34,211,238',  enabled: flood.enabled },
               { k: 'profanity', label: 'Küfür',   icon: <Filter size={11} />,              rgb: '251,113,133', enabled: profanityEnabled },
@@ -387,17 +388,17 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                   key={t.k}
                   type="button"
                   onClick={() => setActiveRuleTab(t.k)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all"
+                  className="flex-1 min-w-0 flex items-center justify-center gap-1 px-1.5 sm:px-2.5 py-1 rounded-md text-[10.5px] sm:text-[11px] font-bold transition-all"
                   style={active ? {
                     background: `rgba(${t.rgb}, 0.14)`,
-                    color: `rgb(${t.rgb})`,
+                    color: 'var(--theme-text)',
                     border: `1px solid rgba(${t.rgb}, 0.24)`,
                   } : {
-                    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.70)',
+                    color: 'var(--theme-secondary-text)',
                     border: '1px solid transparent',
                   }}
                 >
-                  {t.icon} {t.label}
+                  {t.icon} <span className="truncate">{t.label}</span>
                   <span
                     className="inline-block w-1.5 h-1.5 rounded-full ml-0.5"
                     style={{
@@ -449,7 +450,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
         {/* Flood tab — 3 blok yan yana (grid) */}
         {activeRuleTab === 'flood' && (
           <div className="p-3.5">
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
+            <div className={`grid grid-cols-1 min-[760px]:grid-cols-3 gap-3 transition-opacity ${flood.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
               <SliderBlock
                 icon={<MessageSquareWarning size={12} />}
                 label="Mesaj limiti"
@@ -496,7 +497,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-2.5 leading-snug">
               <strong className="text-[var(--theme-text)]">Sistem kara listesi ({SYSTEM_BLACKLIST_TOTAL} kelime) her zaman aktif.</strong> Toggle yalnızca sunucu-özel listeyi açar/kapatır.
             </p>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
               <label className="text-[11px] font-semibold text-[var(--theme-text)]">
                 Kelime listesi
                 <span className="ml-1.5 text-[10px] font-normal text-[var(--theme-secondary-text)]/55 tabular-nums">
@@ -541,7 +542,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             <p className="text-[11px] text-[var(--theme-secondary-text)]/65 mb-2 leading-snug">
               Şu şablonlar engellenir:
             </p>
-            <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[var(--theme-secondary-text)]/75">
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[var(--theme-secondary-text)]/75">
               <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">Tekrar</strong> — 60sn içinde 3+ aynı mesaj</span></li>
               <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">ALL CAPS</strong> — 10+ harf, %80+ büyük</span></li>
               <li className="flex items-start gap-1.5"><span className="text-[var(--theme-accent)]/70 shrink-0">•</span><span><strong className="text-[var(--theme-text)]">Zincir emoji</strong> — 10+ emoji</span></li>
@@ -573,7 +574,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
       )}
 
       {/* ── Desktop: 2-kolon (Events solda | Auto Punishment sağda). Events yoksa tek kolon. ── */}
-      <div className={eventsDenied ? '' : 'grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-3 items-stretch'}>
+      <div className={eventsDenied ? '' : 'grid grid-cols-1 min-[1180px]:grid-cols-[1.15fr_1fr] gap-3 items-stretch'}>
 
       {/* ── Son moderasyon olayları (mod+ görür) ── */}
       {!eventsDenied && (
@@ -675,7 +676,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                         background: 'rgba(var(--theme-accent-rgb),0.18)',
                         color: 'var(--theme-accent)',
                       } : {
-                        color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.62)',
+                        color: 'var(--theme-secondary-text)',
                       }}
                     >
                       {opt.label}
@@ -811,8 +812,8 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
           transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
         }
         .statPill:hover {
-          background: var(--statpill-hover-bg, rgba(255,255,255,0.04));
-          border-color: var(--statpill-hover-border, rgba(255,255,255,0.12));
+          background: var(--statpill-hover-bg, rgba(var(--glass-tint),0.04));
+          border-color: var(--statpill-hover-border, rgba(var(--glass-tint),0.12));
           transform: translateY(-1px);
         }
         /* Range selector */
@@ -824,7 +825,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
         /* StatusChip hover: cursor default, glow hafif artar */
         .statusChip { cursor: default; }
         .statusChip--active:hover {
-          box-shadow: var(--chip-hover-glow, none), inset 0 1px 0 rgba(255,255,255,0.05);
+          box-shadow: var(--chip-hover-glow, none), inset 0 1px 0 rgba(var(--glass-tint),0.05);
         }
         /* Modül kartı hover lift (Flood / Küfür / Spam) */
         .automod-card {
@@ -832,14 +833,14 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
         }
         .automod-card:hover {
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(var(--glass-tint),0.04);
         }
         /* Aktif ceza kartı hover — hafif scale + bg vurgusu */
         .apCard { transition: background 150ms ease, transform 150ms ease, border-color 150ms ease; }
         .apCard:hover {
-          background: rgba(255,255,255,0.06) !important;
+          background: rgba(var(--glass-tint),0.06) !important;
           transform: scale(1.01);
-          border-color: rgba(255,255,255,0.10);
+          border-color: rgba(var(--glass-tint),0.10);
         }
         /* Aktif ceza kartı mount — fade + hafif yukarı kaydır */
         @keyframes apCardIn {
@@ -853,7 +854,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
           position: absolute;
           top: 0; bottom: 0; left: 0;
           width: 55%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+          background: linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.22), transparent);
           animation: apShimmer 2.4s linear infinite;
           pointer-events: none;
         }
@@ -898,12 +899,12 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
     background: `rgba(${c.rgb}, 0.18)`,
     border: `1px solid rgba(${c.rgb}, 0.45)`,
     color: `rgb(${c.rgb})`,
-    boxShadow: `0 0 14px rgba(${c.rgb}, 0.22), inset 0 1px 0 rgba(255,255,255,0.05)`,
+    boxShadow: `0 0 14px rgba(${c.rgb}, 0.22), inset 0 1px 0 rgba(var(--glass-tint),0.05)`,
     ['--chip-hover-glow' as any]: `0 0 22px rgba(${c.rgb}, 0.34)`,
   } : {
     background: 'rgba(var(--glass-tint),0.04)',
     border: '1px solid rgba(var(--glass-tint),0.10)',
-    color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
+    color: 'var(--theme-secondary-text)',
     ['--chip-hover-glow' as any]: 'none',
   };
   return (
@@ -915,7 +916,7 @@ function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet
         <span
           className="absolute inset-0 rounded-full"
           style={{
-            background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.35)',
+            background: active ? `rgb(${c.rgb})` : 'rgba(var(--glass-tint),0.35)',
             boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.90)` : 'none',
           }}
         />
@@ -974,8 +975,8 @@ function SafeAvatar({
     <div
       className="w-9 h-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
       style={{
-        background: 'rgba(255,255,255,0.04)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)',
+        background: 'rgba(var(--glass-tint),0.04)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(var(--glass-tint),0.08)',
       }}
       aria-label={userName || 'Bilinmiyor'}
     >
@@ -1251,7 +1252,7 @@ function HeroStat({
   const c = CHIP_COLOR_MAP[color];
   return (
     <div
-      className="statPill relative flex items-center gap-2.5 rounded-lg px-3 py-2.5"
+      className="statPill relative flex items-center gap-1.5 sm:gap-2.5 rounded-lg px-2 sm:px-3 py-2 sm:py-2.5 min-w-0"
       style={{
         background: active ? `rgba(${c.rgb}, 0.04)` : 'rgba(var(--glass-tint),0.03)',
         border: active ? `1px solid rgba(${c.rgb}, 0.12)` : '1px solid rgba(var(--glass-tint),0.08)',
@@ -1263,7 +1264,7 @@ function HeroStat({
       <span
         className="w-2 h-2 rounded-full shrink-0"
         style={{
-          background: active ? `rgb(${c.rgb})` : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.45)',
+          background: active ? `rgb(${c.rgb})` : 'rgba(var(--glass-tint),0.45)',
           boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.75)` : 'none',
         }}
         aria-hidden="true"
@@ -1271,15 +1272,15 @@ function HeroStat({
       {/* Key = value → sayı değişiminde React remount + CSS fade-in animation */}
       <span
         key={value}
-        className="statValue text-[17px] font-bold tabular-nums leading-none"
+        className="statValue text-[14px] sm:text-[17px] font-bold tabular-nums leading-none"
         style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)' }}
       >
         {value}
       </span>
-      <span className="text-[11px] font-semibold text-[var(--theme-secondary-text)]/65">
+      <span className="text-[10px] sm:text-[11px] font-semibold text-[var(--theme-secondary-text)]/65 truncate">
         {label}
       </span>
-      <span className="ml-auto text-[9.5px] font-semibold uppercase tracking-[0.1em] pl-1.5 shrink-0"
+      <span className="ml-auto hidden sm:inline text-[9.5px] font-semibold uppercase tracking-[0.1em] pl-1.5 shrink-0"
         style={{ color: active ? `rgb(${c.rgb})` : 'var(--theme-secondary-text)', opacity: active ? 0.75 : 0.4 }}>
         {active ? 'açık' : 'kapalı'}
       </span>
@@ -1303,7 +1304,7 @@ function SliderBlock({
   const pct = ((value - min) / (max - min)) * 100;
   return (
     <div
-      className="rounded-xl px-3 py-2.5 flex flex-col gap-2"
+      className="rounded-xl px-3 py-2.5 flex flex-col gap-2 min-w-0"
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.07)',
@@ -1379,7 +1380,7 @@ function BlacklistModal({ onClose }: { onClose: () => void }) {
         style={{
           maxHeight: 'min(85vh, 720px)',
           background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(var(--glass-tint),0.08)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
         }}
       >

@@ -5,6 +5,18 @@ export type SoundVariant = 1 | 2 | 3;
 type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 'ptt-on' | 'ptt-off' | 'moderation';
 
 let audioCtx: AudioContext | null = null;
+const MASTER_VOLUME_KEY = 'mv:sm:master-volume';
+const MUTED_KEY = 'mv:sm:muted';
+
+function getMasterSoundGain(): number {
+  try {
+    if (localStorage.getItem(MUTED_KEY) === '1') return 0;
+    const raw = parseFloat(localStorage.getItem(MASTER_VOLUME_KEY) ?? '1');
+    return Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
+  } catch {
+    return 1;
+  }
+}
 
 function getCtx(): AudioContext {
   if (!audioCtx || audioCtx.state === 'closed') {
@@ -21,6 +33,8 @@ function tone(
   ctx: AudioContext, freq: number, start: number, dur: number,
   vol = 0.55, type: OscillatorType = 'sine', freqEnd?: number,
 ) {
+  const scaledVol = vol * getMasterSoundGain();
+  if (scaledVol <= 0) return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain); gain.connect(ctx.destination);
@@ -30,8 +44,8 @@ function tone(
   const att = Math.min(0.01, dur * 0.1);
   const rel = Math.min(0.02, dur * 0.2);
   gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(vol, start + att);
-  gain.gain.setValueAtTime(vol, start + dur - rel);
+  gain.gain.linearRampToValueAtTime(scaledVol, start + att);
+  gain.gain.setValueAtTime(scaledVol, start + dur - rel);
   gain.gain.linearRampToValueAtTime(0, start + dur);
   osc.start(start); osc.stop(start + dur);
 }
@@ -103,6 +117,8 @@ function toneToNode(
   ctx: AudioContext, dest: AudioNode, freq: number, start: number, dur: number,
   vol = 0.55, type: OscillatorType = 'sine',
 ) {
+  const scaledVol = vol * getMasterSoundGain();
+  if (scaledVol <= 0) return;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
   osc.connect(g); g.connect(dest);
@@ -111,8 +127,8 @@ function toneToNode(
   const att = Math.min(0.01, dur * 0.1);
   const rel = Math.min(0.03, dur * 0.15);
   g.gain.setValueAtTime(0, start);
-  g.gain.linearRampToValueAtTime(vol, start + att);
-  g.gain.setValueAtTime(vol, start + dur - rel);
+  g.gain.linearRampToValueAtTime(scaledVol, start + att);
+  g.gain.setValueAtTime(scaledVol, start + dur - rel);
   g.gain.linearRampToValueAtTime(0, start + dur);
   osc.start(start); osc.stop(start + dur);
 }

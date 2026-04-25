@@ -272,7 +272,7 @@ function ProfileCard() {
   );
 
   return (
-    <CardSection icon={<UserIcon size={12} />} title="">
+    <CardSection icon={<UserIcon size={12} />} title="" className="settings-account-card">
       {/* ── Avatar + Ad Soyad + Çerçeve — tek akış ── */}
       <div className="flex items-center gap-3 mb-2">
         {/* Avatar — sol */}
@@ -343,7 +343,11 @@ function ProfileCard() {
             <NoneIcon />
           </button>
           {/* Renk paletleri */}
-          {[...PALETTE_BASIC, ...PALETTE_VIVID].map(c => <FrameDot key={c.hex} {...c} />)}
+          {[...PALETTE_BASIC, ...PALETTE_VIVID].map(c => (
+            <React.Fragment key={c.hex}>
+              <FrameDot {...c} />
+            </React.Fragment>
+          ))}
           {/* Özel renk seçici */}
           <input
             type="color"
@@ -371,7 +375,7 @@ function AccountInfoCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined} className="xl:h-full xl:flex xl:flex-col">
+    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined} className="settings-account-card xl:h-full xl:flex xl:flex-col">
       <div className="space-y-2">
         <div className="space-y-1">
           <label className={labelCls}>Kullanıcı Adı</label>
@@ -415,7 +419,7 @@ function SecurityCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<Shield size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
+    <CardSection icon={<Shield size={12} />} title="" className="settings-account-card xl:h-full xl:flex xl:flex-col">
       <div className="space-y-2">
         <div className="space-y-1">
           <label className={labelCls}>Yeni Şifre</label>

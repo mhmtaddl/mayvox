@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as LinkIcon, Copy, Mail, ChevronDown, Plus, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Ban } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppState } from '../../../contexts/AppStateContext';
@@ -221,7 +221,9 @@ export default function AdminActionBar() {
               ) : (
                 <div className="divide-y divide-[var(--theme-border)]/50 rounded-lg overflow-hidden border border-[var(--theme-border)]/40">
                   {codes.map(c => (
-                    <CodeRow key={c.code} row={c} onCopy={onCopy} onInvalidate={onInvalidate} />
+                    <React.Fragment key={c.code}>
+                      <CodeRow row={c} onCopy={onCopy} onInvalidate={onInvalidate} />
+                    </React.Fragment>
                   ))}
                 </div>
               )}
@@ -286,7 +288,7 @@ export default function AdminActionBar() {
 }
 
 // ── Tek bir kod satırı ──
-function CodeRow({ row, onCopy, onInvalidate }: { row: AdminInviteCodeRow; onCopy: (code: string) => void; onInvalidate: (code: string) => void }) {
+function CodeRow({ row, onCopy, onInvalidate }: { row: AdminInviteCodeRow; onCopy: (code: string) => void; onInvalidate: (code: string) => void | Promise<void> }) {
   const now = Date.now();
   const isUsed = row.used;
   const isExpired = !isUsed && row.expires_at <= now;

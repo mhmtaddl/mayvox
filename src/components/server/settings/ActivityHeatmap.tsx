@@ -51,7 +51,7 @@ function ActivityHeatmapInner({ peakHours }: Props) {
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.06)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 8px 24px rgba(0,0,0,0.12)',
+        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.02), 0 8px 24px rgba(0,0,0,0.12)',
       }}
     >
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
@@ -117,7 +117,7 @@ function SummaryView({ dailyTotals, maxDaily }: { dailyTotals: Map<number, numbe
                 title={hasData ? `${DOW_FULL_LABELS[dow]} — ${formatDuration(sec)}` : `${DOW_FULL_LABELS[dow]} — aktivite yok`}
                 style={{
                   width: hasData ? `${Math.max(3, pct)}%` : '0%',
-                  background: 'linear-gradient(90deg, rgba(130, 180, 230, 0.55), rgba(var(--theme-accent-rgb), 0.92))',
+                  background: 'linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.35), rgba(var(--theme-accent-rgb), 0.92))',
                   transition: 'width 420ms ease-out',
                 }}
               />

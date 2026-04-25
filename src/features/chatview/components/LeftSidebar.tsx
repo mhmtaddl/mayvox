@@ -152,7 +152,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
   );
 
   return (
-    <aside className={`relative bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ width: leftSidebarW, boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+    <aside className={`mv-shell-panel relative bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ width: leftSidebarW, boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}>
       {/* Resize handle */}
       <div
         onMouseDown={handleSidebarDragStart}

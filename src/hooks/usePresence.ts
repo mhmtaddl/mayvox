@@ -594,7 +594,7 @@ export function usePresence({
         // platformRef eager init edildi — burada tekrar set etmeye gerek yok.
         const onlineSince = onlineSinceRef.current;
         console.log('[usePresence] track_payload onlineSince=' + onlineSince);
-        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, serverId: activeServerIdRef.current || undefined, platform: platformRef.current, onlineSince, autoStatus: 'active', statusText: currentUserRef.current.statusText || 'Online' });
+        await channel.track({ userId: user.id, appVersion: appVersion ?? '', userName: user.name, currentRoom: activeChannelRef.current || undefined, serverId: activeServerIdRef.current || undefined, platform: platformRef.current, onlineSince, autoStatus: 'active', statusText: currentUserRef.current.statusText || 'Online', gameActivity: currentUserRef.current.gameActivity || undefined });
 
         // Kendi versiyonumuzu DB'ye kaydet — kullanıcı offline olsa bile
         // son bilinen sürüm SettingsView'de görünmeye devam eder.
@@ -631,8 +631,8 @@ export function usePresence({
   const resyncPresence = () => {
     const channel = presenceChannelRef.current;
     if (!channel) return;
-    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string }>();
-    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string; statusText?: string }[];
+    const state = channel.presenceState<{ userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string; gameActivity?: string }>();
+    const presenceData = (Object.values(state).flatMap(s => s)) as { userId: string; appVersion?: string; currentRoom?: string; userName?: string; onlineSince?: number; autoStatus?: string; statusText?: string; gameActivity?: string }[];
     const onlineIds = new Set(presenceData.map(p => p.userId));
 
     // Build merged version map: fresh presenceState takes priority, cache fills the gaps
@@ -661,6 +661,10 @@ export function usePresence({
       presenceData.filter(p => p.statusText).map(p => [p.userId, p.statusText!]),
     );
 
+    const gameActivityMap = new Map(
+      presenceData.filter(p => p.gameActivity).map(p => [p.userId, p.gameActivity!]),
+    );
+
     setAllUsers(prev =>
       prev.map(u => {
         const cachedVersion = mergedVersionMap.get(u.id);
@@ -680,6 +684,7 @@ export function usePresence({
             appVersion: cachedVersion ?? u.appVersion,
             statusText: resolvedStatusText,
             onlineSince: onlineSinceMap.get(u.id) ?? u.onlineSince,
+            gameActivity: u.id === currentUserRef.current.id ? u.gameActivity : (gameActivityMap.get(u.id) ?? undefined),
             ...(autoSt && { autoStatus: autoSt as 'active' | 'idle' | 'deafened' }),
           };
         }

@@ -59,8 +59,8 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
         transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
         className="w-full max-w-[420px] rounded-2xl overflow-hidden"
         style={{
-          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.035), rgba(var(--glass-tint), 0.015)), rgb(var(--theme-bg-rgb, 6, 10, 20))',
+          border: '1px solid rgba(var(--glass-tint), 0.12)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
         }}
         onClick={(e) => e.stopPropagation()}

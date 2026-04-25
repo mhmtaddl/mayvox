@@ -247,24 +247,11 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
     <div ref={containerRef} className={`relative ${isCenter ? 'w-full max-w-[500px] mx-auto' : 'px-3'}`}>
       {/* Input */}
       <div
-        className={`flex items-center gap-2 transition-all duration-150 ${isCenter ? 'px-4 py-2.5 rounded-xl' : 'px-3 py-[6px] rounded-lg'}`}
-        style={{
-          // Near-opaque tema-uyumlu surface — %96 alpha ile bg neredeyse sızmaz
-          background: 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.96), rgba(var(--theme-bg-rgb), 0.98))',
-          border: isOpen
-            ? '1px solid rgba(var(--theme-accent-rgb), 0.35)'
-            : '1px solid rgba(255,255,255,0.08)',
-          boxShadow: isOpen
-            ? '0 0 0 2px rgba(var(--theme-accent-rgb),0.15), inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 20px rgba(0,0,0,0.32)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 20px rgba(0,0,0,0.32)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-        } as React.CSSProperties}
+        className={`search-input search-input-shell flex items-center gap-2 transition-all duration-150 ${isOpen ? 'is-focused' : ''} ${isCenter ? 'px-4 py-2.5 rounded-xl' : 'px-3 py-[6px] rounded-lg'}`}
       >
         <Search
           size={isCenter ? 15 : 12}
-          className="shrink-0 transition-colors duration-150"
-          style={{ color: 'var(--text-secondary)' }}
+          className="search-icon shrink-0 transition-colors duration-150"
         />
         <input
           ref={inputRef}
@@ -274,10 +261,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           onFocus={() => setIsOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
           placeholder="Kullanıcı ara..."
-          className={`flex-1 bg-transparent outline-none min-w-0 placeholder:text-[var(--text-muted)] ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
-          style={{
-            color: 'var(--text-primary)',
-          } as React.CSSProperties}
+          className={`search-input-field flex-1 bg-transparent outline-none min-w-0 ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
         />
         {query && (
           <button
@@ -300,14 +284,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.1 }}
-            className={`absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden max-h-72 overflow-y-auto custom-scrollbar ${isCenter ? '' : 'mx-3'}`}
-            style={{
-              background: 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.97), rgba(var(--theme-bg-rgb), 0.99))',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              boxShadow: '0 18px 40px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.04)',
-            }}
+            className={`search-dropdown absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden max-h-72 overflow-y-auto custom-scrollbar ${isCenter ? '' : 'mx-3'}`}
           >
             {isSearching ? (
               <div className="px-4 py-5 text-center">

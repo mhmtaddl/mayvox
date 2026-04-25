@@ -345,7 +345,7 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
         }
         .denetim-kpi:hover {
           transform: translateY(-1px);
-          box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.04) inset;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 1px 0 rgba(var(--glass-tint),0.04) inset;
         }
         .denetim-card {
           transition: transform 160ms cubic-bezier(0.2,0.8,0.2,1),
@@ -413,7 +413,7 @@ function SubTabHeader({ subTab, onChange }: { subTab: SubTab; onChange: (t: SubT
               background: 'rgba(var(--theme-accent-rgb),0.14)',
               color: 'var(--theme-accent)',
             } : {
-              color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.72)',
+              color: 'var(--theme-secondary-text)',
             }}
           >
             {t.icon} {t.label}
@@ -448,7 +448,7 @@ function RangeSelector({ value, onChange }: { value: Range; onChange: (r: Range)
               background: 'rgba(var(--theme-accent-rgb),0.16)',
               color: 'var(--theme-accent)',
             } : {
-              color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.65)',
+              color: 'var(--theme-secondary-text)',
             }}
           >
             {RANGE_LABEL[r]}
@@ -633,7 +633,7 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
                 className="flex items-center gap-1.5 px-2 h-6 rounded-full text-[10px] font-semibold transition-all"
                 style={{
                   background: on ? `rgba(${meta.rgb}, 0.10)` : 'transparent',
-                  color: on ? meta.color : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.45)',
+                  color: on ? meta.color : 'var(--theme-secondary-text)',
                   border: `1px solid ${on ? `rgba(${meta.rgb}, 0.24)` : 'rgba(var(--glass-tint), 0.08)'}`,
                 }}
               >
@@ -678,7 +678,7 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
                 x={PAD_L - 6}
                 y={gridLines[i] + 3}
                 textAnchor="end"
-                style={{ fontSize: 9, fill: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.45)' }}
+                  style={{ fontSize: 9, fill: 'var(--theme-secondary-text)', opacity: 0.55 }}
               >
                 {v}
               </text>
@@ -697,7 +697,7 @@ function TrendChart({ buckets, range, hasAny }: { buckets: TrendBucket[]; range:
                   x={xOf(i)}
                   y={H - 6}
                   textAnchor="middle"
-                  style={{ fontSize: 9, fill: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.55)' }}
+                  style={{ fontSize: 9, fill: 'var(--theme-secondary-text)', opacity: 0.65 }}
                 >
                   {label}
                 </text>
@@ -805,7 +805,7 @@ function HoverTooltip({ bucket, visible, range }: { bucket: TrendBucket; visible
       style={{
         background: 'rgba(12,14,20,0.96)',
         border: '1px solid rgba(var(--glass-tint),0.10)',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.04) inset',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(var(--glass-tint),0.04) inset',
       }}
     >
       <div className="flex items-center justify-between mb-1.5">
@@ -827,7 +827,7 @@ function HoverTooltip({ bucket, visible, range }: { bucket: TrendBucket; visible
             <li key={k} className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.color, boxShadow: `0 0 4px ${meta.color}88` }} />
               <span className="text-[var(--theme-text)]/85 text-[11px]">{meta.label}</span>
-              <span className="ml-auto font-bold tabular-nums text-[12px]" style={{ color: v > 0 ? meta.color : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.4)' }}>
+              <span className="ml-auto font-bold tabular-nums text-[12px]" style={{ color: v > 0 ? meta.color : 'var(--theme-secondary-text)', opacity: v > 0 ? 1 : 0.55 }}>
                 {v}
               </span>
             </li>
@@ -945,7 +945,7 @@ function TopChannelsCard({ channels, totalCurrent }: { channels: ChannelStat[]; 
                     className="text-[10px] font-bold tabular-nums w-4 shrink-0"
                     style={isTop
                       ? { color: 'var(--theme-accent)' }
-                      : { color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.40)' }}
+                      : { color: 'var(--theme-secondary-text)', opacity: 0.55 }}
                   >
                     #{i + 1}
                   </span>
@@ -1055,7 +1055,7 @@ function InsightText({
     tone = 'neutral';
     text = <>Sunucu şu anda sakin görünüyor · manuel müdahale gerekmiyor</>;
   }
-  const dot = tone === 'positive' ? '#34d399' : tone === 'warn' ? '#fb923c' : 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.55)';
+  const dot = tone === 'positive' ? '#34d399' : tone === 'warn' ? '#fb923c' : 'var(--theme-secondary-text)';
   return (
     <div className="flex items-start gap-2">
       <span className="inline-block w-1.5 h-1.5 rounded-full mt-[5px] shrink-0" style={{ background: dot, boxShadow: `0 0 4px ${dot}` }} />

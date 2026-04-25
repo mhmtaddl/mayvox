@@ -85,8 +85,8 @@ const CATEGORY_COLOR: Record<Category, { color: string; rgb: string; label: stri
   profanity: { color: '#f87171', rgb: '248,113,113', label: 'Küfür' },
   spam:      { color: '#a78bfa', rgb: '167,139,250', label: 'Spam' },
   auto:      { color: '#fbbf24', rgb: '251,191,36',  label: 'Auto' },
-  manual:    { color: '#60a5fa', rgb: '96,165,250',  label: 'Manuel' },
-  role:      { color: '#60a5fa', rgb: '96,165,250',  label: 'Rol' },
+  manual:    { color: '#2563eb', rgb: '37,99,235',   label: 'Manuel' },
+  role:      { color: '#2563eb', rgb: '37,99,235',   label: 'Rol' },
   invite:    { color: '#a78bfa', rgb: '167,139,250', label: 'Davet' },
   channel:   { color: '#34d399', rgb: '52,211,153',  label: 'Kanal' },
   settings:  { color: '#fb923c', rgb: '251,146,60',  label: 'Ayar' },
@@ -379,7 +379,7 @@ export default function AuditLogPanel({ serverId }: Props) {
                   background: 'rgba(var(--theme-accent-rgb),0.14)',
                   color: 'var(--theme-accent)',
                 } : {
-                  color: 'rgba(var(--theme-secondary-text-rgb, 123,139,168), 0.65)',
+                  color: 'var(--theme-secondary-text)',
                 }}
               >
                 {f.label}

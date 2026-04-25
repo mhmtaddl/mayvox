@@ -96,32 +96,24 @@ function ambientBlobs(blobs: Array<{ x: string; y: string; r: string; rgba: stri
 export const THEME_PACKS: ThemePack[] = [
   {
     id: 'default-dark',
-    name: 'Varsayılan Koyu',
+    name: 'Mayvox Midnight Glass',
     isLight: false,
-    // Dümdüz matte black — hiç parıltı, radial, falloff yok. Sadece ultra
-    // ince grain (banding kırıcı) + flat renk.
-    bg: `${NOISE.graphite}, #0E0F12`,
-    bgSoft: '#151720',
-    // Surface = level-2 matte. bg'ye yakın, derinlik merdiven hissi
-    surface: 'rgba(27, 30, 41, 0.86)',
-    surfaceHover: 'rgba(34, 38, 51, 0.90)',
-    surfaceActive: 'rgba(42, 47, 62, 0.93)',
-    // Ultra ince hairline — harsh outline YOK
-    border: 'rgba(255, 255, 255, 0.05)',
-    // Focus — classic silver accent
-    borderFocus: 'rgba(192, 192, 192, 0.45)',
-    // WCAG AAA text skalası
-    textPrimary: '#F4F6FA',
-    textSecondary: '#C5CAD4',
-    textMuted: '#8A909C',
-    // Silver light olduğu için üstünde dark text (matte black canvas ile aynı)
-    textOnAccent: '#0E0F12',
-    // Classic Silver #C0C0C0 — monokrom, nötr, renksiz premium
-    accent: '#C0C0C0',
-    accentRgb: '192, 192, 192',
-    accentHover: '#D4D4D4',
-    accentActive: '#A8A8A8',
-    accentSoft: 'rgba(192, 192, 192, 0.10)',
+    bg: `radial-gradient(circle at 18% 0%, rgba(111, 214, 255, 0.10), transparent 34%), radial-gradient(circle at 82% 12%, rgba(125, 92, 255, 0.08), transparent 30%), linear-gradient(180deg, #0b111c 0%, #070b12 100%)`,
+    bgSoft: '#0B111C',
+    surface: 'rgba(16, 22, 34, 0.72)',
+    surfaceHover: 'rgba(20, 28, 42, 0.86)',
+    surfaceActive: 'rgba(111, 214, 255, 0.12)',
+    border: 'rgba(255, 255, 255, 0.075)',
+    borderFocus: 'rgba(111, 214, 255, 0.28)',
+    textPrimary: 'rgba(255, 255, 255, 0.92)',
+    textSecondary: 'rgba(255, 255, 255, 0.62)',
+    textMuted: 'rgba(255, 255, 255, 0.38)',
+    textOnAccent: '#07111A',
+    accent: '#6FD6FF',
+    accentRgb: '111, 214, 255',
+    accentHover: '#96E2FF',
+    accentActive: '#48BDEB',
+    accentSoft: 'rgba(111, 214, 255, 0.16)',
     // Palette-harmonik state renkleri
     success: '#3DD68C',
     warning: '#F5B83C',
@@ -133,89 +125,78 @@ export const THEME_PACKS: ThemePack[] = [
     id: 'default-light',
     name: 'Varsayılan Açık',
     isLight: true,
-    // Bloblar nötr graphite tone — mavi/mor YOK
-    bg: `${NOISE.paper}, ${ambientBlobs([
-      { x: '15%', y: '20%', r: '65% 55%', rgba: 'rgba(0, 0, 0, 0.025)' },
-      { x: '85%', y: '80%', r: '70% 60%', rgba: 'rgba(0, 0, 0, 0.030)' },
-    ])}, linear-gradient(170deg, #F5F7FA 0%, #ECF0F5 100%)`,
-    bgSoft: '#EDF1F8',
-    surface: 'rgba(255, 255, 255, 0.95)',
-    surfaceHover: 'rgba(255, 255, 255, 1)',
-    surfaceActive: 'rgba(244, 246, 250, 1)',
-    border: 'rgba(0, 0, 0, 0.10)',
-    borderFocus: 'rgba(0, 0, 0, 0.45)',
-    // Light: opaque dark hex — alpha YOK, kontrast garanti. Apple System Gray ramp.
-    textPrimary: '#0B0B0C',
-    textSecondary: '#3A3A3C',
-    textTertiary: '#6E6E73',
-    textMuted: '#A1A1A6',
+    bg: '#FFFFFF',
+    bgSoft: '#FFFFFF',
+    surface: '#FFFFFF',
+    surfaceHover: '#F5F8FC',
+    surfaceActive: '#EEF4FB',
+    border: 'rgba(13, 13, 13, 0.12)',
+    borderFocus: 'rgba(37, 7, 7, 0.45)',
+    textPrimary: '#0D0D0D',
+    textSecondary: '#3F4652',
+    textTertiary: '#697386',
+    textMuted: '#8B95A3',
     textOnAccent: '#FFFFFF',
     textInverse: '#FFFFFF',
-    // ── Neutral charcoal accent system — mavi YOK ──
-    accent: '#1A1A1A',
-    accentRgb: '26, 26, 26',
-    accentHover: '#2A2A2A',
-    accentActive: '#000000',
-    accentSoft: 'rgba(0, 0, 0, 0.06)',
-    success: '#15803D',
-    warning: '#B45309',
-    danger: '#B91C1C',
-    previewFrom: '#F5F7FA',
-    previewTo: '#E2E7F2',
+    accent: '#250707',
+    accentRgb: '37, 7, 7',
+    accentHover: '#3A0B0B',
+    accentActive: '#190404',
+    accentSoft: 'rgba(37, 7, 7, 0.10)',
+    success: '#00A240',
+    warning: '#B26A00',
+    danger: '#E02E2A',
+    previewFrom: '#FFFFFF',
+    previewTo: '#EEF4FB',
   },
   {
     id: 'ocean-blue',
     name: 'Okyanus Mavisi',
     isLight: false,
-    bg: `${NOISE.mist}, ${ambientBlobs([
-      { x: '85%', y: '20%', r: '70% 55%', rgba: 'rgba(56, 130, 180, 0.07)' },
-      { x: '15%', y: '85%', r: '75% 60%', rgba: 'rgba(20, 60, 100, 0.08)' },
-    ])}, linear-gradient(170deg, #0B2235 0%, #061927 100%)`,
-    bgSoft: '#0A2640',
-    surface: 'rgba(14, 38, 60, 0.85)',
-    surfaceHover: 'rgba(20, 50, 78, 0.88)',
-    surfaceActive: 'rgba(28, 64, 96, 0.90)',
-    border: 'rgba(123, 175, 210, 0.18)',
-    borderFocus: 'rgba(123, 175, 210, 0.50)',
-    textPrimary: '#EAF2FA',
-    textSecondary: '#C2D7E8',
-    textMuted: '#94B5CC',
+    bg: `radial-gradient(circle at 18% 0%, rgba(107, 214, 255, 0.13), transparent 34%), radial-gradient(circle at 78% 10%, rgba(68, 160, 255, 0.10), transparent 30%), radial-gradient(circle at 50% 100%, rgba(20, 80, 120, 0.16), transparent 40%), linear-gradient(180deg, #082033 0%, #061522 100%)`,
+    bgSoft: '#082033',
+    surface: 'rgba(10, 39, 61, 0.72)',
+    surfaceHover: 'rgba(12, 46, 70, 0.82)',
+    surfaceActive: 'rgba(107, 214, 255, 0.15)',
+    border: 'rgba(173, 226, 255, 0.10)',
+    borderFocus: 'rgba(107, 214, 255, 0.32)',
+    textPrimary: 'rgba(244, 251, 255, 0.94)',
+    textSecondary: 'rgba(219, 240, 250, 0.68)',
+    textMuted: 'rgba(207, 232, 245, 0.42)',
     textOnAccent: '#001523',
-    // Saturasyon ~70%: göz yormayan ocean tone
-    accent: '#5BB0D9',
-    accentRgb: '91, 176, 217',
-    accentHover: '#7AC2E5',
-    accentActive: '#3F94BD',
-    accentSoft: 'rgba(91, 176, 217, 0.16)',
-    success: '#3DA468',
-    warning: '#D49A30',
-    danger: '#D87878',
-    previewFrom: '#061B2E',
-    previewTo: '#0E2F4A',
+    accent: '#6BD6FF',
+    accentRgb: '107, 214, 255',
+    accentHover: '#8FE1FF',
+    accentActive: '#45C7F5',
+    accentSoft: 'rgba(107, 214, 255, 0.15)',
+    success: '#45E6B0',
+    warning: '#FFD166',
+    danger: '#FF6B7A',
+    previewFrom: '#061522',
+    previewTo: '#103954',
   },
   {
     id: 'emerald',
     name: 'Zümrüt',
     isLight: false,
-    // Custom asset — kullanıcının zümrüt arka plan görseli, cover + center
-    bg: `url("${bgEmerald}") center/cover no-repeat, linear-gradient(170deg, #0A2620 0%, #051914 100%)`,
-    bgSoft: '#0A2A22',
-    surface: 'rgba(12, 42, 33, 0.85)',
-    surfaceHover: 'rgba(18, 56, 44, 0.88)',
-    surfaceActive: 'rgba(24, 70, 56, 0.90)',
-    border: 'rgba(80, 175, 145, 0.18)',
-    borderFocus: 'rgba(80, 175, 145, 0.50)',
+    bg: `url("${bgEmerald}") center/cover no-repeat, radial-gradient(circle at 18% 0%, rgba(52, 211, 153, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(16, 185, 129, 0.08), transparent 30%), linear-gradient(180deg, #062016 0%, #03140f 100%)`,
+    bgSoft: '#062016',
+    surface: 'rgba(6, 32, 22, 0.74)',
+    surfaceHover: 'rgba(8, 42, 29, 0.86)',
+    surfaceActive: 'rgba(55, 211, 155, 0.14)',
+    border: 'rgba(94, 234, 212, 0.10)',
+    borderFocus: 'rgba(94, 234, 212, 0.20)',
     textPrimary: '#EAF5EF',
     textSecondary: '#C2DDD0',
     textMuted: '#98C2B0',
     textOnAccent: '#04140C',
     // Saturasyon ~70%: zümrüt mineral haze
-    accent: '#3FB088',
-    accentRgb: '63, 176, 136',
-    accentHover: '#5DC2A0',
-    accentActive: '#2E9974',
-    accentSoft: 'rgba(63, 176, 136, 0.16)',
-    success: '#3FB088',
+    accent: '#37D39B',
+    accentRgb: '55, 211, 155',
+    accentHover: '#5EEAD4',
+    accentActive: '#20B783',
+    accentSoft: 'rgba(55, 211, 155, 0.14)',
+    success: '#37D39B',
     warning: '#D49A30',
     danger: '#D87878',
     previewFrom: '#051914',
@@ -225,23 +206,23 @@ export const THEME_PACKS: ThemePack[] = [
     id: 'crimson',
     name: 'Kızıl',
     isLight: false,
-    bg: `url("${bgCrimson}") center/cover no-repeat, linear-gradient(172deg, #1F0B0D 0%, #110608 100%)`,
-    bgSoft: '#280A0D',
-    surface: 'rgba(46, 14, 16, 0.85)',
-    surfaceHover: 'rgba(60, 20, 22, 0.88)',
-    surfaceActive: 'rgba(74, 28, 30, 0.90)',
-    border: 'rgba(200, 130, 130, 0.18)',
-    borderFocus: 'rgba(200, 130, 130, 0.50)',
+    bg: `url("${bgCrimson}") center/cover no-repeat, radial-gradient(circle at 18% 0%, rgba(248, 113, 113, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(190, 18, 60, 0.09), transparent 30%), linear-gradient(180deg, #26070c 0%, #180407 100%)`,
+    bgSoft: '#26070C',
+    surface: 'rgba(45, 9, 14, 0.74)',
+    surfaceHover: 'rgba(60, 12, 20, 0.86)',
+    surfaceActive: 'rgba(248, 113, 113, 0.14)',
+    border: 'rgba(252, 165, 165, 0.10)',
+    borderFocus: 'rgba(252, 165, 165, 0.20)',
     textPrimary: '#FFEAEA',
     textSecondary: '#E8CCD0',
     textMuted: '#BFA0A4',
     textOnAccent: '#1A0507',
     // Saturasyon ~70%: velvet wine, kontrol altında
-    accent: '#D87878',
-    accentRgb: '216, 120, 120',
-    accentHover: '#E2918F',
-    accentActive: '#BC5E5E',
-    accentSoft: 'rgba(216, 120, 120, 0.14)',
+    accent: '#F87171',
+    accentRgb: '248, 113, 113',
+    accentHover: '#FB8B8B',
+    accentActive: '#D95A5A',
+    accentSoft: 'rgba(248, 113, 113, 0.14)',
     success: '#3DA468',
     warning: '#D49A30',
     danger: '#D87878',
@@ -252,31 +233,27 @@ export const THEME_PACKS: ThemePack[] = [
     id: 'amber-night',
     name: 'Amber Gece',
     isLight: false,
-    bg: `${NOISE.resin}, ${ambientBlobs([
-      { x: '15%', y: '20%', r: '70% 55%', rgba: 'rgba(140, 95, 30, 0.07)' },
-      { x: '85%', y: '85%', r: '75% 60%', rgba: 'rgba(80, 55, 18, 0.08)' },
-    ])}, linear-gradient(172deg, #1B130A 0%, #0E0904 100%)`,
-    bgSoft: '#241A09',
-    surface: 'rgba(42, 30, 12, 0.85)',
-    surfaceHover: 'rgba(56, 40, 18, 0.88)',
-    surfaceActive: 'rgba(70, 50, 24, 0.90)',
-    border: 'rgba(210, 165, 95, 0.18)',
-    borderFocus: 'rgba(210, 165, 95, 0.50)',
-    textPrimary: '#FFF3D9',
-    textSecondary: '#E8D2A8',
-    textMuted: '#B59B6F',
+    bg: `radial-gradient(circle at 16% 0%, rgba(216, 168, 93, 0.12), transparent 34%), radial-gradient(circle at 78% 8%, rgba(255, 209, 132, 0.07), transparent 30%), radial-gradient(circle at 50% 100%, rgba(72, 42, 16, 0.18), transparent 42%), linear-gradient(180deg, #120d08 0%, #0b0805 100%)`,
+    bgSoft: '#120D08',
+    surface: 'rgba(28, 20, 12, 0.72)',
+    surfaceHover: 'rgba(36, 26, 16, 0.86)',
+    surfaceActive: 'rgba(216, 168, 93, 0.15)',
+    border: 'rgba(255, 213, 143, 0.105)',
+    borderFocus: 'rgba(216, 168, 93, 0.34)',
+    textPrimary: 'rgba(255, 247, 232, 0.94)',
+    textSecondary: 'rgba(238, 218, 185, 0.68)',
+    textMuted: 'rgba(224, 197, 153, 0.42)',
     textOnAccent: '#1A1305',
-    // Saturasyon ~70%: bronze dusk
-    accent: '#D2A55F',
-    accentRgb: '210, 165, 95',
-    accentHover: '#DFB677',
-    accentActive: '#B58843',
-    accentSoft: 'rgba(210, 165, 95, 0.14)',
-    success: '#3DA468',
-    warning: '#D2A55F',
-    danger: '#D87878',
-    previewFrom: '#150E04',
-    previewTo: '#261C0A',
+    accent: '#D8A85D',
+    accentRgb: '216, 168, 93',
+    accentHover: '#F0C77A',
+    accentActive: '#B9873F',
+    accentSoft: 'rgba(216, 168, 93, 0.15)',
+    success: '#64D6A2',
+    warning: '#F0C77A',
+    danger: '#FF766F',
+    previewFrom: '#0B0805',
+    previewTo: '#2A1F13',
   },
 ];
 
@@ -318,6 +295,7 @@ export function applyThemePack(pack: ThemePack): void {
   set('--accent-hover', pack.accentHover);
   set('--accent-active', pack.accentActive);
   set('--accent-soft', pack.accentSoft);
+  set('--surface-soft', pack.isLight ? 'rgba(255,255,255,0.72)' : `rgba(${hexToRgbTuple(pack.bgSoft)}, 0.62)`);
   set('--success', pack.success);
   set('--warning', pack.warning);
   set('--danger', pack.danger);
@@ -353,7 +331,7 @@ export function applyThemePack(pack: ThemePack): void {
   // bgSoft'una bağlı, böylece default-dark matte black ailesinde kalır, emerald
   // yeşil ailesinde kalır vs. Hardcoded navy yok.
   const popoverBg = pack.isLight
-    ? 'rgba(255,255,255,0.96)'
+    ? '#FFFFFF'
     : `rgba(${hexToRgbTuple(pack.bgSoft)}, 0.97)`;
   const popoverShadow = pack.isLight ? '0 12px 40px rgba(0,0,0,0.18)' : '0 12px 40px rgba(0,0,0,0.55)';
   set('--popover-bg', popoverBg);
@@ -417,15 +395,15 @@ export function applyThemePack(pack: ThemePack): void {
   // Bu tokenlar yeni component'lerin TEK referans kaynağıdır. Legacy --theme-*
   // alias'ları backward compat için korunur, yeni kod bu token'ları kullanmalı.
   if (pack.isLight) {
-    set('--bg-primary',   '#F5F7FA');
-    set('--bg-secondary', '#ECF0F5');
-    set('--bg-tertiary',  '#E2E7F0');
-    set('--surface-1',    'rgba(255,255,255,0.95)');
-    set('--surface-2',    'rgba(255,255,255,0.98)');
+    set('--bg-primary',   '#FFFFFF');
+    set('--bg-secondary', '#F5F8FC');
+    set('--bg-tertiary',  '#EEF4FB');
+    set('--surface-1',    '#FFFFFF');
+    set('--surface-2',    '#FFFFFF');
     set('--surface-3',    '#FFFFFF');
-    set('--text-primary',   '#0B0C0E');
-    set('--text-secondary', '#3A4150');
-    set('--text-tertiary',  '#6B7382');
+    set('--text-primary',   '#0D0D0D');
+    set('--text-secondary', '#3F4652');
+    set('--text-tertiary',  '#697386');
   } else {
     // Matte black family — tüm koyu alanlar bu 3 bg + 3 surface içinde
     set('--bg-primary',   '#0E0F12');
@@ -443,27 +421,26 @@ export function applyThemePack(pack: ThemePack): void {
   // Unified matte-black gradient SADECE default-dark için. Colored dark temalar
   // (ocean/emerald/crimson/amber) kendi pack.surface tint'lerini korur.
   if (pack.id === 'default-dark') {
-    // Matte black unified material — messages panel referanslı
-    set('--surface-base',            'linear-gradient(180deg, rgba(20,22,30,0.9), rgba(10,12,18,0.9))');
-    set('--surface-elevated',        'linear-gradient(180deg, rgba(28,31,43,0.95), rgba(15,18,25,0.95))');
-    set('--surface-hover',           'rgba(255,255,255,0.04)');
-    set('--surface-active',          'rgba(255,255,255,0.06)');
-    set('--surface-card-border',     '1px solid rgba(255,255,255,0.06)');
-    set('--surface-card-shadow',     '0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)');
-    set('--surface-floating-shadow', '0 20px 60px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.04)');
-    set('--border-subtle',           'rgba(255,255,255,0.06)');
-    set('--shadow-soft',             '0 8px 24px rgba(0,0,0,0.35)');
+    set('--surface-base',            'rgba(16, 22, 34, 0.72)');
+    set('--surface-elevated',        'rgba(20, 28, 42, 0.86)');
+    set('--surface-hover',           'rgba(255,255,255,0.085)');
+    set('--surface-active',          'rgba(111,214,255,0.12)');
+    set('--surface-card-border',     '1px solid rgba(255,255,255,0.075)');
+    set('--surface-card-shadow',     '0 14px 36px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.05)');
+    set('--surface-floating-shadow', '0 18px 50px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)');
+    set('--border-subtle',           'rgba(255,255,255,0.075)');
+    set('--shadow-soft',             '0 18px 50px rgba(0,0,0,0.22)');
   } else if (pack.isLight) {
-    // Light family — beyaz kart üzerine soft shadow
-    set('--surface-base',            'linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,250,253,0.88))');
-    set('--surface-elevated',        'linear-gradient(180deg, #FFFFFF, #F5F7FA)');
-    set('--surface-hover',           'rgba(0,0,0,0.04)');
-    set('--surface-active',          'rgba(0,0,0,0.06)');
-    set('--surface-card-border',     '1px solid rgba(0,0,0,0.06)');
-    set('--surface-card-shadow',     '0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)');
-    set('--surface-floating-shadow', '0 20px 60px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.8)');
-    set('--border-subtle',           'rgba(0,0,0,0.06)');
-    set('--shadow-soft',             '0 8px 24px rgba(0,0,0,0.08)');
+    // Light family — opak beyaz yüzey, koyu metin, koyu bordo focus/accent
+    set('--surface-base',            '#FFFFFF');
+    set('--surface-elevated',        '#FFFFFF');
+    set('--surface-hover',           'rgba(var(--theme-accent-rgb),0.06)');
+    set('--surface-active',          'rgba(var(--theme-accent-rgb),0.10)');
+    set('--surface-card-border',     '1px solid rgba(13,13,13,0.10)');
+    set('--surface-card-shadow',     '0 8px 24px rgba(13,13,13,0.08), inset 0 1px 0 rgba(255,255,255,0.9)');
+    set('--surface-floating-shadow', '0 20px 60px rgba(13,13,13,0.16), 0 2px 8px rgba(13,13,13,0.08)');
+    set('--border-subtle',           'rgba(13,13,13,0.08)');
+    set('--shadow-soft',             '0 8px 24px rgba(13,13,13,0.08)');
   } else {
     // Colored dark themes — kendi kimliklerini korusun (ocean blue, emerald,
     // crimson, amber). pack.surface/surfaceHover/surfaceActive zaten tint'lenmiş.
@@ -490,12 +467,12 @@ export function applyThemePack(pack: ThemePack): void {
   // level-3 = floating UI (dropdowns, tooltips, toasts, context menus)
   // Her level sonrakinden biraz daha aydınlık + daha soft shadow.
   if (pack.isLight) {
-    set('--depth-1', 'rgba(255,255,255,0.95)');
-    set('--depth-2', 'rgba(255,255,255,0.98)');
-    set('--depth-3', 'rgba(255,255,255,1)');
-    set('--shadow-1', '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8)');
-    set('--shadow-2', '0 6px 18px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.10)');
-    set('--shadow-3', '0 18px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.08)');
+    set('--depth-1', '#FFFFFF');
+    set('--depth-2', '#FFFFFF');
+    set('--depth-3', '#FFFFFF');
+    set('--shadow-1', '0 1px 2px rgba(13,13,13,0.04), 0 4px 12px rgba(13,13,13,0.05), inset 0 1px 0 rgba(255,255,255,0.9)');
+    set('--shadow-2', '0 6px 18px rgba(13,13,13,0.08), 0 16px 40px rgba(13,13,13,0.10)');
+    set('--shadow-3', '0 18px 48px rgba(13,13,13,0.14), 0 4px 12px rgba(13,13,13,0.08)');
   } else {
     // Matte black elevation — pencere dışına taşan soft wide shadow + inset hairline
     set('--depth-1', 'rgba(21, 23, 32, 0.88)');   // #151720 — sidebar/panel
@@ -542,7 +519,7 @@ export function applyThemePack(pack: ThemePack): void {
   set('--ambient-bg-rgb-2', ambient[1]);
   set('--ambient-bg-rgb-3', ambient[2]);
   // default-dark → hiç parıltı yok (dümdüz matte black). Diğer temalar default fallback'i alır
-  if (pack.id === 'default-dark') {
+  if (pack.id === 'default-dark' || pack.isLight) {
     set('--ambient-op-1', '0');
     set('--ambient-op-2', '0');
     set('--ambient-op-3', '0');
@@ -592,6 +569,165 @@ export function applyThemePack(pack: ThemePack): void {
   set('--glow-active', `0 0 16px rgba(${pack.accentRgb}, 0.10)`);
   // Pressed state — inset push
   set('--shadow-pressed', 'inset 0 2px 4px rgba(0,0,0,0.25)');
+
+  if (pack.id === 'default-dark') {
+    set('--bg-app', '#070b12');
+    set('--bg-shell', '#0b111c');
+    set('--bg-panel', 'rgba(16, 22, 34, 0.72)');
+    set('--bg-panel-strong', 'rgba(20, 28, 42, 0.86)');
+    set('--bg-card', 'rgba(18, 25, 38, 0.74)');
+    set('--surface-soft', 'rgba(18, 25, 38, 0.62)');
+    set('--border-soft', 'rgba(255, 255, 255, 0.075)');
+    set('--border-strong', 'rgba(255, 255, 255, 0.12)');
+    set('--border-subtle', 'rgba(255, 255, 255, 0.075)');
+    set('--border-default', 'rgba(255, 255, 255, 0.12)');
+    set('--text-primary', 'rgba(255, 255, 255, 0.92)');
+    set('--text-secondary', 'rgba(255, 255, 255, 0.62)');
+    set('--text-tertiary', 'rgba(255, 255, 255, 0.38)');
+    set('--accent-soft', 'rgba(111, 214, 255, 0.16)');
+    set('--accent-border', 'rgba(111, 214, 255, 0.28)');
+    set('--danger', '#ff6b6b');
+    set('--theme-bg-rgb', '7, 11, 18');
+    set('--theme-sidebar-rgb', '16, 22, 34');
+    set('--theme-sidebar', '#0b111c');
+    set('--depth-1', 'rgba(16, 22, 34, 0.72)');
+    set('--depth-2', 'rgba(20, 28, 42, 0.86)');
+    set('--depth-3', 'rgba(25, 35, 52, 0.94)');
+    set('--shadow-1', 'inset 0 1px 0 rgba(255,255,255,0.05)');
+    set('--shadow-2', '0 14px 36px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.05)');
+    set('--shadow-3', '0 18px 50px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)');
+    set('--titlebar-bg-focused', 'transparent');
+    set('--titlebar-bg-blurred', 'transparent');
+    set('--titlebar-border', 'transparent');
+    set('--titlebar-shadow', 'none');
+    set('--theme-input-bg', 'rgba(255,255,255,0.045)');
+    set('--theme-input-bg-hover', 'rgba(255,255,255,0.065)');
+    set('--theme-input-border', 'rgba(255,255,255,0.08)');
+    set('--theme-input-focus-border', 'rgba(111,214,255,0.28)');
+    set('--theme-input-focus-ring', 'rgba(111,214,255,0.14)');
+    set('--theme-input-placeholder', 'rgba(255,255,255,0.38)');
+    set('--theme-input-shadow', 'inset 0 1px 0 rgba(255,255,255,0.04)');
+  } else if (pack.id === 'ocean-blue') {
+    set('--bg-app', '#061522');
+    set('--bg-shell', '#082033');
+    set('--bg-panel', 'rgba(10, 39, 61, 0.72)');
+    set('--bg-panel-strong', 'rgba(13, 50, 76, 0.86)');
+    set('--bg-card', 'rgba(9, 36, 56, 0.74)');
+    set('--surface-soft', 'rgba(10, 30, 50, 0.60)');
+    set('--bg-card-hover', 'rgba(9, 36, 56, 0.74)');
+    set('--border-soft', 'rgba(173, 226, 255, 0.10)');
+    set('--border-strong', 'rgba(173, 226, 255, 0.18)');
+    set('--text-primary', 'rgba(244, 251, 255, 0.94)');
+    set('--text-secondary', 'rgba(219, 240, 250, 0.68)');
+    set('--text-tertiary', 'rgba(207, 232, 245, 0.42)');
+    set('--accent-strong', '#45c7f5');
+    set('--accent-soft', 'rgba(107, 214, 255, 0.15)');
+    set('--accent-border', 'rgba(107, 214, 255, 0.32)');
+    set('--danger', '#ff6b7a');
+    set('--theme-bg-rgb', '6, 21, 34');
+    set('--theme-sidebar-rgb', '10, 39, 61');
+    set('--theme-sidebar', '#082033');
+    set('--surface-base', 'rgba(10, 39, 61, 0.72)');
+    set('--surface-elevated', 'rgba(12, 46, 70, 0.82)');
+    set('--surface-hover', 'rgba(9, 36, 56, 0.74)');
+    set('--surface-active', 'rgba(107, 214, 255, 0.15)');
+    set('--surface-card-border', '1px solid rgba(173,226,255,0.10)');
+    set('--surface-card-shadow', 'inset 0 1px 0 rgba(255,255,255,0.07)');
+    set('--surface-floating-shadow', '0 18px 50px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)');
+    set('--depth-1', 'rgba(10, 39, 61, 0.72)');
+    set('--depth-2', 'rgba(13, 50, 76, 0.86)');
+    set('--depth-3', 'rgba(16, 57, 84, 0.92)');
+    set('--titlebar-bg-focused', 'transparent');
+    set('--titlebar-bg-blurred', 'transparent');
+    set('--titlebar-border', 'transparent');
+    set('--titlebar-shadow', 'none');
+    set('--theme-input-bg', 'rgba(173,226,255,0.075)');
+    set('--theme-input-bg-hover', 'rgba(173,226,255,0.095)');
+    set('--theme-input-border', 'rgba(173,226,255,0.12)');
+    set('--theme-input-focus-border', 'rgba(107,214,255,0.32)');
+    set('--theme-input-focus-ring', 'rgba(107,214,255,0.15)');
+    set('--theme-input-placeholder', 'rgba(219,240,250,0.44)');
+    set('--theme-input-shadow', 'inset 0 1px 0 rgba(255,255,255,0.055)');
+  } else if (pack.id === 'amber-night') {
+    set('--bg-app', '#0b0805');
+    set('--bg-shell', '#120d08');
+    set('--bg-panel', 'rgba(28, 20, 12, 0.72)');
+    set('--bg-panel-strong', 'rgba(36, 26, 16, 0.86)');
+    set('--bg-card', 'rgba(42, 31, 19, 0.66)');
+    set('--surface-soft', 'rgba(40, 25, 10, 0.60)');
+    set('--bg-card-hover', 'rgba(54, 39, 23, 0.72)');
+    set('--border-soft', 'rgba(255, 213, 143, 0.105)');
+    set('--border-strong', 'rgba(255, 213, 143, 0.20)');
+    set('--text-primary', 'rgba(255, 247, 232, 0.94)');
+    set('--text-secondary', 'rgba(238, 218, 185, 0.68)');
+    set('--text-tertiary', 'rgba(224, 197, 153, 0.42)');
+    set('--accent-strong', '#f0c77a');
+    set('--accent-soft', 'rgba(216, 168, 93, 0.15)');
+    set('--accent-border', 'rgba(216, 168, 93, 0.34)');
+    set('--danger', '#ff766f');
+    set('--theme-bg-rgb', '11, 8, 5');
+    set('--theme-sidebar-rgb', '28, 20, 12');
+    set('--theme-sidebar', '#120d08');
+    set('--surface-base', 'rgba(28, 20, 12, 0.72)');
+    set('--surface-elevated', 'rgba(36, 26, 16, 0.86)');
+    set('--surface-hover', 'rgba(54, 39, 23, 0.72)');
+    set('--surface-active', 'rgba(216, 168, 93, 0.15)');
+    set('--surface-card-border', '1px solid rgba(255,213,143,0.105)');
+    set('--surface-card-shadow', 'inset 0 1px 0 rgba(255,255,255,0.06)');
+    set('--surface-floating-shadow', '0 18px 50px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.065)');
+    set('--depth-1', 'rgba(28, 20, 12, 0.72)');
+    set('--depth-2', 'rgba(36, 26, 16, 0.86)');
+    set('--depth-3', 'rgba(42, 31, 19, 0.92)');
+    set('--titlebar-bg-focused', 'transparent');
+    set('--titlebar-bg-blurred', 'transparent');
+    set('--titlebar-border', 'transparent');
+    set('--titlebar-shadow', 'none');
+    set('--theme-input-bg', 'rgba(255,255,255,0.052)');
+    set('--theme-input-bg-hover', 'rgba(216,168,93,0.08)');
+    set('--theme-input-border', 'rgba(255,213,143,0.13)');
+    set('--theme-input-focus-border', 'rgba(216,168,93,0.34)');
+    set('--theme-input-focus-ring', 'rgba(216,168,93,0.14)');
+    set('--theme-input-placeholder', 'rgba(238,218,185,0.44)');
+    set('--theme-input-shadow', 'inset 0 1px 0 rgba(255,255,255,0.05)');
+  } else if (pack.id === 'emerald') {
+    set('--bg-app', '#03140f');
+    set('--bg-shell', '#062016');
+    set('--accent-glow-1', 'rgba(52, 211, 153, 0.13)');
+    set('--accent-glow-2', 'rgba(16, 185, 129, 0.08)');
+    set('--bg-panel', 'rgba(6, 32, 22, 0.74)');
+    set('--bg-panel-strong', 'rgba(8, 42, 29, 0.86)');
+    set('--bg-card', 'rgba(5, 26, 18, 0.74)');
+    set('--bg-card-hover', 'rgba(5, 26, 18, 0.74)');
+    set('--border-soft', 'rgba(94, 234, 212, 0.10)');
+    set('--border-strong', 'rgba(94, 234, 212, 0.20)');
+    set('--accent-strong', '#5eead4');
+    set('--accent-soft', 'rgba(55, 211, 155, 0.14)');
+    set('--accent-border', 'rgba(94, 234, 212, 0.26)');
+    set('--theme-depth-bg', 'radial-gradient(circle at 18% 0%, var(--accent-glow-1), transparent 34%), radial-gradient(circle at 82% 12%, var(--accent-glow-2), transparent 30%), radial-gradient(circle at 50% 100%, rgba(0,0,0,0.22), transparent 42%), linear-gradient(180deg, var(--bg-shell) 0%, var(--bg-app) 100%)');
+    set('--surface-base', 'rgba(6, 32, 22, 0.74)');
+    set('--surface-elevated', 'rgba(8, 42, 29, 0.86)');
+    set('--surface-soft', 'rgba(6, 32, 22, 0.62)');
+    set('--surface-card-border', '1px solid rgba(94,234,212,0.10)');
+  } else if (pack.id === 'crimson') {
+    set('--bg-app', '#180407');
+    set('--bg-shell', '#26070c');
+    set('--accent-glow-1', 'rgba(248, 113, 113, 0.13)');
+    set('--accent-glow-2', 'rgba(190, 18, 60, 0.09)');
+    set('--bg-panel', 'rgba(45, 9, 14, 0.74)');
+    set('--bg-panel-strong', 'rgba(60, 12, 20, 0.86)');
+    set('--bg-card', 'rgba(38, 8, 13, 0.74)');
+    set('--bg-card-hover', 'rgba(38, 8, 13, 0.74)');
+    set('--border-soft', 'rgba(252, 165, 165, 0.10)');
+    set('--border-strong', 'rgba(252, 165, 165, 0.20)');
+    set('--accent-strong', '#fb8b8b');
+    set('--accent-soft', 'rgba(248, 113, 113, 0.14)');
+    set('--accent-border', 'rgba(252, 165, 165, 0.26)');
+    set('--theme-depth-bg', 'radial-gradient(circle at 18% 0%, var(--accent-glow-1), transparent 34%), radial-gradient(circle at 82% 12%, var(--accent-glow-2), transparent 30%), radial-gradient(circle at 50% 100%, rgba(0,0,0,0.22), transparent 42%), linear-gradient(180deg, var(--bg-shell) 0%, var(--bg-app) 100%)');
+    set('--surface-base', 'rgba(45, 9, 14, 0.74)');
+    set('--surface-elevated', 'rgba(60, 12, 20, 0.86)');
+    set('--surface-soft', 'rgba(45, 9, 14, 0.62)');
+    set('--surface-card-border', '1px solid rgba(252,165,165,0.10)');
+  }
 
   // Document body background + color-scheme
   document.body.style.background = pack.bg;

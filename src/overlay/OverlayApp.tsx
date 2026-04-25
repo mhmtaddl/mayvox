@@ -22,7 +22,6 @@ interface SizeCfg {
   avatar: number;
   name: number;
   gap: number;
-  /** Waveform bar height (speaking indicator). */
   wave: number;
 }
 const SIZE_CONFIG: Record<OverlaySize, SizeCfg> = {
@@ -58,6 +57,12 @@ export default function OverlayApp() {
   const size: OverlaySize = snap.size || 'medium';
   const cfg = SIZE_CONFIG[size];
   const variant: OverlayVariant = snap.variant || 'capsule';
+  const openLeft = snap.position === 'top-right'
+    || snap.position === 'right-top-mid'
+    || snap.position === 'right-bot-mid'
+    || snap.position === 'bottom-right'
+    || snap.position === 'top-mid-right'
+    || snap.position === 'bottom-mid-right';
   // Kart rengi — Apple-grade subtle vertical gradient (mat siyaha yakın).
   // Üstte hafif açık (#171a22), altta mat siyah (#0a0c10) → premium depth, abartısız.
   // buildCardGradient(opacity) içinde tanımlı; her variant aynı arka planı paylaşır.
@@ -71,7 +76,7 @@ export default function OverlayApp() {
       style={{
         width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column',
-        justifyContent: 'flex-start', alignItems: 'flex-start',
+        justifyContent: 'flex-start', alignItems: openLeft ? 'flex-end' : 'flex-start',
         gap: rowGap,
         // Clamp padding — küçük overlay penceresinde sıkışmasın, büyükte abartmasın.
         padding: 'clamp(8px, 1.2vw, 14px) clamp(10px, 1.4vw, 16px)',
@@ -93,6 +98,8 @@ export default function OverlayApp() {
           cfg={cfg}
           variant={variant}
           idleOpacityPct={idleOpacityPct}
+          accentRgb={snap.themeAccentRgb || '192, 192, 192'}
+          openLeft={openLeft}
         />
       ))}
 
@@ -100,10 +107,12 @@ export default function OverlayApp() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: cfg.gap,
           fontSize: cfg.name - 0.5,
-          color: 'rgba(220, 228, 240, 0.72)',
+          color: `rgba(${snap.themeAccentRgb || '220, 228, 240'}, 0.82)`,
           fontWeight: 600,
           textShadow: '0 1px 2px rgba(0,0,0,0.55)',
-          paddingLeft: cfg.avatar + cfg.gap,
+          paddingLeft: openLeft ? undefined : cfg.avatar + cfg.gap,
+          paddingRight: openLeft ? cfg.avatar + cfg.gap : undefined,
+          textAlign: openLeft ? 'right' : 'left',
           maxWidth: '100%',
           minWidth: 0,
           boxSizing: 'border-box',
@@ -123,31 +132,34 @@ export default function OverlayApp() {
 // İki katman: üstte çok subtle beyaz radial glow (ambient highlight) + altta
 // koyu mat linear gradient. Backdrop-filter container'da uygulanır.
 // Opacity 0 → 'transparent' (kart yok).
-const GLASS_TOP_RGB    = '20, 20, 25';  // hafif gri-lacivert, pür siyah değil
-const GLASS_BOTTOM_RGB = '10, 10, 15';
 // Idle iken glass (translucent 0.65/0.55), speaking iken TAM OPAK (1.0/0.95) —
 // konuşan/muted/deafened satırda arka plan kesin görünür, slider değeriyle kesişmez.
-function buildCardGradient(opacity: number, solid = false): string {
+function buildCardGradient(opacity: number, solid = false, accentRgb = '192, 192, 192'): string {
   if (!opacity) return 'transparent';
   const a = Math.max(0, Math.min(100, opacity)) / 100;
-  const topA  = (solid ? 1.0  : 0.65 * a).toFixed(3);
-  const botA  = (solid ? 0.95 : 0.55 * a).toFixed(3);
-  const glowA = (solid ? 0.12 : 0.08 * a).toFixed(3);
+  const opaque = solid || opacity >= 100;
+  const topA  = (opaque ? 1.0 : 0.50 * a).toFixed(3);
+  const botA  = (opaque ? 1.0 : 0.44 * a).toFixed(3);
+  const tintA = (solid ? 0.34 : 0.22 * a).toFixed(3);
+  const fillA = (solid ? 0.18 : 0.12 * a).toFixed(3);
+  const lineA = (solid ? 0.16 : 0.10 * a).toFixed(3);
   return (
-    `radial-gradient(circle at 30% 20%, rgba(255,255,255,${glowA}), transparent 60%),`
-    + ` linear-gradient(180deg, rgba(${GLASS_TOP_RGB}, ${topA}) 0%, rgba(${GLASS_BOTTOM_RGB}, ${botA}) 100%)`
+    `radial-gradient(circle at 24% 18%, rgba(${accentRgb}, ${tintA}), transparent 62%),`
+    + `linear-gradient(135deg, rgba(${accentRgb}, ${fillA}) 0%, transparent 72%),`
+    + `linear-gradient(180deg, rgba(24, 25, 30, ${topA}) 0%, rgba(9, 10, 13, ${botA}) 100%),`
+    + `linear-gradient(90deg, rgba(${accentRgb}, ${lineA}), transparent 52%)`
   );
 }
 
 // Glass container ortak stili — her variant (capsule/card/badge) kullanır.
 // backdrop-filter blur(20) + saturate(140) macOS Control Center hissi verir.
 // Border 0.08 white + inset highlight + layered depth shadow ile "floating panel".
-const GLASS_BACKDROP = 'blur(20px) saturate(140%)';
-const GLASS_BORDER = '1px solid rgba(255, 255, 255, 0.08)';
+const GLASS_BACKDROP = 'blur(14px) saturate(125%)';
+const glassBorder = (accentRgb: string) => `1px solid rgba(${accentRgb}, 0.28)`;
 const GLASS_SHADOW =
-  '0 10px 30px rgba(0, 0, 0, 0.35),'
-  + ' 0 2px 8px rgba(0, 0, 0, 0.25),'
-  + ' inset 0 1px 0 rgba(255, 255, 255, 0.06)';
+  '0 8px 22px rgba(0, 0, 0, 0.30),'
+  + ' 0 1px 5px rgba(0, 0, 0, 0.22),'
+  + ' inset 0 1px 0 rgba(255, 255, 255, 0.07)';
 
 // ══════════════════════════════════════════════════════════════════════════
 // Shared subcomponents
@@ -184,26 +196,6 @@ const Avatar: React.FC<{
 
 // Statik durum göstergesi — animasyon/timer yok. Speaking durumunda ekstra yeşil
 // ikon gösterilmez; muted/deafened gibi durumlarda sakin işaret alanı korunur.
-const Waveform: React.FC<{ active: boolean; height: number; color: string }> = ({ active, height, color }) => {
-  if (active) return null;
-  return (
-  <div style={{ display: 'flex', gap: 2, alignItems: 'center', height, flexShrink: 0 }}>
-    {[0.42, 0.72, 0.52, 0.62].map((h, i) => (
-      <span
-        key={i}
-        style={{
-          width: 2,
-          height: `${Math.round(height * h)}px`,
-          borderRadius: 2,
-          background: color,
-          opacity: active ? 0.95 : 0.45,
-        }}
-      />
-    ))}
-  </div>
-  );
-};
-
 const HeadphonesOffIcon: React.FC<{ size: number; color: string }> = ({ size, color }) => (
   <svg
     width={size} height={size} viewBox="0 0 24 24"
@@ -263,7 +255,9 @@ const ParticipantRow: React.FC<{
   cfg: SizeCfg;
   variant: OverlayVariant;
   idleOpacityPct: number;
-}> = React.memo(function ParticipantRow({ p, cfg, variant, idleOpacityPct }) {
+  accentRgb: string;
+  openLeft: boolean;
+}> = React.memo(function ParticipantRow({ p, cfg, variant, idleOpacityPct, accentRgb, openLeft }) {
   const speaking = p.isSpeaking && !p.isMuted;
   const muted = p.isMuted;
   const deafened = p.isDeafened;
@@ -272,22 +266,23 @@ const ParticipantRow: React.FC<{
   const effectiveOpacityPct = visible ? 100 : idleOpacityPct;
   // visible (speaking/muted/deafened) iken kart TAM OPAK — kullanıcı istediği "konuşunca
   // görünsün" garantisi. Idle'da slider değerine göre glass translucent kalır.
-  const cardBg = buildCardGradient(effectiveOpacityPct, visible);
+  const cardBg = buildCardGradient(effectiveOpacityPct, visible, accentRgb);
   const rowOpacity = effectiveOpacityPct / 100;
   const hasCard = cardBg !== 'transparent';
 
   // Status öncelik: deafened (duymuyor) > muted (dinliyor) > speaking (konuşuyor).
   // Deafened genelde mic'i de kapatır ama kulağın kapalı olduğunu vurgulamak öncelikli.
   const statusText = deafened ? 'Duymuyor' : muted ? 'Dinliyor' : speaking ? 'Konuşuyor' : '';
-  const statusColor = deafened ? '#ef4444' : muted ? '#fb923c' : 'rgba(220,228,240,0.65)';
-  const waveColor = deafened ? '#ef4444' : muted ? '#fb923c' : 'rgba(220,228,240,0.65)';
+  const statusColor = deafened ? '#ef4444' : muted ? '#fb923c' : `rgba(${accentRgb},0.74)`;
 
   if (variant === 'capsule') {
     return (
       <CapsuleRow
         p={p} cfg={cfg} speaking={speaking} muted={muted} deafened={deafened}
         cardBg={cardBg} hasCard={hasCard} rowOpacity={rowOpacity}
-        statusText={statusText} statusColor={statusColor} waveColor={waveColor}
+        statusText={statusText} statusColor={statusColor}
+        accentRgb={accentRgb}
+        openLeft={openLeft}
       />
     );
   }
@@ -296,7 +291,9 @@ const ParticipantRow: React.FC<{
       <CardRow
         p={p} cfg={cfg} speaking={speaking} muted={muted} deafened={deafened}
         cardBg={cardBg} hasCard={hasCard} rowOpacity={rowOpacity}
-        statusText={statusText} statusColor={statusColor} waveColor={waveColor}
+        statusText={statusText} statusColor={statusColor}
+        accentRgb={accentRgb}
+        openLeft={openLeft}
       />
     );
   }
@@ -308,7 +305,9 @@ const ParticipantRow: React.FC<{
     <BadgeRow
       p={p} cfg={cfg} speaking={speaking} muted={muted} deafened={deafened}
       cardBg={cardBg} hasCard={hasCard} rowOpacity={rowOpacity}
-      statusText={statusText} statusColor={statusColor} waveColor={waveColor}
+      statusText={statusText} statusColor={statusColor}
+      accentRgb={accentRgb}
+      openLeft={openLeft}
     />
   );
 }, (prev, next) => {
@@ -324,6 +323,8 @@ const ParticipantRow: React.FC<{
     && pp.isDeafened === np.isDeafened
     && prev.variant === next.variant
     && prev.idleOpacityPct === next.idleOpacityPct
+    && prev.accentRgb === next.accentRgb
+    && prev.openLeft === next.openLeft
     && prev.cfg.avatar === next.cfg.avatar
     && prev.cfg.name === next.cfg.name
     && prev.cfg.gap === next.cfg.gap
@@ -387,22 +388,24 @@ interface RowVariantProps {
   rowOpacity: number;
   statusText: string;
   statusColor: string;
-  waveColor: string;
+  accentRgb: string;
+  openLeft: boolean;
 }
 
 const CapsuleRow: React.FC<RowVariantProps> = ({
-  p, cfg, speaking, cardBg, hasCard, rowOpacity, statusText, statusColor, waveColor,
+  p, cfg, speaking, cardBg, hasCard, rowOpacity, statusText, statusColor, accentRgb, openLeft,
 }) => {
-  const padV = Math.max(3, Math.round(cfg.name * 0.22));
-  const padR = Math.max(8, Math.round(cfg.name * 0.85));
-  const cardRadius = Math.round(cfg.avatar * 0.42);
+  const avSize = Math.round(cfg.avatar * 0.80);
+  const padV = 3;
+  const padR = Math.max(8, Math.round(cfg.name * 0.7));
+  const cardRadius = Math.round(avSize * 0.42);
   // Status sadece speaking DIŞI ve metin varsa göster (Dinliyor / Duymuyor).
   // Konuşurken status text gizli — opak kart yeterli vurgu verir.
   const showStatus = !speaking && !!statusText;
   return (
     <div
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: cfg.gap,
+        display: 'inline-flex', alignItems: 'center', flexDirection: openLeft ? 'row-reverse' : 'row', gap: Math.max(6, cfg.gap - 2),
         background: cardBg,
         borderRadius: cardRadius,
         padding: `${padV}px ${padR}px ${padV}px ${padV}px`,
@@ -415,13 +418,13 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
         transition: 'opacity 100ms ease-out',
         // macOS Control Center glass — layered depth shadow + inner highlight.
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
-        border: hasCard ? GLASS_BORDER : 'none',
+        border: hasCard ? glassBorder(accentRgb) : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
       } as React.CSSProperties}
     >
-      <Avatar p={p} size={cfg.avatar} />
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.15 }}>
+      <Avatar p={p} size={avSize} />
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.15, textAlign: openLeft ? 'right' : 'left' }}>
         <span
           style={{
             fontSize: cfg.name,
@@ -453,7 +456,6 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
           </span>
         )}
       </div>
-      <Waveform active={speaking} height={cfg.wave} color={waveColor} />
     </div>
   );
 };
@@ -465,17 +467,17 @@ const CapsuleRow: React.FC<RowVariantProps> = ({
 // ══════════════════════════════════════════════════════════════════════════
 
 const CardRow: React.FC<RowVariantProps> = ({
-  p, cfg, speaking, muted, deafened, cardBg, hasCard, rowOpacity, statusText, statusColor, waveColor,
+  p, cfg, speaking, muted, deafened, cardBg, hasCard, rowOpacity, statusText, statusColor, accentRgb, openLeft,
 }) => {
-  const padX = Math.max(10, Math.round(cfg.name * 1.0));
-  const padY = Math.max(8, Math.round(cfg.name * 0.7));
+  const padX = Math.max(9, Math.round(cfg.name * 0.85));
+  const padY = 5;
   // Avatar squircle ile aynı oranda kart radius — uyumlu görünüm.
   const cardRadius = Math.round(cfg.avatar * 0.42);
   return (
     <div
       style={{
-        display: 'inline-flex', flexDirection: 'column',
-        gap: Math.max(5, cfg.gap - 2),
+        display: 'inline-flex', alignItems: 'center', flexDirection: openLeft ? 'row-reverse' : 'row',
+        gap: Math.max(7, cfg.gap),
         background: cardBg,
         borderRadius: cardRadius,
         padding: `${padY}px ${padX}px`,
@@ -483,17 +485,15 @@ const CardRow: React.FC<RowVariantProps> = ({
         opacity: rowOpacity,
         transition: 'opacity 100ms ease-out',
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
-        border: hasCard ? GLASS_BORDER : 'none',
+        border: hasCard ? glassBorder(accentRgb) : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         maxWidth: 'min(250px, 100%)',
         minWidth: 0,
-        alignItems: 'center', // İçerik (avatar+name ve alt mic-row) yatay ortalı.
       }}
     >
-      {/* Üst satır: avatar + name — ortalı blok */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap, minWidth: 0, maxWidth: '100%', justifyContent: 'center' }}>
-        <Avatar p={p} size={cfg.avatar} />
+      <Avatar p={p} size={cfg.avatar} />
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%', lineHeight: 1.12, textAlign: openLeft ? 'right' : 'left' }}>
         <span
           style={{
             fontSize: cfg.name,
@@ -508,36 +508,32 @@ const CardRow: React.FC<RowVariantProps> = ({
         >
           {p.displayName}
         </span>
-      </div>
 
-      {/* Alt satır: durum ikonu + status text — yatay ortalı.
-          Deafened → kulaklık-off ikonu (kırmızı), muted → mic-off (turuncu),
-          speaking → mic (yeşil), idle → mic (gri). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: cfg.gap - 2, justifyContent: 'center', minWidth: 0, maxWidth: '100%' }}>
-        {deafened ? (
-          <HeadphonesOffIcon size={cfg.name + 1} color="#ef4444" />
-        ) : (
-          <MicIcon
-            size={cfg.name + 1}
-            color={muted ? '#fb923c' : 'rgba(220,228,240,0.60)'}
-            off={muted}
-          />
-        )}
-        <span
-          style={{
-            fontSize: cfg.name - 2,
-            fontWeight: 600,
-            color: statusColor,
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
-            overflow: 'hidden',
-            minWidth: 0,
-            letterSpacing: '0.01em',
-          }}
-        >
-          {statusText || 'Bağlı'}
-        </span>
-        <Waveform active={speaking} height={cfg.wave} color={waveColor} />
+        <div style={{ display: 'flex', alignItems: 'center', flexDirection: openLeft ? 'row-reverse' : 'row', gap: 4, minWidth: 0, marginTop: 2, justifyContent: openLeft ? 'flex-end' : 'flex-start' }}>
+          {deafened ? (
+            <HeadphonesOffIcon size={cfg.name} color="#ef4444" />
+          ) : (
+            <MicIcon
+              size={cfg.name}
+              color={muted ? '#fb923c' : `rgba(${accentRgb},0.66)`}
+              off={muted}
+            />
+          )}
+          <span
+            style={{
+              fontSize: cfg.name - 2,
+              fontWeight: 600,
+              color: statusColor,
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              overflow: 'hidden',
+              minWidth: 0,
+              letterSpacing: '0.01em',
+            }}
+          >
+            {statusText || 'Bağlı'}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -550,7 +546,7 @@ const CardRow: React.FC<RowVariantProps> = ({
 // ══════════════════════════════════════════════════════════════════════════
 
 const BadgeRow: React.FC<RowVariantProps> = ({
-  p, cfg, speaking, muted, deafened, cardBg, hasCard, rowOpacity, waveColor,
+  p, cfg, speaking, muted, deafened, cardBg, hasCard, rowOpacity, accentRgb, openLeft,
 }) => {
   // Speaking, muted veya deafened iken expand kalsın — kullanıcı kim hangi state fark etsin.
   const expanded = speaking || muted || deafened;
@@ -562,7 +558,7 @@ const BadgeRow: React.FC<RowVariantProps> = ({
   return (
     <div
       style={{
-        display: 'inline-flex', alignItems: 'center',
+        display: 'inline-flex', alignItems: 'center', flexDirection: openLeft ? 'row-reverse' : 'row',
         gap: expanded ? Math.max(6, cfg.gap - 2) : 0,
         background: cardBg,
         borderRadius: cardRadius,
@@ -573,7 +569,7 @@ const BadgeRow: React.FC<RowVariantProps> = ({
         // Max-width/padding/gap sadece state değişiminde kısa geçiş yapar; sürekli animasyon yok.
         transition: 'max-width 120ms ease-out, opacity 100ms ease-out, padding 120ms ease-out, gap 120ms ease-out',
         boxShadow: hasCard ? GLASS_SHADOW : 'none',
-        border: hasCard ? GLASS_BORDER : 'none',
+        border: hasCard ? glassBorder(accentRgb) : 'none',
         backdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         WebkitBackdropFilter: hasCard ? GLASS_BACKDROP : undefined,
         maxWidth: expanded ? 'min(240px, 100%)' : avSize + padV * 2,
@@ -608,7 +604,6 @@ const BadgeRow: React.FC<RowVariantProps> = ({
         >
           {p.displayName}
         </span>
-        <Waveform active={speaking} height={cfg.wave - 2} color={waveColor} />
       </div>
     </div>
   );

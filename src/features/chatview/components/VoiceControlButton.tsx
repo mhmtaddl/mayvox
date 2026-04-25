@@ -34,7 +34,7 @@ export default function VoiceControlButton({
   className = '',
 }: Props) {
   const base =
-    'w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150';
+    'voice-control-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150';
 
   if (override === 'warning') {
     return (
@@ -45,7 +45,7 @@ export default function VoiceControlButton({
         title={title}
         aria-label={title}
         aria-pressed={!active}
-        className={`${base} bg-orange-500/20 text-orange-400 border-orange-500/25 ${className}`}
+        className={`${base} voice-control-warning bg-orange-500/20 text-orange-400 border-orange-500/25 ${className}`}
       >
         <OffIcon size={size} strokeWidth={2} />
       </button>
@@ -53,7 +53,7 @@ export default function VoiceControlButton({
   }
 
   const activeCls =
-    'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/25';
+    'voice-control-active bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border-[var(--theme-accent)]/25';
   const inactiveCls =
     'voice-ctrl-off bg-red-500/20 text-red-400 border-red-500/25';
 

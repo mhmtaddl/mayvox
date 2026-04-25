@@ -76,7 +76,7 @@ function LastSeenCard() {
   const { showLastSeen, setShowLastSeen } = useSettings();
   return (
     <div
-      className="surface-card flex items-center gap-3 px-4 py-3 rounded-xl"
+      className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl"
     >
       <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
         <Eye size={14} className="text-[var(--theme-accent)]/80" />
@@ -115,10 +115,15 @@ const ANCHOR_POINTS: Array<{ v: OverlayAnchor; fx: number; fy: number; label: st
   { v: 'left-top-mid',     fx: 0,    fy: 0.33, label: 'Sol (üst orta)' },
 ];
 
-function OverlayPositionPicker({ value, onChange, disabled }: {
+function OverlayPositionPicker({ value, onChange, disabled, variant, size, cardOpacity, displayName, avatarUrl }: {
   value: OverlayAnchor;
   onChange: (v: OverlayAnchor) => void;
   disabled?: boolean;
+  variant: 'capsule' | 'card' | 'badge' | 'none';
+  size: 'small' | 'medium' | 'large';
+  cardOpacity: number;
+  displayName: string;
+  avatarUrl?: string | null;
 }) {
   // Responsive: picker genişliği grid kolonu tarafından yönetilir (min-width 0 ile
   // taşmaz). Aspect-ratio ile yükseklik orantılı; min/max height ara genişliklerde
@@ -128,18 +133,12 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
   const HIT = 24;
   const activeLabel = ANCHOR_POINTS.find(p => p.v === value)?.label ?? '';
 
-  // Picker zemini her temada koyu — gerçek bir oyun ekranı simulasyonu (oyunlar genelde
-  // koyu) ve beyaz anchor dot'ları her temada görünür kalır. Açık tema seçildiğinde de
-  // bg değişmez; dot'lar her zaman beyaz kontrast sağlar. Accent tint hafif ton verir.
-  const bg = 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.14) 0%, rgba(var(--theme-accent-rgb), 0.04) 100%), linear-gradient(180deg, #0f1522 0%, #080b14 100%)';
-  const gridColor = 'rgba(255,255,255,0.028)';
-  const vignette = 'inset 0 0 60px rgba(0,0,0,0.55)';
-  const ringColor = 'rgba(var(--glass-tint), 0.08)';
-  // Tüm anchor noktaları + aktif pip dot'ları beyaz — koyu zemin üzerinde net kontrast.
-  const pipSecondaryDot = 'rgba(255,255,255,0.85)';
-  const pipPrimaryDot   = 'rgba(255,255,255,1)';
-  const inactiveDotBg     = 'rgba(255,255,255,0.78)';
-  const inactiveDotRing   = 'rgba(255,255,255,0.30)';
+  const bg = 'var(--overlay-picker-bg, linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.14) 0%, rgba(var(--theme-accent-rgb), 0.04) 100%), linear-gradient(180deg, #0f1522 0%, #080b14 100%))';
+  const gridColor = 'var(--overlay-picker-grid, rgba(255,255,255,0.028))';
+  const vignette = 'var(--overlay-picker-vignette, inset 0 0 60px rgba(0,0,0,0.55))';
+  const ringColor = 'var(--overlay-picker-ring, rgba(var(--glass-tint), 0.08))';
+  const inactiveDotBg = 'var(--overlay-picker-dot, rgba(255,255,255,0.78))';
+  const inactiveDotRing = 'var(--overlay-picker-dot-ring, rgba(255,255,255,0.30))';
 
   return (
     <div
@@ -187,7 +186,7 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
         />
 
         <style>{`
-          .anchor-hit:hover .anchor-dot { transform: scale(1.6); background: rgba(var(--theme-accent-rgb), 0.55); }
+          .anchor-hit:hover .anchor-dot { transform: scale(1.6); background: var(--overlay-picker-dot-hover, rgba(var(--theme-accent-rgb), 0.55)); }
           .anchor-hit:hover .anchor-dot.is-active { transform: none; }
         `}</style>
 
@@ -218,29 +217,14 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
               aria-pressed={active}
             >
               {active ? (
-                // Mini overlay pip — 3 avatar dot, ilk dot konuşuyor (accent glow)
-                <span
-                  aria-hidden
-                  className="anchor-dot is-active flex items-center gap-[3px] rounded-md"
-                  style={{
-                    padding: '3px 4px',
-                    background: 'rgba(var(--theme-accent-rgb), 0.22)',
-                    boxShadow:
-                      '0 0 0 1px rgba(var(--theme-accent-rgb), 0.80),' +
-                      ' 0 0 12px rgba(var(--theme-accent-rgb), 0.45)',
-                    transition: 'all 140ms cubic-bezier(0.22,1,0.36,1)',
-                  }}
-                >
-                  {[0, 1, 2].map(i => (
-                    <span
-                      key={i}
-                      style={{
-                        width: 5, height: 5, borderRadius: '50%',
-                        background: i === 0 ? pipPrimaryDot : pipSecondaryDot,
-                      }}
-                    />
-                  ))}
-                </span>
+                <OverlayBoardPreview
+                  variant={variant}
+                  size={size}
+                  cardOpacity={cardOpacity}
+                  displayName={displayName}
+                  avatarUrl={avatarUrl}
+                  openLeft={p.fx > 0.5}
+                />
               ) : (
                 <span
                   aria-hidden
@@ -272,11 +256,12 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
           }}
         >
           <span
-            className="font-semibold text-white/95 truncate block"
+            className="font-semibold truncate block"
             style={{
               // Container query — picker küçülünce yazı orantılı küçülür.
               fontSize: 'clamp(10px, 8cqw, 13px)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)',
+              color: 'var(--overlay-picker-label, rgba(255,255,255,0.95))',
+              textShadow: 'var(--overlay-picker-label-shadow, 0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55))',
             }}
           >
             {activeLabel}
@@ -284,6 +269,127 @@ function OverlayPositionPicker({ value, onChange, disabled }: {
         </div>
       </div>
     </div>
+  );
+}
+
+function OverlayBoardPreview({
+  variant,
+  size,
+  cardOpacity,
+  displayName,
+  avatarUrl,
+  openLeft,
+}: {
+  variant: 'capsule' | 'card' | 'badge' | 'none';
+  size: 'small' | 'medium' | 'large';
+  cardOpacity: number;
+  displayName: string;
+  avatarUrl?: string | null;
+  openLeft: boolean;
+}) {
+  const cfg = {
+    small: { avatar: 16, name: 8, gap: 4 },
+    medium: { avatar: 20, name: 9, gap: 5 },
+    large: { avatar: 24, name: 10, gap: 6 },
+  }[size];
+  const name = displayName || 'Mayvox';
+  const initials = name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || 'M';
+  const cardAlpha = Math.max(0, Math.min(100, cardOpacity)) / 100;
+  const hasCard = variant !== 'none' && cardAlpha > 0;
+  const cardBg = hasCard
+    ? `radial-gradient(circle at 24% 18%, rgba(var(--theme-accent-rgb), ${0.14 + cardAlpha * 0.18}), transparent 62%), linear-gradient(180deg, rgba(24,25,30,${0.72 + cardAlpha * 0.28}) 0%, rgba(9,10,13,${0.70 + cardAlpha * 0.30}) 100%)`
+    : 'transparent';
+  const avatar = (
+    <span
+      style={{
+        width: cfg.avatar,
+        height: cfg.avatar,
+        borderRadius: '26%',
+        overflow: 'hidden',
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(var(--theme-accent-rgb), 0.22)',
+        color: '#fff',
+        fontSize: Math.max(7, cfg.name - 1),
+        fontWeight: 800,
+        boxShadow: '0 0 0 1px rgba(255,255,255,0.10)',
+      }}
+    >
+      {avatarUrl?.startsWith('http') ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+    </span>
+  );
+  const nameNode = (
+    <span
+      style={{
+        fontSize: cfg.name,
+        fontWeight: 700,
+        color: 'rgba(255,255,255,0.96)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        maxWidth: size === 'large' ? 78 : 66,
+        lineHeight: 1.12,
+      }}
+    >
+      {name}
+    </span>
+  );
+  const statusNode = (
+    <span style={{ fontSize: Math.max(7, cfg.name - 2), fontWeight: 650, color: 'rgba(var(--theme-accent-rgb),0.82)', lineHeight: 1 }}>
+      Bağlı
+    </span>
+  );
+  const common: React.CSSProperties = {
+    position: 'absolute',
+    top: '50%',
+    left: openLeft ? 'auto' : '50%',
+    right: openLeft ? '50%' : 'auto',
+    transform: openLeft ? 'translate(8px, -50%)' : 'translate(-8px, -50%)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexDirection: openLeft ? 'row-reverse' : 'row',
+    gap: cfg.gap,
+    pointerEvents: 'none',
+    zIndex: 4,
+    maxWidth: 128,
+  };
+
+  if (variant === 'card') {
+    return (
+      <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '4px 7px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+        {avatar}
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
+          {nameNode}
+          {statusNode}
+        </span>
+      </span>
+    );
+  }
+  if (variant === 'badge') {
+    return (
+      <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 7px 3px 3px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+        {avatar}
+        {nameNode}
+      </span>
+    );
+  }
+  if (variant === 'none') {
+    return (
+      <span style={common}>
+        {avatar}
+        {nameNode}
+      </span>
+    );
+  }
+  return (
+    <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 8px 3px 3px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+      {avatar}
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
+        {nameNode}
+      </span>
+    </span>
   );
 }
 
@@ -516,6 +622,7 @@ function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled }: {
 
 // Oyun içi ses overlay — Electron desktop only — preview + kontroller
 function VoiceOverlayCard() {
+  const { currentUser } = useUser();
   const {
     overlayEnabled, setOverlayEnabled,
     overlayPosition, setOverlayPosition,
@@ -527,6 +634,7 @@ function VoiceOverlayCard() {
     overlayVariant, setOverlayVariant,
   } = useSettings();
   const off = !overlayEnabled;
+  const previewName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.name || 'Mayvox';
   return (
     <div
       className="surface-card rounded-xl px-4 py-4 w-full"
@@ -631,6 +739,11 @@ function VoiceOverlayCard() {
             value={overlayPosition}
             onChange={setOverlayPosition}
             disabled={off}
+            variant={overlayVariant}
+            size={overlaySize}
+            cardOpacity={overlayCardOpacity}
+            displayName={previewName}
+            avatarUrl={currentUser.avatar || null}
           />
           <div className="vox-right w-full min-w-0 flex flex-col gap-3">
             <div>
@@ -715,7 +828,7 @@ function VoiceOverlayCard() {
 function GameActivityCard() {
   const { gameActivityEnabled, setGameActivityEnabled } = useSettings();
   return (
-    <div className="surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
+    <div className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
       <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
         <Gamepad2 size={14} className="text-[var(--theme-accent)]/80" />
       </div>
@@ -770,7 +883,7 @@ export default function SettingsView() {
   ];
 
   return (
-    <div className="w-full max-w-[1100px] mx-auto pb-28 px-2 md:px-4 xl:px-6">
+    <div className="settings-flat-light w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-28 px-2 md:px-4 xl:px-6">
 
       {/* ── Header — başlık ve segmented nav dikey hizalı, central ── */}
       <div className="flex flex-col gap-4 pt-4 pb-5 md:pt-6 md:pb-6">

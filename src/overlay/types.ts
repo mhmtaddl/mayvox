@@ -43,10 +43,13 @@ export interface OverlaySnapshot {
   roomName: string | null;
   participants: OverlayParticipant[];
   size: OverlaySize;
+  position?: OverlayPosition;
   /** Kart şeffaflığı — 0-100 (idle görünürlük). Konuşan satırda otomatik 100'e çıkar. */
   cardOpacity: number;
   /** Render stili — overlay renderer buna göre component dispatch eder. */
   variant: OverlayVariant;
+  /** Ana app tema accent rengi — overlay ayrı renderer olduğu için snapshot ile taşınır. */
+  themeAccentRgb?: string;
 }
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {

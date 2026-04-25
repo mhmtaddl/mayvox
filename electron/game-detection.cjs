@@ -14,7 +14,7 @@ const path = require('path');
 const { powerMonitor } = require('electron');
 
 const POLL_INTERVAL_MS = 10_000;
-const ACTIVATION_DELAY_MS = 8_000;
+const ACTIVATION_DELAY_MS = 2_000;
 const DEACTIVATION_TOLERANCE_MS = 5_000;
 
 let whitelist = []; // [{ displayName, processes: string[] }]
@@ -89,11 +89,19 @@ class GameDetector {
   }
 
   setEnabled(enabled) {
-    if (this.enabled === enabled) return;
+    if (this.enabled === enabled) {
+      if (enabled) {
+        this._emit(this.published);
+        void this._tick();
+      }
+      return;
+    }
     this.enabled = enabled;
     if (enabled) {
       loadWhitelist();
       this._start();
+      this._emit(this.published);
+      void this._tick();
     } else {
       this._stop();
       this._reset();

@@ -12,11 +12,13 @@ import { Minus, X } from 'lucide-react';
 
 interface ElectronWindowAPI {
   minimize: () => void;
-  maximizeRestore: () => void;
+  maximizeRestore: () => void | Promise<void>;
+  toggleMaximize?: () => void | Promise<void>;
   close: () => void;
+  setAuthMode?: (enabled: boolean, kind?: string) => void;
   isMaximized: () => Promise<boolean>;
   isFocused: () => Promise<boolean>;
-  onState: (cb: (data: { maximized: boolean; focused: boolean }) => void) => void;
+  onState: (cb: (data: { maximized: boolean; focused: boolean; authMode?: boolean }) => void) => void;
   offState: () => void;
 }
 
@@ -26,61 +28,60 @@ declare global {
   }
 }
 
-const TITLEBAR_HEIGHT = 36;
+const TITLEBAR_HEIGHT = 40;
 
 export default function AppChrome() {
   const api = typeof window !== 'undefined' ? window.electronWindow : undefined;
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
+  const [authMode, setAuthMode] = useState(false);
 
   useEffect(() => {
     if (!api) return;
     void api.isMaximized().then(setMaximized).catch(() => {});
     void api.isFocused().then(setFocused).catch(() => {});
-    api.onState(({ maximized: m, focused: f }) => {
+    api.onState(({ maximized: m, focused: f, authMode: a }) => {
       setMaximized(m);
       setFocused(f);
+      setAuthMode(!!a);
     });
     return () => { api.offState(); };
   }, [api]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('mv-window-maximized', maximized);
+    return () => document.documentElement.classList.remove('mv-window-maximized');
+  }, [maximized]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('mv-auth-window', authMode);
+    return () => document.documentElement.classList.remove('mv-auth-window');
+  }, [authMode]);
 
   // Web modunda (Electron yoksa) hiç render etme — drag region anlamsız.
   if (!api) return null;
 
   const onMin = useCallback(() => api.minimize(), [api]);
-  const onMaxRestore = useCallback(() => api.maximizeRestore(), [api]);
+  const onMaxRestore = useCallback(() => { void api.maximizeRestore(); }, [api]);
   const onClose = useCallback(() => api.close(), [api]);
+  const onTitlebarMouseDown = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-window-control]')) return;
+    if (event.detail < 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void api.toggleMaximize?.();
+  }, [api]);
 
   return (
     <header
-      className="relative w-full select-none"
+      className="titlebar window-titlebar app-titlebar relative w-full select-none"
+      onMouseDownCapture={onTitlebarMouseDown}
       style={{
         height: TITLEBAR_HEIGHT,
         WebkitAppRegion: 'drag',
-        background: focused
-          ? 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.92) 0%, rgba(var(--theme-bg-rgb), 0.78) 100%)'
-          : 'linear-gradient(180deg, rgba(var(--theme-bg-rgb), 0.85) 0%, rgba(var(--theme-bg-rgb), 0.68) 100%)',
-        borderBottom: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
-        boxShadow: focused
-          ? 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.18), 0 1px 0 rgba(0,0,0,0.35), 0 0 14px rgba(var(--theme-accent-rgb), 0.12)'
-          : 'inset 0 1px 0 rgba(var(--theme-accent-rgb), 0.06)',
-        backdropFilter: 'blur(18px) saturate(140%)',
-        transition: 'background 200ms ease, box-shadow 200ms ease',
       } as React.CSSProperties}
     >
-      {/* Ambient center glow — sadece focused */}
-      {focused && (
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none overflow-hidden"
-          style={{
-            background:
-              'radial-gradient(ellipse 260px 32px at 50% 0%, rgba(var(--theme-accent-rgb), 0.22), transparent 75%)',
-            mixBlendMode: 'screen',
-          }}
-        />
-      )}
-
       <div className="relative h-full flex items-center justify-between px-3">
         {/* LEFT — brand */}
         <div
@@ -88,7 +89,7 @@ export default function AppChrome() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <BrandMark focused={focused} />
-          <span className={`text-[11.5px] font-extrabold tracking-[0.20em] uppercase leading-none transition-opacity ${focused ? 'opacity-95' : 'opacity-55'}`}>
+          <span className={`text-[13px] font-black tracking-[0.18em] uppercase leading-none transition-opacity ${focused ? 'opacity-95' : 'opacity-55'}`}>
             <span className="text-[var(--theme-text)]">MAY</span><span className="text-[var(--theme-accent)]">VOX</span>
           </span>
         </div>
@@ -99,14 +100,19 @@ export default function AppChrome() {
         {/* RIGHT — control rail (segmented) */}
         <div
           className="flex items-center gap-1 shrink-0 pl-3"
+          data-window-control
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <ControlButton onClick={onMin} ariaLabel="Küçült" tone="neutral">
-            <Minus size={13} strokeWidth={2.2} />
-          </ControlButton>
-          <ControlButton onClick={onMaxRestore} ariaLabel={maximized ? 'Geri al' : 'Tam ekran'} tone="neutral">
-            {maximized ? <RestoreIcon /> : <MaximizeIcon />}
-          </ControlButton>
+          {!authMode && (
+            <>
+              <ControlButton onClick={onMin} ariaLabel="Küçült" tone="neutral">
+                <Minus size={13} strokeWidth={2.2} />
+              </ControlButton>
+              <ControlButton onClick={onMaxRestore} ariaLabel={maximized ? 'Geri al' : 'Tam ekran'} tone="neutral">
+                {maximized ? <RestoreIcon /> : <MaximizeIcon />}
+              </ControlButton>
+            </>
+          )}
           <ControlButton onClick={onClose} ariaLabel="Kapat" tone="danger">
             <X size={13} strokeWidth={2.2} />
           </ControlButton>
@@ -120,20 +126,20 @@ export default function AppChrome() {
 function BrandMark({ focused }: { focused: boolean }) {
   return (
     <div
-      className="relative w-5 h-5 rounded-md flex items-center justify-center"
+      className="relative w-6 h-6 rounded-lg flex items-center justify-center"
       style={{
         background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.32), rgba(var(--theme-accent-rgb),0.10))',
         border: '1px solid rgba(var(--theme-accent-rgb), 0.42)',
-        boxShadow: focused ? '0 0 12px rgba(var(--theme-accent-rgb), 0.40), inset 0 1px 0 rgba(255,255,255,0.08)' : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+        boxShadow: focused ? '0 0 12px rgba(var(--theme-accent-rgb), 0.34), inset 0 1px 0 rgba(255,255,255,0.10)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
         transition: 'box-shadow 200ms ease',
       }}
     >
       {/* Ses dalgası izlenimi — 3 mini bar */}
-      <svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden>
-        <rect x="0.5" y="3" width="1.6" height="3" rx="0.6" fill="var(--theme-accent)" opacity="0.85" />
-        <rect x="3.4" y="1" width="1.6" height="7" rx="0.6" fill="var(--theme-accent)" opacity="1" />
-        <rect x="6.3" y="2" width="1.6" height="5" rx="0.6" fill="var(--theme-accent)" opacity="0.9" />
-        <rect x="9.2" y="3.5" width="1.3" height="2" rx="0.5" fill="var(--theme-accent)" opacity="0.7" />
+      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" aria-hidden>
+        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="var(--theme-accent)" opacity="0.9" />
+        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="var(--theme-accent)" opacity="1" />
+        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="var(--theme-accent)" opacity="0.95" />
+        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="var(--theme-accent)" opacity="0.78" />
       </svg>
     </div>
   );
@@ -155,10 +161,11 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
   const border = hover
     ? (isDanger ? 'rgba(239,68,68,0.40)' : 'rgba(var(--theme-accent-rgb), 0.30)')
     : 'rgba(255,255,255,0.05)';
-  const color = hover && isDanger ? '#fff' : 'var(--theme-text)';
+  const color = isDanger ? 'var(--window-close-fg, #0d0d0d)' : 'var(--theme-text)';
 
   return (
     <button
+      data-window-control
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

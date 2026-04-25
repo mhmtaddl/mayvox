@@ -30,12 +30,12 @@ interface RoleMeta {
 
 const ROLE_META: Record<ServerRole, RoleMeta> = {
   owner:        { icon: <Crown size={15} />,       iconLg: <Crown size={22} strokeWidth={1.8} />,       accent: '#f59e0b', rgb: '245,158,11',  isSuper: false },
-  super_admin:  { icon: <ShieldPlus size={15} />,  iconLg: <ShieldPlus size={20} strokeWidth={1.9} />,  accent: '#93c5fd', rgb: '147,197,253', isSuper: true  },
-  admin:        { icon: <Shield size={15} />,      iconLg: <Shield size={20} strokeWidth={1.9} />,      accent: '#60a5fa', rgb: '96,165,250',  isSuper: false },
-  super_mod:    { icon: <ShieldAlert size={15} />, iconLg: <ShieldAlert size={20} strokeWidth={1.9} />, accent: '#c4b5fd', rgb: '196,181,253', isSuper: true  },
-  mod:          { icon: <ShieldCheck size={15} />, iconLg: <ShieldCheck size={20} strokeWidth={1.9} />, accent: '#a78bfa', rgb: '167,139,250', isSuper: false },
-  super_member: { icon: <UserCheck size={15} />,   iconLg: <UserCheck size={20} strokeWidth={1.9} />,   accent: '#cbd5e1', rgb: '203,213,225', isSuper: true  },
-  member:       { icon: <User size={15} />,        iconLg: <User size={20} strokeWidth={1.9} />,        accent: '#94a3b8', rgb: '148,163,184', isSuper: false },
+  super_admin:  { icon: <ShieldPlus size={15} />,  iconLg: <ShieldPlus size={20} strokeWidth={1.9} />,  accent: '#1d4ed8', rgb: '29,78,216',   isSuper: true  },
+  admin:        { icon: <Shield size={15} />,      iconLg: <Shield size={20} strokeWidth={1.9} />,      accent: '#2563eb', rgb: '37,99,235',   isSuper: false },
+  super_mod:    { icon: <ShieldAlert size={15} />, iconLg: <ShieldAlert size={20} strokeWidth={1.9} />, accent: '#6d28d9', rgb: '109,40,217',  isSuper: true  },
+  mod:          { icon: <ShieldCheck size={15} />, iconLg: <ShieldCheck size={20} strokeWidth={1.9} />, accent: '#7c3aed', rgb: '124,58,237',  isSuper: false },
+  super_member: { icon: <UserCheck size={15} />,   iconLg: <UserCheck size={20} strokeWidth={1.9} />,   accent: '#475569', rgb: '71,85,105',   isSuper: true  },
+  member:       { icon: <User size={15} />,        iconLg: <User size={20} strokeWidth={1.9} />,        accent: '#64748b', rgb: '100,116,139', isSuper: false },
 };
 
 // Capability kategorileri (Gelişmiş Yetkiler)
@@ -110,7 +110,7 @@ export default function RolesTab({ serverId }: Props) {
 
   return (
     <div className="max-w-[1280px] mx-auto pb-4">
-      <p className="text-[11.5px] text-[#e8ecf4]/55 leading-relaxed mb-4 px-1">
+      <p className="text-[11.5px] text-[var(--theme-secondary-text)] leading-relaxed mb-4 px-1">
         Roller, kullanıcıların sunucuda neler yapabileceğini belirler. Bir rol seçerek yetkileri görüntüleyebilirsiniz.
       </p>
 
@@ -120,11 +120,11 @@ export default function RolesTab({ serverId }: Props) {
           className="rounded-2xl p-2.5"
           style={{
             background: 'var(--roles-layer-base)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+            boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.06)',
           }}
         >
           <div className="px-2 pt-1.5 pb-2.5">
-            <div className="text-[11px] font-semibold text-[#e8ecf4]/55 uppercase" style={{ letterSpacing: '0.14em' }}>
+            <div className="text-[11px] font-semibold text-[var(--theme-secondary-text)] uppercase" style={{ letterSpacing: '0.14em' }}>
               Roller
             </div>
           </div>
@@ -164,11 +164,11 @@ export default function RolesTab({ serverId }: Props) {
       <style>{`
         /* ─── Layer tokens (3-seviye depth) ─── */
         :root {
-          --roles-layer-base:     rgba(255, 255, 255, 0.020);
-          --roles-layer-surface:  rgba(255, 255, 255, 0.035);
-          --roles-layer-hover:    rgba(255, 255, 255, 0.050);
-          --roles-layer-top:      rgba(255, 255, 255, 0.068);
-          --roles-hairline:       rgba(255, 255, 255, 0.045);
+          --roles-layer-base:     rgba(var(--glass-tint), 0.020);
+          --roles-layer-surface:  rgba(var(--glass-tint), 0.035);
+          --roles-layer-hover:    rgba(var(--glass-tint), 0.050);
+          --roles-layer-top:      rgba(var(--glass-tint), 0.068);
+          --roles-hairline:       rgba(var(--glass-tint), 0.070);
           /* Apple-grade easing */
           --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
           --ease-snap:   cubic-bezier(0.4, 0, 0.2, 1);
@@ -237,8 +237,8 @@ export default function RolesTab({ serverId }: Props) {
         .capCategoryRow:focus-visible {
           outline: none;
           box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,0.08),
-            0 0 0 2px rgba(255,255,255,0.06);
+            inset 0 0 0 1px rgba(var(--glass-tint),0.08),
+            0 0 0 2px rgba(var(--glass-tint),0.06);
         }
 
         /* ─── Typography rhythm ─── */
@@ -313,7 +313,7 @@ function RoleListItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[12.5px] font-semibold text-[#e8ecf4] truncate" style={{ opacity: 0.92 }}>
+          <span className="text-[12.5px] font-semibold text-[var(--theme-text)] truncate" style={{ opacity: 0.92 }}>
             {ROLE_LABEL[name]}
           </span>
           {pinned && (
@@ -330,7 +330,7 @@ function RoleListItem({
             </span>
           )}
         </div>
-        <div className="text-[10.5px] text-[#e8ecf4]/55 truncate mt-[2px] flex items-center gap-1 leading-relaxed">
+        <div className="text-[10.5px] text-[var(--theme-secondary-text)] truncate mt-[2px] flex items-center gap-1 leading-relaxed">
           {unavailable && (
             <span
               className="w-1 h-1 rounded-full shrink-0"
@@ -346,8 +346,8 @@ function RoleListItem({
       <div
         className="text-[10.5px] font-medium tabular-nums shrink-0 px-2 py-0.5 rounded-md transition-colors"
         style={{
-          color: selected ? meta.accent : 'rgba(232,236,244,0.55)',
-          background: selected ? `rgba(${meta.rgb}, 0.08)` : 'rgba(255,255,255,0.022)',
+          color: selected ? meta.accent : 'var(--theme-secondary-text)',
+          background: selected ? `rgba(${meta.rgb}, 0.08)` : 'rgba(var(--glass-tint),0.022)',
           opacity: unavailable ? 0.5 : selected ? 0.92 : 0.85,
         }}
       >
@@ -377,7 +377,7 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
       style={{
         background: 'var(--roles-layer-surface)',
         boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.04), ' +
+          'inset 0 1px 0 rgba(var(--glass-tint),0.06), ' +
           '0 6px 24px rgba(0,0,0,0.16)',
       }}
     >
@@ -407,7 +407,7 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3
-                className="text-[16px] font-semibold text-[#e8ecf4] tracking-tight leading-tight"
+                className="text-[16px] font-semibold text-[var(--theme-text)] tracking-tight leading-tight"
                 style={{ letterSpacing: '-0.01em' }}
               >
                 {ROLE_LABEL[name]}
@@ -442,8 +442,8 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
               <span
                 className="inline-flex items-center gap-1 text-[9px] font-medium uppercase px-1.5 py-0.5 rounded-md"
                 style={{
-                  background: 'rgba(255,255,255,0.028)',
-                  color: 'rgba(232,236,244,0.45)',
+                  background: 'rgba(var(--glass-tint),0.028)',
+                  color: 'var(--theme-secondary-text)',
                   letterSpacing: '0.10em',
                 }}
                 title="Sistem rolleri düzenlenemez"
@@ -468,7 +468,7 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
                 </span>
               )}
             </div>
-            <p className="text-[11.5px] text-[#e8ecf4]/55 leading-relaxed mt-1 clamp-1 max-w-[640px]">
+            <p className="text-[11.5px] text-[var(--theme-secondary-text)] leading-relaxed mt-1 clamp-1 max-w-[640px]">
               {ROLE_DESCRIPTION[name]}
             </p>
           </div>
@@ -502,7 +502,7 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
       <div className="px-5 pt-5 pb-2">
         <SectionLabel>Yönetebildiği Roller</SectionLabel>
         {managedRoles.length === 0 ? (
-          <div className="mt-2.5 px-1 text-[11.5px] text-[#e8ecf4]/45 leading-relaxed">
+          <div className="mt-2.5 px-1 text-[11.5px] text-[var(--theme-secondary-text)] leading-relaxed">
             Bu rol diğer kullanıcıların rollerini yönetemez.
           </div>
         ) : (
@@ -523,7 +523,7 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
                     {ROLE_LABEL[r]}
                   </span>
                   {i < managedRoles.length - 1 && (
-                    <ArrowRight size={9} className="text-[#e8ecf4]/25 shrink-0" strokeWidth={2} />
+                    <ArrowRight size={9} className="text-[var(--theme-secondary-text)]/45 shrink-0" strokeWidth={2} />
                   )}
                 </React.Fragment>
               );
@@ -535,21 +535,21 @@ function RoleDetailsPanel({ role, unavailable }: { role: ServerRoleSummary; unav
       {/* Tüm Yetkiler — tertiary (advanced reference) */}
       <div className="px-5 pt-5 pb-6" style={{ opacity: 0.8 }}>
         <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[11px] font-semibold text-[#e8ecf4]/55 uppercase" style={{ letterSpacing: '0.14em' }}>
+          <span className="text-[11px] font-semibold text-[var(--theme-secondary-text)] uppercase" style={{ letterSpacing: '0.14em' }}>
             Tüm Yetkiler
           </span>
-          <span className="text-[10.5px] font-medium text-[#e8ecf4]/40 tabular-nums">
+          <span className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/75 tabular-nums">
             ({caps.length})
           </span>
-          <span className="text-[10.5px] font-medium text-[#e8ecf4]/35 ml-1 normal-case tracking-normal italic">
+          <span className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/70 ml-1 normal-case tracking-normal italic">
             · gelişmiş
           </span>
         </div>
 
         {caps.length === 0 ? (
           <div
-            className="mt-2.5 px-3 py-3 rounded-lg text-center text-[11px] text-[#e8ecf4]/45 leading-relaxed"
-            style={{ background: 'rgba(255,255,255,0.012)' }}
+            className="mt-2.5 px-3 py-3 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)] leading-relaxed"
+            style={{ background: 'rgba(var(--glass-tint),0.012)' }}
           >
             {unavailable
               ? 'Bu rol sunucuda henüz aktif değil.'
@@ -593,7 +593,7 @@ function SectionLabel({ children, accent, prominent = false }: { children: React
         />
         <span
           className="text-[11px] font-semibold uppercase"
-          style={{ color: '#e8ecf4', letterSpacing: '0.14em', opacity: 0.9 }}
+          style={{ color: 'var(--theme-text)', letterSpacing: '0.14em', opacity: 0.9 }}
         >
           {children}
         </span>
@@ -602,7 +602,7 @@ function SectionLabel({ children, accent, prominent = false }: { children: React
   }
   return (
     <div
-      className="text-[11px] font-semibold text-[#e8ecf4]/55 uppercase"
+      className="text-[11px] font-semibold text-[var(--theme-secondary-text)] uppercase"
       style={{ letterSpacing: '0.14em' }}
     >
       {children}
@@ -626,7 +626,7 @@ function BundleCard({ data, accent, rgb }: { data: BundleDisplay; accent: string
           `0 4px 12px rgba(${rgb}, 0.085)`,
       } as React.CSSProperties : {
         background: 'var(--roles-layer-base)',
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.06)',
         opacity: 0.68,
       }}
       title={hint}
@@ -638,8 +638,8 @@ function BundleCard({ data, accent, rgb }: { data: BundleDisplay; accent: string
           color: accent,
           boxShadow: `inset 0 1px 0 rgba(${rgb}, 0.18)`,
         } : {
-          background: 'rgba(255,255,255,0.028)',
-          color: 'rgba(232,236,244,0.35)',
+          background: 'rgba(var(--glass-tint),0.028)',
+          color: 'var(--theme-secondary-text)',
         }}
         aria-hidden="true"
       >
@@ -649,7 +649,7 @@ function BundleCard({ data, accent, rgb }: { data: BundleDisplay; accent: string
         <div className="flex items-center gap-1.5 min-w-0">
           <span
             className="text-[12px] font-medium leading-snug truncate"
-            style={{ color: active ? 'rgba(232,236,244,0.92)' : 'rgba(232,236,244,0.50)' }}
+            style={{ color: active ? 'var(--theme-text)' : 'var(--theme-secondary-text)' }}
           >
             {label}
           </span>
@@ -666,7 +666,7 @@ function BundleCard({ data, accent, rgb }: { data: BundleDisplay; accent: string
             </span>
           )}
         </div>
-        <div className="text-[10.5px] text-[#e8ecf4]/45 clamp-1 leading-relaxed mt-[2px]">
+        <div className="text-[10.5px] text-[var(--theme-secondary-text)] clamp-1 leading-relaxed mt-[2px]">
           {hint}
         </div>
       </div>
@@ -693,31 +693,31 @@ function CapCategorySection({
   return (
     <div
       className="rounded-lg overflow-hidden transition-colors"
-      style={{ background: 'rgba(255,255,255,0.012)' }}
+      style={{ background: 'rgba(var(--glass-tint),0.012)' }}
     >
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="capCategoryRow w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(255,255,255,0.028)]"
+        className="capCategoryRow w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(var(--glass-tint),0.028)]"
       >
         <div
           className="w-[18px] h-[18px] rounded-md flex items-center justify-center shrink-0"
           style={{
-            background: hasAny ? `rgba(${rgb}, 0.09)` : 'rgba(255,255,255,0.022)',
-            color: hasAny ? accent : 'rgba(232,236,244,0.35)',
+            background: hasAny ? `rgba(${rgb}, 0.09)` : 'rgba(var(--glass-tint),0.022)',
+            color: hasAny ? accent : 'var(--theme-secondary-text)',
             opacity: hasAny ? 0.9 : 1,
           }}
         >
           {category.icon}
         </div>
-        <span className="text-[11.5px] font-medium text-[#e8ecf4]/85 flex-1 leading-relaxed">
+        <span className="text-[11.5px] font-medium text-[var(--theme-text)] flex-1 leading-relaxed">
           {category.label}
         </span>
         <span
           className="text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded"
           style={{
-            background: hasAny ? `rgba(${rgb}, 0.10)` : 'rgba(255,255,255,0.022)',
-            color: hasAny ? accent : 'rgba(232,236,244,0.45)',
+            background: hasAny ? `rgba(${rgb}, 0.10)` : 'rgba(var(--glass-tint),0.022)',
+            color: hasAny ? accent : 'var(--theme-secondary-text)',
             letterSpacing: '0.04em',
           }}
         >
@@ -725,7 +725,7 @@ function CapCategorySection({
         </span>
         <ChevronDown
           size={12}
-          className="text-[#e8ecf4]/40 shrink-0"
+          className="text-[var(--theme-secondary-text)] shrink-0"
           style={{
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 200ms var(--ease-smooth)',
@@ -743,10 +743,10 @@ function CapCategorySection({
                 className="inline-flex items-center gap-1 text-[10.5px] font-medium px-1.5 py-[3px] rounded transition-colors"
                 style={has ? {
                   background: `rgba(${rgb}, 0.07)`,
-                  color: 'rgba(232,236,244,0.88)',
+                  color: 'var(--theme-text)',
                 } : {
-                  background: 'rgba(255,255,255,0.018)',
-                  color: 'rgba(232,236,244,0.40)',
+                  background: 'rgba(var(--glass-tint),0.018)',
+                  color: 'var(--theme-secondary-text)',
                 }}
                 title={c}
               >
@@ -778,7 +778,7 @@ function ErrorBanner({ msg }: { msg: string }) {
 function Loading() {
   return (
     <div className="flex items-center justify-center py-10">
-      <div className="w-5 h-5 border-2 border-[#60a5fa]/20 border-t-[#60a5fa] rounded-full animate-spin" />
+      <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin" />
     </div>
   );
 }

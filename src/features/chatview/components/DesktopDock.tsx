@@ -79,7 +79,7 @@ export default function DesktopDock({
 }: Props) {
   const isInline = layout === 'inline';
   const { toastMsg, setToastMsg, setSettingsTarget } = useUI();
-  const { currentUser, setCurrentUser, setAllUsers, getEffectiveStatus, getStatusColor } = useUser();
+  const { currentUser, setCurrentUser, setAllUsers, getEffectiveStatus } = useUser();
   const {
     showInputSettings, setShowInputSettings, showOutputSettings, setShowOutputSettings,
     inputDevices, outputDevices, selectedInput, setSelectedInput, selectedOutput, setSelectedOutput,
@@ -283,12 +283,12 @@ export default function DesktopDock({
       className={
         isInline
           ? 'flex flex-wrap items-center justify-center gap-1.5 px-2 py-2 min-h-[48px]'
-          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`
+          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`
       }
       /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */
       style={isInline
         ? undefined
-        : { left: 'calc(50% + 8px)', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)' }
+        : { left: 'calc(50% + 8px)', transform: 'translateX(-50%)', background: 'var(--dock-bg, rgba(0,0,0,0.25))', border: '1px solid var(--dock-border, rgba(var(--glass-tint), 0.06))', boxShadow: 'var(--dock-shadow, 0 4px 20px rgba(0,0,0,0.2))', backdropFilter: 'var(--dock-blur, blur(12px))' }
       }
       onMouseEnter={() => { if (toastMsg) dockToastHoveredRef.current = true; }}
       onMouseLeave={() => { dockToastHoveredRef.current = false; }}
@@ -337,13 +337,12 @@ export default function DesktopDock({
       {/* ── Kendi kullanıcı kartı — avatar + isim + effective status ── */}
       {(() => {
         const effStatus = getEffectiveStatus();
-        const statusColorClass = getStatusColor(effStatus);
         const displayName = formatFullName(currentUser.firstName, currentUser.lastName) || currentUser.name;
         return (
           <div className="relative shrink-0" ref={selfPanelRef}>
             <button
               onClick={() => setSelfPanelOpen(o => !o)}
-              className="flex items-center gap-2 pr-2.5 pl-1 py-1 mr-1 border-r border-[rgba(var(--glass-tint),0.08)] rounded-lg hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
+              className="mv-dock-user flex items-center gap-2 pr-2.5 pl-1 py-1 mr-1 border-r border-[rgba(var(--glass-tint),0.08)] rounded-lg hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors"
               title={`${displayName} — ${effStatus}`}
             >
               {(() => {
@@ -381,10 +380,12 @@ export default function DesktopDock({
                 );
               })()}
               <div className="flex flex-col leading-tight min-w-0 max-w-[140px] text-left">
-                <span className="text-[11px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
-                <span className={`text-[9px] font-medium ${statusColorClass} truncate`}>{effStatus}</span>
+                <span className="flex items-center gap-1.5 min-w-0" title={effStatus}>
+                  <span className="mv-dock-user-name text-[11px] font-semibold text-[var(--theme-text)] truncate">{displayName}</span>
+                  <span className={`mv-dock-status-dot w-2 h-2 rounded-full shrink-0 ${getStatusDotClass(effStatus)}`} />
+                </span>
                 {currentUser.gameActivity && (
-                  <span className="flex items-center gap-0.5 text-[9px] font-medium text-[var(--theme-accent)]/75 truncate mt-[1px]">
+                  <span className="mv-dock-user-game flex items-center gap-0.5 text-[9px] font-medium text-[var(--theme-accent)]/75 truncate mt-[1px]">
                     <Gamepad2 size={8} strokeWidth={2.2} className="shrink-0" />
                     <span className="truncate">{currentUser.gameActivity}</span>
                   </span>

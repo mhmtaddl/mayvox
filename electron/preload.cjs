@@ -89,8 +89,10 @@ contextBridge.exposeInMainWorld('electronNotify', {
 // ── Custom MayVox window controls (frameless chrome) ──
 contextBridge.exposeInMainWorld('electronWindow', {
   minimize: () => ipcRenderer.send('window:minimize'),
-  maximizeRestore: () => ipcRenderer.send('window:maximize-restore'),
+  maximizeRestore: () => ipcRenderer.invoke('window:toggle-maximize'),
+  toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   close: () => ipcRenderer.send('window:close'),
+  setAuthMode: (enabled, kind) => ipcRenderer.send('window:set-auth-mode', { enabled: !!enabled, kind: kind || '' }),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   isFocused: () => ipcRenderer.invoke('window:is-focused'),
   /** Pencere durumu değişimlerini dinle (maximize/unmaximize/focus/blur) */

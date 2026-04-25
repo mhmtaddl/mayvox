@@ -94,8 +94,8 @@ function SubNav({
     <div
       className="inline-flex p-1 rounded-xl w-full gap-0.5"
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(var(--glass-tint),0.03)',
+        border: '1px solid rgba(var(--glass-tint),0.08)',
         boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)',
       }}
     >
@@ -108,13 +108,13 @@ function SubNav({
             onClick={() => onChange(opt.value)}
             className={`relative flex-1 h-9 px-3 rounded-lg text-[11.5px] font-semibold transition-all duration-200 ease-out inline-flex items-center justify-center gap-1.5 ${
               active
-                ? 'text-[#e8ecf4]'
-                : 'text-[#7b8ba8]/55 hover:text-[#e8ecf4]/85'
+                ? 'text-[var(--theme-text)]'
+                : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
             }`}
             style={active ? {
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06))',
+              background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.14), rgba(var(--glass-tint),0.06))',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.14), ' +
+                'inset 0 1px 0 rgba(var(--glass-tint),0.14), ' +
                 '0 1px 2px rgba(0,0,0,0.08), ' +
                 '0 2px 6px rgba(0,0,0,0.04)',
             } : undefined}
@@ -126,7 +126,7 @@ function SubNav({
                 className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold shrink-0"
                 style={{
                   background: 'var(--theme-accent)',
-                  color: '#0a0f1e',
+                  color: 'var(--theme-text-on-accent, #fff)',
                   boxShadow: '0 0 6px rgba(var(--theme-accent-rgb),0.45)',
                 }}
               >
@@ -216,8 +216,8 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
           >
             <Plus size={13} className="text-[var(--theme-accent)]" strokeWidth={2} />
           </div>
-          <span className="text-[11.5px] font-bold text-[#e8ecf4] tracking-tight">Yeni Davet Kodu</span>
-          <span className="ml-auto text-[10px] text-[#7b8ba8]/55">Boş bırakılanlar sınırsız</span>
+          <span className="text-[11.5px] font-bold text-[var(--theme-text)] tracking-tight">Yeni Davet Kodu</span>
+          <span className="ml-auto text-[10px] text-[var(--theme-secondary-text)]/75">Boş bırakılanlar sınırsız</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
           <InviteField
@@ -236,13 +236,13 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
             type="button"
             onClick={handleCreate}
             disabled={creating}
-            className="h-10 px-5 rounded-xl text-[12px] font-semibold text-white inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 self-end"
+            className="h-10 px-5 rounded-xl text-[12px] font-semibold inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 self-end"
             style={{
               // Tema accent — düz renk + inset highlight/shadow ile depth, tema değişimine uyumlu.
               background: 'var(--theme-accent)',
               color: 'var(--theme-text-on-accent, #fff)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.22), ' +
+                'inset 0 1px 0 rgba(var(--glass-tint),0.22), ' +
                 'inset 0 -1px 0 rgba(0,0,0,0.10), ' +
                 '0 1px 2px rgba(0,0,0,0.10), ' +
                 '0 6px 18px rgba(var(--theme-accent-rgb), 0.30)',
@@ -281,14 +281,14 @@ function InviteField({
 }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <div>
-      <label className="block text-[9.5px] font-semibold uppercase tracking-[0.10em] text-[#7b8ba8]/55 mb-1.5">
+      <label className="block text-[9.5px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/75 mb-1.5">
         {label}
       </label>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-10 bg-[rgba(255,255,255,0.035)] border border-[rgba(255,255,255,0.08)] rounded-xl px-3.5 text-[12.5px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/30 outline-none transition-all duration-200 ease-out hover:border-[rgba(255,255,255,0.14)] focus:border-[var(--theme-accent)]/45 focus:bg-[rgba(255,255,255,0.055)] focus:shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.10)]"
+        className="w-full h-10 bg-[rgba(var(--glass-tint),0.035)] border border-[rgba(var(--glass-tint),0.08)] rounded-xl px-3.5 text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/45 outline-none transition-all duration-200 ease-out hover:border-[rgba(var(--glass-tint),0.14)] focus:border-[var(--theme-accent)]/45 focus:bg-[rgba(var(--glass-tint),0.055)] focus:shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.10)]"
       />
     </div>
   );
@@ -306,8 +306,8 @@ function CodeInviteRow({
     <li
       className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors duration-150 group"
       style={{
-        background: busy ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: busy ? 'rgba(239,68,68,0.04)' : 'rgba(var(--glass-tint),0.025)',
+        border: '1px solid rgba(var(--glass-tint),0.08)',
       }}
     >
       {/* Icon */}
@@ -322,7 +322,7 @@ function CodeInviteRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span
-            className="text-[12.5px] font-mono font-bold text-[#e8ecf4] tracking-wider select-all"
+            className="text-[12.5px] font-mono font-bold text-[var(--theme-text)] tracking-wider select-all"
             title={invite.code}
           >
             {invite.code}
@@ -336,14 +336,14 @@ function CodeInviteRow({
             <Copy size={11} />
           </button>
         </div>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#7b8ba8]/55">
+        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/75">
           <span className="inline-flex items-center gap-1">
             {!invite.maxUses && <InfinityIcon size={10} className="opacity-60" />}
-            Kullanım: <span className="text-[#e8ecf4]/70 font-semibold">{usage}</span>
+            Kullanım: <span className="text-[var(--theme-text)]/80 font-semibold">{usage}</span>
           </span>
-          <span className="text-[#7b8ba8]/30">·</span>
+          <span className="text-[var(--theme-secondary-text)]/40">·</span>
           <span>
-            {expiryText ? <>Biter: <span className="text-[#e8ecf4]/70 font-semibold">{expiryText}</span></> : 'Süresiz'}
+            {expiryText ? <>Biter: <span className="text-[var(--theme-text)]/80 font-semibold">{expiryText}</span></> : 'Süresiz'}
           </span>
         </div>
       </div>
@@ -467,16 +467,16 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
       <div
         className="flex items-center gap-2 h-10 rounded-xl px-3.5"
         style={{
-          background: 'rgba(255,255,255,0.035)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(var(--glass-tint),0.035)',
+          border: '1px solid rgba(var(--glass-tint),0.08)',
         }}
       >
-        <Search size={13} className="text-[#7b8ba8]/45 shrink-0" />
+        <Search size={13} className="text-[var(--theme-secondary-text)] shrink-0" />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Kullanıcı adı ile ara..."
-          className="flex-1 bg-transparent text-[12px] text-[#e8ecf4] placeholder:text-[#7b8ba8]/40 outline-none"
+          className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none"
         />
         {searching && (
           <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />
@@ -485,7 +485,7 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="text-[#7b8ba8]/45 hover:text-[#e8ecf4] transition-colors"
+            className="text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors"
             aria-label="Aramayı temizle"
           >
             <X size={12} />
@@ -503,7 +503,7 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
           />
         ) : (
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.10em] text-[#7b8ba8]/60 mb-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/75 mb-2">
               Bekleyen Davetler ({sentInvites.length})
             </div>
             <ul className="space-y-1.5">
@@ -544,8 +544,8 @@ function SentInviteRow({
     <li
       className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors duration-150 group"
       style={{
-        background: busy ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: busy ? 'rgba(239,68,68,0.04)' : 'rgba(var(--glass-tint),0.025)',
+        border: '1px solid rgba(var(--glass-tint),0.08)',
       }}
     >
       <div
@@ -555,8 +555,8 @@ function SentInviteRow({
         <Mail size={13} className="text-amber-400/80" strokeWidth={1.8} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-semibold text-[#e8ecf4] truncate">{invite.invitedUserName}</div>
-        <div className="text-[10px] text-[#7b8ba8]/55 mt-0.5">{fmtDate(invite.createdAt)}</div>
+        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{invite.invitedUserName}</div>
+        <div className="text-[10px] text-[var(--theme-secondary-text)]/75 mt-0.5">{fmtDate(invite.createdAt)}</div>
       </div>
       <span
         className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0"
@@ -594,23 +594,23 @@ function SearchResultRow({
 }) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
   return (
-    <li className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-[rgba(255,255,255,0.035)] transition-colors duration-150">
+    <li className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-[rgba(var(--glass-tint),0.035)] transition-colors duration-150">
       <div
         className="w-9 h-9 rounded-[10px] overflow-hidden shrink-0 flex items-center justify-center"
-        style={{ background: 'rgba(255,255,255,0.06)' }}
+        style={{ background: 'rgba(var(--glass-tint),0.06)' }}
       >
         <AvatarContent
           avatar={user.avatar}
           statusText="Online"
           firstName={user.first_name}
           name={user.name}
-          letterClassName="text-[10px] font-bold text-[#7b8ba8]/60"
+          letterClassName="text-[10px] font-bold text-[var(--theme-secondary-text)]"
         />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-semibold text-[#e8ecf4] truncate">{user.name}</div>
+        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{user.name}</div>
         {fullName && (
-          <div className="text-[10px] text-[#7b8ba8]/55 truncate mt-0.5">{fullName}</div>
+          <div className="text-[10px] text-[var(--theme-secondary-text)]/75 truncate mt-0.5">{fullName}</div>
         )}
       </div>
       {sent ? (

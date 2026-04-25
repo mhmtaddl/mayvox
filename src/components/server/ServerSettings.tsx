@@ -183,8 +183,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   ];
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="relative flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         {/* ── Identity Strip — compact premium header ── */}
         <div
           className="relative px-6 md:px-8 py-4 border-b border-[rgba(var(--glass-tint),0.06)]"
@@ -248,7 +248,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
         {/* Restricted modunda tab navigasyonu render edilmez — settings tek kilitli panel olur. */}
         {!server.isBanned && (
-          <div className="flex items-center gap-0.5 px-4 md:px-6 py-2 border-b border-[rgba(var(--glass-tint),0.04)] overflow-x-auto custom-scrollbar"
+          <div className="flex items-center gap-0.5 px-2 md:px-6 py-2 border-b border-[rgba(var(--glass-tint),0.04)] overflow-hidden"
             style={{ background: 'rgba(var(--glass-tint), 0.015)' }}
           >
             {tabs.map(t => {
@@ -257,14 +257,14 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold transition-all shrink-0 ${
+                  className={`relative flex-1 min-w-0 flex items-center justify-center gap-1 px-1.5 sm:px-3.5 py-2 rounded-lg text-[10px] sm:text-[12px] font-semibold transition-all ${
                     active
                       ? 'text-[var(--theme-text)]'
                       : 'text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)]'
                   }`}
                 >
                   <span className={`transition-colors ${active ? 'text-[var(--theme-accent)]' : ''}`}>{t.icon}</span>
-                  {t.label}
+                  <span className="truncate">{t.label}</span>
                   {!!t.badge && t.badge > 0 && (
                     <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-[var(--theme-text-on-accent,#000)] shadow-[0_0_6px_rgba(var(--theme-accent-rgb),0.45)]">
                       {t.badge > 99 ? '99+' : t.badge}
@@ -283,6 +283,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 saving={automodState.saving}
                 onReset={() => automodActionsRef.current?.onReset()}
                 onSave={() => automodActionsRef.current?.onSave()}
+                className="hidden min-[900px]:flex"
               />
             )}
             {tab === 'general' && canEdit && (
@@ -291,12 +292,13 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                 saving={generalState.saving}
                 onReset={() => generalActionsRef.current?.onReset()}
                 onSave={() => generalActionsRef.current?.onSave()}
+                className="hidden min-[900px]:flex"
               />
             )}
           </div>
         )}
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 lg:px-8 py-6">
           {server.isBanned ? (
             <RestrictedSettingsPanel server={server} />
           ) : (<>
@@ -336,6 +338,26 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           )}
           </>)}
         </div>
+        {tab === 'automod' && canKickMembers && (
+          <div className="min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end">
+            <TabActionPills
+              dirty={automodState.dirty}
+              saving={automodState.saving}
+              onReset={() => automodActionsRef.current?.onReset()}
+              onSave={() => automodActionsRef.current?.onSave()}
+            />
+          </div>
+        )}
+        {tab === 'general' && canEdit && (
+          <div className="min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end">
+            <TabActionPills
+              dirty={generalState.dirty}
+              saving={generalState.saving}
+              onReset={() => generalActionsRef.current?.onReset()}
+              onSave={() => generalActionsRef.current?.onSave()}
+            />
+          </div>
+        )}
         {toast && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-[11px] font-semibold text-[var(--theme-text)] z-[100] pointer-events-none" style={{ background: 'rgba(var(--theme-accent-rgb), 0.15)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)', backdropFilter: 'blur(12px)' }}>{toast}</div>}
       </div>
     </div>
@@ -423,11 +445,11 @@ function DisabledItem({ children }: { children: React.ReactNode }) {
  * disabled = !dirty || saving; shadow sadece dirty iken.
  */
 function TabActionPills({
-  dirty, saving, onReset, onSave,
-}: { dirty: boolean; saving: boolean; onReset: () => void; onSave: () => void }) {
+  dirty, saving, onReset, onSave, className = 'flex',
+}: { dirty: boolean; saving: boolean; onReset: () => void; onSave: () => void; className?: string }) {
   const disabled = !dirty || saving;
   return (
-    <div className="ml-auto flex items-center gap-1.5 shrink-0">
+    <div className={`ml-auto items-center gap-1.5 shrink-0 ${className}`}>
       <button
         type="button"
         onClick={onReset}

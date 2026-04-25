@@ -864,7 +864,7 @@ export default function ChatView() {
         <InactivityCountdownBanner />
       </div>
 
-      <div className={`flex flex-1 min-h-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-3 lg:gap-[6px]'}`}>
+      <div className={`flex flex-1 min-h-0 min-w-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-3 lg:gap-[6px]'}`}>
         {/* ── Mobil kenar handle'ları ── */}
         {!mobileLeftOpen && !mobileRightOpen && (
           <>
@@ -892,8 +892,8 @@ export default function ChatView() {
               <motion.aside
                 initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
                 transition={FORCE_MOBILE ? { duration: 0.18, ease: 'easeOut' } : { type: 'spring', damping: 25, stiffness: 300 }}
-                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 left-0 w-72 z-50 flex flex-col shadow-2xl rounded-r-2xl`}
-                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} mv-shell-panel fixed inset-y-0 left-0 w-72 z-50 flex flex-col shadow-2xl rounded-r-2xl`}
+                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx < -40) setMobileLeftOpen(false); }}
               >
@@ -1138,8 +1138,8 @@ export default function ChatView() {
               <motion.aside
                 initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                 transition={FORCE_MOBILE ? { duration: 0.18, ease: 'easeOut' } : { type: 'spring', damping: 25, stiffness: 300 }}
-                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} fixed inset-y-0 right-0 w-56 z-50 flex flex-col shadow-2xl rounded-l-2xl`}
-                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
+                className={`${FORCE_MOBILE ? '' : 'lg:hidden'} mv-shell-panel fixed inset-y-0 right-0 w-56 z-50 flex flex-col shadow-2xl rounded-l-2xl`}
+                style={{ background: 'rgba(var(--theme-sidebar-rgb),0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx > 40) setMobileRightOpen(false); }}
               >
@@ -1307,7 +1307,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Main Content ── */}
-        <main className={`flex-1 flex flex-col min-h-0 bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : '0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02)', border: FORCE_MOBILE ? undefined : '1px solid rgba(var(--glass-tint), 0.03)', backgroundImage: 'radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%)' }}>
+        <main className={`mv-chat-main flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : 'var(--chat-main-shadow, 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02))', border: FORCE_MOBILE ? undefined : '1px solid var(--chat-main-border, rgba(var(--glass-tint), 0.03))', backgroundImage: 'var(--chat-main-glow, radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%))' }}>
           {(() => {
             const activeSrv = serverList.find(s => s.id === activeServerId);
             // Restricted mode: settings/discover dışındaki tüm akışlarda merkezi panel
@@ -1325,7 +1325,7 @@ export default function ChatView() {
             return null;
           })()}
           <div
-            className={`flex-1 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[72px] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
+            className={`flex-1 min-w-0 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[72px] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
           {settingsServerId ? (
             <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={refreshServers}
               onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers(); }}
@@ -1338,7 +1338,7 @@ export default function ChatView() {
               onJoinModal={() => setShowJoinModal(true)} />
           ) : currentChannel && !isServerHomeView ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+              <div className="mv-room-ambient absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
                 <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4) 0%, transparent 65%)` }} />
                 <div className="absolute bottom-[10%] right-[15%] w-[300px] h-[300px] rounded-full opacity-[0.012]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.3) 0%, transparent 70%)` }} />
               </div>
@@ -1396,8 +1396,7 @@ export default function ChatView() {
             <div className="flex-1 flex flex-col overflow-y-auto">
               <div className="text-center pt-10 pb-2 px-6">
                 <div className="relative inline-block mb-6">
-                  <div className="absolute inset-[-8px] bg-[var(--theme-accent)] rounded-full blur-xl opacity-[0.06]" />
-                  <div className="relative w-16 h-16 rounded-2xl bg-[rgba(var(--theme-sidebar-rgb),0.5)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.06)] flex items-center justify-center shadow-[inset_0_1px_0_0_rgba(var(--glass-tint),0.04)]">
+                  <div className="relative w-16 h-16 rounded-2xl bg-[rgba(var(--theme-sidebar-rgb),0.5)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.06)] flex items-center justify-center">
                     <Volume2 size={28} className="text-[var(--theme-accent)] opacity-70" />
                   </div>
                 </div>
@@ -1419,7 +1418,7 @@ export default function ChatView() {
         </main>
 
         {/* ── Right Sidebar ── */}
-        <aside className={`w-56 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}>
+        <aside className={`mv-shell-panel w-48 xl:w-56 2xl:w-60 shrink-0 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}>
           <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
           <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
             <div className="flex items-center gap-2">
@@ -1715,6 +1714,7 @@ export default function ChatView() {
           const activeMembers = activeChannel ? channels.find(c => c.id === activeChannel)?.members : undefined;
           const alreadyInChannel = activeMembers?.includes(popupUser.id) || activeMembers?.includes(popupUser.name);
           const canInvite = !isMe && !!activeChannel && !alreadyInChannel && popupUser.status === 'online';
+          const popupServerName = popupUser.serverId ? serverList.find(s => s.id === popupUser.serverId)?.name ?? null : null;
           return (
             <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
               onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
@@ -1722,7 +1722,7 @@ export default function ChatView() {
               canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
               onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
               cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
-              isMe={isMe} currentAppVersion={appVersion} />
+              isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} />
           );
         })()}
       </AnimatePresence>

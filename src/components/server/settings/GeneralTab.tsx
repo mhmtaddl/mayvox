@@ -34,8 +34,8 @@ interface Props {
 // ══════════════════════════════════════════════════════════════════
 
 const INPUT_BASE =
-  'w-full h-10 rounded-lg px-3.5 text-[13px] text-[#e8ecf4]/92 tracking-tight ' +
-  'placeholder:text-[#e8ecf4]/30 outline-none gtInput ' +
+  'w-full h-10 rounded-lg px-3.5 text-[13px] text-[var(--theme-text)] tracking-tight ' +
+  'placeholder:text-[var(--theme-secondary-text)]/45 outline-none gtInput ' +
   'disabled:opacity-55 disabled:cursor-not-allowed';
 
 const DANGER_BTN_STYLE: React.CSSProperties = {
@@ -51,7 +51,7 @@ const DANGER_BTN_STYLE: React.CSSProperties = {
 function Field({ label, children, locked }: { label: string; children: React.ReactNode; locked?: boolean }) {
   return (
     <div className={locked ? 'opacity-55 pointer-events-none' : ''}>
-      <label className="block text-[11px] font-medium text-[#e8ecf4]/50 mb-1.5 tracking-normal">
+      <label className="block text-[11px] font-medium text-[var(--theme-secondary-text)]/80 mb-1.5 tracking-normal">
         {label}
       </label>
       {children}
@@ -60,7 +60,7 @@ function Field({ label, children, locked }: { label: string; children: React.Rea
 }
 
 function GroupLabel({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'danger'; key?: React.Key }) {
-  const color = tone === 'danger' ? 'rgba(248,113,113,0.75)' : 'rgba(232,236,244,0.55)';
+  const color = tone === 'danger' ? 'rgba(220,38,38,0.78)' : 'var(--theme-secondary-text)';
   return (
     <div className="flex items-center gap-2">
       <span
@@ -97,8 +97,8 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
     <div
       className="inline-flex p-[3px] rounded-full w-full"
       style={{
-        background: 'rgba(255,255,255,0.022)',
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
+        background: 'rgba(var(--glass-tint),0.035)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
       }}
     >
       {options.map(opt => {
@@ -113,11 +113,11 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
               disabled ? 'cursor-not-allowed opacity-60' : ''
             }`}
             style={active ? {
-              background: 'rgba(96,165,250,0.12)',
-              color: '#93c5fd',
-              boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.22)',
+              background: 'rgba(var(--theme-accent-rgb),0.12)',
+              color: 'var(--theme-accent)',
+              boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.22)',
             } : {
-              color: 'rgba(232,236,244,0.55)',
+              color: 'var(--theme-secondary-text)',
               background: 'transparent',
             }}
           >
@@ -145,41 +145,41 @@ function PlanRow({
     ? 'rgba(248,113,113,0.65)'
     : near
       ? 'rgba(251,191,36,0.65)'
-      : 'rgba(96,165,250,0.60)';
+      : 'rgba(var(--theme-accent-rgb),0.60)';
 
   return (
     <div
       className="rounded-lg px-3.5 pt-2.5 pb-2"
       style={{
-        background: 'rgba(255,255,255,0.025)',
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.045)',
+        background: 'rgba(var(--glass-tint),0.025)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
       }}
     >
       <div className="flex items-center gap-3 h-6">
         <span
           className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide"
           style={{
-            background: 'rgba(96,165,250,0.12)',
-            color: '#93c5fd',
-            boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.24)',
+            background: 'rgba(var(--theme-accent-rgb),0.12)',
+            color: 'var(--theme-accent)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.24)',
           }}
         >
           {plan.toUpperCase()}
         </span>
-        <span className="text-[#e8ecf4]/18">·</span>
-        <span className="text-[13px] font-semibold text-[#e8ecf4]/90 tabular-nums">
-          {current} <span className="text-[#e8ecf4]/40 font-medium">/</span> {capacity}
-          <span className="font-medium text-[#e8ecf4]/55 ml-1 text-[12px]">üye</span>
+        <span className="text-[var(--theme-secondary-text)]/35">·</span>
+        <span className="text-[13px] font-semibold text-[var(--theme-text)] tabular-nums">
+          {current} <span className="text-[var(--theme-secondary-text)]/65 font-medium">/</span> {capacity}
+          <span className="font-medium text-[var(--theme-secondary-text)] ml-1 text-[12px]">üye</span>
         </span>
-        <span className="text-[#e8ecf4]/18 hidden sm:inline">·</span>
-        <span className="text-[12px] text-[#e8ecf4]/50 tabular-nums truncate hidden sm:inline">
+        <span className="text-[var(--theme-secondary-text)]/35 hidden sm:inline">·</span>
+        <span className="text-[12px] text-[var(--theme-secondary-text)] tabular-nums truncate hidden sm:inline">
           {fmtDate(createdAt)}
         </span>
       </div>
       {/* Thin progress bar */}
       <div
         className="mt-2 h-1 rounded-full overflow-hidden"
-        style={{ background: 'rgba(255,255,255,0.06)' }}
+        style={{ background: 'rgba(var(--glass-tint),0.08)' }}
         aria-label={`Üye kullanımı: ${current} / ${capacity}`}
       >
         <div
@@ -229,9 +229,9 @@ function GhostButton({
         color: 'rgba(248,113,113,0.92)',
         boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.22)',
       } : {
-        background: 'rgba(255,255,255,0.04)',
-        color: 'rgba(232,236,244,0.80)',
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+        background: 'rgba(var(--glass-tint),0.04)',
+        color: 'var(--theme-text)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
       }}
     >
       {children}
@@ -387,15 +387,15 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             style={{
               background: server.avatarUrl
                 ? 'transparent'
-                : 'linear-gradient(160deg, rgba(96,165,250,0.10), rgba(96,165,250,0.03))',
+                : 'linear-gradient(160deg, rgba(var(--theme-accent-rgb),0.10), rgba(var(--theme-accent-rgb),0.03))',
               boxShadow: server.avatarUrl
-                ? 'inset 0 0 0 1px rgba(255,255,255,0.06), 0 4px 14px rgba(0,0,0,0.22)'
-                : 'inset 0 0 0 1px rgba(96,165,250,0.20), 0 2px 10px rgba(96,165,250,0.08)',
+                ? 'inset 0 0 0 1px rgba(var(--glass-tint),0.08), 0 4px 14px rgba(0,0,0,0.16)'
+                : 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.20), 0 2px 10px rgba(var(--theme-accent-rgb),0.08)',
             }}
           >
             {server.avatarUrl
               ? <img src={server.avatarUrl} alt="" className="w-full h-full object-cover" />
-              : <span className="flex items-center justify-center w-full h-full text-[22px] font-semibold text-[#93c5fd]/80 tracking-tight">{server.shortName}</span>
+              : <span className="flex items-center justify-center w-full h-full text-[22px] font-semibold text-[var(--theme-accent)] tracking-tight">{server.shortName}</span>
             }
             {canEdit && (
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
@@ -419,23 +419,23 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
           </button>
 
           <div className="flex-1 min-w-0">
-            <div className="text-[13.5px] font-semibold text-[#e8ecf4]/92 tracking-tight truncate">
+            <div className="text-[13.5px] font-semibold text-[var(--theme-text)] tracking-tight truncate">
               {name || server.name}
             </div>
             <div className="mt-1 inline-flex items-center gap-2 h-7 pl-2.5 pr-1 rounded-md"
               style={{
-                background: 'rgba(96,165,250,0.05)',
-                boxShadow: 'inset 0 0 0 1px rgba(96,165,250,0.14)',
+                background: 'rgba(var(--theme-accent-rgb),0.05)',
+                boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.14)',
               }}
             >
-              <span className="text-[11.5px] font-mono font-medium text-[#93c5fd] truncate">
+              <span className="text-[11.5px] font-mono font-medium text-[var(--theme-accent)] truncate">
                 {shownSlug || '...'}<span className="opacity-55">.mv</span>
                 {nameChanged && <span className="opacity-50 ml-1.5 text-[10px] font-sans">(önizleme)</span>}
               </span>
               <button
                 type="button"
                 onClick={handleCopySlug}
-                className="gtIconBtn w-6 h-6 rounded flex items-center justify-center text-[#e8ecf4]/45 shrink-0"
+                className="gtIconBtn w-6 h-6 rounded flex items-center justify-center text-[var(--theme-secondary-text)] shrink-0"
                 aria-label="Adresi kopyala"
               >
                 {copied ? <Check size={11} strokeWidth={2.5} className="text-emerald-400" /> : <Copy size={11} />}
@@ -445,13 +445,13 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             {/* Owner info — read-only inline */}
             {ownerMember && (
               <div className="mt-1.5 flex items-center gap-2 opacity-70">
-                <span className="text-[10.5px] font-medium text-[#e8ecf4]/50 shrink-0">Sahip</span>
-                <span className="text-[#e8ecf4]/20">·</span>
+                <span className="text-[10.5px] font-medium text-[var(--theme-secondary-text)] shrink-0">Sahip</span>
+                <span className="text-[var(--theme-secondary-text)]/40">·</span>
                 <div
                   className="w-[22px] h-[22px] rounded-full overflow-hidden flex items-center justify-center shrink-0"
                   style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+                    background: 'rgba(var(--glass-tint),0.04)',
+                    boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
                   }}
                 >
                   <AvatarContent
@@ -459,10 +459,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                     statusText={allUsers.find(u => u.id === ownerMember.userId)?.statusText ?? 'Online'}
                     firstName={ownerMember.firstName}
                     name={memberDisplayName(ownerMember)}
-                    letterClassName="text-[9px] font-semibold text-[#e8ecf4]/70"
+                    letterClassName="text-[9px] font-semibold text-[var(--theme-text)]"
                   />
                 </div>
-                <span className="text-[12px] font-medium text-[#e8ecf4]/80 truncate">
+                <span className="text-[12px] font-medium text-[var(--theme-text)] truncate">
                   {memberDisplayName(ownerMember)}
                 </span>
               </div>
@@ -560,7 +560,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
           <div
             className="gtInsight mt-2.5 flex items-center gap-1.5 px-0.5 text-[11.5px] font-medium leading-relaxed"
             style={{
-              color: 'rgba(147,197,253,0.68)',
+              color: 'rgba(var(--theme-accent-rgb),0.78)',
             }}
           >
             <Sparkles size={11} strokeWidth={1.9} className="shrink-0 opacity-80" />
@@ -592,10 +592,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                   <Trash2 size={14} className="text-red-400/90" strokeWidth={1.9} />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-medium text-[#e8ecf4]/92 tracking-tight truncate">
+                  <div className="text-[13px] font-medium text-[var(--theme-text)] tracking-tight truncate">
                     Sunucuyu Sil
                   </div>
-                  <div className="text-[10.5px] text-[#e8ecf4]/45 mt-0.5 leading-snug truncate">
+                  <div className="text-[10.5px] text-[var(--theme-secondary-text)] mt-0.5 leading-snug truncate">
                     Bu işlem geri alınamaz — tüm veriler kalıcı olarak silinir.
                   </div>
                 </div>
@@ -623,10 +623,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                   <LogOut size={14} className="text-red-400/90" strokeWidth={1.9} />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-medium text-[#e8ecf4]/92 tracking-tight truncate">
+                  <div className="text-[13px] font-medium text-[var(--theme-text)] tracking-tight truncate">
                     Sunucudan Ayrıl
                   </div>
-                  <div className="text-[10.5px] text-[#e8ecf4]/45 mt-0.5 leading-snug truncate">
+                  <div className="text-[10.5px] text-[var(--theme-secondary-text)] mt-0.5 leading-snug truncate">
                     Üyelik kaldırılır — tekrar katılmak için davet gerekir.
                   </div>
                 </div>
@@ -641,7 +641,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
 
       {/* ── Last updated — subtle bottom-right ── */}
       {lastUpdatedLabel && (
-        <div className="mt-6 text-right text-[11px] text-[#e8ecf4]/35 tabular-nums">
+        <div className="mt-6 text-right text-[11px] text-[var(--theme-secondary-text)]/70 tabular-nums">
           Son güncelleme: {lastUpdatedLabel}
         </div>
       )}
@@ -657,10 +657,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             className="w-full max-w-[400px] rounded-[22px] p-6 animate-[modalIn_220ms_cubic-bezier(0.22,1,0.36,1)]"
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'rgba(22,26,40,0.98)',
+              background: 'var(--theme-popover-bg, var(--surface-elevated))',
               boxShadow:
-                '0 20px 60px rgba(0,0,0,0.45), ' +
-                'inset 0 1px 0 rgba(255,255,255,0.06)',
+                'var(--surface-floating-shadow, 0 20px 60px rgba(0,0,0,0.25))',
+              border: '1px solid var(--theme-popover-border, var(--theme-border))',
             }}
           >
             <div
@@ -719,10 +719,10 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             className="w-full max-w-[400px] rounded-[22px] p-6 animate-[modalIn_220ms_cubic-bezier(0.22,1,0.36,1)]"
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'rgba(22,26,40,0.98)',
+              background: 'var(--theme-popover-bg, var(--surface-elevated))',
               boxShadow:
-                '0 20px 60px rgba(0,0,0,0.45), ' +
-                'inset 0 1px 0 rgba(255,255,255,0.06)',
+                'var(--surface-floating-shadow, 0 20px 60px rgba(0,0,0,0.25))',
+              border: '1px solid var(--theme-popover-border, var(--theme-border))',
             }}
           >
             <div
@@ -786,19 +786,19 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
 
         /* Inputs — borderless inset ring + focus accent */
         .gtInput {
-          background: rgba(255,255,255,0.03);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+          background: rgba(var(--glass-tint),0.03);
+          box-shadow: inset 0 0 0 1px rgba(var(--glass-tint),0.08);
           transition: background 180ms var(--ease), box-shadow 220ms var(--ease);
         }
         .gtInput:hover:not(:disabled):not(:focus) {
-          background: rgba(255,255,255,0.04);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+          background: rgba(var(--glass-tint),0.04);
+          box-shadow: inset 0 0 0 1px rgba(var(--glass-tint),0.12);
         }
         .gtInput:focus {
-          background: rgba(255,255,255,0.045);
+          background: rgba(var(--glass-tint),0.045);
           box-shadow:
-            inset 0 0 0 1px rgba(96,165,250,0.28),
-            0 0 0 4px rgba(96,165,250,0.08);
+            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.28),
+            0 0 0 4px rgba(var(--theme-accent-rgb),0.08);
         }
 
         /* Segmented buttons */
@@ -809,14 +809,14 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             box-shadow 220ms var(--ease);
         }
         .gtSegBtn:hover:not(:disabled) {
-          color: rgba(232,236,244,0.90);
+          color: var(--theme-text);
         }
         .gtSegBtn:active:not(:disabled) { transform: scale(0.97); }
         .gtSegBtn:focus-visible {
           outline: none;
           box-shadow:
-            inset 0 0 0 1px rgba(96,165,250,0.32),
-            0 0 0 4px rgba(96,165,250,0.08) !important;
+            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.32),
+            0 0 0 4px rgba(var(--theme-accent-rgb),0.08) !important;
         }
 
         /* Pressable buttons (Danger + Ghost) */
@@ -831,8 +831,8 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
         .gtPressable:focus-visible {
           outline: none;
           box-shadow:
-            inset 0 0 0 1px rgba(96,165,250,0.32),
-            0 0 0 4px rgba(96,165,250,0.08) !important;
+            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.32),
+            0 0 0 4px rgba(var(--theme-accent-rgb),0.08) !important;
         }
 
         /* Icon button (slug copy) */
@@ -840,8 +840,8 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
           transition: background 180ms var(--ease), color 180ms var(--ease);
         }
         .gtIconBtn:hover {
-          color: rgba(147,197,253,0.95);
-          background: rgba(96,165,250,0.08);
+          color: var(--theme-accent);
+          background: rgba(var(--theme-accent-rgb),0.08);
         }
         .gtIconBtn:active { transform: scale(0.94); }
 
@@ -862,7 +862,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
           transition: color 150ms ease, opacity 150ms ease;
         }
         .gtInsight:hover {
-          color: rgba(147,197,253,0.92) !important;
+          color: var(--theme-accent) !important;
         }
       `}</style>
     </div>

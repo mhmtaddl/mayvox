@@ -39,6 +39,7 @@ import { checkChannelAccess, getServerAccessContext, getMyModerationState, type 
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
+import { getThemePack } from './lib/themePacks';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -55,6 +56,11 @@ type DbChannel = {
   is_invite_only?: boolean; is_hidden?: boolean; password?: string;
   mode?: string; speaker_ids?: string[];
 };
+
+function hexToRgbTuple(hex: string): string | undefined {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}` : undefined;
+}
 
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
 import type { InviteRequest } from './types';
@@ -237,6 +243,13 @@ export default function App() {
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
+  useEffect(() => {
+    const api = (window as Window & { electronWindow?: { setAuthMode?: (enabled: boolean, kind?: string) => void } }).electronWindow;
+    if (!api?.setAuthMode) return;
+    const authView = view === 'login-password' || view === 'login-code' || view === 'register-details';
+    api.setAuthMode(authView, authView ? view : undefined);
+  }, [view]);
+
 
   // ── Mobil izin onboarding — her açılışta gerçek izin durumunu kontrol eder ──
   const [permissionsGranted, setPermissionsGranted] = useState(() => {
@@ -250,6 +263,9 @@ export default function App() {
 
   // ── Settings state (useAppSettings hook) ──────────────────────────────
   const settings = useAppSettings();
+  const overlayThemeAccentRgb = settings.appearanceMode === 'themePack'
+    ? getThemePack(settings.themePackId).accentRgb
+    : (hexToRgbTuple(settings.currentTheme.accent) ?? hexToRgbTuple(settings.currentTheme.primary));
   const {
     currentTheme, isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold, noiseSuppressionStrength,
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
@@ -1215,6 +1231,7 @@ export default function App() {
       cardOpacity: settings.overlayCardOpacity,
       variant: settings.overlayVariant,
     },
+    themeAccentRgb: overlayThemeAccentRgb,
     currentUserId: currentUser.id,
     activeChannelId: activeChannel,
     activeChannelName: currentChannel?.name ?? null,
@@ -2022,6 +2039,22 @@ export default function App() {
       return;
     }
 
+    const username = displayName.trim();
+    if (!/^[a-z0-9]{1,10}$/.test(username)) {
+      setLoginError('Kullanıcı adı sadece harf ve sayı olabilir.');
+      return;
+    }
+
+    if (!/^\p{L}+( \p{L}+)?$/u.test(firstName) || firstName.length > 15) {
+      setLoginError('Adınızı doğru giriniz.');
+      return;
+    }
+
+    if (!/^\p{L}+$/u.test(lastName) || lastName.length > 15) {
+      setLoginError('Soyadınızı doğru giriniz.');
+      return;
+    }
+
     if (!loginNick || !loginPassword) {
       setLoginError('E-posta ve parola eksik!');
       return;
@@ -2030,6 +2063,12 @@ export default function App() {
     const ageNum = parseInt(age);
     if (!ageNum || ageNum <= 0) {
       setLoginError('Geçerli bir yaş giriniz!');
+      return;
+    }
+
+    const { data: existingProfile } = await getProfileByUsername(username);
+    if (existingProfile) {
+      setLoginError('Bu kullanıcı adı alınmış.');
       return;
     }
 
@@ -2057,7 +2096,7 @@ export default function App() {
 
     const newUser: User = {
       id: data.user?.id || Math.random().toString(36).slice(2, 11),
-      name: displayName,
+      name: username,
       email: loginNick,
       firstName: normalizedFirst,
       lastName: normalizedLast,
@@ -2313,7 +2352,7 @@ export default function App() {
           <UIContext.Provider value={uiContextValue}>
             <AppStateContext.Provider value={appStateValue}>
               <AudioCtx.Provider value={audioValue}>
-                <div className="font-sans selection:bg-blue-500/30 mv-app-shell">
+                <div className={`font-sans selection:bg-blue-500/30 mv-app-shell ${view === 'login-password' || view === 'login-code' || view === 'register-details' ? 'mv-auth-shell' : ''}`}>
                   {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
                   <AppChrome />
                   {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}

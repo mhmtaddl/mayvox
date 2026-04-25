@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Key, Lock, Eye, EyeOff, ArrowLeft, ArrowRight,
+  Key, Lock, Eye, EyeOff,
   Mail, Clock, Send, Ban, AlertCircle, Check, Loader,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +25,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
   const [showRepeatPwd, setShowRepeatPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -40,12 +41,6 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
   const [permanentlyBlocked, setPermanentlyBlocked] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [blockedSecondsLeft, setBlockedSecondsLeft] = useState(0);
-
-  const [appVersion, setAppVersion] = useState<string>('');
-  useEffect(() => {
-    const w = window as Window & { electronApp?: { getVersion: () => Promise<string> } };
-    w.electronApp?.getVersion().then(v => setAppVersion(v)).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!onGoBack) return;
@@ -215,17 +210,20 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
   };
 
   const onSubmit = async () => {
+    if (submitting) return;
+    setPressing(true);
+    setSubmitting(true);
     setError(null);
     try {
       await handleRegister(code, email, password, repeatPwd);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kayıt tamamlanamadı.');
+      setSubmitting(false);
+      setTimeout(() => setPressing(false), 150);
     }
   };
 
   const triggerSubmit = () => {
-    setPressing(true);
-    setTimeout(() => setPressing(false), 150);
     onSubmit();
   };
 
@@ -234,47 +232,47 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
   const canRequest = isValidEmail(email)
     && requestState === 'idle'
     && !permanentlyBlocked;
+  const authInputClass = 'auth-input w-full h-11 sm:h-12 [@media(max-height:760px)]:h-10 rounded-xl text-[13px] sm:text-[14px] [@media(max-height:760px)]:text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none transition-all pl-11 sm:pl-12 pr-4 border border-[var(--theme-input-border,var(--theme-border))] bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] focus:border-[var(--theme-accent)]/60 focus:bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.86))] disabled:opacity-60';
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-full h-full p-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #1a0a12 0%, #0d0b1a 50%, #0a0e1a 100%)' }}>
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.07]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4), transparent 70%)' }} />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.05]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)' }} />
+    <div className="auth-screen flex h-[calc(100vh-var(--titlebar-height,0px))] min-h-0 flex-col items-center justify-center p-3 sm:p-4 relative overflow-hidden" style={{ background: 'transparent' }}>
+      <div className="auth-ambient absolute inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.45), transparent 70%)' }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-glow-secondary-rgb),0.42), transparent 70%)' }} />
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[420px] relative z-10 rounded-3xl overflow-hidden"
-        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 10px 40px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset' }}
+        className="auth-card w-full max-w-[420px] max-h-[calc(100%-52px)] relative z-10 rounded-2xl sm:rounded-3xl overflow-hidden [@media(max-height:560px)]:overflow-y-auto"
+        style={{ background: 'transparent', border: '0', boxShadow: 'none' }}
       >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="auth-card-line absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
         <button
           onClick={onGoBack || handleLogout}
-          className="absolute left-6 top-5 z-20 text-white/40 hover:text-white/70 transition-colors flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
+          className="absolute left-5 sm:left-6 top-4 sm:top-5 z-20 text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] transition-colors flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
         >
-          <ArrowLeft size={14} />
           Geri
         </button>
 
-        <div className="px-10 pt-10 pb-8">
-        <div className="flex justify-center mb-8">
+        <div className="px-5 py-5 sm:px-10 sm:pt-8 sm:pb-7 [@media(max-height:760px)]:px-6 [@media(max-height:760px)]:py-4">
+        <div className="flex justify-center mb-5 sm:mb-6 max-[720px]:mb-4 [@media(max-height:760px)]:mb-3">
           <div className="relative">
-            <div className="absolute inset-[-16px] rounded-full opacity-15 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
-            <div className="relative w-28 h-28 overflow-hidden rounded-[22%]">
-              <img src={appLogo} alt="MAYVOX" className="w-full h-full object-cover" />
+            <div className="auth-logo-glow absolute inset-[-16px] rounded-full opacity-15 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
+            <div className="relative w-24 h-24 sm:w-36 sm:h-36 max-[700px]:w-20 max-[700px]:h-20 [@media(max-height:700px)]:w-20 [@media(max-height:700px)]:h-20 [@media(max-height:600px)]:w-16 [@media(max-height:600px)]:h-16 overflow-hidden rounded-[22%]">
+              <img src={appLogo} alt="MAYVOX" className="auth-logo w-full h-full object-cover" />
             </div>
           </div>
         </div>
 
-        <div className="text-center mb-8">
-          <h1 className="text-[#F5F5F5] text-[24px] font-medium tracking-[-0.01em] leading-tight">Bize Katıl!</h1>
-          <p className="text-white/50 mt-2 text-[13px] max-w-[80%] mx-auto">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
+        <div className="text-center mb-5 sm:mb-6 max-[720px]:mb-4 [@media(max-height:760px)]:mb-3">
+          <h1 className="text-[var(--theme-text)] text-[21px] sm:text-[24px] [@media(max-height:760px)]:text-[20px] font-medium leading-tight">Bize Katıl!</h1>
+          <p className="text-[var(--theme-secondary-text)] mt-2 [@media(max-height:760px)]:mt-1 text-[12px] sm:text-[13px] [@media(max-height:760px)]:text-[11px] max-w-[86%] mx-auto">Topluluğumuza katıl, sesli sohbete dahil ol!</p>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4 max-[720px]:space-y-3 [@media(max-height:760px)]:space-y-2.5">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-bold text-center animate-pulse">
               {error}
@@ -282,10 +280,10 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
           )}
 
           {/* E-Posta — ilk alan */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">E-POSTA</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">E-POSTA</label>
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={emailInputRef}
                 type="email"
@@ -300,15 +298,15 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 disabled={['pending', 'approved', 'requesting'].includes(requestState)}
                 aria-label="E-posta"
                 autoComplete="email"
-                className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-4 focus:border-white/20 outline-none transition-all disabled:opacity-60"
+                className={authInputClass}
               />
             </div>
           </div>
 
           {/* Davet Kodu — ikinci alan */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">DAVET KODU</label>
+              <label className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">DAVET KODU</label>
               {requestState === 'approved' && expiresAt && secondsLeft > 0 && (
                 <motion.span
                   key={secondsLeft}
@@ -323,7 +321,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
             </div>
 
             <div className="relative">
-              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={codeInputRef}
                 type="text"
@@ -333,7 +331,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 onKeyDown={onEnterNext(1)}
                 enterKeyHint="next"
                 aria-label="Davet kodu"
-                className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-4 focus:border-white/20 outline-none transition-all tracking-widest font-mono"
+                className={`${authInputClass} tracking-widest font-mono`}
               />
             </div>
 
@@ -348,7 +346,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                   type="button"
                   onClick={handleRequestCode}
                   disabled={!canRequest}
-                  className="w-full mt-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border border-dashed border-[var(--theme-accent)]/40 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full mt-1 flex items-center justify-center gap-2 py-2 [@media(max-height:760px)]:py-1.5 rounded-xl text-xs font-bold border border-dashed border-[var(--theme-accent)]/40 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Send size={13} />
                   Davet Kodu İste
@@ -472,10 +470,10 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
           </div>
 
           {/* Parola */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">PAROLA OLUŞTUR</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">PAROLA OLUŞTUR</label>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={pwdInputRef}
                 type={showPwd ? 'text' : 'password'}
@@ -486,7 +484,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 enterKeyHint="next"
                 aria-label="Parola"
                 autoComplete="new-password"
-                className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-12 focus:border-white/20 outline-none transition-all"
+                className={`${authInputClass} pr-12`}
               />
               <button
                 type="button"
@@ -495,15 +493,15 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 aria-label={showPwd ? 'Parolayı gizle' : 'Parolayı göster'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
               >
-                {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">PAROLAYI TEKRAR GİRİN</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold text-[var(--theme-secondary-text)] uppercase tracking-[0.12em]">PAROLAYI TEKRAR GİRİN</label>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={repeatPwdInputRef}
                 type={showRepeatPwd ? 'text' : 'password'}
@@ -514,7 +512,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 enterKeyHint="done"
                 aria-label="Parolayı tekrar gir"
                 autoComplete="new-password"
-                className="w-full h-[50px] rounded-2xl text-[14px] text-white placeholder:text-white/30 outline-none transition-all pl-12 pr-12 focus:border-white/20 outline-none transition-all"
+                className={`${authInputClass} pr-12`}
               />
               <button
                 type="button"
@@ -523,29 +521,22 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                 aria-label={showRepeatPwd ? 'Parolayı gizle' : 'Parolayı göster'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] transition-colors"
               >
-                {showRepeatPwd ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showRepeatPwd ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
           <button
             ref={submitBtnRef}
-            onClick={onSubmit}
-            className={`w-full h-[50px] btn-primary text-[15px] flex items-center justify-center ${pressing ? 'opacity-90 scale-[0.97]' : ''}`}
+            onClick={triggerSubmit}
+            disabled={submitting}
+            className={`auth-submit w-full h-11 sm:h-12 [@media(max-height:760px)]:h-10 btn-primary text-[14px] sm:text-[15px] flex items-center justify-center disabled:cursor-wait ${pressing ? 'is-pressing' : ''}`}
           >
-            <span>Devam Et</span>
+            {submitting ? <span className="auth-loading-dots" aria-label="Devam ediliyor"><span /><span /><span /></span> : <span>Devam Et</span>}
           </button>
         </div>
         </div>{/* end px-10 pt-10 pb-8 */}
       </motion.div>
-
-      <div className="mt-8 flex items-center gap-6 text-[11px] text-white/30 font-medium relative z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]"></div>
-          Sunucu Aktif
-        </div>
-        {appVersion && <div className="opacity-50">v{appVersion}</div>}
-      </div>
     </div>
   );
 }

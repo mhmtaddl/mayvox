@@ -614,13 +614,14 @@ function ChatArea({
                 || next.senderId !== msg.senderId
                 || (next.createdAt - msg.createdAt) >= GROUP_GAP_MS;
               return (
-                <MessageBubble
-                  key={msg.id}
-                  msg={msg}
-                  isOwn={msg.senderId === currentUserId}
-                  isGrouped={isGrouped}
-                  isLastInGroup={isLastInGroup}
-                />
+                <React.Fragment key={msg.id}>
+                  <MessageBubble
+                    msg={msg}
+                    isOwn={msg.senderId === currentUserId}
+                    isGrouped={isGrouped}
+                    isLastInGroup={isLastInGroup}
+                  />
+                </React.Fragment>
               );
             })}
           </div>

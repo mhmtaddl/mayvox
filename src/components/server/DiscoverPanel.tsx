@@ -4,6 +4,12 @@ import { searchServers, joinServer, createJoinRequest, type DiscoverServer } fro
 import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
 
+const DISCOVER_PLAN_TONE: Record<string, { rgb: string; bgA: number; bgB: number; borderA: number; shadowA: number }> = {
+  free: { rgb: '75, 85, 99', bgA: 0.08, bgB: 0.035, borderA: 0.18, shadowA: 0.06 },
+  pro: { rgb: '234, 179, 8', bgA: 0.16, bgB: 0.055, borderA: 0.36, shadowA: 0.10 },
+  ultra: { rgb: '168, 85, 247', bgA: 0.18, bgB: 0.065, borderA: 0.42, shadowA: 0.12 },
+};
+
 const MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 function fmtSince(raw: string): string {
   const d = new Date(raw);
@@ -127,15 +133,15 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
         {/* Hero */}
         <div>
           <h1 className="text-[18px] font-bold text-[var(--theme-text)] tracking-tight">Topluluklara Katıl</h1>
-          <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-45 mt-1">Açık sunucuları keşfet, anında katıl veya kendi topluluğunu oluştur.</p>
+          <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-75 mt-1">Açık sunucuları keşfet, anında katıl veya kendi topluluğunu oluştur.</p>
         </div>
 
         {/* Search + Davet kodu — dar ekranda buton ikon+kısa metin, geniş ekranda tam metin */}
         <div className="flex gap-2">
           <div className="flex-1 min-w-0 flex items-center gap-2 h-10 rounded-lg px-3" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
-            <Search size={14} className="text-[var(--theme-secondary-text)] opacity-35 shrink-0" />
+            <Search size={14} className="text-[var(--theme-secondary-text)] opacity-65 shrink-0" />
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Sunucu ara"
-              className="flex-1 min-w-0 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/20 outline-none" />
+              className="flex-1 min-w-0 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/60 outline-none" />
             {loading && query.trim() && <div className="w-3 h-3 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
           </div>
           <button onClick={onJoinModal} className="h-10 px-3 sm:px-4 rounded-lg flex items-center gap-1.5 text-[10px] font-semibold shrink-0 hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"
@@ -149,10 +155,10 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
 
         {/* Başlık */}
         <div className="flex items-center justify-between">
-          <span className="text-[9px] font-bold text-[var(--theme-secondary-text)] opacity-25 uppercase tracking-widest">
+          <span className="text-[9px] font-bold text-[var(--theme-secondary-text)] opacity-70 uppercase tracking-widest">
             {query.trim() ? 'Eşleşen Sunucular' : 'Popüler Sunucular'}
           </span>
-          <span className="text-[9px] text-[var(--theme-secondary-text)] opacity-20">{servers.length} sunucu</span>
+          <span className="text-[9px] text-[var(--theme-secondary-text)] opacity-60">{servers.length} sunucu</span>
         </div>
 
         {/* Grid — 3 kolon */}
@@ -173,13 +179,21 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
               const isJoining = joining === s.id;
               const plan = (s as DiscoverServer & { plan?: string }).plan ?? 'free';
               const pv = getPlanVisual(plan);
+              const planKey = plan === 'pro' || plan === 'ultra' ? plan : 'free';
+              const tone = DISCOVER_PLAN_TONE[planKey];
               const isUltra = plan === 'ultra';
               const clickable = member || active;
               return (
                 <div key={s.id}
                   onClick={clickable ? () => handleCardClick(s) : undefined}
                   className={`group/c relative rounded-xl p-4 transition-all duration-200 hover:-translate-y-[2px] ${active ? 'ring-1 ring-[var(--theme-accent)]/12' : ''} ${isUltra ? 'ultra-card' : ''} ${clickable ? 'cursor-pointer' : ''}`}
-                  style={{ background: active ? 'rgba(var(--theme-accent-rgb), 0.025)' : pv.bg, border: `1px solid ${active ? 'rgba(var(--theme-accent-rgb), 0.1)' : pv.border}` }}>
+                  style={{
+                    background: active
+                      ? `linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.08), rgba(${tone.rgb}, ${tone.bgB}))`
+                      : `linear-gradient(135deg, rgba(${tone.rgb}, ${tone.bgA}), rgba(var(--glass-tint), ${tone.bgB}))`,
+                    border: `1px solid ${active ? 'rgba(var(--theme-accent-rgb), 0.24)' : `rgba(${tone.rgb}, ${tone.borderA})`}`,
+                    boxShadow: `0 8px 22px rgba(0,0,0,0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08), 0 0 0 1px rgba(${tone.rgb}, ${tone.shadowA})`,
+                  }}>
 
 
                   {/* Hover overlay */}
@@ -198,18 +212,18 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                         <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0"
                           style={{ background: pv.badgeBg, color: pv.badgeText, boxShadow: pv.badgeShadow }}>{plan}</span>
                       </div>
-                      {s.motto && <div className="text-[10px] text-[var(--theme-secondary-text)] opacity-50 truncate mt-0.5">"{s.motto}"</div>}
+                      {s.motto && <div className="text-[10px] text-[var(--theme-secondary-text)] opacity-75 truncate mt-0.5">"{s.motto}"</div>}
                     </div>
                   </div>
 
                   {/* 2. Açıklama */}
-                  <div className="relative text-[11px] text-[var(--theme-secondary-text)] opacity-40 leading-relaxed line-clamp-2 mb-3 min-h-[32px]">
+                  <div className="relative text-[11px] text-[var(--theme-secondary-text)] opacity-70 leading-relaxed line-clamp-2 mb-3 min-h-[32px]">
                     {s.description || 'Henüz açıklama yok.'}
                   </div>
 
                   {/* 3. Meta + Aksiyon */}
                   <div className="relative flex items-center justify-between">
-                    <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-30">
+                    <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-60">
                       {s.memberCount} üye · Katılım: {isFrictionless(s) ? 'Açık' : 'Davetli'}
                     </span>
                     {member ? (

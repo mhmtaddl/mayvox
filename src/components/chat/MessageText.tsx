@@ -78,18 +78,27 @@ export default function MessageText({ text, className, isOwn }: Props) {
         const ytId = parseYouTubeUrl(b.value);
         if (ytId) {
           if (activeYtId === ytId) {
-            return <YouTubeInlinePlayer key={`yt-play-${i}`} videoId={ytId} isOwn={isOwn} />;
+            return (
+              <React.Fragment key={`yt-play-${i}`}>
+                <YouTubeInlinePlayer videoId={ytId} isOwn={isOwn} />
+              </React.Fragment>
+            );
           }
           return (
-            <YouTubePreviewCard
-              key={`yt-${i}`}
-              url={b.value}
-              videoId={ytId}
-              isOwn={isOwn}
-            />
+            <React.Fragment key={`yt-${i}`}>
+              <YouTubePreviewCard
+                url={b.value}
+                videoId={ytId}
+                isOwn={isOwn}
+              />
+            </React.Fragment>
           );
         }
-        return <LinkPreviewCard key={`u-${i}`} url={b.value} isOwn={isOwn} />;
+        return (
+          <React.Fragment key={`u-${i}`}>
+            <LinkPreviewCard url={b.value} isOwn={isOwn} />
+          </React.Fragment>
+        );
       })}
     </div>
   );

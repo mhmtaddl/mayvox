@@ -46,7 +46,7 @@ function SocialGroupsCardInner({ groups }: Props) {
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.06)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 8px 24px rgba(0,0,0,0.12)',
+        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.02), 0 8px 24px rgba(0,0,0,0.12)',
         minHeight: '100%',
       }}
     >
@@ -99,7 +99,7 @@ function SocialGroupsCardInner({ groups }: Props) {
               >
                 {/* Rank — #1 için vurgu */}
                 <span className="w-5 text-[10.5px] font-bold tabular-nums shrink-0 text-right"
-                  style={{ color: isFirst ? 'rgba(var(--theme-accent-rgb), 1)' : 'rgba(var(--theme-secondary-text-rgb, 180, 190, 210), 0.45)' }}
+                  style={{ color: isFirst ? 'var(--theme-accent)' : 'var(--theme-secondary-text)', opacity: isFirst ? 1 : 0.55 }}
                 >
                   {idx + 1}
                 </span>

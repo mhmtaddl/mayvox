@@ -36,6 +36,7 @@ export interface UseOverlaySyncOpts {
   selfMuted: boolean;
   selfDeafened: boolean;
   selfUser: Pick<User, 'id' | 'firstName' | 'lastName' | 'name' | 'avatar'>;
+  themeAccentRgb?: string;
 }
 
 export function useOverlaySync({
@@ -48,6 +49,7 @@ export function useOverlaySync({
   selfMuted,
   selfDeafened,
   selfUser,
+  themeAccentRgb,
 }: UseOverlaySyncOpts) {
   // Ayar değişimlerini main'e tek seferde ilet
   useEffect(() => {
@@ -78,8 +80,10 @@ export function useOverlaySync({
       if (!activeChannelId) {
         return {
           roomId: null, roomName: null, participants: [], size: settings.size,
+          position: settings.position,
           cardOpacity: settings.cardOpacity,
           variant: settings.variant,
+          themeAccentRgb,
         };
       }
       const partList: OverlayParticipant[] = [];
@@ -131,8 +135,10 @@ export function useOverlaySync({
         roomName: activeChannelName || null,
         participants: partList,
         size: settings.size, // main process kendi mevcut size'ını enjekte eder; bu yine de defensive
+        position: settings.position,
         cardOpacity: settings.cardOpacity,
         variant: settings.variant,
+        themeAccentRgb,
       };
     };
 
@@ -166,6 +172,7 @@ export function useOverlaySync({
     };
   }, [
     settings.enabled,
+    settings.position,
     settings.showSelf,
     settings.showOnlySpeaking,
     settings.cardOpacity,
@@ -178,5 +185,6 @@ export function useOverlaySync({
     selfMuted,
     selfDeafened,
     selfUser,
+    themeAccentRgb,
   ]);
 }

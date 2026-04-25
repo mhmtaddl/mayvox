@@ -39,7 +39,7 @@ function TopUsersCardInner({ users }: Props) {
       style={{
         background: 'rgba(var(--glass-tint), 0.03)',
         border: '1px solid rgba(var(--glass-tint), 0.06)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 8px 24px rgba(0,0,0,0.12)',
+        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.02), 0 8px 24px rgba(0,0,0,0.12)',
         minHeight: '100%',
       }}
     >
@@ -126,8 +126,8 @@ function TopUsersCardInner({ users }: Props) {
                       style={{
                         width: mounted ? `${pct}%` : '0%',
                         background: isFirst
-                          ? 'linear-gradient(90deg, rgba(140, 200, 250, 0.65), rgba(var(--theme-accent-rgb), 1))'
-                          : 'linear-gradient(90deg, rgba(130, 180, 230, 0.50), rgba(var(--theme-accent-rgb), 0.85))',
+                          ? 'linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.45), rgba(var(--theme-accent-rgb), 1))'
+                          : 'linear-gradient(90deg, rgba(var(--theme-accent-rgb), 0.30), rgba(var(--theme-accent-rgb), 0.85))',
                         transition: 'width 520ms cubic-bezier(0.22, 1, 0.36, 1)',
                         boxShadow: isFirst ? 'inset 0 0 6px rgba(var(--theme-accent-rgb), 0.22)' : 'none',
                       }}
@@ -136,8 +136,8 @@ function TopUsersCardInner({ users }: Props) {
                     <span
                       className="absolute inset-y-0 right-2 flex items-center text-[9.5px] font-bold tabular-nums"
                       style={{
-                        color: 'rgba(255,255,255,0.95)',
-                        textShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        color: pct >= 78 ? 'var(--theme-text-on-accent, #fff)' : 'var(--theme-text)',
+                        textShadow: pct >= 78 ? '0 0 4px rgba(0,0,0,0.5)' : 'none',
                         letterSpacing: '0.02em',
                       }}
                     >

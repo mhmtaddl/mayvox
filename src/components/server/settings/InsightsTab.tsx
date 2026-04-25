@@ -283,7 +283,7 @@ function EmptyState() {
         style={{
           background: 'rgba(var(--glass-tint), 0.05)',
           border: '1px solid rgba(var(--glass-tint), 0.08)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
+          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.02)',
         }}
       >
         <BarChart3 size={22} className="text-[var(--theme-secondary-text)]/45" />

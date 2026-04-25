@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 /**
  * Tiered Avatar Frame System
  *
@@ -24,7 +26,7 @@ export function getFrameTier(
   return 'standard';
 }
 
-export function getFrameStyle(color: string, tier: FrameTier): React.CSSProperties {
+export function getFrameStyle(color: string, tier: FrameTier): CSSProperties {
   if (!color) return {};
   switch (tier) {
     case 'elite':
