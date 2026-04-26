@@ -14,6 +14,11 @@ import {
   ApiError,
 } from '../../../lib/serverService';
 import { formatFullName } from '../../../lib/formatName';
+import { applyVolumeToAudioElement, getUserVolumePercent, setUserVolumePercent } from '../../../lib/userVolume';
+import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
+import { applyLocalChannelOrder } from '../../../lib/channelOrder';
+import { applyLocalChannelIconColors, getDefaultChannelIconColor } from '../../../lib/channelIconColor';
+import { applyLocalChannelIcons, getDefaultChannelIconName } from '../../../lib/channelIcon';
 // Kota enforcement backend'de. Frontend sadece CreateRoomModal'da
 // bilgisel sayaç gösterir (calcPersistentRoomsRemaining ChatView'dan çağrılır).
 import { INVITE_RING_DURATION_MS } from '../../../lib/sounds';
@@ -33,7 +38,7 @@ interface UseChannelActionsOptions {
   presenceChannelRef: React.MutableRefObject<any>;
   livekitRoomRef: React.MutableRefObject<any>;
   // UI
-  roomModal: { isOpen: boolean; type: 'create' | 'edit'; channelId?: string; name: string; maxUsers: number; isInviteOnly: boolean; isHidden: boolean; mode: string; isPersistent?: boolean };
+  roomModal: { isOpen: boolean; type: 'create' | 'edit'; channelId?: string; name: string; maxUsers: number; isInviteOnly: boolean; isHidden: boolean; mode: string; iconColor?: string; iconName?: string; isPersistent?: boolean };
   setRoomModal: React.Dispatch<React.SetStateAction<any>>;
   setContextMenu: (v: null) => void;
   setUserActionMenu: (v: { userId: string; x: number; y: number } | null) => void;
@@ -69,22 +74,31 @@ export function useChannelActions({
 
   // ── User volume ──
   const handleUpdateUserVolume = (userId: string, volume: number) => {
-    const newVolumes = { ...userVolumes, [userId]: volume };
-    setUserVolumes(newVolumes);
-    localStorage.setItem('userVolumes', JSON.stringify(newVolumes));
+    setUserVolumePercent(userId, volume);
+    const nextVolume = getUserVolumePercent(userId);
+    setUserVolumes(prev => ({ ...prev, [userId]: nextVolume }));
 
-    const vol = Math.max(0, Math.min(1, volume / 100));
+    const vol = Math.max(0, Math.min(1, nextVolume / 100));
     const user = allUsers.find(u => u.id === userId);
-    if (user && livekitRoomRef.current) {
+    if (livekitRoomRef.current) {
       const participants = Array.from(livekitRoomRef.current.remoteParticipants.values()) as RemoteParticipant[];
-      const participant = participants.find(p => p.identity === user.name);
+      const participant = participants.find(p => (resolveUserByMemberKey(p.identity, allUsers)?.id ?? p.identity) === userId);
       if (participant) {
         participant.audioTrackPublications.forEach(pub => {
           const t = pub.track ?? pub.audioTrack;
           if (t && t instanceof RemoteAudioTrack) t.setVolume(vol);
         });
       }
-      document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${user.name}"]`).forEach(el => { el.volume = vol; });
+    }
+    const escapedUserId = CSS.escape(userId);
+    document
+      .querySelectorAll<HTMLAudioElement>(`audio[data-mayvox-user-id="${escapedUserId}"]`)
+      .forEach(el => applyVolumeToAudioElement(el, userId));
+    if (user) {
+      const escapedIdentity = CSS.escape(user.name);
+      document
+        .querySelectorAll<HTMLAudioElement>(`audio[data-participant="${escapedIdentity}"]`)
+        .forEach(el => applyVolumeToAudioElement(el, userId));
     }
   };
 
@@ -249,9 +263,13 @@ export function useChannelActions({
           isInviteOnly: roomModal.isInviteOnly,
           isHidden: roomModal.isHidden,
           isPersistent,
+          iconColor: roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode),
+          iconName: roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode),
         });
         console.log('[createRoom-debug] backend returned:', created);
         console.log('[createRoom-debug] backend.isPersistent:', created.isPersistent, '· typeof:', typeof created.isPersistent, '· isDefault:', created.isDefault);
+        const iconColor = created.iconColor ?? roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode);
+        const iconName = created.iconName ?? roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
         const newRoom: VoiceChannel = {
           id: created.id, name: created.name, userCount: 0, members: [],
           isSystemChannel: created.isDefault,
@@ -261,11 +279,13 @@ export function useChannelActions({
           isHidden: created.isHidden,
           ownerId: created.ownerId ?? undefined,
           mode: created.mode ?? roomModal.mode,
+          iconColor,
+          iconName,
           speakerIds: roomModal.mode === 'broadcast' ? [currentUser.id] : undefined,
           position: created.position,
         };
         setChannels(prev => prev.some(c => c.id === newRoom.id) ? prev : [...prev, newRoom]);
-        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', channel: newRoom } });
+        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'create', serverId: activeServerId, channel: newRoom } });
         if (view === 'settings') setView('chat');
       } catch (err) {
         setToastMsg(err instanceof Error ? err.message : 'Oda oluşturulamadı. Lütfen tekrar deneyin.');
@@ -273,7 +293,9 @@ export function useChannelActions({
       }
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
       const channelId = roomModal.channelId;
-      const updates = { name: trimmedName, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode };
+      const iconColor = roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode);
+      const iconName = roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
+      const updates = { name: trimmedName, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode, iconColor, iconName };
       const prevSnapshot = channels;
       setChannels(prev => prev.map(c => c.id === channelId ? { ...c, ...updates } : c));
       try {
@@ -283,8 +305,10 @@ export function useChannelActions({
           maxUsers: roomModal.maxUsers || null,
           isInviteOnly: roomModal.isInviteOnly,
           isHidden: roomModal.isHidden,
+          iconColor,
+          iconName,
         });
-        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId, updates } });
+        presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', serverId: activeServerId, channelId, updates } });
       } catch (err) {
         setChannels(prevSnapshot);
         setToastMsg(err instanceof Error ? err.message : 'Oda güncellenemedi.');
@@ -305,7 +329,7 @@ export function useChannelActions({
     setContextMenu(null);
     try {
       await deleteServerChannel(activeServerId, id);
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', channelId: id } });
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'delete', serverId: activeServerId, channelId: id } });
     } catch (err) {
       setChannels(prevSnapshot);
       if (wasActive) setActiveChannel(id);
@@ -321,7 +345,7 @@ export function useChannelActions({
     setContextMenu(null);
     try {
       await updateServerChannel(activeServerId, id, { name: trimmed });
-      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', channelId: id, updates: { name: trimmed } } });
+      presenceChannelRef.current?.send({ type: 'broadcast', event: 'channel-update', payload: { action: 'update', serverId: activeServerId, channelId: id, updates: { name: trimmed } } });
     } catch (err) {
       setChannels(prevSnapshot);
       setToastMsg(err instanceof Error ? err.message : 'Oda yeniden adlandırılamadı.');
@@ -354,14 +378,61 @@ export function useChannelActions({
     reorderInFlightRef.current = true;
     try {
       const token = channelOrderTokenRef.current;
+      console.info('[channels:reorder] PATCH /servers/%s/channels/reorder', serverIdAtStart, { updates, expectedOrderToken: token });
       const result = await reorderServerChannels(serverIdAtStart, updates, token);
       channelOrderTokenRef.current = result.orderToken;
+      const displayNameMap: Record<string, string> = {
+        'Sohbet Muhabbet': 'Genel',
+        'Oyun Takımı': 'Oyun',
+        'Yayın Sahnesi': 'Yayın',
+        'Sessiz Alan': 'Sessiz',
+      };
+      let authoritative = result;
+      try {
+        authoritative = await getServerChannels(serverIdAtStart);
+      } catch (refetchErr) {
+        console.error('[channels:reorder] refetch after PATCH failed; using PATCH response', refetchErr);
+      }
+      if (activeServerId === serverIdAtStart) {
+        channelOrderTokenRef.current = authoritative.orderToken;
+        setChannels(prev => {
+          const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c] as const));
+          return applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(serverIdAtStart, authoritative.channels.map(ch => {
+            const ex = prevMap.get(ch.id);
+            return {
+              id: ch.id,
+              name: displayNameMap[ch.name] ?? ch.name,
+              userCount: ex?.userCount ?? 0,
+              members: ex?.members ?? [],
+              isSystemChannel: ch.isDefault,
+              isPersistent: ch.isPersistent,
+              mode: ch.mode ?? ex?.mode ?? 'social',
+              maxUsers: ch.maxUsers ?? undefined,
+              isInviteOnly: ch.isInviteOnly,
+              isHidden: ch.isHidden,
+              ownerId: ch.ownerId ?? undefined,
+              iconName: ch.iconName ?? undefined,
+              iconColor: ch.iconColor ?? undefined,
+              position: ch.position,
+              speakerIds: ex?.speakerIds,
+              password: ex?.password,
+            };
+          }))));
+        });
+      }
+      const timestamp = Date.now();
       presenceChannelRef.current?.send({
         type: 'broadcast',
         event: 'channel-update',
-        payload: { action: 'reorder', updates, orderToken: result.orderToken },
+        payload: { action: 'reorder', serverId: serverIdAtStart, updates, orderToken: result.orderToken, timestamp },
+      });
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'channels-reordered',
+        payload: { serverId: serverIdAtStart, channels: updates, orderToken: result.orderToken, timestamp },
       });
     } catch (err) {
+      console.error('[channels:reorder] PATCH failed', err);
       setChannels(prevSnapshot);
       if (err instanceof ApiError && err.status === 409) {
         // Stale ordering → fresh data çek, token'ı yenile.
@@ -370,13 +441,19 @@ export function useChannelActions({
           const fresh = await getServerChannels(serverIdAtStart);
           if (activeServerId === serverIdAtStart) {
             channelOrderTokenRef.current = fresh.orderToken;
+            const displayNameMap: Record<string, string> = {
+              'Sohbet Muhabbet': 'Genel',
+              'Oyun Takımı': 'Oyun',
+              'Yayın Sahnesi': 'Yayın',
+              'Sessiz Alan': 'Sessiz',
+            };
             setChannels(prev => {
               const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c] as const));
-              return fresh.channels.map(ch => {
+              return applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(serverIdAtStart, fresh.channels.map(ch => {
                 const ex = prevMap.get(ch.id);
                 return {
                   id: ch.id,
-                  name: ch.name,
+                  name: displayNameMap[ch.name] ?? ch.name,
                   userCount: ex?.userCount ?? 0,
                   members: ex?.members ?? [],
                   isSystemChannel: ch.isDefault,
@@ -386,11 +463,13 @@ export function useChannelActions({
                   isInviteOnly: ch.isInviteOnly,
                   isHidden: ch.isHidden,
                   ownerId: ch.ownerId ?? undefined,
+                  iconName: ch.iconName ?? undefined,
+                  iconColor: ch.iconColor ?? undefined,
                   position: ch.position,
                   speakerIds: ex?.speakerIds,
                   password: ex?.password,
                 };
-              });
+              }))));
             });
           }
         } catch { /* refetch hata verirse toast zaten atıldı */ }

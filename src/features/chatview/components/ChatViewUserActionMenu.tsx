@@ -94,7 +94,7 @@ export default function ChatViewUserActionMenu({
             <input
               type="range"
               min="0"
-              max="150"
+              max="100"
               value={userVolumes[uid] ?? 100}
               onChange={(e) => onUpdateVolume(uid, parseInt(e.target.value))}
               className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)]"

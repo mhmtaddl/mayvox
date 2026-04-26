@@ -99,7 +99,7 @@ export default function AppChrome() {
 
         {/* RIGHT — control rail (segmented) */}
         <div
-          className="flex items-center gap-1 shrink-0 pl-3"
+          className="flex items-center gap-1 shrink-0 pl-3 pr-2"
           data-window-control
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
@@ -108,7 +108,7 @@ export default function AppChrome() {
               <ControlButton onClick={onMin} ariaLabel="Küçült" tone="neutral">
                 <Minus size={13} strokeWidth={2.2} />
               </ControlButton>
-              <ControlButton onClick={onMaxRestore} ariaLabel={maximized ? 'Geri al' : 'Tam ekran'} tone="neutral">
+              <ControlButton onClick={onMaxRestore} ariaLabel={maximized ? 'Geri al' : 'Tam ekran'} tone="accent">
                 {maximized ? <RestoreIcon /> : <MaximizeIcon />}
               </ControlButton>
             </>
@@ -126,12 +126,10 @@ export default function AppChrome() {
 function BrandMark({ focused }: { focused: boolean }) {
   return (
     <div
-      className="relative w-6 h-6 rounded-lg flex items-center justify-center"
+      className="relative w-6 h-6 flex items-center justify-center"
       style={{
-        background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.32), rgba(var(--theme-accent-rgb),0.10))',
-        border: '1px solid rgba(var(--theme-accent-rgb), 0.42)',
-        boxShadow: focused ? '0 0 12px rgba(var(--theme-accent-rgb), 0.34), inset 0 1px 0 rgba(255,255,255,0.10)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
-        transition: 'box-shadow 200ms ease',
+        opacity: focused ? 1 : 0.62,
+        transition: 'opacity 200ms ease',
       }}
     >
       {/* Ses dalgası izlenimi — 3 mini bar */}
@@ -149,19 +147,20 @@ function BrandMark({ focused }: { focused: boolean }) {
 function ControlButton({ onClick, ariaLabel, tone, children }: {
   onClick: () => void;
   ariaLabel: string;
-  tone: 'neutral' | 'danger';
+  tone: 'neutral' | 'accent' | 'danger';
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
   const isDanger = tone === 'danger';
+  const hoverRgb = tone === 'danger' ? '239,68,68' : tone === 'accent' ? '56,189,248' : '245,158,11';
 
   const baseBg = hover
-    ? (isDanger ? 'rgba(239,68,68,0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)')
-    : 'rgba(255,255,255,0.025)';
+    ? `rgba(${hoverRgb}, 0.13)`
+    : 'transparent';
   const border = hover
-    ? (isDanger ? 'rgba(239,68,68,0.40)' : 'rgba(var(--theme-accent-rgb), 0.30)')
-    : 'rgba(255,255,255,0.05)';
-  const color = isDanger ? 'var(--window-close-fg, #0d0d0d)' : 'var(--theme-text)';
+    ? `rgba(${hoverRgb}, 0.24)`
+    : 'transparent';
+  const color = hover ? `rgb(${hoverRgb})` : isDanger ? 'var(--window-close-fg, #0d0d0d)' : 'var(--theme-text)';
 
   return (
     <button
@@ -177,10 +176,8 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
         border: `1px solid ${border}`,
         color,
         boxShadow: hover
-          ? (isDanger
-              ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 0 12px rgba(239,68,68,0.30)'
-              : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(var(--theme-accent-rgb), 0.18)')
-          : 'inset 0 1px 0 rgba(255,255,255,0.02)',
+          ? `0 0 10px rgba(${hoverRgb}, 0.18)`
+          : 'none',
       }}
     >
       {children}

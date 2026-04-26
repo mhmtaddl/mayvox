@@ -22,6 +22,8 @@ export interface UIContextType {
     isInviteOnly: boolean;
     isHidden: boolean;
     mode: string;
+    iconColor?: string;
+    iconName?: string;
   };
   setRoomModal: React.Dispatch<React.SetStateAction<{
     isOpen: boolean;
@@ -32,6 +34,8 @@ export interface UIContextType {
     isInviteOnly: boolean;
     isHidden: boolean;
     mode: string;
+    iconColor?: string;
+    iconName?: string;
   }>>;
   passwordModal: { type: 'set' | 'enter'; channelId: string } | null;
   setPasswordModal: (v: { type: 'set' | 'enter'; channelId: string } | null) => void;

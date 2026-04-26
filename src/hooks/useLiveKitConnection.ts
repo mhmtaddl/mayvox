@@ -18,6 +18,7 @@ import { buildAudioCaptureOptions } from '../lib/audioConstraints';
 import { AUDIO_FLAGS } from '../lib/audioFlags';
 import { RNNoiseTrackProcessor } from '../lib/audio/rnnoiseProcessor';
 import { playSound } from '../lib/sounds';
+import { applyVolumeToAudioElement, getUserVolumePercent } from '../lib/userVolume';
 import type { User, VoiceChannel } from '../types';
 import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/formatTimeout';
 import { getMyModerationState } from '../lib/serverService';
@@ -292,12 +293,17 @@ export function useLiveKitConnection({
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (track.kind === Track.Kind.Audio) {
           const audioEl = track.attach() as HTMLAudioElement;
+          const user = resolveUserByMemberKey(participant.identity, allUsersRef.current);
+          const remoteUserId = user?.id ?? participant.identity;
           audioEl.setAttribute('data-livekit-audio', 'true');
           audioEl.setAttribute('data-participant', participant.identity);
+          audioEl.dataset.mayvoxUserId = remoteUserId;
           audioEl.muted = isDeafenedRef.current;
           if (isDeafenedRef.current) {
             audioEl.volume = 0;
             try { audioEl.pause(); } catch { /* no-op */ }
+          } else {
+            applyVolumeToAudioElement(audioEl, remoteUserId);
           }
           document.body.appendChild(audioEl);
 
@@ -319,18 +325,13 @@ export function useLiveKitConnection({
           if (isDeafenedRef.current && track instanceof RemoteAudioTrack) {
             track.setVolume(0);
           } else {
-            const user = allUsersRef.current.find(u => u.name === participant.identity);
-            if (user) {
-              const savedVolume = userVolumesRef.current[user.id];
-              if (savedVolume !== undefined) {
-                // webAudioMix destekli setVolume(0..1.5) — 150% amplifikasyon dahil.
-                const vol = Math.max(0, Math.min(1.5, savedVolume / 100));
-                if (track instanceof RemoteAudioTrack) {
-                  track.setVolume(vol);
-                }
-                audioEl.volume = Math.min(1, vol);
-              }
+            const savedVolume = userVolumesRef.current[remoteUserId] ?? getUserVolumePercent(remoteUserId);
+            // RemoteAudioTrack.setVolume is used elsewhere in this codebase; keep it scoped to per-track gain.
+            const vol = Math.max(0, Math.min(1, savedVolume / 100));
+            if (track instanceof RemoteAudioTrack) {
+              track.setVolume(vol);
             }
+            applyVolumeToAudioElement(audioEl, remoteUserId);
           }
         }
       });

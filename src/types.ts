@@ -77,6 +77,10 @@ export interface VoiceChannel {
   ownerId?: string;
   /** Oda modu: social/gaming/broadcast/quiet — undefined = social (fallback) */
   mode?: string;
+  /** Server-scoped oda ikon rengi */
+  iconColor?: string;
+  /** Server-scoped oda ikon adı */
+  iconName?: string;
   /** Broadcast odada konuşmacı kullanıcı ID'leri — yoksa ownerId varsayılan konuşmacı */
   speakerIds?: string[];
   /** Sıralama pozisyonu — backend'den her zaman gelir, drag-reorder ile güncellenir */

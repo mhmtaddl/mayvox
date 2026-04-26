@@ -42,6 +42,9 @@ import { registerHandlers as registerNotifHandlers } from '../features/notificat
 import { useIsUserSpeaking } from '../features/notifications/useIsUserSpeaking';
 import { useWindowActivity } from '../hooks/useWindowActivity';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
+import { applyLocalChannelOrder } from '../lib/channelOrder';
+import { applyLocalChannelIconColors, getChannelIconColor, getDefaultChannelIconColor } from '../lib/channelIconColor';
+import { applyLocalChannelIcons, getChannelIconName, getDefaultChannelIconName } from '../lib/channelIcon';
 import MobileHeader from '../components/MobileHeader';
 import VoiceParticipants from '../components/VoiceParticipants';
 import RoomMemberContextMenu, { type RoomMemberMenuCtx } from '../features/chatview/components/RoomMemberContextMenu';
@@ -66,7 +69,7 @@ import ChatViewPasswordModal from '../features/chatview/components/ChatViewPassw
 import DesktopDock from '../features/chatview/components/DesktopDock';
 import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
-import { roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
+import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
 import AvatarContent from '../components/AvatarContent';
@@ -518,12 +521,12 @@ export default function ChatView() {
     const cached = channelCacheRef.current.get(activeServerId);
     if (cached && cached.length > 0) {
       const myId = currentUser.id;
-      setChannels(cached.map(c => {
+      setChannels(applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(activeServerId, cached.map(c => {
         if (c.id === activeChannel && myId && !c.members?.includes(myId)) {
           return { ...c, members: [...(c.members || []), myId], userCount: (c.userCount || 0) + 1 };
         }
         return c;
-      }));
+      })))));
     }
 
     // API'den güncelle (cache olsa bile fresh data al)
@@ -533,12 +536,27 @@ export default function ChatView() {
         if (cancelled) return;
         const serverChannels = payload.channels;
         channelOrderTokenRef.current = payload.orderToken;
-        const nameModeMap: Record<string, string> = { 'Sohbet Muhabbet': 'social', 'Oyun Takımı': 'gaming', 'Yayın Sahnesi': 'broadcast', 'Sessiz Alan': 'quiet' };
+        const nameModeMap: Record<string, string> = {
+          Genel: 'social',
+          'Sohbet Muhabbet': 'social',
+          Oyun: 'gaming',
+          'Oyun Takımı': 'gaming',
+          Yayın: 'broadcast',
+          'Yayın Sahnesi': 'broadcast',
+          Sessiz: 'quiet',
+          'Sessiz Alan': 'quiet',
+        };
+        const displayNameMap: Record<string, string> = {
+          'Sohbet Muhabbet': 'Genel',
+          'Oyun Takımı': 'Oyun',
+          'Yayın Sahnesi': 'Yayın',
+          'Sessiz Alan': 'Sessiz',
+        };
         const validIds = new Set(serverChannels.map(ch => ch.id));
         setChannels(prev => {
           const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c]));
           const myId = currentUser.id;
-          return serverChannels.map(ch => {
+          return applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(activeServerId, serverChannels.map(ch => {
             const existing = prevMap.get(ch.id);
             let members = existing?.members ?? [];
             let userCount = existing?.userCount ?? 0;
@@ -548,19 +566,21 @@ export default function ChatView() {
             }
             return {
               id: ch.id,
-              name: ch.name,
+              name: displayNameMap[ch.name] ?? ch.name,
               userCount,
               members,
               isSystemChannel: ch.isDefault,
               isPersistent: ch.isPersistent,
               mode: ch.mode ?? nameModeMap[ch.name] ?? 'social',
+              iconName: ch.iconName ?? undefined,
+              iconColor: ch.iconColor ?? undefined,
               maxUsers: ch.maxUsers ?? undefined,
               isInviteOnly: ch.isInviteOnly,
               isHidden: ch.isHidden,
               ownerId: ch.ownerId ?? undefined,
               position: ch.position,
             };
-          });
+          }))));
         });
         if (activeChannel && !validIds.has(activeChannel)) {
           setActiveChannel(null);
@@ -835,8 +855,8 @@ export default function ChatView() {
   }, [invitationModal, currentUser.id, presenceChannelRef, handleJoinChannel, setInvitationModal]);
 
   // ── Context menu callbacks ──
-  const handleEditRoom = useCallback((channel: { id: string; name: string; maxUsers?: number; isInviteOnly?: boolean; isHidden?: boolean; mode?: string }) => {
-    setRoomModal({ isOpen: true, type: 'edit', channelId: channel.id, name: channel.name, maxUsers: channel.maxUsers || 0, isInviteOnly: channel.isInviteOnly || false, isHidden: channel.isHidden || false, mode: channel.mode || 'social' });
+  const handleEditRoom = useCallback((channel: { id: string; name: string; maxUsers?: number; isInviteOnly?: boolean; isHidden?: boolean; mode?: string; iconColor?: string; iconName?: string }) => {
+    setRoomModal({ isOpen: true, type: 'edit', channelId: channel.id, name: channel.name, maxUsers: channel.maxUsers || 0, isInviteOnly: channel.isInviteOnly || false, isHidden: channel.isHidden || false, mode: channel.mode || 'social', iconColor: channel.iconColor ?? getChannelIconColor(channel.id, channel.mode), iconName: channel.iconName ?? getChannelIconName(channel.id, channel.mode) });
   }, [setRoomModal]);
 
   const handleSetPasswordModal = useCallback((channelId: string) => {
@@ -849,6 +869,15 @@ export default function ChatView() {
       onDragOver={currentUser.isAdmin ? handleDragOver : undefined}
       onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
     >
+      {invitationModal && (
+        <InvitationModal
+          data={invitationModal}
+          onAccept={handleInvitationAccept}
+          onDecline={handleInvitationDecline}
+          onMute={handleInvitationMute}
+          isMuted={invitationMuted}
+        />
+      )}
       <MobileHeader
         forceMobile={FORCE_MOBILE}
         onOpenLeftDrawer={() => setMobileLeftOpen(true)}
@@ -980,7 +1009,11 @@ export default function ChatView() {
                               : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
                           }`}>
                           <div className="relative">
-                            {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={16} className="opacity-70" />; })()}
+                            {(() => {
+                              const mode = channel.mode || 'social';
+                              const IC = channelIconComponents[channel.iconName ?? getDefaultChannelIconName(mode)] || roomModeIcons[mode] || Coffee;
+                              return <IC size={16} className="opacity-90" style={{ color: channel.iconColor ?? getDefaultChannelIconColor(mode) }} />;
+                            })()}
                             {channel.password && (
                               <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
                                 <Lock size={8} className="text-white" />
@@ -1090,7 +1123,7 @@ export default function ChatView() {
                       const atLimit = userRoomCount >= roomLimit;
                       return (
                       <button
-                        onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' }); setMobileLeftOpen(false); }}
+                        onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social', iconColor: getDefaultChannelIconColor('social'), iconName: getDefaultChannelIconName('social') }); setMobileLeftOpen(false); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                           atLimit
                             ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
@@ -1273,9 +1306,6 @@ export default function ChatView() {
           )}
         </AnimatePresence>
         <AnimatePresence>
-          {invitationModal && <InvitationModal data={invitationModal} onAccept={handleInvitationAccept} onDecline={handleInvitationDecline} onMute={handleInvitationMute} isMuted={invitationMuted} />}
-        </AnimatePresence>
-        <AnimatePresence>
           {contextMenu && (
             <ChatViewContextMenu contextMenu={contextMenu} channels={channels} onEditRoom={handleEditRoom}
               onSetPassword={handleSetPasswordModal} onRemovePassword={handleRemovePassword}
@@ -1345,7 +1375,7 @@ export default function ChatView() {
               {/* Oda başlığı — sadece tarayıcı daralmış halde (Android'de gizli, desktop parity) */}
               <div className={`relative z-[1] flex items-center justify-between mb-3 sm:mb-6 ${FORCE_MOBILE ? 'hidden' : 'lg:hidden'}`}>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  {(() => { const activeCh = channels.find(c => c.id === activeChannel); const mc = getRoomModeConfig(activeCh?.mode); const ModeIcon = roomModeIcons[mc.id] || Volume2; return (<><div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center text-[var(--theme-accent)] border border-[var(--theme-accent)]/20 shrink-0"><ModeIcon size={18} className="sm:w-5 sm:h-5" /></div><div><h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">{activeCh?.name || 'Sohbet Odası'}</h2><p className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 mt-0.5">{mc.shortHelper}</p></div></>); })()}
+                  {(() => { const activeCh = channels.find(c => c.id === activeChannel); const mc = getRoomModeConfig(activeCh?.mode); const ModeIcon = channelIconComponents[activeCh?.iconName ?? getDefaultChannelIconName(mc.id)] || roomModeIcons[mc.id] || Volume2; const iconColor = activeCh?.iconColor ?? getDefaultChannelIconColor(mc.id); return (<><div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shrink-0" style={{ color: iconColor, background: `${iconColor}1a`, borderColor: `${iconColor}33` }}><ModeIcon size={18} className="sm:w-5 sm:h-5" /></div><div><h2 className="text-base sm:text-xl font-bold tracking-tight text-[var(--theme-text)] leading-none">{activeCh?.name || 'Sohbet Odası'}</h2><p className="text-[9px] font-semibold text-[var(--theme-secondary-text)] opacity-50 mt-0.5">{mc.shortHelper}</p></div></>); })()}
                 </div>
                 <div className="flex items-center gap-3">
                   <button onClick={() => { const next = (cardScale % 3) + 1; setCardScale(next); localStorage.setItem('cardScale', String(next)); }}

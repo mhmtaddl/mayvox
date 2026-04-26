@@ -3,6 +3,10 @@ import type React from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, updateUserAppVersion } from '../lib/supabase';
 import { normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
+import { applyLocalChannelOrder } from '../lib/channelOrder';
+import { applyLocalChannelIcons } from '../lib/channelIcon';
+import { applyLocalChannelIconColors } from '../lib/channelIconColor';
+import { getServerChannels } from '../lib/serverService';
 import type { User, VoiceChannel } from '../types';
 
 interface Props {
@@ -494,12 +498,79 @@ export function usePresence({
       });
     });
 
-    channel.on('broadcast', { event: 'channel-update' }, ({ payload }) => {
+    const refetchServerChannels = async (serverId: string) => {
+      try {
+        const fresh = await getServerChannels(serverId);
+        if (serverId !== activeServerIdRef.current) return;
+        channelOrderTokenRef.current = fresh.orderToken;
+        const displayNameMap: Record<string, string> = {
+          'Sohbet Muhabbet': 'Genel',
+          'Oyun Takımı': 'Oyun',
+          'Yayın Sahnesi': 'Yayın',
+          'Sessiz Alan': 'Sessiz',
+        };
+        setChannels(prev => {
+          const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c] as const));
+          const myId = currentUserRef.current.id;
+          const myChannel = activeChannelRef.current;
+          return applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(serverId, fresh.channels.map(ch => {
+            const existing = prevMap.get(ch.id);
+            let members = existing?.members ?? [];
+            let userCount = existing?.userCount ?? 0;
+            if (ch.id === myChannel && myId && !members.includes(myId)) {
+              members = [...members, myId];
+              userCount = members.length;
+            }
+            return {
+              id: ch.id,
+              name: displayNameMap[ch.name] ?? ch.name,
+              userCount,
+              members,
+              isSystemChannel: ch.isDefault,
+              isPersistent: ch.isPersistent,
+              maxUsers: ch.maxUsers ?? undefined,
+              isInviteOnly: ch.isInviteOnly,
+              isHidden: ch.isHidden,
+              ownerId: ch.ownerId ?? undefined,
+              mode: ch.mode ?? existing?.mode ?? 'social',
+              iconName: ch.iconName ?? undefined,
+              iconColor: ch.iconColor ?? undefined,
+              speakerIds: existing?.speakerIds,
+              position: ch.position,
+              password: existing?.password,
+            } satisfies VoiceChannel;
+          }))));
+        });
+      } catch (err) {
+        console.warn('[usePresence] channel reorder refetch failed:', err);
+      }
+    };
+
+    const handleChannelUpdate = ({ payload }: { payload: any }) => {
+      if (payload?.serverId && payload.serverId !== activeServerIdRef.current) return;
       if (payload.action === 'create') {
+        const incoming = payload.channel || {};
+        const channelToAdd: VoiceChannel = {
+          id: incoming.id,
+          name: incoming.name,
+          userCount: incoming.userCount ?? 0,
+          members: incoming.members ?? [],
+          isSystemChannel: incoming.isSystemChannel ?? incoming.isDefault,
+          isPersistent: incoming.isPersistent,
+          maxUsers: incoming.maxUsers ?? undefined,
+          isInviteOnly: incoming.isInviteOnly,
+          isHidden: incoming.isHidden,
+          ownerId: incoming.ownerId ?? undefined,
+          mode: incoming.mode ?? 'social',
+          iconName: incoming.iconName ?? undefined,
+          iconColor: incoming.iconColor ?? undefined,
+          speakerIds: incoming.speakerIds,
+          position: incoming.position ?? 0,
+        };
         setChannels(prev =>
-          prev.find(c => c.id === payload.channel.id)
+          prev.find(c => c.id === channelToAdd.id)
             ? prev
-            : [...prev, payload.channel],
+            : applyLocalChannelOrder(activeServerIdRef.current, [...prev, channelToAdd]),
         );
       } else if (payload.action === 'delete') {
         setChannels(prev => prev.filter(c => c.id !== payload.channelId));
@@ -507,7 +578,11 @@ export function usePresence({
           prev === payload.channelId ? null : prev,
         );
       } else if (payload.action === 'reorder') {
+        if (payload.serverId) {
+          void refetchServerChannels(payload.serverId);
+        }
         // Kanal sıralama güncellemesi — local position map + token senkronu.
+        // Refetch authoritative; bu patch sadece ağ gecikmesinde anlık görsel fallback.
         const updates = Array.isArray(payload.updates) ? payload.updates : [];
         if (updates.length === 0) return;
         const positionById = new Map<string, number>();
@@ -526,7 +601,7 @@ export function usePresence({
             if (a.position !== b.position) return a.position - b.position;
             return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
           });
-          return next;
+          return applyLocalChannelOrder(activeServerIdRef.current, next);
         });
         // Broadcast payload yeni orderToken taşıyorsa bizim cihazın token'ını güncelle
         // — aksi hâlde bu client'ın sonraki reorder'ı stale token ile 409 alır.
@@ -582,6 +657,15 @@ export function usePresence({
           }),
         );
       }
+    };
+
+    channel.on('broadcast', { event: 'channel-update' }, handleChannelUpdate);
+    channel.on('broadcast', { event: 'channels-reordered' }, ({ payload }) => {
+      if (payload?.serverId && payload.serverId !== activeServerIdRef.current) return;
+      if (payload?.serverId) {
+        void refetchServerChannels(payload.serverId);
+      }
+      handleChannelUpdate({ payload: { ...payload, action: 'reorder', updates: payload.channels ?? payload.updates } });
     });
 
     channel.subscribe(async status => {

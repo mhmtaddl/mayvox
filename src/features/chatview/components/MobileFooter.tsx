@@ -25,6 +25,19 @@ interface Props {
   onLeaveServer: (serverId: string) => Promise<void>;
   onShowCreateModal: () => void;
   canCreateServer?: boolean;
+  invitationData?: {
+    inviterId: string;
+    inviterName: string;
+    inviterAvatar?: string;
+    roomName: string;
+    roomId: string;
+    serverName?: string;
+    serverAvatar?: string | null;
+  } | null;
+  onInvitationAccept?: () => void;
+  onInvitationDecline?: () => void;
+  onInvitationMute?: () => void;
+  invitationMuted?: boolean;
 }
 
 export default function MobileFooter({
@@ -39,6 +52,11 @@ export default function MobileFooter({
   onLeaveServer,
   onShowCreateModal,
   canCreateServer,
+  invitationData,
+  onInvitationAccept,
+  onInvitationDecline,
+  onInvitationMute,
+  invitationMuted,
 }: Props) {
   const { currentUser } = useUser();
   const { activeChannel, channels } = useChannel();
@@ -297,6 +315,11 @@ export default function MobileFooter({
           onLeaveServer={onLeaveServer}
           onShowCreateModal={onShowCreateModal}
           canCreateServer={canCreateServer}
+          invitationData={invitationData}
+          onInvitationAccept={onInvitationAccept}
+          onInvitationDecline={onInvitationDecline}
+          onInvitationMute={onInvitationMute}
+          invitationMuted={invitationMuted}
         />
       </div>
     </footer>

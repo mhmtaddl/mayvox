@@ -91,8 +91,8 @@ export function usePttAudio(params: UsePttAudioParams) {
   // Electron PTT init
   useEffect(() => {
     const rawCode = localStorage.getItem('pttRawCode');
-    if (rawCode && window.electronPtt?.initRaw) window.electronPtt.initRaw(rawCode);
-    else window.electronPtt?.init(pttKey);
+    if (pttKey && rawCode && window.electronPtt?.initRaw) window.electronPtt.initRaw(rawCode);
+    else if (pttKey) window.electronPtt?.init(pttKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -129,7 +129,7 @@ export function usePttAudio(params: UsePttAudioParams) {
 
   // PTT tuş dinleyicileri (sadece PTT modunda)
   useEffect(() => {
-    if (isListeningForKey || voiceMode === 'vad') return;
+    if (isListeningForKey || voiceMode === 'vad' || !pttKey) return;
     if (window.electronPtt) {
       window.electronPtt.onDown(() => {
         // Voice pipeline guard — server susturma/kick/timeout/ban varken PTT başlatma.

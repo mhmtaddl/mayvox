@@ -62,6 +62,8 @@ export interface Channel {
   is_invite_only: boolean;
   is_hidden: boolean;
   mode: string | null;
+  icon_name: string | null;
+  icon_color: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +82,8 @@ export interface ChannelResponse {
   isInviteOnly: boolean;
   isHidden: boolean;
   mode: string | null;
+  iconName: string | null;
+  iconColor: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -2,6 +2,8 @@ import React, { useRef, useEffect } from 'react';
 import type { Room, RemoteParticipant } from 'livekit-client';
 import { RemoteAudioTrack } from 'livekit-client';
 import type { DuckingConfig } from '../lib/roomModeConfig';
+import { getUserVolumePercent } from '../lib/userVolume';
+import { resolveUserByMemberKey } from '../lib/memberIdentity';
 
 // ── Smart Voice Ducking — dominant speaker based ──────────────────────────
 // Biri konuşurken diğerlerinin sesi otomatik kısılır.
@@ -16,7 +18,7 @@ interface UseDuckingProps {
   livekitRoomRef: React.MutableRefObject<Room | null>;
   /** Mevcut speaking levels — { identity: audioLevel } */
   speakingLevels: Record<string, number>;
-  /** Kullanıcının manuel volume ayarları — { userId: 1-99 } */
+  /** Kullanıcının manuel volume ayarları — { userId: 0-100 } */
   userVolumes: Record<string, number>;
   /** userId ↔ identity (name) eşlemesi için kullanıcı listesi */
   allUsers: { id: string; name: string }[];
@@ -167,13 +169,12 @@ export function useDucking({
       return;
     }
 
-    // Kullanıcının manuel volume ayarı (0-150, default 100)
+    // Kullanıcının manuel volume ayarı (0-100, default 100)
     // Ducking gain bunu çarpan olarak uygular, override etmez.
-    // userVolumes userId ile key'lendiği için identity (user.name) → userId resolve edilir.
-    const userId = allUsersRef.current.find(u => u.name === identity)?.id;
-    const userVol = ((userId ? userVolumesRef.current[userId] : undefined) ?? 100) / 100;
-    // Max 1.5 — webAudioMix: true ile LiveKit GainNode >1 amplifikasyonu destekler.
-    const finalVol = Math.max(0, Math.min(1.5, userVol * duckingGain));
+    // userVolumes userId ile key'lendiği için LiveKit identity → userId resolve edilir.
+    const userId = resolveUserByMemberKey(identity, allUsersRef.current)?.id ?? identity;
+    const userVol = (userVolumesRef.current[userId] ?? getUserVolumePercent(userId)) / 100;
+    const finalVol = Math.max(0, Math.min(1, userVol * duckingGain));
 
     // LiveKit track API
     for (const [, p] of room.remoteParticipants) {

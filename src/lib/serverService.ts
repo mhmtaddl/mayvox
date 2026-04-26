@@ -274,6 +274,8 @@ export interface ServerChannel {
   isInviteOnly: boolean;
   isHidden: boolean;
   mode: string | null;
+  iconName: string | null;
+  iconColor: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -285,6 +287,8 @@ export interface ChannelCreatePayload {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
   /** "Oda Kalıcılığı" toggle — undefined/true = persistent (default).
    *  false path şu an backend FEATURE_FLAGS.nonPersistentRoomsEnabled
    *  kapalı olduğu için yine persistent'e düşürülür. */
@@ -298,6 +302,8 @@ export interface ChannelUpdatePayload {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
 }
 
 export interface ChannelListPayload {
@@ -334,7 +340,7 @@ export async function reorderServerChannels(
 ): Promise<ChannelListPayload> {
   return apiFetch<ChannelListPayload>(`/servers/${serverId}/channels/reorder`, {
     method: 'PATCH',
-    body: JSON.stringify({ updates, orderToken }),
+    body: JSON.stringify({ updates, expectedOrderToken: orderToken, orderToken }),
   });
 }
 

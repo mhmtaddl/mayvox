@@ -38,6 +38,7 @@ import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
+import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 import { getThemePack } from './lib/themePacks';
 
@@ -562,14 +563,15 @@ export default function App() {
     isInviteOnly: boolean;
     isHidden: boolean;
     mode: string;
+    iconColor?: string;
+    iconName?: string;
   }>({ isOpen: false, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
   const [passwordModal, setPasswordModal] = useState<{ type: 'set' | 'enter'; channelId: string } | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordRepeatInput, setPasswordRepeatInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   const [userVolumes, setUserVolumes] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('userVolumes');
-    return saved ? JSON.parse(saved) : {};
+    return getAllUserVolumePercents();
   });
   const [settingsTarget, setSettingsTarget] = useState<import('./contexts/UIContext').SettingsTarget>(null);
 
@@ -1140,7 +1142,7 @@ export default function App() {
         const channelsToDelete: string[] = [];
 
         // Task #18 defense-in-depth: is_default flag drift olursa name fallback'i.
-        const SYSTEM_ROOM_NAMES = new Set(['Sohbet Muhabbet', 'Oyun Takımı', 'Yayın Sahnesi', 'Sessiz Alan']);
+        const SYSTEM_ROOM_NAMES = new Set(['Genel', 'Sohbet Muhabbet', 'Oyun', 'Oyun Takımı', 'Yayın', 'Yayın Sahnesi', 'Sessiz', 'Sessiz Alan']);
         const nextChannels = prevChannels.map(channel => {
           if (channel.isSystemChannel) return channel;
           // Kalıcı odalar (kullanıcı toggle ile açtı) auto-delete'ten muaf.
@@ -1390,7 +1392,9 @@ export default function App() {
         el.volume = 0;
         try { el.pause(); } catch { /* no-op */ }
       } else {
-        el.volume = 1;
+        const userId = el.dataset.mayvoxUserId;
+        if (userId) applyVolumeToAudioElement(el, userId);
+        else el.volume = 1;
         // play() autoplay policy ilk gesture'dan önce reddedebilir — LiveKit zaten autoplay yapar.
         void el.play().catch(() => { /* safe — LiveKit attach tekrar tetikler */ });
       }
@@ -1409,9 +1413,9 @@ export default function App() {
         if (isDeafened) {
           track.setVolume(0);
         } else {
-          const user = allUsers.find(u => u.name === participant.identity);
+          const user = resolveUserByMemberKey<User>(participant.identity, allUsers);
           const savedPct = user ? userVolumes[user.id] : undefined;
-          const vol = savedPct !== undefined ? Math.max(0, Math.min(1.5, savedPct / 100)) : 1;
+          const vol = savedPct !== undefined ? Math.max(0, Math.min(1, savedPct / 100)) : 1;
           track.setVolume(vol);
         }
       });

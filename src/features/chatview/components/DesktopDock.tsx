@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
 import InactivityCountdownBanner from './InactivityCountdownBanner';
+import InvitationModal from './InvitationModal';
 import { formatFullName } from '../../../lib/formatName';
 import AvatarContent from '../../../components/AvatarContent';
 import { type CardStyle, CARD_STYLES } from '../../../components/chat/cardStyles';
@@ -58,6 +59,19 @@ interface Props {
   onGoHome?: () => void;
   /** Kullanıcıyı aktif odaya geri döndürür (activeChannel set değilse çalışmaz). */
   onReturnToRoom?: () => void;
+  invitationData?: {
+    inviterId: string;
+    inviterName: string;
+    inviterAvatar?: string;
+    roomName: string;
+    roomId: string;
+    serverName?: string;
+    serverAvatar?: string | null;
+  } | null;
+  onInvitationAccept?: () => void;
+  onInvitationDecline?: () => void;
+  onInvitationMute?: () => void;
+  invitationMuted?: boolean;
 }
 
 export default function DesktopDock({
@@ -76,6 +90,11 @@ export default function DesktopDock({
   currentView,
   onGoHome,
   onReturnToRoom,
+  invitationData,
+  onInvitationAccept,
+  onInvitationDecline,
+  onInvitationMute,
+  invitationMuted = false,
 }: Props) {
   const isInline = layout === 'inline';
   const { toastMsg, setToastMsg, setSettingsTarget } = useUI();
@@ -282,7 +301,7 @@ export default function DesktopDock({
     <div
       className={
         isInline
-          ? 'flex flex-wrap items-center justify-center gap-1.5 px-2 py-2 min-h-[48px]'
+          ? `flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
           : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`
       }
       /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */
@@ -420,6 +439,17 @@ export default function DesktopDock({
           </div>
         );
       })()}
+      {invitationData && onInvitationAccept && onInvitationDecline && onInvitationMute ? (
+        <InvitationModal
+          inline
+          data={invitationData}
+          onAccept={onInvitationAccept}
+          onDecline={onInvitationDecline}
+          onMute={onInvitationMute}
+          isMuted={invitationMuted}
+        />
+      ) : (
+      <>
       {/* ── Sunucu alanı — kompakt default ── */}
       {serverList.length > 0 && activeServer && <>
       <div ref={serverAreaRef} className="relative flex items-center gap-1 shrink-0">
@@ -583,6 +613,7 @@ export default function DesktopDock({
       {/* Ses modu butonu — mobilde gizli, Ayarlar → Ses'te PTT/VAD değişimi */}
       {!isInline && activeChannel && (() => {
         const isVad = voiceMode === 'vad';
+        const pttKeyMissing = !pttKey;
         const activeCh = channels.find(c => c.id === activeChannel);
         const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
         const canSwitch = vc ? vc.allowedModes.length > 1 : true;
@@ -603,12 +634,21 @@ export default function DesktopDock({
                 className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center btn-haptic text-[10px] font-black whitespace-nowrap transition-all duration-150 active:scale-[0.97] ${
                   isListeningForKey
                     ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse'
+                    : pttKeyMissing
+                      ? 'mv-ptt-onboarding-button animate-pulse'
                     : 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
                 }`}
-                title="Bas-Konuş tuşu — tıkla değiştir"
+                title={pttKeyMissing ? 'Bas-Konuş tuşunuzu seçiniz' : 'Bas-Konuş tuşu — tıkla değiştir'}
               >
-                {isListeningForKey ? '...' : pttKey}
+                {isListeningForKey ? '...' : pttKeyMissing ? 'Bas-Konuş' : pttKey}
               </button>
+            )}
+            {pttKeyMissing && !isListeningForKey && (
+              <div
+                className="mv-ptt-onboarding-toast pointer-events-none absolute left-1/2 bottom-[calc(100%+12px)] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-[12px] font-extrabold whitespace-nowrap animate-pulse"
+              >
+                Bas-Konuş tuşunuzu seçiniz
+              </div>
             )}
             {canSwitch && (
               <div
@@ -670,7 +710,7 @@ export default function DesktopDock({
               null'a döner, voice avatar listesinden düşer. Home butonu "peek" için. */}
           <button
             onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
-            className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500 hover:text-white transition-colors duration-150"
+            className="voice-leave-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150"
             title="Çağrıdan Ayrıl"
           >
             <PhoneOff size={16} />
@@ -715,6 +755,8 @@ export default function DesktopDock({
           </>
         );
       })()}
+      </>
+      )}
       </>}
     </div>
   );

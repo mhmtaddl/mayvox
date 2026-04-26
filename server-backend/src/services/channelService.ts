@@ -7,6 +7,7 @@ import { invalidateServerOverview } from './serverOverviewService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
 import { assertLimit, FEATURE_FLAGS } from './planService';
+import { broadcastChannelUpdate } from './channelBroadcast';
 
 // ── Sabitler ──
 const NAME_MIN = 1;
@@ -16,6 +17,12 @@ const MAX_USERS_MIN = 2;
 // type enforcement future-use. Bugünlük tek sabit cap yeterli.
 const MAX_USERS_MAX = 60;
 const ALLOWED_MODES = new Set(['social', 'gaming', 'broadcast', 'quiet']);
+const ALLOWED_ICON_NAMES = new Set([
+  'coffee', 'gamepad', 'radio', 'quiet', 'users', 'party',
+  'message', 'crosshair', 'target', 'swords', 'shield', 'bomb', 'trophy',
+  'userPlus', 'music', 'headphones', 'monitor', 'zap', 'crown', 'flame',
+  'rocket', 'tank', 'radar', 'gem', 'bot', 'cpu',
+]);
 
 export interface ChannelCreateInput {
   name: string;
@@ -24,6 +31,8 @@ export interface ChannelCreateInput {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
   /** Yeni modelde kullanıcı kalıcı oda oluşturuyorsa true.
    *  Şu an planlarda maxNonPersistent=0 olduğundan DEFAULT true (backward compat).
    *  Future: CreateRoomModal'dan açık boolean gelir. */
@@ -37,6 +46,8 @@ export interface ChannelUpdateInput {
   isInviteOnly?: boolean;
   isHidden?: boolean;
   description?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
 }
 
 function toResponse(ch: Channel): ChannelResponse {
@@ -54,6 +65,8 @@ function toResponse(ch: Channel): ChannelResponse {
     isInviteOnly: ch.is_invite_only,
     isHidden: ch.is_hidden,
     mode: ch.mode,
+    iconName: ch.icon_name,
+    iconColor: ch.icon_color,
     createdAt: ch.created_at,
     updatedAt: ch.updated_at,
   };
@@ -82,6 +95,21 @@ function normalizeMaxUsers(raw: unknown): number | null {
     throw new AppError(400, `Kullanıcı limiti ${MAX_USERS_MIN}-${MAX_USERS_MAX} arası olmalı`);
   }
   return n;
+}
+
+function normalizeIconName(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') throw new AppError(400, 'Geçersiz kanal ikonu');
+  if (!ALLOWED_ICON_NAMES.has(raw)) throw new AppError(400, 'Geçersiz kanal ikonu');
+  return raw;
+}
+
+function normalizeIconColor(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string' || !/^#[0-9a-f]{6}$/i.test(raw)) {
+    throw new AppError(400, 'Geçersiz kanal rengi');
+  }
+  return raw;
 }
 
 // requireManageRole legacy helper kaldırıldı — capability resolver + assertCapability kullanılıyor.
@@ -150,6 +178,8 @@ export async function createChannel(
   const isInviteOnly = !!input.isInviteOnly;
   const isHidden = !!input.isHidden;
   const description = typeof input.description === 'string' ? input.description.slice(0, 200) : '';
+  const iconName = normalizeIconName(input.iconName);
+  const iconColor = normalizeIconColor(input.iconColor);
 
   // Pozisyon: mevcut max + 1
   const posRow = await queryOne<{ max_pos: number | null }>(
@@ -159,10 +189,10 @@ export async function createChannel(
   const nextPosition = (posRow?.max_pos ?? -1) + 1;
 
   const row = await queryOne<Channel>(
-    `INSERT INTO channels (server_id, name, description, type, position, is_default, is_persistent, owner_id, max_users, is_invite_only, is_hidden, mode)
-     VALUES ($1, $2, $3, 'voice', $4, false, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO channels (server_id, name, description, type, position, is_default, is_persistent, owner_id, max_users, is_invite_only, is_hidden, mode, icon_name, icon_color)
+     VALUES ($1, $2, $3, 'voice', $4, false, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING *`,
-    [serverId, name, description, nextPosition, isPersistent, userId, maxUsers, isInviteOnly, isHidden, mode]
+    [serverId, name, description, nextPosition, isPersistent, userId, maxUsers, isInviteOnly, isHidden, mode, iconName, iconColor]
   );
   if (!row) throw new AppError(500, 'Kanal oluşturulamadı');
 
@@ -174,7 +204,9 @@ export async function createChannel(
     resourceType: 'channel', resourceId: row.id,
     metadata: { name: row.name, isInviteOnly, isHidden, isPersistent },
   });
-  return toResponse(row);
+  const response = toResponse(row);
+  void broadcastChannelUpdate({ action: 'create', serverId, channel: response });
+  return response;
 }
 
 /** Kanal güncelle */
@@ -216,6 +248,12 @@ export async function updateChannel(
     sets.push(`description = $${i++}`);
     values.push(typeof input.description === 'string' ? input.description.slice(0, 200) : '');
   }
+  if (input.iconName !== undefined) {
+    sets.push(`icon_name = $${i++}`); values.push(normalizeIconName(input.iconName));
+  }
+  if (input.iconColor !== undefined) {
+    sets.push(`icon_color = $${i++}`); values.push(normalizeIconColor(input.iconColor));
+  }
 
   if (sets.length === 0) return toResponse(existing);
 
@@ -232,7 +270,14 @@ export async function updateChannel(
   });
   // Visibility değişebilir → overview private/public sayımları stale olmasın.
   invalidateServerOverview(serverId);
-  return toResponse(row);
+  const response = toResponse(row);
+  void broadcastChannelUpdate({
+    action: 'update',
+    serverId,
+    channelId: row.id,
+    updates: response,
+  });
+  return response;
 }
 
 /** Kanal sıralamasını toplu güncelle — tek SQL (unnest), transactional, optimistic concurrency. */
@@ -269,10 +314,15 @@ export async function reorderChannels(
   try {
     await client.query('BEGIN');
 
-    // Optimistic concurrency: başka yönetici reorder yapmışsa token uyuşmaz.
+    // Optimistic concurrency: önce server kanallarını kilitle, sonra aggregate token hesapla.
+    // Postgres aggregate SELECT ile FOR UPDATE birlikte kullanılamaz.
+    await client.query(
+      'SELECT id FROM channels WHERE server_id = $1 FOR UPDATE',
+      [serverId],
+    );
     const freshRow = await client.query<{ max_ts: string | null }>(
-      'SELECT MAX(updated_at)::text AS max_ts FROM channels WHERE server_id = $1 FOR UPDATE',
-      [serverId]
+      'SELECT MAX(updated_at)::text AS max_ts FROM channels WHERE server_id = $1',
+      [serverId],
     );
     const currentToken = freshRow.rows[0]?.max_ts ?? null;
     if (expectedOrderToken !== null && currentToken !== expectedOrderToken) {
@@ -309,6 +359,15 @@ export async function reorderChannels(
     await client.query('COMMIT');
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch { /* no-op */ }
+    if (!(err instanceof AppError)) {
+      console.error('[channel.reorder] transaction failed', {
+        serverId,
+        userId,
+        updatesCount: updates.length,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+    }
     throw err instanceof AppError ? err : new AppError(500, 'Sıralama kaydedilemedi');
   } finally {
     client.release();
@@ -319,7 +378,9 @@ export async function reorderChannels(
     [serverId]
   );
   const orderToken = await fetchOrderToken(serverId);
-  return { channels: rows.map(toResponse), orderToken };
+  const result = { channels: rows.map(toResponse), orderToken };
+  void broadcastChannelUpdate({ action: 'reorder', serverId, updates, orderToken, timestamp: Date.now() });
+  return result;
 }
 
 /** Kanal sil — varsayılan (sistem) kanallar silinemez */
@@ -355,4 +416,5 @@ export async function deleteChannel(
     resourceType: 'channel', resourceId: channelId,
     metadata: { name: existing.name },
   });
+  void broadcastChannelUpdate({ action: 'delete', serverId, channelId });
 }

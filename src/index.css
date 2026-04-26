@@ -118,16 +118,16 @@ html, body, #root {
 .window-titlebar,
 .app-titlebar {
   height: 40px !important;
-  width: calc(100% - 20px) !important;
-  margin: 8px 10px 0 !important;
-  border-radius: 14px !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022)) !important;
-  border: 1px solid var(--border-soft, var(--theme-border, rgba(255, 255, 255, 0.08))) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-  backdrop-filter: blur(18px) saturate(1.12) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
-  overflow: hidden;
+  width: 100% !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(var(--glass-tint), 0.08) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: visible;
   -webkit-app-region: drag;
 }
 
@@ -135,17 +135,17 @@ html[data-theme-light="true"] .titlebar,
 html[data-theme-light="true"] .window-titlebar,
 html[data-theme-light="true"] .app-titlebar {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.54)) !important;
-  border-color: rgba(0, 0, 0, 0.065) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.80) !important;
+    transparent !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: none !important;
 }
 
 html.mv-window-maximized .titlebar,
 html.mv-window-maximized .window-titlebar,
 html.mv-window-maximized .app-titlebar {
   width: calc(100% - 16px) !important;
-  margin: 6px 8px 0 !important;
-  border-radius: 12px !important;
+  margin: 0 8px !important;
+  border-radius: 0 !important;
 }
 
 .titlebar button,
@@ -370,6 +370,17 @@ button:focus {
   transform: translateY(0.5px) scale(0.97);
   box-shadow: 0 0 2px rgba(0,0,0,0.10);
   transition-duration: 60ms;
+}
+
+.voice-leave-btn {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: rgb(248, 113, 113) !important;
+  border-color: rgba(239, 68, 68, 0.28) !important;
+}
+.voice-leave-btn:hover {
+  background: rgb(239, 68, 68) !important;
+  color: #fff !important;
+  border-color: rgba(239, 68, 68, 0.9) !important;
 }
 
 /* ─── Floating glass panel system ─── */
@@ -1523,4 +1534,69 @@ html[data-theme-light="true"] .mv-desktop-dock .voice-control-warning {
   background: rgba(217, 119, 6, 0.12) !important;
   color: #b45309 !important;
   border-color: rgba(180, 83, 9, 0.22) !important;
+}
+
+/* ─── PTT onboarding hint — theme-aware contrast colors ─── */
+.mv-ptt-onboarding-button {
+  background: rgba(251, 191, 36, 0.18);
+  color: rgb(254, 240, 138);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 22px rgba(251, 191, 36, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.mv-ptt-onboarding-toast {
+  color: rgb(254, 243, 199);
+  background: rgba(120, 74, 8, 0.34);
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 22px rgba(251, 191, 36, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+html[data-theme-pack="default-dark"] .mv-ptt-onboarding-button,
+html[data-theme-pack="ocean-blue"] .mv-ptt-onboarding-button,
+html[data-theme-pack="emerald"] .mv-ptt-onboarding-button,
+html[data-theme-pack="crimson"] .mv-ptt-onboarding-button {
+  background: rgba(251, 191, 36, 0.18);
+  color: rgb(254, 240, 138);
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 22px rgba(251, 191, 36, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme-pack="default-dark"] .mv-ptt-onboarding-toast,
+html[data-theme-pack="ocean-blue"] .mv-ptt-onboarding-toast,
+html[data-theme-pack="emerald"] .mv-ptt-onboarding-toast,
+html[data-theme-pack="crimson"] .mv-ptt-onboarding-toast {
+  color: rgb(254, 243, 199);
+  background: rgba(120, 74, 8, 0.34);
+  border-color: rgba(251, 191, 36, 0.34);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 22px rgba(251, 191, 36, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme-pack="amber-night"] .mv-ptt-onboarding-button {
+  background: rgba(239, 68, 68, 0.16);
+  color: rgb(254, 202, 202);
+  border-color: rgba(248, 113, 113, 0.42);
+  box-shadow: 0 0 22px rgba(239, 68, 68, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+html[data-theme-pack="amber-night"] .mv-ptt-onboarding-toast {
+  color: rgb(254, 226, 226);
+  background: rgba(127, 29, 29, 0.34);
+  border-color: rgba(248, 113, 113, 0.32);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 22px rgba(239, 68, 68, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+html[data-theme-light="true"] .mv-ptt-onboarding-button {
+  background: rgba(0, 0, 0, 0.78);
+  color: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 0, 0, 0.42);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+html[data-theme-light="true"] .mv-ptt-onboarding-toast {
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(0, 0, 0, 0.76);
+  border-color: rgba(0, 0, 0, 0.42);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }

@@ -45,7 +45,7 @@ export interface RoomModeConfig {
 export const ROOM_MODES: Record<RoomMode, RoomModeConfig> = {
   social: {
     id: 'social',
-    label: 'Sohbet Lounge',
+    label: 'Genel',
     description: 'Rahat ve akışkan sesli sohbet.',
     ruleSummary: 'Açık mikrofon \u2022 Mesaj açık',
     icon: 'Coffee',
@@ -60,7 +60,7 @@ export const ROOM_MODES: Record<RoomMode, RoomModeConfig> = {
   },
   gaming: {
     id: 'gaming',
-    label: 'Oyun Takımı',
+    label: 'Oyun',
     description: 'Hızlı ve odaklı takım iletişimi.',
     ruleSummary: 'Hızlı iletişim \u2022 Mesaj açık',
     icon: 'Gamepad2',
@@ -69,13 +69,13 @@ export const ROOM_MODES: Record<RoomMode, RoomModeConfig> = {
     pttRequired: false,
     uiDensity: 'focused',
     ducking: { enabled: true, amount: 0.35, attackMs: 120, releaseMs: 220 },
-    voice: { defaultMode: 'vad', allowedModes: ['vad', 'ptt'] },
+    voice: { defaultMode: 'ptt', allowedModes: ['ptt', 'vad'] },
     futureHostPriority: false,
     shortHelper: 'Takım iletişimi',
   },
   broadcast: {
     id: 'broadcast',
-    label: 'Yayın Sahnesi',
+    label: 'Yayın',
     description: 'Konuşmacı odaklı, düzenli yayın akışı.',
     ruleSummary: 'Düzenli akış \u2022 Mesaj açık',
     icon: 'Radio',
@@ -90,7 +90,7 @@ export const ROOM_MODES: Record<RoomMode, RoomModeConfig> = {
   },
   quiet: {
     id: 'quiet',
-    label: 'Sessiz Alan',
+    label: 'Sessiz',
     description: 'Bas-konuş odaklı, dikkat dağıtmayan ortam.',
     ruleSummary: 'Bas-konuş zorunlu \u2022 Mesaj kapalı',
     icon: 'VolumeX',

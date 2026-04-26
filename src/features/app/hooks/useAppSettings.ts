@@ -193,8 +193,27 @@ export function useAppSettings() {
   };
 
   // ── PTT ──
-  const [pttKey, setPttKey] = useState(() => localStorage.getItem('pttKey') || 'SPACE');
-  useEffect(() => { localStorage.setItem('pttKey', pttKey); }, [pttKey]);
+  const [pttKey, setPttKeyState] = useState(() => {
+    const saved = localStorage.getItem('pttKey');
+    const userSelected = localStorage.getItem('pttKeyUserSet') === 'true';
+    if (saved === 'SPACE' && !userSelected) {
+      localStorage.removeItem('pttKey');
+      localStorage.removeItem('pttRawCode');
+      return '';
+    }
+    return saved || '';
+  });
+  const setPttKey = (v: string) => {
+    if (v) {
+      localStorage.setItem('pttKeyUserSet', 'true');
+      localStorage.setItem('pttKey', v);
+    } else {
+      localStorage.removeItem('pttKeyUserSet');
+      localStorage.removeItem('pttKey');
+      localStorage.removeItem('pttRawCode');
+    }
+    setPttKeyState(v);
+  };
   const [isListeningForKey, setIsListeningForKey] = useState(false);
 
   const [pttReleaseDelay, setPttReleaseDelayState] = useState<number>(() => {

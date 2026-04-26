@@ -28,8 +28,10 @@ import { useUI } from '../../../contexts/UIContext';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useSidebarResize } from '../hooks/useSidebarResize';
-import { roomModeIcons, FORCE_MOBILE } from '../constants';
+import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../constants';
 import { Coffee } from 'lucide-react';
+import { getDefaultChannelIconColor } from '../../../lib/channelIconColor';
+import { getDefaultChannelIconName } from '../../../lib/channelIcon';
 
 interface Props {
   handleDragOver: (e: React.DragEvent) => void;
@@ -261,7 +263,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         <nav ref={channelScrollRef} className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
           {visibleChannels.map(channel => {
             // Capability-driven: resolver falsy iken legacy isAdmin fallback.
-            const canReorderThis = (canReorderChannels || serverAdminFallback) && !channel.isSystemChannel;
+            const canReorderThis = canReorderChannels || serverAdminFallback;
             const isDragging = draggingChannelId === channel.id;
             const isDropTarget = dropTargetChannelId === channel.id && draggingChannelId && draggingChannelId !== channel.id;
             return (
@@ -279,7 +281,6 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 onContextMenu={(e) => handleContextMenu(e, channel.id)}
                 onDragOver={(e) => {
                   if (e.dataTransfer.types.includes(CHANNEL_DRAG_MIME)) {
-                    if (channel.isSystemChannel) return; // sistem kanalları drop hedefi değil
                     if (draggingChannelId === channel.id) return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
@@ -303,7 +304,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                     e.preventDefault();
                     e.stopPropagation();
                     clearDragState();
-                    if (!activeServerId || dragId === channel.id || channel.isSystemChannel) return;
+                    if (!activeServerId || dragId === channel.id) return;
                     // Sıralamayı yeniden üret: kaynakt kanalı hedefin önüne/arkasına yerleştir
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     const placeBefore = e.clientY < rect.top + rect.height / 2;
@@ -338,7 +339,11 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 }`}
               >
                 <div className="relative">
-                  {(() => { const IC = roomModeIcons[channel.mode || 'social'] || Coffee; return <IC size={16} className="opacity-70" />; })()}
+                  {(() => {
+                    const mode = channel.mode || 'social';
+                    const IC = channelIconComponents[channel.iconName ?? getDefaultChannelIconName(mode)] || roomModeIcons[mode] || Coffee;
+                    return <IC size={16} className="opacity-90" style={{ color: channel.iconColor ?? getDefaultChannelIconColor(mode) }} />;
+                  })()}
                   {channel.password && (
                     <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
                       <Lock size={8} className="text-white" />
@@ -483,14 +488,14 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                                 <input
                                   type="range"
                                   min={0}
-                                  max={150}
+                                  max={100}
                                   value={userVolumes[user.id] ?? 100}
                                   onChange={e => handleUpdateUserVolume(user.id, parseInt(e.target.value, 10))}
                                   onMouseDown={e => e.stopPropagation()}
                                   onPointerDown={e => e.stopPropagation()}
                                   className="flex-1 min-w-0 h-[3px] rounded-full appearance-none cursor-pointer accent-[var(--theme-accent)]"
                                   style={{
-                                    background: `linear-gradient(to right, rgba(var(--theme-accent-rgb),0.85) 0%, rgba(var(--theme-accent-rgb),0.85) ${((userVolumes[user.id] ?? 100) / 150) * 100}%, rgba(var(--glass-tint),0.18) ${((userVolumes[user.id] ?? 100) / 150) * 100}%, rgba(var(--glass-tint),0.18) 100%)`,
+                                    background: `linear-gradient(to right, rgba(var(--theme-accent-rgb),0.85) 0%, rgba(var(--theme-accent-rgb),0.85) ${userVolumes[user.id] ?? 100}%, rgba(var(--glass-tint),0.18) ${userVolumes[user.id] ?? 100}%, rgba(var(--glass-tint),0.18) 100%)`,
                                   }}
                                 />
                                 <span className="text-[8px] font-bold tabular-nums text-[var(--theme-accent)] shrink-0">%{userVolumes[user.id] ?? 100}</span>
@@ -531,7 +536,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                   setToastMsg(roomLimitMessage(activeServerPlan));
                   return;
                 }
-                setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social' });
+                setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social', iconColor: getDefaultChannelIconColor('social'), iconName: getDefaultChannelIconName('social') });
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                 atLimit

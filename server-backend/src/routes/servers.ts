@@ -598,6 +598,8 @@ router.post('/:id/channels', async (req: Request, res: Response) => {
         isHidden: body.isHidden,
         description: body.description,
         isPersistent: body.isPersistent,
+        iconName: body.iconName,
+        iconColor: body.iconColor,
       }
     );
     res.status(201).json(channel);
@@ -609,7 +611,11 @@ router.patch('/:id/channels/reorder', async (req: Request, res: Response) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const updates = Array.isArray(body.updates) ? body.updates : [];
-    const expectedToken = typeof body.orderToken === 'string' ? body.orderToken : null;
+    const expectedToken = typeof body.expectedOrderToken === 'string'
+      ? body.expectedOrderToken
+      : typeof body.orderToken === 'string'
+        ? body.orderToken
+        : null;
     const result = await channelService.reorderChannels(
       req.params.id as string,
       (req as any).userId,
@@ -635,6 +641,8 @@ router.patch('/:id/channels/:channelId', async (req: Request, res: Response) => 
         isInviteOnly: body.isInviteOnly,
         isHidden: body.isHidden,
         description: body.description,
+        iconName: body.iconName,
+        iconColor: body.iconColor,
       }
     );
     res.json(channel);
