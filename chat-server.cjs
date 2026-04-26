@@ -360,6 +360,32 @@ function checkRateLimit(map, userId, maxCount, windowMs) {
 const INTERNAL_NOTIFY_SECRET = process.env.INTERNAL_NOTIFY_SECRET || '';
 const SERVER_BACKEND_URL = process.env.SERVER_BACKEND_URL || 'http://127.0.0.1:10002';
 
+function looksLikePrivateIdentifier(value) {
+  const s = String(value || '').trim();
+  if (!s) return false;
+  if (s.includes('@')) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)) return true;
+  if (/^[0-9a-f]{6,}-[0-9a-f-]{6,}$/i.test(s)) return true;
+  if (/^[0-9a-f]{24,}$/i.test(s)) return true;
+  if (/^[a-z0-9_-]{28,}$/i.test(s) && /\d/.test(s)) return true;
+  return false;
+}
+
+function safePublicName(value) {
+  const s = String(value || '').trim().replace(/\s+/g, ' ');
+  return s && !looksLikePrivateIdentifier(s) ? s : '';
+}
+
+function profileDisplayName(profile) {
+  const displayName = safePublicName(profile?.display_name);
+  if (displayName) return displayName;
+  const firstName = safePublicName(profile?.first_name);
+  const lastName = safePublicName(profile?.last_name);
+  const fullName = `${firstName} ${lastName}`.trim();
+  if (fullName) return fullName;
+  return safePublicName(profile?.name);
+}
+
 // ── Profile cache (name/avatar) — DM enrichment için ─────────────────────
 // TTL 60 sn; batch fetch. Bellekte, Redis yok.
 const profileCache = new Map(); // userId -> { name, avatar, expiresAt }
@@ -379,10 +405,10 @@ async function getProfiles(userIds) {
   }
   if (miss.length > 0) {
     try {
-      const { data } = await supabase.from('profiles').select('id, name, avatar').in('id', miss);
+      const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', miss);
       if (data) {
         for (const p of data) {
-          const entry = { name: p.name ?? '', avatar: p.avatar ?? null, expiresAt: now + PROFILE_TTL_MS };
+          const entry = { name: profileDisplayName(p), avatar: p.avatar ?? null, expiresAt: now + PROFILE_TTL_MS };
           profileCache.set(p.id, entry);
           result.set(p.id, { name: entry.name, avatar: entry.avatar });
         }
@@ -878,12 +904,7 @@ function formatMsg(row) {
 }
 
 function getDisplayName(profile, user) {
-  const firstName = String(profile?.first_name || '').trim();
-  const lastName = String(profile?.last_name || '').trim();
-  const fullName = `${firstName} ${lastName}`.trim();
-  const name = String(profile?.name || '').trim();
-
-  return fullName || name || user.email || `user-${user.id}`;
+  return profileDisplayName(profile) || 'Kullanıcı';
 }
 
 function cancelCleanup(roomId) {
@@ -1543,7 +1564,7 @@ wss.on('connection', (ws) => {
         // Alıcıya teslim
         sendToUser(recipientId, { type: 'dm:new_message', message: newMsg });
 
-        console.log(`[dm] ${userName} → ${recipientId}: ${text.slice(0, 40)}`);
+        console.log(`[dm] ${userName} -> ${recipientId} messageId=${msgId} len=${text.length}`);
 
         // Audit — fire-and-forget, metadata-only, message body ASLA yazılmaz.
         if (conversationCreated) {

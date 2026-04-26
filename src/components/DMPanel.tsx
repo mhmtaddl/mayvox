@@ -7,7 +7,7 @@ import {
 } from '../features/notifications/notificationSound';
 import { SoundManager, stopAllSamples, type MessageVariant } from '../lib/audio/SoundManager';
 import { motion, AnimatePresence } from 'motion/react';
-import { getPublicDisplayName } from '../lib/formatName';
+import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
@@ -240,7 +240,7 @@ function ConversationItem({
   onDelete: () => void;
 }) {
   const user = allUsers.find((u: any) => u.id === convo.recipientId);
-  const name = user ? getPublicDisplayName(user) : convo.recipientName || 'Kullanıcı';
+  const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
   const avatar = user?.avatar || convo.recipientAvatar || '';
   const hasUnread = convo.unreadCount > 0;
 
@@ -816,7 +816,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   <div className="p-2">
                     {dm.conversations.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
-                      const n = u ? getPublicDisplayName(u) : convo.recipientName || 'Kullanıcı';
+                      const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
                       return (
                         <div key={convo.conversationKey}>
                           <ConversationItem

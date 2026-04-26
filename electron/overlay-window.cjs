@@ -6,7 +6,7 @@
  *
  * Lifecycle:
  *   applySettings({enabled:true}) → window varsa kullanır, yoksa oluşturur + show
- *   applySettings({enabled:false}) → hide (destroy etmeyiz; toggle hızlı)
+ *   applySettings({enabled:false}) → hide, kapalı kalırsa renderer'ı kapat
  *   dispose()  → app quit'te close + null
  *
  * Snapshot delivery: lastSnapshotRef + did-finish-load replay. İlk tick
@@ -70,6 +70,7 @@ class OverlayWindowManager {
     this.win = null;
     this.ready = false;
     this.lastSnapshot = null;
+    this.destroyTimer = null;
     this.currentSettings = {
       enabled: false,
       position: 'top-right',
@@ -110,6 +111,10 @@ class OverlayWindowManager {
   }
 
   _ensureWindow() {
+    if (this.destroyTimer) {
+      clearTimeout(this.destroyTimer);
+      this.destroyTimer = null;
+    }
     if (this.win && !this.win.isDestroyed()) return this.win;
     const bounds = computeBounds(this.currentSettings.position, this.currentSettings.size);
     // NOT: `focusable: true` Windows'ta transparent window'un ilk paint
@@ -161,6 +166,18 @@ class OverlayWindowManager {
     return win;
   }
 
+  _scheduleDestroyIfDisabled() {
+    if (this.destroyTimer) clearTimeout(this.destroyTimer);
+    this.destroyTimer = setTimeout(() => {
+      this.destroyTimer = null;
+      if (this.currentSettings.enabled) return;
+      if (!this.win || this.win.isDestroyed()) return;
+      try { this.win.destroy(); } catch {}
+      this.win = null;
+      this.ready = false;
+    }, 30_000);
+  }
+
   applySettings(next) {
     const prev = this.currentSettings;
     this.currentSettings = { ...prev, ...next };
@@ -170,6 +187,7 @@ class OverlayWindowManager {
       this.lastSnapshot = null;
       this._flushInactiveSnapshot();
       if (this.win && !this.win.isDestroyed()) this.win.hide();
+      this._scheduleDestroyIfDisabled();
       return;
     }
 
@@ -229,6 +247,10 @@ class OverlayWindowManager {
   }
 
   dispose() {
+    if (this.destroyTimer) {
+      clearTimeout(this.destroyTimer);
+      this.destroyTimer = null;
+    }
     if (this.win && !this.win.isDestroyed()) {
       try { this.win.close(); } catch {}
     }

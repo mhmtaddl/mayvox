@@ -57,6 +57,7 @@ export function usePttAudio(params: UsePttAudioParams) {
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,6 +88,25 @@ export function usePttAudio(params: UsePttAudioParams) {
     isVoiceConnectedRef.current = isVoiceConnected;
     if (!isVoiceConnected && isPttPressed) setIsPttPressed(false);
   }, [isVoiceConnected, isPttPressed]);
+
+  const stopCaptureGraph = () => {
+    if (animationRef.current) {
+      window.clearTimeout(animationRef.current);
+      animationRef.current = null;
+    }
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch { /* no-op */ }
+      sourceRef.current = null;
+    }
+    if (analyserRef.current) {
+      try { analyserRef.current.disconnect(); } catch { /* no-op */ }
+      analyserRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  };
 
   // Electron PTT init
   useEffect(() => {
@@ -192,8 +212,7 @@ export function usePttAudio(params: UsePttAudioParams) {
   useEffect(() => {
     if (!shouldCapture) {
       // Durdur
-      if (animationRef.current) { window.clearTimeout(animationRef.current); animationRef.current = null; }
-      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      stopCaptureGraph();
       if (vadSilenceTimerRef.current) { clearTimeout(vadSilenceTimerRef.current); vadSilenceTimerRef.current = null; }
       setVolumeLevel(0);
       if (voiceMode === 'vad') setIsPttPressed(false);
@@ -238,6 +257,7 @@ export function usePttAudio(params: UsePttAudioParams) {
         const analyser = audioContextRef.current!.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
+        sourceRef.current = source;
         analyserRef.current = analyser;
 
         const bufferLength = analyser.frequencyBinCount;
@@ -315,12 +335,21 @@ export function usePttAudio(params: UsePttAudioParams) {
 
     return () => {
       cancelled = true;
-      if (animationRef.current) { window.clearTimeout(animationRef.current); animationRef.current = null; }
-      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      stopCaptureGraph();
       // VAD silence timer'ı KORUYORUZ — cleanup'ta temizlemiyoruz
       // Böylece sessizlik algılama effect restart'tan etkilenmez
     };
   }, [shouldCapture, selectedInput, voiceMode]);
+
+  useEffect(() => () => {
+    stopCaptureGraph();
+    if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+    if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+  }, []);
 
   return { isPttPressed, setIsPttPressed, volumeLevel };
 }

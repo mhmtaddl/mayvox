@@ -11,6 +11,7 @@
  */
 
 import type { DmMessage } from '../../lib/dmService';
+import { safePublicName } from '../../lib/formatName';
 import { playNotifyBeep } from './notificationSound';
 import { playMessageReceive, playNotification } from '../../lib/audio/SoundManager';
 import { requestElectronFlash } from './electronAttention';
@@ -365,7 +366,7 @@ export function handleDmMessage(msg: DmMessage) {
     kind: 'dm',
     priority: decision.effectivePriority,
     avatar: msg.senderAvatar ?? null,
-    title: msg.senderName || 'Yeni mesaj',
+    title: safePublicName(msg.senderName) || 'Yeni mesaj',
     body: preview,
     createdAt: Date.now(),
     data: { recipientId: msg.senderId, conversationKey: msg.conversationKey },

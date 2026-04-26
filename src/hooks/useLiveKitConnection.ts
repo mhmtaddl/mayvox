@@ -20,6 +20,7 @@ import { applyVolumeToAudioElement, getUserVolumePercent } from '../lib/userVolu
 import type { User, VoiceChannel } from '../types';
 import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/formatTimeout';
 import { getMyModerationState } from '../lib/serverService';
+import { safePublicName } from '../lib/formatName';
 
 // Toplam bağlantı süresi üst sınırı (token + connect + mic setup)
 const TOTAL_JOIN_TIMEOUT_MS = 25_000;
@@ -338,13 +339,14 @@ export function useLiveKitConnection({
           setAllUsers(prev => {
             if (prev.find(u => u.id === identity)) return prev;
             logMemberIdentityDebug('synthetic_user_created', { identity }, `synthetic_user:${identity}`);
+            const safeIdentityName = safePublicName(identity);
             const newUser: User = {
               id: identity,
-              name: identity,
-              firstName: identity,
+              name: safeIdentityName,
+              firstName: safeIdentityName,
               lastName: '',
               age: 0,
-              avatar: (identity[0] || '?').toUpperCase(),
+              avatar: (safeIdentityName[0] || '?').toUpperCase(),
               status: 'online',
               statusText: 'Online',
               isAdmin: false,
@@ -418,15 +420,24 @@ export function useLiveKitConnection({
       // yapamadıysa (canPlaybackAudio=false), ilk kullanıcı gesture'ında
       // room.startAudio() ile hepsini unlock et. Kullanıcı "başkalarını
       // duyamıyorum" durumundan otomatik kurtulur.
+      let audioUnlockArmed = false;
+      let cleanupAudioUnlock = () => {};
       room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
         if (!room.canPlaybackAudio) {
+          if (audioUnlockArmed) return;
+          audioUnlockArmed = true;
           console.warn('[audio] canPlaybackAudio=false — awaiting user gesture to startAudio');
           const unlock = () => {
+            cleanupAudioUnlock();
             room.startAudio().then(() => {
               console.log('[audio] startAudio unlocked');
             }).catch(err => {
               console.warn('[audio] startAudio failed:', err);
             });
+          };
+          cleanupAudioUnlock = () => {
+            if (!audioUnlockArmed) return;
+            audioUnlockArmed = false;
             window.removeEventListener('click', unlock, true);
             window.removeEventListener('keydown', unlock, true);
             window.removeEventListener('touchstart', unlock, true);
@@ -435,6 +446,7 @@ export function useLiveKitConnection({
           window.addEventListener('keydown', unlock, { capture: true, once: true });
           window.addEventListener('touchstart', unlock, { capture: true, once: true });
         } else {
+          cleanupAudioUnlock();
           console.log('[audio] canPlaybackAudio=true');
         }
       });
@@ -550,6 +562,7 @@ export function useLiveKitConnection({
           clearTimeout(speakingThrottleTimer);
           speakingThrottleTimer = null;
         }
+        cleanupAudioUnlock();
         const identity =
           room.localParticipant?.identity || currentUserRef.current.id;
 

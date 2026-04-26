@@ -1,5 +1,6 @@
 import React from 'react';
 import { hasCustomAvatar, getStatusAvatar } from '../lib/statusAvatar';
+import { safePublicName } from '../lib/formatName';
 
 /**
  * Tek tip avatar render pipeline'ı:
@@ -39,7 +40,8 @@ export default function AvatarContent({
   if (statusSrc) {
     return <img src={statusSrc} alt={alt} className={imgClassName} />;
   }
-  const initial = (firstName?.[0] || name?.[0] || '?').toUpperCase();
+  const initialSource = safePublicName(firstName) || safePublicName(name);
+  const initial = (initialSource[0] || '?').toUpperCase();
   return (
     <span className={letterClassName ?? 'font-bold text-[var(--theme-accent)]'}>{initial}</span>
   );

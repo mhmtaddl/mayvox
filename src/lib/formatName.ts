@@ -36,6 +36,22 @@ export function formatFullName(firstName: string | null | undefined, lastName: s
   return `${first} ${last}`.trim();
 }
 
+export function looksLikePrivateIdentifier(value: string | null | undefined): boolean {
+  const s = (value || '').trim();
+  if (!s) return false;
+  if (s.includes('@')) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)) return true;
+  if (/^[0-9a-f]{6,}-[0-9a-f-]{6,}$/i.test(s)) return true;
+  if (/^[0-9a-f]{24,}$/i.test(s)) return true;
+  if (/^[a-z0-9_-]{28,}$/i.test(s) && /\d/.test(s)) return true;
+  return false;
+}
+
+export function safePublicName(value: string | null | undefined): string {
+  const s = (value || '').trim().replace(/\s+/g, ' ');
+  return s && !looksLikePrivateIdentifier(s) ? s : '';
+}
+
 export function getPublicDisplayName(user: {
   displayName?: string | null;
   firstName?: string | null;
@@ -43,11 +59,11 @@ export function getPublicDisplayName(user: {
   name?: string | null;
 } | null | undefined): string {
   if (!user) return 'Kullanıcı';
-  const displayName = user.displayName?.trim();
+  const displayName = safePublicName(user.displayName);
   if (displayName) return displayName;
-  const fullName = formatFullName(user.firstName, user.lastName);
+  const fullName = safePublicName(formatFullName(user.firstName, user.lastName));
   if (fullName) return fullName;
-  const username = user.name?.trim();
+  const username = safePublicName(user.name);
   return username || 'Kullanıcı';
 }
 

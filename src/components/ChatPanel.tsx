@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { VolumeX } from 'lucide-react';
 import AvatarContent from './AvatarContent';
-import { getPublicDisplayName } from '../lib/formatName';
+import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
@@ -153,7 +153,7 @@ export default function ChatPanel({
           const avatarPx = 22 + fs * 2;
           const isMe = msg.senderId === currentUserId;
           const senderUser = allUsers.find(u => u.id === msg.senderId);
-          const senderName = senderUser ? getPublicDisplayName(senderUser) : msg.sender;
+          const senderName = senderUser ? getPublicDisplayName(senderUser) : (safePublicName(msg.sender) || 'Kullanıcı');
           const nameColor = isMe ? 'var(--theme-accent)' : getUserColor(msg.senderId);
           const prevMsg = idx > 0 ? messages[idx - 1] : null;
           const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
