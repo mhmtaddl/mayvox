@@ -144,6 +144,7 @@ export interface ServerResponse {
 export interface MemberResponse {
   userId: string;
   username: string;
+  displayName: string;
   firstName: string;
   lastName: string;
   avatar: string | null;

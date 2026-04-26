@@ -7,7 +7,7 @@ import {
 } from '../features/notifications/notificationSound';
 import { SoundManager, stopAllSamples, type MessageVariant } from '../lib/audio/SoundManager';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatFullName } from '../lib/formatName';
+import { getPublicDisplayName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
@@ -19,6 +19,7 @@ import { MV_PRESS } from '../lib/signature';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 import { playMessageSend } from '../lib/audio/SoundManager';
 import MessageText from './chat/MessageText';
+import { rangeVisualStyle } from '../lib/rangeStyle';
 // SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
@@ -212,7 +213,8 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
               setVol(v);
               SoundManager.setMessageVolume(v);
             }}
-            className="w-full accent-[var(--theme-accent)]"
+            className="premium-range w-full"
+            style={rangeVisualStyle(vol, 0, 1)}
           />
         </div>
         <Row label="Masaüstü bildirimi">
@@ -238,7 +240,7 @@ function ConversationItem({
   onDelete: () => void;
 }) {
   const user = allUsers.find((u: any) => u.id === convo.recipientId);
-  const name = user ? formatFullName(user.firstName, user.lastName) : convo.recipientName || 'Kullanıcı';
+  const name = user ? getPublicDisplayName(user) : convo.recipientName || 'Kullanıcı';
   const avatar = user?.avatar || convo.recipientAvatar || '';
   const hasUnread = convo.unreadCount > 0;
 
@@ -271,7 +273,7 @@ function ConversationItem({
               : 'inset 0 0 0 1px rgba(var(--glass-tint),0.10), 0 1px 3px rgba(0,0,0,0.15)',
           }}
         >
-          <AvatarContent avatar={avatar} statusText={user?.statusText} firstName={user?.firstName} name={name} letterClassName="text-[14px] font-bold tracking-tight text-[var(--theme-accent)]/85" />
+          <AvatarContent avatar={avatar} statusText={user?.statusText} firstName={user?.displayName || user?.firstName} name={name} letterClassName="text-[14px] font-bold tracking-tight text-[var(--theme-accent)]/85" />
         </div>
 
         {/* Content */}
@@ -410,7 +412,7 @@ function ChatArea({
   const lastOwnMsgIdRef = useRef<string | null>(null);
 
   const recipient = allUsers.find((u: any) => u.id === recipientId);
-  const recipientName = recipient ? formatFullName(recipient.firstName, recipient.lastName) : 'Kullanıcı';
+  const recipientName = recipient ? getPublicDisplayName(recipient) : 'Kullanıcı';
   const recipientAvatar = recipient?.avatar || '';
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -561,7 +563,7 @@ function ChatArea({
             boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.10)',
           }}
         >
-          <AvatarContent avatar={recipientAvatar} statusText={recipient?.statusText} firstName={recipient?.firstName} name={recipientName} letterClassName="text-[13px] font-bold text-[var(--theme-accent)]/85" />
+          <AvatarContent avatar={recipientAvatar} statusText={recipient?.statusText} firstName={recipient?.displayName || recipient?.firstName} name={recipientName} letterClassName="text-[13px] font-bold text-[var(--theme-accent)]/85" />
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{recipientName}</span>
@@ -814,7 +816,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   <div className="p-2">
                     {dm.conversations.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
-                      const n = u ? formatFullName(u.firstName, u.lastName) : convo.recipientName || 'Kullanıcı';
+                      const n = u ? getPublicDisplayName(u) : convo.recipientName || 'Kullanıcı';
                       return (
                         <div key={convo.conversationKey}>
                           <ConversationItem

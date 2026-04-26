@@ -371,6 +371,7 @@ function CodeInviteRow({
 interface SearchedUser {
   id: string;
   name: string;
+  display_name?: string | null;
   first_name: string;
   last_name: string;
   avatar: string | null;
@@ -409,8 +410,8 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('id, name, first_name, last_name, avatar')
-          .or(`name.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+          .select('id, name, display_name, first_name, last_name, avatar')
+          .or(`display_name.ilike.%${query}%,name.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
           .order('name')
           .limit(10);
         if (seq !== seqRef.current) return;
@@ -475,7 +476,7 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Kullanıcı adı ile ara..."
+          placeholder="Takma ad ile ara..."
           className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none"
         />
         {searching && (
@@ -592,7 +593,7 @@ function SearchResultRow({
   onInvite: () => void;
   key?: React.Key;
 }) {
-  const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+  const displayName = user.display_name || [user.first_name, user.last_name].filter(Boolean).join(' ') || user.name || 'Kullanıcı';
   return (
     <li className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-[rgba(var(--glass-tint),0.035)] transition-colors duration-150">
       <div
@@ -602,16 +603,13 @@ function SearchResultRow({
         <AvatarContent
           avatar={user.avatar}
           statusText="Online"
-          firstName={user.first_name}
-          name={user.name}
+          firstName={user.display_name || user.first_name}
+          name={displayName}
           letterClassName="text-[10px] font-bold text-[var(--theme-secondary-text)]"
         />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{user.name}</div>
-        {fullName && (
-          <div className="text-[10px] text-[var(--theme-secondary-text)]/75 truncate mt-0.5">{fullName}</div>
-        )}
+        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{displayName}</div>
       </div>
       {sent ? (
         <span

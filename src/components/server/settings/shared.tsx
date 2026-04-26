@@ -45,6 +45,7 @@ export function displaySlug(slug: string): string {
 }
 
 export function memberDisplayName(m: ServerMember): string {
+  if (m.displayName) return m.displayName;
   if (m.username) return m.username;
   const full = [m.firstName, m.lastName].filter(Boolean).join(' ');
   return full || 'Kullanıcı';

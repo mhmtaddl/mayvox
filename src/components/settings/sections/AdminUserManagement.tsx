@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import AvatarContent from '../../AvatarContent';
 import { Users, Search, X, Trash2, ShieldCheck, Recycle, KeyRound, VolumeX, Ban, Server } from 'lucide-react';
 import { cardCls } from '../shared';
-import { formatFullName } from '../../../lib/formatName';
+import { getPublicDisplayName } from '../../../lib/formatName';
 import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useUI } from '../../../contexts/UIContext';
@@ -75,6 +75,7 @@ export default function AdminUserManagement() {
     if (userSearch.trim()) {
       const q = userSearch.toLocaleLowerCase('tr');
       list = list.filter(u =>
+        getPublicDisplayName(u).toLocaleLowerCase('tr').includes(q) ||
         `${u.firstName} ${u.lastName}`.toLocaleLowerCase('tr').includes(q) ||
         (u.name || '').toLocaleLowerCase('tr').includes(q) ||
         (u.email || '').toLocaleLowerCase('tr').includes(q)
@@ -254,6 +255,7 @@ export default function AdminUserManagement() {
               const isExpanded = expandedUser === user.id;
               const hasVersion = !!user.appVersion;
               const outdated = !hasVersion || (currentAppVersion ? isOutdated(user.appVersion!, currentAppVersion) : false);
+              const publicName = getPublicDisplayName(user);
 
               return (
                 <div key={user.id} className="px-2.5 py-2 md:px-4 md:py-3 hover:bg-[var(--theme-accent)]/[0.03] transition-colors">
@@ -262,11 +264,11 @@ export default function AdminUserManagement() {
                     {/* User info */}
                     <div className="flex items-center gap-2 md:gap-2.5 min-w-0 flex-1">
                       <div className="h-7 w-7 md:h-8 md:w-8 avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-[9px] md:text-[10px] shrink-0 ring-1 ring-[var(--theme-border)]">
-                        <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[9px] md:text-[10px] font-bold text-[var(--theme-text)]" />
+                        <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[9px] md:text-[10px] font-bold text-[var(--theme-text)]" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 md:gap-1.5 min-w-0">
-                          <span className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)] truncate">{formatFullName(user.firstName, user.lastName)}</span>
+                          <span className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)] truncate">{publicName}</span>
                           {!user.isAdmin && user.isModerator && (
                             <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
                               <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
@@ -307,12 +309,12 @@ export default function AdminUserManagement() {
                       {/* Moderasyon */}
                       <div className="flex items-center gap-0.5">
                         {user.isMuted ? (
-                          <IconBtn onClick={() => setConfirmAction({ type: 'unmute', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })} title={`Susturmayı kaldır (${Math.ceil((user.muteExpires! - Date.now()) / 60000)} dk)`} icon={<Recycle size={12} />} className="bg-orange-500/15 text-orange-400 hover:bg-orange-500 hover:text-white" />
+                          <IconBtn onClick={() => setConfirmAction({ type: 'unmute', userId: user.id, userName: publicName })} title={`Susturmayı kaldır (${Math.ceil((user.muteExpires! - Date.now()) / 60000)} dk)`} icon={<Recycle size={12} />} className="bg-orange-500/15 text-orange-400 hover:bg-orange-500 hover:text-white" />
                         ) : (
                           <IconBtn onClick={() => setExpandedUser(isExpanded ? null : user.id)} title="Sustur" icon={<VolumeX size={12} />} className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-orange-500/20 hover:text-orange-400" />
                         )}
                         {user.isVoiceBanned ? (
-                          <IconBtn onClick={() => setConfirmAction({ type: 'unban', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })} title={`Yasağı kaldır (${Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))} gün)`} icon={<Recycle size={12} />} className="bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white" />
+                          <IconBtn onClick={() => setConfirmAction({ type: 'unban', userId: user.id, userName: publicName })} title={`Yasağı kaldır (${Math.ceil((user.banExpires! - Date.now()) / (1000 * 60 * 60 * 24))} gün)`} icon={<Recycle size={12} />} className="bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white" />
                         ) : (
                           <IconBtn onClick={() => setExpandedUser(isExpanded ? null : user.id)} title="Yasakla" icon={<Ban size={12} />} className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-red-500/20 hover:text-red-400" />
                         )}
@@ -325,7 +327,7 @@ export default function AdminUserManagement() {
                         <>
                           <div className="flex items-center gap-0.5">
                             <IconBtn
-                              onClick={() => setConfirmAction({ type: user.isAdmin ? 'removeAdmin' : 'makeAdmin', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                              onClick={() => setConfirmAction({ type: user.isAdmin ? 'removeAdmin' : 'makeAdmin', userId: user.id, userName: publicName })}
                               title={user.isAdmin ? 'Admin yetkisini kaldır' : 'Admin yap'}
                               icon={<ShieldCheck size={12} />}
                               className={user.isAdmin
@@ -334,7 +336,7 @@ export default function AdminUserManagement() {
                               }
                             />
                             <IconBtn
-                              onClick={() => setConfirmAction({ type: user.isModerator ? 'removeModerator' : 'makeModerator', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                              onClick={() => setConfirmAction({ type: user.isModerator ? 'removeModerator' : 'makeModerator', userId: user.id, userName: publicName })}
                               title={user.isModerator ? 'Moderatör kaldır' : 'Moderatör yap'}
                               icon={<svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>}
                               className={user.isModerator
@@ -368,7 +370,7 @@ export default function AdminUserManagement() {
                       {/* Sistem */}
                       <div className="flex items-center gap-0.5">
                         <IconBtn
-                          onClick={() => setConfirmAction({ type: 'resetPassword', userId: user.id, userName: formatFullName(user.firstName, user.lastName), email: user.email || '' })}
+                          onClick={() => setConfirmAction({ type: 'resetPassword', userId: user.id, userName: publicName, email: user.email || '' })}
                           title={passwordResetRequests.some(r => r.userId === user.id) ? 'Şifre sıfırlama isteği var!' : 'Şifre sıfırla'}
                           icon={<KeyRound size={12} />}
                           className={passwordResetRequests.some(r => r.userId === user.id)
@@ -378,7 +380,7 @@ export default function AdminUserManagement() {
                         />
                         {(!user.isPrimaryAdmin && (currentUser.isPrimaryAdmin || !user.isAdmin)) && (
                           <IconBtn
-                            onClick={() => setConfirmAction({ type: 'delete', userId: user.id, userName: formatFullName(user.firstName, user.lastName) })}
+                            onClick={() => setConfirmAction({ type: 'delete', userId: user.id, userName: publicName })}
                             title="Kullanıcıyı sil"
                             icon={<Trash2 size={12} />}
                             className="bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)] hover:bg-red-500 hover:text-white"
@@ -401,7 +403,7 @@ export default function AdminUserManagement() {
                           className="w-12 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] focus:ring-1 focus:ring-[var(--theme-accent)]/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <button
-                          onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) setConfirmAction({ type: 'mute', userId: user.id, userName: formatFullName(user.firstName, user.lastName), minutes: m }); }}
+                          onClick={() => { const m = parseInt(muteInputs[user.id]); if (m > 0) setConfirmAction({ type: 'mute', userId: user.id, userName: publicName, minutes: m }); }}
                           className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/15 text-orange-400 hover:bg-orange-500/80 hover:text-white active:scale-95 transition-all"
                         >
                           Sustur
@@ -417,7 +419,7 @@ export default function AdminUserManagement() {
                           className="w-12 bg-[var(--theme-sidebar)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 text-[10px] text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] focus:ring-1 focus:ring-[var(--theme-accent)]/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <button
-                          onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) setConfirmAction({ type: 'ban', userId: user.id, userName: formatFullName(user.firstName, user.lastName), days: d }); }}
+                          onClick={() => { const d = parseInt(banInputs[user.id]); if (d > 0) setConfirmAction({ type: 'ban', userId: user.id, userName: publicName, days: d }); }}
                           className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 hover:bg-red-500/80 hover:text-white active:scale-95 transition-all"
                         >
                           Yasakla

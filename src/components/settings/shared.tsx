@@ -16,7 +16,7 @@ export const cardCls = 'surface-card rounded-2xl overflow-hidden';
 export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onChange: () => void; tooltip?: string }) => (
   <div className="flex items-center gap-2 shrink-0" title={tooltip}>
     <span className={`text-[10px] font-bold tracking-wide select-none transition-colors duration-150 ${
-      checked ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40'
+      checked ? 'text-[var(--theme-accent)]/70' : 'text-[var(--theme-secondary-text)]/40'
     }`}>
       {checked ? 'ON' : 'OFF'}
     </span>
@@ -27,12 +27,12 @@ export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onCha
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange(); }}
       className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-all duration-200 focus:outline-none cursor-pointer active:scale-95 ${
         checked
-          ? 'bg-[var(--theme-accent)] shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.25)]'
+          ? 'switch-on bg-[rgba(var(--theme-accent-rgb),0.58)] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_-10px_rgba(var(--theme-accent-rgb),0.42)] hover:bg-[rgba(var(--theme-accent-rgb),0.66)]'
           : 'bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.06)]'
       }`}
     >
       <span className={`inline-block h-4 w-4 transform rounded-full shadow-md transition-all duration-200 cubic-bezier(0.34,1.56,0.64,1) ${
-        checked ? 'translate-x-[21px] bg-white scale-100' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)] scale-100'
+        checked ? 'translate-x-[21px] bg-[rgba(255,255,255,0.88)] scale-100' : 'translate-x-[3px] bg-[rgba(255,255,255,0.5)] scale-100'
       }`} />
     </button>
   </div>

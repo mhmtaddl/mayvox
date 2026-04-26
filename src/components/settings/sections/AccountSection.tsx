@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList } from 'lucide-react';
 import { CardSection, inputCls, labelCls } from '../shared';
-import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH } from '../../../lib/formatName';
+import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH, getPublicDisplayName } from '../../../lib/formatName';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
@@ -18,6 +18,7 @@ function useAccountState() {
 
   const [settingsUsername, setSettingsUsername] = useState('');
   const [settingsDisplayName, setSettingsDisplayName] = useState('');
+  const [settingsPublicDisplayName, setSettingsPublicDisplayName] = useState('');
   const [settingsFirstName, setSettingsFirstName] = useState('');
   const [settingsLastName, setSettingsLastName] = useState('');
   const [settingsAge, setSettingsAge] = useState('');
@@ -37,6 +38,7 @@ function useAccountState() {
   React.useEffect(() => {
     setSettingsUsername(currentUser.email || currentUser.name || '');
     setSettingsDisplayName(currentUser.name || '');
+    setSettingsPublicDisplayName(getPublicDisplayName(currentUser));
     setSettingsFirstName(currentUser.firstName || '');
     setSettingsLastName(currentUser.lastName || '');
     setSettingsAge(currentUser.age?.toString() || '');
@@ -59,6 +61,7 @@ function useAccountState() {
 
   const hasProfileChanges =
     settingsDisplayName !== (currentUser.name || '') ||
+    settingsPublicDisplayName !== getPublicDisplayName(currentUser) ||
     settingsUsername !== (currentUser.email || currentUser.name || '') ||
     settingsFirstName !== (currentUser.firstName || '') ||
     settingsLastName !== (currentUser.lastName || '') ||
@@ -92,6 +95,16 @@ function useAccountState() {
     }
     setSettingsPasswordError('');
 
+    const publicDisplayName = settingsPublicDisplayName.trim().replace(/\s+/g, ' ');
+    if (publicDisplayName.length < 2 || publicDisplayName.length > 24) {
+      setSettingsPasswordError('Takma ad 2-24 karakter olmalıdır.');
+      return;
+    }
+    if (/[\p{C}]/u.test(publicDisplayName)) {
+      setSettingsPasswordError('Takma ad geçersiz karakter içeriyor.');
+      return;
+    }
+
     const normalizedFirst = toTitleCase(settingsFirstName.trim());
     const normalizedLast = toTitleCase(settingsLastName.trim());
     setSettingsFirstName(normalizedFirst);
@@ -103,6 +116,7 @@ function useAccountState() {
     const updatedUser = {
       ...currentUser,
       name: settingsDisplayName,
+      displayName: publicDisplayName,
       email: settingsUsername,
       firstName: normalizedFirst,
       lastName: normalizedLast,
@@ -113,6 +127,7 @@ function useAccountState() {
     await saveProfile({
       id: currentUser.id,
       name: updatedUser.name,
+      display_name: publicDisplayName,
       email: settingsUsername,
       first_name: normalizedFirst,
       last_name: normalizedLast,
@@ -138,6 +153,12 @@ function useAccountState() {
 
     setCurrentUser(updatedUser);
     setAllUsers(allUsers.map(u => u.id === currentUser.id ? updatedUser : u));
+    broadcastModeration(currentUser.id, {
+      displayName: publicDisplayName,
+      firstName: normalizedFirst,
+      lastName: normalizedLast,
+      avatar: finalAvatar,
+    });
     setSettingsPassword('');
     setSettingsPasswordRepeat('');
     setUpdateSuccessMessage('Bilgiler Güncellendi!');
@@ -168,6 +189,7 @@ function useAccountState() {
       await saveProfile({
         id: currentUser.id,
         name: currentUser.name,
+        display_name: currentUser.displayName || getPublicDisplayName(currentUser),
         email: currentUser.email,
         first_name: currentUser.firstName || '',
         last_name: currentUser.lastName || '',
@@ -196,6 +218,7 @@ function useAccountState() {
   return {
     currentUser, avatarBorderColor, setAvatarBorderColor, currentAppVersion,
     settingsUsername, setSettingsUsername, settingsDisplayName, setSettingsDisplayName,
+    settingsPublicDisplayName, setSettingsPublicDisplayName,
     settingsFirstName, setSettingsFirstName, settingsLastName, setSettingsLastName,
     settingsAge, setSettingsAge, settingsPassword, setSettingsPassword,
     settingsPasswordRepeat, setSettingsPasswordRepeat, settingsPasswordError,
@@ -370,6 +393,7 @@ function AccountInfoCard() {
   const ctx = useAccount();
   const {
     settingsUsername, setSettingsUsername, settingsDisplayName, setSettingsDisplayName,
+    settingsPublicDisplayName, setSettingsPublicDisplayName,
     settingsAge, setSettingsAge, currentAppVersion,
     updateSuccessMessage, settingsPasswordError, handleUpdateProfile, pressingProfile, hasProfileChanges,
   } = ctx;
@@ -377,6 +401,19 @@ function AccountInfoCard() {
   return (
     <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined} className="settings-account-card xl:h-full xl:flex xl:flex-col">
       <div className="space-y-2">
+        <div className="space-y-1">
+          <label className={labelCls}>Takma Ad</label>
+          <input
+            type="text"
+            maxLength={24}
+            value={settingsPublicDisplayName}
+            onChange={e => setSettingsPublicDisplayName(e.target.value.replace(/[\p{C}]/gu, '').slice(0, 24))}
+            className={inputCls}
+          />
+          <p className="text-[9px] text-[var(--theme-secondary-text)]/45 leading-relaxed">
+            Diğer kullanıcılar seni bu isimle görür.
+          </p>
+        </div>
         <div className="space-y-1">
           <label className={labelCls}>Kullanıcı Adı</label>
           <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={inputCls} />

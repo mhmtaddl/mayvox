@@ -129,10 +129,11 @@ export async function listJoinRequests(
   const userIds = Array.from(new Set(rows.map(r => r.user_id)));
   const nameMap = new Map<string, { name: string; avatar: string | null }>();
   if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, avatar').in('id', userIds);
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', userIds);
     if (data) {
-      for (const p of data as Array<{ id: string; name: string; avatar: string | null }>) {
-        nameMap.set(p.id, { name: p.name ?? '', avatar: p.avatar ?? null });
+      for (const p of data as Array<{ id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null; avatar: string | null }>) {
+        const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+        nameMap.set(p.id, { name: p.display_name || full || p.name || '', avatar: p.avatar ?? null });
       }
     }
   }

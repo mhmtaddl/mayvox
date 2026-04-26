@@ -8,7 +8,7 @@ import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
 import OwnVoiceEqualizer from './OwnVoiceEqualizer';
 import MiniEqualizer from './MiniEqualizer';
-import { formatFullName } from '../../lib/formatName';
+import { getPublicDisplayName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
 
 // ─── Refined transition curves ────────────────────────────────────
@@ -166,7 +166,7 @@ function UserCardInner({
           className={`${s.avatar} rounded-lg bg-[var(--theme-accent)]/8 flex items-center justify-center text-[var(--theme-text)] font-bold overflow-hidden`}
           style={avatarStyle}
         >
-          <AvatarContent avatar={user.avatar} statusText={userStatusText} firstName={user.firstName} name={user.name} letterClassName="text-[var(--theme-text)] font-bold" />
+          <AvatarContent avatar={user.avatar} statusText={userStatusText} firstName={user.displayName || user.firstName} name={getPublicDisplayName(user)} letterClassName="text-[var(--theme-text)] font-bold" />
         </div>
         <DeviceBadge platform={user.platform} size={s.dense ? 12 : s.icon === 13 ? 13 : 14} className="absolute -bottom-0.5 -right-0.5" />
       </div>
@@ -182,7 +182,7 @@ function UserCardInner({
               transition: 'font-weight 0.3s ease, letter-spacing 0.3s ease',
             }}
           >
-            {formatFullName(user.firstName, user.lastName)}
+            {getPublicDisplayName(user)}
           </span>
           <span className={`${ageFontSize} font-medium shrink-0`} style={{ color: 'rgba(var(--theme-accent-rgb), 0.4)' }}>
             {user.age}
@@ -275,6 +275,7 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (pu.isModerator !== nu.isModerator) return false;
   if (pu.statusText !== nu.statusText) return false;
   if (pu.avatar !== nu.avatar) return false;
+  if (pu.displayName !== nu.displayName) return false;
   if (pu.firstName !== nu.firstName) return false;
   if (pu.lastName !== nu.lastName) return false;
   if (pu.age !== nu.age) return false;

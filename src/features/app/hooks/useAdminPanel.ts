@@ -17,6 +17,20 @@ import {
 import type { ResetRequest } from '../../../components/PasswordResetPanel';
 import type { InviteRequest } from '../../../types';
 
+type PendingResetProfile = {
+  id: string;
+  name?: string | null;
+  display_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+};
+
+const pendingResetDisplayName = (p: PendingResetProfile) => {
+  const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+  return p.display_name || full || p.name || 'Kullanıcı';
+};
+
 interface UseAdminPanelOptions {
   currentUserId: string;
   isAdmin: boolean;
@@ -47,10 +61,10 @@ export function useAdminPanel({
     const poll = async () => {
       const { data } = await getPendingPasswordResets();
       if (data) {
-        setPasswordResetRequests(data.map((p: { id: string; name: string; email: string }) => ({
+        setPasswordResetRequests((data as PendingResetProfile[]).map((p) => ({
           userId: p.id,
-          userName: p.name,
-          userEmail: p.email,
+          userName: pendingResetDisplayName(p),
+          userEmail: p.email || '',
         })));
       }
     };
@@ -241,8 +255,8 @@ export function useAdminPanel({
   const loadInitialAdminData = async () => {
     const { data: pending } = await getPendingPasswordResets();
     if (pending) {
-      setPasswordResetRequests(pending.map((p: { id: string; name: string; email: string }) => ({
-        userId: p.id, userName: p.name, userEmail: p.email,
+      setPasswordResetRequests((pending as PendingResetProfile[]).map((p) => ({
+        userId: p.id, userName: pendingResetDisplayName(p), userEmail: p.email || '',
       })));
     }
     const adminInvites = await getAdminInviteRequests();

@@ -7,10 +7,12 @@ import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import AvatarContent from './AvatarContent';
+import { getPublicDisplayName } from '../lib/formatName';
 
 interface SearchResult {
   id: string;
   name: string;
+  displayName?: string;
   firstName: string;
   lastName: string;
   avatar: string;
@@ -52,13 +54,14 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
         ? tokens.slice(0, 3).flatMap(t => [
             `first_name.ilike.%${t}%`,
             `last_name.ilike.%${t}%`,
+            `display_name.ilike.%${t}%`,
             `name.ilike.%${t}%`,
           ]).join(',')
-        : `first_name.ilike.%${first}%,last_name.ilike.%${first}%,name.ilike.%${first}%`;
+        : `display_name.ilike.%${first}%,first_name.ilike.%${first}%,last_name.ilike.%${first}%,name.ilike.%${first}%`;
 
       const { data } = await supabase
         .from('profiles')
-        .select('id, name, first_name, last_name, avatar')
+        .select('id, name, display_name, first_name, last_name, avatar')
         .or(orClauses)
         .neq('id', currentUserId)
         .limit(30); // fetch more, filter+rank client-side
@@ -70,9 +73,10 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
       for (const p of data) {
         const fn = (p.first_name || '').toLowerCase();
         const ln = (p.last_name || '').toLowerCase();
+        const dn = (p.display_name || '').toLowerCase();
         const un = (p.name || '').toLowerCase();
         const full = `${fn} ${ln}`.trim();
-        const combined = `${fn} ${ln} ${un}`;
+        const combined = `${dn} ${fn} ${ln} ${un}`;
 
         // All tokens must match somewhere in combined text
         const allMatch = tokens.every(t => combined.includes(t));
@@ -84,8 +88,11 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
 
         // Exact username match
         if (un === queryLower) score += 100;
+        if (dn === queryLower) score += 95;
         // Exact full name match
         if (full === queryLower) score += 90;
+        // Display name starts with query
+        if (dn.startsWith(queryLower)) score += 70;
         // Username starts with query
         if (un.startsWith(queryLower)) score += 60;
         // Full name starts with query
@@ -100,6 +107,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
         scored.push({
           id: p.id,
           name: p.name || '',
+          displayName: p.display_name || undefined,
           firstName: p.first_name || '',
           lastName: p.last_name || '',
           avatar: p.avatar || '',
@@ -130,7 +138,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
 
   useEscapeKey(() => setIsOpen(false), isOpen);
 
-  const displayName = (r: SearchResult) => `${r.firstName} ${r.lastName}`.trim() || r.name || 'Kullanıcı';
+  const displayName = (r: SearchResult) => getPublicDisplayName(r);
   const initials = (r: SearchResult) => `${(r.firstName || r.name || '?')[0]}${(r.lastName || '')[0] || ''}`.toUpperCase();
 
   const triggerConfirm = (userId: string, userName: string, action: 'send' | 'remove' | 'cancel') => {
@@ -302,13 +310,12 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
                   >
                     {/* Avatar */}
                     <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
+                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.displayName || user.firstName} name={displayName(user)} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium truncate leading-tight" style={{ color: 'var(--text-primary)' }}>{displayName(user)}</p>
                       <div className="flex items-center gap-1.5">
-                        {user.name && <p className="text-[9px] truncate" style={{ color: 'var(--text-tertiary)' }}>@{user.name}</p>}
                         {getStatusBadge(user.id)}
                       </div>
                     </div>

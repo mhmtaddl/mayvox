@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import RoomNode from './RoomNode';
 import type { RoomNodeData, PositionedNode } from './roomNetworkLayout';
-import { formatFullName } from '../../lib/formatName';
+import { getPublicDisplayName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
 import type { CardStyle } from './cardStyles';
 
@@ -126,9 +126,9 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
                     onClick={(e) => { user.onClick?.(e); setOverflowOpen(false); }}
                   >
                     <div className="shrink-0 overflow-hidden flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: '22%', background: 'rgba(var(--theme-accent-rgb), 0.06)', border: user.isSpeaking ? '1.5px solid rgba(var(--theme-accent-rgb), 0.3)' : '1px solid rgba(var(--glass-tint), 0.06)' }}>
-                      <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[var(--theme-text)] font-semibold text-[9px]" />
+                    <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={getPublicDisplayName(user)} letterClassName="text-[var(--theme-text)] font-semibold text-[9px]" />
                     </div>
-                    <span className="flex-1 min-w-0 text-[11px] font-medium text-[var(--theme-text)] truncate leading-tight">{formatFullName(user.firstName, user.lastName)}</span>
+                    <span className="flex-1 min-w-0 text-[11px] font-medium text-[var(--theme-text)] truncate leading-tight">{getPublicDisplayName(user)}</span>
                     {user.isMuted && <span className="text-[8px] text-red-400 font-bold shrink-0">MUTE</span>}
                   </div>
                 ))}

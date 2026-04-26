@@ -153,13 +153,13 @@ export async function listActiveAutoPunishments(serverId: string): Promise<Activ
   try {
     const { data } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, name, avatar')
+      .select('id, display_name, first_name, last_name, name, avatar')
       .in('id', userIds);
     if (data) {
       for (const p of data) {
         const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
         profileMap.set(p.id as string, {
-          name: full || (p.name as string) || '',
+          name: (p.display_name as string) || full || (p.name as string) || '',
           avatar: (p.avatar as string) ?? null,
         });
       }

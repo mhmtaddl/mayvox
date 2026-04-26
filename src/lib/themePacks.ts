@@ -11,6 +11,7 @@ import bgCrimson from '../assets/bg-crimson.png';
 
 export type ThemePackId =
   | 'default-dark'
+  | 'dual-tone'
   | 'default-light'
   | 'ocean-blue'
   | 'emerald'
@@ -120,6 +121,32 @@ export const THEME_PACKS: ThemePack[] = [
     danger: '#FF6B6B',
     previewFrom: '#0E0F12',
     previewTo: '#1B1E29',
+  },
+  {
+    id: 'dual-tone',
+    name: 'Dual Tone',
+    isLight: false,
+    bg: `radial-gradient(900px 560px at 16% 4%, rgba(59,130,246,0.06), transparent 62%), radial-gradient(900px 560px at 86% 8%, rgba(168,85,247,0.06), transparent 62%), linear-gradient(90deg, rgba(10, 24, 38, 1) 0%, rgba(10, 17, 30, 1) 48%, rgba(22, 18, 42, 1) 100%)`,
+    bgSoft: '#0B1220',
+    surface: 'rgba(16, 22, 34, 0.72)',
+    surfaceHover: 'rgba(20, 28, 42, 0.84)',
+    surfaceActive: 'rgba(59, 130, 246, 0.12)',
+    border: 'rgba(255, 255, 255, 0.05)',
+    borderFocus: 'rgba(59, 130, 246, 0.26)',
+    textPrimary: 'rgba(255, 255, 255, 0.92)',
+    textSecondary: 'rgba(255, 255, 255, 0.64)',
+    textMuted: 'rgba(255, 255, 255, 0.40)',
+    textOnAccent: '#07111A',
+    accent: '#3B82F6',
+    accentRgb: '59, 130, 246',
+    accentHover: '#60A5FA',
+    accentActive: '#2563EB',
+    accentSoft: 'rgba(59, 130, 246, 0.14)',
+    success: '#3DD68C',
+    warning: '#F5B83C',
+    danger: '#FF6B6B',
+    previewFrom: '#0B1220',
+    previewTo: '#111827',
   },
   {
     id: 'default-light',
@@ -378,6 +405,9 @@ export function applyThemePack(pack: ThemePack): void {
 
   // Scrollbar / selection / badge
   set('--theme-scrollbar-thumb', pack.isLight ? 'rgba(15,23,42,0.20)' : 'rgba(255,255,255,0.18)');
+  set('--scrollbar-track', pack.isLight ? 'rgba(0,0,0,0.015)' : 'rgba(255,255,255,0.018)');
+  set('--scrollbar-thumb', pack.isLight ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.20)');
+  set('--scrollbar-thumb-hover', pack.isLight ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.32)');
   set('--theme-selection', pack.accentSoft);
   set('--theme-badge-bg', pack.accent);
   set('--theme-badge-text', pack.textOnAccent);
@@ -570,26 +600,26 @@ export function applyThemePack(pack: ThemePack): void {
   // Pressed state — inset push
   set('--shadow-pressed', 'inset 0 2px 4px rgba(0,0,0,0.25)');
 
-  if (pack.id === 'default-dark') {
-    set('--bg-app', '#070b12');
-    set('--bg-shell', '#0b111c');
-    set('--bg-panel', 'rgba(16, 22, 34, 0.72)');
+  if (pack.id === 'default-dark' || pack.id === 'dual-tone') {
+    set('--bg-app', pack.id === 'dual-tone' ? '#0a111e' : '#070b12');
+    set('--bg-shell', pack.id === 'dual-tone' ? '#0a1826' : '#0b111c');
+    set('--bg-panel', pack.id === 'dual-tone' ? '#12151a' : 'rgba(16, 22, 34, 0.72)');
     set('--bg-panel-strong', 'rgba(20, 28, 42, 0.86)');
     set('--bg-card', 'rgba(18, 25, 38, 0.74)');
     set('--surface-soft', 'rgba(18, 25, 38, 0.62)');
-    set('--border-soft', 'rgba(255, 255, 255, 0.075)');
+    set('--border-soft', pack.id === 'dual-tone' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.075)');
     set('--border-strong', 'rgba(255, 255, 255, 0.12)');
-    set('--border-subtle', 'rgba(255, 255, 255, 0.075)');
+    set('--border-subtle', pack.id === 'dual-tone' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.075)');
     set('--border-default', 'rgba(255, 255, 255, 0.12)');
     set('--text-primary', 'rgba(255, 255, 255, 0.92)');
     set('--text-secondary', 'rgba(255, 255, 255, 0.62)');
     set('--text-tertiary', 'rgba(255, 255, 255, 0.38)');
-    set('--accent-soft', 'rgba(111, 214, 255, 0.16)');
-    set('--accent-border', 'rgba(111, 214, 255, 0.28)');
+    set('--accent-soft', pack.accentSoft);
+    set('--accent-border', `rgba(${pack.accentRgb}, 0.26)`);
     set('--danger', '#ff6b6b');
     set('--theme-bg-rgb', '7, 11, 18');
     set('--theme-sidebar-rgb', '16, 22, 34');
-    set('--theme-sidebar', '#0b111c');
+    set('--theme-sidebar', pack.id === 'dual-tone' ? '#0b1220' : '#0b111c');
     set('--depth-1', 'rgba(16, 22, 34, 0.72)');
     set('--depth-2', 'rgba(20, 28, 42, 0.86)');
     set('--depth-3', 'rgba(25, 35, 52, 0.94)');
@@ -600,11 +630,12 @@ export function applyThemePack(pack: ThemePack): void {
     set('--titlebar-bg-blurred', 'transparent');
     set('--titlebar-border', 'transparent');
     set('--titlebar-shadow', 'none');
+    set('--app-divider', pack.id === 'dual-tone' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.042)');
     set('--theme-input-bg', 'rgba(255,255,255,0.045)');
     set('--theme-input-bg-hover', 'rgba(255,255,255,0.065)');
     set('--theme-input-border', 'rgba(255,255,255,0.08)');
-    set('--theme-input-focus-border', 'rgba(111,214,255,0.28)');
-    set('--theme-input-focus-ring', 'rgba(111,214,255,0.14)');
+    set('--theme-input-focus-border', `rgba(${pack.accentRgb},0.28)`);
+    set('--theme-input-focus-ring', `rgba(${pack.accentRgb},0.14)`);
     set('--theme-input-placeholder', 'rgba(255,255,255,0.38)');
     set('--theme-input-shadow', 'inset 0 1px 0 rgba(255,255,255,0.04)');
   } else if (pack.id === 'ocean-blue') {
@@ -729,12 +760,149 @@ export function applyThemePack(pack: ThemePack): void {
     set('--surface-card-border', '1px solid rgba(252,165,165,0.10)');
   }
 
+  // ── Soft hairlines only: keep theme colors/backgrounds untouched. ────────
+  const borderMaterial = (() => {
+    if (pack.isLight) {
+      return {
+        border: 'rgba(13,13,13,0.035)',
+        borderStrong: 'rgba(13,13,13,0.070)',
+        inputBorder: 'rgba(13,13,13,0.050)',
+      };
+    }
+    if (pack.id === 'ocean-blue') {
+      return {
+        border: 'rgba(173,226,255,0.045)',
+        borderStrong: 'rgba(173,226,255,0.095)',
+        inputBorder: 'rgba(173,226,255,0.058)',
+      };
+    }
+    if (pack.id === 'amber-night') {
+      return {
+        border: 'rgba(255,213,143,0.045)',
+        borderStrong: 'rgba(255,213,143,0.095)',
+        inputBorder: 'rgba(255,213,143,0.058)',
+      };
+    }
+    if (pack.id === 'emerald') {
+      return {
+        border: 'rgba(94,234,212,0.042)',
+        borderStrong: 'rgba(94,234,212,0.090)',
+        inputBorder: 'rgba(94,234,212,0.055)',
+      };
+    }
+    if (pack.id === 'crimson') {
+      return {
+        border: 'rgba(252,165,165,0.042)',
+        borderStrong: 'rgba(252,165,165,0.090)',
+        inputBorder: 'rgba(252,165,165,0.055)',
+      };
+    }
+    return {
+      border: 'rgba(255,255,255,0.042)',
+      borderStrong: 'rgba(255,255,255,0.085)',
+      inputBorder: 'rgba(255,255,255,0.052)',
+    };
+  })();
+
+  set('--border-soft', borderMaterial.border);
+  set('--border-subtle', borderMaterial.border);
+  set('--border-strong', borderMaterial.borderStrong);
+  set('--theme-surface-card-border', borderMaterial.border);
+  set('--surface-card-border', `1px solid ${borderMaterial.border}`);
+  set('--theme-input-border', borderMaterial.inputBorder);
+
+  const zoneMaterial = (() => {
+    if (pack.isLight) {
+      return {
+        neutralBg: '#f3f4f6',
+        neutralSurface: '#f6f7f9',
+        contentSurface: '#f6f7f9',
+        sidebarTint: '#e8ecf3',
+        topbarMidStrong: '#edf0f5',
+        topbarMidSoft: '#f2f4f7',
+        divider: 'rgba(0, 0, 0, 0.055)',
+      };
+    }
+    switch (pack.id) {
+      case 'emerald':
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#0b2419',
+          topbarMidStrong: '#111a16',
+          topbarMidSoft: '#141615',
+          divider: 'rgba(255, 255, 255, 0.045)',
+        };
+      case 'crimson':
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#2b1116',
+          topbarMidStrong: '#211416',
+          topbarMidSoft: '#181515',
+          divider: 'rgba(255, 255, 255, 0.045)',
+        };
+      case 'amber-night':
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#271c10',
+          topbarMidStrong: '#201a13',
+          topbarMidSoft: '#181612',
+          divider: 'rgba(255, 255, 255, 0.045)',
+        };
+      case 'ocean-blue':
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#151d2b',
+          topbarMidStrong: '#171b23',
+          topbarMidSoft: '#161719',
+          divider: 'rgba(255, 255, 255, 0.045)',
+        };
+      case 'dual-tone':
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#171d2b',
+          topbarMidStrong: '#181b23',
+          topbarMidSoft: '#161719',
+          divider: 'rgba(255, 255, 255, 0.050)',
+        };
+      default:
+        return {
+          neutralBg: '#151515',
+          neutralSurface: '#151515',
+          sidebarTint: '#171d2b',
+          topbarMidStrong: '#181b23',
+          topbarMidSoft: '#161719',
+          divider: 'rgba(255, 255, 255, 0.045)',
+        };
+    }
+  })();
+
+  set('--app-neutral-bg', zoneMaterial.neutralBg);
+  set('--app-neutral-surface', zoneMaterial.neutralSurface);
+  set('--app-content-surface', zoneMaterial.contentSurface ?? zoneMaterial.neutralSurface);
+  set('--sidebar-tint-bg', zoneMaterial.sidebarTint);
+  set('--topbar-gradient-start', zoneMaterial.sidebarTint);
+  set('--topbar-gradient-end', zoneMaterial.neutralBg);
+  set('--topbar-gradient-mid-strong', zoneMaterial.topbarMidStrong);
+  set('--topbar-gradient-mid-soft', zoneMaterial.topbarMidSoft);
+  set('--app-divider', zoneMaterial.divider);
+  set('--app-shell-bg', zoneMaterial.neutralBg);
+  set(
+    '--topbar-bg',
+    `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0%, ${zoneMaterial.sidebarTint} 12%, ${zoneMaterial.topbarMidStrong} 24%, ${zoneMaterial.topbarMidSoft} 34%, ${zoneMaterial.neutralBg} 46%, ${zoneMaterial.neutralBg} 100%)`,
+  );
+
   // Document body background + color-scheme
-  document.body.style.background = pack.bg;
+  document.body.style.background = zoneMaterial.neutralBg;
   document.body.style.color = pack.textPrimary;
   root.style.colorScheme = pack.isLight ? 'light' : 'dark';
 
   // Active theme attr (Tailwind koşullu stillendirme için kullanılabilir)
+  root.setAttribute('data-theme', pack.id);
   root.setAttribute('data-theme-pack', pack.id);
   root.setAttribute('data-theme-light', pack.isLight ? 'true' : 'false');
 }

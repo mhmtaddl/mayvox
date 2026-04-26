@@ -113,8 +113,11 @@ export async function listAuditLog(
   const actorIds = Array.from(new Set(rows.map(r => r.actor_id)));
   const nameMap = new Map<string, string>();
   if (actorIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name').in('id', actorIds);
-    if (data) data.forEach((p: { id: string; name: string }) => nameMap.set(p.id, p.name));
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', actorIds);
+    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
+      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+      nameMap.set(p.id, p.display_name || full || p.name || '');
+    });
   }
 
   return rows.map(r => ({
@@ -145,4 +148,3 @@ export async function deleteOldAuditLogs(days: number): Promise<number> {
   );
   return result.rowCount ?? 0;
 }
-

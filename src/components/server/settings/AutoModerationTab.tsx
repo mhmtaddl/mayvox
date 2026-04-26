@@ -16,6 +16,7 @@ import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
 import { useUser } from '../../../contexts/UserContext';
 import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
+import { rangeVisualStyle } from '../../../lib/rangeStyle';
 import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
 // Vite JSON import native; build-time inline olur, runtime fetch yok.
@@ -1301,7 +1302,6 @@ function SliderBlock({
   step: number;
   onChange: (v: number) => void;
 }) {
-  const pct = ((value - min) / (max - min)) * 100;
   return (
     <div
       className="rounded-xl px-3 py-2.5 flex flex-col gap-2 min-w-0"
@@ -1326,10 +1326,8 @@ function SliderBlock({
         step={step}
         value={value}
         onChange={e => onChange(parseInt(e.target.value, 10))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer automod-slider"
-        style={{
-          background: `linear-gradient(to right, var(--theme-accent) 0%, var(--theme-accent) ${pct}%, rgba(var(--glass-tint),0.15) ${pct}%, rgba(var(--glass-tint),0.15) 100%)`,
-        }}
+        className="premium-range w-full automod-slider"
+        style={rangeVisualStyle(value, min, max)}
       />
     </div>
   );

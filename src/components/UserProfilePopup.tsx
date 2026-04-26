@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2 } from 'lucide-react';
 import type { User } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { formatFullName } from '../lib/formatName';
+import { getPublicDisplayName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
 import { hasCustomAvatar } from '../lib/statusAvatar';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -102,7 +102,7 @@ export default function UserProfilePopup({
     : statusText === 'AFK' ? 'text-violet-400'
     : 'text-orange-400';
 
-  const userName = formatFullName(user.firstName, user.lastName);
+  const userName = getPublicDisplayName(user);
 
 
   const handleAccept = async () => {
@@ -213,8 +213,8 @@ export default function UserProfilePopup({
                   <AvatarContent
                     avatar={user.avatar}
                     statusText={statusText}
-                    firstName={user.firstName}
-                    name={user.name}
+                    firstName={user.displayName || user.firstName}
+                    name={userName}
                     letterClassName="text-[26px] font-semibold tracking-tight"
                   />
                 ) : (

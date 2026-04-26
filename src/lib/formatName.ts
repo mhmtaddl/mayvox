@@ -36,6 +36,21 @@ export function formatFullName(firstName: string | null | undefined, lastName: s
   return `${first} ${last}`.trim();
 }
 
+export function getPublicDisplayName(user: {
+  displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
+} | null | undefined): string {
+  if (!user) return 'Kullanıcı';
+  const displayName = user.displayName?.trim();
+  if (displayName) return displayName;
+  const fullName = formatFullName(user.firstName, user.lastName);
+  if (fullName) return fullName;
+  const username = user.name?.trim();
+  return username || 'Kullanıcı';
+}
+
 /** Ad/Soyad input max karakter sınırı */
 export const NAME_INPUT_MAX_LENGTH = 15;
 

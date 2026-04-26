@@ -23,7 +23,7 @@ import {
 import VoiceControlButton from './VoiceControlButton';
 import InactivityCountdownBanner from './InactivityCountdownBanner';
 import InvitationModal from './InvitationModal';
-import { formatFullName } from '../../../lib/formatName';
+import { getPublicDisplayName } from '../../../lib/formatName';
 import AvatarContent from '../../../components/AvatarContent';
 import { type CardStyle, CARD_STYLES } from '../../../components/chat/cardStyles';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
@@ -302,7 +302,7 @@ export default function DesktopDock({
       className={
         isInline
           ? `flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
-          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-4 z-30 items-center gap-1.5 px-3 py-2 rounded-2xl min-h-[48px]`
+          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-3 z-30 items-center gap-1.5 px-2 py-1 rounded-2xl min-h-[46px]`
       }
       /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */
       style={isInline
@@ -356,7 +356,7 @@ export default function DesktopDock({
       {/* ── Kendi kullanıcı kartı — avatar + isim + effective status ── */}
       {(() => {
         const effStatus = getEffectiveStatus();
-        const displayName = formatFullName(currentUser.firstName, currentUser.lastName) || currentUser.name;
+        const displayName = getPublicDisplayName(currentUser);
         return (
           <div className="relative shrink-0" ref={selfPanelRef}>
             <button
@@ -385,7 +385,7 @@ export default function DesktopDock({
                       />
                     )}
                     <div className="w-9 h-9 rounded-xl overflow-hidden bg-[var(--theme-accent)]/10 flex items-center justify-center">
-                      <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.firstName} name={currentUser.name} imgClassName="w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
+                      <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.displayName || currentUser.firstName} name={displayName} imgClassName="w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
                     </div>
                     {/* Mobil: avatar sağ-alt köşe status dot — desktop'ta gösterilmez */}
                     {isInline && (
@@ -588,7 +588,7 @@ export default function DesktopDock({
         </AnimatePresence>
       </div>
       {/* Gürültü Susturma — mobilde gizli, Ayarlar → Ses'te aynı seçenek */}
-      {!isInline && <button
+      {!isInline && activeChannel && <button
         onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
         className={`relative w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
           isNoiseSuppressionEnabled

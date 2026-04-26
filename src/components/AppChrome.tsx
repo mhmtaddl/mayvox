@@ -64,33 +64,38 @@ export default function AppChrome() {
   const onMin = useCallback(() => api.minimize(), [api]);
   const onMaxRestore = useCallback(() => { void api.maximizeRestore(); }, [api]);
   const onClose = useCallback(() => api.close(), [api]);
-  const onTitlebarMouseDown = useCallback((event: React.MouseEvent<HTMLElement>) => {
+  const onTitlebarDoubleClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (authMode) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest('[data-window-control]')) return;
-    if (event.detail < 2) return;
+    if (!target) return;
+    if (target.closest('[data-window-control]')) return;
+    if (target.closest('[data-no-drag], .no-drag')) return;
+    if (target.closest('button, input, select, textarea, a')) return;
     event.preventDefault();
     event.stopPropagation();
-    void api.toggleMaximize?.();
-  }, [api]);
-
+    void (api.toggleMaximize?.() ?? api.maximizeRestore());
+  }, [api, authMode]);
   return (
     <header
       className="titlebar window-titlebar app-titlebar relative w-full select-none"
-      onMouseDownCapture={onTitlebarMouseDown}
       style={{
         height: TITLEBAR_HEIGHT,
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}
     >
       <div className="relative h-full flex items-center justify-between px-3">
-        {/* LEFT — brand */}
+        {/* Drag regions do not reliably emit renderer double-click; brand is the manual maximize zone. */}
         <div
-          className="flex items-center gap-2 shrink-0 pr-3"
+          className="group relative z-30 flex items-center gap-2 shrink-0 pr-3"
+          onDoubleClick={onTitlebarDoubleClick}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <BrandMark focused={focused} />
-          <span className={`text-[13px] font-black tracking-[0.18em] uppercase leading-none transition-opacity ${focused ? 'opacity-95' : 'opacity-55'}`}>
-            <span className="text-[var(--theme-text)]">MAY</span><span className="text-[var(--theme-accent)]">VOX</span>
+          <span
+            className={`text-[14px] font-semibold tracking-[0.10em] uppercase leading-none transition-opacity duration-150 group-hover:opacity-95 ${focused ? 'opacity-90' : 'opacity-55'}`}
+            style={{ color: 'rgba(var(--glass-tint), 0.88)' }}
+          >
+            MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span>
           </span>
         </div>
 
@@ -99,7 +104,7 @@ export default function AppChrome() {
 
         {/* RIGHT — control rail (segmented) */}
         <div
-          className="flex items-center gap-1 shrink-0 pl-3 pr-2"
+          className="relative z-30 flex items-center gap-1 shrink-0 pl-3 pr-2"
           data-window-control
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
@@ -128,16 +133,16 @@ function BrandMark({ focused }: { focused: boolean }) {
     <div
       className="relative w-6 h-6 flex items-center justify-center"
       style={{
-        opacity: focused ? 1 : 0.62,
+        opacity: focused ? 0.82 : 0.52,
         transition: 'opacity 200ms ease',
       }}
     >
       {/* Ses dalgası izlenimi — 3 mini bar */}
       <svg width="14" height="11" viewBox="0 0 14 11" fill="none" aria-hidden>
-        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="var(--theme-accent)" opacity="0.9" />
-        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="var(--theme-accent)" opacity="1" />
-        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="var(--theme-accent)" opacity="0.95" />
-        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="var(--theme-accent)" opacity="0.78" />
+        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="var(--theme-accent)" opacity="0.62" />
+        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="var(--theme-accent)" opacity="0.74" />
+        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="var(--theme-accent)" opacity="0.68" />
+        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="var(--theme-accent)" opacity="0.54" />
       </svg>
     </div>
   );

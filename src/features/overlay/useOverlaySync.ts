@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react';
 import type { User } from '../../types';
 import type { OverlaySnapshot, OverlayParticipant, OverlaySettings } from '../../overlay/types';
+import { getPublicDisplayName } from '../../lib/formatName';
 
 interface OverlayHostAPI {
   applySettings: (s: Partial<OverlaySettings>) => void;
@@ -35,7 +36,7 @@ export interface UseOverlaySyncOpts {
   selfSpeaking: boolean; // isPttPressed && !isMuted vb
   selfMuted: boolean;
   selfDeafened: boolean;
-  selfUser: Pick<User, 'id' | 'firstName' | 'lastName' | 'name' | 'avatar'>;
+  selfUser: Pick<User, 'id' | 'displayName' | 'firstName' | 'lastName' | 'name' | 'avatar'>;
   themeAccentRgb?: string;
 }
 
@@ -90,7 +91,7 @@ export function useOverlaySync({
       // Self (eğer showSelf ise)
       if (settings.showSelf && currentUserId) {
         const selfSpeakingFinal = selfSpeaking && !selfMuted;
-        const selfName = [selfUser.firstName, selfUser.lastName].filter(Boolean).join(' ').trim() || selfUser.name || 'Ben';
+        const selfName = getPublicDisplayName(selfUser) || 'Ben';
         if (!settings.showOnlySpeaking || selfSpeakingFinal) {
           partList.push({
             id: currentUserId,
@@ -109,7 +110,7 @@ export function useOverlaySync({
         if (u.id === currentUserId) continue;
         const isSpeaking = !!u.isSpeaking && !u.selfMuted && !u.isMuted;
         if (settings.showOnlySpeaking && !isSpeaking) continue;
-        const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.name || 'Kullanıcı';
+        const name = getPublicDisplayName(u);
         partList.push({
           id: u.id,
           displayName: name,

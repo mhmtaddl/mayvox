@@ -13,7 +13,7 @@ import {
   getServerChannels,
   ApiError,
 } from '../../../lib/serverService';
-import { formatFullName } from '../../../lib/formatName';
+import { getPublicDisplayName } from '../../../lib/formatName';
 import { applyVolumeToAudioElement, getUserVolumePercent, setUserVolumePercent } from '../../../lib/userVolume';
 import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../../../lib/channelOrder';
@@ -146,7 +146,7 @@ export function useChannelActions({
       type: 'broadcast', event: 'invite',
       payload: {
         inviterId: currentUser.id, inviteeId: userId,
-        inviterName: formatFullName(currentUser.firstName, currentUser.lastName),
+        inviterName: getPublicDisplayName(currentUser),
         inviterAvatar: currentUser.avatar, roomName: channel.name, roomId: channel.id,
         serverName: serverContext?.name ?? undefined,
         serverAvatar: serverContext?.avatar ?? undefined,

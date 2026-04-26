@@ -14,7 +14,7 @@ import AiInsightsRow from './AiInsightsRow';
 
 type Phase = 'loading' | 'ready' | 'empty' | 'error';
 
-interface ProfileRecord { id: string; name: string | null; avatar: string | null; }
+interface ProfileRecord { id: string; displayName: string | null; avatar: string | null; }
 
 interface Props {
   serverId: string;
@@ -102,12 +102,13 @@ export default function InsightsTab({ serverId }: Props) {
     const needed = Array.from(ids).filter(id => !profiles.has(id));
     if (needed.length === 0) return;
 
-    supabase.from('profiles').select('id, name, avatar').in('id', needed).then(({ data: rows }) => {
+    supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', needed).then(({ data: rows }) => {
       if (!rows) return;
       setProfiles(prev => {
         const next = new Map(prev);
         for (const r of rows) {
-          next.set(r.id, { id: r.id, name: r.name ?? null, avatar: r.avatar ?? null });
+          const full = `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim();
+          next.set(r.id, { id: r.id, displayName: r.display_name || full || r.name || null, avatar: r.avatar ?? null });
         }
         return next;
       });
@@ -118,7 +119,7 @@ export default function InsightsTab({ serverId }: Props) {
     if (!data) return [];
     return data.topActiveUsers.map(u => {
       const p = profiles.get(u.userId);
-      return { ...u, displayName: p?.name ?? u.displayName, avatarUrl: p?.avatar ?? u.avatarUrl };
+      return { ...u, displayName: p?.displayName ?? u.displayName, avatarUrl: p?.avatar ?? u.avatarUrl };
     });
   }, [data, profiles]);
 
@@ -128,7 +129,7 @@ export default function InsightsTab({ serverId }: Props) {
       ...g,
       members: g.members.map(m => {
         const p = profiles.get(m.id);
-        return { ...m, name: p?.name ?? m.name, avatar: p?.avatar ?? m.avatar };
+        return { ...m, name: p?.displayName ?? m.name, avatar: p?.avatar ?? m.avatar };
       }),
     }));
   }, [data, profiles]);

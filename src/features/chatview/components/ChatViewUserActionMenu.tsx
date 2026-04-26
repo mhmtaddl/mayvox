@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Clock } from 'lucide-react';
 import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
+import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
 interface Props {
   menu: { userId: string; x: number; y: number };
@@ -97,7 +98,8 @@ export default function ChatViewUserActionMenu({
               max="100"
               value={userVolumes[uid] ?? 100}
               onChange={(e) => onUpdateVolume(uid, parseInt(e.target.value))}
-              className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)]"
+              className="premium-range flex-1"
+              style={rangeVisualStyle(userVolumes[uid] ?? 100, 0, 100)}
             />
             <span className="text-[11px] font-bold text-[var(--theme-accent)] w-10 text-right tabular-nums">%{userVolumes[uid] ?? 100}</span>
           </div>

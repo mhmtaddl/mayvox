@@ -3,6 +3,7 @@ export type UserStatus = 'online' | 'busy' | 'away' | 'offline';
 export interface User {
   id: string;
   name: string;
+  displayName?: string;
   email?: string;
   firstName?: string;
   lastName?: string;

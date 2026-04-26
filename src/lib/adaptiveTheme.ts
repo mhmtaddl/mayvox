@@ -340,8 +340,8 @@ export function getDerivedTokens(theme: AppTheme, bg: BackgroundPreset): Derived
 
   // Scrollbar
   const scrollbarThumb = isLight
-    ? withAlpha(accentOnBg, 0.25)
-    : withAlpha(accentOnBg, 0.40);
+    ? withAlpha('#000000', 0.18)
+    : withAlpha('#FFFFFF', 0.20);
 
   // Card selected
   const cardBgHover = isLight
@@ -507,6 +507,9 @@ export function applyDerivedTokens(tokens: DerivedTokens) {
 
   // Scrollbar & selection
   root.style.setProperty('--theme-scrollbar-thumb', tokens.scrollbarThumb);
+  root.style.setProperty('--scrollbar-track', tokens.colorScheme === 'light' ? 'rgba(0,0,0,0.015)' : 'rgba(255,255,255,0.018)');
+  root.style.setProperty('--scrollbar-thumb', tokens.colorScheme === 'light' ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.20)');
+  root.style.setProperty('--scrollbar-thumb-hover', tokens.colorScheme === 'light' ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.32)');
   root.style.setProperty('--theme-selection', tokens.accentSoft);
 
   // Glass system

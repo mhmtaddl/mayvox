@@ -12,6 +12,7 @@ import {
 import { themes, themeOrder, backgroundPresets } from '../../../themes';
 import { THEME_PACKS, getThemePack } from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
+import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
 // ── Görünüm ──
 export function AppearanceSection() {
@@ -363,7 +364,8 @@ export function SoundsSection() {
               setVol(v);
               SoundManager.setMasterVolume(v);
             }}
-            className="w-full accent-[var(--theme-accent)]"
+            className="premium-range w-full"
+            style={rangeVisualStyle(vol, 0, 1)}
             disabled={muted}
           />
         </div>
@@ -490,7 +492,8 @@ export function PerformanceSection() {
             type="range" min={0} max={100} value={noiseSuppressionStrength}
             onChange={e => setNoiseSuppressionStrength(Number(e.target.value))}
             disabled={!isNoiseSuppressionEnabled}
-            className="w-full accent-[var(--theme-accent)]"
+            className="premium-range w-full"
+            style={rangeVisualStyle(noiseSuppressionStrength, 0, 100)}
           />
           <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
             <span>Hafif</span><span>Agresif</span>
@@ -505,7 +508,16 @@ export function PerformanceSection() {
               {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
             </span>
           </div>
-          <input type="range" min={0} max={500} step={50} value={pttReleaseDelay} onChange={e => setPttReleaseDelay(Number(e.target.value))} className="w-full accent-[var(--theme-accent)]" />
+          <input
+            type="range"
+            min={0}
+            max={500}
+            step={50}
+            value={pttReleaseDelay}
+            onChange={e => setPttReleaseDelay(Number(e.target.value))}
+            className="premium-range w-full"
+            style={rangeVisualStyle(pttReleaseDelay, 0, 500)}
+          />
           <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
             <span>Kapalı</span><span>500 ms</span>
           </div>

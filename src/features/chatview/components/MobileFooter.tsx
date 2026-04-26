@@ -12,6 +12,7 @@ import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import { type CardStyle } from '../../../components/chat/cardStyles';
 import { type Server } from '../../../lib/serverService';
 import { formatRemainingFromIso } from '../../../lib/formatTimeout';
+import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
@@ -221,7 +222,8 @@ export default function MobileFooter({
                     max={50}
                     value={noiseThreshold}
                     onChange={(e) => setNoiseThreshold(parseInt(e.target.value))}
-                    className="flex-1 h-1 accent-emerald-400 rounded-full"
+                    className="premium-range flex-1"
+                    style={rangeVisualStyle(noiseThreshold, 5, 50, { height: '4px' })}
                   />
                   <span className="text-[10px] text-emerald-400 font-bold w-5 text-right shrink-0">{noiseThreshold}</span>
                 </div>

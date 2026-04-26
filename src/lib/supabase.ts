@@ -53,6 +53,7 @@ export const onAuthStateChange = (
 export const saveProfile = async (profile: {
   id: string;
   name: string;
+  display_name?: string;
   email?: string;
   first_name: string;
   last_name: string;
@@ -203,7 +204,7 @@ export const setChannelPassword = async (channelId: string, password: string | n
 export const getPendingPasswordResets = async () => {
   return await supabase
     .from('profiles')
-    .select('id, name, email')
+    .select('id, name, display_name, first_name, last_name, email')
     .eq('password_reset_requested', true);
 };
 

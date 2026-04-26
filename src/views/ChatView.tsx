@@ -14,7 +14,7 @@ import {
   Timer,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatFullName } from '../lib/formatName';
+import { getPublicDisplayName } from '../lib/formatName';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { useAppState } from '../contexts/AppStateContext';
 import { useAudio } from '../contexts/AudioContext';
@@ -835,13 +835,13 @@ export default function ChatView() {
     if (presenceChannelRef.current && invitationModal) {
       presenceChannelRef.current.send({
         type: 'broadcast', event: 'invite-rejected',
-        payload: { inviterId: invitationModal.inviterId, inviteeId: currentUser.id, inviteeName: formatFullName(currentUser.firstName, currentUser.lastName) },
+        payload: { inviterId: invitationModal.inviterId, inviteeId: currentUser.id, inviteeName: getPublicDisplayName(currentUser) },
       });
     }
     // Reject sesi — stopInviteRingtone effect'i zaten modal=null'da tetiklenir.
     playReject();
     setInvitationModal(null);
-  }, [invitationModal, currentUser.id, currentUser.firstName, currentUser.lastName, presenceChannelRef, setInvitationModal]);
+  }, [invitationModal, currentUser, presenceChannelRef, setInvitationModal]);
 
   const handleInvitationAccept = useCallback(() => {
     if (presenceChannelRef.current && invitationModal) {
@@ -893,7 +893,7 @@ export default function ChatView() {
         <InactivityCountdownBanner />
       </div>
 
-      <div className={`flex flex-1 min-h-0 min-w-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-3 lg:gap-[6px]'}`}>
+      <div className={`mv-desktop-shell-layout flex flex-1 min-h-0 min-w-0 overflow-hidden relative ${FORCE_MOBILE ? '' : 'lg:p-0 lg:gap-0'}`}>
         {/* ── Mobil kenar handle'ları ── */}
         {!mobileLeftOpen && !mobileRightOpen && (
           <>
@@ -1099,11 +1099,11 @@ export default function ChatView() {
                                           : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
                                         color: 'var(--theme-accent)',
                                       }}>
-                                      <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold" />
+                                      <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={getPublicDisplayName(user)} letterClassName="text-[8px] font-bold" />
                                     </div>
                                     <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />
                                   </div>
-                                  <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
+                                  <span className="truncate flex-1">{getPublicDisplayName(user)}</span>
                                   {isBc && (isSp ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" /> : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />)}
                                 </div>
                               </React.Fragment>);
@@ -1179,8 +1179,8 @@ export default function ChatView() {
                 <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
                 <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
-                    <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/65">Arkadaşlar</h3>
+                    <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] text-[10px] leading-none font-semibold text-[var(--theme-accent)]/62 tabular-nums">{friendUsers.length}</span>
                   </div>
                 </div>
                 <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
@@ -1219,7 +1219,7 @@ export default function ChatView() {
                     onOpenServer={(sid) => { setActiveServerId(sid); setMobileRightOpen(false); }}
                     onAcceptFriendRequest={async (senderId) => {
                       const sender = allUsers.find(u => u.id === senderId);
-                      const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                      const name = getPublicDisplayName(sender);
                       await acceptRequest(senderId);
                       pushInformational({
                         key: `friend-accepted:${senderId}`,
@@ -1231,7 +1231,7 @@ export default function ChatView() {
                     }}
                     onRejectFriendRequest={async (senderId) => {
                       const sender = allUsers.find(u => u.id === senderId);
-                      const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                      const name = getPublicDisplayName(sender);
                       await rejectRequest(senderId);
                       pushInformational({
                         key: `friend-rejected:${senderId}`,
@@ -1337,7 +1337,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Main Content ── */}
-        <main className={`mv-chat-main flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden bg-[rgba(var(--theme-sidebar-rgb),0.04)] relative ${FORCE_MOBILE ? '' : 'lg:rounded-2xl lg:backdrop-blur-[12px]'}`} style={{ boxShadow: FORCE_MOBILE ? undefined : 'var(--chat-main-shadow, 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(var(--glass-tint), 0.02))', border: FORCE_MOBILE ? undefined : '1px solid var(--chat-main-border, rgba(var(--glass-tint), 0.03))', backgroundImage: 'var(--chat-main-glow, radial-gradient(ellipse 50% 35% at 50% 25%, rgba(var(--theme-glow-rgb), 0.025) 0%, rgba(var(--theme-glow-rgb), 0.01) 40%, transparent 65%))' }}>
+        <main className="mv-chat-main mv-shell-center-panel flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden relative" style={{ backgroundColor: 'var(--app-content-surface, var(--app-neutral-surface))', boxShadow: 'none', border: 0, backgroundImage: 'none' }}>
           {(() => {
             const activeSrv = serverList.find(s => s.id === activeServerId);
             // Restricted mode: settings/discover dışındaki tüm akışlarda merkezi panel
@@ -1448,12 +1448,12 @@ export default function ChatView() {
         </main>
 
         {/* ── Right Sidebar ── */}
-        <aside className={`mv-shell-panel w-48 xl:w-56 2xl:w-60 shrink-0 bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}>
+        <aside className={`mv-shell-panel mv-shell-right-panel w-48 xl:w-56 2xl:w-60 shrink-0 flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--app-content-surface, var(--app-neutral-surface)) 96%, white 4%)', boxShadow: 'none', border: 0 }}>
           <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
           <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
             <div className="flex items-center gap-2">
-              <h3 className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-[var(--theme-secondary-text)]">Arkadaşlar</h3>
-              <span className="text-[10px] bg-[var(--theme-accent)]/8 text-[var(--theme-accent)] px-2.5 py-0.5 rounded-full font-bold">{friendUsers.length}</span>
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/65">Arkadaşlar</h3>
+              <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] text-[10px] leading-none font-semibold text-[var(--theme-accent)]/62 tabular-nums">{friendUsers.length}</span>
             </div>
           </div>
           <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
@@ -1489,7 +1489,7 @@ export default function ChatView() {
               onOpenServer={(sid) => setActiveServerId(sid)}
               onAcceptFriendRequest={async (senderId) => {
                 const sender = allUsers.find(u => u.id === senderId);
-                const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                const name = getPublicDisplayName(sender);
                 await acceptRequest(senderId);
                 pushInformational({
                   key: `friend-accepted:${senderId}`,
@@ -1501,7 +1501,7 @@ export default function ChatView() {
               }}
               onRejectFriendRequest={async (senderId) => {
                 const sender = allUsers.find(u => u.id === senderId);
-                const name = sender?.name || sender?.firstName || 'Kullanıcı';
+                const name = getPublicDisplayName(sender);
                 await rejectRequest(senderId);
                 pushInformational({
                   key: `friend-rejected:${senderId}`,

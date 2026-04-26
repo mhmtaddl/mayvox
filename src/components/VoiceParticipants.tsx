@@ -7,6 +7,7 @@ import type { ChatMessage } from './ChatPanel';
 import ChatPanel from './ChatPanel';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
 import { BloomHighlight } from '../lib/signature';
+import { getPublicDisplayName } from '../lib/formatName';
 
 interface Props {
   forceMobile: boolean;
@@ -164,7 +165,7 @@ function VoiceParticipants({
     const speaking = isSpeakingForUser(user);
     return {
       id: user.id,
-      name: user.name,
+      name: getPublicDisplayName(user),
       firstName: user.firstName,
       lastName: user.lastName,
       age: user.age,

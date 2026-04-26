@@ -471,6 +471,12 @@ export function usePresence({
       const otherFields = {
         ...(updates.isMuted !== undefined && { isMuted: updates.isMuted }),
         ...(updates.isVoiceBanned !== undefined && { isVoiceBanned: updates.isVoiceBanned }),
+        ...(updates.displayName !== undefined && { displayName: updates.displayName }),
+        ...(updates.firstName !== undefined && { firstName: updates.firstName }),
+        ...(updates.lastName !== undefined && { lastName: updates.lastName }),
+        ...(updates.avatar !== undefined && { avatar: updates.avatar }),
+        ...(updates.statusText !== undefined && { statusText: updates.statusText }),
+        ...(updates.avatarBorderColor !== undefined && { avatarBorderColor: updates.avatarBorderColor }),
       };
       if (Object.keys(otherFields).length > 0) {
         setAllUsers(prev =>

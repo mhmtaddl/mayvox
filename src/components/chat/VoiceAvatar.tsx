@@ -3,7 +3,7 @@ import { Mic, MicOff, Headphones, HeadphoneOff, ShieldCheck, Monitor, Smartphone
 import { motion } from 'motion/react';
 import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
-import { formatFullName } from '../../lib/formatName';
+import { getPublicDisplayName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
 
 // ── Spring presets ──
@@ -127,8 +127,8 @@ function VoiceAvatarInner({
           <AvatarContent
             avatar={user.avatar}
             statusText={user.statusText}
-            firstName={user.firstName}
-            name={user.name}
+            firstName={user.displayName || user.firstName}
+            name={getPublicDisplayName(user)}
             letterClassName="text-[var(--theme-text)] font-bold"
           />
         </motion.div>
@@ -153,7 +153,7 @@ function VoiceAvatarInner({
             transition: 'font-weight 0.3s ease',
           }}
         >
-          {formatFullName(user.firstName, user.lastName)}
+          {getPublicDisplayName(user)}
         </span>
         {/* Role icon — immediately right of name */}
         {user.isAdmin && (
@@ -232,6 +232,7 @@ function arePropsEqual(prev: UserCardProps, next: UserCardProps): boolean {
   if (pu.isAdmin !== nu.isAdmin) return false;
   if (pu.isModerator !== nu.isModerator) return false;
   if (pu.avatar !== nu.avatar) return false;
+  if (pu.displayName !== nu.displayName) return false;
   if (pu.firstName !== nu.firstName) return false;
   if (pu.lastName !== nu.lastName) return false;
   if (pu.platform !== nu.platform) return false;

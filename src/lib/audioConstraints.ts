@@ -13,25 +13,18 @@
 import type { AudioCaptureOptions } from 'livekit-client';
 
 export interface AudioSettings {
-  /**
-   * Kullanıcının NS toggle'ı. RNNoise aktifse burası TRUE olsa bile native
-   * NS'yi KAPAT (double-processing engelleme); `rnnoiseActive=true` gönder.
-   */
+  /** Kullanıcının native browser noise suppression toggle'ı. */
   noiseSuppression: boolean;
-  /** AGC AYRI toggle — NS'den bağımsız. Default true. */
+  /** AGC stabilite için açık tutulur. */
   autoGainControl?: boolean;
-  /** RNNoise worklet aktifse: native Chromium NS kapatılır, double-processing engellenir. */
-  rnnoiseActive?: boolean;
   deviceId?: string | null;
 }
 
 export function buildAudioCaptureOptions(settings: AudioSettings): AudioCaptureOptions {
-  // Double-processing fix: RNNoise varsa native NS off; yoksa user toggle'ı uygulanır.
-  const effectiveNS = settings.rnnoiseActive ? false : settings.noiseSuppression;
   return {
     echoCancellation: true,
-    noiseSuppression: effectiveNS,
-    autoGainControl: settings.autoGainControl ?? true,
+    noiseSuppression: settings.noiseSuppression,
+    autoGainControl: true,
     sampleRate: 48000,
     channelCount: 1,
     deviceId: settings.deviceId || undefined,
@@ -44,11 +37,10 @@ export function buildAudioCaptureOptions(settings: AudioSettings): AudioCaptureO
  * AudioCaptureOptions yerine doğrudan `MediaTrackConstraints` döner.
  */
 export function buildMediaTrackConstraints(settings: AudioSettings): MediaTrackConstraints {
-  const effectiveNS = settings.rnnoiseActive ? false : settings.noiseSuppression;
   const opts: MediaTrackConstraints = {
     echoCancellation: true,
-    noiseSuppression: effectiveNS,
-    autoGainControl: settings.autoGainControl ?? true,
+    noiseSuppression: settings.noiseSuppression,
+    autoGainControl: true,
     sampleRate: 48000,
     channelCount: 1,
   };

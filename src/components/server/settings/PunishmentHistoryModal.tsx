@@ -648,16 +648,19 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
         }
 
         /* Scrollbar — thin, muted */
-        .phmScroll::-webkit-scrollbar { width: 6px; }
-        .phmScroll::-webkit-scrollbar-track { background: transparent; }
+        .phmScroll::-webkit-scrollbar { width: 7px; height: 7px; }
+        .phmScroll::-webkit-scrollbar-track { background: var(--scrollbar-track, transparent); }
         .phmScroll::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.06);
+          background: var(--scrollbar-thumb, rgba(255,255,255,0.20));
           border-radius: 999px;
         }
         .phmScroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(255,255,255,0.10);
+          background: var(--scrollbar-thumb-hover, rgba(255,255,255,0.32));
         }
-        .phmScroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
+        .phmScroll {
+          scrollbar-width: thin;
+          scrollbar-color: var(--scrollbar-thumb, rgba(255,255,255,0.20)) var(--scrollbar-track, transparent);
+        }
       `}</style>
     </div>
   );

@@ -5,8 +5,10 @@ import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
 import { isCapacitor, isMobile, isElectron } from '../lib/platform';
+import { getPublicDisplayName } from '../lib/formatName';
 import { Toggle } from '../components/settings/shared';
 import { isGameActivityAvailable } from '../features/game-activity/useGameActivity';
+import { rangeVisualStyle } from '../lib/rangeStyle';
 
 // ── Components ──
 import AccountSection from '../components/settings/sections/AccountSection';
@@ -27,14 +29,14 @@ function SegmentedTabs({ tabs, value, onChange }: {
   onChange: (v: MainTab) => void;
 }) {
   return (
-    <div className="surface-card inline-flex p-1 rounded-xl">
+    <div className="settings-tabs surface-card inline-flex p-1 rounded-xl">
       {tabs.map(tab => {
         const active = value === tab.key;
         return (
           <button
             key={tab.key}
             onClick={() => onChange(tab.key)}
-            className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap"
+            className={`settings-tab ${active ? 'active' : ''} relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap`}
           >
             {active && (
               <motion.span
@@ -51,7 +53,7 @@ function SegmentedTabs({ tabs, value, onChange }: {
             <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/70'}>
               {tab.icon}
             </span>
-            <span className={active ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/80'}>
+            <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/80'}>
               {tab.label}
             </span>
           </button>
@@ -296,9 +298,17 @@ function OverlayBoardPreview({
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || 'M';
   const cardAlpha = Math.max(0, Math.min(100, cardOpacity)) / 100;
   const hasCard = variant !== 'none' && cardAlpha > 0;
+  const tintA = 0.10 + cardAlpha * 0.08;
+  const fillA = 0.10 + cardAlpha * 0.14;
+  const baseA = 0.58 + cardAlpha * 0.26;
+  const lineA = 0.10 + cardAlpha * 0.10;
   const cardBg = hasCard
-    ? `radial-gradient(circle at 24% 18%, rgba(var(--theme-accent-rgb), ${0.14 + cardAlpha * 0.18}), transparent 62%), linear-gradient(180deg, rgba(24,25,30,${0.72 + cardAlpha * 0.28}) 0%, rgba(9,10,13,${0.70 + cardAlpha * 0.30}) 100%)`
+    ? `radial-gradient(circle at 24% 18%, rgba(var(--theme-accent-rgb), ${tintA}), transparent 62%), linear-gradient(135deg, rgba(var(--theme-accent-rgb), ${fillA}) 0%, transparent 72%), linear-gradient(180deg, rgba(var(--theme-bg-rgb), ${baseA}) 0%, rgba(var(--shadow-base), ${0.42 + cardAlpha * 0.22}) 100%), linear-gradient(90deg, rgba(var(--theme-accent-rgb), ${lineA}), transparent 52%)`
     : 'transparent';
+  const cardBorder = hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none';
+  const cardShadow = hasCard
+    ? '0 5px 14px rgba(var(--shadow-base),0.22), inset 0 1px 0 rgba(var(--theme-accent-rgb),0.08)'
+    : 'none';
   const avatar = (
     <span
       style={{
@@ -310,11 +320,11 @@ function OverlayBoardPreview({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(var(--theme-accent-rgb), 0.22)',
-        color: '#fff',
+        background: 'rgba(var(--theme-accent-rgb), 0.18)',
+        color: 'var(--theme-text)',
         fontSize: Math.max(7, cfg.name - 1),
         fontWeight: 800,
-        boxShadow: '0 0 0 1px rgba(255,255,255,0.10)',
+        boxShadow: '0 0 0 1px rgba(var(--theme-accent-rgb),0.24)',
       }}
     >
       {avatarUrl?.startsWith('http') ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
@@ -325,7 +335,7 @@ function OverlayBoardPreview({
       style={{
         fontSize: cfg.name,
         fontWeight: 700,
-        color: 'rgba(255,255,255,0.96)',
+        color: 'var(--theme-text)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -358,7 +368,7 @@ function OverlayBoardPreview({
 
   if (variant === 'card') {
     return (
-      <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '4px 7px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+      <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '4px 7px', boxShadow: cardShadow }}>
         {avatar}
         <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
           {nameNode}
@@ -369,7 +379,7 @@ function OverlayBoardPreview({
   }
   if (variant === 'badge') {
     return (
-      <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 7px 3px 3px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+      <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 7px 3px 3px', boxShadow: cardShadow }}>
         {avatar}
         {nameNode}
       </span>
@@ -384,7 +394,7 @@ function OverlayBoardPreview({
     );
   }
   return (
-    <span style={{ ...common, background: cardBg, border: hasCard ? '1px solid rgba(var(--theme-accent-rgb),0.28)' : 'none', borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 8px 3px 3px', boxShadow: hasCard ? '0 5px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)' : 'none' }}>
+    <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 8px 3px 3px', boxShadow: cardShadow }}>
       {avatar}
       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
         {nameNode}
@@ -634,7 +644,7 @@ function VoiceOverlayCard() {
     overlayVariant, setOverlayVariant,
   } = useSettings();
   const off = !overlayEnabled;
-  const previewName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.name || 'Mayvox';
+  const previewName = getPublicDisplayName(currentUser) || 'Mayvox';
   return (
     <div
       className="surface-card rounded-xl px-4 py-4 w-full"
@@ -773,9 +783,9 @@ function VoiceOverlayCard() {
                 value={overlayCardOpacity}
                 disabled={off}
                 onChange={(e) => setOverlayCardOpacity(parseInt(e.target.value) || 0)}
-                className="w-full"
+                className="premium-range w-full"
                 style={{
-                  accentColor: 'var(--theme-accent)',
+                  ...rangeVisualStyle(overlayCardOpacity, 0, 100),
                   opacity: off ? 0.5 : 1,
                   cursor: off ? 'not-allowed' : 'pointer',
                 }}

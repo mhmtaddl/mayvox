@@ -44,7 +44,7 @@ import { getThemePack } from './lib/themePacks';
 
 // Supabase DB satır tipleri
 type DbProfile = {
-  id: string; name: string; email?: string; first_name?: string; last_name?: string;
+  id: string; name: string; display_name?: string; email?: string; first_name?: string; last_name?: string;
   age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
   is_moderator?: boolean;
   is_muted?: boolean; mute_expires?: number; is_voice_banned?: boolean; ban_expires?: number;
@@ -95,7 +95,7 @@ import { type ResetRequest } from './components/PasswordResetPanel';
 import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
-import { toTitleCaseTr, formatFullName } from './lib/formatName';
+import { toTitleCaseTr } from './lib/formatName';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from './lib/memberIdentity';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
@@ -146,6 +146,7 @@ function mapDbProfile(
     id: p.id,
     email: p.email || '',
     name: p.name || '',
+    displayName: p.display_name || undefined,
     firstName: p.first_name || p.name || '',
     lastName: p.last_name || '',
     age: p.age || 0,
@@ -188,6 +189,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       id,
       email,
       name: profile.name || email,
+      displayName: profile.display_name || undefined,
       firstName: profile.first_name || email.split('@')[0],
       lastName: profile.last_name || '',
       age: profile.age || 18,
@@ -215,6 +217,7 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
   return {
     id,
     name: email,
+    displayName: undefined,
     firstName: email.split('@')[0],
     lastName: '',
     age: 18,
@@ -825,7 +828,7 @@ export default function App() {
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
 
-  const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit, updateNoiseStrength } = useLiveKitConnection({
+  const { livekitRoomRef, connectToLiveKit, disconnectFromLiveKit, updateNoiseStrength, applyNoisePipeline } = useLiveKitConnection({
     presenceChannelRef,
     currentUserRef,
     activeChannelRef,
@@ -1357,12 +1360,18 @@ export default function App() {
       buildAudioCaptureOptions({
         noiseSuppression: isNoiseSuppressionEnabled,
         autoGainControl: true,
-        // RNNoise aktifse native NS kapatılır (double-processing fix).
-        rnnoiseActive: isNoiseSuppressionEnabled,
         deviceId: selectedInput,
       }),
-    ).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
-  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting, isVoiceBlocked]);
+    ).then(() => {
+      if (canSpeak) {
+        void applyNoisePipeline({
+          enabled: isNoiseSuppressionEnabled,
+          strength: noiseSuppressionStrength,
+          deviceId: selectedInput,
+        });
+      }
+    }).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
+  }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting, isVoiceBlocked, applyNoisePipeline]);
 
   // ── Voice pipeline guard: reason set olunca mic'i ZORLA kapat ──────────
   // PTT effect zaten isVoiceBlocked'ı dep alıyor; bu effect ek güvenlik
@@ -1381,6 +1390,14 @@ export default function App() {
   useEffect(() => {
     updateNoiseStrength(noiseSuppressionStrength);
   }, [noiseSuppressionStrength, updateNoiseStrength]);
+
+  useEffect(() => {
+    void applyNoisePipeline({
+      enabled: isNoiseSuppressionEnabled,
+      strength: noiseSuppressionStrength,
+      deviceId: selectedInput,
+    });
+  }, [isNoiseSuppressionEnabled, selectedInput, applyNoisePipeline]);
 
   // ── Deafen transition: pause/play SADECE isDeafened değişiminde ──
   // allUsers/userVolumes dep'lerine bağlanırsa her user update'inde play() spam olur →
@@ -2101,6 +2118,7 @@ export default function App() {
     const newUser: User = {
       id: data.user?.id || Math.random().toString(36).slice(2, 11),
       name: username,
+      displayName: `${normalizedFirst} ${normalizedLast}`.trim(),
       email: loginNick,
       firstName: normalizedFirst,
       lastName: normalizedLast,
@@ -2117,6 +2135,7 @@ export default function App() {
     await saveProfile({
       id: newUser.id,
       name: newUser.name,
+      display_name: newUser.displayName || `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim() || newUser.name,
       email: loginNick,
       first_name: newUser.firstName || '',
       last_name: newUser.lastName || '',
@@ -2443,18 +2462,22 @@ export default function App() {
 
                   <style>{`
                     .custom-scrollbar::-webkit-scrollbar {
-                      width: 4px;
+                      width: 7px;
+                      height: 7px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-track {
-                      background: transparent;
+                      background: var(--scrollbar-track, transparent);
                     }
                     .custom-scrollbar::-webkit-scrollbar-thumb {
-                      background: var(--theme-accent);
-                      border-radius: 10px;
+                      background: var(--scrollbar-thumb, rgba(255,255,255,0.20));
+                      border-radius: 999px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                      background: var(--theme-accent);
-                      opacity: 0.8;
+                      background: var(--scrollbar-thumb-hover, rgba(255,255,255,0.32));
+                    }
+                    .custom-scrollbar {
+                      scrollbar-width: thin;
+                      scrollbar-color: var(--scrollbar-thumb, rgba(255,255,255,0.20)) var(--scrollbar-track, transparent);
                     }
                   `}</style>
 

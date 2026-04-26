@@ -34,6 +34,9 @@ import {
 import { useAdminUserSessions } from '../../../hooks/useAdminUserSessions';
 import { displayVersion, isOutdatedVersion } from '../../../lib/compareVersions';
 
+const adminUserDisplayName = (user: Pick<AdminUserRow, 'display_name' | 'full_name' | 'username' | 'email' | 'id'>) =>
+  user.display_name || user.full_name || user.username || user.email || user.id.slice(0, 8);
+
 type Tab = 'all' | 'admin' | 'mod' | 'user' | 'owners';
 type OwnershipFilter = 'all' | 'has-server' | 'no-server';
 
@@ -169,7 +172,7 @@ export default function ManagementUsersPanel() {
   // ── Row confirm config + runner ──
   const rowConfirmConfig = useMemo(() => {
     if (!rowConfirm) return null;
-    const n = rowConfirm.user.full_name || rowConfirm.user.username || rowConfirm.user.email || rowConfirm.user.id.slice(0, 8);
+    const n = adminUserDisplayName(rowConfirm.user);
     switch (rowConfirm.type) {
       case 'delete':
         return { title: 'Kullanıcıyı Sil', description: `${n} kalıcı olarak silinecek. Bu işlem geri alınamaz.`, confirmText: 'Kalıcı Sil', danger: true };
@@ -203,7 +206,7 @@ export default function ManagementUsersPanel() {
   const runRowConfirm = useCallback(async () => {
     if (!rowConfirm) return;
     const u = rowConfirm.user;
-    const n = u.full_name || u.username || u.email || u.id.slice(0, 8);
+    const n = adminUserDisplayName(u);
     setRowConfirmLoading(true);
     try {
       switch (rowConfirm.type) {
@@ -684,7 +687,7 @@ interface UserRowProps {
 const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, canAssignRole, onToggle, onManagePlan, onOpenDetail, onManageRole, onQuickAction }) => {
   const isVoiceBanned = !!user.is_voice_banned && (!user.ban_expires || user.ban_expires > Date.now());
   const isMuted = !!user.is_muted && (!user.mute_expires || user.mute_expires > Date.now());
-  const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
+  const displayName = adminUserDisplayName(user);
   // Live status look-up — admin DTO'nun statusText'i yok. allUsers (realtime presence)
   // içinden çek; yoksa 'Online' default → pipeline status PNG'yi (online.png) döner,
   // initial harfe düşmez.
@@ -729,7 +732,7 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Avatar */}
         <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden ring-1 ring-[rgba(var(--glass-tint),0.06)]">
-          <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.first_name} name={displayName} letterClassName="text-[11px] font-bold text-[var(--theme-accent)]" />
+          <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.display_name || user.first_name} name={displayName} letterClassName="text-[11px] font-bold text-[var(--theme-accent)]" />
         </div>
 
         {/* Meta — 3-tier typography hierarchy */}
@@ -1114,7 +1117,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
   onAction: (a: RowConfirm) => void;
   onOpenPlan: () => void;
 }) {
-  const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
+  const displayName = adminUserDisplayName(user);
   const isVoiceBanned = !!user.is_voice_banned && (!user.ban_expires || user.ban_expires > Date.now());
   const isMuted = !!user.is_muted && (!user.mute_expires || user.mute_expires > Date.now());
   const { allUsers } = useUser();
@@ -1138,7 +1141,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
       <div className="p-5 border-b border-[var(--theme-border)]">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-12 h-12 rounded-xl bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[15px] flex items-center justify-center overflow-hidden">
-            <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.first_name} name={displayName} letterClassName="text-[14px] font-bold text-[var(--theme-accent)]" />
+            <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.display_name || user.first_name} name={displayName} letterClassName="text-[14px] font-bold text-[var(--theme-accent)]" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-bold text-[var(--theme-text)] truncate">{displayName}</h3>
@@ -1453,7 +1456,7 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
   const [localError, setLocalError] = useState<string | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
-  const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
+  const displayName = adminUserDisplayName(user);
 
   const submit = async () => {
     if (readOnly) return;
@@ -1670,7 +1673,7 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
   const [localError, setLocalError] = useState<string | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
-  const displayName = user.full_name || user.username || user.email || user.id.slice(0, 8);
+  const displayName = adminUserDisplayName(user);
 
   const submit = async () => {
     setSubmitting(true); setLocalError(null);

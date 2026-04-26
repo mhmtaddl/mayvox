@@ -165,8 +165,11 @@ export async function listChannelAccess(
   const userIds = Array.from(new Set(rows.map(r => r.user_id)));
   const nameMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string }) => nameMap.set(p.id, p.name));
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', userIds);
+    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
+      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+      nameMap.set(p.id, p.display_name || full || p.name || '');
+    });
   }
   const entries = rows.map(r => ({
     userId: r.user_id,

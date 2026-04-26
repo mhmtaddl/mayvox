@@ -11,7 +11,7 @@ import {
   Compass,
   Power,
 } from 'lucide-react';
-import { formatFullName } from '../../../lib/formatName';
+import { getPublicDisplayName } from '../../../lib/formatName';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import AvatarContent from '../../../components/AvatarContent';
 import { useSettings } from '../../../contexts/SettingsCtx';
@@ -24,6 +24,7 @@ import DeviceBadge from '../../../components/chat/DeviceBadge';
 import UpdateVersionHub from '../../update/components/UpdateVersionHub';
 import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
+import { rangeVisualStyle } from '../../../lib/rangeStyle';
 import { useUI } from '../../../contexts/UIContext';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useAppState } from '../../../contexts/AppStateContext';
@@ -154,7 +155,16 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
   );
 
   return (
-    <aside className={`mv-shell-panel relative bg-[rgba(var(--theme-sidebar-rgb),0.08)] backdrop-blur-[20px] rounded-2xl ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`} style={{ width: leftSidebarW, boxShadow: 'var(--shell-panel-shadow, 0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(var(--glass-tint),0.03))', border: '1px solid var(--shell-panel-border, rgba(var(--glass-tint), 0.04))' }}>
+    <aside
+      className={`mv-shell-panel mv-shell-left-panel relative ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} flex-col shrink-0`}
+      style={{
+        width: leftSidebarW,
+        '--left-sidebar-width': `${leftSidebarW}px`,
+        background: 'var(--sidebar-tint-bg)',
+        boxShadow: 'none',
+        border: 0,
+      } as React.CSSProperties}
+    >
       {/* Resize handle */}
       <div
         onMouseDown={handleSidebarDragStart}
@@ -478,7 +488,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                                   color: 'var(--theme-accent)',
                                 }}
                               >
-                                <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[8px] font-bold" />
+                                <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={getPublicDisplayName(user)} letterClassName="text-[8px] font-bold" />
                               </div>
                               <DeviceBadge platform={user.platform} size={10} className="absolute -bottom-0.5 -right-0.5" />
                             </div>
@@ -493,16 +503,14 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                                   onChange={e => handleUpdateUserVolume(user.id, parseInt(e.target.value, 10))}
                                   onMouseDown={e => e.stopPropagation()}
                                   onPointerDown={e => e.stopPropagation()}
-                                  className="flex-1 min-w-0 h-[3px] rounded-full appearance-none cursor-pointer accent-[var(--theme-accent)]"
-                                  style={{
-                                    background: `linear-gradient(to right, rgba(var(--theme-accent-rgb),0.85) 0%, rgba(var(--theme-accent-rgb),0.85) ${userVolumes[user.id] ?? 100}%, rgba(var(--glass-tint),0.18) ${userVolumes[user.id] ?? 100}%, rgba(var(--glass-tint),0.18) 100%)`,
-                                  }}
+                                  className="premium-range flex-1 min-w-0"
+                                  style={rangeVisualStyle(userVolumes[user.id] ?? 100, 0, 100, { height: '3px' })}
                                 />
                                 <span className="text-[8px] font-bold tabular-nums text-[var(--theme-accent)] shrink-0">%{userVolumes[user.id] ?? 100}</span>
                               </div>
                             ) : (
                               <>
-                                <span className="truncate flex-1">{formatFullName(user.firstName, user.lastName)}</span>
+                                <span className="truncate flex-1">{getPublicDisplayName(user)}</span>
                                 {isBc && (isSp
                                   ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
                                   : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />

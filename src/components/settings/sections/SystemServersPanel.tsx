@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Server, Search, Trash2, Ban, ShieldOff, UserMinus, Crown,
-  ChevronLeft, ChevronRight, Mail, AtSign, User as UserIcon, AlertTriangle,
+  ChevronLeft, ChevronRight, Mail, User as UserIcon, AlertTriangle,
   Check,
 } from 'lucide-react';
 import { CardSection, cardCls } from '../shared';
@@ -330,8 +330,7 @@ interface RowProps {
 }
 
 const ServerRow: React.FC<RowProps> = ({ srv, canDelete, onDelete, onBanToggle, onOpenPlanPicker, onForceLeave }) => {
-  const ownerName = srv.owner_full_name || '—';
-  const ownerUsername = srv.owner_username || '—';
+  const ownerName = srv.owner_display_name || srv.owner_full_name || '—';
   const ownerEmail = srv.owner_email || '—';
   const avatarHttp = srv.avatar_url && srv.avatar_url.startsWith('http') ? srv.avatar_url : null;
   const avatarFallback = (srv.short_name || srv.name || 'S').slice(0, 2).toUpperCase();
@@ -374,10 +373,6 @@ const ServerRow: React.FC<RowProps> = ({ srv, canDelete, onDelete, onBanToggle, 
             <span className="font-semibold text-[var(--theme-text)]/90 truncate" title={ownerName}>{ownerName}</span>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-[var(--theme-secondary-text)]/75">
-            <span className="inline-flex items-center gap-1 min-w-0 truncate" title={ownerUsername}>
-              <AtSign size={9} className="opacity-60 shrink-0" />
-              <span className="truncate">{ownerUsername}</span>
-            </span>
             <span className="inline-flex items-center gap-1 min-w-0 truncate" title={ownerEmail}>
               <Mail size={9} className="opacity-60 shrink-0" />
               <span className="truncate">{ownerEmail}</span>
@@ -574,4 +569,3 @@ function PlanPickerModal({ server, onClose, onSelect }: {
     </Modal>
   );
 }
-

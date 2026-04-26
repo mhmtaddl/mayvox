@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import AvatarContent from './AvatarContent';
+import { getPublicDisplayName } from '../lib/formatName';
 
 interface SearchResult {
   id: string;
   name: string;
+  displayName?: string;
   firstName: string;
   lastName: string;
   avatar: string;
@@ -36,8 +38,8 @@ export default function UserSearch({ currentUserId }: Props) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, first_name, last_name, avatar, status')
-        .or(`first_name.ilike.%${trimmed}%,last_name.ilike.%${trimmed}%,name.ilike.%${trimmed}%`)
+        .select('id, name, display_name, first_name, last_name, avatar, status')
+        .or(`display_name.ilike.%${trimmed}%,first_name.ilike.%${trimmed}%,last_name.ilike.%${trimmed}%,name.ilike.%${trimmed}%`)
         .neq('id', currentUserId)
         .limit(10);
 
@@ -45,6 +47,7 @@ export default function UserSearch({ currentUserId }: Props) {
         setResults(data.map(p => ({
           id: p.id,
           name: p.name || '',
+          displayName: p.display_name || undefined,
           firstName: p.first_name || '',
           lastName: p.last_name || '',
           avatar: p.avatar || '',
@@ -79,10 +82,7 @@ export default function UserSearch({ currentUserId }: Props) {
 
   useEscapeKey(() => setIsOpen(false), isOpen);
 
-  const displayName = (r: SearchResult) => {
-    const full = `${r.firstName} ${r.lastName}`.trim();
-    return full || r.name || 'Kullanıcı';
-  };
+  const displayName = (r: SearchResult) => getPublicDisplayName(r);
 
   const initials = (r: SearchResult) => {
     const fn = r.firstName || r.name || '?';
@@ -146,13 +146,12 @@ export default function UserSearch({ currentUserId }: Props) {
                   >
                     {/* Avatar */}
                     <div className="shrink-0 w-8 h-8 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}>
-                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.firstName} name={user.name} letterClassName="text-[9px] font-bold text-[var(--theme-accent)]" />
+                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.displayName || user.firstName} name={displayName(user)} letterClassName="text-[9px] font-bold text-[var(--theme-accent)]" />
                     </div>
 
-                    {/* İsim + kullanıcı adı */}
+                    {/* İsim */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-semibold text-[var(--theme-text)] truncate leading-tight">{displayName(user)}</p>
-                      {user.name && <p className="text-[9px] text-[var(--theme-secondary-text)] opacity-50 truncate">@{user.name}</p>}
                     </div>
 
                     {/* Aksiyonlar — ileride aktif olacak */}

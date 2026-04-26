@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { VolumeX } from 'lucide-react';
 import AvatarContent from './AvatarContent';
+import { getPublicDisplayName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
@@ -116,7 +117,7 @@ export default function ChatPanel({
   // Quiet mode — chat kapali
   if (!chatEnabled) {
     return (
-      <div className="absolute left-3 right-3 bottom-4 flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
+      <div className="absolute left-3 right-3 bottom-[var(--voice-bar-safe-area,76px)] flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
         <VolumeX size={22} className="text-[var(--theme-secondary-text)] opacity-10 mb-2" />
         <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-25">Bu oda modunda mesajlasma kapali</p>
       </div>
@@ -129,7 +130,7 @@ export default function ChatPanel({
   const fs = chatFontSize;
 
   return (
-    <div className="absolute left-3 right-3 bottom-0 flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', borderBottom: 'none', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
+    <div className="absolute left-3 right-3 bottom-[var(--voice-bar-safe-area,76px)] flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
       {/* Yazi boyutu ayari */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
         <button onClick={() => changeFontSize(-1)} disabled={fs === 0} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Küçült">A-</button>
@@ -151,6 +152,8 @@ export default function ChatPanel({
           const isEd = editingMsgId === msg.id;
           const avatarPx = 22 + fs * 2;
           const isMe = msg.senderId === currentUserId;
+          const senderUser = allUsers.find(u => u.id === msg.senderId);
+          const senderName = senderUser ? getPublicDisplayName(senderUser) : msg.sender;
           const nameColor = isMe ? 'var(--theme-accent)' : getUserColor(msg.senderId);
           const prevMsg = idx > 0 ? messages[idx - 1] : null;
           const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
@@ -192,7 +195,7 @@ export default function ChatPanel({
                       className="overflow-hidden flex items-center justify-center avatar-squircle"
                       style={{ width: avatarPx, height: avatarPx, background: `${nameColor}15` }}
                     >
-                      <AvatarContent avatar={msg.avatar} statusText={allUsers.find(u => u.id === msg.senderId)?.statusText || 'Online'} name={msg.sender} letterClassName="font-bold" />
+                      <AvatarContent avatar={msg.avatar} statusText={senderUser?.statusText || 'Online'} firstName={senderUser?.displayName || senderUser?.firstName} name={senderName} letterClassName="font-bold" />
                     </div>
                   </div>
                 ) : (
@@ -202,7 +205,7 @@ export default function ChatPanel({
                 <div className={`flex flex-col max-w-[65%] min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
                   {!isGrouped && (
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{msg.sender}</span>
+                      <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{senderName}</span>
                       <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: 8 + fs }}>{ts}</span>
                     </div>
                   )}

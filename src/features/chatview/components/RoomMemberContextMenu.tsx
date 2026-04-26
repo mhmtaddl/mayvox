@@ -21,7 +21,7 @@ import { getRemainingMs } from '../../../lib/formatTimeout';
 import ActionMenu, { type ActionItem } from '../../../components/server/settings/ActionMenu';
 import TimeoutPicker from '../../../components/server/settings/TimeoutPicker';
 import ConfirmModal, { type ConfirmVariant } from '../../../components/server/settings/ConfirmModal';
-import { formatFullName } from '../../../lib/formatName';
+import { getPublicDisplayName } from '../../../lib/formatName';
 
 export interface RoomMemberMenuCtx {
   user: User;
@@ -232,7 +232,7 @@ export default function RoomMemberContextMenu({
       {confirm && (
         <ConfirmModal
           variant={confirm.variant}
-          targetName={formatFullName(confirm.user.firstName, confirm.user.lastName) || confirm.user.name}
+          targetName={getPublicDisplayName(confirm.user)}
           open={true}
           busy={busy}
           onCancel={() => setConfirm(null)}

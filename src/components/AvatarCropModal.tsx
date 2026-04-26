@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 import { X, Check } from 'lucide-react';
+import { rangeVisualStyle } from '../lib/rangeStyle';
 
 interface CropArea {
   x: number;
@@ -98,7 +99,8 @@ export default function AvatarCropModal({ imageSrc, onConfirm, onCancel }: Props
             step={0.05}
             value={zoom}
             onChange={(e) => setZoom(Number(e.target.value))}
-            className="w-full accent-[var(--theme-accent)]"
+            className="premium-range w-full"
+            style={rangeVisualStyle(zoom, 1, 3)}
           />
         </div>
 

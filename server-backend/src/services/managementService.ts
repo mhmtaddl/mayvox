@@ -93,10 +93,10 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
 
   // Supabase profiles'dan kullanıcı bilgilerini çek
   const userIds = rows.map(r => r.user_id);
-  const profileMap = new Map<string, { name: string; first_name: string; last_name: string; avatar: string | null }>();
+  const profileMap = new Map<string, { name: string; display_name: string; first_name: string; last_name: string; avatar: string | null }>();
   if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, first_name, last_name, avatar').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string; first_name: string; last_name: string; avatar: string | null }) => profileMap.set(p.id, p));
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', userIds);
+    if (data) data.forEach((p: { id: string; name: string; display_name: string; first_name: string; last_name: string; avatar: string | null }) => profileMap.set(p.id, p));
   }
 
   const now = Date.now();
@@ -115,6 +115,7 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
     return {
       userId: r.user_id,
       username: p?.name ?? '',
+      displayName: p?.display_name ?? ([p?.first_name, p?.last_name].filter(Boolean).join(' ') || (p?.name ?? '')),
       firstName: p?.first_name ?? '',
       lastName: p?.last_name ?? '',
       avatar: p?.avatar ?? null,
@@ -770,8 +771,11 @@ export async function listSentInvites(serverId: string, userId: string): Promise
   const userIds = rows.map(r => r.invited_user_id);
   const nameMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string }) => nameMap.set(p.id, p.name));
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', userIds);
+    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
+      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+      nameMap.set(p.id, p.display_name || full || p.name || '');
+    });
   }
 
   return rows.map(r => ({
@@ -825,8 +829,11 @@ export async function listMyInvites(userId: string): Promise<UserInviteResponse[
   const inviterIds = rows.map(r => r.invited_by);
   const inviterMap = new Map<string, string>();
   if (inviterIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name').in('id', inviterIds);
-    if (data) data.forEach((p: { id: string; name: string }) => inviterMap.set(p.id, p.name));
+    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', inviterIds);
+    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
+      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
+      inviterMap.set(p.id, p.display_name || full || p.name || '');
+    });
   }
 
   return rows.map(r => {

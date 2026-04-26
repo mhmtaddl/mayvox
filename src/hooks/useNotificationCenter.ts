@@ -7,6 +7,7 @@ import {
   type InformationalItem,
 } from '../features/notifications/informationalStore';
 import type { UserInvite } from '../lib/serverService';
+import { getPublicDisplayName } from '../lib/formatName';
 
 // ── Bildirim item tipi — panel render + gelecek genişleme için ──
 
@@ -107,7 +108,7 @@ export function useNotificationCenter(
     // Kullanıcı aksiyonu almadığı sürece item silinmez (incomingRequests source of truth).
     for (const req of incomingRequests) {
       const sender = allUsers.find(u => u.id === req.senderId);
-      const senderName = sender?.name || sender?.firstName || 'Bilinmeyen kullanıcı';
+      const senderName = getPublicDisplayName(sender);
       items.push({
         key: `friend-req:${req.id}`,
         kind: 'social',

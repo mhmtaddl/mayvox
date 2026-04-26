@@ -13,6 +13,7 @@ import {
   deleteAnnouncement,
   supabase,
 } from '../lib/supabase';
+import { getPublicDisplayName } from '../lib/formatName';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -707,7 +708,7 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
         const { error } = await createAnnouncement({
           ...data,
           author_id: currentUser.id,
-          author_name: currentUser.name,
+          author_name: getPublicDisplayName(currentUser),
         });
         if (error) { showToast('Ekleme başarısız: ' + error.message); return; }
       }

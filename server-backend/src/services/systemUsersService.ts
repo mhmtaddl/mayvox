@@ -19,6 +19,7 @@ export interface AdminUserRow {
   first_name: string | null;
   last_name: string | null;
   full_name: string | null;
+  display_name: string | null;
   username: string | null;
   email: string | null;
   avatar: string | null;
@@ -102,7 +103,7 @@ export async function listAllUsers(
   let q = supa
     .from('profiles')
     .select(
-      'id, name, email, first_name, last_name, avatar, role, is_admin, is_moderator, is_primary_admin, is_muted, mute_expires, is_voice_banned, ban_expires, server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end, user_level, user_level_source, user_level_start_at, user_level_end_at, created_at',
+      'id, name, email, display_name, first_name, last_name, avatar, role, is_admin, is_moderator, is_primary_admin, is_muted, mute_expires, is_voice_banned, ban_expires, server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end, user_level, user_level_source, user_level_start_at, user_level_end_at, created_at',
       { count: 'exact' },
     );
 
@@ -129,7 +130,7 @@ export async function listAllUsers(
   const s = (opts.search ?? '').trim();
   if (s) {
     const esc = s.replace(/[%_]/g, (c) => `\\${c}`);
-    q = q.or(`name.ilike.%${esc}%,email.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%`);
+    q = q.or(`display_name.ilike.%${esc}%,name.ilike.%${esc}%,email.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%`);
   }
 
   // Sıralama
@@ -161,6 +162,7 @@ export async function listAllUsers(
     email: string | null;
     first_name: string | null;
     last_name: string | null;
+    display_name: string | null;
     avatar: string | null;
     role: string | null;
     is_admin: boolean | null;
@@ -209,6 +211,7 @@ export async function listAllUsers(
       first_name: p.first_name,
       last_name: p.last_name,
       full_name: fullName,
+      display_name: p.display_name,
       username: p.name,
       email: p.email,
       avatar: p.avatar,

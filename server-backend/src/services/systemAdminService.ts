@@ -18,6 +18,7 @@ export interface AdminServerRow {
   banned_at: string | null;
   banned_reason: string | null;
   banned_by: string | null;
+  owner_display_name: string | null;
   owner_full_name: string | null;
   owner_username: string | null;
   owner_email: string | null;
@@ -66,7 +67,7 @@ export async function listAllServers(opts: ListServersOptions): Promise<ListServ
   // Items
   args.push(limit);
   args.push(offset);
-  const rows = await queryMany<Omit<AdminServerRow, 'owner_full_name' | 'owner_username' | 'owner_email'>>(
+  const rows = await queryMany<Omit<AdminServerRow, 'owner_display_name' | 'owner_full_name' | 'owner_username' | 'owner_email'>>(
     `SELECT
        s.id,
        s.name,
@@ -90,20 +91,21 @@ export async function listAllServers(opts: ListServersOptions): Promise<ListServ
 
   // Owner profile batch fetch (Supabase — farklı DB). N+1 yok: tek .in() sorgusu.
   const ownerIds = Array.from(new Set(rows.map(r => r.owner_user_id).filter(Boolean)));
-  const ownerMap = new Map<string, { fullName: string | null; username: string | null; email: string | null }>();
+  const ownerMap = new Map<string, { displayName: string | null; fullName: string | null; username: string | null; email: string | null }>();
   if (ownerIds.length > 0) {
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('id, name, first_name, last_name, email')
+      .select('id, name, display_name, first_name, last_name, email')
       .in('id', ownerIds);
     if (error) {
       console.warn('[systemAdminService] owner profile fetch failed', error.message);
     } else if (profiles) {
-      for (const p of profiles as Array<{ id: string; name: string | null; first_name: string | null; last_name: string | null; email: string | null }>) {
+      for (const p of profiles as Array<{ id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null }>) {
         const first = (p.first_name ?? '').trim();
         const last = (p.last_name ?? '').trim();
         const combined = `${first} ${last}`.trim();
         ownerMap.set(p.id, {
+          displayName: p.display_name || combined || p.name || null,
           fullName: combined || null,
           username: p.name || null,
           email: p.email || null,
@@ -117,6 +119,7 @@ export async function listAllServers(opts: ListServersOptions): Promise<ListServ
     return {
       ...r,
       plan: sanitizePlan(r.plan),
+      owner_display_name: o?.displayName ?? null,
       owner_full_name: o?.fullName ?? null,
       owner_username: o?.username ?? null,
       owner_email: o?.email ?? null,

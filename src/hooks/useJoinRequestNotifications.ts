@@ -41,8 +41,10 @@ export function useJoinRequestNotifications(opts: Options = {}): void {
         } catch { /* no-op */ }
         if (requesterId) {
           try {
-            const { data } = await supabase.from('profiles').select('name').eq('id', requesterId).maybeSingle();
-            requesterName = (data as { name?: string } | null)?.name ?? null;
+            const { data } = await supabase.from('profiles').select('name, display_name, first_name, last_name').eq('id', requesterId).maybeSingle();
+            const p = data as { name?: string | null; display_name?: string | null; first_name?: string | null; last_name?: string | null } | null;
+            const full = `${p?.first_name ?? ''} ${p?.last_name ?? ''}`.trim();
+            requesterName = p?.display_name || full || p?.name || null;
           } catch { /* no-op */ }
         }
         handleJoinRequest({ serverId, requesterId, serverName, serverAvatar, requesterName });

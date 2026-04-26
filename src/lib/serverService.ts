@@ -56,6 +56,7 @@ export interface DiscoverServer {
 export interface ServerMember {
   userId: string;
   username: string;
+  displayName: string;
   firstName: string;
   lastName: string;
   avatar: string | null;

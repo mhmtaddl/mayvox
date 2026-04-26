@@ -87,6 +87,10 @@ export class RNNoiseTrackProcessor {
   private destroyed = false;
   private strength = 1.0;
 
+  get isReady(): boolean {
+    return this.ready && !this.destroyed && !!this.processedTrack;
+  }
+
   // LiveKit TrackProcessor interface: `init(options)` — eski `processTrack` değil.
   async init(options: RNNoiseProcessorOptions): Promise<void> {
     this.originalTrack = options.track;

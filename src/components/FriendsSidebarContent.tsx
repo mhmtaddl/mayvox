@@ -4,7 +4,7 @@ import {
   UserPlus, Star, MessageSquare, PhoneCall, Gamepad2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatFullName } from '../lib/formatName';
+import { getPublicDisplayName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -103,6 +103,7 @@ export default function FriendsSidebarContent({
   // ── Render user item ───────────────────────────────────────────────────
   const renderOnlineUser = (user: User) => {
     const isMe = user.id === currentUser.id;
+    const publicName = getPublicDisplayName(user);
     const userServerName = !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
     const statusLabel = user.statusText && user.statusText !== 'Aktif' ? user.statusText : 'Online';
     const statusDotColor =
@@ -113,12 +114,12 @@ export default function FriendsSidebarContent({
     return (
       <div
         key={user.id}
-        className={`flex items-center gap-2.5 ${isDesktop ? 'px-3 py-2 rounded-lg border border-[rgba(var(--glass-tint),0.04)]' : 'px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+        className={`flex items-center gap-2.5 ${isDesktop ? 'px-3 py-2 rounded-lg' : 'px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
         onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
         onContextMenu={(e) => {
           if (isMe) return;
           e.preventDefault();
-          setFriendMenu({ userId: user.id, userName: formatFullName(user.firstName, user.lastName), x: e.clientX, y: e.clientY });
+          setFriendMenu({ userId: user.id, userName: publicName, x: e.clientX, y: e.clientY });
         }}
       >
         {(() => {
@@ -135,7 +136,7 @@ export default function FriendsSidebarContent({
           <div
             className={`${isDesktop ? 'h-[34px] w-[34px]' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           >
-            <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.firstName} name={user.name} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
+            <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
           <DeviceBadge platform={user.platform} size={isDesktop ? 11 : 13} className="absolute -top-0.5 -right-0.5" />
         </div>
@@ -143,7 +144,7 @@ export default function FriendsSidebarContent({
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
             <span className="text-[13px] font-semibold text-[var(--theme-text)] leading-[18px] truncate min-w-0 shrink">
-              {formatFullName(user.firstName, user.lastName)}
+              {publicName}
             </span>
             <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/70 shrink-0 tabular-nums">{user.age}</span>
             {user.isAdmin && (
@@ -228,15 +229,16 @@ export default function FriendsSidebarContent({
   const renderOfflineUser = (user: User) => {
     const fav = isFavorite(user.id);
     const isMe = user.id === currentUser.id;
+    const publicName = getPublicDisplayName(user);
     return (
     <div
       key={user.id}
-      className={`flex items-center gap-3 ${isDesktop ? 'px-3 py-2 rounded-lg border border-transparent' : 'px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.03)] cursor-pointer`}
+      className={`flex items-center gap-3 ${isDesktop ? 'px-3 py-2 rounded-lg' : 'px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
       onContextMenu={(e) => {
         if (isMe) return;
         e.preventDefault();
-        setFriendMenu({ userId: user.id, userName: formatFullName(user.firstName, user.lastName), x: e.clientX, y: e.clientY });
+        setFriendMenu({ userId: user.id, userName: publicName, x: e.clientX, y: e.clientY });
       }}
     >
       {(() => {
@@ -254,7 +256,7 @@ export default function FriendsSidebarContent({
         <div
           className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
         >
-          <AvatarContent avatar={user.avatar} statusText="Çevrimdışı" firstName={user.firstName} name={user.name} imgClassName={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
+          <AvatarContent avatar={user.avatar} statusText="Çevrimdışı" firstName={user.displayName || user.firstName} name={publicName} imgClassName={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
         </div>
         {isDesktop && <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />}
       </div>
@@ -262,7 +264,7 @@ export default function FriendsSidebarContent({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
           <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate min-w-0 shrink`}>
-            {formatFullName(user.firstName, user.lastName)}
+            {publicName}
           </span>
           <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0 tabular-nums`}>{user.age}</span>
           {user.isAdmin && (
@@ -278,16 +280,16 @@ export default function FriendsSidebarContent({
           {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-          <span className="text-[9px] text-[var(--theme-secondary-text)]/40 leading-[14px] mt-[3px] block truncate">
+          <span className="text-[9px] text-[var(--theme-secondary-text)]/35 leading-[14px] mt-[3px] block truncate">
             {(() => {
               const d = new Date(user.lastSeenAt);
               const now = new Date();
               const yesterday = new Date(now);
               yesterday.setDate(now.getDate() - 1);
               const time = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-              if (d.toDateString() === now.toDateString()) return `Son görülme: Bugün ${time}`;
-              if (d.toDateString() === yesterday.toDateString()) return `Son görülme: Dün ${time}`;
-              return `Son görülme: ${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
+              if (d.toDateString() === now.toDateString()) return `Bugün ${time}`;
+              if (d.toDateString() === yesterday.toDateString()) return `Dün ${time}`;
+              return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
             })()}
           </span>
         )}
@@ -320,10 +322,9 @@ export default function FriendsSidebarContent({
           {favoriteUsers.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2 px-2">
-                <Star size={9} className="text-amber-400/60 fill-amber-400/60" />
-                <span className="text-[9px] font-bold text-amber-400/50 uppercase tracking-[0.14em]">Favoriler</span>
-                <span className="text-[9px] bg-amber-400/8 text-amber-400/50 px-1.5 py-0.5 rounded-full font-bold">{favoriteUsers.length}</span>
-                <div className="flex-1 h-px bg-amber-400/10" />
+                <Star size={9} className="text-amber-400/45 fill-amber-400/45" />
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.10em]">Favoriler</span>
+                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-amber-400/8 text-[10px] leading-none font-semibold text-amber-300/55 tabular-nums">{favoriteUsers.length}</span>
               </div>
               <div className="space-y-1">
                 {favoriteUsers.map(u => isEffectivelyOnline(u) ? renderOnlineUser(u) : renderOfflineUser(u))}
@@ -335,9 +336,8 @@ export default function FriendsSidebarContent({
           {onlineRest.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2 px-2">
-                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.14em]">Çevrimiçi</span>
-                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">{onlineRest.length}</span>
-                <div className="flex-1 h-px bg-[var(--theme-border)]/10" />
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/62 uppercase tracking-[0.10em]">Çevrimiçi</span>
+                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-emerald-500/8 text-[10px] leading-none font-semibold text-emerald-300/58 tabular-nums">{onlineRest.length}</span>
               </div>
               <div className="space-y-1">
                 {onlineRest.map(renderOnlineUser)}
@@ -351,12 +351,12 @@ export default function FriendsSidebarContent({
               <button
                 type="button"
                 onClick={() => { const next = !offlineExpanded; setOfflineExpanded(next); localStorage.setItem('offlineUsersExpanded', String(next)); }}
-                className="flex items-center gap-2 w-full mb-2 px-2 hover:opacity-80 transition-opacity cursor-pointer"
+                className="flex items-center gap-2 w-full mb-2 px-2 hover:opacity-85 transition-opacity cursor-pointer"
               >
-                <span className="text-[9px] font-bold text-[var(--theme-secondary-text)]/50 uppercase tracking-[0.14em]">Çevrimdışı</span>
-                <span className="text-[9px] bg-[var(--theme-secondary-text)]/8 text-[var(--theme-secondary-text)]/50 px-1.5 py-0.5 rounded-full font-bold">{offlineRest.length}</span>
-                <div className="flex-1 h-px bg-[var(--theme-border)]/8" />
-                <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/40 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/56 uppercase tracking-[0.10em]">Çevrimdışı</span>
+                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--glass-tint),0.035)] text-[10px] leading-none font-semibold text-[var(--theme-secondary-text)]/48 tabular-nums">{offlineRest.length}</span>
+                <span className="flex-1" />
+                <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/32 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
               </button>
               {offlineExpanded && (
                 <div className="space-y-1">

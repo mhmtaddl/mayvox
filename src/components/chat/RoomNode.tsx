@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Mic, MicOff, Headphones, HeadphoneOff, ShieldCheck, Monitor, Smartphone } from 'lucide-react';
-import { formatFullName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
 import type { PositionedNode } from './roomNetworkLayout';
 import { type CardStyle, getCardStyleTokens } from './cardStyles';
@@ -14,7 +13,7 @@ interface Props {
 
 function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   const {
-    avatar, firstName, lastName, statusText, isSpeaking, isMuted, isDeafened,
+    avatar, name, firstName, statusText, isSpeaking, isMuted, isDeafened,
     platform, isAdmin, isModerator,
     onClick, onDoubleClick, onContextMenu,
   } = node;
@@ -73,7 +72,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
               transition: 'border-color 0.3s',
             }}
           >
-            <AvatarContent avatar={avatar} statusText={statusText} firstName={firstName} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
+            <AvatarContent avatar={avatar} statusText={statusText} firstName={name || firstName} name={name} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
           </motion.div>
 
           {/* Speaking pulse */}
@@ -98,7 +97,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
               opacity: isCenter ? 1 : t.textOpacity,
             }}
           >
-            {formatFullName(firstName, lastName)}
+            {name || 'Kullanıcı'}
           </span>
           {isAdmin && (
             <ShieldCheck size={isCenter ? 12 : 9} className="text-[var(--theme-accent)] shrink-0" strokeWidth={2.5} />
@@ -156,6 +155,7 @@ function arePropsEqual(prev: Props, next: Props) {
     a.y === b.y &&
     a.scale === b.scale &&
     a.avatar === b.avatar &&
+    a.name === b.name &&
     a.firstName === b.firstName &&
     a.lastName === b.lastName &&
     a.isAdmin === b.isAdmin &&

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Headphones, HeadphoneOff } from 'lucide-react';
 import type { UserCardProps } from './types';
 import { computeSpeakingVisuals } from './types';
-import { formatFullName } from '../../lib/formatName';
+import { getPublicDisplayName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
 
 // ── Types ──
@@ -74,8 +74,8 @@ function VoiceNode({
           <AvatarContent
             avatar={user.avatar}
             statusText={user.statusText}
-            firstName={user.firstName}
-            name={user.name}
+            firstName={user.displayName || user.firstName}
+            name={getPublicDisplayName(user)}
             letterClassName="text-[var(--theme-text)] font-bold text-sm"
           />
         </div>
@@ -101,7 +101,7 @@ function VoiceNode({
 
       {/* Name */}
       <span className="text-[10px] font-medium text-[var(--theme-text)] text-center leading-tight truncate max-w-full opacity-70">
-        {formatFullName(user.firstName, user.lastName)}
+        {getPublicDisplayName(user)}
       </span>
     </div>
   );
@@ -155,8 +155,8 @@ function CenterNode({
           <AvatarContent
             avatar={user.avatar}
             statusText={user.statusText}
-            firstName={user.firstName}
-            name={user.name}
+            firstName={user.displayName || user.firstName}
+            name={getPublicDisplayName(user)}
             letterClassName="text-[var(--theme-text)] font-bold text-xl"
           />
         </motion.div>
@@ -183,7 +183,7 @@ function CenterNode({
 
       {/* Name */}
       <span className="text-[12px] font-semibold text-[var(--theme-text)] text-center leading-tight truncate max-w-full">
-        {formatFullName(user.firstName, user.lastName)}
+        {getPublicDisplayName(user)}
       </span>
     </div>
   );

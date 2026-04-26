@@ -15,6 +15,7 @@ export interface AdminServerRow {
   banned_at: string | null;
   banned_reason: string | null;
   banned_by: string | null;
+  owner_display_name: string | null;
   owner_full_name: string | null;
   owner_username: string | null;
   owner_email: string | null;
@@ -104,6 +105,7 @@ export interface AdminUserRow {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  display_name: string | null;
   full_name: string | null;
   username: string | null;
   email: string | null;
