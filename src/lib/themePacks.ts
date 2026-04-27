@@ -152,24 +152,24 @@ export const THEME_PACKS: ThemePack[] = [
     id: 'default-light',
     name: 'Varsayılan Açık',
     isLight: true,
-    bg: '#FFFFFF',
-    bgSoft: '#FFFFFF',
+    bg: '#F5F6F8',
+    bgSoft: '#F5F6F8',
     surface: '#FFFFFF',
     surfaceHover: '#F5F8FC',
     surfaceActive: '#EEF4FB',
     border: 'rgba(13, 13, 13, 0.12)',
-    borderFocus: 'rgba(37, 7, 7, 0.45)',
+    borderFocus: 'rgba(255, 255, 255, 0.45)',
     textPrimary: '#0D0D0D',
     textSecondary: '#3F4652',
     textTertiary: '#697386',
     textMuted: '#8B95A3',
-    textOnAccent: '#FFFFFF',
+    textOnAccent: '#111111',
     textInverse: '#FFFFFF',
-    accent: '#250707',
-    accentRgb: '37, 7, 7',
-    accentHover: '#3A0B0B',
-    accentActive: '#190404',
-    accentSoft: 'rgba(37, 7, 7, 0.10)',
+    accent: '#FFFFFF',
+    accentRgb: '255, 255, 255',
+    accentHover: '#F3F4F6',
+    accentActive: '#E5E7EB',
+    accentSoft: 'rgba(255, 255, 255, 0.16)',
     success: '#00A240',
     warning: '#B26A00',
     danger: '#E02E2A',
@@ -814,12 +814,12 @@ export function applyThemePack(pack: ThemePack): void {
   const zoneMaterial = (() => {
     if (pack.isLight) {
       return {
-        neutralBg: '#f3f4f6',
-        neutralSurface: '#f6f7f9',
-        contentSurface: '#f6f7f9',
-        sidebarTint: '#e8ecf3',
-        topbarMidStrong: '#edf0f5',
-        topbarMidSoft: '#f2f4f7',
+        neutralBg: '#f1f3f6',
+        neutralSurface: '#f8f9fb',
+        contentSurface: '#f8f9fb',
+        sidebarTint: '#e8edf4',
+        topbarMidStrong: '#e9eef5',
+        topbarMidSoft: '#f1f3f6',
         divider: 'rgba(0, 0, 0, 0.055)',
       };
     }
@@ -890,14 +890,19 @@ export function applyThemePack(pack: ThemePack): void {
   set('--topbar-gradient-mid-strong', zoneMaterial.topbarMidStrong);
   set('--topbar-gradient-mid-soft', zoneMaterial.topbarMidSoft);
   set('--app-divider', zoneMaterial.divider);
-  set('--app-shell-bg', zoneMaterial.neutralBg);
+  const rootBg = pack.isLight
+    ? 'linear-gradient(90deg, #e2e8f1 0%, #e6ebf3 22%, #edf1f6 44%, #edf1f6 100%)'
+    : `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0%, color-mix(in srgb, ${zoneMaterial.sidebarTint} 72%, ${zoneMaterial.neutralBg} 28%) 22%, ${zoneMaterial.neutralBg} 48%, ${zoneMaterial.neutralBg} 100%)`;
+  set('--app-root-bg', rootBg);
+  set('--app-shell-bg', rootBg);
+  set('--titlebar-blend-width', '180px');
   set(
     '--topbar-bg',
-    `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0%, ${zoneMaterial.sidebarTint} 12%, ${zoneMaterial.topbarMidStrong} 24%, ${zoneMaterial.topbarMidSoft} 34%, ${zoneMaterial.neutralBg} 46%, ${zoneMaterial.neutralBg} 100%)`,
+    `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0, ${zoneMaterial.sidebarTint} 46vw, ${zoneMaterial.topbarMidStrong} 56vw, ${zoneMaterial.topbarMidSoft} 66vw, ${zoneMaterial.neutralBg} 76vw, ${zoneMaterial.neutralBg} 100%)`,
   );
 
   // Document body background + color-scheme
-  document.body.style.background = zoneMaterial.neutralBg;
+  document.body.style.background = rootBg;
   document.body.style.color = pack.textPrimary;
   root.style.colorScheme = pack.isLight ? 'light' : 'dark';
 

@@ -95,7 +95,7 @@ export default function AppChrome() {
             className={`text-[14px] font-semibold tracking-[0.10em] uppercase leading-none transition-opacity duration-150 group-hover:opacity-95 ${focused ? 'opacity-90' : 'opacity-55'}`}
             style={{ color: 'rgba(var(--glass-tint), 0.88)' }}
           >
-            MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span>
+            MAYVOX
           </span>
         </div>
 
@@ -139,10 +139,10 @@ function BrandMark({ focused }: { focused: boolean }) {
     >
       {/* Ses dalgası izlenimi — 3 mini bar */}
       <svg width="14" height="11" viewBox="0 0 14 11" fill="none" aria-hidden>
-        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="var(--theme-accent)" opacity="0.62" />
-        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="var(--theme-accent)" opacity="0.74" />
-        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="var(--theme-accent)" opacity="0.68" />
-        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="var(--theme-accent)" opacity="0.54" />
+        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.62" />
+        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.74" />
+        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.68" />
+        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="rgba(var(--glass-tint), 0.82)" opacity="0.54" />
       </svg>
     </div>
   );
@@ -156,8 +156,8 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
-  const isDanger = tone === 'danger';
-  const hoverRgb = tone === 'danger' ? '239,68,68' : tone === 'accent' ? '56,189,248' : '245,158,11';
+  void tone;
+  const hoverRgb = '255,255,255';
 
   const baseBg = hover
     ? `rgba(${hoverRgb}, 0.13)`
@@ -165,7 +165,7 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
   const border = hover
     ? `rgba(${hoverRgb}, 0.24)`
     : 'transparent';
-  const color = hover ? `rgb(${hoverRgb})` : isDanger ? 'var(--window-close-fg, #0d0d0d)' : 'var(--theme-text)';
+  const color = hover ? 'rgba(var(--glass-tint), 0.92)' : 'rgba(var(--glass-tint), 0.72)';
 
   return (
     <button

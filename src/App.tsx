@@ -6,7 +6,7 @@
 declare const __APP_VERSION__: string;
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Mic } from 'lucide-react';
+import { CloudOff, Mic, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AppChrome from './components/AppChrome';
 import { AppView, User, VoiceChannel } from './types';
@@ -240,17 +240,119 @@ async function loadOfflineUsers(
     .map((p: DbProfile) => mapDbProfile(p, knownVersions));
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} zaman aşımına uğradı`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+function isConnectivityError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return /zaman aşım|timeout|failed to fetch|network|fetch/i.test(message);
+}
+
+const STARTUP_MAINTENANCE_MESSAGE =
+  'Şu anda MAYVOX sunucularına ulaşılamıyor. Kısa bir bakım veya bağlantı kesintisi olabilir.';
+
+async function shouldShowStartupMaintenance(err: unknown): Promise<boolean> {
+  if (!isConnectivityError(err)) return false;
+
+  const apiBase = import.meta.env.VITE_SERVER_API_URL || import.meta.env.VITE_TOKEN_SERVER_URL;
+  if (!apiBase) return true;
+
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`${String(apiBase).replace(/\/$/, '')}/health`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    window.clearTimeout(timer);
+    return !res.ok;
+  } catch {
+    return true;
+  }
+}
+
+function StartupMaintenanceNotice({ message }: { message: string }) {
+  return (
+    <motion.div
+      key="loading"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.16, ease: 'easeOut' }}
+      className="h-full min-h-[calc(100vh-var(--titlebar-height))] bg-[var(--theme-bg)] flex items-center justify-center px-6"
+    >
+      <div
+        className="w-full max-w-[390px] rounded-[16px] px-6 py-5 text-center"
+        style={{
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018))',
+          border: '1px solid rgba(255,255,255,0.065)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+        }}
+      >
+        <div
+          className="mx-auto mb-4 w-11 h-11 rounded-xl flex items-center justify-center"
+          style={{
+            color: 'var(--theme-accent)',
+            background: 'rgba(var(--theme-accent-rgb), 0.10)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.18)',
+          }}
+        >
+          <CloudOff size={20} strokeWidth={2.1} />
+        </div>
+        <h2 className="text-[15px] font-semibold text-[var(--theme-text)] leading-tight">
+          Sunucu bakımı sürüyor
+        </h2>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--theme-secondary-text)]">
+          {message}
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-5 mx-auto h-9 px-3.5 rounded-lg inline-flex items-center justify-center gap-2 text-[12px] font-semibold transition-colors"
+          style={{
+            color: 'var(--theme-text)',
+            background: 'rgba(255,255,255,0.055)',
+            border: '1px solid rgba(255,255,255,0.075)',
+          }}
+        >
+          <RefreshCw size={13} strokeWidth={2.2} />
+          Yeniden dene
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function App() {
   // ── Window activity: toggles .window-inactive CSS class on <html> ──
   useWindowActivity();
 
   const [view, setView] = useState<AppView>('loading');
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [startupMaintenanceMessage, setStartupMaintenanceMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const api = (window as Window & { electronWindow?: { setAuthMode?: (enabled: boolean, kind?: string) => void } }).electronWindow;
     if (!api?.setAuthMode) return;
     const authView = view === 'login-password' || view === 'login-code' || view === 'register-details';
+    document.documentElement.classList.toggle('mv-auth-window', authView);
     api.setAuthMode(authView, authView ? view : undefined);
   }, [view]);
 
@@ -995,9 +1097,10 @@ export default function App() {
     // Render cold start — sunucu uyuyorsa şimdiden uyandır
     warmUpTokenServer();
 
-    getSession().then(async ({ data }) => {
+    withTimeout(getSession(), 8000, 'Oturum kontrolü').then(async ({ data }) => {
       const session = data.session;
       if (!session?.user) {
+        setStartupMaintenanceMessage(null);
         setView('login-password');
         setIsSessionLoading(false);
         return;
@@ -1006,7 +1109,7 @@ export default function App() {
       try {
 
       const email = session.user.email || '';
-      const { data: profile } = await getProfile(session.user.id);
+      const { data: profile } = await withTimeout(getProfile(session.user.id), 8000, 'Profil yükleme');
 
       const restoredUser = buildOnlineUser(session.user.id, email, profile);
       if (!restoredUser.avatar) {
@@ -1024,7 +1127,7 @@ export default function App() {
       // Eski global kanal yükleme devre dışı — sunucu izolasyonu için
 
       // ── 2. Users yükle
-      const offlineUsers = await loadOfflineUsers(undefined, knownVersionsRef.current);
+      const offlineUsers = await withTimeout(loadOfflineUsers(undefined, knownVersionsRef.current), 8000, 'Kullanıcı listesi yükleme');
       if (offlineUsers.length > 0) {
         setAllUsers((prev) => {
           const prevMap = new Map(prev.map((u) => [u.id, u]));
@@ -1035,17 +1138,30 @@ export default function App() {
       // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
       activatePresence(restoredUser, appVersion, presenceDeps);
 
+      setStartupMaintenanceMessage(null);
       setView('chat');
       setIsSessionLoading(false);
 
       } catch (err) {
         logger.error('Session restore failed', { error: err instanceof Error ? err.message : err });
-        setView('login-password');
+        if (await shouldShowStartupMaintenance(err)) {
+          setStartupMaintenanceMessage(STARTUP_MAINTENANCE_MESSAGE);
+          setView('loading');
+        } else {
+          setStartupMaintenanceMessage(null);
+          setView('login-password');
+        }
         setIsSessionLoading(false);
       }
-    }).catch((err) => {
+    }).catch(async (err) => {
       logger.error('getSession failed', { error: err instanceof Error ? err.message : err });
-      setView('login-password');
+      if (await shouldShowStartupMaintenance(err)) {
+        setStartupMaintenanceMessage(STARTUP_MAINTENANCE_MESSAGE);
+        setView('loading');
+      } else {
+        setStartupMaintenanceMessage(null);
+        setView('login-password');
+      }
       setIsSessionLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2419,7 +2535,11 @@ export default function App() {
                   <div className="mv-app-main" style={{ position: 'relative', zIndex: 1 }}>
                     <AnimatePresence mode="wait">
                       {view === 'loading' && (
-                        <motion.div key="loading" exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="min-h-screen bg-[var(--theme-bg)]" />
+                        startupMaintenanceMessage ? (
+                          <StartupMaintenanceNotice message={startupMaintenanceMessage} />
+                        ) : (
+                          <motion.div key="loading" exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="min-h-screen bg-[var(--theme-bg)]" />
+                        )
                       )}
                       {view === 'login-password' && (
                         <motion.div key="login-password" initial={{ opacity: 0.96, scale: 0.995 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.14, ease: 'easeOut' }}>

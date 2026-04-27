@@ -63,7 +63,6 @@ function MobileHeader({
                       const rest = raw.slice(spaceIdx + 1);
                       return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
                     }
-                    if (raw.toUpperCase() === 'MAYVOX') return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
                     return raw;
                   })()}
                 </h1>

@@ -67,7 +67,7 @@ function SegmentedTabs({ tabs, value, onChange }: {
 function DomainTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-3 px-1">
-      <span className="text-[var(--theme-accent)]/70">{icon}</span>
+      <span className="settings-domain-title-icon text-[var(--theme-accent)]/70">{icon}</span>
       <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">{title}</h3>
     </div>
   );
@@ -311,6 +311,7 @@ function OverlayBoardPreview({
     : 'none';
   const avatar = (
     <span
+      className="settings-overlay-preview-avatar"
       style={{
         width: cfg.avatar,
         height: cfg.avatar,
@@ -379,15 +380,39 @@ function OverlayBoardPreview({
   }
   if (variant === 'badge') {
     return (
-      <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 7px 3px 3px', boxShadow: cardShadow }}>
-        {avatar}
-        {nameNode}
+      <span
+        className="settings-overlay-badge-board-preview"
+        data-open-left={openLeft}
+        style={{ ...common }}
+      >
+        <span className="settings-overlay-badge-closed">
+          {avatar}
+        </span>
+        <span
+          className="settings-overlay-badge-open"
+          style={{
+            background: cardBg,
+            border: cardBorder,
+            borderRadius: Math.round(cfg.avatar * 0.42),
+            padding: '3px 8px 3px 3px',
+            boxShadow: cardShadow,
+            display: 'inline-flex',
+            alignItems: 'center',
+            flexDirection: openLeft ? 'row-reverse' : 'row',
+            gap: cfg.gap,
+          }}
+        >
+          {avatar}
+          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
+            {nameNode}
+          </span>
+        </span>
       </span>
     );
   }
   if (variant === 'none') {
     return (
-      <span style={common}>
+      <span className="settings-overlay-none-board-preview" style={common}>
         {avatar}
         {nameNode}
       </span>
@@ -431,8 +456,9 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
         return (
           <button
             key={o.v}
+            data-overlay-option={o.v}
             onClick={() => onChange(o.v)}
-            className="min-w-0 flex flex-col items-center justify-center gap-0.5 rounded-[10px] px-1"
+            className="settings-overlay-segment-option min-w-0 flex flex-col items-center justify-center gap-0.5 rounded-[10px] px-1"
             style={{
               height: 44,
               background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
@@ -554,7 +580,7 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
           <button
             key={o.v}
             onClick={() => onChange(o.v)}
-            className="min-w-0 flex flex-col items-center justify-center gap-1 rounded-[10px] px-1"
+            className="settings-overlay-segment-option min-w-0 flex flex-col items-center justify-center gap-1 rounded-[10px] px-1"
             style={{
               height: 44,
               background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
@@ -702,19 +728,19 @@ function VoiceOverlayCard() {
       {/* Header — ikon + başlık + Masaüstü rozeti + ana toggle */}
       <div className="flex items-start gap-3">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          className="settings-overlay-icon-tile w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{
             background: 'rgba(var(--theme-accent-rgb), 0.12)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.22)',
           }}
         >
-          <Layers size={15} className="text-[var(--theme-accent)]" />
+          <Layers size={15} className="settings-overlay-icon text-[var(--theme-accent)]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
             <span
-              className="text-[8.5px] font-bold uppercase tracking-[0.14em] px-1.5 py-[2px] rounded leading-none"
+              className="settings-overlay-platform-badge text-[8.5px] font-bold uppercase tracking-[0.14em] px-1.5 py-[2px] rounded leading-none"
               style={{
                 color: 'var(--theme-secondary-text)',
                 background: 'rgba(var(--glass-tint), 0.06)',
@@ -899,7 +925,7 @@ export default function SettingsView() {
       <div className="flex flex-col gap-4 pt-4 pb-5 md:pt-6 md:pb-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-            <Settings size={15} className="text-[var(--theme-accent)] opacity-75" />
+            <Settings size={15} className="text-[var(--theme-accent)]" />
           </div>
           <h2 className="text-base md:text-lg font-bold text-[var(--theme-text)] tracking-[-0.01em] leading-none">Ayarlar</h2>
         </div>

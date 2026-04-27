@@ -29,8 +29,8 @@ function BrandArea() {
       {/* Text */}
       <div className="flex flex-col leading-none min-w-0">
         <h1 className="text-[20px] tracking-[-0.01em]">
-          <span className="font-extrabold text-[var(--theme-text)] group-hover/brand:text-[var(--theme-accent)] transition-colors duration-300">MAY</span>
-          <span className="font-semibold text-[var(--theme-accent)]">VOX</span>
+          <span className="font-extrabold text-[var(--theme-text)] transition-colors duration-300">MAY</span>
+          <span className="font-semibold text-[var(--theme-text)]">VOX</span>
         </h1>
         <span className="text-[7.5px] font-medium tracking-[0.18em] uppercase text-[var(--theme-secondary-text)]/30 mt-0.5 group-hover/brand:text-[var(--theme-secondary-text)]/50 transition-colors duration-300">
           voice & chat

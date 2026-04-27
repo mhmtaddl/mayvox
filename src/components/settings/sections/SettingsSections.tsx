@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye, Sparkles, ChevronDown } from 'lucide-react';
+import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react';
 import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
-import { useUser } from '../../../contexts/UserContext';
 import { useUI } from '../../../contexts/UIContext';
 import { previewSound, type SoundVariant } from '../../../lib/sounds';
 import {
   SoundManager, stopAllSamples,
   type CallVariant, type NotificationVariant,
 } from '../../../lib/audio/SoundManager';
-import { themes, themeOrder, backgroundPresets } from '../../../themes';
 import { THEME_PACKS, getThemePack } from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { appearanceMode, themePackId, setThemePackId, currentTheme, setCurrentTheme, activeBackground, setActiveBackground } = useSettings();
-  const { currentUser } = useUser();
-  const isAdvanced = !!(currentUser.isAdmin || currentUser.isPrimaryAdmin || currentUser.isModerator);
-  const [advancedOpen, setAdvancedOpen] = useState(appearanceMode === 'custom');
+  const { appearanceMode, themePackId, setThemePackId } = useSettings();
   const activePack = getThemePack(themePackId);
   const isThemePackMode = appearanceMode === 'themePack';
   const isCustomMode = appearanceMode === 'custom';
@@ -32,7 +27,7 @@ export function AppearanceSection() {
         <div className="flex items-baseline justify-between mb-3">
           <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Tema Paketleri</p>
           {isThemePackMode ? (
-            <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
+            <span className="settings-active-theme-pack-name text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
           ) : (
             <span className="text-[10px] font-medium text-[var(--theme-secondary-text)]/55 shrink-0">Özel mod aktif</span>
           )}
@@ -42,19 +37,24 @@ export function AppearanceSection() {
           {THEME_PACKS.map(pack => {
             // Mutual exclusion — sadece themePack modundayken seçili görünür
             const isSelected = isThemePackMode && themePackId === pack.id;
+            const isDefaultLightSelected = isSelected && pack.id === 'default-light';
             return (
               <button
                 key={pack.id}
                 onClick={() => setThemePackId(pack.id)}
-                className="group relative flex flex-col gap-2 p-2.5 rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
+                className="settings-theme-pack-card group relative flex flex-col gap-2 p-2.5 rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
                 style={{
                   background: 'rgba(255,255,255,0.03)',
-                  border: isSelected
-                    ? '2px solid var(--accent, #6366F1)'
-                    : '1px solid rgba(255,255,255,0.06)',
-                  boxShadow: isSelected
-                    ? '0 0 0 1px var(--accent, #6366F1), 0 4px 16px rgba(0,0,0,0.25)'
-                    : '0 1px 4px rgba(0,0,0,0.18)',
+                  border: isDefaultLightSelected
+                    ? '2px solid rgba(255,255,255,0.92)'
+                    : isSelected
+                      ? '2px solid var(--accent, #6366F1)'
+                      : '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: isDefaultLightSelected
+                    ? '0 0 0 1px rgba(255,255,255,0.72), 0 4px 16px rgba(0,0,0,0.25)'
+                    : isSelected
+                      ? '0 0 0 1px var(--accent, #6366F1), 0 4px 16px rgba(0,0,0,0.25)'
+                      : '0 1px 4px rgba(0,0,0,0.18)',
                 }}
               >
                 {/* Preview gradient */}
@@ -81,107 +81,6 @@ export function AppearanceSection() {
           })}
         </div>
       </div>
-
-      {/* ═══ ADVANCED CUSTOMIZATION (admin/mod only) ═══ */}
-      {isAdvanced && (
-        <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
-          <button
-            onClick={() => setAdvancedOpen(v => !v)}
-            className="w-full flex items-center justify-between text-left mb-2"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles size={11} className="text-[var(--theme-accent)]/70" />
-              <span className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Gelişmiş Özelleştirme</span>
-              <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--theme-accent)]/70 px-1.5 py-0.5 rounded bg-[var(--theme-accent)]/10">admin</span>
-            </div>
-            <ChevronDown size={13} className={`text-[var(--theme-secondary-text)]/60 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {advancedOpen && (
-            <div className="space-y-5">
-              {/* Mod uyarısı — themePack modundayken custom selections highlight YOK */}
-              <div className={`text-[10.5px] px-3 py-2 rounded-lg ${isCustomMode
-                ? 'bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/25 text-[var(--theme-accent)]'
-                : 'bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)] text-[var(--theme-secondary-text)]/75'}`}>
-                {isCustomMode
-                  ? 'Özel mod aktif — yukarıdaki tema paketleri devre dışı.'
-                  : 'Tema paketi aktif — özel ayarlar pasif. Aşağıdan herhangi birine tıklayarak özel moda geç.'}
-              </div>
-
-              {/* Renk Paletleri (legacy) */}
-              <div>
-                <div className="flex items-baseline justify-between mb-2">
-                  <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/75 uppercase tracking-[0.14em]">Renk Paleti</p>
-                  {isCustomMode && (
-                    <span className="text-[10px] font-medium text-[var(--theme-accent)] opacity-60 shrink-0">{currentTheme.name}</span>
-                  )}
-                </div>
-                <div className={`grid grid-cols-3 gap-2 ${isThemePackMode ? 'opacity-55' : ''}`}>
-                  {themeOrder.map(key => {
-                    const theme = themes[key];
-                    // Mutual exclusion — sadece custom modundayken seçili görünür
-                    const isSelected = isCustomMode && currentTheme.key === key;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setCurrentTheme(theme)}
-                        className="flex flex-col gap-1.5 p-2 rounded-lg text-left transition-all duration-150"
-                        style={{
-                          background: 'var(--theme-surface-card)',
-                          border: isSelected ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.06)',
-                          boxShadow: isSelected ? '0 0 0 1px var(--theme-accent), 0 0 8px rgba(var(--theme-accent-rgb), 0.12)' : '0 1px 4px rgba(0,0,0,0.15)',
-                        }}
-                      >
-                        <div className="relative w-full h-6 rounded overflow-hidden" style={{ background: theme.background }}>
-                          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.1)' }} />
-                          <div className="absolute bottom-0.5 right-1 flex gap-0.5">
-                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
-                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.secondary, opacity: 0.7 }} />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between min-w-0">
-                          <span className="text-[9px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.78)' }}>{theme.name}</span>
-                          {isSelected && <Check size={8} className="shrink-0" style={{ color: theme.primary }} strokeWidth={3} />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Arka Plan (legacy) */}
-              <div>
-                <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/75 uppercase tracking-[0.14em] mb-2">Arka Plan</p>
-                <div className={`grid grid-cols-8 gap-2 ${isThemePackMode ? 'opacity-55' : ''}`}>
-                  {backgroundPresets.map(bg => {
-                    // Mutual exclusion — sadece custom modundayken seçili görünür
-                    const isActive = isCustomMode && activeBackground === bg.id;
-                    return (
-                      <button
-                        key={bg.id}
-                        onClick={() => setActiveBackground(bg.id)}
-                        title={bg.name}
-                        className="relative overflow-hidden transition-all duration-150 aspect-square rounded-lg"
-                        style={{
-                          background: bg.surface,
-                          border: isActive ? '2px solid var(--theme-accent)' : '1px solid rgba(var(--glass-tint), 0.08)',
-                          boxShadow: isActive ? '0 0 0 1px var(--theme-accent), 0 0 8px rgba(var(--theme-accent-rgb), 0.15)' : '0 1px 4px rgba(0,0,0,0.18)',
-                        }}
-                      >
-                        {isActive && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <Check size={12} style={{ color: '#fff' }} strokeWidth={3} />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
     </CardSection>
   );
@@ -465,12 +364,13 @@ export function PerformanceSection() {
               <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-0.5">Kaynak yönetimi için zorunlu. 5–60 dakika arası seç.</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
+          <div className="settings-idle-minute-grid flex flex-wrap gap-1.5 mt-2.5">
             {IDLE_MINUTES_OPTIONS.map(m => (
               <button
                 key={m}
+                data-active={autoLeaveMinutes === m}
                 onClick={() => { setAutoLeaveMinutes(m); if (!autoLeaveEnabled) setAutoLeaveEnabled(true); }}
-                className={`flex-1 min-w-[40px] py-1.5 rounded-lg text-[10px] font-bold transition-all border active:scale-95 ${
+                className={`settings-idle-minute-option flex-1 min-w-[40px] py-1.5 rounded-lg text-[10px] font-bold transition-all border active:scale-95 ${
                   autoLeaveMinutes === m
                     ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border-[var(--theme-accent)]/30'
                     : 'bg-transparent text-[var(--theme-secondary-text)]/50 border-[var(--theme-border)] hover:text-[var(--theme-secondary-text)]'
@@ -486,7 +386,7 @@ export function PerformanceSection() {
         <div className={`md:py-3 transition-opacity ${isNoiseSuppressionEnabled ? '' : 'opacity-40 pointer-events-none'}`}>
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Temizleme Gücü</p>
-            <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">%{noiseSuppressionStrength}</span>
+            <span className="settings-range-value text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">%{noiseSuppressionStrength}</span>
           </div>
           <input
             type="range" min={0} max={100} value={noiseSuppressionStrength}
@@ -504,7 +404,7 @@ export function PerformanceSection() {
         <div className="md:pt-3">
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">PTT Bırakma Gecikmesi</p>
-            <span className="text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">
+            <span className="settings-range-value text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">
               {pttReleaseDelay === 0 ? 'Kapalı' : `${pttReleaseDelay} ms`}
             </span>
           </div>

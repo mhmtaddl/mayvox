@@ -395,14 +395,16 @@ function fadeMainIn(win) {
   return animateOpacity(win, 0, 1, 10, 16);
 }
 
-function createMainWindow() {
+function createMainWindow(boundsOverride = null) {
   const saved = Store.get();
+  const initialBounds = boundsOverride || saved;
 
   const win = new BrowserWindow({
-    width: saved.width,
-    height: saved.height,
-    x: saved.x,
-    y: saved.y,
+    width: initialBounds.width,
+    height: initialBounds.height,
+    x: initialBounds.x,
+    y: initialBounds.y,
+    center: typeof initialBounds.x !== "number" || typeof initialBounds.y !== "number",
     minWidth: 1100,
     minHeight: 700,
     show: false,
@@ -504,6 +506,32 @@ function withWin(event, fn) {
 function toggleMaximize(win) {
   if (win.isMaximized()) win.unmaximize(); else win.maximize();
 }
+
+function rebuildMainWindowAfterAuth(oldWin, bounds) {
+  const nextWin = createMainWindow(bounds);
+  const showNext = () => {
+    if (!nextWin || nextWin.isDestroyed()) return;
+    nextWin.show();
+    nextWin.focus();
+    setupAutoUpdater(nextWin);
+    setupGlobalPtt(nextWin);
+    setupTray(nextWin);
+    setupGameDetection(nextWin, logger);
+    try {
+      nextWin.webContents.send("window:state", {
+        maximized: nextWin.isMaximized(),
+        focused: nextWin.isFocused(),
+        authMode: false,
+      });
+    } catch { /* no-op */ }
+    if (oldWin && !oldWin.isDestroyed()) {
+      try { oldWin.destroy(); } catch { /* no-op */ }
+    }
+  };
+
+  nextWin.once("ready-to-show", showNext);
+  setTimeout(showNext, 5000);
+}
 ipcMain.on("window:minimize", (e) => withWin(e, (w) => w.minimize()));
 ipcMain.on("window:maximize-restore", (e) => withWin(e, toggleMaximize));
 ipcMain.on("window:toggle-maximize", (e) => withWin(e, toggleMaximize));
@@ -549,25 +577,18 @@ ipcMain.on("window:set-auth-mode", (e, payload) => withWin(e, (w) => {
 
   if (!authWindowMode) return;
   authWindowMode = false;
-  w.setResizable(true);
-  w.setMaximizable(true);
-  w.setMaximumSize(10000, 10000);
-  w.setMinimumSize(1100, 700);
 
   const saved = Store.get();
   const bounds = preAuthBounds || saved;
   const width = Math.max(1100, bounds.width || saved.width || 1400);
   const height = Math.max(700, bounds.height || saved.height || 900);
-  if (typeof bounds.x === "number" && typeof bounds.y === "number") {
-    w.setBounds({ x: bounds.x, y: bounds.y, width, height }, true);
-  } else {
-    w.setSize(width, height, true);
-    w.center();
-  }
+  const nextBounds = {
+    width,
+    height,
+    ...(typeof bounds.x === "number" && typeof bounds.y === "number" ? { x: bounds.x, y: bounds.y } : {}),
+  };
   preAuthBounds = null;
-  try {
-    w.webContents.send("window:state", { maximized: w.isMaximized(), focused: w.isFocused(), authMode: false });
-  } catch { /* no-op */ }
+  rebuildMainWindowAfterAuth(w, nextBounds);
 }));
 ipcMain.handle("window:is-maximized", (e) => {
   try {
@@ -1025,10 +1046,11 @@ app.whenReady().then(() => {
       return;
     }
     // Normal ikinci instance → pencereyi öne getir
-    if (mainWin && !mainWin.isDestroyed()) {
-      if (mainWin.isMinimized()) mainWin.restore();
-      mainWin.show();
-      mainWin.focus();
+    const activeMain = mainWinRef && !mainWinRef.isDestroyed() ? mainWinRef : mainWin;
+    if (activeMain && !activeMain.isDestroyed()) {
+      if (activeMain.isMinimized()) activeMain.restore();
+      activeMain.show();
+      activeMain.focus();
     } else if (splash && !splash.isDestroyed()) {
       splash.show();
       splash.focus();

@@ -1,16 +1,21 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-const LEFT_SIDEBAR_MIN = 220;
-const LEFT_SIDEBAR_MAX = 320;
+const LEFT_SIDEBAR_MIN = 252;
+const LEFT_SIDEBAR_MAX = 360;
+const LEFT_SIDEBAR_DEFAULT = 276;
 
 export function useSidebarResize() {
   const [leftSidebarW, setLeftSidebarW] = useState<number>(() => {
     const saved = localStorage.getItem('leftSidebarW');
-    return saved ? Math.min(LEFT_SIDEBAR_MAX, Math.max(LEFT_SIDEBAR_MIN, parseInt(saved))) : 240;
+    return saved ? Math.min(LEFT_SIDEBAR_MAX, Math.max(LEFT_SIDEBAR_MIN, parseInt(saved))) : LEFT_SIDEBAR_DEFAULT;
   });
   const leftSidebarWRef = useRef(leftSidebarW);
   leftSidebarWRef.current = leftSidebarW;
   const sidebarDragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--left-sidebar-width', `${leftSidebarW}px`);
+  }, [leftSidebarW]);
 
   const handleSidebarDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

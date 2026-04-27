@@ -168,8 +168,10 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
       {/* Resize handle */}
       <div
         onMouseDown={handleSidebarDragStart}
-        className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-[var(--theme-accent)]/20 active:bg-[var(--theme-accent)]/30 transition-colors"
-      />
+        className="group/resize absolute top-0 -right-[3px] w-[6px] h-full cursor-col-resize z-20"
+      >
+        <span className="absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-[var(--theme-accent)]/35 opacity-0 transition-opacity group-hover/resize:opacity-100 group-active/resize:opacity-100" />
+      </div>
       {/* ── A. Marka / Sunucu Header ── */}
       <div className="px-5 pt-5 pb-3.5 shrink-0 flex items-center gap-3.5 select-none group/header">
         {activeServerAvatarUrl ? (
@@ -213,10 +215,6 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                   const first = raw.slice(0, spaceIdx);
                   const rest = raw.slice(spaceIdx + 1);
                   return <>{first} <span style={{ color: 'var(--theme-accent)' }}>{rest}</span></>;
-                }
-                // Tek kelime → sadece MAYVOX için "MAY" + accent "VOX" split'i uygula.
-                if (raw.toUpperCase() === 'MAYVOX') {
-                  return <>MAY<span style={{ color: 'var(--theme-accent)' }}>VOX</span></>;
                 }
                 return raw;
               })()}
