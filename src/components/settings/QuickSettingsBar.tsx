@@ -2,12 +2,14 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Eye, Palette, MoreHorizontal } from 'lucide-react';
 import { Toggle } from './shared';
 import { useSettings } from '../../contexts/SettingsCtx';
+import { getThemePack } from '../../lib/themePacks';
 
 export default function QuickSettingsBar() {
   const {
     showLastSeen, setShowLastSeen,
-    currentTheme,
+    themePackId,
   } = useSettings();
+  const currentThemePack = getThemePack(themePackId);
 
   // Overflow menu for narrow widths
   const barRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,7 @@ export default function QuickSettingsBar() {
       content: (
         <div className="flex items-center gap-1 md:gap-1.5 min-w-0 cursor-default" title="Aktif tema">
           <Palette size={13} className="text-[var(--theme-accent)] opacity-70 shrink-0" />
-          <span className="text-[10px] font-semibold text-[var(--theme-text)] truncate">{currentTheme.name}</span>
+          <span className="text-[10px] font-semibold text-[var(--theme-text)] truncate">{currentThemePack.name}</span>
         </div>
       ),
     },

@@ -73,6 +73,14 @@ function DomainTitle({ icon, title }: { icon: React.ReactNode; title: string }) 
   );
 }
 
+function SettingsSectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`settings-section-card min-w-0 rounded-2xl p-3 md:p-4 ${className}`}>
+      {children}
+    </section>
+  );
+}
+
 // Son görülme inline toggle kartı — Hesap sekmesi için
 function LastSeenCard() {
   const { showLastSeen, setShowLastSeen } = useSettings();
@@ -943,22 +951,22 @@ export default function SettingsView() {
         >
           {effectiveTab === 'account' && (
             <div className="flex flex-col gap-5 md:gap-6">
-              <section>
+              <SettingsSectionCard>
                 <DomainTitle icon={<UserIcon size={11} strokeWidth={2.2} />} title="Profil & Hesap" />
                 <AccountSection />
-              </section>
-              <section>
+              </SettingsSectionCard>
+              <SettingsSectionCard>
                 <DomainTitle icon={<Eye size={11} strokeWidth={2.2} />} title="Gizlilik" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <LastSeenCard />
                   {isElectron() && isGameActivityAvailable() && <GameActivityCard />}
                 </div>
-              </section>
+              </SettingsSectionCard>
               {showPermissions && (
-                <section>
+                <SettingsSectionCard>
                   <DomainTitle icon={<ShieldCheck size={11} strokeWidth={2.2} />} title="İzinler" />
                   <PermissionSection />
-                </section>
+                </SettingsSectionCard>
               )}
             </div>
           )}
@@ -969,69 +977,69 @@ export default function SettingsView() {
                   yükseklikleri otomatik eşit. AppearanceSection (Tema Paketleri) içeriği
                   küçük olsa da kart Performans kartının yüksekliğine kadar uzar. */}
               <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
-                <section className="flex flex-col h-full">
+                <SettingsSectionCard className="flex flex-col h-full">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
                   <div className="flex-1 flex flex-col">
                     <AppearanceSection />
                   </div>
-                </section>
-                <section className="flex flex-col h-full">
+                </SettingsSectionCard>
+                <SettingsSectionCard className="flex flex-col h-full">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
                   <div className="flex-1 flex flex-col">
                     <PerformanceSection />
                   </div>
-                </section>
+                </SettingsSectionCard>
 
-                <section>
+                <SettingsSectionCard>
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
-                </section>
+                </SettingsSectionCard>
                 {showVoiceMode && (
-                  <section>
+                  <SettingsSectionCard>
                     <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
                     <VoiceModeSection />
-                  </section>
+                  </SettingsSectionCard>
                 )}
                 {isElectron() && (
-                  <section>
+                  <SettingsSectionCard>
                     <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
                     <VoiceOverlayCard />
-                  </section>
+                  </SettingsSectionCard>
                 )}
               </div>
 
               {/* base–lg: tek kolon */}
               <div className="flex flex-col gap-5 xl:hidden">
-                <section>
+                <SettingsSectionCard>
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
                   <AppearanceSection />
-                </section>
-                <section>
+                </SettingsSectionCard>
+                <SettingsSectionCard>
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
-                </section>
-                <section>
+                </SettingsSectionCard>
+                <SettingsSectionCard>
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
                   <PerformanceSection />
-                </section>
+                </SettingsSectionCard>
                 {showVoiceMode && (
-                  <section>
+                  <SettingsSectionCard>
                     <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
                     <VoiceModeSection />
-                  </section>
+                  </SettingsSectionCard>
                 )}
                 {isElectron() && (
-                  <section>
+                  <SettingsSectionCard>
                     <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
                     <VoiceOverlayCard />
-                  </section>
+                  </SettingsSectionCard>
                 )}
               </div>
             </div>
           )}
 
           {effectiveTab === 'admin' && isAdmin && (
-            <div className="space-y-5">
+            <SettingsSectionCard className="space-y-5">
               <DomainTitle
                 icon={<ShieldCheck size={11} strokeWidth={2.2} />}
                 title={`Yönetim · ${effectiveSub === 'users' ? 'Kullanıcılar' : 'Sunucular'}`}
@@ -1074,7 +1082,7 @@ export default function SettingsView() {
               )}
 
               {effectiveSub === 'servers' && showServersSub && <SystemServersPanel />}
-            </div>
+            </SettingsSectionCard>
           )}
         </motion.div>
       </AnimatePresence>

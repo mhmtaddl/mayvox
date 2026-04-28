@@ -103,10 +103,6 @@ export interface InviteRequest {
   sentCode?: string;
 }
 
-// Legacy Theme type — replaced by AppTheme from themes.ts
-// Kept as re-export for backward compatibility
-export type { AppTheme as Theme, ThemeKey } from './themes';
-
 export type AnnouncementPriority = 'normal' | 'important' | 'critical';
 export type AnnouncementType = 'announcement' | 'event';
 

@@ -58,11 +58,6 @@ type DbChannel = {
   mode?: string; speaker_ids?: string[];
 };
 
-function hexToRgbTuple(hex: string): string | undefined {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return m ? `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}` : undefined;
-}
-
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
 import type { InviteRequest } from './types';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
@@ -369,11 +364,9 @@ export default function App() {
 
   // ── Settings state (useAppSettings hook) ──────────────────────────────
   const settings = useAppSettings();
-  const overlayThemeAccentRgb = settings.appearanceMode === 'themePack'
-    ? getThemePack(settings.themePackId).accentRgb
-    : (hexToRgbTuple(settings.currentTheme.accent) ?? hexToRgbTuple(settings.currentTheme.primary));
+  const overlayThemeAccentRgb = getThemePack(settings.themePackId).accentRgb;
   const {
-    currentTheme, isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold, noiseSuppressionStrength,
+    isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold, noiseSuppressionStrength,
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
     voiceMode, setVoiceMode, pttReleaseDelay, autoLeaveEnabled, autoLeaveMinutes,
     showLastSeen, setShowLastSeenLocal,
@@ -2498,40 +2491,6 @@ export default function App() {
                   {!permissionsGranted ? (
                     <PermissionOnboarding onComplete={handlePermissionsComplete} />
                   ) : <>
-
-                  {currentTheme.id === 'cylk' && (
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: 'fixed',
-                        inset: 0,
-                        zIndex: 0,
-                        pointerEvents: 'none',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: '52vw',
-                          fontWeight: 100,
-                          letterSpacing: '0.2em',
-                          color: '#C8A84B',
-                          opacity: 0.09,
-                          userSelect: 'none',
-                          lineHeight: 1,
-                          fontFamily: 'Georgia, serif',
-                          whiteSpace: 'nowrap',
-                          transform: 'rotate(-32deg)',
-                          display: 'block',
-                        }}
-                      >
-                        CYLK
-                      </span>
-                    </div>
-                  )}
                   <div className="mv-app-main" style={{ position: 'relative', zIndex: 1 }}>
                     <AnimatePresence mode="wait">
                       {view === 'loading' && (

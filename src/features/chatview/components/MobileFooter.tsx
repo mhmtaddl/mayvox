@@ -132,7 +132,7 @@ export default function MobileFooter({
 
   return (
     <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} shrink-0 pb-[env(safe-area-inset-bottom)] mx-2 mb-2 rounded-2xl`}
-      style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+      style={{ background: 'var(--dock-bg, var(--surface-elevated))', border: '1px solid var(--dock-border, var(--border-subtle))', boxShadow: 'var(--dock-shadow, 0 4px 20px rgba(0,0,0,0.2))', backdropFilter: 'var(--dock-blur, blur(12px))', WebkitBackdropFilter: 'var(--dock-blur, blur(12px))' }}>
       {/* PTT / VAD buton alanı */}
       {activeChannel && view !== 'settings' && (() => {
         // pttDisabled: dokunma/konuşma tamamen bloklu. Server bloğu (mute/timeout/kick/ban)
@@ -303,7 +303,7 @@ export default function MobileFooter({
       })()}
 
       {/* Desktop dock ile aynı — user card + server + mic + hp + audio lines + voice mode + room controls */}
-      <div style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+      <div style={{ borderTop: '1px solid var(--dock-divider, var(--dock-item-border, rgba(var(--glass-tint), 0.08)))' }}>
         <DesktopDock
           layout="inline"
           dockToastHoveredRef={dockToastHoveredRef}

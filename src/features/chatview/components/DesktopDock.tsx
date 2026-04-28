@@ -301,7 +301,7 @@ export default function DesktopDock({
     <div
       className={
         isInline
-          ? `flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
+          ? `mv-desktop-dock mv-dock-inline flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
           : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-3 z-30 items-center gap-1.5 px-2 py-1 rounded-2xl min-h-[46px]`
       }
       /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */

@@ -187,15 +187,6 @@ html.mv-electron-window.mv-window-maximized .mv-app-shell {
   overflow: visible;
   -webkit-app-region: drag;
 }
-
-html[data-theme-light="true"] .titlebar,
-html[data-theme-light="true"] .window-titlebar,
-html[data-theme-light="true"] .app-titlebar {
-  background: var(--topbar-bg, var(--app-neutral-bg, #f5f6f8)) !important;
-  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow: none !important;
-}
-
 html.mv-window-maximized .titlebar,
 html.mv-window-maximized .window-titlebar,
 html.mv-window-maximized .app-titlebar {
@@ -307,17 +298,6 @@ textarea,
   outline: none;
   isolation: isolate;
 }
-
-html[data-theme-light="true"] .mv-app-shell {
-  --window-close-fg: rgba(13, 13, 13, 0.88);
-  background-color: #f4f5f7;
-  background-image: linear-gradient(180deg, #fbfbfc 0%, #f4f5f7 100%);
-  border-color: rgba(0, 0, 0, 0.08);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-}
-
 html[data-theme-pack="default-dark"] .mv-app-shell {
   background:
     radial-gradient(circle at 18% 0%, rgba(111, 214, 255, 0.10), transparent 34%),
@@ -393,14 +373,6 @@ html.mv-window-maximized .mv-app-shell {
   outline: none;
   isolation: isolate;
 }
-
-html[data-theme-light="true"] .mv-app-shell.mv-auth-shell {
-  --window-close-fg: rgba(13, 13, 13, 0.88);
-  background-color: #f4f5f7;
-  background-image: linear-gradient(180deg, #fbfbfc 0%, #f4f5f7 100%);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
 html.mv-auth-window #root::before,
 html.mv-auth-window #root::after,
 html.mv-auth-window .auth-ambient {
@@ -670,14 +642,7 @@ button, a, input, [role="button"] {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
-
-html[data-theme-light="true"] {
-  --scrollbar-track: rgba(0, 0, 0, 0.015);
-  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
-}
-
-html:not([data-theme-light="true"]) {
+html {
   --scrollbar-track: rgba(255, 255, 255, 0.018);
   --scrollbar-thumb: rgba(255, 255, 255, 0.20);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
@@ -955,31 +920,6 @@ html:not([data-theme-light="true"]) {
   border: 1px solid var(--border-soft, var(--theme-border));
   box-shadow: var(--surface-floating-shadow, 0 18px 40px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.04));
 }
-
-html[data-theme-light="true"] .search-input-shell {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.62)),
-    var(--surface-soft, #ffffff);
-  border-color: rgba(0, 0, 0, 0.055);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.80);
-}
-
-html[data-theme-light="true"] .search-input-shell.is-focused,
-html[data-theme-light="true"] .search-input-shell:focus-within {
-  border-color: rgba(var(--theme-accent-rgb), 0.34);
-  box-shadow:
-    0 0 0 1px rgba(var(--theme-accent-rgb), 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.90);
-}
-
-html[data-theme-pack="default-dark"] .surface-card {
-  background: var(--bg-card);
-  border-color: var(--border-soft);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-}
-
 html[data-theme-pack="default-dark"] .surface-input,
 html[data-theme-pack="default-dark"] input:not([type="range"]),
 html[data-theme-pack="default-dark"] textarea {
@@ -1057,6 +997,51 @@ html[data-theme-pack="ocean-blue"] .icon-button:hover,
 html[data-theme-pack="ocean-blue"] .voice-control-btn:hover {
   background: rgba(107, 214, 255, 0.11);
   border-color: rgba(107, 214, 255, 0.24);
+}
+
+html[data-theme-pack="frost-light"] .surface-card,
+html[data-theme-pack="frost-light"] .settings-card,
+html[data-theme-pack="frost-light"] .theme-card,
+html[data-theme-pack="frost-light"] .card,
+html[data-theme-pack="graphite-pro"] .surface-card,
+html[data-theme-pack="graphite-pro"] .settings-card,
+html[data-theme-pack="graphite-pro"] .theme-card,
+html[data-theme-pack="graphite-pro"] .card,
+html[data-theme-pack="aurora"] .surface-card,
+html[data-theme-pack="aurora"] .settings-card,
+html[data-theme-pack="aurora"] .theme-card,
+html[data-theme-pack="aurora"] .card {
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.032), rgba(var(--glass-tint), 0.014)),
+    var(--surface-base);
+  border-color: var(--border-soft);
+  box-shadow: var(--surface-card-shadow);
+}
+
+html[data-theme-pack="frost-light"] .surface-input,
+html[data-theme-pack="frost-light"] input:not([type="range"]),
+html[data-theme-pack="frost-light"] textarea,
+html[data-theme-pack="graphite-pro"] .surface-input,
+html[data-theme-pack="graphite-pro"] input:not([type="range"]),
+html[data-theme-pack="graphite-pro"] textarea,
+html[data-theme-pack="aurora"] .surface-input,
+html[data-theme-pack="aurora"] input:not([type="range"]),
+html[data-theme-pack="aurora"] textarea {
+  background: var(--theme-input-bg);
+  border-color: var(--theme-input-border);
+  color: var(--theme-input-text);
+}
+
+html[data-theme-pack="frost-light"] .surface-input::placeholder,
+html[data-theme-pack="frost-light"] input::placeholder,
+html[data-theme-pack="frost-light"] textarea::placeholder,
+html[data-theme-pack="graphite-pro"] .surface-input::placeholder,
+html[data-theme-pack="graphite-pro"] input::placeholder,
+html[data-theme-pack="graphite-pro"] textarea::placeholder,
+html[data-theme-pack="aurora"] .surface-input::placeholder,
+html[data-theme-pack="aurora"] input::placeholder,
+html[data-theme-pack="aurora"] textarea::placeholder {
+  color: var(--theme-input-placeholder);
 }
 
 html[data-theme-pack="amber-night"] .surface-card,
@@ -1212,7 +1197,6 @@ html[data-theme-pack="crimson"] .card:hover {
 /* ─── Unread feedback: theme-mapped color, solid bell fill, blinking message fill, swing + sound waves ─── */
 /* Color maps per themePack (see src/lib/themePacks.ts):
    - default-dark       → white
-   - default-light      → black
    - ocean-blue,emerald,crimson → warm amber (yellow/gold)
    - amber-night        → red
    Bell when unread: solid 100% fill + swing + side sound lines.
@@ -1225,10 +1209,6 @@ html[data-theme-pack="crimson"] .card:hover {
 html[data-theme-pack="default-dark"] {
   --notif-unread: #ffffff;
   --notif-unread-rgb: 255, 255, 255;
-}
-html[data-theme-pack="default-light"] {
-  --notif-unread: #111111;
-  --notif-unread-rgb: 17, 17, 17;
 }
 html[data-theme-pack="ocean-blue"],
 html[data-theme-pack="emerald"],
@@ -1352,38 +1332,6 @@ html[data-theme-pack="amber-night"] {
   animation-play-state: paused !important;
   transition-duration: 0s !important;
 }
-
-/* Açık temada sol paneldeki motto ve versiyon — tam kontrast (pulse dot update sinyali
-   yine gösteriliyor; label rengi okunabilirlik için koyulaştırılıyor) */
-html[data-theme-light="true"] .mv-sidebar-motto {
-  color: rgba(15, 15, 15, 0.85) !important;
-}
-html[data-theme-light="true"] .mv-sidebar-version,
-html[data-theme-light="true"] .mv-sidebar-version span {
-  color: rgba(15, 15, 15, 0.9) !important;
-}
-
-html[data-theme-light="true"] body {
-  background: var(--app-neutral-bg, #f5f6f8) !important;
-}
-
-html[data-theme-light="true"] #root::before,
-html[data-theme-light="true"] #root::after {
-  display: none;
-}
-
-html[data-theme-light="true"] .mv-chat-main {
-  --chat-main-glow: none;
-  --chat-main-border: rgba(0, 0, 0, 0.035);
-  --chat-main-shadow: inset 1px 0 rgba(0, 0, 0, 0.018);
-  background-color: rgba(255, 255, 255, 0.72) !important;
-}
-
-html[data-theme-light="true"] .mv-shell-panel {
-  --shell-panel-border: rgba(0, 0, 0, 0.035);
-  --shell-panel-shadow: inset 1px 0 rgba(0, 0, 0, 0.016);
-}
-
 html[data-theme-pack="default-dark"] .mv-chat-main {
   --chat-main-glow: radial-gradient(circle at 22% 0%, rgba(111, 214, 255, 0.06), transparent 30%);
   --chat-main-border: var(--border-soft);
@@ -1569,100 +1517,9 @@ html[data-theme-pack="crimson"] [aria-selected="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.050),
     0 0 0 1px rgba(var(--theme-accent-rgb), 0.045);
 }
-
-html[data-theme-light="true"] .settings-account-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62) !important;
-}
-
-html[data-theme-light="true"] .settings-flat-light .surface-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62) !important;
-}
-
-html[data-theme-light="true"] .settings-flat-light {
-  --overlay-picker-bg:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(250, 250, 248, 0.94) 100%),
-    linear-gradient(135deg, rgba(37, 7, 7, 0.055), rgba(255, 255, 255, 0));
-  --overlay-picker-grid: rgba(37, 7, 7, 0.055);
-  --overlay-picker-vignette: inset 0 0 0 1px rgba(0, 0, 0, 0.035);
-  --overlay-picker-ring: rgba(0, 0, 0, 0.065);
-  --overlay-picker-dot: rgba(37, 7, 7, 0.42);
-  --overlay-picker-dot-ring: rgba(37, 7, 7, 0.20);
-  --overlay-picker-dot-hover: rgba(var(--theme-accent-rgb), 0.82);
-  --overlay-picker-label: rgba(37, 7, 7, 0.72);
-  --overlay-picker-label-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
-}
-
-html[data-theme-light="true"] .auth-screen {
-  background: transparent !important;
-}
-
-html[data-theme-light="true"] .auth-ambient,
-html[data-theme-light="true"] .auth-logo-glow,
-html[data-theme-light="true"] .auth-card-line {
-  display: none !important;
-}
-
 .auth-card-line {
   display: none;
 }
-
-html[data-theme-light="true"] .auth-logo {
-  filter: brightness(0) saturate(100%) invert(8%) sepia(26%) saturate(1946%) hue-rotate(315deg) brightness(89%) contrast(104%);
-}
-
-html[data-theme-light="true"] .auth-card {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-html[data-theme-light="true"] .auth-input {
-  background: #ffffff !important;
-  border-color: rgba(0, 0, 0, 0.11) !important;
-  color: rgba(13, 13, 13, 0.94) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
-}
-
-html[data-theme-light="true"] .auth-input::placeholder {
-  color: rgba(13, 13, 13, 0.42) !important;
-}
-
-html[data-theme-light="true"] .auth-input:focus {
-  background: #ffffff !important;
-  border-color: rgba(var(--theme-accent-rgb), 0.52) !important;
-  box-shadow: 0 0 0 3px rgba(var(--theme-accent-rgb), 0.12) !important;
-}
-
-html[data-theme-light="true"] .auth-title {
-  color: rgba(13, 13, 13, 0.94) !important;
-}
-
-html[data-theme-light="true"] .auth-subtitle,
-html[data-theme-light="true"] .auth-muted-link,
-html[data-theme-light="true"] .auth-footer {
-  color: rgba(13, 13, 13, 0.58) !important;
-}
-
-html[data-theme-light="true"] .auth-muted-link:hover {
-  color: rgba(13, 13, 13, 0.88) !important;
-}
-
-html[data-theme-light="true"] .auth-separator {
-  color: rgba(13, 13, 13, 0.18) !important;
-}
-
-html[data-theme-light="true"] .mv-room-ambient {
-  display: none;
-}
-
-/* Açık tema: alt dock soft glass */
-html[data-theme-light="true"] .mv-desktop-dock {
-  --dock-bg: rgba(255, 255, 255, 0.86);
-  --dock-border: rgba(0, 0, 0, 0.045);
-  --dock-shadow: 0 4px 14px rgba(0, 0, 0, 0.035), 0 1px 3px rgba(0, 0, 0, 0.025);
-  --dock-blur: blur(18px) saturate(1.18);
-}
-
 html[data-theme-pack="default-dark"] .mv-desktop-dock {
   --dock-bg: rgba(9, 14, 23, 0.72);
   --dock-border: rgba(255, 255, 255, 0.060);
@@ -1711,51 +1568,6 @@ html[data-theme-pack="crimson"] .switch-on {
   background: rgba(var(--theme-accent-rgb), 0.56);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 4px 12px -10px rgba(var(--theme-accent-rgb), 0.38);
 }
-
-html[data-theme-light="true"] .mv-desktop-dock .mv-dock-user {
-  border-right-color: rgba(255, 255, 255, 0.10) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .mv-dock-user:hover,
-html[data-theme-light="true"] .mv-desktop-dock .btn-haptic:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .mv-dock-user-name {
-  color: rgba(13, 13, 13, 0.94) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .mv-dock-user-game {
-  color: rgba(var(--theme-accent-rgb), 0.82) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .mv-dock-status-dot {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92), 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .voice-control-btn,
-html[data-theme-light="true"] .mv-desktop-dock .btn-haptic {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.045), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .voice-control-active {
-  background: rgba(var(--theme-accent-rgb), 0.10) !important;
-  color: var(--theme-accent) !important;
-  border-color: rgba(var(--theme-accent-rgb), 0.20) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .voice-ctrl-off {
-  background: rgba(225, 29, 72, 0.10) !important;
-  color: #b91c1c !important;
-  border-color: rgba(185, 28, 28, 0.20) !important;
-}
-
-html[data-theme-light="true"] .mv-desktop-dock .voice-control-warning {
-  background: rgba(217, 119, 6, 0.12) !important;
-  color: #b45309 !important;
-  border-color: rgba(180, 83, 9, 0.22) !important;
-}
-
 /* ─── PTT onboarding hint — theme-aware contrast colors ─── */
 .mv-ptt-onboarding-button {
   background: rgba(251, 191, 36, 0.18);
@@ -1806,21 +1618,6 @@ html[data-theme-pack="amber-night"] .mv-ptt-onboarding-toast {
   border-color: rgba(248, 113, 113, 0.32);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 22px rgba(239, 68, 68, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
-
-html[data-theme-light="true"] .mv-ptt-onboarding-button {
-  background: rgba(0, 0, 0, 0.78);
-  color: rgba(255, 255, 255, 0.96);
-  border-color: rgba(0, 0, 0, 0.42);
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-html[data-theme-light="true"] .mv-ptt-onboarding-toast {
-  color: rgba(255, 255, 255, 0.96);
-  background: rgba(0, 0, 0, 0.76);
-  border-color: rgba(0, 0, 0, 0.42);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
 html .mv-app-shell:not(.mv-auth-shell) {
   background: var(--app-shell-bg, var(--app-neutral-bg)) !important;
   border-radius: 20px !important;
@@ -1839,15 +1636,6 @@ html {
   --surface-floating-control: color-mix(in srgb, rgba(24, 24, 24, 0.58) 94%, white 2%);
   --voice-bar-safe-area: 72px;
 }
-
-html[data-theme-light="true"] {
-  --app-surface-raised: #ffffff;
-  --app-surface-floating: color-mix(in srgb, rgba(255, 255, 255, 0.74) 94%, black 2%);
-  --app-border-soft: rgba(0, 0, 0, 0.045);
-  --surface-floating-hover: color-mix(in srgb, rgba(255, 255, 255, 0.82) 92%, black 4%);
-  --surface-floating-control: color-mix(in srgb, rgba(255, 255, 255, 0.66) 94%, black 3%);
-}
-
 .titlebar,
 .window-titlebar,
 .app-titlebar {
@@ -1955,456 +1743,183 @@ html[data-theme-light="true"] {
 }
 
 .mv-desktop-dock {
-  --dock-bg:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--app-surface-floating) 96%, white 1%),
-      color-mix(in srgb, var(--app-surface-floating) 98%, black 2%)
-    ) !important;
-  --dock-border: var(--app-border-soft) !important;
-  --dock-shadow: none !important;
-  --dock-blur: blur(14px) saturate(1.12) !important;
+  color: var(--theme-text);
+}
+
+html[data-theme-pack] .mv-desktop-dock {
+  --dock-bg: var(--dock-surface-bg) !important;
+  --dock-border: var(--dock-surface-border) !important;
+  --dock-shadow: var(--dock-surface-shadow) !important;
+  --dock-blur: var(--dock-surface-blur) !important;
+}
+
+.mv-desktop-dock .mv-dock-user {
+  border-right-color: var(--dock-divider, var(--dock-item-border)) !important;
+}
+
+.mv-desktop-dock .mv-dock-user:hover {
+  background: var(--dock-user-hover, var(--dock-item-hover)) !important;
+}
+
+.mv-desktop-dock .mv-dock-user-name {
+  color: var(--theme-text) !important;
+}
+
+.mv-desktop-dock .mv-dock-user-game {
+  color: var(--theme-accent) !important;
+  opacity: 0.78;
+}
+
+.mv-desktop-dock .mv-dock-status-dot {
+  box-shadow: 0 0 0 2px var(--dock-bg), 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 
 .mv-desktop-dock .btn-haptic:not(.voice-leave-btn),
 .mv-desktop-dock .voice-control-btn {
-  background: var(--surface-floating-control) !important;
-  border-color: rgba(255, 255, 255, 0.045) !important;
+  background: var(--dock-item-bg) !important;
+  border-color: var(--dock-item-border) !important;
+  color: var(--theme-secondary-text) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.026),
+    inset 0 1px 0 rgba(var(--glass-tint), 0.040),
     0 1px 2px rgba(0, 0, 0, 0.10) !important;
 }
 
 .mv-desktop-dock .btn-haptic:not(.voice-leave-btn):hover,
 .mv-desktop-dock .voice-control-btn:hover {
-  background: var(--surface-floating-hover) !important;
-  border-color: var(--accent-soft-border) !important;
+  background: var(--dock-item-hover) !important;
+  border-color: var(--dock-item-active-border) !important;
+  color: var(--theme-text) !important;
 }
 
 .mv-desktop-dock .voice-control-active {
-  background: color-mix(in srgb, var(--theme-accent) 8%, rgba(24, 24, 24, 0.64) 92%) !important;
+  background: var(--dock-item-active) !important;
   color: var(--theme-accent) !important;
-  border-color: var(--accent-soft-border) !important;
+  border-color: var(--dock-item-active-border) !important;
 }
 
 .mv-desktop-dock .voice-ctrl-off {
-  background: color-mix(in srgb, rgb(248 113 113) 8%, rgba(24, 24, 24, 0.64) 92%) !important;
+  background: var(--dock-item-off) !important;
   color: rgb(248, 113, 113) !important;
   border-color: rgba(248, 113, 113, 0.20) !important;
 }
 
-html[data-theme-light="true"] .mv-desktop-dock {
-  --dock-border: rgba(0, 0, 0, 0.055) !important;
-  --dock-shadow: none !important;
+.mv-desktop-dock .voice-control-warning {
+  background: color-mix(in srgb, var(--theme-warning) 12%, var(--surface-elevated) 88%) !important;
+  color: var(--theme-warning) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 28%, transparent) !important;
 }
 
-html[data-theme-light="true"] .mv-desktop-dock .btn-haptic:not(.voice-leave-btn),
-html[data-theme-light="true"] .mv-desktop-dock .voice-control-btn {
-  border-color: rgba(0, 0, 0, 0.065) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.70),
-    0 1px 2px rgba(0, 0, 0, 0.045) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-dock {
-  --theme-bg: #151515;
-  --theme-bg-rgb: 21, 21, 21;
-  --theme-text: #f8fafc;
-  --theme-secondary-text: #cbd5e1;
-  --theme-border: rgba(255, 255, 255, 0.06);
-  --glass-tint: 255, 255, 255;
-  --dock-bg: rgba(9, 14, 23, 0.72) !important;
-  --dock-border: rgba(255, 255, 255, 0.060) !important;
-  --dock-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 18px 50px rgba(0, 0, 0, 0.16) !important;
-  --dock-blur: blur(24px) saturate(1.18) !important;
-  --surface-floating-control: color-mix(in srgb, rgba(24, 24, 24, 0.58) 94%, white 2%);
-  --surface-floating-hover: color-mix(in srgb, rgba(24, 24, 24, 0.76) 90%, white 4%);
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-dock .btn-haptic:not(.voice-leave-btn),
-html[data-theme-pack="default-light"] .mv-desktop-dock .voice-control-btn {
-  background: var(--surface-floating-control) !important;
-  color: #f8fafc !important;
-  border-color: rgba(255, 255, 255, 0.045) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.026),
-    0 1px 2px rgba(0, 0, 0, 0.10) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-dock .btn-haptic:not(.voice-leave-btn):hover,
-html[data-theme-pack="default-light"] .mv-desktop-dock .voice-control-btn:hover {
-  background: var(--surface-floating-hover) !important;
-  color: #ffffff !important;
-  border-color: rgba(var(--theme-accent-rgb), 0.26) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-dock .mv-dock-user {
-  border-right-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-dock .mv-dock-user-name {
-  color: #ffffff !important;
-}
-
-html:not([data-theme-light="true"]) .settings-flat-light {
+html .settings-flat-light {
   --settings-page-bg: var(--app-surface, var(--app-neutral-surface));
   --settings-card-bg: color-mix(in srgb, var(--app-surface-raised) 94%, white 2%);
   --settings-card-bg-hover: color-mix(in srgb, var(--app-surface-raised) 91%, white 4%);
   --settings-panel-bg: color-mix(in srgb, var(--app-surface-raised) 95%, white 1%);
-  --settings-border: rgba(255, 255, 255, 0.06);
-  --settings-border-strong: rgba(255, 255, 255, 0.095);
+  --settings-border: var(--border-subtle, var(--theme-surface-card-border));
+  --settings-border-strong: var(--border-default, var(--theme-surface-card-border));
   --theme-surface-card: var(--settings-card-bg);
   --theme-surface-card-border: var(--settings-border);
   --surface-card-border: 1px solid var(--settings-border);
-  --surface-elevated: color-mix(in srgb, var(--theme-accent) 14%, var(--app-surface-raised) 86%);
-  background: var(--settings-page-bg) !important;
 }
 
-html:not([data-theme-light="true"]) .settings-panel {
+html .settings-panel {
   background: var(--app-neutral-surface) !important;
   background-image: none !important;
   border-color: var(--settings-border, rgba(255, 255, 255, 0.07)) !important;
 }
 
-html:not([data-theme-light="true"]) .settings-flat-light .surface-card,
-html:not([data-theme-light="true"]) .settings-flat-light .settings-card,
-html:not([data-theme-light="true"]) .settings-flat-light .settings-panel,
-html:not([data-theme-light="true"]) .settings-flat-light .settings-section-card,
-html:not([data-theme-light="true"]) .settings-flat-light .theme-card,
-html:not([data-theme-light="true"]) .settings-flat-light .performance-card,
-html:not([data-theme-light="true"]) .settings-flat-light .card {
+html .settings-flat-light .surface-card,
+html .settings-flat-light .settings-card,
+html .settings-flat-light .settings-panel,
+html .settings-flat-light .settings-section-card,
+html .settings-flat-light .theme-card,
+html .settings-flat-light .performance-card,
+html .settings-flat-light .card {
   background: var(--settings-card-bg) !important;
   border: 1px solid var(--settings-border) !important;
   box-shadow: none !important;
 }
 
-html:not([data-theme-light="true"]) .settings-flat-light .surface-card:hover,
-html:not([data-theme-light="true"]) .settings-flat-light .settings-card:hover,
-html:not([data-theme-light="true"]) .settings-flat-light .settings-section-card:hover,
-html:not([data-theme-light="true"]) .settings-flat-light .theme-card:hover,
-html:not([data-theme-light="true"]) .settings-flat-light .performance-card:hover,
-html:not([data-theme-light="true"]) .settings-flat-light .card:hover {
+html .settings-flat-light .surface-card:hover,
+html .settings-flat-light .settings-card:hover,
+html .settings-flat-light .settings-section-card:hover,
+html .settings-flat-light .theme-card:hover,
+html .settings-flat-light .performance-card:hover,
+html .settings-flat-light .card:hover {
   background: var(--settings-card-bg-hover) !important;
   border-color: var(--settings-border-strong) !important;
 }
 
-html:not([data-theme-light="true"]) .settings-flat-light .settings-tabs {
+html .settings-flat-light .settings-tabs {
   background: color-mix(in srgb, var(--app-surface-raised) 92%, white 3%) !important;
   border: 1px solid var(--settings-border) !important;
   box-shadow: none !important;
 }
 
-html:not([data-theme-light="true"]) .settings-flat-light .settings-tab.active {
+html .settings-flat-light .settings-tab.active {
   color: var(--theme-accent);
 }
 
-html:not([data-theme-light="true"]) .settings-flat-light .theme-card.selected,
-html:not([data-theme-light="true"]) .settings-flat-light .theme-card[aria-selected="true"] {
+html .settings-flat-light .theme-card.selected,
+html .settings-flat-light .theme-card[aria-selected="true"] {
   background: var(--settings-card-bg-hover) !important;
   border-color: var(--theme-accent) !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 22%, transparent) !important;
 }
 
-html[data-theme-light="true"] {
-  --app-surface: var(--app-content-surface, #f6f7f9);
-  --app-surface-raised: #ffffff;
-  --settings-page-bg: var(--app-neutral-bg, #f5f6f8);
-  --settings-card-bg: #ffffff;
-  --settings-card-bg-hover: #fbfcfd;
-  --settings-border: rgba(15, 23, 42, 0.08);
-  --settings-border-strong: rgba(15, 23, 42, 0.12);
+html[data-theme-pack] .settings-flat-light {
+  --settings-page-bg: var(--app-neutral-surface);
+  --settings-card-bg: var(--surface-base);
+  --settings-card-bg-hover: var(--surface-elevated);
+  --settings-panel-bg: var(--surface-base);
+  --settings-inner-card-bg: var(--surface-soft);
+  --settings-inner-card-bg-hover: var(--surface-hover);
+  --settings-tabs-bg: var(--surface-elevated);
+  --settings-border: var(--border-subtle);
+  --settings-border-strong: var(--border-default);
   --theme-surface-card: var(--settings-card-bg);
   --theme-surface-card-border: var(--settings-border);
   --surface-card-border: 1px solid var(--settings-border);
 }
 
-html[data-theme-light="true"] .mv-chat-main,
-html[data-theme="default-light"] .mv-chat-main,
-html[data-theme-pack="default-light"] .mv-chat-main,
-html[data-theme-light="true"] .mv-desktop-shell-layout > .mv-shell-center-panel,
-html[data-theme-light="true"] .mv-desktop-shell-layout > .mv-shell-right-panel,
-html[data-theme="default-light"] .mv-desktop-shell-layout > .mv-shell-center-panel,
-html[data-theme="default-light"] .mv-desktop-shell-layout > .mv-shell-right-panel,
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-center-panel,
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-right-panel {
-  background: var(--app-neutral-surface, #f4f5f7) !important;
-  background-image: none !important;
-}
-
-html[data-theme-light="true"] .settings-panel,
-html[data-theme-light="true"] .settings-flat-light,
-html[data-theme="default-light"] .settings-panel,
-html[data-theme="default-light"] .settings-flat-light,
-html[data-theme-pack="default-light"] .settings-panel,
-html[data-theme-pack="default-light"] .settings-flat-light {
-  background: var(--settings-page-bg) !important;
-  background-image: none !important;
-}
-
-html[data-theme-light="true"] .mv-shell-right-panel,
-html[data-theme="default-light"] .mv-shell-right-panel,
-html[data-theme-pack="default-light"] .mv-shell-right-panel {
-  background: var(--app-neutral-surface, #f4f5f7) !important;
-  background-image: none !important;
-}
-
-html[data-theme-pack="default-light"] .mv-app-shell:not(.mv-auth-shell),
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout,
-html[data-theme-pack="default-light"] .mv-app-main {
-  background: var(--app-root-bg) !important;
-  background-image: var(--app-root-bg) !important;
-}
-
-html[data-theme-pack="default-light"] .titlebar,
-html[data-theme-pack="default-light"] .window-titlebar,
-html[data-theme-pack="default-light"] .app-titlebar {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  border-bottom: 0 !important;
-  box-shadow: none !important;
-  outline: 0 !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-left-panel {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  border-right: 0 !important;
-  box-shadow: none !important;
-  outline: 0 !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-center-panel,
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-main-panel,
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-chat-main {
-  --theme-bg-rgb: 21, 21, 21;
-  --theme-text: #f8fafc;
-  --theme-secondary-text: #cbd5e1;
-  --glass-tint: 255, 255, 255;
-  --app-content-surface: #151515;
-  --app-neutral-surface: #151515;
-  background: #151515 !important;
-  background-image: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-radius: 18px 0 0 18px !important;
-  color: #e5e7eb !important;
-  overflow: hidden !important;
-}
-
-html[data-theme-pack="default-light"] .mv-desktop-shell-layout > .mv-shell-right-panel {
-  --theme-bg-rgb: 21, 21, 21;
-  --theme-text: #f8fafc;
-  --theme-secondary-text: #cbd5e1;
-  --glass-tint: 255, 255, 255;
-  --app-content-surface: #151515;
-  --app-neutral-surface: #151515;
-  background: #151515 !important;
-  background-image: none !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-radius: 0 18px 18px 0 !important;
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25) !important;
-  color: #e5e7eb !important;
-  overflow: hidden !important;
-}
-
-html[data-theme-light="true"] .settings-flat-light .surface-card,
-html[data-theme-light="true"] .settings-flat-light .settings-card,
-html[data-theme-light="true"] .settings-flat-light .settings-panel,
-html[data-theme-light="true"] .settings-flat-light .settings-section-card,
-html[data-theme-light="true"] .settings-flat-light .theme-card,
-html[data-theme-light="true"] .settings-flat-light .performance-card,
-html[data-theme-light="true"] .settings-flat-light .card {
+html[data-theme-pack] .settings-flat-light .settings-section-card {
   background: var(--settings-card-bg) !important;
   border: 1px solid var(--settings-border) !important;
-  box-shadow: none !important;
+  color: var(--theme-text);
 }
 
-html[data-theme-light="true"] .settings-flat-light .surface-card:hover,
-html[data-theme-light="true"] .settings-flat-light .settings-card:hover,
-html[data-theme-light="true"] .settings-flat-light .settings-section-card:hover,
-html[data-theme-light="true"] .settings-flat-light .theme-card:hover,
-html[data-theme-light="true"] .settings-flat-light .performance-card:hover,
-html[data-theme-light="true"] .settings-flat-light .card:hover {
+html[data-theme-pack] .settings-flat-light .settings-section-card:hover {
   background: var(--settings-card-bg-hover) !important;
   border-color: var(--settings-border-strong) !important;
 }
 
-html[data-theme-light="true"] .settings-flat-light .settings-tabs {
-  background: var(--settings-card-bg) !important;
-  border: 1px solid var(--settings-border) !important;
-  box-shadow: none !important;
+html[data-theme-pack] .settings-flat-light .settings-section-card .surface-card,
+html[data-theme-pack] .settings-flat-light .settings-section-card .settings-card,
+html[data-theme-pack] .settings-flat-light .settings-section-card .theme-card,
+html[data-theme-pack] .settings-flat-light .settings-section-card .performance-card,
+html[data-theme-pack] .settings-flat-light .settings-section-card .card {
+  background: var(--settings-inner-card-bg) !important;
+  border-color: var(--settings-border) !important;
 }
 
-html[data-theme-light="true"] .settings-flat-light .theme-card.selected,
-html[data-theme-light="true"] .settings-flat-light .theme-card[aria-selected="true"] {
+html[data-theme-pack] .settings-flat-light .settings-section-card .surface-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-section-card .settings-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-section-card .theme-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-section-card .performance-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-section-card .card:hover {
+  background: var(--settings-inner-card-bg-hover) !important;
+  border-color: var(--settings-border-strong) !important;
+}
+
+html[data-theme-pack] .settings-flat-light .settings-tabs {
+  background: var(--settings-tabs-bg) !important;
+  border-color: var(--settings-border) !important;
+}
+
+html[data-theme-pack] .settings-flat-light .theme-card.selected,
+html[data-theme-pack] .settings-flat-light .theme-card[aria-selected="true"] {
   background: var(--settings-card-bg-hover) !important;
   border-color: var(--theme-accent) !important;
-  box-shadow: 0 0 0 1px rgba(var(--theme-accent-rgb), 0.18) !important;
 }
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light {
-  --settings-page-bg: #151515;
-  --settings-card-bg: color-mix(in srgb, #151515 92%, white 4%);
-  --settings-card-bg-hover: color-mix(in srgb, #151515 88%, white 7%);
-  --settings-panel-bg: #151515;
-  --settings-border: rgba(255, 255, 255, 0.06);
-  --settings-border-strong: rgba(255, 255, 255, 0.095);
-  --theme-panel-hover: color-mix(in srgb, #151515 88%, white 7%);
-  --theme-surface-card: var(--settings-card-bg);
-  --theme-surface-card-border: var(--settings-border);
-  --surface-card-border: 1px solid var(--settings-border);
-  --surface-elevated: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--theme-accent) 42%, #151515 58%),
-    color-mix(in srgb, var(--theme-accent) 28%, #151515 72%)
-  );
-  --range-track-alpha: 0.12;
-  --range-fill-alpha: 0.42;
-  --range-thumb-alpha: 0.86;
-  --range-thumb-glow: 0.08;
-  background: #151515 !important;
-  background-image: none !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .surface-card,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-card,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-panel,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-section-card,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .theme-card,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .performance-card,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .card {
-  background: var(--settings-card-bg) !important;
-  border: 1px solid var(--settings-border) !important;
-  box-shadow: none !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .surface-card:hover,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-card:hover,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-section-card:hover,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .theme-card:hover,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .performance-card:hover,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .card:hover {
-  background: var(--settings-card-bg-hover) !important;
-  border-color: var(--settings-border-strong) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-tabs {
-  background: var(--settings-card-bg) !important;
-  border: 1px solid var(--settings-border) !important;
-  box-shadow: none !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-theme-pack-card span {
-  color: #ffffff !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-active-theme-pack-name,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-domain-title-icon {
-  color: #ffffff !important;
-  opacity: 1 !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-tab.active span {
-  color: #111111 !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-tab.active > span:first-child {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.76) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 3px 10px rgba(0, 0, 0, 0.12) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .switch-on,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .toggle-on {
-  background: linear-gradient(180deg, #ffffff, #eef2f7) !important;
-  border: 1px solid rgba(255, 255, 255, 0.74) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 4px 12px -10px rgba(0, 0, 0, 0.42) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light [role="switch"][aria-checked="false"] {
-  background: rgba(255, 255, 255, 0.16) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light [role="switch"][aria-checked="true"] > span {
-  background: var(--theme-accent) !important;
-  box-shadow:
-    0 0 0 1px #111111,
-    0 2px 6px rgba(0, 0, 0, 0.22) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light [role="switch"][aria-checked="false"] > span {
-  background: rgba(203, 213, 225, 0.62) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light div:has(> [role="switch"][aria-checked="true"]) > span {
-  color: #f8fafc !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .premium-range {
-  --range-track-alpha: 0.14 !important;
-  --range-fill-alpha: 0.86 !important;
-  --range-thumb-alpha: 0.86 !important;
-  --range-thumb-glow: 0.08 !important;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, var(--range-fill-alpha)) 0%,
-      rgba(255, 255, 255, var(--range-fill-alpha)) var(--range-percent),
-      rgba(255, 255, 255, var(--range-track-alpha)) var(--range-percent),
-      rgba(255, 255, 255, var(--range-track-alpha)) 100%
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-range-value {
-  color: #ffffff !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-platform-badge {
-  background: rgba(255, 255, 255, 0.90) !important;
-  color: #111111 !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 3px 10px rgba(0, 0, 0, 0.12) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-icon-tile {
-  background: rgba(255, 255, 255, 0.90) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 3px 10px rgba(0, 0, 0, 0.12) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-icon {
-  color: #111111 !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-segment-option[aria-pressed="true"] {
-  background: rgba(255, 255, 255, 0.90) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 3px 10px rgba(0, 0, 0, 0.12) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-segment-option[aria-pressed="true"] span {
-  color: #111111 !important;
-  text-shadow: none !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-segment-option[aria-pressed="true"] span span {
-  background: #111111 !important;
-  box-shadow: none !important;
-}
-
 .settings-overlay-badge-board-preview {
   position: relative;
   transform-origin: center;
@@ -2415,11 +1930,6 @@ html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settin
     0 0 0 1px rgba(var(--theme-accent-rgb), 0.26),
     0 0 0 4px rgba(var(--theme-accent-rgb), 0.08) !important;
 }
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-overlay-none-board-preview > span:not(.settings-overlay-preview-avatar) {
-  color: #111111 !important;
-}
-
 .settings-overlay-badge-closed {
   position: absolute;
   top: 50%;
@@ -2481,44 +1991,6 @@ html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settin
     transform: none;
   }
 }
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .premium-range::-webkit-slider-thumb {
-  background: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.72) !important;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.26),
-    0 0 10px rgba(255, 255, 255, 0.10) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .premium-range::-moz-range-thumb {
-  background: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.72) !important;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.26),
-    0 0 10px rgba(255, 255, 255, 0.10) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-idle-minute-option[data-active="true"] {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border-color: rgba(255, 255, 255, 0.72) !important;
-  color: #111111 !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 4px 12px rgba(0, 0, 0, 0.12) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .vox-variant-grid,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .vox-size-grid,
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-idle-minute-grid {
-  background: rgba(255, 255, 255, 0.05) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
-}
-
-html[data-theme-pack="default-light"] .mv-chat-main .settings-flat-light .settings-idle-minute-grid {
-  padding: 4px;
-  border-radius: 12px;
-}
-
 @media (max-height: 760px) {
   html {
   --voice-bar-safe-area: 68px;

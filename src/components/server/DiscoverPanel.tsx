@@ -138,10 +138,10 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
 
         {/* Search + Davet kodu — dar ekranda buton ikon+kısa metin, geniş ekranda tam metin */}
         <div className="flex gap-2">
-          <div className="flex-1 min-w-0 flex items-center gap-2 h-10 rounded-lg px-3" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
+          <div className="discover-search-shell flex-1 min-w-0 flex items-center gap-2 h-10 rounded-lg px-3" style={{ background: 'rgba(var(--glass-tint), 0.04)', border: '1px solid rgba(var(--glass-tint), 0.08)' }}>
             <Search size={14} className="text-[var(--theme-secondary-text)] opacity-65 shrink-0" />
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Sunucu ara"
-              className="flex-1 min-w-0 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/60 outline-none" />
+              className="search-input-field flex-1 min-w-0 text-[12px] outline-none" />
             {loading && query.trim() && <div className="w-3 h-3 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
           </div>
           <button onClick={onJoinModal} className="h-10 px-3 sm:px-4 rounded-lg flex items-center gap-1.5 text-[10px] font-semibold shrink-0 hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"

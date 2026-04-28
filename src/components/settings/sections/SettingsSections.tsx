@@ -14,10 +14,8 @@ import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { appearanceMode, themePackId, setThemePackId } = useSettings();
+  const { themePackId, setThemePackId } = useSettings();
   const activePack = getThemePack(themePackId);
-  const isThemePackMode = appearanceMode === 'themePack';
-  const isCustomMode = appearanceMode === 'custom';
 
   return (
     <CardSection icon={<Recycle size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
@@ -26,18 +24,12 @@ export function AppearanceSection() {
       <div className="mb-1">
         <div className="flex items-baseline justify-between mb-3">
           <p className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-[0.14em]">Tema Paketleri</p>
-          {isThemePackMode ? (
-            <span className="settings-active-theme-pack-name text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
-          ) : (
-            <span className="text-[10px] font-medium text-[var(--theme-secondary-text)]/55 shrink-0">Özel mod aktif</span>
-          )}
+          <span className="settings-active-theme-pack-name text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
         </div>
 
-        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2.5 ${isCustomMode ? 'opacity-55' : ''}`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {THEME_PACKS.map(pack => {
-            // Mutual exclusion — sadece themePack modundayken seçili görünür
-            const isSelected = isThemePackMode && themePackId === pack.id;
-            const isDefaultLightSelected = isSelected && pack.id === 'default-light';
+            const isSelected = themePackId === pack.id;
             return (
               <button
                 key={pack.id}
@@ -45,14 +37,10 @@ export function AppearanceSection() {
                 className="settings-theme-pack-card group relative flex flex-col gap-2 p-2.5 rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
                 style={{
                   background: 'rgba(255,255,255,0.03)',
-                  border: isDefaultLightSelected
-                    ? '2px solid rgba(255,255,255,0.92)'
-                    : isSelected
+                  border: isSelected
                       ? '2px solid var(--accent, #6366F1)'
                       : '1px solid rgba(255,255,255,0.06)',
-                  boxShadow: isDefaultLightSelected
-                    ? '0 0 0 1px rgba(255,255,255,0.72), 0 4px 16px rgba(0,0,0,0.25)'
-                    : isSelected
+                  boxShadow: isSelected
                       ? '0 0 0 1px var(--accent, #6366F1), 0 4px 16px rgba(0,0,0,0.25)'
                       : '0 1px 4px rgba(0,0,0,0.18)',
                 }}
