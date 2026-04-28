@@ -63,7 +63,7 @@ export default function AvatarCropModal({ imageSrc, onConfirm, onCancel }: Props
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onCancel}>
       <div
-        className="bg-[var(--theme-bg)] rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl"
+        className="surface-floating rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

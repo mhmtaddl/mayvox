@@ -149,8 +149,8 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
       onClick={e => e.stopPropagation()}
       className="absolute right-3 top-[48px] z-20 w-[260px] rounded-xl overflow-hidden"
       style={{
-        background: 'var(--theme-bg)',
-        border: '1px solid var(--theme-border)',
+        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
+        border: '1px solid var(--theme-popover-border, var(--theme-border))',
         boxShadow:
           '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
           ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
@@ -257,11 +257,8 @@ function ConversationItem({
     <div className="relative group/conv">
       <button
         onClick={onClick}
-        className={`flex items-center gap-3 w-full pl-2.5 pr-3 py-2.5 rounded-[12px] text-left transition-[background-color,transform] duration-150 active:scale-[0.995] ${
-          hasUnread
-            ? 'bg-[rgba(var(--theme-accent-rgb),0.035)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)] active:bg-[rgba(var(--theme-accent-rgb),0.11)]'
-            : 'hover:bg-[rgba(var(--glass-tint),0.045)] active:bg-[rgba(var(--glass-tint),0.065)]'
-        }`}
+        data-unread={hasUnread}
+        className="dm-conversation-item flex items-center gap-3 w-full pl-2.5 pr-3 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
       >
         {/* Avatar — tek pipeline: custom → status PNG → initial */}
         <div
@@ -655,12 +652,13 @@ function ChatArea({
       {/* Input */}
       <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
         <div
-          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-colors duration-150 border-[rgba(255,255,255,0.08)] focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
+          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-colors duration-150 focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
           style={{
-            background: 'rgba(255,255,255,0.04)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+            background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.08), rgba(var(--glass-tint),0.04)), var(--surface-base)',
+            borderColor: 'rgba(var(--glass-tint),0.10)',
+            backdropFilter: 'blur(6px) saturate(110%)',
+            WebkitBackdropFilter: 'blur(6px) saturate(110%)',
+            boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.04)',
           } as React.CSSProperties}
         >
           <input
@@ -680,7 +678,8 @@ function ChatArea({
             }}
             placeholder="Mesaj yaz..."
             maxLength={2000}
-            className="flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
+            className="mv-chat-composer-field flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
+            style={{ background: 'transparent', border: 0, boxShadow: 'none' }}
           />
           <button
             onClick={() => setEmojiOpen(o => !o)}
@@ -772,7 +771,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           // materyali sağlar; Görünüm/Sesler/Performans vs aynı class üzerinden
           // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
           // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
-          className="surface-card fixed bottom-[60px] right-3 z-[110] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
+          className="surface-card dm-glass-panel fixed bottom-[60px] right-3 z-[110] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
         >
           {dm.activeRecipientId ? (
             <ChatArea

@@ -7,9 +7,8 @@ export type CardStyle = 'current' | 'revolt' | 'linear' | 'apple';
 
 export const CARD_STYLES: { key: CardStyle; label: string }[] = [
   { key: 'current', label: 'Varsayılan' },
-  { key: 'revolt', label: 'Revolt' },
-  { key: 'linear', label: 'Linear' },
-  { key: 'apple', label: 'Apple' },
+  { key: 'revolt', label: 'Kompakt' },
+  { key: 'linear', label: 'Minimal' },
 ];
 
 export interface CardStyleTokens {
@@ -104,7 +103,7 @@ export function getCardStyleTokens(style: CardStyle): CardStyleTokens {
 
 export function loadCardStyle(): CardStyle {
   const saved = localStorage.getItem('cylk_card_style');
-  if (saved === 'revolt' || saved === 'linear' || saved === 'apple') return saved;
+  if (saved === 'revolt' || saved === 'linear') return saved;
   return 'current';
 }
 

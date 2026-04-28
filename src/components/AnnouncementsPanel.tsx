@@ -160,7 +160,7 @@ function CalendarPicker({ value, onChange, onClose }: { value: string; onChange:
   const next = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
 
   return (
-    <div className="p-3 rounded-xl border w-[260px]" style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
+    <div className="p-3 rounded-xl border w-[260px]" style={{ background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={prev} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors text-xs">&lt;</button>
         <span className="text-[12px] font-bold text-[var(--theme-text)]">{MONTHS_TR[viewMonth]} {viewYear}</span>
@@ -202,7 +202,7 @@ function TimePicker({ value, onChange, onClose }: { value: string; onChange: (v:
   const apply = () => { onChange(`${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`); onClose(); };
 
   return (
-    <div className="p-4 rounded-xl border w-[200px]" style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
+    <div className="p-4 rounded-xl border w-[200px]" style={{ background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))', borderColor: 'var(--popover-border)', boxShadow: 'var(--popover-shadow)', color: 'var(--popover-text)' }} onClick={e => e.stopPropagation()}>
       <p className="text-[10px] font-bold text-[var(--theme-secondary-text)]/70 uppercase tracking-wider mb-3 text-center">Saat Seç</p>
       <div className="flex items-center justify-center gap-2 mb-4">
         <div className="flex flex-col items-center">
@@ -288,7 +288,7 @@ const ItemModal = ({ open, onClose, onSubmit, initial, initialType, loading }: M
         exit={{ scale: 0.96, opacity: 0, y: 12 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
         className="w-full max-w-md rounded-2xl border max-h-[85vh] flex flex-col overflow-hidden"
-        style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
+        style={{ background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top accent line */}
@@ -494,7 +494,7 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
         exit={{ scale: 0.96, opacity: 0, y: 12 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
         className="w-full max-w-sm rounded-2xl border p-5"
-        style={{ background: 'var(--theme-bg)', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
+        style={{ background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm text-[var(--theme-text)] mb-4">Bu öğeyi silmek istediğinize emin misiniz?</p>
@@ -525,7 +525,7 @@ function AnnouncementCard({ item, isPinned, canEdit, onEdit, onDelete }: {
     exit={{ opacity: 0, y: -8 }}
     className={`relative rounded-xl border ${PRIORITY_BORDER[item.priority]} ${
       isPinned
-        ? 'bg-gradient-to-br from-[var(--theme-surface)] to-[var(--theme-bg)] p-5'
+        ? 'bg-gradient-to-br from-[var(--theme-surface)] to-[var(--surface-elevated)] p-5'
         : 'bg-[var(--theme-surface)]/50 hover:bg-[var(--theme-surface)]/80 p-4'
     } group transition-colors`}
   >
@@ -585,7 +585,7 @@ function EventCard({ item, isPinned, canEdit, onEdit, onDelete }: {
     exit={{ opacity: 0, y: -8 }}
     className={`relative rounded-xl border ${PRIORITY_BORDER[item.priority]} ${
       isPinned
-        ? 'bg-gradient-to-br from-violet-500/5 via-[var(--theme-surface)] to-[var(--theme-bg)] p-5'
+        ? 'bg-gradient-to-br from-violet-500/5 via-[var(--theme-surface)] to-[var(--surface-elevated)] p-5'
         : 'bg-[var(--theme-surface)]/50 hover:bg-[var(--theme-surface)]/80 p-4'
     } group transition-colors`}
   >
@@ -763,7 +763,7 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         {/* Tabs */}
-        <div className="flex items-center gap-1 bg-[var(--theme-bg)]/60 rounded-lg p-0.5 border border-[var(--theme-border)]/20">
+        <div className="flex items-center gap-1 bg-[var(--theme-panel)]/60 rounded-lg p-0.5 border border-[var(--theme-border)]/20">
           {([
             { id: 'all' as Tab, label: 'Tümü', count: announcements.length },
             { id: 'announcement' as Tab, label: 'Duyurular', count: announcementCount },

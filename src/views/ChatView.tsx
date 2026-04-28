@@ -621,7 +621,7 @@ export default function ChatView() {
   });
   const [cardStyle, setCardStyleState] = useState<CardStyle>(loadCardStyle);
   const cycleCardStyle = () => {
-    const order: CardStyle[] = ['current', 'revolt', 'linear', 'apple'];
+    const order: CardStyle[] = ['current', 'revolt', 'linear'];
     const next = order[(order.indexOf(cardStyle) + 1) % order.length];
     saveCardStyle(next);
     setCardStyleState(next);

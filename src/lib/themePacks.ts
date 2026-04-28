@@ -20,9 +20,12 @@ export type ThemePackId =
   | 'graphite-pro'
   | 'aurora';
 
+export type ThemePackAccessTier = 'free' | 'pro' | 'elite';
+
 export interface ThemePack {
   id: ThemePackId;
   name: string;
+  requiredAccess?: ThemePackAccessTier;
 
   // Background — 2-tone gradient + subtle radial highlight + (opsiyonel) noise
   bg: string;        // CSS background (gradient + radial)
@@ -61,6 +64,30 @@ export interface ThemePack {
   previewFrom: string;
   previewTo: string;
 }
+
+export type ThemeCustomizationTier = 'pro' | 'elite';
+
+export interface ProThemeCustomization {
+  accent?: string;
+  chromeTint?: string;
+}
+
+export interface EliteThemeCustomization extends ProThemeCustomization {
+  contentTint?: string;
+  materialTint?: string;
+}
+
+export interface ThemeCustomizationOverrides {
+  pro: ProThemeCustomization;
+  elite: EliteThemeCustomization;
+}
+
+export const THEME_OVERRIDES_STORAGE_KEY = 'mayvox:theme-overrides:v1';
+
+export const EMPTY_THEME_CUSTOMIZATION_OVERRIDES: ThemeCustomizationOverrides = {
+  pro: {},
+  elite: {},
+};
 
 // ── Texture system: per-theme noise grain ──
 // Her tema farklı baseFrequency + opacity → kendi material identity
@@ -280,6 +307,7 @@ export const THEME_PACKS: ThemePack[] = [
   {
     id: 'graphite-pro',
     name: 'Graphite Pro',
+    requiredAccess: 'pro',
     bg: `radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.045), transparent 34%), radial-gradient(circle at 80% 10%, rgba(156, 163, 175, 0.05), transparent 30%), linear-gradient(180deg, #0e0f11 0%, #090a0c 100%), ${NOISE.graphite}`,
     bgSoft: '#0E0F11',
     surface: 'rgba(22, 24, 28, 0.82)',
@@ -306,6 +334,7 @@ export const THEME_PACKS: ThemePack[] = [
   {
     id: 'aurora',
     name: 'Aurora',
+    requiredAccess: 'elite',
     bg: `radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.14), transparent 34%), radial-gradient(circle at 82% 8%, rgba(167, 139, 250, 0.12), transparent 32%), radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.08), transparent 42%), linear-gradient(180deg, #0b0f17 0%, #080b12 100%), ${NOISE.aurora}`,
     bgSoft: '#0B0F17',
     surface: 'rgba(18, 24, 38, 0.78)',
@@ -333,14 +362,198 @@ export const THEME_PACKS: ThemePack[] = [
 
 export const DEFAULT_THEME_PACK_ID: ThemePackId = 'default-dark';
 
+const THEME_ACCESS_RANK: Record<ThemePackAccessTier, number> = {
+  free: 0,
+  pro: 1,
+  elite: 2,
+};
+
 export function getThemePack(id: string | null | undefined): ThemePack {
   return THEME_PACKS.find(p => p.id === id) ?? THEME_PACKS[0];
+}
+
+export function getThemeAccessTier(user: {
+  serverCreationPlan?: string | null;
+  userLevel?: string | null;
+} | null | undefined): ThemePackAccessTier {
+  const plan = String(user?.serverCreationPlan ?? '').toLowerCase();
+  const level = String(user?.userLevel ?? '').toLowerCase();
+
+  if (
+    plan === 'ultra' ||
+    level === '3' ||
+    level.includes('elit') ||
+    level.includes('elite') ||
+    level.includes('ultra')
+  ) {
+    return 'elite';
+  }
+
+  if (
+    plan === 'pro' ||
+    level === '2' ||
+    level.includes('pro') ||
+    level.includes('vip')
+  ) {
+    return 'pro';
+  }
+
+  return 'free';
+}
+
+export function canAccessThemePack(
+  packOrId: ThemePack | ThemePackId | string | null | undefined,
+  userTier: ThemePackAccessTier,
+): boolean {
+  const pack = typeof packOrId === 'object' && packOrId
+    ? packOrId
+    : THEME_PACKS.find(p => p.id === packOrId);
+  const required = pack?.requiredAccess ?? 'free';
+  return THEME_ACCESS_RANK[required] <= THEME_ACCESS_RANK[userTier];
 }
 
 function hexToRgbTuple(hex: string): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!m) return '0, 0, 0';
   return `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}`;
+}
+
+function isValidHexColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[a-f\d]{6}$/i.test(value);
+}
+
+function sanitizeHex(value: unknown): string | undefined {
+  return isValidHexColor(value) ? value : undefined;
+}
+
+export function sanitizeThemeCustomizationOverrides(value: unknown): ThemeCustomizationOverrides {
+  const source = value && typeof value === 'object' ? value as any : {};
+  const pro = source.pro && typeof source.pro === 'object' ? source.pro : {};
+  const elite = source.elite && typeof source.elite === 'object' ? source.elite : {};
+  return {
+    pro: {
+      accent: sanitizeHex(pro.accent),
+      chromeTint: sanitizeHex(pro.chromeTint),
+    },
+    elite: {
+      accent: sanitizeHex(elite.accent),
+      chromeTint: sanitizeHex(elite.chromeTint),
+      contentTint: sanitizeHex(elite.contentTint),
+      materialTint: sanitizeHex(elite.materialTint),
+    },
+  };
+}
+
+function hasThemeOverrideValues(overrides: ThemeCustomizationOverrides): boolean {
+  return Boolean(
+    overrides.pro.accent ||
+    overrides.pro.chromeTint ||
+    overrides.elite.accent ||
+    overrides.elite.chromeTint ||
+    overrides.elite.contentTint ||
+    overrides.elite.materialTint,
+  );
+}
+
+// Runs after applyThemePack. It writes only CSS variables and never mutates packs.
+export function applyThemeOverrides(overrides: ThemeCustomizationOverrides | null | undefined): void {
+  if (!overrides) return;
+  const sanitized = sanitizeThemeCustomizationOverrides(overrides);
+  if (!hasThemeOverrideValues(sanitized)) return;
+
+  const root = document.documentElement;
+  const set = (k: string, v: string) => root.style.setProperty(k, v);
+
+  const accent = sanitized.elite.accent ?? sanitized.pro.accent;
+  const chromeTint = sanitized.elite.chromeTint ?? sanitized.pro.chromeTint;
+  const contentTint = sanitized.elite.contentTint;
+  const materialTint = sanitized.elite.materialTint;
+
+  if (accent) {
+    const rgb = hexToRgbTuple(accent);
+    set('--accent', accent);
+    set('--accent-rgb', rgb);
+    set('--theme-accent', accent);
+    set('--theme-accent-rgb', rgb);
+    set('--theme-glow', accent);
+    set('--theme-glow-rgb', rgb);
+    set('--theme-icon-primary', accent);
+    set('--accent-strong', `color-mix(in srgb, ${accent} 82%, white 18%)`);
+    set('--accent-soft', `rgba(${rgb}, 0.13)`);
+    set('--accent-border', `rgba(${rgb}, 0.28)`);
+    set('--theme-selection', `rgba(${rgb}, 0.14)`);
+    set('--theme-badge-bg', accent);
+    set('--theme-btn-primary-bg', accent);
+    set('--theme-btn-primary-hover', `color-mix(in srgb, ${accent} 84%, white 16%)`);
+    set('--theme-input-focus-border', `rgba(${rgb}, 0.36)`);
+    set('--theme-input-focus-ring', `rgba(${rgb}, 0.15)`);
+    set('--dock-item-active', `color-mix(in srgb, ${accent} 12%, var(--surface-elevated) 88%)`);
+    set('--dock-item-active-border', `rgba(${rgb}, 0.26)`);
+  }
+
+  if (chromeTint) {
+    const rgb = hexToRgbTuple(chromeTint);
+    const sidebarTint = `color-mix(in srgb, ${chromeTint} 42%, var(--bg-shell) 58%)`;
+    const topbarStrong = `color-mix(in srgb, ${chromeTint} 24%, var(--bg-app) 76%)`;
+    const topbarSoft = `color-mix(in srgb, ${chromeTint} 12%, var(--bg-app) 88%)`;
+    const rootBg = `linear-gradient(90deg, ${sidebarTint} 0%, color-mix(in srgb, ${sidebarTint} 72%, var(--app-neutral-bg) 28%) 22%, var(--app-neutral-bg) 48%, var(--app-neutral-bg) 100%)`;
+    const topbarBg = `linear-gradient(90deg, ${sidebarTint} 0, ${sidebarTint} 46vw, ${topbarStrong} 56vw, ${topbarSoft} 66vw, var(--app-neutral-bg) 76vw, var(--app-neutral-bg) 100%)`;
+    set('--theme-sidebar-rgb', rgb);
+    set('--theme-sidebar', sidebarTint);
+    set('--sidebar', sidebarTint);
+    set('--sidebar-tint-bg', sidebarTint);
+    set('--topbar-gradient-start', sidebarTint);
+    set('--topbar-gradient-mid-strong', topbarStrong);
+    set('--topbar-gradient-mid-soft', topbarSoft);
+    set('--app-root-bg', rootBg);
+    set('--app-shell-bg', rootBg);
+    set('--theme-bg', rootBg);
+    set('--topbar-bg', topbarBg);
+    document.body.style.background = rootBg;
+  }
+
+  if (contentTint) {
+    const surface = `color-mix(in srgb, var(--app-neutral-bg) 92%, ${contentTint} 8%)`;
+    const elevated = `color-mix(in srgb, var(--app-neutral-bg) 90%, ${contentTint} 10%)`;
+    const soft = `color-mix(in srgb, var(--app-neutral-bg) 94%, ${contentTint} 6%)`;
+    set('--app-neutral-surface', surface);
+    set('--app-content-surface', surface);
+    set('--app-surface', surface);
+    set('--app-surface-raised', elevated);
+    set('--rightbar', surface);
+    set('--surface-base', surface);
+    set('--surface-elevated', elevated);
+    set('--surface-soft', soft);
+    set('--surface-hover', elevated);
+    set('--surface-muted', soft);
+  }
+
+  if (materialTint) {
+    const rgb = hexToRgbTuple(materialTint);
+    const materialBase = `color-mix(in srgb, var(--app-neutral-bg) 90%, ${materialTint} 10%)`;
+    const materialRaised = `color-mix(in srgb, var(--app-neutral-bg) 88%, ${materialTint} 12%)`;
+    const materialSoft = `color-mix(in srgb, var(--app-neutral-bg) 94%, ${materialTint} 6%)`;
+    set('--card', materialBase);
+    set('--card-elevated', materialRaised);
+    set('--theme-panel', materialBase);
+    set('--theme-surface-card', materialBase);
+    set('--theme-elevated-panel', materialRaised);
+    set('--theme-bg-elevated', materialRaised);
+    set('--surface-card-bg', materialBase);
+    set('--surface-card-hover-bg', materialRaised);
+    set('--surface-floating-bg', materialRaised);
+    set('--popover-bg', materialRaised);
+    set('--theme-popover-bg', materialRaised);
+    set('--surface-card-border', `1px solid rgba(${rgb}, 0.11)`);
+    set('--theme-surface-card-border', `rgba(${rgb}, 0.11)`);
+    set('--dock-surface-bg', `linear-gradient(180deg, color-mix(in srgb, ${materialTint} 12%, var(--surface-elevated) 88%), color-mix(in srgb, ${materialTint} 8%, var(--surface-base) 92%))`);
+    set('--dock-item-bg', `color-mix(in srgb, ${materialTint} 8%, var(--surface-elevated) 92%)`);
+    set('--dock-item-hover', `color-mix(in srgb, ${materialTint} 12%, var(--surface-elevated) 88%)`);
+    set('--dock-surface-border', `rgba(${rgb}, 0.11)`);
+    set('--dock-item-border', `rgba(${rgb}, 0.10)`);
+    set('--dock-bg', 'var(--dock-surface-bg)');
+    set('--dock-border', 'var(--dock-surface-border)');
+  }
 }
 
 // ── Apply: tüm token'ları :root CSS değişkeni olarak yaz ──

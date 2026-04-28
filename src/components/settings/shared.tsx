@@ -10,7 +10,7 @@ export const labelCls = 'text-[10px] font-semibold text-[var(--theme-secondary-t
 
 // Unified surface — Messages panel referanslı gradient + hairline + soft shadow.
 // `.surface-card` bg/border/shadow'u merkezi token'lardan alır.
-export const cardCls = 'surface-card rounded-2xl overflow-hidden';
+export const cardCls = 'surface-card settings-content-card rounded-2xl overflow-hidden';
 
 // ── Toggle switch ──
 export const Toggle = ({ checked, onChange, tooltip }: { checked: boolean; onChange: () => void; tooltip?: string }) => (

@@ -672,23 +672,18 @@ export default function DesktopDock({
             onClick={cycleCardStyle}
             className="w-10 h-10 flex items-center justify-center btn-haptic"
             style={{
-              borderRadius: cardStyle === 'revolt' ? 8 : cardStyle === 'linear' ? 12 : cardStyle === 'apple' ? 14 : 12,
+              borderRadius: cardStyle === 'revolt' ? 8 : cardStyle === 'linear' ? 12 : 12,
               background: cardStyle === 'revolt'
                 ? 'rgba(var(--theme-bg-rgb), 0.85)'
                 : cardStyle === 'linear'
                   ? 'rgba(var(--theme-bg-rgb), 0.75)'
-                  : cardStyle === 'apple'
-                    ? 'rgba(255,255,255,0.05)'
-                    : 'rgba(var(--glass-tint), 0.025)',
+                  : 'rgba(var(--glass-tint), 0.025)',
               border: cardStyle === 'linear'
                 ? '1px solid rgba(var(--theme-accent-rgb), 0.12)'
-                : cardStyle === 'apple'
-                  ? '1px solid rgba(255,255,255,0.1)'
-                  : '1px solid rgba(var(--glass-tint), 0.06)',
+                : '1px solid rgba(var(--glass-tint), 0.06)',
               boxShadow: cardStyle === 'linear'
                 ? '0 2px 8px rgba(0,0,0,0.15)'
                 : '0 1px 3px rgba(0,0,0,0.06)',
-              backdropFilter: cardStyle === 'apple' ? 'blur(12px)' : undefined,
               transition: 'all 0.2s ease',
             }}
             title={`Görünüm: ${CARD_STYLES.find(s => s.key === cardStyle)?.label}`}

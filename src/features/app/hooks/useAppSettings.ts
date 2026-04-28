@@ -2,9 +2,20 @@
  * useAppSettings — Tüm kullanıcı ayarlarının localStorage ile persist edilen state yönetimi.
  * Tema CSS efekti dahil. Hiçbir dış state'e bağımlılığı yok (saf settings domain).
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { type VoiceMode } from '../../../contexts/SettingsCtx';
-import { THEME_PACKS, DEFAULT_THEME_PACK_ID, getThemePack, applyThemePack, type ThemePackId } from '../../../lib/themePacks';
+import {
+  THEME_PACKS,
+  DEFAULT_THEME_PACK_ID,
+  THEME_OVERRIDES_STORAGE_KEY,
+  EMPTY_THEME_CUSTOMIZATION_OVERRIDES,
+  getThemePack,
+  applyThemePack,
+  applyThemeOverrides,
+  sanitizeThemeCustomizationOverrides,
+  type ThemeCustomizationOverrides,
+  type ThemePackId,
+} from '../../../lib/themePacks';
 
 export function useAppSettings() {
   // ── Theme Pack — single source of truth for appearance ──
@@ -14,17 +25,88 @@ export function useAppSettings() {
     return DEFAULT_THEME_PACK_ID;
   });
   const setThemePackId = (id: ThemePackId) => {
+    if (id === themePackId) return;
     localStorage.setItem('themePack', id);
     setThemePackIdState(id);
   };
 
-  // ── Apply effect — all appearance tokens come from the active pack ──
+  const [customThemeOverrides, setCustomThemeOverridesState] = useState<ThemeCustomizationOverrides>(() => {
+    try {
+      const saved = localStorage.getItem(THEME_OVERRIDES_STORAGE_KEY);
+      return sanitizeThemeCustomizationOverrides(saved ? JSON.parse(saved) : EMPTY_THEME_CUSTOMIZATION_OVERRIDES);
+    } catch {
+      return EMPTY_THEME_CUSTOMIZATION_OVERRIDES;
+    }
+  });
+  const customThemeOverridesRef = useRef(customThemeOverrides);
+  const lastAppliedOverrideKeyRef = useRef('');
+  const overrideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overrideFrameRef = useRef<number | null>(null);
+
+  const setCustomThemeOverrides = (value: ThemeCustomizationOverrides) => {
+    const sanitized = sanitizeThemeCustomizationOverrides(value);
+    const nextKey = JSON.stringify(sanitized);
+    if (nextKey === JSON.stringify(customThemeOverridesRef.current)) return;
+    customThemeOverridesRef.current = sanitized;
+    setCustomThemeOverridesState(sanitized);
+  };
+
+  const commitCustomThemeOverrides = (value?: ThemeCustomizationOverrides) => {
+    const sanitized = sanitizeThemeCustomizationOverrides(value ?? customThemeOverridesRef.current);
+    localStorage.setItem(THEME_OVERRIDES_STORAGE_KEY, JSON.stringify(sanitized));
+  };
+
+  const resetCustomThemeOverrides = (tier?: 'pro' | 'elite') => {
+    const next = sanitizeThemeCustomizationOverrides(customThemeOverrides);
+    if (!tier || tier === 'pro') next.pro = {};
+    if (!tier || tier === 'elite') next.elite = {};
+    localStorage.setItem(THEME_OVERRIDES_STORAGE_KEY, JSON.stringify(next));
+    customThemeOverridesRef.current = next;
+    applyThemePack(getThemePack(themePackId));
+    applyThemeOverrides(next);
+    lastAppliedOverrideKeyRef.current = JSON.stringify(next);
+    setCustomThemeOverridesState(next);
+  };
+
+  useEffect(() => {
+    customThemeOverridesRef.current = customThemeOverrides;
+  }, [customThemeOverrides]);
+
+  // ── Apply pack only when the selected pack changes ──
   useEffect(() => {
     localStorage.removeItem('appearanceMode');
     localStorage.removeItem('themeKey');
     localStorage.removeItem('activeBackground');
     applyThemePack(getThemePack(themePackId));
+    const overrideKey = JSON.stringify(sanitizeThemeCustomizationOverrides(customThemeOverridesRef.current));
+    applyThemeOverrides(customThemeOverridesRef.current);
+    lastAppliedOverrideKeyRef.current = overrideKey;
   }, [themePackId]);
+
+  // ── Debounced live preview — color picker drag updates CSS variables, not storage ──
+  useEffect(() => {
+    const overrideKey = JSON.stringify(sanitizeThemeCustomizationOverrides(customThemeOverrides));
+    if (overrideKey === lastAppliedOverrideKeyRef.current) return;
+
+    if (overrideTimerRef.current) clearTimeout(overrideTimerRef.current);
+    if (overrideFrameRef.current !== null) cancelAnimationFrame(overrideFrameRef.current);
+
+    overrideTimerRef.current = setTimeout(() => {
+      overrideFrameRef.current = requestAnimationFrame(() => {
+        const currentKey = JSON.stringify(sanitizeThemeCustomizationOverrides(customThemeOverridesRef.current));
+        if (currentKey === lastAppliedOverrideKeyRef.current) return;
+        applyThemeOverrides(customThemeOverridesRef.current);
+        lastAppliedOverrideKeyRef.current = currentKey;
+      });
+    }, 125);
+
+    return () => {
+      if (overrideTimerRef.current) clearTimeout(overrideTimerRef.current);
+      if (overrideFrameRef.current !== null) cancelAnimationFrame(overrideFrameRef.current);
+      overrideTimerRef.current = null;
+      overrideFrameRef.current = null;
+    };
+  }, [customThemeOverrides]);
 
   // ── Audio / Noise ──
   const [isLowDataMode, setIsLowDataModeState] = useState(() => localStorage.getItem('lowDataMode') === 'true');
@@ -265,6 +347,7 @@ export function useAppSettings() {
 
   return {
     themePackId, setThemePackId,
+    customThemeOverrides, setCustomThemeOverrides, commitCustomThemeOverrides, resetCustomThemeOverrides,
     isLowDataMode, setIsLowDataMode,
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
     noiseThreshold, setNoiseThreshold,

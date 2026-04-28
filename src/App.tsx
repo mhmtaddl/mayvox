@@ -40,7 +40,12 @@ import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
-import { getThemePack } from './lib/themePacks';
+import {
+  DEFAULT_THEME_PACK_ID,
+  canAccessThemePack,
+  getThemeAccessTier,
+  getThemePack,
+} from './lib/themePacks';
 
 // Supabase DB satır tipleri
 type DbProfile = {
@@ -452,6 +457,18 @@ export default function App() {
     isPrimaryAdmin: false,
   });
   const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!currentUser.id) return;
+    const themeAccessTier = getThemeAccessTier(currentUser);
+    if (canAccessThemePack(settings.themePackId, themeAccessTier)) return;
+    settings.setThemePackId(DEFAULT_THEME_PACK_ID);
+  }, [
+    currentUser.id,
+    currentUser.serverCreationPlan,
+    currentUser.userLevel,
+    settings.themePackId,
+  ]);
 
   // ── Friends v2 ───────────────────────────────────────────────────────────
   const {

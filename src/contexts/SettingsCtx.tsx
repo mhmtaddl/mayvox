@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import type { ThemePackId } from '../lib/themePacks';
+import type { ThemePackId, ThemeCustomizationOverrides } from '../lib/themePacks';
 
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
@@ -15,6 +15,10 @@ export interface SettingsContextType {
   /** Tek-paket tema seçimi (normal kullanıcı). 6 sabit pack'ten biri. */
   themePackId: ThemePackId;
   setThemePackId: (id: ThemePackId) => void;
+  customThemeOverrides: ThemeCustomizationOverrides;
+  setCustomThemeOverrides: (v: ThemeCustomizationOverrides) => void;
+  commitCustomThemeOverrides: (v?: ThemeCustomizationOverrides) => void;
+  resetCustomThemeOverrides: (tier?: 'pro' | 'elite') => void;
   isLowDataMode: boolean;
   setIsLowDataMode: (v: boolean) => void;
   isNoiseSuppressionEnabled: boolean;

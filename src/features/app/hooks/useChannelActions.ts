@@ -17,7 +17,7 @@ import { getPublicDisplayName } from '../../../lib/formatName';
 import { applyVolumeToAudioElement, getUserVolumePercent, setUserVolumePercent } from '../../../lib/userVolume';
 import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../../../lib/channelOrder';
-import { applyLocalChannelIconColors, getDefaultChannelIconColor } from '../../../lib/channelIconColor';
+import { applyLocalChannelIconColors, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { applyLocalChannelIcons, getDefaultChannelIconName } from '../../../lib/channelIcon';
 // Kota enforcement backend'de. Frontend sadece CreateRoomModal'da
 // bilgisel sayaç gösterir (calcPersistentRoomsRemaining ChatView'dan çağrılır).
@@ -263,12 +263,12 @@ export function useChannelActions({
           isInviteOnly: roomModal.isInviteOnly,
           isHidden: roomModal.isHidden,
           isPersistent,
-          iconColor: roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode),
+          iconColor: normalizeChannelIconColor(roomModal.iconColor, roomModal.mode),
           iconName: roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode),
         });
         console.log('[createRoom-debug] backend returned:', created);
         console.log('[createRoom-debug] backend.isPersistent:', created.isPersistent, '· typeof:', typeof created.isPersistent, '· isDefault:', created.isDefault);
-        const iconColor = created.iconColor ?? roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode);
+        const iconColor = normalizeChannelIconColor(created.iconColor ?? roomModal.iconColor, roomModal.mode);
         const iconName = created.iconName ?? roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
         const newRoom: VoiceChannel = {
           id: created.id, name: created.name, userCount: 0, members: [],
@@ -293,7 +293,7 @@ export function useChannelActions({
       }
     } else if (roomModal.type === 'edit' && roomModal.channelId) {
       const channelId = roomModal.channelId;
-      const iconColor = roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode);
+      const iconColor = normalizeChannelIconColor(roomModal.iconColor, roomModal.mode);
       const iconName = roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
       const updates = { name: trimmedName, maxUsers: roomModal.maxUsers, isInviteOnly: roomModal.isInviteOnly, isHidden: roomModal.isHidden, mode: roomModal.mode, iconColor, iconName };
       const prevSnapshot = channels;

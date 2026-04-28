@@ -1,21 +1,214 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Recycle, Volume2, Zap, Mic, AudioLines, Eye } from 'lucide-react';
+import { Check, ChevronDown, Crown, Lock, Palette, Recycle, RotateCcw, Volume2, Zap, Mic, AudioLines } from 'lucide-react';
 import { CardSection, Toggle, cardCls } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
+import { useUser } from '../../../contexts/UserContext';
 import { useUI } from '../../../contexts/UIContext';
 import { previewSound, type SoundVariant } from '../../../lib/sounds';
 import {
   SoundManager, stopAllSamples,
   type CallVariant, type NotificationVariant,
 } from '../../../lib/audio/SoundManager';
-import { THEME_PACKS, getThemePack } from '../../../lib/themePacks';
+import {
+  THEME_PACKS,
+  DEFAULT_THEME_PACK_ID,
+  canAccessThemePack,
+  getThemeAccessTier,
+  getThemePack,
+} from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
 
+function PremiumColorControl({
+  label,
+  value,
+  fallback,
+  disabled,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  value?: string;
+  fallback: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onCommit: (value: string) => void;
+}) {
+  const color = value || fallback;
+  const [draftColor, setDraftColor] = useState(color);
+
+  useEffect(() => {
+    setDraftColor(color);
+  }, [color]);
+
+  const commitDraft = () => {
+    if (!disabled) onCommit(draftColor);
+  };
+
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] px-2.5 py-2 ${disabled ? 'opacity-45' : ''}`}>
+      <span className="min-w-0 text-[10.5px] font-semibold text-[var(--theme-secondary-text)] truncate">{label}</span>
+      <span className="relative h-6 w-8 shrink-0 overflow-hidden rounded-md border border-[var(--theme-border)]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" style={{ background: draftColor }}>
+        <input
+          type="color"
+          value={draftColor}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDraftColor(next);
+            onChange(next);
+          }}
+          onBlur={commitDraft}
+          onMouseUp={commitDraft}
+          onPointerUp={commitDraft}
+          onTouchEnd={commitDraft}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          aria-label={label}
+        />
+      </span>
+    </div>
+  );
+}
+
+function PremiumCustomizationCard({
+  tier,
+  title,
+  badge,
+  icon,
+  locked,
+  children,
+  onReset,
+  isOpen,
+  onToggle,
+}: {
+  tier: 'pro' | 'elite';
+  title: string;
+  badge: string;
+  icon: React.ReactNode;
+  locked: boolean;
+  children: React.ReactNode;
+  onReset: () => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl border border-[var(--theme-border)]/65 bg-[var(--surface-base)] p-3 shadow-[var(--surface-card-shadow)] ${locked ? 'opacity-75' : ''}`}
+      aria-disabled={locked}
+    >
+      <button
+        type="button"
+        disabled={locked}
+        onClick={onToggle}
+        className={`flex w-full items-center justify-between gap-2 text-left ${isOpen ? 'mb-3' : ''} disabled:cursor-not-allowed`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-border)]/60 bg-[var(--surface-soft)] text-[var(--theme-accent)]">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-bold text-[var(--theme-text)]">{title}</p>
+            <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-accent)]/80">{badge}</p>
+          </div>
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-[var(--theme-secondary-text)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="flex items-center justify-end mb-3">
+        <button
+          type="button"
+          disabled={locked}
+          onClick={onReset}
+          className="settings-premium-reset inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--theme-border)]/60 bg-[var(--surface-soft)] px-2 text-[10px] font-semibold text-[var(--theme-secondary-text)] transition-colors hover:bg-[var(--surface-elevated)] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <RotateCcw size={12} />
+          Sıfırla
+        </button>
+        </div>
+      )}
+
+      {isOpen && (
+        <div className={`grid gap-2 ${locked ? 'pointer-events-none blur-[1px]' : ''}`}>
+          {children}
+        </div>
+      )}
+
+      {locked && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[var(--surface-base)]/55 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-full border border-[var(--theme-border)]/70 bg-[var(--surface-elevated)] px-3 py-1.5 text-[10px] font-bold text-[var(--theme-secondary-text)] shadow-[var(--shadow-soft)]">
+            <Lock size={12} />
+            {tier === 'pro' ? 'Pro ve üstü üyeler' : 'Elit üyeler'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Görünüm ──
 export function AppearanceSection() {
-  const { themePackId, setThemePackId } = useSettings();
+  const {
+    themePackId,
+    setThemePackId,
+    customThemeOverrides,
+    setCustomThemeOverrides,
+    commitCustomThemeOverrides,
+    resetCustomThemeOverrides,
+  } = useSettings();
+  const { currentUser } = useUser();
+  const [isProCustomizationOpen, setIsProCustomizationOpen] = useState(false);
+  const [isEliteCustomizationOpen, setIsEliteCustomizationOpen] = useState(false);
   const activePack = getThemePack(themePackId);
+  const themeAccessTier = getThemeAccessTier(currentUser);
+  const visibleThemePacks = THEME_PACKS.filter(pack => canAccessThemePack(pack, themeAccessTier));
+  const isEliteMember = themeAccessTier === 'elite';
+  const isProMember = themeAccessTier === 'pro' || themeAccessTier === 'elite';
+
+  const buildProOverride = (key: 'accent' | 'chromeTint', value: string) => ({
+    ...customThemeOverrides,
+    pro: { ...customThemeOverrides.pro, [key]: value },
+  });
+
+  const buildEliteOverride = (key: 'accent' | 'chromeTint' | 'contentTint' | 'materialTint', value: string) => ({
+    ...customThemeOverrides,
+    elite: { ...customThemeOverrides.elite, [key]: value },
+  });
+
+  const updateProOverride = (key: 'accent' | 'chromeTint', value: string) => {
+    setCustomThemeOverrides(buildProOverride(key, value));
+  };
+
+  const commitProOverride = (key: 'accent' | 'chromeTint', value: string) => {
+    commitCustomThemeOverrides(buildProOverride(key, value));
+  };
+
+  const updateEliteOverride = (key: 'accent' | 'chromeTint' | 'contentTint' | 'materialTint', value: string) => {
+    setCustomThemeOverrides(buildEliteOverride(key, value));
+  };
+
+  const commitEliteOverride = (key: 'accent' | 'chromeTint' | 'contentTint' | 'materialTint', value: string) => {
+    commitCustomThemeOverrides(buildEliteOverride(key, value));
+  };
+
+  const selectThemePack = (id: typeof themePackId) => {
+    if (!canAccessThemePack(id, themeAccessTier)) return;
+    resetCustomThemeOverrides();
+    setThemePackId(id);
+    setIsProCustomizationOpen(false);
+    setIsEliteCustomizationOpen(false);
+  };
+
+  useEffect(() => {
+    if (canAccessThemePack(themePackId, themeAccessTier)) return;
+    resetCustomThemeOverrides();
+    setThemePackId(DEFAULT_THEME_PACK_ID);
+    setIsProCustomizationOpen(false);
+    setIsEliteCustomizationOpen(false);
+  }, [themeAccessTier, themePackId]);
 
   return (
     <CardSection icon={<Recycle size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
@@ -28,12 +221,12 @@ export function AppearanceSection() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {THEME_PACKS.map(pack => {
+          {visibleThemePacks.map(pack => {
             const isSelected = themePackId === pack.id;
             return (
               <button
                 key={pack.id}
-                onClick={() => setThemePackId(pack.id)}
+                onClick={() => selectThemePack(pack.id)}
                 className="settings-theme-pack-card group relative flex flex-col gap-2 p-2.5 rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
                 style={{
                   background: 'rgba(255,255,255,0.03)',
@@ -67,6 +260,80 @@ export function AppearanceSection() {
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-3 grid gap-2.5">
+          <PremiumCustomizationCard
+            tier="pro"
+            title="Pro Özelleştirme"
+            badge="Pro"
+            icon={<Palette size={14} />}
+            locked={!isProMember}
+            onReset={() => resetCustomThemeOverrides('pro')}
+            isOpen={isProCustomizationOpen}
+            onToggle={() => setIsProCustomizationOpen(value => !value)}
+          >
+            <PremiumColorControl
+              label="Accent rengi"
+              value={customThemeOverrides.pro.accent}
+              fallback={activePack.accent}
+              disabled={!isProMember}
+              onChange={(value) => updateProOverride('accent', value)}
+              onCommit={(value) => commitProOverride('accent', value)}
+            />
+            <PremiumColorControl
+              label="Sol panel + üst bar"
+              value={customThemeOverrides.pro.chromeTint}
+              fallback={activePack.bgSoft}
+              disabled={!isProMember}
+              onChange={(value) => updateProOverride('chromeTint', value)}
+              onCommit={(value) => commitProOverride('chromeTint', value)}
+            />
+          </PremiumCustomizationCard>
+
+          <PremiumCustomizationCard
+            tier="elite"
+            title="Elit Özelleştirme"
+            badge="Elit"
+            icon={<Crown size={14} />}
+            locked={!isEliteMember}
+            onReset={() => resetCustomThemeOverrides('elite')}
+            isOpen={isEliteCustomizationOpen}
+            onToggle={() => setIsEliteCustomizationOpen(value => !value)}
+          >
+            <PremiumColorControl
+              label="Accent rengi"
+              value={customThemeOverrides.elite.accent}
+              fallback={activePack.accent}
+              disabled={!isEliteMember}
+              onChange={(value) => updateEliteOverride('accent', value)}
+              onCommit={(value) => commitEliteOverride('accent', value)}
+            />
+            <PremiumColorControl
+              label="Sol panel + üst bar"
+              value={customThemeOverrides.elite.chromeTint}
+              fallback={activePack.bgSoft}
+              disabled={!isEliteMember}
+              onChange={(value) => updateEliteOverride('chromeTint', value)}
+              onCommit={(value) => commitEliteOverride('chromeTint', value)}
+            />
+            <PremiumColorControl
+              label="İçerik + sağ panel"
+              value={customThemeOverrides.elite.contentTint}
+              fallback={activePack.accent}
+              disabled={!isEliteMember}
+              onChange={(value) => updateEliteOverride('contentTint', value)}
+              onCommit={(value) => commitEliteOverride('contentTint', value)}
+            />
+            <PremiumColorControl
+              label="Dock / modal / card"
+              value={customThemeOverrides.elite.materialTint}
+              fallback={activePack.accent}
+              disabled={!isEliteMember}
+              onChange={(value) => updateEliteOverride('materialTint', value)}
+              onCommit={(value) => commitEliteOverride('materialTint', value)}
+            />
+          </PremiumCustomizationCard>
         </div>
       </div>
 

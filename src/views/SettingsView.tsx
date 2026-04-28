@@ -681,7 +681,7 @@ function VoiceOverlayCard() {
   const previewName = getPublicDisplayName(currentUser) || 'Mayvox';
   return (
     <div
-      className="surface-card rounded-xl px-4 py-4 w-full"
+      className="surface-card settings-content-card rounded-xl px-4 py-4 w-full"
       style={{
         maxWidth: 600,
         minWidth: 0,
@@ -973,9 +973,9 @@ export default function SettingsView() {
 
           {effectiveTab === 'app' && (
             <div className="flex flex-col gap-5 md:gap-6">
-              {/* Row-by-row grid: Görünüm + Performans aynı satırda, grid stretch ile
+              {/* Row-by-row grid: Görünüm + Oyun İçi Göstergeler aynı satırda, grid stretch ile
                   yükseklikleri otomatik eşit. AppearanceSection (Tema Paketleri) içeriği
-                  küçük olsa da kart Performans kartının yüksekliğine kadar uzar. */}
+                  küçük olsa da kart yan kartın yüksekliğine kadar uzar. */}
               <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
                 <SettingsSectionCard className="flex flex-col h-full">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
@@ -983,14 +983,23 @@ export default function SettingsView() {
                     <AppearanceSection />
                   </div>
                 </SettingsSectionCard>
-                <SettingsSectionCard className="flex flex-col h-full">
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                  <div className="flex-1 flex flex-col">
-                    <PerformanceSection />
-                  </div>
-                </SettingsSectionCard>
+                {isElectron() ? (
+                  <SettingsSectionCard className="flex flex-col h-full">
+                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                    <div className="flex-1 flex flex-col">
+                      <VoiceOverlayCard />
+                    </div>
+                  </SettingsSectionCard>
+                ) : (
+                  <SettingsSectionCard className="flex flex-col h-full">
+                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                    <div className="flex-1 flex flex-col">
+                      <PerformanceSection />
+                    </div>
+                  </SettingsSectionCard>
+                )}
 
-                <SettingsSectionCard>
+                <SettingsSectionCard className="self-start">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
@@ -1002,8 +1011,8 @@ export default function SettingsView() {
                 )}
                 {isElectron() && (
                   <SettingsSectionCard>
-                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
-                    <VoiceOverlayCard />
+                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                    <PerformanceSection />
                   </SettingsSectionCard>
                 )}
               </div>
@@ -1018,22 +1027,22 @@ export default function SettingsView() {
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
-                <SettingsSectionCard>
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                  <PerformanceSection />
-                </SettingsSectionCard>
-                {showVoiceMode && (
-                  <SettingsSectionCard>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
-                    <VoiceModeSection />
-                  </SettingsSectionCard>
-                )}
                 {isElectron() && (
                   <SettingsSectionCard>
                     <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
                     <VoiceOverlayCard />
                   </SettingsSectionCard>
                 )}
+                {showVoiceMode && (
+                  <SettingsSectionCard>
+                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
+                    <VoiceModeSection />
+                  </SettingsSectionCard>
+                )}
+                <SettingsSectionCard>
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  <PerformanceSection />
+                </SettingsSectionCard>
               </div>
             </div>
           )}

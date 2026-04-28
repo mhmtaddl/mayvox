@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Sparkles, Settings, Infinity as InfinityIcon } from 'lucide-react';
 import { ROOM_MODE_LIST } from '../../../lib/roomModeConfig';
 import { channelIconComponents, roomModeIcons } from '../constants';
-import { CHANNEL_ICON_COLOR_OPTIONS, getDefaultChannelIconColor } from '../../../lib/channelIconColor';
+import { CHANNEL_ICON_COLOR_OPTIONS, getDefaultChannelIconColor, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { CHANNEL_ICON_POOL_OPTIONS, getDefaultChannelIconName, QUICK_CHANNEL_ICON_OPTIONS } from '../../../lib/channelIcon';
 
 interface RoomModalState {
@@ -39,12 +39,25 @@ interface Props {
   persistentInfo?: PersistentRoomsInfo;
 }
 
-function getReadableTextColor(hex: string): string {
-  const normalized = /^#[0-9a-f]{6}$/i.test(hex) ? hex.slice(1) : '000000';
-  const r = parseInt(normalized.slice(0, 2), 16);
-  const g = parseInt(normalized.slice(2, 4), 16);
-  const b = parseInt(normalized.slice(4, 6), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111827' : '#ffffff';
+const CHANNEL_SEMANTIC_PRESETS = [
+  { id: 'voice', label: 'Voice Room', iconName: 'coffee', iconColor: '#38bdf8', mode: 'social' },
+  { id: 'gaming', label: 'Gaming', iconName: 'gamepad', iconColor: '#34d399', mode: 'gaming' },
+  { id: 'work', label: 'Work', iconName: 'monitor', iconColor: '#94a3b8', mode: 'social' },
+  { id: 'chill', label: 'Chill', iconName: 'headphones', iconColor: '#a78bfa', mode: 'quiet' },
+  { id: 'announcement', label: 'Announcement', iconName: 'radio', iconColor: '#f43f5e', mode: 'broadcast' },
+  { id: 'competitive', label: 'Competitive', iconName: 'trophy', iconColor: '#f59e0b', mode: 'gaming' },
+] as const;
+
+function getIconTileStyle(selected: boolean, accent: string): React.CSSProperties {
+  return selected ? {
+    color: accent,
+    background: `linear-gradient(135deg, ${accent}24, rgba(var(--theme-accent-rgb), 0.08)), var(--surface-soft)`,
+    borderColor: `${accent}80`,
+    boxShadow: `0 0 0 1px ${accent}1f, inset 0 1px 0 rgba(var(--glass-tint),0.08)`,
+  } : {
+    background: 'var(--surface-soft)',
+    borderColor: 'rgba(var(--glass-tint),0.10)',
+  };
 }
 
 export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave, persistentInfo }: Props) {
@@ -53,8 +66,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
   const showPersistentRow = roomModal.type === 'create' && persistentInfo !== undefined;
   const quotaReached = showPersistentRow && persistentInfo!.remaining <= 0;
   const noQuotaPlan = showPersistentRow && persistentInfo!.quota === 0;
-  const selectedIconColor = roomModal.iconColor ?? getDefaultChannelIconColor(roomModal.mode);
-  const customPickerTextColor = getReadableTextColor(selectedIconColor);
+  const selectedIconColor = normalizeChannelIconColor(roomModal.iconColor, roomModal.mode);
   const selectedIconName = roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
   // Save butonu DISABLE etmiyoruz — backend authoritative. Frontend plan resolve
   // yanlış olursa (cache/stale) user bloklanmasın; backend 403 dönerse toast düşer.
@@ -73,7 +85,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.97, opacity: 0 }}
         transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
-        className="w-full max-w-[560px] rounded-2xl overflow-hidden"
+        className="w-full max-w-[560px] max-h-[calc(100vh-48px)] rounded-2xl overflow-hidden flex flex-col"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.035), rgba(var(--glass-tint), 0.015)), rgb(var(--theme-bg-rgb, 6, 10, 20))',
           border: '1px solid rgba(var(--glass-tint), 0.12)',
@@ -85,7 +97,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
         <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.3), transparent)` }} />
 
         {/* Header */}
-        <div className="px-6 py-4 flex items-center gap-3" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
+        <div className="shrink-0 px-6 py-4 flex items-center gap-3" style={{ background: 'rgba(var(--glass-tint),0.02)', borderBottom: '1px solid rgba(var(--glass-tint),0.04)' }}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `rgba(var(--theme-accent-rgb), 0.1)`, boxShadow: `0 0 18px rgba(var(--theme-accent-rgb), 0.08)` }}>
             {roomModal.type === 'create'
               ? <Sparkles className="text-[var(--theme-accent)]" size={18} />
@@ -103,7 +115,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
         </div>
 
         {/* Form */}
-        <div className="px-6 pt-4 pb-5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-5">
           {/* Room Mode Selection — sadece create modunda */}
           {roomModal.type === 'create' && (
             <div className="mb-4">
@@ -112,7 +124,6 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                 {ROOM_MODE_LIST.map(m => {
                   const sel = roomModal.mode === m.id;
                   const ModeIcon = roomModeIcons[m.id];
-                  const iconColor = getDefaultChannelIconColor(m.id);
                   return (
                     <button
                       key={m.id}
@@ -132,7 +143,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        <ModeIcon size={14} className="shrink-0" style={{ color: iconColor }} />
+                        <ModeIcon size={14} className={`shrink-0 ${sel ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'}`} />
                         <span className={`text-[11px] font-bold truncate ${sel ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/90'}`}>{m.label}</span>
                       </div>
                     </button>
@@ -142,9 +153,34 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
           )}
 
+          <div className="mb-4">
+            <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Preset</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {CHANNEL_SEMANTIC_PRESETS.map(preset => {
+                const Icon = channelIconComponents[preset.iconName];
+                const selected = selectedIconName === preset.iconName && selectedIconColor === preset.iconColor;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    title={preset.label}
+                    onClick={() => onUpdate({ iconName: preset.iconName, iconColor: preset.iconColor, mode: preset.mode })}
+                    className="relative text-left rounded-xl px-3 py-2 transition-all duration-150 border active:scale-[0.97] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/35"
+                    style={getIconTileStyle(selected, preset.iconColor)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {Icon && <Icon size={14} className="shrink-0" />}
+                      <span className={`text-[11px] font-bold truncate ${selected ? '' : 'text-[var(--theme-text)]/90'}`}>{preset.label}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="mb-4 grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">İkon Rengi</label>
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Palette</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {CHANNEL_ICON_COLOR_OPTIONS.map(option => {
                   const selected = selectedIconColor === option.value;
@@ -155,36 +191,22 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                       title={option.label}
                       aria-label={option.label}
                       onClick={() => onUpdate({ iconColor: option.value })}
-                      className={`w-7 h-7 rounded-lg transition-all duration-150 active:scale-95 ${selected ? 'ring-2 ring-offset-2 ring-offset-[var(--theme-bg)] ring-white/70' : 'hover:scale-105'}`}
+                      className="w-7 h-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
                       style={{
-                        background: option.value,
-                        boxShadow: selected ? `0 0 14px ${option.value}55` : 'inset 0 0 0 1px rgba(255,255,255,0.18)',
+                        background: selected
+                          ? `linear-gradient(135deg, ${option.value}42, rgba(var(--theme-accent-rgb), 0.10)), var(--surface-soft)`
+                          : 'var(--surface-soft)',
+                        borderColor: selected ? `${option.value}90` : 'rgba(var(--glass-tint),0.12)',
+                        boxShadow: selected ? `0 0 0 1px ${option.value}24, inset 0 1px 0 rgba(var(--glass-tint),0.08)` : undefined,
                       }}
-                    />
+                    >
+                      <span
+                        className="block w-3 h-3 rounded-full mx-auto"
+                        style={{ background: option.value, boxShadow: `0 0 10px ${option.value}55` }}
+                      />
+                    </button>
                   );
                 })}
-                <label
-                  title="Özel renk"
-                  className="relative w-7 h-7 rounded-lg cursor-pointer transition-all duration-150 hover:scale-105 active:scale-95 overflow-hidden"
-                  style={{
-                    background: selectedIconColor,
-                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18), 0 0 0 2px rgba(var(--glass-tint),0.04)',
-                  }}
-                >
-                  <input
-                    type="color"
-                    value={selectedIconColor}
-                    onChange={(e) => onUpdate({ iconColor: e.target.value })}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    aria-label="Özel ikon rengi"
-                  />
-                <span
-                  className="absolute inset-0 flex items-center justify-center text-[17px] font-black leading-none"
-                  style={{ color: customPickerTextColor, textShadow: customPickerTextColor === '#ffffff' ? '0 1px 2px rgba(0,0,0,0.55)' : '0 1px 1px rgba(255,255,255,0.45)' }}
-                >
-                  +
-                </span>
-              </label>
               </div>
             </div>
             <div>
@@ -200,12 +222,8 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                       title={option.label}
                       aria-label={option.label}
                       onClick={() => onUpdate({ iconName: option.id })}
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-all duration-150 active:scale-95 ${selected ? 'border-white/45' : 'border-white/10 hover:border-white/25 hover:scale-105'}`}
-                      style={{
-                        color: selectedIconColor,
-                        background: selected ? `${selectedIconColor}1f` : 'rgba(var(--glass-tint),0.035)',
-                        boxShadow: selected ? `0 0 12px ${selectedIconColor}44` : undefined,
-                      }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center border transition-all duration-150 active:scale-95 text-[var(--theme-secondary-text)] hover:scale-105 hover:text-[var(--theme-accent)]"
+                      style={getIconTileStyle(selected, selectedIconColor)}
                     >
                       {Icon && <Icon size={14} />}
                     </button>
@@ -216,8 +234,11 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                   title="Tüm ikonlar"
                   aria-label="Tüm ikonlar"
                   onClick={() => setIconPickerOpen(true)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[13px] font-black border border-white/10 hover:border-white/25 hover:bg-[rgba(var(--glass-tint),0.06)] transition-all active:scale-95"
-                  style={{ color: selectedIconColor }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[13px] font-black border text-[var(--theme-secondary-text)] hover:border-[var(--theme-border)]/35 hover:text-[var(--theme-accent)] transition-all active:scale-95"
+                  style={{
+                    background: 'var(--surface-soft)',
+                    borderColor: 'rgba(var(--glass-tint),0.10)',
+                  }}
                 >
                   +
                 </button>
@@ -226,7 +247,10 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
           </div>
 
           {iconPickerOpen && (
-            <div className="mb-4 rounded-xl border border-white/10 p-3" style={{ background: 'rgba(var(--shadow-base),0.18)' }}>
+            <div
+              className="mb-4 rounded-xl border p-3"
+              style={{ background: 'var(--surface-soft)', borderColor: 'rgba(var(--glass-tint),0.10)' }}
+            >
               <div className="flex items-center justify-between gap-3 mb-2">
                 <span className="text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em]">İkon Havuzu</span>
                 <button
@@ -238,7 +262,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                   ×
                 </button>
               </div>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-5 gap-2 max-h-[220px] overflow-y-auto pr-1">
                 {CHANNEL_ICON_POOL_OPTIONS.map(option => {
                   const Icon = channelIconComponents[option.id];
                   const selected = selectedIconName === option.id;
@@ -252,12 +276,8 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                         onUpdate({ iconName: option.id });
                         setIconPickerOpen(false);
                       }}
-                      className={`h-9 rounded-lg flex items-center justify-center border transition-all duration-150 active:scale-95 ${selected ? 'border-white/45' : 'border-white/10 hover:border-white/25 hover:bg-white/[0.04]'}`}
-                      style={{
-                        color: selectedIconColor,
-                        background: selected ? `${selectedIconColor}1f` : 'rgba(var(--glass-tint),0.025)',
-                        boxShadow: selected ? `0 0 12px ${selectedIconColor}44` : undefined,
-                      }}
+                      className="h-9 rounded-lg flex items-center justify-center border transition-all duration-150 active:scale-95 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/35"
+                      style={getIconTileStyle(selected, selectedIconColor)}
                     >
                       {Icon && <Icon size={17} />}
                     </button>
@@ -416,21 +436,25 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2.5 mt-7">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-[13px] btn-cancel active:scale-[0.97]"
-            >
-              İptal
-            </button>
-            <button
-              onClick={onSave}
-              className="flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold btn-primary active:scale-[0.97]"
-            >
-              {roomModal.type === 'create' ? 'Oda Oluştur' : 'Kaydet'}
-            </button>
-          </div>
+        </div>
+
+        {/* Actions */}
+        <div
+          className="shrink-0 flex gap-2.5 px-6 py-4"
+          style={{ background: 'rgba(var(--glass-tint),0.02)', borderTop: '1px solid rgba(var(--glass-tint),0.04)' }}
+        >
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-[13px] btn-cancel active:scale-[0.97]"
+          >
+            İptal
+          </button>
+          <button
+            onClick={onSave}
+            className="flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold btn-primary active:scale-[0.97]"
+          >
+            {roomModal.type === 'create' ? 'Oda Oluştur' : 'Kaydet'}
+          </button>
         </div>
       </motion.div>
     </motion.div>,

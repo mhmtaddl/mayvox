@@ -253,7 +253,7 @@ export default function ChatPanel({
       )}
 
       {/* Input */}
-      <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
+      <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative transition-[box-shadow,border-color,background] focus-within:shadow-[inset_0_0_0_1px_rgba(var(--theme-accent-rgb),0.18)]" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
         {/* Emoji */}
         <div ref={emojiRef} className="relative shrink-0">
           <button onClick={() => setShowEmojiPicker(p => !p)} className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
@@ -287,8 +287,8 @@ export default function ChatPanel({
           placeholder={isFloodCooling ? 'Biraz yavaşla, kısa bir bekleme var…' : isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
           disabled={isChatDisabled}
           rows={1}
-          className="flex-1 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] rounded-lg px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none focus:border-[var(--theme-accent)]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed resize-none max-h-24 overflow-y-auto"
-          style={{ minHeight: 36 }}
+          className="mv-chat-composer-field flex-1 px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none ring-0 focus:outline-none focus:ring-0 disabled:opacity-40 disabled:cursor-not-allowed resize-none max-h-24 overflow-y-auto"
+          style={{ minHeight: 36, background: 'transparent', border: 0, boxShadow: 'none' }}
           onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
         />
         {/* Gonder */}
