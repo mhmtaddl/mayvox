@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Pin, Megaphone, Plus, Edit2, Trash2, X, AlertTriangle, AlertCircle,
-  Calendar, Clock, Users, ChevronDown,
+  Calendar, Clock, Users, ChevronDown, UserCheck, Check,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { User, Announcement, AnnouncementPriority, AnnouncementType } from '../types';
@@ -14,6 +14,8 @@ import {
   supabase,
 } from '../lib/supabase';
 import { getPublicDisplayName } from '../lib/formatName';
+import { useJoinRequests } from '../hooks/useJoinRequests';
+import type { JoinRequestListItem } from '../lib/serverService';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -183,7 +185,7 @@ function CalendarPicker({ value, onChange, onClose }: { value: string; onChange:
               className={`w-8 h-8 rounded-lg text-[11px] font-semibold transition-all ${
                 isSel ? 'bg-[var(--theme-accent)] text-white' :
                 isToday ? 'text-[var(--theme-accent)] border border-[var(--theme-accent)]/30' :
-                isPast ? 'text-[var(--theme-secondary-text)]/20 cursor-not-allowed' :
+                isPast ? 'text-[var(--theme-secondary-text)]/20 cursor-default' :
                 'text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
               }`}
             >{day}</button>
@@ -654,15 +656,173 @@ function EventCard({ item, isPinned, canEdit, onEdit, onDelete }: {
   </motion.div>
 ); }
 
+function InviteApplicationsFeed({
+  items,
+  error,
+  busyId,
+  onAccept,
+  onReject,
+  onManage,
+}: {
+  items: JoinRequestListItem[] | null;
+  error: string;
+  busyId: string | null;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+  onManage: () => void;
+}) {
+  const pendingItems = (items ?? []).filter(it => it.status === 'pending');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-[var(--theme-text)]">Bekleyen Davetler</div>
+          <div className="text-[10px] text-[var(--theme-secondary-text)]/50">Sunucuya katılma başvuruları</div>
+        </div>
+        <button
+          type="button"
+          onClick={onManage}
+          className="shrink-0 h-7 px-3 rounded-lg text-[10px] font-semibold text-[var(--theme-accent)] transition-colors"
+          style={{
+            background: 'rgba(var(--theme-accent-rgb), 0.10)',
+            border: '1px solid rgba(var(--theme-accent-rgb), 0.18)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.15)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.10)'; }}
+        >
+          Davetleri Yönet
+        </button>
+      </div>
+
+      {error && (
+        <div
+          className="flex items-center gap-2 p-2.5 rounded-lg text-[11px] text-red-400/80"
+          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.10)' }}
+        >
+          <AlertCircle size={12} />
+          <span className="truncate">{error}</span>
+        </div>
+      )}
+
+      {!items ? (
+        <div className="text-center py-10 text-[var(--theme-secondary-text)]/40 text-xs">Yükleniyor...</div>
+      ) : pendingItems.length === 0 ? (
+        <div className="text-center py-10 text-[var(--theme-secondary-text)]/40 text-xs">
+          Bekleyen davet veya başvuru yok.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {pendingItems.map(it => {
+            const hasAvatar = typeof it.userAvatar === 'string' && it.userAvatar.startsWith('http');
+            const busy = busyId !== null;
+            return (
+              <li
+                key={it.id}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                style={{
+                  background: 'rgba(var(--glass-tint), 0.035)',
+                  border: '1px solid rgba(var(--glass-tint), 0.07)',
+                }}
+              >
+                <div
+                  className="shrink-0 w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
+                  style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)' }}
+                >
+                  {hasAvatar
+                    ? <img src={it.userAvatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    : <span className="text-[10px] font-bold text-[var(--theme-accent)]/70">{(it.userName[0] ?? '?').toUpperCase()}</span>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{it.userName}</div>
+                  <div className="text-[9px] text-[var(--theme-secondary-text)]/55 flex items-center gap-1.5">
+                    <Clock size={9} />
+                    <span>{formatDate(it.createdAt)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onReject(it.id)}
+                    disabled={busy}
+                    title="Reddet"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-red-300/80 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.09)',
+                      border: '1px solid rgba(248, 113, 113, 0.18)',
+                      boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (busy) return;
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
+                      e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.26)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(239, 68, 68, 0.12), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.09)';
+                      e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.18)';
+                      e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAccept(it.id)}
+                    disabled={busy}
+                    title="Kabul Et"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-300/85 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.10)',
+                      border: '1px solid rgba(52, 211, 153, 0.20)',
+                      boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (busy) return;
+                      e.currentTarget.style.background = 'rgba(16, 185, 129, 0.16)';
+                      e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.30)';
+                      e.currentTarget.style.boxShadow = '0 6px 14px rgba(16, 185, 129, 0.13), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(16, 185, 129, 0.10)';
+                      e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.20)';
+                      e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                    }}
+                  >
+                    <Check size={13} />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+type CombinedFeedItem =
+  | { kind: 'announcement'; item: Announcement; createdAt: string }
+  | { kind: 'event'; item: Announcement; createdAt: string }
+  | { kind: 'invite'; item: JoinRequestListItem; createdAt: string };
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface Props {
   currentUser: User;
+  serverId?: string;
+  canViewInviteApplications?: boolean;
+  onOpenInviteApplications?: () => void;
 }
 
-type Tab = 'all' | 'announcement' | 'event';
+type Tab = 'all' | 'announcement' | 'event' | 'invites';
 
-export default function AnnouncementsPanel({ currentUser }: Props) {
+export default function AnnouncementsPanel({
+  currentUser,
+  serverId,
+  canViewInviteApplications = false,
+  onOpenInviteApplications,
+}: Props) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<AnnouncementType>('announcement');
@@ -674,6 +834,24 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
 
   const canManage = currentUser.isAdmin || currentUser.isModerator;
   const isAdmin = currentUser.isAdmin;
+  const showInvitesTab = !!serverId && canViewInviteApplications;
+  const {
+    items: joinRequestItems,
+    error: joinRequestError,
+    busyId: joinRequestBusyId,
+    onAccept: acceptJoinRequest,
+    onReject: rejectJoinRequest,
+  } = useJoinRequests({
+    serverId: serverId ?? '',
+    includeHistory: false,
+    enabled: showInvitesTab,
+  });
+  const pendingJoinRequests = (joinRequestItems ?? []).filter(it => it.status === 'pending');
+  const pendingJoinRequestCount = pendingJoinRequests.length;
+
+  useEffect(() => {
+    if (activeTab === 'invites' && !showInvitesTab) setActiveTab('all');
+  }, [activeTab, showInvitesTab]);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
@@ -748,15 +926,37 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
   // ── Filter ──
   const filtered = activeTab === 'all'
     ? announcements
+    : activeTab === 'invites'
+      ? []
     : announcements.filter(a => a.type === activeTab);
 
   const pinned = filtered.find(a => a.is_pinned);
   const rest = filtered.filter(a => a !== pinned);
+  const combinedItems: CombinedFeedItem[] = activeTab === 'all'
+    ? [
+        ...announcements.map(a => ({
+          kind: a.type === 'event' ? 'event' as const : 'announcement' as const,
+          item: a,
+          createdAt: a.created_at,
+        })),
+        ...(showInvitesTab
+          ? pendingJoinRequests.map(it => ({
+              kind: 'invite' as const,
+              item: it,
+              createdAt: it.createdAt,
+            }))
+          : []),
+      ].sort((a, b) => {
+        const bt = new Date(b.createdAt).getTime();
+        const at = new Date(a.createdAt).getTime();
+        return (Number.isFinite(bt) ? bt : 0) - (Number.isFinite(at) ? at : 0);
+      })
+    : [];
 
   const announcementCount = announcements.filter(a => a.type === 'announcement').length;
   const eventCount = announcements.filter(a => a.type === 'event').length;
 
-  if (announcements.length === 0 && !canManage) return null;
+  if (announcements.length === 0 && !canManage && !showInvitesTab) return null;
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-8 px-6 pb-8">
@@ -768,6 +968,12 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
             { id: 'all' as Tab, label: 'Tümü', count: announcements.length },
             { id: 'announcement' as Tab, label: 'Duyurular', count: announcementCount },
             { id: 'event' as Tab, label: 'Etkinlikler', count: eventCount },
+            ...(showInvitesTab ? [{
+              id: 'invites' as Tab,
+              label: 'Davetler',
+              count: pendingJoinRequestCount,
+              icon: <UserCheck size={11} />,
+            }] : []),
           ]).map(tab => (
             <button
               key={tab.id}
@@ -779,11 +985,12 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
                   : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-secondary-text)]'
               }`}
             >
+              {'icon' in tab && tab.icon}
               {tab.label}
               {tab.count > 0 && (
                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
                   activeTab === tab.id
-                    ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]'
+                    ? 'bg-[rgba(var(--theme-accent-rgb),0.16)] text-[var(--theme-accent)]'
                     : 'bg-[var(--theme-border)]/20 text-[var(--theme-secondary-text)]/50'
                 }`}>
                   {tab.count}
@@ -799,7 +1006,7 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
       </div>
 
       {/* Empty state */}
-      {filtered.length === 0 && (
+      {activeTab !== 'invites' && (activeTab === 'all' ? combinedItems.length === 0 : filtered.length === 0) && (
         <div className="text-center py-12 text-[var(--theme-secondary-text)]/40 text-xs">
           {canManage
             ? (activeTab === 'event' ? 'Henüz etkinlik yok. İlk etkinliği siz ekleyin.' : activeTab === 'announcement' ? 'Henüz duyuru yok. İlk duyuruyu siz ekleyin.' : 'Henüz içerik yok.')
@@ -810,24 +1017,145 @@ export default function AnnouncementsPanel({ currentUser }: Props) {
 
       {/* Cards */}
       <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {pinned && (
-            <React.Fragment key={pinned.id}>
-              {pinned.type === 'event'
-                ? <EventCard item={pinned} isPinned canEdit={canManage && canEditItem(pinned)} onEdit={() => { setEditTarget(pinned); setModalType(pinned.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(pinned)} />
-                : <AnnouncementCard item={pinned} isPinned canEdit={canManage && canEditItem(pinned)} onEdit={() => { setEditTarget(pinned); setModalType(pinned.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(pinned)} />
+        {activeTab === 'invites' ? (
+          <InviteApplicationsFeed
+            items={joinRequestItems}
+            error={joinRequestError}
+            busyId={joinRequestBusyId}
+            onAccept={acceptJoinRequest}
+            onReject={rejectJoinRequest}
+            onManage={onOpenInviteApplications ?? (() => undefined)}
+          />
+        ) : activeTab === 'all' ? (
+          <AnimatePresence mode="popLayout">
+            {combinedItems.map(entry => {
+              if (entry.kind === 'invite') {
+                const it = entry.item;
+                const hasAvatar = typeof it.userAvatar === 'string' && it.userAvatar.startsWith('http');
+                const busy = joinRequestBusyId !== null;
+                return (
+                  <motion.div
+                    key={`invite-${it.id}`}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)]/30 bg-[var(--theme-surface)]/50 hover:bg-[var(--theme-surface)]/80 p-4 transition-colors"
+                  >
+                    <div
+                      className="shrink-0 w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
+                      style={{ background: 'rgba(var(--glass-tint), 0.055)' }}
+                    >
+                      {hasAvatar
+                        ? <img src={it.userAvatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        : <span className="text-[10px] font-bold text-[var(--theme-secondary-text)]/70">{(it.userName[0] ?? '?').toUpperCase()}</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{it.userName}</div>
+                        <span
+                          className="shrink-0 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-[0.08em]"
+                          style={{
+                            background: 'rgba(var(--glass-tint), 0.045)',
+                            color: 'rgba(var(--theme-accent-rgb), 0.72)',
+                            border: '1px solid rgba(var(--glass-tint), 0.08)',
+                          }}
+                        >
+                          Davet
+                        </span>
+                      </div>
+                      <div className="text-[9px] text-[var(--theme-secondary-text)]/55 flex items-center gap-1.5">
+                        <Clock size={9} />
+                        <span>{formatDate(it.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => rejectJoinRequest(it.id)}
+                        disabled={busy}
+                        title="Reddet"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-red-300/80 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.055)',
+                          border: '1px solid rgba(248, 113, 113, 0.12)',
+                          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (busy) return;
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)';
+                          e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.20)';
+                          e.currentTarget.style.boxShadow = '0 4px 10px rgba(239, 68, 68, 0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.055)';
+                          e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.12)';
+                          e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => acceptJoinRequest(it.id)}
+                        disabled={busy}
+                        title="Kabul Et"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-300/85 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.06)',
+                          border: '1px solid rgba(52, 211, 153, 0.13)',
+                          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (busy) return;
+                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.11)';
+                          e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.22)';
+                          e.currentTarget.style.boxShadow = '0 4px 10px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.06)';
+                          e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.13)';
+                          e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                        }}
+                      >
+                        <Check size={13} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
               }
-            </React.Fragment>
-          )}
-          {rest.map(a => (
-            <React.Fragment key={a.id}>
-              {a.type === 'event'
-                ? <EventCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
-                : <AnnouncementCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
-              }
-            </React.Fragment>
-          ))}
-        </AnimatePresence>
+
+              const a = entry.item;
+              return (
+                <React.Fragment key={`${entry.kind}-${a.id}`}>
+                  {entry.kind === 'event'
+                    ? <EventCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
+                    : <AnnouncementCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
+                  }
+                </React.Fragment>
+              );
+            })}
+          </AnimatePresence>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {pinned && (
+              <React.Fragment key={pinned.id}>
+                {pinned.type === 'event'
+                  ? <EventCard item={pinned} isPinned canEdit={canManage && canEditItem(pinned)} onEdit={() => { setEditTarget(pinned); setModalType(pinned.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(pinned)} />
+                  : <AnnouncementCard item={pinned} isPinned canEdit={canManage && canEditItem(pinned)} onEdit={() => { setEditTarget(pinned); setModalType(pinned.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(pinned)} />
+                }
+              </React.Fragment>
+            )}
+            {rest.map(a => (
+              <React.Fragment key={a.id}>
+                {a.type === 'event'
+                  ? <EventCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
+                  : <AnnouncementCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
+                }
+              </React.Fragment>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
       {/* Modals — portal ile body'ye render (parent transform/overflow kırmasın) */}

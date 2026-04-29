@@ -291,7 +291,7 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
             onClick={() => setExportOpen(true)}
             disabled={!events || events.length === 0}
             title="Dışa aktar (tarih aralığı / tüm log kaydı)"
-            className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[11px] font-semibold text-[var(--theme-accent)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[11px] font-semibold text-[var(--theme-accent)] transition-colors disabled:opacity-40 disabled:cursor-default"
             style={{
               background: 'rgba(var(--theme-accent-rgb),0.08)',
               border: '1px solid rgba(var(--theme-accent-rgb),0.20)',

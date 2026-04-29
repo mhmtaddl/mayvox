@@ -675,7 +675,7 @@ function PlanSummaryRow({ plan }: { plan: string }) {
       <button
         type="button"
         disabled
-        className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 cursor-not-allowed"
+        className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 cursor-default"
         style={{
           background: 'rgba(var(--glass-tint), 0.05)',
           color: 'var(--theme-secondary-text)',

@@ -91,7 +91,7 @@ import DiscoverPanel from '../components/server/DiscoverPanel';
 
 export default function ChatView() {
   const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests, acceptRequest, rejectRequest } = useUser();
-  const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, isConnecting, currentChannel, channelMembers } = useChannel();
+  const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, accessContext, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
     userActionMenu, setUserActionMenu, roomModal, setRoomModal,
@@ -110,7 +110,7 @@ export default function ChatView() {
     passwordResetRequests, inviteRequests, inviteCooldowns, inviteStatuses,
     isChatBanned: isChatBannedFromCtx,
   } = useAppState();
-  const { volumeLevel, isPttPressed, speakingLevels, connectionLevel } = useAudio();
+  const { volumeLevel, isPttPressed, speakingLevels, connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
 
   const [showDiscover, setShowDiscover] = useState(false);
 
@@ -497,6 +497,8 @@ export default function ChatView() {
 
   const activeServerData = serverList.find(s => s.id === activeServerId) ?? serverList[0] ?? null;
   const hasServer = serverList.length > 0;
+  const activeServerCanManage = accessContext?.flags.canManageServer
+    ?? (activeServerData?.role === 'owner' || activeServerData?.role === 'admin');
   // App-level rol + 0 sahip sunucu → sunucu oluşturma butonları görünür.
   const canCreateServer = canUserCreateServer(currentUser, serverList);
 
@@ -1125,9 +1127,10 @@ export default function ChatView() {
                         onClick={(e) => { e.stopPropagation(); if (atLimit) { setToastMsg(roomLimitMessage(activePlan)); return; } setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social', iconColor: getDefaultChannelIconColor('social'), iconName: getDefaultChannelIconName('social') }); setMobileLeftOpen(false); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                           atLimit
-                            ? 'text-[var(--theme-secondary-text)]/40 cursor-not-allowed'
+                            ? 'text-[var(--theme-secondary-text)]/70 cursor-pointer hover:bg-[rgba(var(--glass-tint),0.04)]'
                             : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
-                        }`}>
+                        }`}
+                        title={atLimit ? roomLimitMessage(activePlan) : undefined}>
                         <Sparkles size={15} />
                         <span className="text-sm font-medium">Oda Oluştur</span>
                       </button>
@@ -1153,7 +1156,7 @@ export default function ChatView() {
                         onNotesShown={() => setShowReleaseNotes(false)}
                       />
                     )}
-                    <ConnectionQualityIndicator connectionLevel={connectionLevel} isConnecting={isConnecting} isActive={!!activeChannel} />
+                    <ConnectionQualityIndicator connectionLevel={connectionLevel} latencyMs={connectionLatencyMs} jitterMs={connectionJitterMs} isConnecting={isConnecting} isActive={!!activeChannel} />
                   </div>
                 </div>
               </motion.aside>
@@ -1440,7 +1443,16 @@ export default function ChatView() {
                   Bir Kanala Katıl
                 </button>
               </div>
-              <AnnouncementsPanel currentUser={currentUser} />
+              <AnnouncementsPanel
+                currentUser={currentUser}
+                serverId={activeServerId}
+                canViewInviteApplications={activeServerCanManage}
+                onOpenInviteApplications={() => {
+                  if (!activeServerId) return;
+                  setSettingsInitialTab('requests');
+                  setSettingsServerId(activeServerId);
+                }}
+              />
             </div>
           )}
           </div>
@@ -1676,11 +1688,17 @@ export default function ChatView() {
                 const sel = createPlan === p.id;
                 const pv = getPlanVisual(p.id);
                 return (
-                  <button key={p.id} type="button" disabled={p.disabled}
-                    onClick={() => !p.disabled && setCreatePlan(p.id)}
+                  <button key={p.id} type="button"
+                    onClick={() => {
+                      if (p.disabled) {
+                        setToastMsg('Bu ayar şu anda değiştirilemez');
+                        return;
+                      }
+                      setCreatePlan(p.id);
+                    }}
                     title={p.disabled ? 'Bu plan için yetkin yok' : p.name}
                     aria-disabled={p.disabled}
-                    className={`relative p-2.5 rounded-xl text-center transition-all ${p.disabled ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`relative p-2.5 rounded-xl text-center transition-all ${p.disabled ? 'opacity-70 cursor-pointer' : 'cursor-pointer'}`}
                     style={sel ? { background: pv.selectBg, border: `1px solid ${pv.selectBorder}` } : { background: 'rgba(var(--glass-tint),0.04)', border: '1px solid rgba(var(--glass-tint),0.06)' }}>
                     <div className="text-[11px] font-bold" style={{ color: sel ? pv.selectText : 'var(--theme-text)' }}>{p.name}</div>
                     <div className="text-[8px] text-[var(--theme-secondary-text)]/40 mt-0.5">{p.sub}</div>

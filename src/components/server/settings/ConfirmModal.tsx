@@ -162,7 +162,7 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-[12.5px] font-semibold text-[#e8ecf4]/75 hover:text-[#e8ecf4] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.10)] border border-[rgba(255,255,255,0.08)] transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-[12.5px] font-semibold text-[#e8ecf4]/75 hover:text-[#e8ecf4] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.10)] border border-[rgba(255,255,255,0.08)] transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-default"
           >
             Vazgeç
           </button>
@@ -170,7 +170,7 @@ export default function ConfirmModal({ variant, targetName, open, busy, onCancel
             type="button"
             disabled={!canSubmit}
             onClick={() => onConfirm(trimmed)}
-            className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-[12.5px] font-semibold text-white transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
+            className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl text-[12.5px] font-semibold text-white transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-35 disabled:cursor-default disabled:hover:brightness-100 disabled:active:scale-100"
             style={{
               background: meta.tone === 'danger'
                 ? 'linear-gradient(180deg, rgb(239,68,68), rgb(220,38,38))'

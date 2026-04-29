@@ -242,7 +242,7 @@ export default function SystemServersPanel() {
               <button
                 disabled={offset <= 0 || loading}
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] disabled:opacity-30 disabled:cursor-default"
                 aria-label="Önceki sayfa"
               >
                 <ChevronLeft size={14} />
@@ -250,7 +250,7 @@ export default function SystemServersPanel() {
               <button
                 disabled={offset + PAGE_SIZE >= total || loading}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
-                className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] disabled:opacity-30 disabled:cursor-default"
                 aria-label="Sonraki sayfa"
               >
                 <ChevronRight size={14} />
@@ -493,7 +493,7 @@ function RestrictReasonModal({ server, reason, onReasonChange, loading, onClose,
         <button
           onClick={onConfirm}
           disabled={!valid || loading}
-          className="flex-1 py-3.5 text-[13px] font-bold text-orange-400 hover:bg-orange-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 py-3.5 text-[13px] font-bold text-orange-400 hover:bg-orange-500/10 disabled:opacity-40 disabled:cursor-default"
         >
           {loading ? 'Kısıtlanıyor...' : 'Kısıtla'}
         </button>

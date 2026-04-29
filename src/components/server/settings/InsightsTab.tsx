@@ -205,7 +205,7 @@ function RefreshButton({ onClick, pending, disabled }: {
       disabled={isDisabled}
       title={pending ? 'Yenileniyor…' : 'Aktivite haritasını yenile'}
       aria-busy={pending}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide disabled:cursor-default"
       style={{
         color: 'var(--theme-text)',
         background: pending

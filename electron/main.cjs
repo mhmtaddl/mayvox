@@ -65,6 +65,19 @@ let pttMouseButton = null;   // uiohook button (fare)
 let isListeningForPtt = false;
 let pttWindow = null;
 let pttDownActive = false;   // OS key-repeat aynı basışta ptt:down spam'lemesin
+let pttHookInstalled = false;
+
+function sendPtt(channel, payload) {
+  try {
+    const win = pttWindow;
+    if (!win || win.isDestroyed()) return;
+    if (!win.webContents || win.webContents.isDestroyed()) return;
+    if (payload === undefined) win.webContents.send(channel);
+    else win.webContents.send(channel, payload);
+  } catch (err) {
+    logger.warn?.("[ptt] send skipped", { channel, message: err?.message });
+  }
+}
 
 // Tray & quit state
 let tray = null;
@@ -104,52 +117,70 @@ function parseSavedPttKey(keyStr) {
 function setupGlobalPtt(win) {
   if (!uIOhook) return;
   pttWindow = win;
+  if (pttHookInstalled) return;
+  pttHookInstalled = true;
 
   uIOhook.on("keydown", (e) => {
-    if (isListeningForPtt) {
-      isListeningForPtt = false;
-      pttKeycode = e.keycode;
-      pttMouseButton = null;
-      const displayName = keycodeToName[e.keycode] || `KEY${e.keycode}`;
-      win.webContents.send("ptt:keyAssigned", { displayName, rawCode: `k${e.keycode}` });
-      return;
-    }
-    if (pttKeycode !== null && e.keycode === pttKeycode) {
-      if (pttDownActive) return;
-      pttDownActive = true;
-      win.webContents.send("ptt:down");
+    try {
+      if (isListeningForPtt) {
+        isListeningForPtt = false;
+        pttKeycode = e.keycode;
+        pttMouseButton = null;
+        const displayName = keycodeToName[e.keycode] || `KEY${e.keycode}`;
+        sendPtt("ptt:keyAssigned", { displayName, rawCode: `k${e.keycode}` });
+        return;
+      }
+      if (pttKeycode !== null && e.keycode === pttKeycode) {
+        if (pttDownActive) return;
+        pttDownActive = true;
+        sendPtt("ptt:down");
+      }
+    } catch (err) {
+      logger.warn?.("[ptt] keydown handler failed", { message: err?.message });
     }
   });
 
   uIOhook.on("keyup", (e) => {
-    if (pttKeycode !== null && e.keycode === pttKeycode) {
-      if (!pttDownActive) return;
-      pttDownActive = false;
-      win.webContents.send("ptt:up");
+    try {
+      if (pttKeycode !== null && e.keycode === pttKeycode) {
+        if (!pttDownActive) return;
+        pttDownActive = false;
+        sendPtt("ptt:up");
+      }
+    } catch (err) {
+      logger.warn?.("[ptt] keyup handler failed", { message: err?.message });
     }
   });
 
   uIOhook.on("mousedown", (e) => {
-    if (isListeningForPtt) {
-      isListeningForPtt = false;
-      pttMouseButton = e.button;
-      pttKeycode = null;
-      const displayName = mouseButtonToName[e.button] || `MOUSE ${e.button}`;
-      win.webContents.send("ptt:keyAssigned", { displayName, rawCode: `m${e.button}` });
-      return;
-    }
-    if (pttMouseButton !== null && e.button === pttMouseButton) {
-      if (pttDownActive) return;
-      pttDownActive = true;
-      win.webContents.send("ptt:down");
+    try {
+      if (isListeningForPtt) {
+        isListeningForPtt = false;
+        pttMouseButton = e.button;
+        pttKeycode = null;
+        const displayName = mouseButtonToName[e.button] || `MOUSE ${e.button}`;
+        sendPtt("ptt:keyAssigned", { displayName, rawCode: `m${e.button}` });
+        return;
+      }
+      if (pttMouseButton !== null && e.button === pttMouseButton) {
+        if (pttDownActive) return;
+        pttDownActive = true;
+        sendPtt("ptt:down");
+      }
+    } catch (err) {
+      logger.warn?.("[ptt] mousedown handler failed", { message: err?.message });
     }
   });
 
   uIOhook.on("mouseup", (e) => {
-    if (pttMouseButton !== null && e.button === pttMouseButton) {
-      if (!pttDownActive) return;
-      pttDownActive = false;
-      win.webContents.send("ptt:up");
+    try {
+      if (pttMouseButton !== null && e.button === pttMouseButton) {
+        if (!pttDownActive) return;
+        pttDownActive = false;
+        sendPtt("ptt:up");
+      }
+    } catch (err) {
+      logger.warn?.("[ptt] mouseup handler failed", { message: err?.message });
     }
   });
 
@@ -331,6 +362,21 @@ const mainWebPrefs = {
   enableWebSQL: false,
 };
 
+function isDangerousDefaultShortcut(input) {
+  const key = String(input?.key || "").toLowerCase();
+  const code = String(input?.code || "").toLowerCase();
+  const ctrlOrMeta = !!(input?.control || input?.meta);
+  const shift = !!input?.shift;
+
+  if (key === "f5" || code === "f5") return true;
+  if (!ctrlOrMeta) return false;
+
+  // Electron/Chromium defaults that can look like the app closed or restarted.
+  if (key === "w" || key === "q") return true;
+  if (key === "r" || (shift && key === "r")) return true;
+  return false;
+}
+
 function createSplashWindow() {
   const splash = new BrowserWindow({
     // Update durumu etiketi + progress bar için height biraz arttırıldı; logo alanı aynı.
@@ -421,6 +467,32 @@ function createMainWindow(boundsOverride = null) {
     roundedCorners: true,
     icon: path.join(__dirname, "../build/icon.ico"),
     webPreferences: mainWebPrefs,
+  });
+
+  win.webContents.on("before-input-event", (event, input) => {
+    if (isDangerousDefaultShortcut(input)) {
+      event.preventDefault();
+      logger.info("[shortcut] default blocked", {
+        key: input?.key,
+        code: input?.code,
+        control: !!input?.control,
+        meta: !!input?.meta,
+        shift: !!input?.shift,
+        alt: !!input?.alt,
+      });
+    }
+  });
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    logger.error("Renderer process gone", details);
+  });
+
+  win.webContents.on("unresponsive", () => {
+    logger.warn("Renderer became unresponsive");
+  });
+
+  win.webContents.on("responsive", () => {
+    logger.info("Renderer became responsive");
   });
 
   // ── Window state changes → renderer'a duyur (maximize ikon güncellemesi) ──
@@ -895,6 +967,19 @@ process.on("unhandledRejection", (reason) => {
   });
 });
 
+app.on("child-process-gone", (_event, details) => {
+  logger.error("Child process gone", details);
+});
+
+app.on("render-process-gone", (_event, webContents, details) => {
+  logger.error("App render process gone", {
+    ...details,
+    url: (() => {
+      try { return webContents?.getURL?.(); } catch { return ""; }
+    })(),
+  });
+});
+
 // ── Windows Audio Ducking opt-out ────────────────────────────────────────────
 // Windows varsayılan: bir app mic açınca ("communications activity") diğer
 // uygulamaların sesini %80 kısar. PUBG vb. oyun sesleri kısılmasın diye HKCU
@@ -1085,7 +1170,9 @@ app.on("before-quit", () => {
   // Native kaynakları erken serbest bırak — installer başlamadan dosya kilitleri kalksın
   if (uIOhook) {
     try { uIOhook.stop(); } catch (e) { logger.error("uIOhook stop hatası", { message: e?.message }); }
+    try { uIOhook.removeAllListeners?.(); } catch {}
     uIOhook = null;
+    pttHookInstalled = false;
   }
   if (tray) { try { tray.destroy(); } catch {} tray = null; }
   try { getOverlayManager()?.dispose(); } catch {}
@@ -1096,7 +1183,9 @@ app.on("will-quit", () => {
   // before-quit'te temizlenmediyse son şans
   if (uIOhook) {
     try { uIOhook.stop(); } catch {}
+    try { uIOhook.removeAllListeners?.(); } catch {}
     uIOhook = null;
+    pttHookInstalled = false;
   }
   if (tray) { try { tray.destroy(); } catch {} tray = null; }
 });

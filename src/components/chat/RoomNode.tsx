@@ -5,6 +5,46 @@ import AvatarContent from '../AvatarContent';
 import type { PositionedNode } from './roomNetworkLayout';
 import { type CardStyle, getCardStyleTokens } from './cardStyles';
 
+interface StaticRoomAvatarProps {
+  avatar?: string | null;
+  statusText?: string | null;
+  firstName?: string | null;
+  name?: string | null;
+  size: number;
+  radius: string;
+  border: string;
+  shadow: string;
+}
+
+const StaticRoomAvatar = React.memo(function StaticRoomAvatar({
+  avatar,
+  statusText,
+  firstName,
+  name,
+  size,
+  radius,
+  border,
+  shadow,
+}: StaticRoomAvatarProps) {
+  return (
+    <div className="relative shrink-0">
+      <div
+        className="overflow-hidden flex items-center justify-center"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          background: 'rgba(var(--theme-accent-rgb), 0.05)',
+          border,
+          boxShadow: shadow,
+        }}
+      >
+        <AvatarContent avatar={avatar} statusText={statusText} firstName={name || firstName} name={name} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
+      </div>
+    </div>
+  );
+});
+
 interface Props {
   node: PositionedNode;
   isCenter: boolean;
@@ -31,8 +71,8 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   const nodeShellStyle: React.CSSProperties = {
     opacity: (isMuted && isDeafened) ? 0.55 : isMuted ? 0.7 : 1,
     filter: (isMuted && isDeafened) ? 'grayscale(0.5)' : 'none',
-    transform: isSpeaking ? 'translateY(-2px)' : 'none',
-    transition: 'opacity 0.2s, filter 0.2s, transform 0.2s',
+    transform: cardStyle === 'revolt' ? 'none' : isSpeaking ? 'translateY(-2px)' : 'none',
+    transition: cardStyle === 'revolt' ? 'opacity 0.2s, filter 0.2s' : 'opacity 0.2s, filter 0.2s, transform 0.2s',
   };
 
   const renderRoleMark = (size: number) => {
@@ -81,45 +121,51 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
     size,
     radius = '22%',
     border,
-    speakingBorder,
     shadow,
-    speakingShadow,
-    pulseRadius = '24%',
   }: {
     size: number;
     radius?: string;
     border: string;
-    speakingBorder: string;
     shadow: string;
-    speakingShadow?: string;
-    pulseRadius?: string;
   }) => (
     <div className="relative shrink-0">
-      <motion.div
-        animate={{ scale: isSpeaking ? 1.035 : 1 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      <div
         className="overflow-hidden flex items-center justify-center"
         style={{
           width: size,
           height: size,
           borderRadius: radius,
           background: 'rgba(var(--theme-accent-rgb), 0.05)',
-          border: isSpeaking ? speakingBorder : border,
-          boxShadow: isSpeaking ? (speakingShadow ?? shadow) : shadow,
-          transition: 'border-color 0.3s, box-shadow 0.3s',
+          border,
+          boxShadow: shadow,
         }}
       >
         <AvatarContent avatar={avatar} statusText={statusText} firstName={name || firstName} name={name} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
-      </motion.div>
-      {isSpeaking && (
-        <motion.div
-          className="absolute inset-[-4px] pointer-events-none"
-          style={{ borderRadius: pulseRadius, border: '1px solid rgba(var(--theme-accent-rgb), 0.18)' }}
-          animate={{ opacity: [0.55, 0.16, 0.55], scale: [1, 1.045, 1] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      )}
+      </div>
     </div>
+  );
+
+  const renderStaticAvatar = ({
+    size,
+    radius = '22%',
+    border,
+    shadow,
+  }: {
+    size: number;
+    radius?: string;
+    border: string;
+    shadow: string;
+  }) => (
+    <StaticRoomAvatar
+      avatar={avatar}
+      statusText={statusText}
+      firstName={firstName}
+      name={name}
+      size={size}
+      radius={radius}
+      border={border}
+      shadow={shadow}
+    />
   );
 
   const renderName = (className: string, style?: React.CSSProperties) => (
@@ -147,9 +193,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
         {renderAvatar({
           size: avatarSize,
           border: t.avatarBorder,
-          speakingBorder: t.avatarBorderSpeaking,
           shadow: t.avatarShadow,
-          speakingShadow: `0 0 0 2px rgba(var(--theme-accent-rgb),0.16), ${t.avatarShadow}`,
         })}
       </div>
 
@@ -192,23 +236,19 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
           transition: 'background 0.2s, border 0.2s, box-shadow 0.3s',
         }}
       >
-        {renderAvatar({
+        {renderStaticAvatar({
           size: pillAvatar,
           radius: '999px',
           border: '1px solid rgba(var(--glass-tint),0.10)',
-          speakingBorder: '2px solid rgba(var(--theme-accent-rgb),0.46)',
           shadow: '0 2px 8px rgba(0,0,0,0.12)',
-          speakingShadow: '0 0 0 3px rgba(var(--theme-accent-rgb),0.12), 0 0 18px rgba(var(--theme-accent-rgb),0.16)',
-          pulseRadius: '999px',
         })}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 min-w-0">
             {renderName(`${isCenter ? 'text-[12px]' : 'text-[11px]'} font-semibold min-w-0`)}
             {renderRoleMark(isCenter ? 11 : 9)}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[var(--theme-secondary-text)]" style={{ opacity: isSpeaking ? 0.8 : 0.48 }}>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[var(--theme-secondary-text)]" style={{ opacity: 0.48 }}>
             {renderStatusIcons(isCenter ? 10 : 9)}
-            {isSpeaking && renderSpeakingBars('h-2')}
           </div>
         </div>
       </div>
@@ -227,10 +267,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
           size: minimalAvatar,
           radius: '999px',
           border: '1px solid rgba(var(--glass-tint),0.08)',
-          speakingBorder: '2px solid rgba(var(--theme-accent-rgb),0.50)',
           shadow: '0 4px 14px rgba(0,0,0,0.18)',
-          speakingShadow: '0 0 0 5px rgba(var(--theme-accent-rgb),0.11), 0 0 28px rgba(var(--theme-accent-rgb),0.22), 0 6px 20px rgba(0,0,0,0.20)',
-          pulseRadius: '999px',
         })}
 
         <div

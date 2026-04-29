@@ -1050,7 +1050,7 @@ function Pagination({ page, totalPages, loading, onChange }: {
       <button
         disabled={page <= 1 || loading}
         onClick={() => onChange(page - 1)}
-        className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)] disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)] disabled:opacity-30 disabled:cursor-default"
         aria-label="Önceki sayfa"
       >
         <ChevronLeft size={14} />
@@ -1075,7 +1075,7 @@ function Pagination({ page, totalPages, loading, onChange }: {
       <button
         disabled={page >= totalPages || loading}
         onClick={() => onChange(page + 1)}
-        className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)] disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)] disabled:opacity-30 disabled:cursor-default"
         aria-label="Sonraki sayfa"
       >
         <ChevronRight size={14} />
@@ -1613,7 +1613,7 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
             <button
               onClick={submit}
               disabled={submitting || (duration === 'custom' && !customEndAt)}
-              className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-default"
             >
               {submitting ? 'Kaydediliyor...' : (user.plan === 'none' ? 'Plan Ata' : 'Planı Güncelle')}
             </button>
@@ -1817,7 +1817,7 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
         <button
           onClick={submit}
           disabled={submitting || (duration === 'custom' && !customEndAt)}
-          className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-default"
         >
           {submitting ? 'Kaydediliyor...' : 'Seviye Belirle'}
         </button>
@@ -1868,7 +1868,7 @@ const SelectableCard: React.FC<{
       whileHover={disabled ? undefined : { y: -1 }}
       whileTap={disabled ? undefined : { scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 480, damping: 28, mass: 0.7 }}
-      className="relative rounded-xl px-3 py-2.5 text-left outline-none overflow-hidden disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white/20"
+      className="relative rounded-xl px-3 py-2.5 text-left outline-none overflow-hidden disabled:opacity-45 disabled:cursor-default focus-visible:ring-2 focus-visible:ring-white/20"
       style={{
         background: selected
           ? `linear-gradient(180deg, rgba(${t.rgb},0.20) 0%, rgba(${t.rgb},0.10) 100%)`
@@ -1930,7 +1930,7 @@ const SelectableChip: React.FC<{
       whileHover={disabled ? undefined : { y: -1 }}
       whileTap={disabled ? undefined : { scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 520, damping: 28, mass: 0.6 }}
-      className="relative rounded-lg py-2 text-[10.5px] font-semibold outline-none disabled:opacity-45 disabled:cursor-not-allowed"
+      className="relative rounded-lg py-2 text-[10.5px] font-semibold outline-none disabled:opacity-45 disabled:cursor-default"
       style={{
         background: selected
           ? `rgba(${t.rgb},0.16)`

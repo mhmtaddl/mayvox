@@ -343,15 +343,14 @@ export default function AuditLogPanel({ serverId }: Props) {
       {/* ── Toolbar — search + filter + refresh + export ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div
-          className="flex-1 min-w-[200px] flex items-center gap-2 h-8 rounded-lg px-2.5"
-          style={{ background: 'rgba(var(--glass-tint),0.04)', border: '1px solid rgba(var(--glass-tint),0.08)' }}
+          className="server-settings-input-shell flex-1 min-w-[200px] flex items-center gap-2 h-8 rounded-lg px-2.5"
         >
           <Search size={12} className="text-[var(--theme-secondary-text)]/45 shrink-0" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Kişi, hedef veya sebep ara…"
-            className="flex-1 bg-transparent text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 outline-none"
+            className="server-settings-input-field flex-1 min-w-0 text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40"
           />
           {query && (
             <button

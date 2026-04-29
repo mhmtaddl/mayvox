@@ -41,7 +41,7 @@ export default function ConfirmModal({
         <button
           onClick={onConfirm}
           disabled={loading}
-          className={`flex-1 py-3.5 text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`flex-1 py-3.5 text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-default ${
             danger ? 'text-red-400 hover:bg-red-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'
           }`}
         >

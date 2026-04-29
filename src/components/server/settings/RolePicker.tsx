@@ -130,7 +130,7 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
                 ? 'bg-[rgba(59,130,246,0.10)]'
                 : canAssign && !busy
                 ? 'hover:bg-[rgba(255,255,255,0.06)]'
-                : 'cursor-not-allowed opacity-50'
+                : 'cursor-default opacity-50'
             }`}
           >
             <span className="shrink-0 mt-0.5">{opt.icon}</span>

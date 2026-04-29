@@ -917,7 +917,7 @@ html {
 }
 .surface-input:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .search-input-shell {
@@ -957,6 +957,40 @@ html {
 
 .search-icon {
   color: var(--text-muted, var(--theme-secondary-text));
+}
+
+.server-settings-input-shell {
+  background: rgba(var(--glass-tint), 0.035);
+  border: 1px solid rgba(var(--glass-tint), 0.10);
+  box-shadow: none;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.server-settings-input-shell:hover {
+  background: rgba(var(--glass-tint), 0.045);
+  border-color: rgba(var(--glass-tint), 0.12);
+}
+
+.server-settings-input-shell:focus-within {
+  background: rgba(var(--glass-tint), 0.055);
+  border-color: rgba(var(--theme-accent-rgb), 0.24);
+  box-shadow: 0 0 0 3px rgba(var(--theme-accent-rgb), 0.06);
+}
+
+.server-settings-input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.server-settings-input-field:focus {
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .search-input-shell.is-focused .search-icon,
@@ -1862,6 +1896,56 @@ html[data-theme-pack] .mv-desktop-dock {
   border-color: color-mix(in srgb, var(--theme-warning) 28%, transparent) !important;
 }
 
+.mv-desktop-dock .mv-server-dock-area,
+.mv-desktop-dock .mv-server-popover {
+  transform: none !important;
+}
+
+.mv-desktop-dock .mv-server-dock-area:hover,
+.mv-desktop-dock .mv-server-dock-area:focus-within {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.mv-desktop-dock .mv-server-dock-button {
+  background: rgba(var(--glass-tint), 0.035) !important;
+  border-color: rgba(var(--glass-tint), 0.075) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.mv-desktop-dock .mv-server-dock-button:hover,
+.mv-desktop-dock .mv-server-dock-button:focus-visible {
+  background: rgba(var(--theme-accent-rgb), 0.10) !important;
+  border-color: rgba(var(--theme-accent-rgb), 0.24) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.mv-desktop-dock .mv-server-popover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+.mv-desktop-dock .mv-server-popover:hover {
+  background: rgba(var(--theme-bg-rgb, 6,10,20), 0.95) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+.mv-desktop-dock .mv-server-row {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.mv-desktop-dock .mv-server-row:hover,
+.mv-desktop-dock .mv-server-row:focus-visible {
+  background: rgba(var(--theme-accent-rgb), 0.10) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
 html .settings-flat-light {
   --settings-page-bg: var(--app-surface, var(--app-neutral-surface));
   --settings-card-bg: color-mix(in srgb, var(--app-surface-raised) 94%, white 2%);
@@ -1928,6 +2012,55 @@ html .settings-flat-light .settings-tab:not(.active):hover {
 
 html .settings-flat-light .settings-tab:not(.active):hover span {
   color: var(--theme-accent) !important;
+}
+
+.admin-subtabs {
+  background: rgba(var(--glass-tint), 0.030);
+  border: 1px solid rgba(var(--glass-tint), 0.060);
+  box-shadow: none;
+  transform: none;
+}
+
+.admin-subtabs:hover,
+.admin-subtabs:focus-within {
+  background: rgba(var(--glass-tint), 0.030);
+  border-color: rgba(var(--glass-tint), 0.060);
+  box-shadow: none;
+  transform: none;
+}
+
+.admin-subtab {
+  border: 1px solid transparent;
+  box-shadow: none;
+  transform: none;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.admin-subtab-idle {
+  color: var(--theme-secondary-text);
+  background: transparent;
+}
+
+.admin-subtab-idle:hover,
+.admin-subtab-idle:focus-visible {
+  color: var(--theme-text);
+  background: rgba(var(--theme-accent-rgb), 0.080);
+  border-color: rgba(var(--theme-accent-rgb), 0.140);
+  box-shadow: inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.060);
+}
+
+.admin-subtab-active {
+  color: var(--theme-accent);
+  background: rgba(var(--theme-accent-rgb), 0.140);
+  border-color: rgba(var(--theme-accent-rgb), 0.250);
+}
+
+.admin-subtab-active:hover,
+.admin-subtab-active:focus-visible {
+  color: var(--theme-accent);
+  background: rgba(var(--theme-accent-rgb), 0.170);
+  border-color: rgba(var(--theme-accent-rgb), 0.300);
+  box-shadow: inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.080);
 }
 
 html .settings-flat-light .settings-theme-pack-card:hover {

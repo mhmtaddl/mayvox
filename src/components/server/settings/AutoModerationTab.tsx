@@ -525,7 +525,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
               disabled={!profanityEnabled}
               rows={5}
               placeholder={'Her satıra bir kelime…'}
-              className="w-full rounded-lg px-3 py-2 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+              className="w-full rounded-lg px-3 py-2 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none focus:border-[var(--theme-accent)]/30 transition-colors resize-none disabled:opacity-50 disabled:cursor-default font-mono"
               style={{
                 background: 'rgba(var(--glass-tint), 0.05)',
                 border: '1px solid rgba(var(--glass-tint), 0.10)',
@@ -622,11 +622,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
           {events && events.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <div
-                className="flex-1 min-w-[180px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
-                style={{
-                  background: 'rgba(var(--glass-tint), 0.04)',
-                  border: '1px solid rgba(var(--glass-tint), 0.08)',
-                }}
+                className="server-settings-input-shell flex-1 min-w-[180px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
               >
                 <Search size={11} className="text-[var(--theme-secondary-text)]/40 shrink-0" />
                 <input
@@ -634,7 +630,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                   value={eventSearch}
                   onChange={e => setEventSearch(e.target.value)}
                   placeholder="Kullanıcı veya kanal ara..."
-                  className="flex-1 bg-transparent text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none min-w-0"
+                  className="server-settings-input-field flex-1 text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 min-w-0"
                 />
                 {eventSearch && (
                   <button
@@ -726,7 +722,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                     type="button"
                     disabled={eventCurrentPage <= 1}
                     onClick={() => setEventPage(p => Math.max(1, p - 1))}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-default"
                     style={{
                       background: 'rgba(var(--glass-tint),0.05)',
                       border: '1px solid rgba(var(--glass-tint),0.10)',
@@ -762,7 +758,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                     type="button"
                     disabled={eventCurrentPage >= eventTotalPages}
                     onClick={() => setEventPage(p => Math.min(eventTotalPages, p + 1))}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10.5px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-default"
                     style={{
                       background: 'rgba(var(--glass-tint),0.05)',
                       border: '1px solid rgba(var(--glass-tint),0.10)',
@@ -1445,11 +1441,7 @@ function BlacklistModal({ onClose }: { onClose: () => void }) {
         {/* Search */}
         <div className="px-6 py-3 shrink-0">
           <div
-            className="flex items-center gap-2 px-3 py-2 rounded-lg"
-            style={{
-              background: 'rgba(var(--glass-tint), 0.04)',
-              border: '1px solid rgba(var(--glass-tint), 0.08)',
-            }}
+            className="server-settings-input-shell flex items-center gap-2 px-3 py-2 rounded-lg"
           >
             <Search size={12} className="text-[var(--theme-secondary-text)]/40 shrink-0" />
             <input
@@ -1458,7 +1450,7 @@ function BlacklistModal({ onClose }: { onClose: () => void }) {
               onChange={e => setQuery(e.target.value)}
               autoFocus
               placeholder={`${activeMeta.name} içinde ara...`}
-              className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none min-w-0"
+              className="server-settings-input-field flex-1 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 min-w-0"
             />
             {query && (
               <button
@@ -1513,7 +1505,7 @@ function BlacklistModal({ onClose }: { onClose: () => void }) {
               type="button"
               disabled={currentPage <= 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-default"
               style={{
                 background: 'rgba(var(--glass-tint),0.06)',
                 border: '1px solid rgba(var(--glass-tint),0.10)',
@@ -1551,7 +1543,7 @@ function BlacklistModal({ onClose }: { onClose: () => void }) {
               type="button"
               disabled={currentPage >= totalPages}
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-35 disabled:cursor-default"
               style={{
                 background: 'rgba(var(--glass-tint),0.06)',
                 border: '1px solid rgba(var(--glass-tint),0.10)',

@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type React from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, updateUserAppVersion } from '../lib/supabase';
-import { normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
+import { logMemberIdentityDebug, normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../lib/channelOrder';
 import { applyLocalChannelIcons } from '../lib/channelIcon';
 import { applyLocalChannelIconColors } from '../lib/channelIconColor';
@@ -16,6 +16,7 @@ interface Props {
   activeServerIdRef: React.MutableRefObject<string>;
   /** Kanal sırası token'ı — reorder broadcast'ı geldiğinde remote token ile senkron tut. */
   channelOrderTokenRef: React.MutableRefObject<string | null>;
+  liveVoicePresenceRef: React.MutableRefObject<{ channelId: string | null; memberIds: Set<string> }>;
   disconnectFromLiveKit: () => Promise<void>;
   allUsersRef: React.MutableRefObject<User[]>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
@@ -58,6 +59,7 @@ export function usePresence({
   activeChannelRef,
   activeServerIdRef,
   channelOrderTokenRef,
+  liveVoicePresenceRef,
   disconnectFromLiveKit,
   allUsersRef,
   setAllUsers,
@@ -146,19 +148,43 @@ export function usePresence({
     const myId = currentUserRef.current.id;
     const myChannel = activeChannelRef.current;
 
+    const protectWithLiveKitMembers = (
+      channelId: string,
+      members: string[],
+      currentMembers: string[],
+      presenceMembers: string[],
+      source: string,
+    ) => {
+      const live = liveVoicePresenceRef.current;
+      if (live.channelId !== channelId || live.memberIds.size === 0) return members;
+      const next = [...members];
+      live.memberIds.forEach(memberId => {
+        if (next.includes(memberId)) return;
+        next.push(memberId);
+        const event = currentMembers.includes(memberId) && !presenceMembers.includes(memberId)
+          ? 'presence_remove_blocked_by_livekit'
+          : 'presence_member_restored_from_livekit';
+        logMemberIdentityDebug(event, { source, channelId, memberId }, `${event}:${source}:${channelId}:${memberId}`);
+      });
+      return next;
+    };
+
     setChannels(prev => {
       let hasChanges = false;
       const next = prev.map(c => {
         const presenceMembers = roomMembers.get(c.id) || [];
+        const currentMembers = c.members || [];
         let members = [...presenceMembers];
+        members = protectWithLiveKitMembers(c.id, members, currentMembers, presenceMembers, 'presence_sync');
         // Self: local ref is more up-to-date than presence propagation
         if (myChannel === c.id && myId && !members.includes(myId)) {
           members.push(myId);
         }
         if (myChannel !== c.id && myId) {
-          members = members.filter(m => m !== myId);
+          const live = liveVoicePresenceRef.current;
+          const liveHasSelf = live.channelId === c.id && live.memberIds.has(myId);
+          if (!liveHasSelf) members = members.filter(m => m !== myId);
         }
-        const currentMembers = c.members || [];
         const sortedNew = [...members].sort();
         const sortedOld = [...currentMembers].sort();
         if (
@@ -656,6 +682,19 @@ export function usePresence({
               );
               if (myChannel === payload.channelId && myId) {
                 updates.members = [...updates.members, myId];
+              }
+              const live = liveVoicePresenceRef.current;
+              if (live.channelId === payload.channelId && live.memberIds.size > 0) {
+                const currentMembers = c.members || [];
+                const incomingMembers = updates.members as string[];
+                live.memberIds.forEach(memberId => {
+                  if (incomingMembers.includes(memberId)) return;
+                  incomingMembers.push(memberId);
+                  const event = currentMembers.includes(memberId)
+                    ? 'presence_broadcast_remove_blocked_by_livekit'
+                    : 'presence_broadcast_member_restored_from_livekit';
+                  logMemberIdentityDebug(event, { channelId: payload.channelId, memberId }, `${event}:${payload.channelId}:${memberId}`);
+                });
               }
               updates.userCount = updates.members.length;
             }

@@ -346,7 +346,7 @@ export default function LoginCodeView({ handleRegister, handleLogout, onGoBack }
                   type="button"
                   onClick={handleRequestCode}
                   disabled={!canRequest}
-                  className="w-full mt-1 flex items-center justify-center gap-2 py-2 [@media(max-height:760px)]:py-1.5 rounded-xl text-xs font-bold border border-dashed border-[var(--theme-accent)]/40 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full mt-1 flex items-center justify-center gap-2 py-2 [@media(max-height:760px)]:py-1.5 rounded-xl text-xs font-bold border border-dashed border-[var(--theme-accent)]/40 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-all disabled:opacity-40 disabled:cursor-default"
                 >
                   <Send size={13} />
                   Davet Kodu İste

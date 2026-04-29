@@ -62,14 +62,35 @@ function getIconTileStyle(selected: boolean, accent: string): React.CSSPropertie
 
 export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave, persistentInfo }: Props) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [primaryHover, setPrimaryHover] = useState(false);
   // Create modunda kota bilgisi olması beklenir; edit'te gösterilmez.
   const showPersistentRow = roomModal.type === 'create' && persistentInfo !== undefined;
   const quotaReached = showPersistentRow && persistentInfo!.remaining <= 0;
   const noQuotaPlan = showPersistentRow && persistentInfo!.quota === 0;
   const selectedIconColor = normalizeChannelIconColor(roomModal.iconColor, roomModal.mode);
   const selectedIconName = roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
-  // Save butonu DISABLE etmiyoruz — backend authoritative. Frontend plan resolve
-  // yanlış olursa (cache/stale) user bloklanmasın; backend 403 dönerse toast düşer.
+  const isRoomNameValid = roomModal.name.trim().length > 0;
+  const primaryActionEnabled = isRoomNameValid;
+  const primaryActionStyle: React.CSSProperties = primaryActionEnabled ? {
+    background: primaryHover ? 'rgba(var(--theme-accent-rgb), 0.30)' : 'rgba(var(--theme-accent-rgb), 0.22)',
+    border: primaryHover ? '1px solid rgba(var(--theme-accent-rgb), 0.42)' : '1px solid rgba(var(--theme-accent-rgb), 0.32)',
+    color: 'var(--theme-text)',
+    boxShadow: primaryHover
+      ? '0 6px 18px rgba(var(--theme-accent-rgb), 0.14), inset 0 1px 0 rgba(var(--glass-tint), 0.10)'
+      : 'inset 0 1px 0 rgba(var(--glass-tint), 0.08)',
+  } : {
+    background: 'rgba(var(--glass-tint), 0.045)',
+    border: '1px solid rgba(var(--glass-tint), 0.08)',
+    color: 'var(--theme-secondary-text)',
+    boxShadow: 'none',
+    opacity: 0.78,
+  };
+  const handlePrimaryAction = () => {
+    if (!primaryActionEnabled) return;
+    onSave();
+  };
+  // Quota/backend rules remain authoritative; the primary action only mirrors the
+  // local required-name validation so the modal does not look actionable too early.
   return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
@@ -306,7 +327,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                 value={roomModal.name}
                 onChange={(e) => onUpdate({ name: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') onSave();
+                  if (e.key === 'Enter') handlePrimaryAction();
                   if (e.key === 'Escape') onClose();
                 }}
               />
@@ -381,7 +402,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                     aria-checked={persistActive}
                     disabled={toggleDisabled}
                     onClick={onToggle}
-                    className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${toggleDisabled ? 'opacity-40 cursor-not-allowed' : ''} ${persistActive && !toggleDisabled ? '' : 'bg-[var(--theme-border)]'}`}
+                    className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${toggleDisabled ? 'opacity-40 cursor-default' : ''} ${persistActive && !toggleDisabled ? '' : 'bg-[var(--theme-border)]'}`}
                     style={persistActive && !toggleDisabled ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
                     title={toggleDisabled ? (noQuotaPlan ? 'Bu planda kalıcı oda hakkı yok' : 'Hakkın doldu') : undefined}
                   >
@@ -425,7 +446,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                 disabled={roomModal.isHidden}
                 onClick={() => { if (!roomModal.isHidden) onUpdate({ isInviteOnly: !roomModal.isInviteOnly }); }}
                 className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${
-                  roomModal.isHidden ? 'opacity-40 cursor-not-allowed' : ''
+                  roomModal.isHidden ? 'opacity-40 cursor-default' : ''
                 } ${
                   roomModal.isInviteOnly && !roomModal.isHidden ? '' : 'bg-[var(--theme-border)]'
                 }`}
@@ -450,8 +471,18 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             İptal
           </button>
           <button
-            onClick={onSave}
-            className="flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold btn-primary active:scale-[0.97]"
+            type="button"
+            disabled={!primaryActionEnabled}
+            aria-disabled={!primaryActionEnabled}
+            onClick={handlePrimaryAction}
+            onMouseEnter={() => { if (primaryActionEnabled) setPrimaryHover(true); }}
+            onMouseLeave={() => setPrimaryHover(false)}
+            onFocus={() => { if (primaryActionEnabled) setPrimaryHover(true); }}
+            onBlur={() => setPrimaryHover(false)}
+            className={`flex-[1.5] px-4 py-2.5 rounded-xl text-[13px] font-bold transition-[background,border-color,box-shadow,color,opacity,transform] duration-150 ${
+              primaryActionEnabled ? 'active:scale-[0.97]' : 'cursor-default'
+            }`}
+            style={primaryActionStyle}
           >
             {roomModal.type === 'create' ? 'Oda Oluştur' : 'Kaydet'}
           </button>

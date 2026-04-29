@@ -160,7 +160,7 @@ export default function ChatViewUserActionMenu({
             <button
               disabled={onCooldown}
               onClick={() => { onInvite(uid); onClose(); }}
-              className="w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] active:scale-95 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] hover:border-transparent hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.2)]"
+              className="w-full text-left px-3 py-2.5 text-xs font-bold rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-default text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-badge-text)] active:scale-95 bg-[rgba(var(--glass-tint),0.03)] border border-[rgba(var(--glass-tint),0.06)] hover:border-transparent hover:shadow-[0_0_20px_rgba(var(--theme-accent-rgb),0.2)]"
             >
               Davet Et
             </button>

@@ -438,7 +438,7 @@ function AccountInfoCard() {
         <button
           onClick={handleUpdateProfile}
           disabled={!hasProfileChanges}
-          className={`shrink-0 w-full md:w-auto px-5 py-2 btn-primary font-bold text-xs active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
+          className={`shrink-0 w-full md:w-auto px-5 py-2 btn-primary font-bold text-xs active:scale-95 disabled:opacity-30 disabled:cursor-default ${pressingProfile ? 'opacity-90 scale-[0.97]' : ''}`}
         >
           Güncelle
         </button>
@@ -498,7 +498,7 @@ function SecurityCard() {
         <button
           onClick={triggerSaveProfile}
           disabled={settingsPassword.length === 0}
-          className="px-5 py-2 btn-primary font-bold text-xs active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-5 py-2 btn-primary font-bold text-xs active:scale-95 disabled:opacity-30 disabled:cursor-default"
         >
           Şifreyi Değiştir
         </button>

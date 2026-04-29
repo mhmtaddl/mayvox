@@ -423,6 +423,7 @@ export default function DesktopDock({
                   }
                   isInRoom={!!activeChannel}
                   onStatusChange={(s) => { setSelfStatus(s); setSelfPanelOpen(false); }}
+                  onRestrictedStatusClick={(message) => setToastMsg(message)}
                   onOpenSettings={() => {
                     // Sunucu ayarları açıksa onu kapat — yoksa ServerSettings overlay'i
                     // SettingsView'ı maskeler. ChatView 'mayvox:close-server-settings'
@@ -452,15 +453,13 @@ export default function DesktopDock({
       <>
       {/* ── Sunucu alanı — kompakt default ── */}
       {serverList.length > 0 && activeServer && <>
-      <div ref={serverAreaRef} className="relative flex items-center gap-1 shrink-0">
+      <div ref={serverAreaRef} className="mv-server-dock-area relative flex items-center gap-1 shrink-0">
         {/* Aktif sunucu — tıkla → diğer sunucular yukarı açılır */}
         <div className="relative shrink-0">
           <button
             onClick={() => { setServerListOpen(prev => !prev); setServerSearchOpen(false); setServerSearch(''); }}
             title={activeServer.name}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 btn-haptic border ${
-              serverListOpen ? 'bg-[var(--theme-accent)]/15 border-[var(--theme-accent)]/25' : 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]/20'
-            } text-[var(--theme-accent)]`}
+            className="mv-server-dock-button w-10 h-10 rounded-xl flex items-center justify-center border text-[var(--theme-accent)]"
           >
             {activeServer.avatarUrl
               ? <img src={activeServer.avatarUrl} alt="" className="w-10 h-10 rounded-xl object-cover" />
@@ -479,12 +478,12 @@ export default function DesktopDock({
               <motion.div ref={serverListRef}
                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
                 transition={{ duration: 0.12 }}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[200px] max-h-[280px] overflow-y-auto rounded-xl z-[100]"
-                style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', backdropFilter: 'blur(24px)', border: '1px solid rgba(var(--glass-tint), 0.1)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+                className="mv-server-popover absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[200px] max-h-[280px] overflow-y-auto rounded-xl z-[100]"
+                style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', backdropFilter: 'blur(18px)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 10px 28px rgba(0,0,0,0.32)' }}>
                 <div className="px-3 py-2 text-[8px] font-semibold text-[var(--theme-secondary-text)]/30 uppercase tracking-wider">Sunucular</div>
                 {otherServers.map(s => (
                   <button key={s.id} onClick={() => handleSelectServer(s.id)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors text-left border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0">
+                    className="mv-server-row w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0">
                     <div className="w-7 h-7 rounded-[8px] overflow-hidden flex items-center justify-center shrink-0" style={{ background: s.avatarUrl ? 'none' : 'rgba(var(--glass-tint), 0.08)' }}>
                       {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-7 h-7 rounded-[8px] object-cover" /> : <span className="text-[9px] font-bold text-[var(--theme-accent)]">{s.shortName}</span>}
                     </div>
@@ -789,6 +788,7 @@ function SelfControlPanel({
   canInvisible,
   isInRoom,
   onStatusChange,
+  onRestrictedStatusClick,
   onOpenSettings,
 }: {
   currentStatus: string;
@@ -796,6 +796,7 @@ function SelfControlPanel({
   /** Kullanıcı bir sohbet/ses odasında mı — Çevrimdışı seçimini bloklar. */
   isInRoom: boolean;
   onStatusChange: (s: string) => void;
+  onRestrictedStatusClick: (message: string) => void;
   onOpenSettings: () => void;
   onClose: () => void;
 }) {
@@ -831,13 +832,18 @@ function SelfControlPanel({
             return (
               <button
                 key={opt.key}
-                onClick={() => { if (!disabled) onStatusChange(opt.key); }}
-                disabled={disabled}
+                onClick={() => {
+                  if (disabled) {
+                    onRestrictedStatusClick('Oda içindeyken Çevrimdışı seçilemez');
+                    return;
+                  }
+                  onStatusChange(opt.key);
+                }}
                 aria-disabled={disabled}
                 title={disabled ? 'Oda içindeyken Çevrimdışı seçilemez' : undefined}
                 className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
                   disabled
-                    ? 'opacity-40 cursor-not-allowed'
+                    ? 'opacity-70 cursor-pointer hover:bg-[var(--theme-panel-hover)]'
                     : active
                       ? 'bg-[var(--theme-accent)]/10'
                       : 'hover:bg-[var(--theme-panel-hover)]'

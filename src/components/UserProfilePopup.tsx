@@ -374,7 +374,7 @@ export default function UserProfilePopup({
                     <button
                       disabled={onCooldown}
                       onClick={() => onInvite?.()}
-                      className="w-9 h-9 rounded-[10px] flex items-center justify-center text-emerald-400/75 hover:text-emerald-400 hover:bg-emerald-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-25 disabled:cursor-not-allowed"
+                      className="w-9 h-9 rounded-[10px] flex items-center justify-center text-emerald-400/75 hover:text-emerald-400 hover:bg-emerald-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-25 disabled:cursor-default"
                       title={onCooldown ? `${cooldownRemaining}s` : 'Odaya davet et'}
                     >
                       <PhoneCall size={15} strokeWidth={2} />

@@ -351,18 +351,14 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
       <header className="flex items-center gap-3 flex-wrap">
         {/* Search */}
         <div
-          className="flex-1 min-w-[220px] flex items-center gap-2.5 h-11 rounded-full px-4 searchInput"
-          style={{
-            background: 'rgba(var(--glass-tint),0.028)',
-            boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.08)',
-          }}
+          className="server-settings-input-shell flex-1 min-w-[220px] flex items-center gap-2.5 h-11 rounded-full px-4 searchInput"
         >
           <Search size={14} className="text-[var(--theme-secondary-text)] shrink-0" strokeWidth={2} />
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Üye ara..."
-            className="flex-1 bg-transparent text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none"
+            className="server-settings-input-field flex-1 min-w-0 text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55"
           />
           {searchQuery && (
             <button
@@ -516,10 +512,6 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
 
         /* Search — focus ring */
         .searchInput:focus-within {
-          background: rgba(var(--glass-tint),0.045) !important;
-          box-shadow:
-            inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.30),
-            0 0 0 4px rgba(var(--theme-accent-rgb),0.08) !important;
           transition: background 180ms var(--ease), box-shadow 220ms var(--ease);
         }
         .searchInput {

@@ -684,7 +684,7 @@ const FriendRequestItem: React.FC<{
           disabled={!!pending || !onAccept}
           title="Kabul et"
           aria-label="Arkadaşlık isteğini kabul et"
-          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-default transition-colors"
           style={{
             color: 'var(--theme-accent)',
             background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
@@ -700,7 +700,7 @@ const FriendRequestItem: React.FC<{
           disabled={!!pending || !onReject}
           title="Reddet"
           aria-label="Arkadaşlık isteğini reddet"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-default transition-colors"
           style={{
             background: pending === 'reject' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
             border: '1px solid rgba(var(--glass-tint), 0.10)',
@@ -791,7 +791,7 @@ const ServerInviteItem: React.FC<{
           disabled={!!pending || !onAccept}
           title="Daveti kabul et"
           aria-label="Sunucu davetini kabul et"
-          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-default transition-colors"
           style={{
             color: 'var(--theme-accent)',
             background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
@@ -807,7 +807,7 @@ const ServerInviteItem: React.FC<{
           disabled={!!pending || !onDecline}
           title="Reddet"
           aria-label="Sunucu davetini reddet"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-default transition-colors"
           style={{
             background: pending === 'decline' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
             border: '1px solid rgba(var(--glass-tint), 0.10)',

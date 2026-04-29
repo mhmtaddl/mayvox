@@ -125,10 +125,12 @@ const ANCHOR_POINTS: Array<{ v: OverlayAnchor; fx: number; fy: number; label: st
   { v: 'left-top-mid',     fx: 0,    fy: 0.33, label: 'Sol (üst orta)' },
 ];
 
-function OverlayPositionPicker({ value, onChange, disabled, variant, size, cardOpacity, displayName, avatarUrl }: {
+function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDisabledClick, variant, size, cardOpacity, displayName, avatarUrl }: {
   value: OverlayAnchor;
   onChange: (v: OverlayAnchor) => void;
   disabled?: boolean;
+  disabledReason?: string;
+  onDisabledClick?: () => void;
   variant: 'capsule' | 'card' | 'badge' | 'none';
   size: 'small' | 'medium' | 'large';
   cardOpacity: number;
@@ -165,13 +167,14 @@ function OverlayPositionPicker({ value, onChange, disabled, variant, size, cardO
           maxHeight: 240,
           background: bg,
           boxShadow: `inset 0 0 0 1px ${ringColor}, ${vignette}`,
-          opacity: disabled ? 0.45 : 1,
-          pointerEvents: disabled ? 'none' : 'auto',
+          opacity: disabled ? 0.7 : 1,
+          cursor: disabled ? 'pointer' : 'default',
           transition: 'opacity 180ms ease-out',
           // Container queries — içindeki center label container width'e göre küçülür.
           containerType: 'inline-size',
         } as React.CSSProperties}
         aria-label="Ekran konum seçici"
+        title={disabled ? disabledReason : undefined}
       >
         {/* İnce grid — ekran hissi (tema duyarlı) */}
         <div
@@ -210,7 +213,13 @@ function OverlayPositionPicker({ value, onChange, disabled, variant, size, cardO
           return (
             <button
               key={p.v}
-              onClick={() => onChange(p.v)}
+              onClick={() => {
+                if (disabled) {
+                  onDisabledClick?.();
+                  return;
+                }
+                onChange(p.v);
+              }}
               title={p.label}
               className="anchor-hit"
               style={{
@@ -438,10 +447,12 @@ function OverlayBoardPreview({
 
 // Stil segmented — 3 mini preview: Capsule (pill) / Card (kare+bar) / Badge (minimal dot).
 // Her buton aktif varyantı küçük mockup ile gösterir → kullanıcı seçerken ne alacağını görür.
-function OverlayVariantSegmented({ value, onChange, disabled }: {
+function OverlayVariantSegmented({ value, onChange, disabled, disabledReason, onDisabledClick }: {
   value: 'capsule' | 'card' | 'badge' | 'none';
   onChange: (v: 'capsule' | 'card' | 'badge' | 'none') => void;
   disabled?: boolean;
+  disabledReason?: string;
+  onDisabledClick?: () => void;
 }) {
   const opts: Array<{ v: 'capsule' | 'card' | 'badge' | 'none'; label: string }> = [
     { v: 'capsule', label: 'Kapsül' },
@@ -455,9 +466,9 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
       style={{
         background: 'rgba(var(--glass-tint), 0.05)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
-        opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
+        opacity: disabled ? 0.7 : 1,
       }}
+      title={disabled ? disabledReason : undefined}
     >
       {opts.map(o => {
         const active = value === o.v;
@@ -465,7 +476,13 @@ function OverlayVariantSegmented({ value, onChange, disabled }: {
           <button
             key={o.v}
             data-overlay-option={o.v}
-            onClick={() => onChange(o.v)}
+            onClick={() => {
+              if (disabled) {
+                onDisabledClick?.();
+                return;
+              }
+              onChange(o.v);
+            }}
             className="settings-overlay-segment-option min-w-0 flex flex-col items-center justify-center gap-0.5 rounded-[10px] px-1"
             style={{
               height: 44,
@@ -562,10 +579,12 @@ function VariantPreview({ variant, active }: { variant: 'capsule' | 'card' | 'ba
 
 // Boyut segmented — 3 buton, her biri avatar-dot ölçeğiyle görsel hiyerarşi.
 // Konum kartının yanında dikey ortalanır; yükseklik picker'la eşleşir.
-function OverlaySizeSegmented({ value, onChange, disabled }: {
+function OverlaySizeSegmented({ value, onChange, disabled, disabledReason, onDisabledClick }: {
   value: 'small' | 'medium' | 'large';
   onChange: (v: 'small' | 'medium' | 'large') => void;
   disabled?: boolean;
+  disabledReason?: string;
+  onDisabledClick?: () => void;
 }) {
   const opts: Array<{ v: 'small' | 'medium' | 'large'; label: string; dot: number; gap: number }> = [
     { v: 'small',  label: 'Küçük', dot: 4, gap: 2 },
@@ -578,16 +597,22 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
       style={{
         background: 'rgba(var(--glass-tint), 0.05)',
         boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
-        opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
+        opacity: disabled ? 0.7 : 1,
       }}
+      title={disabled ? disabledReason : undefined}
     >
       {opts.map(o => {
         const active = value === o.v;
         return (
           <button
             key={o.v}
-            onClick={() => onChange(o.v)}
+            onClick={() => {
+              if (disabled) {
+                onDisabledClick?.();
+                return;
+              }
+              onChange(o.v);
+            }}
             className="settings-overlay-segment-option min-w-0 flex flex-col items-center justify-center gap-1 rounded-[10px] px-1"
             style={{
               height: 44,
@@ -626,23 +651,31 @@ function OverlaySizeSegmented({ value, onChange, disabled }: {
 }
 
 // İkonlu + açıklamalı toggle satırı
-function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled }: {
+function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled, disabledReason, onDisabledClick }: {
   icon: React.ReactNode;
   label: string;
   hint: string;
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  disabledReason?: string;
+  onDisabledClick?: () => void;
 }) {
   return (
     <label
       className="flex items-center gap-3"
+      title={disabled ? disabledReason : undefined}
+      onClick={(e) => {
+        if (!disabled) return;
+        e.preventDefault();
+        onDisabledClick?.();
+      }}
       style={{
         minHeight: 42,
         paddingLeft: 2,
         paddingRight: 2,
-        opacity: disabled ? 0.55 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
+        opacity: disabled ? 0.7 : 1,
+        cursor: disabled ? 'pointer' : 'default',
       }}
     >
       <span
@@ -667,6 +700,7 @@ function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled }: {
 // Oyun içi ses overlay — Electron desktop only — preview + kontroller
 function VoiceOverlayCard() {
   const { currentUser } = useUser();
+  const { setToastMsg } = useUI();
   const {
     overlayEnabled, setOverlayEnabled,
     overlayPosition, setOverlayPosition,
@@ -679,6 +713,8 @@ function VoiceOverlayCard() {
   } = useSettings();
   const off = !overlayEnabled;
   const previewName = getPublicDisplayName(currentUser) || 'Mayvox';
+  const overlayDisabledReason = 'Önce oyun overlay özelliğini açın';
+  const showOverlayDisabledFeedback = () => setToastMsg('Bu ayar şu anda değiştirilemez');
   return (
     <div
       className="surface-card settings-content-card rounded-xl px-4 py-4 w-full"
@@ -783,6 +819,8 @@ function VoiceOverlayCard() {
             value={overlayPosition}
             onChange={setOverlayPosition}
             disabled={off}
+            disabledReason={overlayDisabledReason}
+            onDisabledClick={showOverlayDisabledFeedback}
             variant={overlayVariant}
             size={overlaySize}
             cardOpacity={overlayCardOpacity}
@@ -792,12 +830,12 @@ function VoiceOverlayCard() {
           <div className="vox-right w-full min-w-0 flex flex-col gap-3">
             <div>
               <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
-              <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} />
+              <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} disabledReason={overlayDisabledReason} onDisabledClick={showOverlayDisabledFeedback} />
             </div>
 
             <div>
               <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Boyut</div>
-              <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} />
+              <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} disabledReason={overlayDisabledReason} onDisabledClick={showOverlayDisabledFeedback} />
             </div>
 
             {/* Kart şeffaflık — tek slider, sabit koyu renk. Overlay'de isim
@@ -821,7 +859,7 @@ function VoiceOverlayCard() {
                 style={{
                   ...rangeVisualStyle(overlayCardOpacity, 0, 100),
                   opacity: off ? 0.5 : 1,
-                  cursor: off ? 'not-allowed' : 'pointer',
+                  cursor: off ? 'default' : 'pointer',
                 }}
                 aria-label="Kart şeffaflık ayarı"
               />
@@ -843,6 +881,8 @@ function VoiceOverlayCard() {
             checked={overlayShowOnlySpeaking}
             onChange={() => !off && setOverlayShowOnlySpeaking(!overlayShowOnlySpeaking)}
             disabled={off}
+            disabledReason={overlayDisabledReason}
+            onDisabledClick={showOverlayDisabledFeedback}
           />
           <div style={{ height: 1, background: 'rgba(var(--glass-tint), 0.05)', marginLeft: 34 }} />
           <OverlayToggleRow
@@ -852,6 +892,8 @@ function VoiceOverlayCard() {
             checked={overlayShowSelf}
             onChange={() => !off && setOverlayShowSelf(!overlayShowSelf)}
             disabled={off}
+            disabledReason={overlayDisabledReason}
+            onDisabledClick={showOverlayDisabledFeedback}
           />
           <div style={{ height: 1, background: 'rgba(var(--glass-tint), 0.05)', marginLeft: 34 }} />
           <OverlayToggleRow
@@ -861,6 +903,8 @@ function VoiceOverlayCard() {
             checked={overlayClickThrough}
             onChange={() => !off && setOverlayClickThrough(!overlayClickThrough)}
             disabled={off}
+            disabledReason={overlayDisabledReason}
+            onDisabledClick={showOverlayDisabledFeedback}
           />
         </div>
       </div>
@@ -889,7 +933,7 @@ function GameActivityCard() {
 
 export default function SettingsView() {
   const { currentUser } = useUser();
-  const { settingsTarget, setSettingsTarget } = useUI();
+  const { settingsTarget, setSettingsTarget, setToastMsg } = useUI();
   const isAdmin = !!currentUser.isAdmin;
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
@@ -1061,17 +1105,17 @@ export default function SettingsView() {
                 ];
                 const visible = subTabs.filter(t => t.visible);
                 return (
-                  <div className={`surface-card grid gap-1 p-1 rounded-xl ${visible.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className={`admin-subtabs grid gap-1 p-1 rounded-xl ${visible.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     {visible.map(tab => {
                       const isActive = effectiveSub === tab.key;
                       return (
                         <button
                           key={tab.key}
                           onClick={() => setAdminSub(tab.key)}
-                          className={`flex items-center gap-1.5 justify-center min-w-0 py-1.5 rounded-lg text-[11px] md:text-[12px] font-semibold transition-all duration-150 truncate ${
+                          className={`admin-subtab flex items-center gap-1.5 justify-center min-w-0 py-1.5 rounded-lg text-[11px] md:text-[12px] font-semibold truncate ${
                             isActive
-                              ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)] border border-[rgba(var(--theme-accent-rgb),0.25)]'
-                              : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(255,255,255,0.02)]'
+                              ? 'admin-subtab-active'
+                              : 'admin-subtab-idle'
                           }`}
                         >
                           {tab.icon}

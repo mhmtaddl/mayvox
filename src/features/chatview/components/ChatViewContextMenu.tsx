@@ -158,7 +158,7 @@ export default function ChatViewContextMenu({
           <button
             onClick={handleReAuthSubmit}
             disabled={reAuthLoading || reAuthInput.length !== 4}
-            className="flex-1 px-2 py-1.5 text-[10px] font-bold text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 px-2 py-1.5 text-[10px] font-bold text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-default"
           >
             {reAuthLoading ? '...' : 'Doğrula'}
           </button>

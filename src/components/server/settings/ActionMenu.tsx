@@ -72,7 +72,7 @@ export default function ActionMenu({ items, anchorRect, onClose }: Props) {
   }, [onClose]);
 
   const toneClass = (tone?: ActionItem['tone'], disabled?: boolean) => {
-    if (disabled) return 'text-[#7b8ba8]/45 cursor-not-allowed';
+    if (disabled) return 'text-[#7b8ba8]/45 cursor-default';
     switch (tone) {
       case 'danger': return 'text-red-400 hover:bg-red-500/10 hover:text-red-300';
       case 'warn': return 'text-orange-400 hover:bg-orange-500/10 hover:text-orange-300';

@@ -8,6 +8,8 @@ export interface AudioContextType {
   setIsPttPressed: (v: boolean) => void;
   connectionLevel: number;
   setConnectionLevel: (v: number) => void;
+  connectionLatencyMs?: number;
+  connectionJitterMs?: number;
   selectedInput: string;
   setSelectedInput: (v: string) => void;
   selectedOutput: string;

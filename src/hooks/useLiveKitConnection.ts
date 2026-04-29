@@ -38,6 +38,7 @@ interface Props {
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
   activeServerIdRef: React.MutableRefObject<string>;
+  liveVoicePresenceRef: React.MutableRefObject<{ channelId: string | null; memberIds: Set<string> }>;
   connectionLostRef: React.MutableRefObject<boolean>;
   isDeafenedRef: React.MutableRefObject<boolean>;
   isNoiseSuppressionEnabled: boolean;
@@ -89,6 +90,7 @@ export function useLiveKitConnection({
   currentUserRef,
   activeChannelRef,
   activeServerIdRef,
+  liveVoicePresenceRef,
   connectionLostRef,
   isDeafenedRef,
   isNoiseSuppressionEnabled,
@@ -321,6 +323,10 @@ export function useLiveKitConnection({
           }
           if (!participants.includes(memberId)) participants.push(memberId);
         });
+        liveVoicePresenceRef.current = {
+          channelId,
+          memberIds: new Set(participants),
+        };
         setChannels(prev =>
           prev.map(c =>
             c.id === channelId
@@ -530,6 +536,8 @@ export function useLiveKitConnection({
         }
         connectionLostRef.current = false;
         setConnectionLevel(4);
+        updateMembers();
+        syncUsers();
         noiseSessionVersionRef.current += 1;
         lastAppliedNoiseConfigRef.current = null;
         // Reconnect sonrası permission'ı tekrar oku — reconnect sırasında mute/unmute
@@ -565,6 +573,9 @@ export function useLiveKitConnection({
         cleanupAudioUnlock();
         const identity =
           room.localParticipant?.identity || currentUserRef.current.id;
+        if (liveVoicePresenceRef.current.channelId === channelId) {
+          liveVoicePresenceRef.current = { channelId: null, memberIds: new Set() };
+        }
 
         setChannels(prev => {
           const updated = prev.map(c => {

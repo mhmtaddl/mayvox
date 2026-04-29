@@ -1,11 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AlertCircle, Check, X, UserCheck, Clock } from 'lucide-react';
-import {
-  listJoinRequests,
-  acceptJoinRequest,
-  rejectJoinRequest,
-  type JoinRequestListItem,
-} from '../../../lib/serverService';
+import { useJoinRequests } from '../../../hooks/useJoinRequests';
 
 interface Props {
   serverId: string;
@@ -31,47 +26,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function JoinRequestsTab({ serverId }: Props) {
-  const [items, setItems] = useState<JoinRequestListItem[] | null>(null);
-  const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError('');
-    try {
-      const r = await listJoinRequests(serverId, showHistory);
-      setItems(r);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Başvurular yüklenemedi');
-    }
-  }, [serverId, showHistory]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const onAccept = async (id: string) => {
-    if (busyId) return;
-    setBusyId(id);
-    try {
-      await acceptJoinRequest(serverId, id);
-      await load();
-      // Admin'in kendi çanındaki pending özetini anında güncelle (WS push kendine gelmez).
-      window.dispatchEvent(new Event('pigevox:join-request:local-update'));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Kabul işlemi başarısız');
-    } finally { setBusyId(null); }
-  };
-
-  const onReject = async (id: string) => {
-    if (busyId) return;
-    setBusyId(id);
-    try {
-      await rejectJoinRequest(serverId, id);
-      await load();
-      window.dispatchEvent(new Event('pigevox:join-request:local-update'));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Red işlemi başarısız');
-    } finally { setBusyId(null); }
-  };
+  const { items, error, busyId, onAccept, onReject } = useJoinRequests({
+    serverId,
+    includeHistory: showHistory,
+    enabled: true,
+  });
 
   return (
     <div className="flex flex-col gap-3">
@@ -138,7 +98,23 @@ export default function JoinRequestsTab({ serverId }: Props) {
                       onClick={() => onReject(it.id)}
                       disabled={busyId !== null}
                       title="Reddet"
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 transition-colors"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-red-300/80 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.09)',
+                        border: '1px solid rgba(248, 113, 113, 0.18)',
+                        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (busyId !== null) return;
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
+                        e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.26)';
+                        e.currentTarget.style.boxShadow = '0 6px 14px rgba(239, 68, 68, 0.12), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.09)';
+                        e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.18)';
+                        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                      }}
                     >
                       <X size={13} />
                     </button>
@@ -146,7 +122,23 @@ export default function JoinRequestsTab({ serverId }: Props) {
                       onClick={() => onAccept(it.id)}
                       disabled={busyId !== null}
                       title="Kabul Et"
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-400/80 hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 transition-colors"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-300/85 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
+                      style={{
+                        background: 'rgba(16, 185, 129, 0.10)',
+                        border: '1px solid rgba(52, 211, 153, 0.20)',
+                        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (busyId !== null) return;
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.16)';
+                        e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.30)';
+                        e.currentTarget.style.boxShadow = '0 6px 14px rgba(16, 185, 129, 0.13), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.10)';
+                        e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.20)';
+                        e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
+                      }}
                     >
                       <Check size={13} />
                     </button>

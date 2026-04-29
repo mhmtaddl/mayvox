@@ -141,11 +141,7 @@ function InputRow({
         {label}
       </label>
       <div
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
-        style={{
-          background: 'rgba(var(--glass-tint),0.05)',
-          border: '1px solid rgba(var(--glass-tint),0.10)',
-        }}
+        className="server-settings-input-shell flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
       >
         <input
           type="number"
@@ -154,7 +150,7 @@ function InputRow({
           max={max}
           step={1}
           onChange={e => onChange(e.target.value)}
-          className="flex-1 min-w-0 bg-transparent text-[14px] font-bold tabular-nums text-[var(--theme-text)] outline-none"
+          className="server-settings-input-field flex-1 min-w-0 text-[14px] font-bold tabular-nums text-[var(--theme-text)]"
         />
         <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55 shrink-0">
           {unit}

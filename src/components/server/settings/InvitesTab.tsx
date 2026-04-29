@@ -148,6 +148,7 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
   const [invites, setInvites] = useState<ServerInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [createHover, setCreateHover] = useState(false);
   const [maxUses, setMaxUses] = useState('');
   const [expHrs, setExpHrs] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -236,16 +237,23 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
             type="button"
             onClick={handleCreate}
             disabled={creating}
-            className="h-10 px-5 rounded-xl text-[12px] font-semibold inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] hover:brightness-[1.08] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 self-end"
+            onMouseEnter={() => setCreateHover(true)}
+            onMouseLeave={() => setCreateHover(false)}
+            onFocus={() => setCreateHover(true)}
+            onBlur={() => setCreateHover(false)}
+            className="h-10 px-5 rounded-xl text-[12px] font-semibold inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-default self-end"
             style={{
-              // Tema accent — düz renk + inset highlight/shadow ile depth, tema değişimine uyumlu.
-              background: 'var(--theme-accent)',
-              color: 'var(--theme-text-on-accent, #fff)',
+              background: createHover
+                ? 'rgba(var(--theme-accent-rgb), 0.28)'
+                : 'rgba(var(--theme-accent-rgb), 0.18)',
+              color: 'var(--theme-text)',
+              border: createHover
+                ? '1px solid rgba(var(--theme-accent-rgb), 0.36)'
+                : '1px solid rgba(var(--theme-accent-rgb), 0.28)',
               boxShadow:
-                'inset 0 1px 0 rgba(var(--glass-tint),0.22), ' +
-                'inset 0 -1px 0 rgba(0,0,0,0.10), ' +
-                '0 1px 2px rgba(0,0,0,0.10), ' +
-                '0 6px 18px rgba(var(--theme-accent-rgb), 0.30)',
+                'inset 0 1px 0 rgba(255,255,255,0.06), ' +
+                '0 1px 2px rgba(0,0,0,0.10)' +
+                (createHover ? ', 0 4px 12px rgba(var(--theme-accent-rgb),0.10)' : ''),
             }}
           >
             {creating
@@ -353,7 +361,7 @@ function CodeInviteRow({
         type="button"
         onClick={onDelete}
         disabled={busy}
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 active:scale-[0.94] opacity-70 group-hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 active:scale-[0.94] opacity-70 group-hover:opacity-100 disabled:opacity-40 disabled:cursor-default"
         aria-label="Daveti sil"
       >
         {busy
@@ -466,18 +474,14 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
     <div className="space-y-3">
       {/* Search bar */}
       <div
-        className="flex items-center gap-2 h-10 rounded-xl px-3.5"
-        style={{
-          background: 'rgba(var(--glass-tint),0.035)',
-          border: '1px solid rgba(var(--glass-tint),0.08)',
-        }}
+        className="server-settings-input-shell flex items-center gap-2 h-10 rounded-xl px-3.5"
       >
         <Search size={13} className="text-[var(--theme-secondary-text)] shrink-0" />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Takma ad ile ara..."
-          className="flex-1 bg-transparent text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55 outline-none"
+          className="server-settings-input-field flex-1 min-w-0 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/55"
         />
         {searching && (
           <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />
@@ -573,7 +577,7 @@ function SentInviteRow({
         type="button"
         onClick={onCancel}
         disabled={busy}
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 active:scale-[0.94] opacity-70 group-hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 active:scale-[0.94] opacity-70 group-hover:opacity-100 disabled:opacity-40 disabled:cursor-default"
         aria-label="Daveti iptal et"
       >
         {busy
@@ -627,7 +631,7 @@ function SearchResultRow({
           type="button"
           onClick={onInvite}
           disabled={inviting}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[10.5px] font-semibold shrink-0 transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-default"
           style={{
             background: 'rgba(var(--theme-accent-rgb),0.12)',
             color: 'var(--theme-accent)',

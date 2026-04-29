@@ -125,7 +125,7 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
                     className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-[rgba(var(--glass-tint),0.04)] transition-colors"
                     onClick={(e) => { user.onClick?.(e); setOverflowOpen(false); }}
                   >
-                    <div className="shrink-0 overflow-hidden flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: '22%', background: 'rgba(var(--theme-accent-rgb), 0.06)', border: user.isSpeaking ? '1.5px solid rgba(var(--theme-accent-rgb), 0.3)' : '1px solid rgba(var(--glass-tint), 0.06)' }}>
+                    <div className="shrink-0 overflow-hidden flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: '22%', background: 'rgba(var(--theme-accent-rgb), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.06)' }}>
                     <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={getPublicDisplayName(user)} letterClassName="text-[var(--theme-text)] font-semibold text-[9px]" />
                     </div>
                     <span className="flex-1 min-w-0 text-[11px] font-medium text-[var(--theme-text)] truncate leading-tight">{getPublicDisplayName(user)}</span>

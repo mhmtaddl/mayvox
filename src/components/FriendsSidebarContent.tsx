@@ -54,8 +54,19 @@ export default function FriendsSidebarContent({
   // ── Derived lists ──────────────────────────────────────────────────────
   // Manuel "Çevrimdışı" (premium/staff) — presence'ta hala online ama UI'da
   // offline grubunda gösterilir.
-  const isEffectivelyOnline = (u: { status: string; statusText?: string }) =>
-    u.status === 'online' && u.statusText !== 'Çevrimdışı';
+  const voicePresentKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const channel of channels ?? []) {
+      for (const member of channel.members ?? []) {
+        if (typeof member === 'string') keys.add(member);
+      }
+    }
+    return keys;
+  }, [channels]);
+  const isVoicePresent = (u: { id: string; name?: string }) =>
+    voicePresentKeys.has(u.id) || (!!u.name && voicePresentKeys.has(u.name));
+  const isEffectivelyOnline = (u: { id: string; name?: string; status: string; statusText?: string }) =>
+    isVoicePresent(u) || (u.status === 'online' && u.statusText !== 'Çevrimdışı');
   const friendUsers = useMemo(() => allUsers.filter(u => friendIds.has(u.id)), [allUsers, friendIds]);
   const onlineUsers = useMemo(() => friendUsers.filter(isEffectivelyOnline), [friendUsers]);
   const offlineUsers = useMemo(() => friendUsers.filter(u => !isEffectivelyOnline(u)), [friendUsers]);
@@ -105,7 +116,9 @@ export default function FriendsSidebarContent({
     const isMe = user.id === currentUser.id;
     const publicName = getPublicDisplayName(user);
     const userServerName = !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
-    const statusLabel = user.statusText && user.statusText !== 'Aktif' ? user.statusText : 'Online';
+    const voicePresent = isVoicePresent(user);
+    const displayStatusText = voicePresent && user.statusText === 'Çevrimdışı' ? 'Online' : user.statusText;
+    const statusLabel = displayStatusText && displayStatusText !== 'Aktif' ? displayStatusText : 'Online';
     const statusDotColor =
       statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor' ? '#ef4444'
       : statusLabel === 'AFK' || statusLabel === 'Pasif' ? '#f59e0b'
@@ -136,7 +149,7 @@ export default function FriendsSidebarContent({
           <div
             className={`${isDesktop ? 'h-[34px] w-[34px]' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           >
-            <AvatarContent avatar={user.avatar} statusText={user.statusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
+            <AvatarContent avatar={user.avatar} statusText={displayStatusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
           <DeviceBadge platform={user.platform} size={isDesktop ? 11 : 13} className="absolute -top-0.5 -right-0.5" />
         </div>
@@ -216,7 +229,7 @@ export default function FriendsSidebarContent({
               disabled={onCooldown}
               onClick={(e) => { e.stopPropagation(); handleInviteUser(user.id); }}
               title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
-              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-default"
             >
               {onCooldown ? <span className="text-[8px] font-bold">{remaining}</span> : <PhoneCall size={13} />}
             </button>

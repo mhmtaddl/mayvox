@@ -62,7 +62,7 @@ function PremiumColorControl({
           onMouseUp={commitDraft}
           onPointerUp={commitDraft}
           onTouchEnd={commitDraft}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
           aria-label={label}
         />
       </span>
@@ -100,7 +100,7 @@ function PremiumCustomizationCard({
         type="button"
         disabled={locked}
         onClick={onToggle}
-        className={`flex w-full items-center justify-between gap-2 text-left ${isOpen ? 'mb-3' : ''} disabled:cursor-not-allowed`}
+        className={`flex w-full items-center justify-between gap-2 text-left ${isOpen ? 'mb-3' : ''} disabled:cursor-default`}
       >
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-border)]/60 bg-[var(--surface-soft)] text-[var(--theme-accent)]">
@@ -123,7 +123,7 @@ function PremiumCustomizationCard({
           type="button"
           disabled={locked}
           onClick={onReset}
-          className="settings-premium-reset inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--theme-border)]/60 bg-[var(--surface-soft)] px-2 text-[10px] font-semibold text-[var(--theme-secondary-text)] transition-colors hover:bg-[var(--surface-elevated)] disabled:cursor-not-allowed disabled:opacity-45"
+          className="settings-premium-reset inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--theme-border)]/60 bg-[var(--surface-soft)] px-2 text-[10px] font-semibold text-[var(--theme-secondary-text)] transition-colors hover:bg-[var(--surface-elevated)] disabled:cursor-default disabled:opacity-45"
         >
           <RotateCcw size={12} />
           Sıfırla
@@ -447,7 +447,7 @@ export function SoundsSection() {
                       key={v}
                       disabled={!enabled}
                       onClick={() => { stopAllSamples(); setVariant(v); previewSound(category, v); }}
-                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-not-allowed"
+                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-default"
                       aria-label={`Ses ${v}`}
                     >
                       <RadioDot active={active && enabled} dim={!enabled} />

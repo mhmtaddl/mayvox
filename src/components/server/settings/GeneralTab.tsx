@@ -36,7 +36,7 @@ interface Props {
 const INPUT_BASE =
   'w-full h-10 rounded-lg px-3.5 text-[13px] text-[var(--theme-text)] tracking-tight ' +
   'placeholder:text-[var(--theme-secondary-text)]/45 outline-none gtInput ' +
-  'disabled:opacity-55 disabled:cursor-not-allowed';
+  'disabled:opacity-55 disabled:cursor-default';
 
 const DANGER_BTN_STYLE: React.CSSProperties = {
   background: 'rgba(248,113,113,0.12)',
@@ -110,7 +110,7 @@ function Segmented<T extends string>({ options, value, onChange, disabled }: {
             onClick={() => !disabled && onChange(opt.value)}
             disabled={disabled}
             className={`gtSegBtn relative flex-1 h-[30px] px-3 rounded-full text-[12px] font-medium inline-flex items-center justify-center gap-1.5 ${
-              disabled ? 'cursor-not-allowed opacity-60' : ''
+              disabled ? 'cursor-default opacity-60' : ''
             }`}
             style={active ? {
               background: 'rgba(var(--theme-accent-rgb),0.12)',
@@ -203,7 +203,7 @@ function DangerButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`gtPressable inline-flex items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-semibold tracking-tight disabled:opacity-35 disabled:cursor-not-allowed ${
+      className={`gtPressable inline-flex items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-semibold tracking-tight disabled:opacity-35 disabled:cursor-default ${
         size === 'sm' ? 'h-8 px-3.5' : 'h-9 px-4'
       }`}
       style={DANGER_BTN_STYLE}
@@ -383,7 +383,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             type="button"
             onClick={() => canEdit && logoRef.current?.click()}
             disabled={!canEdit}
-            className="gtAvatar group relative w-[76px] h-[76px] rounded-2xl overflow-hidden shrink-0 disabled:cursor-not-allowed"
+            className="gtAvatar group relative w-[76px] h-[76px] rounded-2xl overflow-hidden shrink-0 disabled:cursor-default"
             style={{
               background: server.avatarUrl
                 ? 'transparent'

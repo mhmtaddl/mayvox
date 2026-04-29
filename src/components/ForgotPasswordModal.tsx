@@ -167,7 +167,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <button
                   onClick={handleSubmit}
                   disabled={!foundUser}
-                  className={`h-11 w-full rounded-xl bg-[var(--theme-accent)] px-5 text-sm font-semibold text-[var(--theme-btn-primary-text)] shadow-[0_10px_24px_rgba(var(--theme-accent-rgb),0.18)] transition-all disabled:cursor-not-allowed disabled:bg-[rgba(var(--theme-accent-rgb),0.28)] disabled:text-[var(--theme-btn-primary-text)]/55 disabled:shadow-none active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-95'}`}
+                  className={`h-11 w-full rounded-xl bg-[var(--theme-accent)] px-5 text-sm font-semibold text-[var(--theme-btn-primary-text)] shadow-[0_10px_24px_rgba(var(--theme-accent-rgb),0.18)] transition-all disabled:cursor-default disabled:bg-[rgba(var(--theme-accent-rgb),0.28)] disabled:text-[var(--theme-btn-primary-text)]/55 disabled:shadow-none active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-95'}`}
                 >
                   Şifremi Sıfırla
                 </button>

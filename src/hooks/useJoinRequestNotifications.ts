@@ -48,6 +48,7 @@ export function useJoinRequestNotifications(opts: Options = {}): void {
           } catch { /* no-op */ }
         }
         handleJoinRequest({ serverId, requesterId, serverName, serverAvatar, requesterName });
+        window.dispatchEvent(new Event('pigevox:join-request:local-update'));
         return;
       }
 

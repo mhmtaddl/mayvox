@@ -21,7 +21,6 @@ export interface CardStyleTokens {
   cardRadius: number;
   cardBackdrop: string;
   avatarBorder: string;
-  avatarBorderSpeaking: string;
   avatarShadow: string;
   textOpacity: number;
   iconOpacity: number;
@@ -41,7 +40,6 @@ export function getCardStyleTokens(style: CardStyle): CardStyleTokens {
         cardRadius: 12,
         cardBackdrop: 'none',
         avatarBorder: '1.5px solid rgba(var(--theme-accent-rgb), 0.08)',
-        avatarBorderSpeaking: '2px solid rgba(var(--theme-accent-rgb), 0.3)',
         avatarShadow: '0 2px 6px rgba(0,0,0,0.12)',
         textOpacity: 0.9,
         iconOpacity: 0.4,
@@ -59,7 +57,6 @@ export function getCardStyleTokens(style: CardStyle): CardStyleTokens {
         cardRadius: 18,
         cardBackdrop: 'blur(8px)',
         avatarBorder: '1.5px solid rgba(var(--theme-accent-rgb), 0.1)',
-        avatarBorderSpeaking: '2px solid rgba(var(--theme-accent-rgb), 0.4)',
         avatarShadow: '0 3px 10px rgba(0,0,0,0.15)',
         textOpacity: 0.92,
         iconOpacity: 0.45,
@@ -76,7 +73,6 @@ export function getCardStyleTokens(style: CardStyle): CardStyleTokens {
         cardRadius: 20,
         cardBackdrop: 'blur(16px)',
         avatarBorder: '1.5px solid rgba(255,255,255,0.08)',
-        avatarBorderSpeaking: '2px solid rgba(var(--theme-accent-rgb), 0.25)',
         avatarShadow: '0 2px 6px rgba(0,0,0,0.08)',
         textOpacity: 0.8,
         iconOpacity: 0.35,
@@ -93,7 +89,6 @@ export function getCardStyleTokens(style: CardStyle): CardStyleTokens {
         cardRadius: 16,
         cardBackdrop: 'none',
         avatarBorder: '1px solid rgba(var(--glass-tint), 0.06)',
-        avatarBorderSpeaking: '2px solid rgba(var(--theme-accent-rgb), 0.35)',
         avatarShadow: '0 2px 8px rgba(0,0,0,0.1)',
         textOpacity: 0.8,
         iconOpacity: 0.4,

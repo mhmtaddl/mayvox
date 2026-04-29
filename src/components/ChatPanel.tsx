@@ -287,12 +287,12 @@ export default function ChatPanel({
           placeholder={isFloodCooling ? 'Biraz yavaşla, kısa bir bekleme var…' : isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
           disabled={isChatDisabled}
           rows={1}
-          className="mv-chat-composer-field flex-1 px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none ring-0 focus:outline-none focus:ring-0 disabled:opacity-40 disabled:cursor-not-allowed resize-none max-h-24 overflow-y-auto"
+          className="mv-chat-composer-field flex-1 px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none ring-0 focus:outline-none focus:ring-0 disabled:opacity-40 disabled:cursor-default resize-none max-h-24 overflow-y-auto"
           style={{ minHeight: 36, background: 'transparent', border: 0, boxShadow: 'none' }}
           onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
         />
         {/* Gonder */}
-        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatInput.trim() ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)] opacity-30'} disabled:cursor-not-allowed`}>
+        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatInput.trim() ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)] opacity-30'} disabled:cursor-default`}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
         {/* Admin/Mod butonlari */}

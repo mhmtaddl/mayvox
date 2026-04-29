@@ -103,7 +103,7 @@ export default function TimeoutPicker({ anchorRect, onSelect, onClose, busy }: P
           disabled={busy}
           onClick={() => { if (!busy) onSelect(opt.value); }}
           className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-150 ${
-            busy ? 'cursor-not-allowed opacity-50' : 'hover:bg-[rgba(255,255,255,0.06)]'
+            busy ? 'cursor-default opacity-50' : 'hover:bg-[rgba(255,255,255,0.06)]'
           }`}
         >
           <span className="shrink-0 mt-0.5 w-6 text-center text-[11px] font-bold tracking-tight text-amber-400/85">

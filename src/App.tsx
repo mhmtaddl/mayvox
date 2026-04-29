@@ -442,6 +442,14 @@ export default function App() {
     }
   };
   const [connectionLevel, setConnectionLevel] = useState(4);
+  const [connectionLatencyMs, setConnectionLatencyMs] = useState<number | undefined>(undefined);
+  const [connectionJitterMs, setConnectionJitterMs] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (connectionLevel !== 0) return;
+    setConnectionLatencyMs(undefined);
+    setConnectionJitterMs(undefined);
+  }, [connectionLevel]);
 
   // ── User state ───────────────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState<User>({
@@ -482,6 +490,10 @@ export default function App() {
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const [activeServerId, setActiveServerId] = useState<string>('');
   const [isConnecting, setIsConnecting] = useState(false);
+  const liveVoicePresenceRef = useRef<{ channelId: string | null; memberIds: Set<string> }>({
+    channelId: null,
+    memberIds: new Set(),
+  });
 
   const currentChannel = useMemo(
     () => channels.find(c => c.id === activeChannel),
@@ -887,6 +899,7 @@ export default function App() {
     activeChannelRef,
     activeServerIdRef,
     channelOrderTokenRef,
+    liveVoicePresenceRef,
     disconnectFromLiveKit: () => disconnectLKRef.current(),
     allUsersRef,
     setAllUsers,
@@ -945,6 +958,7 @@ export default function App() {
     currentUserRef,
     activeChannelRef,
     activeServerIdRef,
+    liveVoicePresenceRef,
     connectionLostRef,
     isDeafenedRef,
     isNoiseSuppressionEnabled,
@@ -1033,6 +1047,10 @@ export default function App() {
   // Bu fallback sadece LiveKit bağlantısı yokken çalışır.
   useEffect(() => {
     const isInRoom = () => !!livekitRoomRef.current;
+    const pingSamples: number[] = [];
+    let fallbackLevel = 4;
+    let consecutiveWorseSamples = 0;
+    let consecutiveFailures = 0;
 
     const getNetworkType = (): number => {
       if (!navigator.onLine) return 0;
@@ -1046,23 +1064,73 @@ export default function App() {
     };
 
     const rttToLevel = (rtt: number): number =>
-      rtt < 150 ? 4 : rtt < 300 ? 3 : rtt < 600 ? 2 : 1;
+      rtt < 300 ? 4 : rtt < 700 ? 3 : rtt < 1500 ? 2 : 1;
+
+    const getMedianRtt = (): number => {
+      const sorted = [...pingSamples].sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)] ?? 0;
+    };
+
+    const calculateJitter = (samples: number[]): number => {
+      if (samples.length < 2) return 0;
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      const deviation = samples.reduce((sum, val) => sum + Math.abs(val - avg), 0) / samples.length;
+      return Math.round(deviation);
+    };
+
+    const setFallbackLevel = (nextLevel: number) => {
+      if (isInRoom()) return;
+
+      if (nextLevel === 0) {
+        fallbackLevel = 0;
+        consecutiveWorseSamples = 0;
+        setConnectionLatencyMs(undefined);
+        setConnectionJitterMs(undefined);
+        setConnectionLevel(0);
+        return;
+      }
+
+      if (nextLevel > fallbackLevel) {
+        fallbackLevel = nextLevel;
+        consecutiveWorseSamples = 0;
+        setConnectionLevel(nextLevel);
+        return;
+      }
+
+      if (nextLevel < fallbackLevel) {
+        consecutiveWorseSamples += 1;
+        if (consecutiveWorseSamples >= 2) {
+          fallbackLevel = nextLevel;
+          consecutiveWorseSamples = 0;
+          setConnectionLevel(nextLevel);
+        }
+        return;
+      }
+
+      consecutiveWorseSamples = 0;
+      setConnectionLevel(nextLevel);
+    };
 
     const onOffline = () => {
       connectionLostRef.current = true;
+      fallbackLevel = 0;
+      consecutiveFailures = 3;
+      pingSamples.length = 0;
       setConnectionLevel(0);
       setToastMsg('İnternet bağlantısı kesildi.');
     };
     const onOnline = () => {
       if (isInRoom()) return;
-      setConnectionLevel(getNetworkType());
+      consecutiveFailures = 0;
+      fallbackLevel = Math.max(getNetworkType(), 1);
+      setConnectionLevel(fallbackLevel);
       if (connectionLostRef.current) {
         connectionLostRef.current = false;
       }
     };
     const onConnectionChange = () => {
       if (isInRoom()) return;
-      setConnectionLevel(getNetworkType());
+      setFallbackLevel(getNetworkType());
     };
 
     window.addEventListener('offline', onOffline);
@@ -1079,20 +1147,35 @@ export default function App() {
         const rtt = Date.now() - start;
         // Ref'i tekrar kontrol — fetch sırasında odaya girilmiş olabilir
         if (isInRoom()) return;
-        const level = rttToLevel(rtt);
-        logger.info('Fallback ping', { rtt, level });
-        setConnectionLevel(level);
+        consecutiveFailures = 0;
+        pingSamples.push(rtt);
+        if (pingSamples.length > 5) pingSamples.shift();
+        const medianRtt = getMedianRtt();
+        const jitter = calculateJitter(pingSamples);
+        const level = rttToLevel(medianRtt);
+        setConnectionLatencyMs(Math.round(medianRtt));
+        setConnectionJitterMs(jitter);
+        logger.info('Fallback ping', { rtt, medianRtt, jitter, level });
+        setFallbackLevel(level);
         if (connectionLostRef.current) {
           connectionLostRef.current = false;
           setToastMsg(null);
         }
       } catch {
         if (isInRoom()) return;
-        setConnectionLevel(0);
+        consecutiveFailures += 1;
+        logger.warn('Fallback ping failed', { consecutiveFailures });
+        if (consecutiveFailures >= 3) {
+          connectionLostRef.current = true;
+          setFallbackLevel(0);
+        } else if (consecutiveFailures >= 2) {
+          setFallbackLevel(1);
+        }
       }
     }, 15000);
 
-    setConnectionLevel(getNetworkType());
+    fallbackLevel = getNetworkType();
+    setConnectionLevel(fallbackLevel);
 
     return () => {
       window.removeEventListener('offline', onOffline);
@@ -2456,6 +2539,8 @@ export default function App() {
     setIsPttPressed: setPttPressed,
     connectionLevel,
     setConnectionLevel,
+    connectionLatencyMs,
+    connectionJitterMs,
     selectedInput,
     setSelectedInput,
     selectedOutput,
@@ -2475,6 +2560,8 @@ export default function App() {
     volumeLevel,
     isPttPressed,
     connectionLevel,
+    connectionLatencyMs,
+    connectionJitterMs,
     selectedInput,
     selectedOutput,
     inputDevices,

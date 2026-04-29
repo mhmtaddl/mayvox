@@ -202,7 +202,7 @@ export default function AdminActionBar() {
                 <button
                   onClick={onGenerateClick}
                   disabled={generating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 btn-primary font-semibold text-[11px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 btn-primary font-semibold text-[11px] active:scale-95 disabled:opacity-50 disabled:cursor-default"
                 >
                   <Plus size={12} />
                   Yeni Kod Üret
@@ -238,14 +238,14 @@ export default function AdminActionBar() {
                     <button
                       onClick={() => setCodesPage(p => Math.max(0, p - 1))}
                       disabled={codesPage === 0 || codesLoading}
-                      className="p-1.5 rounded-lg bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1.5 rounded-lg bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] disabled:opacity-30 disabled:cursor-default"
                     >
                       <ChevronLeft size={12} />
                     </button>
                     <button
                       onClick={() => setCodesPage(p => Math.min(codesTotalPages - 1, p + 1))}
                       disabled={codesPage >= codesTotalPages - 1 || codesLoading}
-                      className="p-1.5 rounded-lg bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1.5 rounded-lg bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] disabled:opacity-30 disabled:cursor-default"
                     >
                       <ChevronRight size={12} />
                     </button>
