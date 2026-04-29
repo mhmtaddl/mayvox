@@ -10,18 +10,23 @@ export interface UseMyPendingJoinRequestsApi {
   refresh: () => Promise<void>;
 }
 
+interface UseMyPendingJoinRequestsOptions {
+  enabled?: boolean;
+}
+
 /**
  * Admin/owner olduğu tüm sunuculardaki toplam pending başvuru özeti.
  * - Mount'ta ve 45 sn aralıkla fetch
  * - `server:join_request:*` WS event'i gelince anında refresh (optimistic yerine canonical)
  * - WS reconnect sonrası tek seferlik catch-up fetch
  */
-export function useMyPendingJoinRequests(): UseMyPendingJoinRequestsApi {
+export function useMyPendingJoinRequests({ enabled = true }: UseMyPendingJoinRequestsOptions = {}): UseMyPendingJoinRequestsApi {
   const [items, setItems] = useState<MyPendingJoinRequestsSummaryItem[]>([]);
   const mountedRef = useRef(true);
   const inflightRef = useRef(false);
 
   const load = useCallback(async () => {
+    if (!enabled) return;
     if (inflightRef.current) return;
     inflightRef.current = true;
     try {
@@ -29,9 +34,14 @@ export function useMyPendingJoinRequests(): UseMyPendingJoinRequestsApi {
       if (mountedRef.current) setItems(data);
     } catch { /* sessizce yut: bir sonraki poll düzeltecek */ }
     finally { inflightRef.current = false; }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setItems([]);
+      return;
+    }
+
     mountedRef.current = true;
     void load();
     const timer = window.setInterval(() => {
@@ -67,7 +77,7 @@ export function useMyPendingJoinRequests(): UseMyPendingJoinRequestsApi {
       unsubEvents();
       unsubStatus();
     };
-  }, [load]);
+  }, [enabled, load]);
 
   const totalCount = items.reduce((sum, it) => sum + it.pendingCount, 0);
   return { items, totalCount, refresh: load };

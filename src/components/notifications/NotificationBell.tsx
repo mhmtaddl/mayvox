@@ -185,8 +185,10 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     return () => { handler(); setOpen(false); };
   }, [onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer]);
 
-  // State model: open > unread > idle. Panel open pauses all unread cues
-  // (amber color, glow, swing) and uses the standard active-state styling.
+  // State model: notification color is independent from popover open state.
+  // Panel open only pauses motion/badge cues; the bell stays yellow while actionable
+  // notifications exist.
+  const hasBellNotifications = bellCount > 0;
   const unread = bellCount > 0 && !open;
 
   return (
@@ -196,11 +198,9 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         ref={btnRef}
         onClick={() => setOpen(prev => !prev)}
         className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/bell ${
-          open
-            ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8'
-            : unread
-              ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]'
-              : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'
+          hasBellNotifications
+            ? `${open ? 'bg-[rgba(245,181,68,0.08)]' : ''} mv-notification-bell-has hover:bg-[rgba(245,181,68,0.10)]`
+            : `${open ? 'bg-[rgba(var(--glass-tint),0.05)]' : ''} mv-notification-bell-idle hover:bg-[rgba(var(--glass-tint),0.04)]`
         }`}
         title="Bildirimler"
       >

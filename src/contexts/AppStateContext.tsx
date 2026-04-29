@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { AppView, User, VoiceChannel, InviteRequest } from '../types';
+import { AppView, User, InviteRequest } from '../types';
 import { supabase } from '../lib/supabase';
 import type { ResetRequest } from '../components/PasswordResetPanel';
 import type { VoiceDisabledReason } from '../hooks/useLiveKitConnection';

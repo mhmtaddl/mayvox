@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { UserCard, RoomNetworkVisualization, CARD_SCALE_MAP } from './chat';
 import type { CardScale } from './chat';
 import type { CardStyle } from './chat/cardStyles';
@@ -115,23 +115,23 @@ function VoiceParticipants({
   const s = cardScale;
   const scaleConfig = CARD_SCALE_MAP[cardScale as CardScale];
 
-  const makeClickHandler = (userId: string) => (e: React.MouseEvent) => {
+  const makeClickHandler = useCallback((userId: string) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onProfileClick(userId, e.clientX, e.clientY);
-  };
+  }, [onProfileClick]);
 
-  const isSpeakingForUser = (user: User) => {
+  const isSpeakingForUser = useCallback((user: User) => {
     const isMe = user.id === currentUser.id;
     return (isMe && isPttPressed && !isMuted && !isVoiceBanned) || (!isMe && !!user.isSpeaking);
-  };
+  }, [currentUser.id, isPttPressed, isMuted, isVoiceBanned]);
 
-  const isBroadcastSpeaker = (userId: string) => {
+  const isBroadcastSpeaker = useCallback((userId: string) => {
     if (currentChannel?.mode !== 'broadcast') return false;
     const sp = currentChannel.speakerIds || [];
     return sp.length > 0 ? sp.includes(userId) : currentChannel.ownerId === userId;
-  };
+  }, [currentChannel?.mode, currentChannel?.speakerIds, currentChannel?.ownerId]);
 
-  const renderCardProps = (user: User) => {
+  const renderCardProps = useCallback((user: User) => {
     const isMe = user.id === currentUser.id;
     const speaking = isSpeakingForUser(user);
     return {
@@ -158,9 +158,28 @@ function VoiceParticipants({
         onRequestMemberMenu?.(user, e.clientX, e.clientY);
       },
     };
-  };
+  }, [
+    currentUser.id,
+    currentChannel?.ownerId,
+    dominantSpeakerId,
+    getIntensity,
+    scaleConfig,
+    isBroadcastSpeaker,
+    isPttPressed,
+    isMuted,
+    isDeafened,
+    isVoiceBanned,
+    volumeLevel,
+    speakingLevels,
+    getEffectiveStatus,
+    makeClickHandler,
+    isAdmin,
+    onKickUser,
+    onRequestMemberMenu,
+    isSpeakingForUser,
+  ]);
 
-  const networkParticipants = members.map(user => {
+  const networkParticipants = useMemo(() => members.map(user => {
     const isMe = user.id === currentUser.id;
     const speaking = isSpeakingForUser(user);
     return {
@@ -187,7 +206,18 @@ function VoiceParticipants({
         onRequestMemberMenu?.(user, e.clientX, e.clientY);
       },
     };
-  });
+  }), [
+    members,
+    currentUser.id,
+    isSpeakingForUser,
+    isMuted,
+    isDeafened,
+    getEffectiveStatus,
+    makeClickHandler,
+    isAdmin,
+    onKickUser,
+    onRequestMemberMenu,
+  ]);
 
   const chatEnabled = getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).chatEnabled;
 

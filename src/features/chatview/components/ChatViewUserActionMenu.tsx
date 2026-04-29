@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Clock } from 'lucide-react';
 import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
 

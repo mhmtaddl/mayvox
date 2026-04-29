@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Users, Hash } from 'lucide-react';
+import { Search, Hash } from 'lucide-react';
 import { searchServers, joinServer, createJoinRequest, type DiscoverServer } from '../../lib/serverService';
 import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
@@ -9,13 +9,6 @@ const DISCOVER_PLAN_TONE: Record<string, { rgb: string; bgA: number; bgB: number
   pro: { rgb: '234, 179, 8', bgA: 0.16, bgB: 0.055, borderA: 0.36, shadowA: 0.10 },
   ultra: { rgb: '168, 85, 247', bgA: 0.18, bgB: 0.065, borderA: 0.42, shadowA: 0.12 },
 };
-
-const MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-function fmtSince(raw: string): string {
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return '';
-  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
 
 interface Props {
   /** serverId — katılım sonrası veya mevcut üye olunan sunucuya geçiş için parent'a iletilir. */

@@ -12,6 +12,7 @@ import { resolveUserByMemberKey } from '../lib/memberIdentity';
 
 const TICK_MS = 120; // Ducking hesaplama aralığı
 const DOMINANT_THRESHOLD = 0.02; // Bu seviyenin altı = konuşmuyor
+const VOLUME_APPLY_EPSILON = 0.02; // Çok küçük farklarda track/DOM volume yazımını atla
 
 interface UseDuckingProps {
   /** LiveKit room ref */
@@ -46,6 +47,8 @@ export function useDucking({
   const currentGainsRef = useRef<Map<string, number>>(new Map());
   // Her participant için hedef gain
   const targetGainsRef = useRef<Map<string, number>>(new Map());
+  // Track/DOM'a son yazılan final volume. Ducking hesaplaması aynı kalır, sadece no-op yazımları keser.
+  const lastAppliedVolumeRef = useRef<Map<string, number>>(new Map());
 
   const configRef = useRef(duckingConfig);
   configRef.current = duckingConfig;
@@ -75,6 +78,7 @@ export function useDucking({
     if (!room) return;
     currentGainsRef.current.clear();
     targetGainsRef.current.clear();
+    lastAppliedVolumeRef.current.clear();
     // Tüm remote participant'ların sesini kullanıcı ayarına geri yükle
     for (const [, p] of room.remoteParticipants) {
       applyVolume(p.identity, 1.0);
@@ -146,6 +150,7 @@ export function useDucking({
       if (!activeIds.has(id)) {
         currentGainsRef.current.delete(id);
         targetGainsRef.current.delete(id);
+        lastAppliedVolumeRef.current.delete(id);
       }
     }
   }
@@ -164,6 +169,7 @@ export function useDucking({
           if (track && track instanceof RemoteAudioTrack) track.setVolume(0);
         }
         document.querySelectorAll<HTMLAudioElement>(`audio[data-participant="${identity}"]`).forEach(el => { el.volume = 0; el.muted = true; });
+        lastAppliedVolumeRef.current.set(identity, 0);
         break;
       }
       return;
@@ -175,6 +181,9 @@ export function useDucking({
     const userId = resolveUserByMemberKey(identity, allUsersRef.current)?.id ?? identity;
     const userVol = (userVolumesRef.current[userId] ?? getUserVolumePercent(userId)) / 100;
     const finalVol = Math.max(0, Math.min(1, userVol * duckingGain));
+    const lastApplied = lastAppliedVolumeRef.current.get(identity);
+    if (lastApplied !== undefined && Math.abs(lastApplied - finalVol) < VOLUME_APPLY_EPSILON) return;
+    lastAppliedVolumeRef.current.set(identity, finalVol);
 
     // LiveKit track API
     for (const [, p] of room.remoteParticipants) {

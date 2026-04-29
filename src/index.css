@@ -1308,6 +1308,18 @@ html[data-theme-pack="amber-night"] {
   --notif-unread-rgb: 255, 255, 255;
 }
 
+.mv-notification-bell-has {
+  color: #F5B544;
+}
+
+.mv-notification-bell-idle {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme-pack="frost-light"] .mv-notification-bell-idle {
+  color: rgba(15, 23, 42, 0.92);
+}
+
 /* Message icon: inside blinks on/off */
 @keyframes notif-icon-pulse {
   0%, 100% { opacity: 0; }

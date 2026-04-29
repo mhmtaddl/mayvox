@@ -1,6 +1,5 @@
 export { default as UserCard } from './UserCard';
 export { default as VoiceAvatar } from './VoiceAvatar';
-export { default as VoiceNetwork } from './VoiceNetwork';
 export { default as RoomNetworkVisualization } from './RoomNetworkVisualization';
 export { default as MiniEqualizer } from './MiniEqualizer';
 export { default as OwnVoiceEqualizer } from './OwnVoiceEqualizer';

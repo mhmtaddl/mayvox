@@ -90,13 +90,12 @@ const VolumeLabel = React.memo(function VolumeLabel({ value }: { value: number |
   );
 });
 
-export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserClick, onUserContextMenu, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
+export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStart, onUserContextMenu, activeServerName, activeServerShortName, activeServerAvatarUrl, activeServerMotto, activeServerRole, activeServerPublic, activeServerPlan, onShowSettings, onShowDiscover, onLeaveServer }: Props) {
   const { channels, activeChannel, isConnecting, activeServerId, accessContext } = useChannel();
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const canReorderChannels = accessContext?.flags.canReorderChannels ?? false;
   const canCreateChannel = accessContext?.flags.canCreateChannel ?? false;
-  const canManageServer = accessContext?.flags.canManageServer ?? false;
   const canMoveMembers = accessContext?.flags.canMoveMembers ?? false;
   // Server-specific fallback: accessContext henüz yüklenmediyse (ilk render),
   // listMyServers'dan gelen activeServerRole'ü kullan — global currentUser.isAdmin yerine.
@@ -106,7 +105,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
   const selfFrameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
   const { userVolumes, setContextMenu, setRoomModal, setToastMsg } = useUI();
   const { connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
-  const { handleJoinChannel, handleContextMenu, handleReorderChannels, view, appVersion, showReleaseNotes, setShowReleaseNotes, handleUpdateUserVolume } = useAppState();
+  const { handleJoinChannel, handleContextMenu, handleReorderChannels, appVersion, showReleaseNotes, setShowReleaseNotes, handleUpdateUserVolume } = useAppState();
 
   // Inline volume edit — tıklanan kullanıcının ismi yerine slider çıkar,
   // dışına tıklayınca kapanır. Popup (action menu) yerine in-row UX.
@@ -152,6 +151,24 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
   const visibleChannels = useMemo(
     () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
+  );
+  const userLookup = useMemo(() => {
+    const byId = new Map<string, typeof allUsers[number]>();
+    const byName = new Map<string, typeof allUsers[number]>();
+    for (const user of allUsers) {
+      byId.set(user.id, user);
+      if (user.name) byName.set(user.name, user);
+    }
+    return { byId, byName };
+  }, [allUsers]);
+  const resolveMemberUser = useCallback((memberId: string) => {
+    return userLookup.byId.get(memberId)
+      ?? userLookup.byName.get(memberId)
+      ?? resolveUserByMemberKey(memberId, allUsers);
+  }, [userLookup, allUsers]);
+  const userRoomCount = useMemo(
+    () => channels.filter(c => c.ownerId === currentUser.id).length,
+    [channels, currentUser.id],
   );
 
   return (
@@ -404,7 +421,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 return (
                 <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
                   {sorted.map((memberId, idx) => {
-                    const user = resolveUserByMemberKey(memberId, allUsers);
+                    const user = resolveMemberUser(memberId);
                     if (!user) {
                       logMemberIdentityDebug('left_sidebar_unresolved_member', { memberId }, `left_sidebar:${memberId}`);
                     }
@@ -531,7 +548,6 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
 
           {/* Oda Oluştur — capability-gated */}
           {(canCreateChannel || serverAdminFallback) && (() => {
-            const userRoomCount = channels.filter(c => c.ownerId === currentUser.id).length;
             const roomLimit = getUserRoomLimit(activeServerPlan);
             const atLimit = userRoomCount >= roomLimit;
             return (

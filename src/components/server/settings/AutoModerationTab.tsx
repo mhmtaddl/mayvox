@@ -882,56 +882,11 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   );
 }
 
-// ── Status chip: modül aktif/pasif göstergesi (hero için) ──
 const CHIP_COLOR_MAP: Record<string, { rgb: string }> = {
-  cyan:   { rgb: '34,211,238'  },
-  rose:   { rgb: '251,113,133' },
+  cyan: { rgb: '34,211,238' },
+  rose: { rgb: '251,113,133' },
   violet: { rgb: '167,139,250' },
 };
-
-function StatusChip({ color, label, active }: { color: 'cyan' | 'rose' | 'violet'; label: string; active: boolean }) {
-  const c = CHIP_COLOR_MAP[color];
-  // Inline style'daki --rgb ve --active-* değerlerini CSS class (statusChip) hover rule'u için CSS vars olarak verir.
-  const activeStyle: React.CSSProperties = active ? {
-    background: `rgba(${c.rgb}, 0.18)`,
-    border: `1px solid rgba(${c.rgb}, 0.45)`,
-    color: `rgb(${c.rgb})`,
-    boxShadow: `0 0 14px rgba(${c.rgb}, 0.22), inset 0 1px 0 rgba(var(--glass-tint),0.05)`,
-    ['--chip-hover-glow' as any]: `0 0 22px rgba(${c.rgb}, 0.34)`,
-  } : {
-    background: 'rgba(var(--glass-tint),0.04)',
-    border: '1px solid rgba(var(--glass-tint),0.10)',
-    color: 'var(--theme-secondary-text)',
-    ['--chip-hover-glow' as any]: 'none',
-  };
-  return (
-    <span
-      className={`statusChip relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all duration-150 ${active ? 'statusChip--active' : ''}`}
-      style={activeStyle}
-    >
-      <span className="relative flex items-center justify-center w-2 h-2">
-        <span
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: active ? `rgb(${c.rgb})` : 'rgba(var(--glass-tint),0.35)',
-            boxShadow: active ? `0 0 8px rgba(${c.rgb}, 0.90)` : 'none',
-          }}
-        />
-        {active && (
-          <span
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: `rgba(${c.rgb}, 0.55)`,
-              animation: 'statusChipPulse 2.4s ease-out infinite',
-            }}
-            aria-hidden="true"
-          />
-        )}
-      </span>
-      {label}
-    </span>
-  );
-}
 
 /**
  * Güvenli avatar — öncelik: (1) userAvatar varsa & yüklenebilirse onu, (2) aksi halde

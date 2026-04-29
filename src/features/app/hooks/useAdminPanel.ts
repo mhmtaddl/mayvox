@@ -2,7 +2,7 @@
  * useAdminPanel — Admin şifre sıfırlama ve davet talebi yönetimi.
  * Polling + Realtime subscription + action handlers.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getPendingPasswordResets,
   getAdminInviteRequests,
@@ -31,6 +31,28 @@ const pendingResetDisplayName = (p: PendingResetProfile) => {
   return p.display_name || full || p.name || 'Kullanıcı';
 };
 
+type AdminInviteRequestRow = {
+  id: string; email: string; status: string; code?: string | null;
+  expires_at: number; created_at: string; rejection_count: number;
+  blocked_until?: number | null; permanently_blocked: boolean;
+  last_send_error?: string | null;
+};
+
+const ADMIN_FETCH_COOLDOWN_MS = 2_500;
+
+const mapInviteRequestRow = (r: AdminInviteRequestRow): InviteRequest => ({
+  id: r.id,
+  email: r.email,
+  status: r.status as InviteRequest['status'],
+  expiresAt: r.expires_at,
+  rejectionCount: r.rejection_count,
+  blockedUntil: r.blocked_until,
+  permanentlyBlocked: r.permanently_blocked,
+  createdAt: r.created_at,
+  lastSendError: r.last_send_error ?? undefined,
+  sentCode: r.code ?? undefined,
+});
+
 interface UseAdminPanelOptions {
   currentUserId: string;
   isAdmin: boolean;
@@ -50,15 +72,21 @@ export function useAdminPanel({
 }: UseAdminPanelOptions) {
   const [passwordResetRequests, setPasswordResetRequests] = useState<ResetRequest[]>([]);
   const [inviteRequests, setInviteRequests] = useState<InviteRequest[]>([]);
+  const passwordResetsInFlightRef = useRef(false);
+  const inviteRequestsInFlightRef = useRef(false);
+  const lastPasswordResetsFetchAtRef = useRef(0);
+  const lastInviteRequestsFetchAtRef = useRef(0);
 
   const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
-  // ── Password reset polling (15sn) ──
-  useEffect(() => {
-    if (!currentUserId || (!isAdmin && !isPrimaryAdmin)) return;
-    if (view !== 'chat' && view !== 'settings') return;
+  const loadPasswordResetRequests = useCallback(async (opts: { force?: boolean } = {}) => {
+    const now = Date.now();
+    if (passwordResetsInFlightRef.current) return;
+    if (!opts.force && now - lastPasswordResetsFetchAtRef.current < ADMIN_FETCH_COOLDOWN_MS) return;
 
-    const poll = async () => {
+    passwordResetsInFlightRef.current = true;
+    lastPasswordResetsFetchAtRef.current = now;
+    try {
       const { data } = await getPendingPasswordResets();
       if (data) {
         setPasswordResetRequests((data as PendingResetProfile[]).map((p) => ({
@@ -67,42 +95,42 @@ export function useAdminPanel({
           userEmail: p.email || '',
         })));
       }
-    };
+    } finally {
+      passwordResetsInFlightRef.current = false;
+    }
+  }, []);
 
-    const interval = setInterval(poll, 15000);
+  const loadInviteRequests = useCallback(async (opts: { force?: boolean } = {}) => {
+    const now = Date.now();
+    if (inviteRequestsInFlightRef.current) return;
+    if (!opts.force && now - lastInviteRequestsFetchAtRef.current < ADMIN_FETCH_COOLDOWN_MS) return;
+
+    inviteRequestsInFlightRef.current = true;
+    lastInviteRequestsFetchAtRef.current = now;
+    try {
+      const requests = await getAdminInviteRequests();
+      setInviteRequests(requests.map(mapInviteRequestRow));
+    } finally {
+      inviteRequestsInFlightRef.current = false;
+    }
+  }, []);
+
+  // ── Password reset polling (15sn) ──
+  useEffect(() => {
+    if (!currentUserId || (!isAdmin && !isPrimaryAdmin)) return;
+    if (view !== 'chat' && view !== 'settings') return;
+
+    const interval = setInterval(() => { void loadPasswordResetRequests(); }, 15000);
     return () => clearInterval(interval);
-  }, [isAdmin, isPrimaryAdmin, view, currentUserId]);
+  }, [isAdmin, isPrimaryAdmin, view, currentUserId, loadPasswordResetRequests]);
 
   // ── Invite request polling (30sn) + Realtime ──
   useEffect(() => {
     if (!currentUserId || (!isAdmin && !isPrimaryAdmin)) return;
     if (view !== 'chat' && view !== 'settings') return;
 
-    const mapRow = (r: {
-      id: string; email: string; status: string; code?: string | null;
-      expires_at: number; created_at: string; rejection_count: number;
-      blocked_until?: number | null; permanently_blocked: boolean;
-      last_send_error?: string | null;
-    }): InviteRequest => ({
-      id: r.id,
-      email: r.email,
-      status: r.status as InviteRequest['status'],
-      expiresAt: r.expires_at,
-      rejectionCount: r.rejection_count,
-      blockedUntil: r.blocked_until,
-      permanentlyBlocked: r.permanently_blocked,
-      createdAt: r.created_at,
-      lastSendError: r.last_send_error ?? undefined,
-      sentCode: r.code ?? undefined,
-    });
-
-    const refreshInvites = async () => {
-      const requests = await getAdminInviteRequests();
-      setInviteRequests(requests.map(mapRow));
-    };
-
-    refreshInvites();
-    const interval = setInterval(refreshInvites, 30000);
+    void loadInviteRequests();
+    const interval = setInterval(() => { void loadInviteRequests(); }, 30000);
 
     const channel = supabaseClient
       .channel(`invite-requests-admin-rt-${currentUserId}`)
@@ -156,7 +184,7 @@ export function useAdminPanel({
       clearInterval(interval);
       channel.unsubscribe();
     };
-  }, [currentUserId, isAdmin, isPrimaryAdmin, view]);
+  }, [currentUserId, isAdmin, isPrimaryAdmin, view, loadInviteRequests]);
 
   // ── Handlers ──
   const handleApproveReset = async (req: ResetRequest) => {
@@ -253,23 +281,10 @@ export function useAdminPanel({
 
   // Login sonrası initial load için
   const loadInitialAdminData = async () => {
-    const { data: pending } = await getPendingPasswordResets();
-    if (pending) {
-      setPasswordResetRequests((pending as PendingResetProfile[]).map((p) => ({
-        userId: p.id, userName: pendingResetDisplayName(p), userEmail: p.email || '',
-      })));
-    }
-    const adminInvites = await getAdminInviteRequests();
-    if (adminInvites.length > 0) {
-      setInviteRequests(adminInvites.map(r => ({
-        id: r.id, email: r.email,
-        status: r.status as InviteRequest['status'],
-        expiresAt: r.expires_at, rejectionCount: r.rejection_count,
-        blockedUntil: r.blocked_until, permanentlyBlocked: r.permanently_blocked,
-        createdAt: r.created_at, lastSendError: r.last_send_error ?? undefined,
-        sentCode: r.code ?? undefined,
-      })));
-    }
+    await Promise.all([
+      loadPasswordResetRequests({ force: true }),
+      loadInviteRequests({ force: true }),
+    ]);
   };
 
   return {

@@ -231,7 +231,7 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
 // ── Conversation Item ───────────────────────────────────────────────────
 
 function ConversationItem({
-  convo, allUsers, currentUserId, onClick, onDelete,
+  convo, allUsers, onClick, onDelete,
 }: {
   convo: DmConversation;
   allUsers: any[];

@@ -61,7 +61,6 @@ function getIdleCardStyle(user: { isAdmin?: boolean; isModerator?: boolean }, is
 function UserCardInner({
   user,
   isMe,
-  isOwner,
   isSpeakingActive,
   isDominant,
   intensity,

@@ -243,7 +243,7 @@ function ProfileCard() {
   const {
     settingsFirstName, setSettingsFirstName, settingsLastName, setSettingsLastName,
     settingsAge, avatarBorderColor, setAvatarBorderColor,
-    customAvatarUrl, avatarUploading, fileInputRef, getAvatarText, toTitleCase,
+    customAvatarUrl, avatarUploading, fileInputRef, getAvatarText,
     handleAvatarFileChange, currentUser,
   } = ctx;
   const frameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });

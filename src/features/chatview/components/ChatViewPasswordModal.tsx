@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Lock } from 'lucide-react';

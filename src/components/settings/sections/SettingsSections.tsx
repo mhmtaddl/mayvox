@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, ChevronDown, Crown, Lock, Palette, Recycle, RotateCcw, Volume2, Zap, Mic, AudioLines } from 'lucide-react';
-import { CardSection, Toggle, cardCls } from '../shared';
+import { CardSection, Toggle } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useUser } from '../../../contexts/UserContext';
-import { useUI } from '../../../contexts/UIContext';
 import { previewSound, type SoundVariant } from '../../../lib/sounds';
 import {
   SoundManager, stopAllSamples,
@@ -548,7 +547,7 @@ export function PerformanceSection() {
     autoLeaveMinutes, setAutoLeaveMinutes,
   } = useSettings();
 
-  const [micAverage, setMicAverage] = useState(0);
+  const [, setMicAverage] = useState(0);
   const meterStreamRef = useRef<MediaStream | null>(null);
   const meterAnimRef = useRef<number | null>(null);
   const meterCtxRef = useRef<AudioContext | null>(null);

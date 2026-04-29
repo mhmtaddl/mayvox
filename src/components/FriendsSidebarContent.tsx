@@ -14,6 +14,18 @@ import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import DeviceBadge from './chat/DeviceBadge';
 import type { User } from '../types';
 
+function lastSeenSortValue(user: User): number {
+  if (!user.lastSeenAt) return 0;
+  const value = new Date(user.lastSeenAt).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareByDisplayNameTr(a: User, b: User): number {
+  const aName = getPublicDisplayName(a) || a.name || a.id || '';
+  const bName = getPublicDisplayName(b) || b.name || b.id || '';
+  return aName.localeCompare(bName, 'tr', { sensitivity: 'base' });
+}
+
 interface Props {
   variant: 'desktop' | 'mobile';
   onUserClick: (userId: string, x: number, y: number) => void;
@@ -89,7 +101,14 @@ export default function FriendsSidebarContent({
     [onlineUsers, favoriteIds]
   );
   const offlineRest = useMemo(
-    () => offlineUsers.filter(u => !favoriteIds.has(u.id)),
+    () => offlineUsers
+      .filter(u => !favoriteIds.has(u.id))
+      .sort((a, b) => {
+        const aLastSeen = lastSeenSortValue(a);
+        const bLastSeen = lastSeenSortValue(b);
+        if (aLastSeen !== bLastSeen) return bLastSeen - aLastSeen;
+        return compareByDisplayNameTr(a, b);
+      }),
     [offlineUsers, favoriteIds]
   );
 

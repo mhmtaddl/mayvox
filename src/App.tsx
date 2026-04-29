@@ -6,11 +6,10 @@
 declare const __APP_VERSION__: string;
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { CloudOff, Mic, RefreshCw } from 'lucide-react';
+import { CloudOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AppChrome from './components/AppChrome';
 import { AppView, User, VoiceChannel } from './types';
-import { CHANNELS } from './constants';
 // Theme types + adaptive theme artık useAppSettings hook'unda
 import {
   signIn,
@@ -21,17 +20,14 @@ import {
   getProfile,
   getProfileByUsername,
   getAllProfiles,
-  getChannels,
   deleteChannel,
   updateUserModeration,
   verifyChannelPassword,
   saveInviteCode,
   verifyInviteCodeForEmail,
   useInviteCodeForEmail,
-  getPendingInviteRequests,
   updateActivityOnLogout,
   updateShowLastSeen,
-  supabase as supabaseClient,
 } from './lib/supabase';
 import { playSound } from './lib/sounds';
 import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
@@ -57,14 +53,7 @@ type DbProfile = {
   show_last_seen?: boolean;
   server_creation_plan?: 'none' | 'free' | 'pro' | 'ultra';
 };
-type DbChannel = {
-  id: string; name: string; owner_id?: string; max_users?: number;
-  is_invite_only?: boolean; is_hidden?: boolean; password?: string;
-  mode?: string; speaker_ids?: string[];
-};
-
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
-import type { InviteRequest } from './types';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
 import { UserContext, UserContextType } from './contexts/UserContext';
 import { ChannelContext, ChannelContextType } from './contexts/ChannelContext';
@@ -81,7 +70,6 @@ import { useDucking } from './hooks/useDucking';
 import { useAutoPresence, type AutoStatus } from './hooks/useAutoPresence';
 import { useFriends } from './hooks/useFriends';
 
-// LoginSelectionView kaldırıldı — LoginPasswordView ana giriş ekranı
 import LoginCodeView from './views/LoginCodeView';
 import LoginPasswordView from './views/LoginPasswordView';
 import RegisterDetailsView from './views/RegisterDetailsView';
@@ -89,7 +77,6 @@ import ChatView from './views/ChatView';
 import BanScreen from './components/BanScreen';
 import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
-import { type ResetRequest } from './components/PasswordResetPanel';
 // getReleaseNotes artık App.tsx'te kullanılmıyor (auto-popup kaldırıldı).
 // Settings içindeki ReleaseNotesModal hala ./lib/releaseNotes'ten çağırıyor.
 import PermissionOnboarding from './components/PermissionOnboarding';
@@ -119,24 +106,6 @@ import { playNotifyBeep } from './features/notifications/notificationSound';
 import { requestElectronFlash } from './features/notifications/electronAttention';
 
 const isSupabaseUser = (userId: string) => userId.includes('-');
-
-function mapDbChannel(c: DbChannel): VoiceChannel {
-  return {
-    id: c.id,
-    name: c.name,
-    userCount: 0,
-    members: [],
-    isSystemChannel: false,
-    ownerId: c.owner_id,
-    maxUsers: c.max_users,
-    isInviteOnly: c.is_invite_only,
-    isHidden: c.is_hidden,
-    password: c.password || undefined,
-    mode: c.mode || undefined,
-    speakerIds: c.speaker_ids || undefined,
-    position: 0,
-  };
-}
 
 function mapDbProfile(
   p: DbProfile,
@@ -176,12 +145,6 @@ function resolveServerCreationPlan(p: { server_creation_plan?: string; is_admin?
   if (p.is_admin || p.is_primary_admin) return 'ultra';
   return 'none';
 }
-
-async function loadChannelsFromDb(): Promise<VoiceChannel[]> {
-  const { data } = await getChannels();
-  return data && data.length > 0 ? data.map((c: DbChannel) => mapDbChannel(c)) : [];
-}
-
 
 function buildOnlineUser(id: string, email: string, profile: DbProfile | null): User {
   if (profile) {
@@ -345,7 +308,7 @@ export default function App() {
   useWindowActivity();
 
   const [view, setView] = useState<AppView>('loading');
-  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [, setIsSessionLoading] = useState(true);
   const [startupMaintenanceMessage, setStartupMaintenanceMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -374,7 +337,7 @@ export default function App() {
     isLowDataMode, isNoiseSuppressionEnabled, noiseThreshold, noiseSuppressionStrength,
     pttKey, setPttKey, isListeningForKey, setIsListeningForKey,
     voiceMode, setVoiceMode, pttReleaseDelay, autoLeaveEnabled, autoLeaveMinutes,
-    showLastSeen, setShowLastSeenLocal,
+    setShowLastSeenLocal,
   } = settings;
 
   // showLastSeen DB sync — hook sadece localStorage yönetir, DB + user state burada
@@ -638,10 +601,8 @@ export default function App() {
 
   const setInvitationModal = useCallback((v: InviteData | null) => {
     if (v) {
-      console.log('[InviteStore] pending_set:', v.inviterName, v.roomName);
       pendingInviteRef.current = v;
     } else {
-      console.log('[InviteStore] pending_cleared');
       pendingInviteRef.current = null;
     }
     setInvitationModalRaw(v);
@@ -654,7 +615,6 @@ export default function App() {
       if (pendingInviteRef.current) {
         setInvitationModalRaw(prev => {
           if (prev) return prev; // zaten açık
-          console.log('[InviteStore] pending_used (rehydrated on resume)');
           return pendingInviteRef.current;
         });
       }
@@ -858,9 +818,7 @@ export default function App() {
   const presenceChannelForAutoRef = useRef<any>(null);
   const {
     lastActivityRef: sharedLastActivityRef,
-    recordActivity,
     recordActivityImmediate,
-    currentAutoStatus,
   } = useAutoPresence({
     isLoggedIn: !!currentUser.id,
     isDeafened,
@@ -945,7 +903,7 @@ export default function App() {
   // ── Backend-driven presence (online + last_seen) ────────────────────────
   // Supabase Realtime presence oda/audio state'i için kalıyor; global online
   // ve last_seen kaynağı artık custom chat-server (Hetzner).
-  const { getServerNow } = useBackendPresence({
+  useBackendPresence({
     currentUserId: currentUser.id || null,
     setAllUsers,
   });
@@ -980,6 +938,8 @@ export default function App() {
     onSessionReset: bumpEpoch,
     localAudioLevelRef,
   });
+  const micGuardRoomRef = useRef<typeof livekitRoomRef.current>(null);
+  const lastRequestedMicEnabledRef = useRef<boolean | null>(null);
 
   // Keep forward ref current so usePresence always calls the real function
   disconnectLKRef.current = disconnectFromLiveKit;
@@ -1362,18 +1322,6 @@ export default function App() {
           if (channel.isPersistent) return channel;
           if (SYSTEM_ROOM_NAMES.has(channel.name)) return channel; // hard fallback
 
-          // DEBUG TEMP — 2026-04-19: boş bir oda ilk kez timer'a giriyorsa state'ini logla.
-          // Kalıcı flag geliyor mu görmek için. Çözüldüğünde kaldırılacak.
-          if ((!channel.members || channel.members.length === 0) && channel.deletionTimer === undefined) {
-            console.log('[delTimer-debug] empty channel entering timer:', {
-              name: channel.name,
-              id: channel.id,
-              isSystemChannel: channel.isSystemChannel,
-              isPersistent: channel.isPersistent,
-              ownerId: channel.ownerId,
-            });
-          }
-
           const isEmpty = !channel.members || channel.members.length === 0;
 
           if (isEmpty) {
@@ -1434,17 +1382,40 @@ export default function App() {
 
   // ── Ses odası overlay — ayrı Electron BrowserWindow'a sanitize snapshot ───
   // Electron dışında no-op; toggle kapalıyken IPC durur.
+  const overlaySettings = useMemo(() => ({
+    enabled: settings.overlayEnabled,
+    position: settings.overlayPosition,
+    size: settings.overlaySize,
+    showOnlySpeaking: settings.overlayShowOnlySpeaking,
+    showSelf: settings.overlayShowSelf,
+    clickThrough: settings.overlayClickThrough,
+    cardOpacity: settings.overlayCardOpacity,
+    variant: settings.overlayVariant,
+  }), [
+    settings.overlayEnabled,
+    settings.overlayPosition,
+    settings.overlaySize,
+    settings.overlayShowOnlySpeaking,
+    settings.overlayShowSelf,
+    settings.overlayClickThrough,
+    settings.overlayCardOpacity,
+    settings.overlayVariant,
+  ]);
+  const overlaySelfUser = useMemo(() => ({
+    id: currentUser.id,
+    firstName: currentUser.firstName,
+    lastName: currentUser.lastName,
+    name: currentUser.name,
+    avatar: currentUser.avatar,
+  }), [
+    currentUser.id,
+    currentUser.firstName,
+    currentUser.lastName,
+    currentUser.name,
+    currentUser.avatar,
+  ]);
   useOverlaySync({
-    settings: {
-      enabled: settings.overlayEnabled,
-      position: settings.overlayPosition,
-      size: settings.overlaySize,
-      showOnlySpeaking: settings.overlayShowOnlySpeaking,
-      showSelf: settings.overlayShowSelf,
-      clickThrough: settings.overlayClickThrough,
-      cardOpacity: settings.overlayCardOpacity,
-      variant: settings.overlayVariant,
-    },
+    settings: overlaySettings,
     themeAccentRgb: overlayThemeAccentRgb,
     currentUserId: currentUser.id,
     activeChannelId: activeChannel,
@@ -1453,13 +1424,7 @@ export default function App() {
     selfSpeaking: isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener,
     selfMuted: isMuted,
     selfDeafened: isDeafened,
-    selfUser: {
-      id: currentUser.id,
-      firstName: currentUser.firstName,
-      lastName: currentUser.lastName,
-      name: currentUser.name,
-      avatar: currentUser.avatar,
-    },
+    selfUser: overlaySelfUser,
   });
 
   // ── Ses bildirimleri ──────────────────────────────────────────────────────
@@ -1558,13 +1523,24 @@ export default function App() {
   // double-guarantee veriyor; bu local guard kullanıcı UX'ini doğru tutar
   // (volume meter, isPttPressed sound efektleri vs. tetiklenmez).
   useEffect(() => {
-    if (!livekitRoomRef.current) return;
+    const room = livekitRoomRef.current;
+    if (!room) {
+      micGuardRoomRef.current = null;
+      lastRequestedMicEnabledRef.current = null;
+      return;
+    }
+    if (micGuardRoomRef.current !== room) {
+      micGuardRoomRef.current = room;
+      lastRequestedMicEnabledRef.current = null;
+    }
     const canSpeak = isPttPressed
       && !isMuted
       && !currentUser.isVoiceBanned
       && !isBroadcastListener
       && !isVoiceBlocked;
-    livekitRoomRef.current.localParticipant.setMicrophoneEnabled(
+    if (lastRequestedMicEnabledRef.current === canSpeak) return;
+    lastRequestedMicEnabledRef.current = canSpeak;
+    room.localParticipant.setMicrophoneEnabled(
       canSpeak,
       buildAudioCaptureOptions({
         noiseSuppression: isNoiseSuppressionEnabled,
@@ -1579,7 +1555,10 @@ export default function App() {
           deviceId: selectedInput,
         });
       }
-    }).catch(err => console.warn('Mikrofon durumu güncellenemedi:', err));
+    }).catch(err => {
+      lastRequestedMicEnabledRef.current = null;
+      console.warn('Mikrofon durumu güncellenemedi:', err);
+    });
   }, [isPttPressed, isMuted, currentUser.isVoiceBanned, isNoiseSuppressionEnabled, selectedInput, activeChannel, isConnecting, isVoiceBlocked, applyNoisePipeline]);
 
   // ── Voice pipeline guard: reason set olunca mic'i ZORLA kapat ──────────
@@ -1590,7 +1569,9 @@ export default function App() {
     if (!isVoiceBlocked) return;
     const room = livekitRoomRef.current;
     if (!room) return;
+    lastRequestedMicEnabledRef.current = false;
     room.localParticipant.setMicrophoneEnabled(false).catch(err => {
+      lastRequestedMicEnabledRef.current = null;
       console.warn('Voice guard: mic force-disable failed:', err);
     });
   }, [isVoiceBlocked]);

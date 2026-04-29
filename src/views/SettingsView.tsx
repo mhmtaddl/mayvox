@@ -933,7 +933,7 @@ function GameActivityCard() {
 
 export default function SettingsView() {
   const { currentUser } = useUser();
-  const { settingsTarget, setSettingsTarget, setToastMsg } = useUI();
+  const { settingsTarget, setSettingsTarget } = useUI();
   const isAdmin = !!currentUser.isAdmin;
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');

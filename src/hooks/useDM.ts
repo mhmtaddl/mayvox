@@ -12,7 +12,7 @@ import {
   type DmConversation,
   type DmMessage,
 } from '../lib/dmService';
-import { TYPING_CLEAR_MS, TYPING_EMIT_THROTTLE_MS, shouldEmitTyping } from '../lib/dmUxLogic';
+import { TYPING_CLEAR_MS, shouldEmitTyping } from '../lib/dmUxLogic';
 import { handleDmMessage as notifyDmMessage } from '../features/notifications/notificationService';
 import { subscribeConnectionStatus } from '../lib/chatService';
 

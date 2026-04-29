@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Hash } from 'lucide-react';
-import { joinServer, acceptInviteLink, type Server } from '../../lib/serverService';
+import { joinServer, acceptInviteLink } from '../../lib/serverService';
 import { MV_PRESS, MV_SPRING } from '../../lib/signature';
 
 interface Props {

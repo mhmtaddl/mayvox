@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X, Sparkles, Shield, Monitor, Smartphone, Globe } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { ReleaseNote } from '../lib/releaseNotes';
 
 interface Props {
@@ -46,7 +46,7 @@ function Section({ icon, title, items, startIndex }: { icon: React.ReactNode; ti
   );
 }
 
-export default function ReleaseNotesPopover({ version, notes, onClose, isAdmin }: Props) {
+export default function ReleaseNotesPopover({ notes, onClose, isAdmin }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -53,15 +53,9 @@ const formatLastSeen = (lastSeenAt: string) => {
   return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
 };
 
-const formatTotalUsage = (minutes: number) => {
-  if (minutes < 60) return `${minutes} dk`;
-  const h = Math.floor(minutes / 60), m = minutes % 60;
-  return m > 0 ? `${h} sa ${m} dk` : `${h} sa`;
-};
-
 export default function UserProfilePopup({
   user, position, onClose, onInvite, onDM, canInvite, inviteStatus,
-  onCooldown, cooldownRemaining, isMe, currentAppVersion, serverName,
+  onCooldown, cooldownRemaining, isMe, serverName,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);

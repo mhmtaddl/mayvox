@@ -14,10 +14,6 @@ import {
   Download,
   AlertCircle,
   Info,
-  Search,
-  Plus,
-  X,
-  Users,
   Gamepad2,
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
@@ -83,7 +79,6 @@ export default function DesktopDock({
   activeServerId,
   onSelectServer,
   onJoinServer,
-  onLeaveServer,
   onShowCreateModal,
   canCreateServer = true,
   layout = 'fixed',
@@ -111,7 +106,7 @@ export default function DesktopDock({
   } = useSettings();
   const {
     isMuted, setIsMuted, isDeafened, setIsDeafened,
-    isBroadcastListener, disconnectFromLiveKit, view, setView,
+    isBroadcastListener, disconnectFromLiveKit, setView,
     countdownActive, broadcastModeration,
     voiceDisabledReason, timedOutUntil,
   } = useAppState();

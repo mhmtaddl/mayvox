@@ -146,6 +146,9 @@ export interface ServerBan {
 const API_BASE = import.meta.env.VITE_SERVER_API_URL || '';
 if (!API_BASE) console.error('[serverService] VITE_SERVER_API_URL tanımlı değil — API çağrıları başarısız olacak');
 
+const SEARCH_CACHE_TTL_MS = 30_000;
+const serverSearchCache = new Map<string, { expiresAt: number; data: DiscoverServer[] }>();
+
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -254,7 +257,14 @@ export async function deleteServer(serverId: string): Promise<void> {
 }
 
 export async function searchServers(query: string): Promise<DiscoverServer[]> {
-  return apiFetch<DiscoverServer[]>(`/servers/search?q=${encodeURIComponent(query)}`);
+  const cacheKey = query.trim().toLocaleLowerCase('tr-TR');
+  const now = Date.now();
+  const cached = serverSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+
+  const data = await apiFetch<DiscoverServer[]>(`/servers/search?q=${encodeURIComponent(query)}`);
+  serverSearchCache.set(cacheKey, { expiresAt: now + SEARCH_CACHE_TTL_MS, data });
+  return data;
 }
 
 // ── Sunucu kanalları ──

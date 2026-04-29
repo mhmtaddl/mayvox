@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Sparkles, Settings, Infinity as InfinityIcon } from 'lucide-react';
 import { ROOM_MODE_LIST } from '../../../lib/roomModeConfig';
 import { channelIconComponents, roomModeIcons } from '../constants';
-import { CHANNEL_ICON_COLOR_OPTIONS, getDefaultChannelIconColor, normalizeChannelIconColor } from '../../../lib/channelIconColor';
+import { CHANNEL_ICON_COLOR_OPTIONS, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { CHANNEL_ICON_POOL_OPTIONS, getDefaultChannelIconName, QUICK_CHANNEL_ICON_OPTIONS } from '../../../lib/channelIcon';
 
 interface RoomModalState {

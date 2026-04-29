@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link as LinkIcon, Copy, Timer, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CardSection, cardCls } from '../shared';
+import { CardSection } from '../shared';
 import { useAppState } from '../../../contexts/AppStateContext';
 import InviteRequestPanel from '../../InviteRequestPanel';
 

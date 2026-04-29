@@ -6,7 +6,6 @@ import {
   PhoneOff,
   X,
   Lock,
-  MessageSquare,
   Power,
   Headphones,
   Radio,
@@ -90,7 +89,7 @@ import JoinServerModal from '../components/server/JoinServerModal';
 import DiscoverPanel from '../components/server/DiscoverPanel';
 
 export default function ChatView() {
-  const { currentUser, allUsers, getStatusColor, getEffectiveStatus, friendIds, incomingRequests, acceptRequest, rejectRequest } = useUser();
+  const { currentUser, allUsers, getEffectiveStatus, friendIds, acceptRequest, rejectRequest } = useUser();
   const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, accessContext, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
@@ -101,13 +100,13 @@ export default function ChatView() {
   } = useUI();
   const { avatarBorderColor, soundInvite, soundInviteVariant } = useSettings();
   const {
-    isMuted, isDeafened, handleUpdateUserVolume, handleUserActionClick,
+    isMuted, isDeafened, handleUpdateUserVolume,
     handleInviteUser, handleCancelInvite, handleKickUser, handleMoveUser, handleSaveRoom,
     handleDeleteRoom, handleSetPassword, handleRemovePassword,
-    handleJoinChannel, handleVerifyPassword, handleContextMenu, handleLogout,
-    handleToggleSpeaker, isBroadcastListener, disconnectFromLiveKit,
+    handleJoinChannel, handleVerifyPassword, handleLogout,
+    handleToggleSpeaker, disconnectFromLiveKit,
     presenceChannelRef, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
-    passwordResetRequests, inviteRequests, inviteCooldowns, inviteStatuses,
+    inviteCooldowns, inviteStatuses,
     isChatBanned: isChatBannedFromCtx,
   } = useAppState();
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
@@ -340,8 +339,17 @@ export default function ChatView() {
   // çeviriyor ve "random refresh" hissi veriyordu. Loading state SADECE ilk
   // yüklemede gösterilmeli; sonraki arka plan refetch'leri silent olmalı.
   const initialServerLoadDoneRef = useRef(false);
-  const refreshServers = useCallback(async () => {
+  const refreshServersInFlightRef = useRef(false);
+  const lastRefreshServersAtRef = useRef(0);
+  const refreshServers = useCallback(async (opts: { force?: boolean } = {}) => {
+    const now = Date.now();
     const isInitial = !initialServerLoadDoneRef.current;
+    const force = opts.force === true;
+    if (refreshServersInFlightRef.current) return;
+    if (!isInitial && !force && now - lastRefreshServersAtRef.current < 2_500) return;
+
+    refreshServersInFlightRef.current = true;
+    lastRefreshServersAtRef.current = now;
     try {
       if (isInitial) setServerLoading(true);
       setServerError('');
@@ -359,6 +367,7 @@ export default function ChatView() {
     } finally {
       if (isInitial) setServerLoading(false);
       initialServerLoadDoneRef.current = true;
+      refreshServersInFlightRef.current = false;
     }
   }, [activeServerId, setActiveServerId]);
 
@@ -452,7 +461,7 @@ export default function ChatView() {
       setServerActionLoading(true);
       setCreateError('');
       const server = await createServer(name, createDesc.trim(), createPublic, createMotto.trim() || undefined, createPlan);
-      await refreshServers();
+      await refreshServers({ force: true });
       setActiveServerId(server.id);
       setShowCreateModal(false);
       setShowDiscover(false);
@@ -472,7 +481,7 @@ export default function ChatView() {
     try {
       setServerActionLoading(true);
       const server = await joinServer(code);
-      await refreshServers();
+      await refreshServers({ force: true });
       setActiveServerId(server.id);
       setToastMsg('Sunucuya katıldın');
     } catch (err: unknown) {
@@ -486,7 +495,7 @@ export default function ChatView() {
     try {
       setServerActionLoading(true);
       await leaveServer(serverId);
-      await refreshServers();
+      await refreshServers({ force: true });
       if (activeServerId === serverId) setActiveServerId('');
     } catch (err: any) {
       setToastMsg(err.message || 'Sunucudan ayrılınamadı');
@@ -606,7 +615,9 @@ export default function ChatView() {
   const [accessModalChannelId, setAccessModalChannelId] = useState<string | null>(null);
 
   // ── Sunucu admin başvuru özeti ──
-  const myPendingJoinRequests = useMyPendingJoinRequests();
+  const shouldPollPendingJoinRequests = serverLoading
+    || serverList.some(server => server.role === 'owner' || server.role === 'admin');
+  const myPendingJoinRequests = useMyPendingJoinRequests({ enabled: shouldPollPendingJoinRequests });
 
   // ── Notification center ──
   const notifications = useNotificationCenter(
@@ -813,6 +824,31 @@ export default function ChatView() {
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
   );
   const friendUsers = useMemo(() => allUsers.filter(u => friendIds.has(u.id)), [allUsers, friendIds]);
+  const sidebarServers = useMemo(() => serverList.map(s => ({ id: s.id, name: s.name })), [serverList]);
+  const handleFriendProfileClick = useCallback((userId: string, x: number, y: number) => {
+    setProfilePopup({ userId, x, y });
+  }, []);
+  const handleFriendDm = useCallback((userId: string) => {
+    setDmTargetUserId(userId);
+    setDmPanelOpen(true);
+  }, []);
+  const handleMobileFriendDm = useCallback((userId: string) => {
+    setDmTargetUserId(userId);
+    setDmPanelOpen(true);
+    setMobileRightOpen(false);
+  }, []);
+  const handleVoiceParticipantProfileClick = useCallback((userId: string, x: number, y: number) => {
+    // Büyük voice room kartları: tıklayınca profil popup (arkadaş ekle, DM vs).
+    // Ses seviyesi slider'ı SADECE sol kanal üye listesinde inline.
+    if (userId === currentUser.id) return;
+    setProfilePopup({ userId, x, y });
+  }, [currentUser.id]);
+  const handleToggleChatMuted = useCallback(() => {
+    setChatMuted(prev => !prev);
+  }, []);
+  const handleRequestRoomMemberMenu = useCallback((user: typeof sortedChannelMembers[0], x: number, y: number) => {
+    setRoomMemberMenu({ user, x, y });
+  }, []);
 
   const getIntensity = useCallback((user: typeof sortedChannelMembers[0]): number => {
     const isMe = user.id === currentUser.id;
@@ -1185,12 +1221,12 @@ export default function ChatView() {
                     <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] text-[10px] leading-none font-semibold text-[var(--theme-accent)]/62 tabular-nums">{friendUsers.length}</span>
                   </div>
                 </div>
-                <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
-                  onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setMobileRightOpen(false); }}
+                <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
+                  onDM={handleMobileFriendDm}
                   channels={channels} activeChannel={activeChannel}
                   inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite}
                   isMuted={isMuted} isDeafened={isDeafened}
-                  servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
+                  servers={sidebarServers} />
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
                   <button ref={dmToggleRef} onClick={() => { setDmPanelOpen(prev => !prev); setMobileRightOpen(false); }}
                     className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
@@ -1247,7 +1283,7 @@ export default function ChatView() {
                       const inv = incomingInvites.invites.find(i => i.id === invId);
                       const serverName = inv?.serverName ?? 'Sunucu';
                       await incomingInvites.acceptInvite(invId);
-                      refreshServers();
+                      refreshServers({ force: true });
                       setToastMsg(`${serverName} sunucusuna katıldın`);
                       pushInformational({
                         key: `inv-accepted:${invId}`,
@@ -1359,13 +1395,13 @@ export default function ChatView() {
           <div
             className={`flex-1 min-w-0 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[72px] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
           {settingsServerId ? (
-            <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={refreshServers}
-              onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers(); }}
+            <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={() => refreshServers({ force: true })}
+              onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers({ force: true }); }}
               initialTab={settingsInitialTab} />
           ) : view === 'settings' ? <SettingsView /> : showDiscover ? (
             <DiscoverPanel activeServerId={activeServerId}
               canCreate={canCreateServer}
-              onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
+              onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
               onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
               onJoinModal={() => setShowJoinModal(true)} />
           ) : currentChannel && !isServerHomeView ? (
@@ -1394,16 +1430,11 @@ export default function ChatView() {
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
                   currentChannel={currentChannel} getIntensity={getIntensity} getEffectiveStatus={getEffectiveStatus}
-                  cardScale={cardScale} cardStyle={cardStyle} onProfileClick={(userId, x, y) => {
-                    // Büyük voice room kartları: tıklayınca profil popup (arkadaş ekle, DM vs).
-                    // Ses seviyesi slider'ı SADECE sol kanal üye listesinde inline.
-                    if (userId === currentUser.id) return;
-                    setProfilePopup({ userId, x, y });
-                  }}
+                  cardScale={cardScale} cardStyle={cardStyle} onProfileClick={handleVoiceParticipantProfileClick}
                   onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isModerator={currentUser.isModerator || false}
-                  onRequestMemberMenu={(user, x, y) => setRoomMemberMenu({ user, x, y })}
+                  onRequestMemberMenu={handleRequestRoomMemberMenu}
                   activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted}
-                  onToggleChatMuted={() => setChatMuted(!chatMuted)} editingMsgId={editingMsgId} editingText={editingText}
+                  onToggleChatMuted={handleToggleChatMuted} editingMsgId={editingMsgId} editingText={editingText}
                   onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
                   onDeleteMessage={deleteChatMessage} onClearAll={clearAllMessages} onSendMessage={sendChatMessage}
                   chatInput={chatInput} onChatInputChange={setChatInput} chatScrollRef={chatScrollRef} onChatScroll={handleChatScroll}
@@ -1420,7 +1451,7 @@ export default function ChatView() {
             /* ── Sunucu Keşfet paneli ── */
             <DiscoverPanel activeServerId={activeServerId}
               canCreate={canCreateServer}
-              onJoinSuccess={(serverId) => { refreshServers(); setActiveServerId(serverId); setShowDiscover(false); }}
+              onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
               onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
               onJoinModal={() => setShowJoinModal(true)}
             />
@@ -1467,10 +1498,10 @@ export default function ChatView() {
               <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] text-[10px] leading-none font-semibold text-[var(--theme-accent)]/62 tabular-nums">{friendUsers.length}</span>
             </div>
           </div>
-          <FriendsSidebarContent variant="desktop" onUserClick={(userId, x, y) => setProfilePopup({ userId, x, y })}
-            onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); }} channels={channels} activeChannel={activeChannel}
+          <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
+            onDM={handleFriendDm} channels={channels} activeChannel={activeChannel}
             inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
-            servers={serverList.map(s => ({ id: s.id, name: s.name }))} />
+            servers={sidebarServers} />
           <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
               className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
@@ -1526,7 +1557,7 @@ export default function ChatView() {
                 const inv = incomingInvites.invites.find(i => i.id === invId);
                 const serverName = inv?.serverName ?? 'Sunucu';
                 await incomingInvites.acceptInvite(invId);
-                refreshServers();
+                refreshServers({ force: true });
                 setToastMsg(`${serverName} sunucusuna katıldın`);
                 pushInformational({
                   key: `inv-accepted:${invId}`,
@@ -1596,7 +1627,7 @@ export default function ChatView() {
         error={incomingInvites.error}
         onAccept={incomingInvites.acceptInvite}
         onDecline={incomingInvites.declineInvite}
-        onAccepted={(inv) => { refreshServers(); setToastMsg(`${inv.serverName} sunucusuna katıldın`); }}
+        onAccepted={(inv) => { refreshServers({ force: true }); setToastMsg(`${inv.serverName} sunucusuna katıldın`); }}
         onDeclined={() => setToastMsg('Davet reddedildi')}
       />
 

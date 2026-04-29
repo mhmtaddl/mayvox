@@ -55,7 +55,7 @@ interface UseChannelActionsOptions {
 
 export function useChannelActions({
   channels, setChannels, activeChannel, setActiveChannel,
-  activeServerId, activeServerPlan,
+  activeServerId,
   channelOrderTokenRef,
   currentUser, allUsers,
   presenceChannelRef, livekitRoomRef,
@@ -63,7 +63,7 @@ export function useChannelActions({
   setContextMenu, setUserActionMenu,
   setPasswordModal, setPasswordInput, setPasswordRepeatInput, setPasswordError,
   setToastMsg,
-  userVolumes, setUserVolumes,
+  setUserVolumes,
   view, setView,
 }: UseChannelActionsOptions) {
 
@@ -255,7 +255,6 @@ export function useChannelActions({
       try {
         // Toggle opt-in: default undefined → false (geçici). User tik attıysa true (kalıcı).
         const isPersistent = roomModal.isPersistent === true;
-        console.log('[createRoom-debug] roomModal.isPersistent:', roomModal.isPersistent, '→ sending:', isPersistent);
         const created = await createServerChannel(activeServerId, {
           name: trimmedName,
           mode: roomModal.mode,
@@ -266,8 +265,6 @@ export function useChannelActions({
           iconColor: normalizeChannelIconColor(roomModal.iconColor, roomModal.mode),
           iconName: roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode),
         });
-        console.log('[createRoom-debug] backend returned:', created);
-        console.log('[createRoom-debug] backend.isPersistent:', created.isPersistent, '· typeof:', typeof created.isPersistent, '· isDefault:', created.isDefault);
         const iconColor = normalizeChannelIconColor(created.iconColor ?? roomModal.iconColor, roomModal.mode);
         const iconName = created.iconName ?? roomModal.iconName ?? getDefaultChannelIconName(roomModal.mode);
         const newRoom: VoiceChannel = {

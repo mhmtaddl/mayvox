@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import type { ThemePackId, ThemeCustomizationOverrides } from '../lib/themePacks';
 
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.

@@ -139,7 +139,6 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => getPublicDisplayName(r);
-  const initials = (r: SearchResult) => `${(r.firstName || r.name || '?')[0]}${(r.lastName || '')[0] || ''}`.toUpperCase();
 
   const triggerConfirm = (userId: string, userName: string, action: 'send' | 'remove' | 'cancel') => {
     openConfirm({

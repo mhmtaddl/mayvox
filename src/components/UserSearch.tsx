@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, UserPlus, Send, User as UserIcon } from 'lucide-react';
+import { Search, X, UserPlus, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -83,12 +83,6 @@ export default function UserSearch({ currentUserId }: Props) {
   useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => getPublicDisplayName(r);
-
-  const initials = (r: SearchResult) => {
-    const fn = r.firstName || r.name || '?';
-    const ln = r.lastName || '';
-    return `${fn[0] || ''}${ln[0] || ''}`.toUpperCase();
-  };
 
   return (
     <div ref={containerRef} className="relative px-4 mb-3">

@@ -10,7 +10,6 @@ interface Props {
 
 export default function PermissionOnboarding({ onComplete }: Props) {
   const {
-    status,
     checkPermissions,
     requestMicrophone,
     requestNotifications,

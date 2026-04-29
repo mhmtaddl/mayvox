@@ -45,16 +45,16 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
     return () => document.removeEventListener('mousedown', handler);
   }, [overflowOpen]);
 
-  const self = participants.find(p => p.isSelf);
-  const remotes = participants.filter(p => !p.isSelf);
-
-  const sortedRemotes = useMemo(() => {
-    return [...remotes].sort((a, b) => {
+  const { self, sortedRemotes } = useMemo(() => {
+    const selfNode = participants.find(p => p.isSelf);
+    const remotes = participants.filter(p => !p.isSelf);
+    remotes.sort((a, b) => {
       if (a.isSpeaking !== b.isSpeaking) return a.isSpeaking ? -1 : 1;
       if (a.isMuted !== b.isMuted) return a.isMuted ? 1 : -1;
       return a.name.localeCompare(b.name, 'tr');
     });
-  }, [remotes]);
+    return { self: selfNode, sortedRemotes: remotes };
+  }, [participants]);
 
   const hasOverflow = sortedRemotes.length > maxVisible;
   const visibleSlots = hasOverflow ? maxVisible - 1 : sortedRemotes.length;
