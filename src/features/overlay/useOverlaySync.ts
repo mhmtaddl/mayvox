@@ -63,6 +63,7 @@ export function useOverlaySync({
   // State değişince ANINDA flush (PTT gecikme hissi yok), sonra min 40ms aralık.
   // Spam update'lerde (hızlı speaking flicker) trailing-edge fallback devreye girer.
   const lastSentRef = useRef<string>('');
+  const lastRenderableRef = useRef(false);
   const throttleTimerRef = useRef<number | null>(null);
   const lastFlushAtRef = useRef<number>(0);
   const MIN_GAP_MS = 40;
@@ -145,9 +146,12 @@ export function useOverlaySync({
 
     const flush = () => {
       const snap = build();
+      const renderable = !!snap.roomId && snap.participants.length > 0;
+      if (!snap.roomId && !lastRenderableRef.current) return;
       const serialized = JSON.stringify(snap);
       if (serialized === lastSentRef.current) return;
       lastSentRef.current = serialized;
+      lastRenderableRef.current = renderable;
       host.update(snap);
     };
 

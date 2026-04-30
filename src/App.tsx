@@ -826,6 +826,7 @@ export default function App() {
     statusText: currentUser.statusText,
     isMuted,
     localAudioLevelRef,
+    voiceActivityEnabled: !!activeChannel,
     onStatusChange: (status) => {
       autoStatusRef.current = status;
       setAutoStatus(status);

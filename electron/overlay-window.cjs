@@ -99,6 +99,10 @@ class OverlayWindowManager {
     if (!this.win || this.win.isDestroyed()) return;
     const shouldShow = this._shouldBeVisible();
     if (shouldShow) {
+      if (this.destroyTimer) {
+        clearTimeout(this.destroyTimer);
+        this.destroyTimer = null;
+      }
       if (!this.win.isVisible()) {
         try { this.win.show(); } catch {}
         try { this.win.setAlwaysOnTop(true, 'screen-saver'); } catch {}
@@ -107,6 +111,7 @@ class OverlayWindowManager {
       if (this.win.isVisible()) {
         try { this.win.hide(); } catch {}
       }
+      this._scheduleDestroyIfIdle();
     }
   }
 
@@ -166,16 +171,28 @@ class OverlayWindowManager {
     return win;
   }
 
-  _scheduleDestroyIfDisabled() {
+  _scheduleDestroy(reason = 'idle') {
     if (this.destroyTimer) clearTimeout(this.destroyTimer);
     this.destroyTimer = setTimeout(() => {
       this.destroyTimer = null;
-      if (this.currentSettings.enabled) return;
+      if (reason === 'disabled') {
+        if (this.currentSettings.enabled) return;
+      } else if (this._shouldBeVisible()) {
+        return;
+      }
       if (!this.win || this.win.isDestroyed()) return;
       try { this.win.destroy(); } catch {}
       this.win = null;
       this.ready = false;
     }, 30_000);
+  }
+
+  _scheduleDestroyIfDisabled() {
+    this._scheduleDestroy('disabled');
+  }
+
+  _scheduleDestroyIfIdle() {
+    this._scheduleDestroy('idle');
   }
 
   applySettings(next) {
@@ -191,9 +208,19 @@ class OverlayWindowManager {
       return;
     }
 
-    // Pencere var olmalı ama VISIBLE olmak için _shouldBeVisible şart (oda+participant).
-    const win = this._ensureWindow();
     const bounds = computeBounds(this.currentSettings.position, this.currentSettings.size);
+    // Pencereyi sadece gerçekten görüneceği zaman yarat. Toggle açık ama kullanıcı
+    // odada değilse/katılımcı yoksa ayrı renderer süreci boşuna bellekte kalmasın.
+    if (!this._shouldBeVisible()) {
+      if (this.win && !this.win.isDestroyed()) {
+        try { this.win.setBounds(bounds); } catch {}
+        try { this.win.setIgnoreMouseEvents(!!this.currentSettings.clickThrough, { forward: true }); } catch {}
+        this._syncVisibility();
+      }
+      return;
+    }
+
+    const win = this._ensureWindow();
     try { win.setBounds(bounds); } catch {}
     try { win.setIgnoreMouseEvents(!!this.currentSettings.clickThrough, { forward: true }); } catch {}
     this._syncVisibility();
@@ -208,7 +235,7 @@ class OverlayWindowManager {
     };
     // Snapshot geldiğinde (özellikle roomId/participants değiştiyse) visibility re-check
     if (this.currentSettings.enabled) {
-      // Pencere henüz yoksa yaratma — ilk enable'da applySettings yarattı zaten.
+      if (this._shouldBeVisible()) this._ensureWindow();
       this._syncVisibility();
       this._flushSnapshot();
     }

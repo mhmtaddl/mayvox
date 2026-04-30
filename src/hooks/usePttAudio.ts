@@ -106,6 +106,9 @@ export function usePttAudio(params: UsePttAudioParams) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    if (audioContextRef.current?.state === 'running') {
+      audioContextRef.current.suspend().catch(() => {});
+    }
   };
 
   // Electron PTT init

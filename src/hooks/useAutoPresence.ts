@@ -29,6 +29,8 @@ interface UseAutoPresenceProps {
   isMuted: boolean;
   /** LiveKit local participant audio level ref (0..1) */
   localAudioLevelRef?: React.MutableRefObject<number>;
+  /** Voice activity polling sadece aktif ses odası varken gerekli */
+  voiceActivityEnabled?: boolean;
   /** Durum değiştiğinde çağrılır — sadece gerçek değişikliklerde */
   onStatusChange: (status: AutoStatus) => void;
 }
@@ -57,6 +59,7 @@ export function useAutoPresence({
   statusText,
   isMuted,
   localAudioLevelRef,
+  voiceActivityEnabled = true,
   onStatusChange,
 }: UseAutoPresenceProps) {
   // ── Tek aktivite kaynağı — auto-leave de bu ref'i kullanmalı ──────────
@@ -183,14 +186,14 @@ export function useAutoPresence({
   // speakingLevels pipeline'ına dokunulmaz (ducking). Sadece local user'ın
   // seviyesi belirli süre eşiğin üzerindeyse activity kaydı tetiklenir.
   useEffect(() => {
-    if (!isLoggedIn || !localAudioLevelRef) return;
+    if (!isLoggedIn || !localAudioLevelRef || !voiceActivityEnabled || isMuted) return;
     const VOICE_THRESHOLD = 0.02;
     const VOICE_DEBOUNCE_MS = 600;
     const CHECK_MS = 200;
     let sustainedStart: number | null = null;
     const tick = () => {
       const level = localAudioLevelRef.current ?? 0;
-      if (!isMuted && level > VOICE_THRESHOLD) {
+      if (level > VOICE_THRESHOLD) {
         if (sustainedStart === null) sustainedStart = Date.now();
         else if (Date.now() - sustainedStart >= VOICE_DEBOUNCE_MS) {
           recordActivity();
@@ -202,7 +205,7 @@ export function useAutoPresence({
     };
     const interval = setInterval(tick, CHECK_MS);
     return () => clearInterval(interval);
-  }, [isLoggedIn, isMuted, localAudioLevelRef, recordActivity]);
+  }, [isLoggedIn, isMuted, localAudioLevelRef, recordActivity, voiceActivityEnabled]);
 
   // ── Manuel statüden "Aktif"e dönüşte activity sıfırla ────────────────
   useEffect(() => {
