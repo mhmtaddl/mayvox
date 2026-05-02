@@ -209,12 +209,14 @@ export function useAppSettings() {
     localStorage.setItem('avatarBorderColor', v);
     setAvatarBorderColorState(v);
     // Profile DB'ye de kaydet — diğer kullanıcılar görsün
-    import('../../../lib/supabase').then(({ supabase }) => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user?.id) {
-          supabase.from('profiles').update({ avatar_border_color: v }).eq('id', session.user.id).then(() => {});
-        }
-      });
+    Promise.all([
+      import('../../../lib/supabase'),
+      import('../../../lib/authClient'),
+    ]).then(([{ supabase }, { getAuthPayload }]) => {
+      const profileId = getAuthPayload()?.profileId;
+      if (profileId) {
+        supabase.from('profiles').update({ avatar_border_color: v }).eq('id', profileId).then(() => {});
+      }
     });
   };
 

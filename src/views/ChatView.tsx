@@ -656,11 +656,12 @@ export default function ChatView() {
   // Dock butonları bu değere bakarak visibility + handler wiring yapar.
   type CurrentView = 'room' | 'server_home' | 'discover' | 'settings';
   const currentView: CurrentView = useMemo(() => {
+    if (settingsServerId) return 'settings';
     if (view === 'settings') return 'settings';
     if (showDiscover) return 'discover';
     if (!activeChannel || isServerHomeView) return 'server_home';
     return 'room';
-  }, [view, showDiscover, activeChannel, isServerHomeView]);
+  }, [settingsServerId, view, showDiscover, activeChannel, isServerHomeView]);
 
   // handleGoHome — kullanıcıyı sunucu ana sayfasına götürür.
   // Hangi view'den olursa olsun: settings/discover kapanır, varsa oda peek moduna geçer.
@@ -1818,6 +1819,9 @@ export default function ChatView() {
         onLeaveServer={handleLeaveServer}
         onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }}
         canCreateServer={canCreateServer}
+        currentView={currentView}
+        onGoHome={handleGoHome}
+        onReturnToRoom={handleReturnToRoom}
       />
 
       {/* ── DM Panel ── */}

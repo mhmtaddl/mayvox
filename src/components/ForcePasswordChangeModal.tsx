@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
-import { updateUserPassword, supabase } from '../lib/supabase';
+import { updateUserPassword } from '../lib/supabase';
+import { getAuthToken } from '../lib/authClient';
 
 const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
 
@@ -37,11 +38,11 @@ export default function ForcePasswordChangeModal({ onDone }: Props) {
       if (pwdError) { setError('Parola güncellenemedi: ' + pwdError.message); return; }
 
       // must_change_password flagını server üzerinden temizle (service role — RLS'ye bağlı değil)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
+      const token = getAuthToken();
+      if (token) {
         await fetch(`${SERVER_URL}/api/clear-must-change-password`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          headers: { 'Authorization': `Bearer ${token}` },
         });
       }
 

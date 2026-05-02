@@ -19,8 +19,8 @@ const REFETCH_DEBOUNCE_MS = 300;
  *   const { data, loading, error } = useAdminUserSessions(userId);
  *
  * Realtime:
- *   - presence:update (userId === target) → refetch (debounced)
- *   - presence:snapshot (onlineUserIds içerir target) → refetch (debounced)
+ *   - presence:update (user.userId === target) → refetch (debounced)
+ *   - presence:snapshot (users içerir target) → refetch (debounced)
  *
  * Performans:
  *   - Modal kapalıyken userId=null → hiç fetch/listen yok
@@ -82,9 +82,9 @@ export function useAdminUserSessions(userId: string | null): Result {
       }, REFETCH_DEBOUNCE_MS);
     };
     const unsub = subscribePresenceEvents((ev) => {
-      if (ev.type === 'presence:update' && ev.userId === userId) {
+      if (ev.type === 'presence:update' && ev.user.userId === userId) {
         scheduleRefetch();
-      } else if (ev.type === 'presence:snapshot' && ev.onlineUserIds.includes(userId)) {
+      } else if (ev.type === 'presence:snapshot' && ev.users.some(u => u.userId === userId)) {
         scheduleRefetch();
       }
     });

@@ -18,7 +18,7 @@ import { invalidateAccessContext } from './accessContextService';
 import { broadcastModeration } from './moderationBroadcast';
 import { logAction } from './auditLogService';
 import { recordEvent as recordModStatEvent } from './moderationStatsService';
-import { supabase } from '../supabaseClient';
+import { fetchProfileSummaryMap } from './profileLookupService';
 
 export type AutoPunishResult =
   | { applied: false; reason: 'skipped_not_member'   }
@@ -129,7 +129,7 @@ export interface ActiveAutoPunishment {
 /**
  * Şu an aktif auto-mod kaynaklı chat-ban'ları döndürür.
  * Sadece chat_banned_by='system:auto-mod' VE chat_ban_expires_at > now().
- * Profile enrichment Supabase'den batch.
+ * Profile enrichment profiles tablosundan batch.
  */
 export async function listActiveAutoPunishments(serverId: string): Promise<ActiveAutoPunishment[]> {
   const rows = await queryMany<{
@@ -149,21 +149,9 @@ export async function listActiveAutoPunishments(serverId: string): Promise<Activ
   if (rows.length === 0) return [];
 
   const userIds = rows.map(r => r.user_id);
-  const profileMap = new Map<string, { name: string; avatar: string | null }>();
+  let profileMap = new Map<string, { name: string; avatar: string | null }>();
   try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, display_name, first_name, last_name, name, avatar')
-      .in('id', userIds);
-    if (data) {
-      for (const p of data) {
-        const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-        profileMap.set(p.id as string, {
-          name: (p.display_name as string) || full || (p.name as string) || '',
-          avatar: (p.avatar as string) ?? null,
-        });
-      }
-    }
+    profileMap = await fetchProfileSummaryMap(userIds);
   } catch (err) {
     console.warn('[auto-punish] active list profile enrich fail:', err instanceof Error ? err.message : err);
   }

@@ -36,6 +36,8 @@ export interface User {
   autoStatus?: 'active' | 'idle' | 'deafened';
   /** Kullanıcının presence'ta bildirdiği aktif sunucu ID'si — server-level izolasyon için. */
   serverId?: string;
+  /** Kullanıcının presence'ta bildirdiği aktif oda/kanal ID'si. */
+  currentRoom?: string;
   /**
    * Sunucu oluşturma yetki planı — rol bağımsız, admin tarafından per-user set edilir.
    *   'none'  → oluşturamaz

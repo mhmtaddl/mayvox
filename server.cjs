@@ -2,6 +2,8 @@ const express = require('express');
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const { rateLimit } = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 if (!process.env.ELECTRON_IS_PACKAGED) {
   require('dotenv').config();
 }
@@ -17,6 +19,8 @@ const DEFAULT_ORIGINS = [
   'https://www.cylksohbet.org',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
   'http://localhost',
   'https://localhost',
   'capacitor://localhost',
@@ -76,6 +80,18 @@ const getSupabaseAnonKey = () => process.env.SUPABASE_ANON_KEY || process.env.VI
 const createAnonClient = () => createClient(getSupabaseUrl(), getSupabaseAnonKey());
 const createAdminClient = () => createClient(getSupabaseUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+async function updateAppUserPasswordByProfileId(profileId, password) {
+  const passwordHash = await bcrypt.hash(password, 12);
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const result = await pool.query('UPDATE app_users SET password_hash = $1 WHERE profile_id = $2', [passwordHash, profileId]);
+    if (!result.rowCount) throw new Error('app_users kaydı bulunamadı');
+  } finally {
+    await pool.end().catch(() => {});
+  }
+}
+
 // ── Resend helpers ────────────────────────────────────────────────────────
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'MAYVOX <noreply@mayvox.com>';
 const RESEND_REPLY_TO = process.env.RESEND_REPLY_TO || 'support@mayvox.com';
@@ -121,12 +137,20 @@ async function verifyAuth(req, res) {
     res.status(401).json({ error: 'Yetkisiz istek: Authorization header eksik' });
     return null;
   }
-  const { data: { user }, error } = await createAnonClient().auth.getUser(authHeader.split(' ')[1]);
-  if (error || !user) {
+  try {
+    const payload = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET);
+    if (!payload || typeof payload !== 'object' || !payload.profileId) throw new Error('invalid payload');
+    return {
+      id: String(payload.profileId),
+      profileId: String(payload.profileId),
+      appUserId: String(payload.appUserId || payload.userId || ''),
+      email: String(payload.email || ''),
+      role: String(payload.role || 'user'),
+    };
+  } catch {
     res.status(401).json({ error: 'Geçersiz veya süresi dolmuş oturum' });
     return null;
   }
-  return user;
 }
 
 async function verifyAdmin(req, res) {
@@ -306,8 +330,9 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
-  const { error: updateError } = await admin.auth.admin.updateUserById(userId, { password: tempPassword });
-  if (updateError) {
+  try {
+    await updateAppUserPasswordByProfileId(userId, tempPassword);
+  } catch (updateError) {
     console.error('[self-reset] Auth güncelleme hatası:', updateError.message);
     return res.status(500).json({ error: 'Şifre güncellenemedi, lütfen tekrar deneyin.' });
   }
@@ -349,8 +374,9 @@ app.post('/api/admin-reset-password', async (req, res) => {
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
-  const { error: updateError } = await admin.auth.admin.updateUserById(targetUserId, { password: tempPassword });
-  if (updateError) {
+  try {
+    await updateAppUserPasswordByProfileId(targetUserId, tempPassword);
+  } catch (updateError) {
     console.error('[reset] Auth güncelleme hatası:', updateError.message);
     return res.status(500).json({ error: 'Şifre güncellenemedi, lütfen tekrar deneyin.' });
   }

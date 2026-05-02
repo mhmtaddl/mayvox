@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { logger } from './logger';
+import { getAuthToken } from './authClient';
 
 const TOKEN_TIMEOUT_MS = 10_000;
 const MAX_RETRIES = 3;
@@ -35,8 +36,8 @@ export const getLiveKitToken = async (
   channelId: string,
   onStatus?: (msg: string) => void,
 ): Promise<string> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Oturum bulunamadı, lütfen tekrar giriş yapın');
+  const token = getAuthToken();
+  if (!token) throw new Error('Oturum bulunamadı, lütfen tekrar giriş yapın');
 
   const url = `${TOKEN_SERVER_URL}/livekit-token`;
 
@@ -44,7 +45,7 @@ export const getLiveKitToken = async (
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({ roomName, participantName, serverId, channelId }),
   };

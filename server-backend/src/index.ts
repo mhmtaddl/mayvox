@@ -7,6 +7,7 @@ import inviteLinkRoutes from './routes/inviteLinks';
 import internalRoutes from './routes/internal';
 import adminRoutes from './routes/admin';
 import webhookRoutes from './routes/webhooks';
+import authRoutes from './routes/auth';
 import { assertCapabilitySyncOnStartup } from './services/capabilitySyncService';
 import { reconcileOrphanSessions, refreshActivityHeatmap } from './services/voiceActivityService';
 
@@ -27,6 +28,7 @@ app.get('/health', (_req, res) => {
 });
 
 // ── Routes ──
+app.use('/auth', authRoutes);
 app.use('/servers', serverRoutes);
 app.use('/invite-links', inviteLinkRoutes);
 app.use('/internal', internalRoutes);

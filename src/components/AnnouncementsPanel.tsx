@@ -11,8 +11,8 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-  supabase,
 } from '../lib/supabase';
+import { subscribeRealtimeEvents } from '../lib/chatService';
 import { getPublicDisplayName } from '../lib/formatName';
 import { useJoinRequests } from '../hooks/useJoinRequests';
 import type { JoinRequestListItem } from '../lib/serverService';
@@ -863,17 +863,15 @@ export default function AnnouncementsPanel({
 
   useEffect(() => { fetchAnnouncements(); }, [fetchAnnouncements]);
 
-  // ── Realtime subscription ──
+  // ── WebSocket realtime ──
   useEffect(() => {
-    const channel = supabase
-      .channel('announcements-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
-        fetchAnnouncements();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchAnnouncements]);
+    return subscribeRealtimeEvents(event => {
+      if (event.type !== 'announcement-update') return;
+      const payload = event.payload || {};
+      if (payload.serverId && serverId && payload.serverId !== serverId) return;
+      void fetchAnnouncements();
+    });
+  }, [fetchAnnouncements, serverId]);
 
   // ── Handlers ──
   const handleSubmit = async (data: ModalData) => {

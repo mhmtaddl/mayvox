@@ -1,15 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
+import { queryMany } from '../repositories/db';
 
 /**
  * userSessionsService
  * ───────────────────
  * Admin paneli için kullanıcı session bilgisi (presence-backed).
  *
- * Source: Supabase `user_sessions` tablosu (chat-server presence system yazar).
- * NOT: server-backend pg pool LOCAL Hetzner Postgres'e bakıyor; user_sessions
- * ise Supabase Postgres'te. Bu yüzden Supabase client (anon) ile sorguluyoruz.
- * Tabloda RLS yok → anon read yeterli.
+ * Source: Hetzner Postgres `user_sessions` tablosu (chat-server presence system yazar).
  */
 
 export interface AdminUserSession {
@@ -26,12 +22,6 @@ export interface AdminUserSession {
 
 const MAX_ROWS = 10;
 
-function serviceClient() {
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 /**
  * Kullanıcının session listesini döndürür.
  * Sıralama:
@@ -43,23 +33,28 @@ function serviceClient() {
  */
 export async function listUserSessions(userId: string): Promise<AdminUserSession[]> {
   if (!userId || typeof userId !== 'string') return [];
-  const supa = serviceClient();
-  const { data, error } = await supa
-    .from('user_sessions')
-    .select(
-      'session_key, device_id, platform, app_version, connected_at, last_heartbeat_at, disconnected_at, disconnect_reason',
-    )
-    .eq('user_id', userId)
-    .order('disconnected_at', { ascending: false, nullsFirst: true })
-    .order('last_heartbeat_at', { ascending: false })
-    .limit(MAX_ROWS);
+  const data = await queryMany<{
+    session_key: string;
+    device_id: string;
+    platform: 'desktop' | 'mobile' | 'web';
+    app_version: string | null;
+    connected_at: string;
+    last_heartbeat_at: string;
+    disconnected_at: string | null;
+    disconnect_reason: string | null;
+  }>(
+    `SELECT session_key, device_id, platform, app_version,
+            connected_at::text, last_heartbeat_at::text,
+            disconnected_at::text, disconnect_reason
+       FROM user_sessions
+      WHERE user_id = $1
+      ORDER BY (disconnected_at IS NULL) DESC,
+               last_heartbeat_at DESC
+      LIMIT $2`,
+    [userId, MAX_ROWS],
+  );
 
-  if (error) {
-    console.error('[userSessionsService] query failed', error.message);
-    throw new Error(error.message);
-  }
-
-  return (data ?? []).map((row) => ({
+  return data.map((row) => ({
     session_key: row.session_key,
     device_id: row.device_id,
     platform: row.platform as AdminUserSession['platform'],

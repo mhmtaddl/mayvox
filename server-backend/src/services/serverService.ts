@@ -1,5 +1,4 @@
 import { queryOne, queryMany, pool } from '../repositories/db';
-import { supabase } from '../supabaseClient';
 import { getPlanLimits } from '../planConfig';
 import type { Server, ServerResponse, ServerActivity } from '../types';
 import { nanoid } from 'nanoid';
@@ -111,11 +110,10 @@ export async function createServer(userId: string, name: string, description: st
   //   'pro'   → free + pro
   //   'ultra' → tüm planlar
   // Admin kullanıcılar migration sırasında 'ultra' set edilir; sonradan override edilebilir.
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('server_creation_plan, is_admin, is_primary_admin')
-    .eq('id', userId)
-    .maybeSingle();
+  const profile = await queryOne<{ server_creation_plan: string | null; is_admin: boolean | null; is_primary_admin: boolean | null }>(
+    'SELECT server_creation_plan, is_admin, is_primary_admin FROM profiles WHERE id = $1',
+    [userId],
+  );
   const rawTier = profile?.server_creation_plan as string | undefined;
   const userTier: 'none' | 'free' | 'pro' | 'ultra' =
     rawTier === 'free' || rawTier === 'pro' || rawTier === 'ultra' || rawTier === 'none'

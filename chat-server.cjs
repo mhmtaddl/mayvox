@@ -1,6 +1,6 @@
 /**
  * MAYVOX WebSocket Chat Server v4
- * - Supabase JWT auth
+ * - App JWT auth
  * - Room-based messaging with persistent history
  * - DM (Direct Message) with SQLite persistence
  * - Avatar + display name from profiles
@@ -10,6 +10,7 @@
 
 const { WebSocketServer, WebSocket } = require('ws');
 const { createClient } = require('@supabase/supabase-js');
+const jwt = require('jsonwebtoken');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -25,15 +26,28 @@ if (!process.env.ELECTRON_IS_PACKAGED) {
 const PORT = process.env.CHAT_PORT || 10001;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
-  console.error('[chat-server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY gerekli!');
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET) {
+  console.error('[chat-server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / JWT_SECRET gerekli!');
   process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function verifyAppJwt(token) {
+  const payload = jwt.verify(token, JWT_SECRET);
+  if (!payload || typeof payload !== 'object' || !payload.profileId) {
+    throw new Error('Geçersiz token');
+  }
+  return {
+    appUserId: String(payload.appUserId || payload.userId || ''),
+    profileId: String(payload.profileId),
+    email: String(payload.email || ''),
+    username: String(payload.username || ''),
+    role: String(payload.role || 'user'),
+  };
+}
 
 // ── SQLite for DM ────────────────────────────────────────────────────────
 const Database = require('better-sqlite3');
@@ -199,6 +213,19 @@ function generateId() {
 
 // userId -> Set<ws> (bir kullanıcının birden fazla bağlantısı olabilir)
 const userConnections = new Map();
+// serverId -> Set<ws>. Frontend serverId bilgisini WS auth/join/presence payload'ında
+// gönderdikçe dolar; bilinmeyen durumlarda broadcast all-authed fallback'e düşer.
+const serverConnections = new Map();
+
+const INTERNAL_BROADCAST_EVENTS = new Set([
+  'channel-update',
+  'channels-reordered',
+  'moderation-event',
+  'announcement-update',
+  'friend-update',
+]);
+
+const userPresenceByUserId = new Map();
 
 function registerUserConnection(userId, ws) {
   if (!userConnections.has(userId)) userConnections.set(userId, new Set());
@@ -210,6 +237,29 @@ function unregisterUserConnection(userId, ws) {
   if (!conns) return;
   conns.delete(ws);
   if (conns.size === 0) userConnections.delete(userId);
+}
+
+function registerServerConnection(serverId, ws) {
+  if (!serverId || typeof serverId !== 'string') return;
+  if (!serverConnections.has(serverId)) serverConnections.set(serverId, new Set());
+  serverConnections.get(serverId).add(ws);
+  if (!ws.serverIds) ws.serverIds = new Set();
+  ws.serverIds.add(serverId);
+}
+
+function unregisterServerConnection(serverId, ws) {
+  const conns = serverConnections.get(serverId);
+  if (!conns) return;
+  conns.delete(ws);
+  if (conns.size === 0) serverConnections.delete(serverId);
+  if (ws.serverIds) ws.serverIds.delete(serverId);
+}
+
+function unregisterAllServerConnections(ws) {
+  if (!ws.serverIds) return;
+  for (const serverId of Array.from(ws.serverIds)) {
+    unregisterServerConnection(serverId, ws);
+  }
 }
 
 function sendToUser(userId, data) {
@@ -232,6 +282,186 @@ function sendToUser(userId, data) {
   if (conns.size === 0) userConnections.delete(userId);
 }
 
+function sendToSockets(sockets, data) {
+  const payload = JSON.stringify(data);
+  let delivered = 0;
+  const dead = [];
+  for (const ws of sockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(payload);
+        delivered += 1;
+      } catch {
+        dead.push(ws);
+      }
+    } else {
+      dead.push(ws);
+    }
+  }
+  for (const ws of dead) {
+    if (ws.userId) unregisterUserConnection(ws.userId, ws);
+    unregisterAllServerConnections(ws);
+  }
+  return delivered;
+}
+
+function broadcastInternalEvent(event, payload) {
+  if (!INTERNAL_BROADCAST_EVENTS.has(event)) {
+    return { delivered: 0, reason: 'unsupported_event' };
+  }
+
+  const message = { type: event, event, payload };
+  const targets = new Set();
+
+  const targetUserId = typeof payload?.targetUserId === 'string'
+    ? payload.targetUserId
+    : '';
+  if (targetUserId && userConnections.has(targetUserId)) {
+    for (const ws of userConnections.get(targetUserId)) targets.add(ws);
+  }
+
+  const userIds = Array.isArray(payload?.userIds) ? payload.userIds.filter((id) => typeof id === 'string') : [];
+  for (const uid of userIds) {
+    const conns = userConnections.get(uid);
+    if (conns) for (const ws of conns) targets.add(ws);
+  }
+
+  const serverId = typeof payload?.serverId === 'string' ? payload.serverId : '';
+  if (serverId && serverConnections.has(serverId)) {
+    for (const ws of serverConnections.get(serverId)) targets.add(ws);
+  }
+
+  const roomId = typeof payload?.roomId === 'string'
+    ? payload.roomId
+    : typeof payload?.channelId === 'string'
+      ? payload.channelId
+      : '';
+  if (roomId && rooms.has(roomId)) {
+    for (const ws of rooms.get(roomId)) targets.add(ws);
+  }
+
+  if (targets.size === 0) {
+    // Current frontend does not always send serverId on WS auth/join yet.
+    // Keep compatibility by broadcasting to authenticated clients.
+    for (const [, conns] of userConnections) {
+      for (const ws of conns) targets.add(ws);
+    }
+  }
+
+  return { delivered: sendToSockets(targets, message), reason: 'ok' };
+}
+
+function openConnectionCount(userId) {
+  const conns = userConnections.get(userId);
+  if (!conns) return 0;
+  let count = 0;
+  for (const ws of conns) {
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) count += 1;
+  }
+  return count;
+}
+
+function normalizePresenceState(userId, patch = {}) {
+  const now = new Date().toISOString();
+  const prev = userPresenceByUserId.get(userId) || {};
+  const isNew = !prev.userId;
+  const next = {
+    ...prev,
+    userId,
+    online: true,
+    lastSeenAt: null,
+    updatedAt: now,
+  };
+  if (isNew) {
+    next.selfMuted = false;
+    next.selfDeafened = false;
+    next.statusText = 'Online';
+    next.autoStatus = 'active';
+    next.currentRoom = null;
+    next.gameActivity = null;
+  }
+  if (typeof patch?.serverId === 'string') next.serverId = patch.serverId.slice(0, 80);
+  if (typeof patch?.currentRoom === 'string') next.currentRoom = patch.currentRoom.slice(0, 80);
+  if (patch?.currentRoom === null) next.currentRoom = null;
+  if (typeof patch?.selfMuted === 'boolean') next.selfMuted = patch.selfMuted;
+  if (typeof patch?.selfDeafened === 'boolean') next.selfDeafened = patch.selfDeafened;
+  if (typeof patch?.statusText === 'string') next.statusText = patch.statusText.slice(0, 80);
+  if (patch?.autoStatus === 'active' || patch?.autoStatus === 'idle' || patch?.autoStatus === 'deafened' || patch?.autoStatus === null) {
+    next.autoStatus = patch.autoStatus;
+  }
+  if (typeof patch?.gameActivity === 'string') next.gameActivity = patch.gameActivity.slice(0, 80);
+  if (patch?.gameActivity === null) next.gameActivity = null;
+  if (typeof patch?.appVersion === 'string') next.appVersion = patch.appVersion.slice(0, 32);
+  if (patch?.platform === 'mobile' || patch?.platform === 'desktop') next.platform = patch.platform;
+  if (typeof patch?.onlineSince === 'number' && Number.isFinite(patch.onlineSince)) next.onlineSince = patch.onlineSince;
+  return next;
+}
+
+function sendPresenceSnapshot(ws) {
+  console.log('[presence] SNAPSHOT SEND', {
+    to: ws.userId,
+    users: userPresenceByUserId.size,
+  });
+  send(ws, {
+    type: 'presence:snapshot',
+    users: Array.from(userPresenceByUserId.values()),
+    serverNow: new Date().toISOString(),
+  });
+}
+
+function broadcastPresenceUpdate(user) {
+  const state = {
+    ...user,
+    updatedAt: user.updatedAt || new Date().toISOString(),
+  };
+  userPresenceByUserId.set(state.userId, state);
+  console.log('[presence] BROADCAST UPDATE', {
+    userId: state.userId,
+    online: state.online,
+    currentRoom: state.currentRoom,
+    serverId: state.serverId,
+    selfMuted: state.selfMuted,
+    selfDeafened: state.selfDeafened,
+    statusText: state.statusText,
+    autoStatus: state.autoStatus,
+    gameActivity: state.gameActivity,
+    sockets: Array.from(userConnections.values()).reduce((n, set) => n + set.size, 0),
+  });
+  broadcastToAllAuthed({
+    type: 'presence:update',
+    user: state,
+    serverNow: new Date().toISOString(),
+  });
+}
+
+function markPresenceOnline(userId, patch = {}) {
+  const state = normalizePresenceState(userId, patch);
+  state.online = true;
+  state.lastSeenAt = null;
+  if (!state.onlineSince) state.onlineSince = Date.now();
+  broadcastPresenceUpdate(state);
+  return state;
+}
+
+function markPresenceOffline(userId) {
+  const prev = userPresenceByUserId.get(userId) || { userId };
+  const state = {
+    ...prev,
+    userId,
+    online: false,
+    lastSeenAt: new Date().toISOString(),
+    statusText: 'Çevrimdışı',
+    selfMuted: false,
+    selfDeafened: false,
+    autoStatus: null,
+    currentRoom: null,
+    gameActivity: null,
+    updatedAt: new Date().toISOString(),
+  };
+  broadcastPresenceUpdate(state);
+  return state;
+}
+
 // ── Presence service ──────────────────────────────────────────────────────
 // Hetzner Node process = global online/last_seen authority.
 // userConnections'dan bağımsız — kendi in-memory session store'una yazar.
@@ -251,7 +481,9 @@ function broadcastToAllAuthed(payload) {
 const presence = createPresenceService({
   store: presenceStore,
   supabase,
-  broadcastFn: broadcastToAllAuthed,
+  // UI presence is authored in this chat-server process via userPresenceByUserId.
+  // PresenceService remains responsible for user_sessions / last_seen persistence.
+  broadcastFn: () => {},
   log: console,
 });
 
@@ -855,6 +1087,48 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Internal: server-backend global realtime event broadcast.
+  // Body: { event: string, payload: object } — loopback + shared secret.
+  if (req.method === 'POST' && req.url === '/internal/broadcast') {
+    if (!INTERNAL_NOTIFY_SECRET) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'internal_notify_disabled' }));
+      return;
+    }
+    const provided = req.headers['x-internal-secret'];
+    if (provided !== INTERNAL_NOTIFY_SECRET) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+      if (raw.length > 64_000) {
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(raw || '{}');
+        const event = typeof body.event === 'string' ? body.event : '';
+        const payload = body.payload && typeof body.payload === 'object' ? body.payload : {};
+        if (!INTERNAL_BROADCAST_EVENTS.has(event)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'unsupported_event' }));
+          return;
+        }
+        const result = broadcastInternalEvent(event, payload);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, event, delivered: result.delivered }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid_json' }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end();
 });
@@ -999,26 +1273,27 @@ wss.on('connection', (ws) => {
           throw new Error('Token eksik');
         }
 
-        const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
-        const user = authData?.user;
-
-        if (authError || !user) {
-          throw new Error(authError?.message || 'Geçersiz token');
-        }
+        const authUser = verifyAppJwt(token);
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('first_name, last_name, name, avatar')
-          .eq('id', user.id)
+          .eq('id', authUser.profileId)
           .maybeSingle();
 
         if (profileError) {
           console.warn('[chat] Profil çekme uyarısı:', profileError.message);
         }
 
-        userId = user.id;
-        userName = getDisplayName(profile, user);
+        userId = authUser.profileId;
+        userName = getDisplayName(profile, { email: authUser.email, user_metadata: { name: authUser.username } });
         userAvatar = String(profile?.avatar || '').trim();
+        ws.userId = userId;
+        ws.appUserId = authUser.appUserId;
+        ws.authUser = authUser;
+        if (typeof msg.serverId === 'string' && msg.serverId.trim()) {
+          registerServerConnection(msg.serverId.trim(), ws);
+        }
 
         authenticated = true;
         clearTimeout(authTimeout);
@@ -1039,12 +1314,20 @@ wss.on('connection', (ws) => {
         ws.presenceSessionKey = `${deviceId}:${wsSuffix}`;
         ws.presenceUserId = userId;
         const platform = (msg.platform === 'mobile' || msg.platform === 'web')
-          ? msg.platform : 'desktop';
+          ? (msg.platform === 'web' ? 'desktop' : msg.platform) : 'desktop';
         const appVer = typeof msg.appVersion === 'string'
           ? msg.appVersion.slice(0, 32) : null;
         presence.handleConnect(userId, ws.presenceSessionKey, {
           deviceId, platform, appVersion: appVer,
         }).catch(err => console.warn('[presence] connect error:', err && err.message));
+        ws.presenceState = normalizePresenceState(userId, {
+          appVersion: appVer || undefined,
+          platform,
+          onlineSince: Date.now(),
+          statusText: 'Online',
+          autoStatus: 'active',
+        });
+        userPresenceByUserId.set(userId, ws.presenceState);
 
         send(ws, {
           type: 'auth_ok',
@@ -1052,19 +1335,8 @@ wss.on('connection', (ws) => {
           userName,
         });
 
-        // Snapshot: bu client'a mevcut online kullanıcıları bildir (hydrate).
-        // userConnections Map'i zaten authoritative — store'dan bağımsız bakıyoruz.
-        {
-          const onlineUserIds = [];
-          for (const [uid] of userConnections) {
-            if (uid !== userId) onlineUserIds.push(uid);
-          }
-          send(ws, {
-            type: 'presence:snapshot',
-            onlineUserIds,
-            serverNow: new Date().toISOString(),
-          });
-        }
+        sendPresenceSnapshot(ws);
+        broadcastPresenceUpdate(ws.presenceState);
 
         // Reconnect batch delivery — bu user offline iken biriken tüm mesajları
         // delivered olarak işaretle ve ilgili gönderenlere dm:delivered eventi yolla.
@@ -1121,8 +1393,26 @@ wss.on('connection', (ws) => {
     // ── PRESENCE: heartbeat ───────────────────────────────────────────────
     if (msg.type === 'presence:ping') {
       if (!ws.presenceUserId || !ws.presenceSessionKey) return;
+      if (typeof msg.serverId === 'string' && msg.serverId.trim()) {
+        registerServerConnection(msg.serverId.trim(), ws);
+      }
       presence.handleHeartbeat(ws.presenceUserId, ws.presenceSessionKey)
         .catch(err => console.warn('[presence] hb err:', err && err.message));
+      return;
+    }
+
+    // ── PRESENCE: detailed patch ─────────────────────────────────────────
+    if (msg.type === 'presence:patch') {
+      if (!ws.presenceUserId || !ws.presenceSessionKey) return;
+      console.log('[presence] PATCH RECEIVED', {
+        userId: ws.presenceUserId,
+        payload: msg.payload || {},
+        wsOpen: ws.readyState === WebSocket.OPEN,
+      });
+      ws.presenceState = markPresenceOnline(ws.presenceUserId, msg.payload || {});
+      if (typeof ws.presenceState.serverId === 'string' && ws.presenceState.serverId.trim()) {
+        registerServerConnection(ws.presenceState.serverId.trim(), ws);
+      }
       return;
     }
 
@@ -1142,6 +1432,9 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       const roomId = String(msg.roomId || '').trim();
       if (!roomId) return;
+      if (typeof msg.serverId === 'string' && msg.serverId.trim()) {
+        registerServerConnection(msg.serverId.trim(), ws);
+      }
 
       // Per-user join rate limit: 5 join / 15 saniye
       if (checkRateLimit(userJoinLimits, userId, 5, 15000)) {
@@ -1684,7 +1977,9 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     clearTimeout(authTimeout);
 
-    if (userId) unregisterUserConnection(userId, ws);
+    const closingUserId = userId;
+    if (closingUserId) unregisterUserConnection(closingUserId, ws);
+    unregisterAllServerConnections(ws);
 
     // Presence: ungraceful disconnect (network drop, kill, missed pong).
     // Graceful path'te bye handler ws.presenceUserId'yi null'ladı; burada tekrar
@@ -1692,6 +1987,9 @@ wss.on('connection', (ws) => {
     if (ws.presenceUserId && ws.presenceSessionKey) {
       presence.handleDisconnect(ws.presenceUserId, ws.presenceSessionKey, 'close')
         .catch(err => console.warn('[presence] close err:', err && err.message));
+    }
+    if (closingUserId && openConnectionCount(closingUserId) === 0) {
+      markPresenceOffline(closingUserId);
     }
 
     if (currentRoom) {

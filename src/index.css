@@ -2278,10 +2278,25 @@ html.mv-electron-window .mv-app-shell {
   contain: paint;
 }
 
+html.mv-electron-window body > .fixed.inset-0 {
+  inset: 1px !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  clip-path: inset(0 round 20px) !important;
+  background-clip: padding-box !important;
+  contain: paint;
+}
+
 html.mv-electron-window.mv-window-maximized .mv-app-shell {
   inset: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+}
+
+html.mv-electron-window.mv-window-maximized body > .fixed.inset-0 {
+  inset: 0 !important;
   border-radius: 0 !important;
   clip-path: none !important;
 }

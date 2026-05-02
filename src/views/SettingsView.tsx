@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -18,6 +18,7 @@ import AdminActionBar from '../components/settings/sections/AdminActionBar';
 import PermissionSection from '../components/settings/sections/PermissionSection';
 import SystemServersPanel from '../components/settings/sections/SystemServersPanel';
 import ManagementUsersPanel from '../components/settings/sections/ManagementUsersPanel';
+import LegalModal, { type LegalModalKind } from '../components/legal/LegalModal';
 
 type MainTab = 'account' | 'app' | 'admin';
 type AdminSubTab = 'users' | 'servers';
@@ -99,6 +100,29 @@ function LastSeenCard() {
       </div>
       <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
     </div>
+  );
+}
+
+function LegalCard({ icon, title, description, onClick }: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="settings-account-card surface-card flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-[var(--surface-elevated)]"
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]/85">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-semibold leading-tight text-[var(--theme-text)]">{title}</p>
+        <p className="mt-0.5 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/60">{description}</p>
+      </div>
+    </button>
   );
 }
 
@@ -937,6 +961,7 @@ export default function SettingsView() {
   const isAdmin = !!currentUser.isAdmin;
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
+  const [legalModal, setLegalModal] = useState<LegalModalKind | null>(null);
 
   // Deep-link intent — bildirim tıklamasından / dock ikonundan gelen hedef
   // tab'ına otomatik geçer. 'invite_requests' AdminActionBar'da ek iş yapıyor;
@@ -1004,6 +1029,29 @@ export default function SettingsView() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <LastSeenCard />
                   {isElectron() && isGameActivityAvailable() && <GameActivityCard />}
+                </div>
+              </SettingsSectionCard>
+              <SettingsSectionCard>
+                <DomainTitle icon={<ShieldCheck size={11} strokeWidth={2.2} />} title="Hukuki" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <LegalCard
+                    icon={<ShieldCheck size={14} strokeWidth={2} />}
+                    title="KVKK Aydınlatma Metni"
+                    description="Kişisel verilerin işlenmesi ve başvuru hakları"
+                    onClick={() => setLegalModal('kvkk')}
+                  />
+                  <LegalCard
+                    icon={<Database size={14} strokeWidth={2} />}
+                    title="Yerel Depolama"
+                    description="Çerezler, localStorage ve uygulama tercihleri"
+                    onClick={() => setLegalModal('storage')}
+                  />
+                  <LegalCard
+                    icon={<FileText size={14} strokeWidth={2} />}
+                    title="Kullanım Şartları"
+                    description="Hizmet kuralları ve kullanıcı sorumlulukları"
+                    onClick={() => setLegalModal('terms')}
+                  />
                 </div>
               </SettingsSectionCard>
               {showPermissions && (
@@ -1139,6 +1187,12 @@ export default function SettingsView() {
           )}
         </motion.div>
       </AnimatePresence>
+
+      <LegalModal
+        kind={legalModal ?? 'kvkk'}
+        open={legalModal !== null}
+        onClose={() => setLegalModal(null)}
+      />
 
     </div>
   );

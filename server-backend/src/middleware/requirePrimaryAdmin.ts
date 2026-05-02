@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
+import { queryOne } from '../repositories/db';
 
 /**
  * requirePrimaryAdmin
@@ -16,29 +15,12 @@ export async function requirePrimaryAdmin(req: Request, res: Response, next: Nex
     return;
   }
 
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Token gerekli' });
-    return;
-  }
-  const token = header.slice(7);
-
   try {
-    const scoped = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await scoped
-      .from('profiles')
-      .select('is_primary_admin')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('[requirePrimaryAdmin] supabase error', error.message);
-      res.status(500).json({ error: 'Yetki doğrulanamadı' });
-      return;
-    }
-    if (!data || !(data as { is_primary_admin?: boolean }).is_primary_admin) {
+    const data = await queryOne<{ is_primary_admin: boolean | null }>(
+      'SELECT is_primary_admin FROM profiles WHERE id = $1',
+      [userId],
+    );
+    if (!data?.is_primary_admin) {
       res.status(403).json({ error: 'Bu işlem yalnızca ana yönetici tarafından yapılabilir' });
       return;
     }

@@ -1,52 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  authHeader,
+  changeEmail,
+  changePassword,
+  clearAuthToken,
+  getAuthPayload,
+  getAuthToken,
+  login,
+  register,
+} from './authClient';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    storageKey: 'cylk-auth-session',
+    persistSession: false,
+    autoRefreshToken: false,
   },
 });
 
 // REGISTER
 export const signUp = async (email: string, password: string) => {
-  return await supabase.auth.signUp({
-    email,
-    password,
-  });
+  return await register({ email, username: email.split('@')[0] || email, password });
 };
 
 // LOGIN
 export const signIn = async (email: string, password: string) => {
-  return await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  return await login(email, password);
 };
 
 // LOGOUT
 export const signOut = async () => {
-  return await supabase.auth.signOut();
+  clearAuthToken();
+  return { error: null };
 };
 
 // GET CURRENT USER
 export const getUser = async () => {
-  return await supabase.auth.getUser();
+  return { data: { user: getAuthPayload() }, error: null };
 };
 
 // GET CURRENT SESSION
 export const getSession = async () => {
-  return await supabase.auth.getSession();
+  const token = getAuthToken();
+  const payload = getAuthPayload();
+  return { data: { session: token ? { access_token: token, user: { id: payload?.profileId, email: payload?.email } } : null }, error: null };
 };
 
 // AUTH STATE LISTENER
-export const onAuthStateChange = (
-  callback: Parameters<typeof supabase.auth.onAuthStateChange>[0]
-) => {
-  return supabase.auth.onAuthStateChange(callback);
+export const onAuthStateChange = () => {
+  return { data: { subscription: { unsubscribe: () => {} } } };
 };
 
 // SAVE PROFILE
@@ -139,12 +143,22 @@ export const setServerCreationPlan = async (targetUserId: string, newPlan: 'none
 
 // UPDATE AUTH EMAIL
 export const updateUserEmail = async (email: string) => {
-  return await supabase.auth.updateUser({ email });
+  try {
+    await changeEmail(email);
+    return { data: null, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error('E-posta güncellenemedi') };
+  }
 };
 
 // UPDATE AUTH PASSWORD
 export const updateUserPassword = async (password: string) => {
-  return await supabase.auth.updateUser({ password });
+  try {
+    await changePassword(password);
+    return { data: null, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error('Parola güncellenemedi') };
+  }
 };
 
 // GET CHANNELS (user-created only)
@@ -224,10 +238,10 @@ export const deleteChannel = async (id: string) => {
 // SAVE INVITE CODE (önceki kodları silmez — liste birikir; kullanılınca/süresi
 // dolunca tarihsel kayıt olarak kalır, "kim kullandı" gösterimi için gerekli)
 export const saveInviteCode = async (code: string, expiresAt: number) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const payload = getAuthPayload();
   return await supabase.from('invite_codes').insert({
     code: code.toUpperCase(),
-    created_by: session?.user?.id,
+    created_by: payload?.profileId,
     expires_at: expiresAt,
     used: false,
   });
@@ -383,14 +397,14 @@ export const sendInviteEmail = async (
   expiresAt: number,
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return { success: false, error: 'Oturum bulunamadı' };
+    const token = getAuthToken();
+    if (!token) return { success: false, error: 'Oturum bulunamadı' };
     const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL as string;
     const res = await fetch(`${tokenServerUrl}/api/send-invite-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        ...authHeader(),
       },
       body: JSON.stringify({ email, code, expiresAt }),
     });
@@ -408,14 +422,14 @@ export const sendRejectionEmail = async (
   reason?: string,
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return { success: false, error: 'Oturum bulunamadı' };
+    const token = getAuthToken();
+    if (!token) return { success: false, error: 'Oturum bulunamadı' };
     const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL as string;
     const res = await fetch(`${tokenServerUrl}/api/send-rejection-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        ...authHeader(),
       },
       body: JSON.stringify({ email, reason }),
     });

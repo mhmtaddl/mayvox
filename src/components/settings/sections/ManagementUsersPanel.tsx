@@ -15,6 +15,7 @@ import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { supabase } from '../../../lib/supabase';
+import { getAuthToken } from '../../../lib/authClient';
 import {
   listAdminUsers,
   listUserOwnedServers,
@@ -247,14 +248,14 @@ export default function ManagementUsersPanel() {
             break;
           }
           const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) {
+          const token = getAuthToken();
+          if (!token) {
             setToastMsg('Oturum bulunamadı');
             break;
           }
           const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ targetUserId: u.id }),
           });
           if (!res.ok) {

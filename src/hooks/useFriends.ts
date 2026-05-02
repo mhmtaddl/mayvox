@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { subscribeRealtimeEvents } from '../lib/chatService';
 import { playNotification } from '../lib/audio/SoundManager';
 import { playNotifyBeep } from '../features/notifications/notificationSound';
 
@@ -79,54 +80,36 @@ export function useFriends(currentUserId: string | undefined) {
     return () => { mountedRef.current = false; };
   }, [fetchFriends, fetchRequests]);
 
-  // ── Supabase Realtime — friend_requests + friendships ───────────────────
+  // ── WebSocket realtime — friend_requests + friendships ──────────────────
   useEffect(() => {
     if (!currentUserId) return;
 
-    const channel = supabase.channel(`friends:${currentUserId}`)
-      // friend_requests tablosu — INSERT/UPDATE/DELETE
-      .on(
-        'postgres_changes' as any,
-        { event: '*', schema: 'public', table: 'friend_requests' },
-        (payload: any) => {
-          const row = payload.new || payload.old;
-          if (!row) return;
-          // Bu kullanıcıyla ilgili mi kontrol et
-          const isRelevant = row.sender_id === currentUserId || row.receiver_id === currentUserId;
-          if (!isRelevant) return;
+    return subscribeRealtimeEvents(event => {
+      if (event.type !== 'friend-update') return;
+      const payload = event.payload || {};
+      const targetUserIds = Array.isArray(payload.userIds) ? payload.userIds : [];
+      const row = payload.row || payload.new || payload.old || {};
+      const isRelevant =
+        targetUserIds.includes(currentUserId) ||
+        row.sender_id === currentUserId ||
+        row.receiver_id === currentUserId ||
+        row.user_low_id === currentUserId ||
+        row.user_high_id === currentUserId;
+      if (!isRelevant) return;
 
-          // Yeni gelen arkadaşlık isteği → bildirim sesi çal.
-          // INSERT + ben receiver + başkasından + pending. MP3 (bildirim_gelme.mp3)
-          // playNotification; başarısızsa beep fallback (NotificationSound).
-          if (payload.eventType === 'INSERT'
-              && row.receiver_id === currentUserId
-              && row.sender_id !== currentUserId
-              && row.status === 'pending') {
-            const ok = playNotification();
-            if (!ok) playNotifyBeep();
-          }
+      if (
+        payload.eventType === 'INSERT' &&
+        row.receiver_id === currentUserId &&
+        row.sender_id !== currentUserId &&
+        row.status === 'pending'
+      ) {
+        const ok = playNotification();
+        if (!ok) playNotifyBeep();
+      }
 
-          // State'i tam yeniden fetch et — en güvenli yol
-          fetchRequests();
-          // Eğer accepted ise friendships da değişmiş olabilir
-          if (row.status === 'accepted') fetchFriends();
-        }
-      )
-      // friendships tablosu — INSERT/DELETE
-      .on(
-        'postgres_changes' as any,
-        { event: '*', schema: 'public', table: 'friendships' },
-        (payload: any) => {
-          const row = payload.new || payload.old;
-          if (!row) return;
-          const isRelevant = row.user_low_id === currentUserId || row.user_high_id === currentUserId;
-          if (!isRelevant) return;
-          fetchFriends();
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+      void fetchRequests();
+      void fetchFriends();
+    });
   }, [currentUserId, fetchFriends, fetchRequests]);
 
   // ── Derived maps ─────────────────────────────────────────────────────────

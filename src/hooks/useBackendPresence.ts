@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type React from 'react';
 import { subscribePresenceEvents, getChatSocket } from '../lib/chatService';
-import type { PresenceEvent } from '../lib/chatService';
+import type { PresenceEvent, PresenceUserState } from '../lib/chatService';
 import type { User } from '../types';
 
 interface Deps {
@@ -46,20 +46,60 @@ export function useBackendPresence({ currentUserId, setAllUsers }: Deps) {
         serverTimeOffsetRef.current = serverMs - Date.now();
       }
 
+      const presencePatchFor = (u: PresenceUserState): Partial<User> => {
+        const patch: Partial<User> = {
+          status: u.online ? 'online' : 'offline',
+          statusText: u.online ? (u.statusText || 'Online') : 'Çevrimdışı',
+        };
+        if (u.online) {
+          patch.lastSeenAt = undefined;
+          if (u.selfMuted !== undefined) patch.selfMuted = !!u.selfMuted;
+          if (u.selfDeafened !== undefined) patch.selfDeafened = !!u.selfDeafened;
+          if (u.autoStatus !== undefined) patch.autoStatus = u.autoStatus ?? undefined;
+          if (u.gameActivity !== undefined) patch.gameActivity = u.gameActivity ?? undefined;
+          if (u.currentRoom !== undefined) patch.currentRoom = u.currentRoom ?? undefined;
+          if (u.onlineSince !== undefined) patch.onlineSince = u.onlineSince ?? undefined;
+        } else {
+          patch.lastSeenAt = u.lastSeenAt ?? undefined;
+          patch.selfMuted = false;
+          patch.selfDeafened = false;
+          patch.autoStatus = undefined;
+          patch.gameActivity = undefined;
+          patch.currentRoom = undefined;
+        }
+        if (u.appVersion !== undefined) patch.appVersion = u.appVersion;
+        if (u.platform !== undefined) patch.platform = u.platform;
+        if (u.serverId !== undefined) patch.serverId = u.serverId;
+        return patch;
+      };
+
       if (event.type === 'presence:snapshot') {
-        const onlineSet = new Set(event.onlineUserIds);
+        const byId = new Map(event.users.map(u => [u.userId, u] as const));
         setAllUsers(prev => prev.map(u => {
           if (u.id === currentUserId) return u;
-          if (onlineSet.has(u.id)) {
-            return u.status === 'online' ? u : { ...u, status: 'online' as const };
-          }
-          return u.status === 'offline' ? u : { ...u, status: 'offline' as const };
+          const state = byId.get(u.id);
+          if (!state) return u;
+          const patch = presencePatchFor(state);
+          console.log('[presence] STATE MERGE', {
+            source: 'snapshot',
+            userId: u.id,
+            before: {
+              status: u.status,
+              statusText: u.statusText,
+              selfMuted: u.selfMuted,
+              selfDeafened: u.selfDeafened,
+              autoStatus: u.autoStatus,
+            },
+            patch,
+          });
+          return { ...u, ...patch };
         }));
         return;
       }
 
       // presence:update
-      const { userId, online, lastSeenAt } = event;
+      const { user } = event;
+      const { userId, online } = user;
       if (!userId || userId === currentUserId) return;
 
       if (online === true) {
@@ -69,22 +109,30 @@ export function useBackendPresence({ currentUserId, setAllUsers }: Deps) {
           clearTimeout(pending);
           offlineTimersRef.current.delete(userId);
         }
-        apply(userId, { status: 'online' });
+        const patch = presencePatchFor(user);
+        console.log('[presence] STATE MERGE', {
+          source: 'update',
+          userId,
+          online,
+          patch,
+        });
+        apply(userId, patch);
       } else if (online === false) {
         // 3sn debounce: kısa reconnect'lerde offline flicker olmasın
         const existing = offlineTimersRef.current.get(userId);
         if (existing) clearTimeout(existing);
         const timer = setTimeout(() => {
           offlineTimersRef.current.delete(userId);
-          apply(userId, {
-            status: 'offline',
-            lastSeenAt: lastSeenAt ?? undefined,
+          const patch = presencePatchFor(user);
+          console.log('[presence] STATE MERGE', {
+            source: 'offline-update',
+            userId,
+            online,
+            patch,
           });
+          apply(userId, patch);
         }, OFFLINE_DEBOUNCE_MS);
         offlineTimersRef.current.set(userId, timer);
-      } else {
-        // online === null → privacy gizli (Phase 2'de anlamlı olacak)
-        apply(userId, { status: 'offline', lastSeenAt: undefined });
       }
     };
 

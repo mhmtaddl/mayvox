@@ -1,9 +1,9 @@
 import { queryMany, queryOne, pool } from '../repositories/db';
 import { AppError } from './serverService';
-import { supabase } from '../supabaseClient';
 import { getServerAccessContext, assertCapability } from './accessContextService';
 import { CAPABILITIES } from '../capabilities';
 import { logAction } from './auditLogService';
+import { fetchProfileNameMap } from './profileLookupService';
 
 const MANAGE_ROLES = new Set(['owner', 'admin']);
 
@@ -163,14 +163,7 @@ export async function listChannelAccess(
     [channelId]
   );
   const userIds = Array.from(new Set(rows.map(r => r.user_id)));
-  const nameMap = new Map<string, string>();
-  if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
-      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-      nameMap.set(p.id, p.display_name || full || p.name || '');
-    });
-  }
+  const nameMap = await fetchProfileNameMap(userIds);
   const entries = rows.map(r => ({
     userId: r.user_id,
     userName: nameMap.get(r.user_id) ?? r.user_id.slice(0, 8),

@@ -26,6 +26,9 @@ interface Props {
   onLeaveServer: (serverId: string) => Promise<void>;
   onShowCreateModal: () => void;
   canCreateServer?: boolean;
+  currentView?: 'room' | 'server_home' | 'discover' | 'settings';
+  onGoHome?: () => void;
+  onReturnToRoom?: () => void;
   invitationData?: {
     inviterId: string;
     inviterName: string;
@@ -53,6 +56,9 @@ export default function MobileFooter({
   onLeaveServer,
   onShowCreateModal,
   canCreateServer,
+  currentView,
+  onGoHome,
+  onReturnToRoom,
   invitationData,
   onInvitationAccept,
   onInvitationDecline,
@@ -317,6 +323,9 @@ export default function MobileFooter({
           onLeaveServer={onLeaveServer}
           onShowCreateModal={onShowCreateModal}
           canCreateServer={canCreateServer}
+          currentView={currentView}
+          onGoHome={onGoHome}
+          onReturnToRoom={onReturnToRoom}
           invitationData={invitationData}
           onInvitationAccept={onInvitationAccept}
           onInvitationDecline={onInvitationDecline}

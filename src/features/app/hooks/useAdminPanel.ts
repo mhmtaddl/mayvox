@@ -1,6 +1,6 @@
 /**
  * useAdminPanel — Admin şifre sıfırlama ve davet talebi yönetimi.
- * Polling + Realtime subscription + action handlers.
+ * Polling + action handlers.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -12,8 +12,8 @@ import {
   adminRejectInvite,
   sendInviteEmail,
   sendRejectionEmail,
-  supabase as supabaseClient,
 } from '../../../lib/supabase';
+import { getAuthToken } from '../../../lib/authClient';
 import type { ResetRequest } from '../../../components/PasswordResetPanel';
 import type { InviteRequest } from '../../../types';
 
@@ -124,7 +124,7 @@ export function useAdminPanel({
     return () => clearInterval(interval);
   }, [isAdmin, isPrimaryAdmin, view, currentUserId, loadPasswordResetRequests]);
 
-  // ── Invite request polling (30sn) + Realtime ──
+  // ── Invite request polling (30sn) ──
   useEffect(() => {
     if (!currentUserId || (!isAdmin && !isPrimaryAdmin)) return;
     if (view !== 'chat' && view !== 'settings') return;
@@ -132,68 +132,19 @@ export function useAdminPanel({
     void loadInviteRequests();
     const interval = setInterval(() => { void loadInviteRequests(); }, 30000);
 
-    const channel = supabaseClient
-      .channel(`invite-requests-admin-rt-${currentUserId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'invite_requests' },
-        (payload) => {
-          const row = payload.new as {
-            id: string; email: string; status: string; code?: string | null;
-            expires_at: number; created_at: string;
-            last_send_error?: string | null;
-          };
-          setInviteRequests(prev => {
-            if (prev.find(r => r.id === row.id)) return prev;
-            return [...prev, {
-              id: row.id,
-              email: row.email,
-              status: row.status as InviteRequest['status'],
-              expiresAt: row.expires_at,
-              rejectionCount: 0,
-              createdAt: row.created_at,
-              lastSendError: row.last_send_error ?? undefined,
-              sentCode: row.code ?? undefined,
-            }];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'invite_requests' },
-        (payload) => {
-          const row = payload.new as {
-            id: string; status: string; code?: string | null;
-            last_send_error?: string | null; expires_at: number;
-          };
-          const actionable = ['pending', 'sending', 'failed'];
-          if (!actionable.includes(row.status)) {
-            setInviteRequests(prev => prev.filter(r => r.id !== row.id));
-          } else {
-            setInviteRequests(prev => prev.map(r =>
-              r.id === row.id
-                ? { ...r, status: row.status as InviteRequest['status'], lastSendError: row.last_send_error ?? undefined, sentCode: row.code ?? undefined, expiresAt: row.expires_at }
-                : r,
-            ));
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
       clearInterval(interval);
-      channel.unsubscribe();
     };
   }, [currentUserId, isAdmin, isPrimaryAdmin, view, loadInviteRequests]);
 
   // ── Handlers ──
   const handleApproveReset = async (req: ResetRequest) => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session?.access_token) return;
+    const token = getAuthToken();
+    if (!token) return;
 
     const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ targetUserId: req.userId }),
     });
 
@@ -208,12 +159,12 @@ export function useAdminPanel({
   };
 
   const handleDismissReset = async (userId: string) => {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session?.access_token) return;
+    const token = getAuthToken();
+    if (!token) return;
 
     await fetch(`${SERVER_URL}/api/dismiss-password-reset`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ targetUserId: userId }),
     });
 

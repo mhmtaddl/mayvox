@@ -23,6 +23,7 @@ interface RegisterDetailsViewProps {
   loginError: string | null;
   handleCompleteRegistration: () => Promise<void>;
   onGoBack: () => void;
+  onOpenKvkk?: () => void;
 }
 
 export default function RegisterDetailsView({
@@ -37,6 +38,7 @@ export default function RegisterDetailsView({
   loginError,
   handleCompleteRegistration,
   onGoBack,
+  onOpenKvkk,
 }: RegisterDetailsViewProps) {
   const [pressing, setPressing] = React.useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -182,6 +184,17 @@ export default function RegisterDetailsView({
           >
             <span>Kaydını Tamamla</span>
           </button>
+          <p className="px-1 text-center text-[11px] leading-relaxed text-[var(--theme-secondary-text)]/55">
+            Kişisel verilerimin işlenmesine ilişkin{' '}
+            <button
+              type="button"
+              onClick={onOpenKvkk}
+              className="font-semibold text-[var(--theme-accent)]/85 hover:text-[var(--theme-accent)] transition-colors"
+            >
+              KVKK Aydınlatma Metni'ni
+            </button>{' '}
+            okudum.
+          </p>
         </div>
         </div>{/* end px-10 */}
       </motion.div>

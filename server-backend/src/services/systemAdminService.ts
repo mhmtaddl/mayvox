@@ -1,7 +1,7 @@
 import { pool, queryMany, queryOne, execute } from '../repositories/db';
-import { supabase } from '../supabaseClient';
 import { writeSystemAudit } from './systemAuditService';
 import { invalidateAccessContextForServer } from './accessContextService';
+import { fetchProfilesByIds, profileDisplayName } from './profileLookupService';
 
 export type PlanKey = 'free' | 'pro' | 'ultra';
 
@@ -89,28 +89,25 @@ export async function listAllServers(opts: ListServersOptions): Promise<ListServ
     args,
   );
 
-  // Owner profile batch fetch (Supabase — farklı DB). N+1 yok: tek .in() sorgusu.
+  // Owner profile batch fetch. N+1 yok: tek SQL sorgusu.
   const ownerIds = Array.from(new Set(rows.map(r => r.owner_user_id).filter(Boolean)));
   const ownerMap = new Map<string, { displayName: string | null; fullName: string | null; username: string | null; email: string | null }>();
   if (ownerIds.length > 0) {
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('id, name, display_name, first_name, last_name, email')
-      .in('id', ownerIds);
-    if (error) {
-      console.warn('[systemAdminService] owner profile fetch failed', error.message);
-    } else if (profiles) {
-      for (const p of profiles as Array<{ id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null }>) {
+    try {
+      const profiles = await fetchProfilesByIds(ownerIds);
+      for (const p of profiles) {
         const first = (p.first_name ?? '').trim();
         const last = (p.last_name ?? '').trim();
         const combined = `${first} ${last}`.trim();
         ownerMap.set(p.id, {
-          displayName: p.display_name || combined || p.name || null,
+          displayName: profileDisplayName(p) || null,
           fullName: combined || null,
           username: p.name || null,
           email: p.email || null,
         });
       }
+    } catch (err) {
+      console.warn('[systemAdminService] owner profile fetch failed', err instanceof Error ? err.message : err);
     }
   }
 

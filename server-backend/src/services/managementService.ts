@@ -2,7 +2,6 @@ import { queryOne, queryMany, pool } from '../repositories/db';
 import type { Server, ServerMember, ServerInvite, ServerBan, MemberResponse, InviteResponse, BanResponse, SentInviteResponse, UserInviteResponse } from '../types';
 import { nanoid } from 'nanoid';
 import { AppError } from './serverService';
-import { supabase } from '../supabaseClient';
 import { notifyClient } from './realtimeNotify';
 import { assignSystemRoleToMember, type SystemRoleName } from './roleSeedService';
 import { getServerAccessContext, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
@@ -15,6 +14,7 @@ import { logAction } from './auditLogService';
 import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 import { removeParticipantFromAllServerRooms, removeParticipantFromChannel, setPublishPermissionInAllServerRooms } from './livekitService';
 import { broadcastModeration } from './moderationBroadcast';
+import { fetchProfileNameMap, fetchProfilesByIds } from './profileLookupService';
 
 // ── Yetki kontrol ──
 
@@ -91,12 +91,18 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
     [serverId]
   );
 
-  // Supabase profiles'dan kullanıcı bilgilerini çek
+  // profiles tablosundan kullanıcı bilgilerini çek
   const userIds = rows.map(r => r.user_id);
   const profileMap = new Map<string, { name: string; display_name: string; first_name: string; last_name: string; avatar: string | null }>();
   if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string; display_name: string; first_name: string; last_name: string; avatar: string | null }) => profileMap.set(p.id, p));
+    const rows = await fetchProfilesByIds(userIds);
+    rows.forEach((p) => profileMap.set(p.id, {
+      name: p.name ?? '',
+      display_name: p.display_name ?? '',
+      first_name: p.first_name ?? '',
+      last_name: p.last_name ?? '',
+      avatar: p.avatar ?? null,
+    }));
   }
 
   const now = Date.now();
@@ -769,14 +775,7 @@ export async function listSentInvites(serverId: string, userId: string): Promise
 
   // Profil bilgilerini çek
   const userIds = rows.map(r => r.invited_user_id);
-  const nameMap = new Map<string, string>();
-  if (userIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', userIds);
-    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
-      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-      nameMap.set(p.id, p.display_name || full || p.name || '');
-    });
-  }
+  const nameMap = await fetchProfileNameMap(userIds);
 
   return rows.map(r => ({
     id: r.id,
@@ -827,14 +826,7 @@ export async function listMyInvites(userId: string): Promise<UserInviteResponse[
 
   // Davet eden profilleri
   const inviterIds = rows.map(r => r.invited_by);
-  const inviterMap = new Map<string, string>();
-  if (inviterIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', inviterIds);
-    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
-      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-      inviterMap.set(p.id, p.display_name || full || p.name || '');
-    });
-  }
+  const inviterMap = await fetchProfileNameMap(inviterIds);
 
   return rows.map(r => {
     const srv = serverMap.get(r.server_id);

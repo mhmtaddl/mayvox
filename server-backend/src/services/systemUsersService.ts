@@ -1,13 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
-import { queryMany } from '../repositories/db';
+import { execute, queryMany, queryOne } from '../repositories/db';
 import { writeSystemAudit } from './systemAuditService';
 
 /**
  * systemUsersService
  * ─────────────────
- * Global kullanıcı yönetimi — profiller Supabase'de, sunucu sayıları backend
- * pg pool'da. 2-step merge ile tek yanıt üretir.
+ * Global kullanıcı yönetimi — profiles + server bilgileri Hetzner Postgres'ten okunur.
  */
 
 type PlanKey = 'free' | 'pro' | 'ultra';
@@ -75,88 +72,65 @@ function computePlanStatus(plan: string | null, planEnd: string | null): PlanSta
   return Date.now() < end ? 'active' : 'expired';
 }
 
-function serviceClient() {
-  // Servis tarafı: RLS'i bypass etmek için anon yerine backend auth kullanıyoruz
-  // ama profiles için anon yeterli olmalı (sistem admin kendi middleware'inde onaylandı).
-  // Sadece admin rotalarından çağrılır; caller her zaman sistem admin.
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-function scopedClient(token: string) {
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 export async function listAllUsers(
-  adminToken: string,
+  _adminToken: string,
   opts: ListUsersOptions,
 ): Promise<ListUsersResult> {
   const limit = Math.min(Math.max(opts.limit | 0, 1), 100);
   const offset = Math.max(opts.offset | 0, 0);
-  const supa = scopedClient(adminToken);
+  const params: unknown[] = [];
+  const where: string[] = [];
 
-  // 1) Supabase'ten paginated profile listesi — filtreler DB'de.
-  let q = supa
-    .from('profiles')
-    .select(
-      'id, name, email, display_name, first_name, last_name, avatar, role, is_admin, is_moderator, is_primary_admin, is_muted, mute_expires, is_voice_banned, ban_expires, server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end, user_level, user_level_source, user_level_start_at, user_level_end_at, created_at',
-      { count: 'exact' },
-    );
+  if (opts.role === 'admin') where.push('p.is_admin = true');
+  else if (opts.role === 'mod') where.push('p.is_moderator = true AND p.is_admin = false');
+  else if (opts.role === 'user') where.push('p.is_admin = false AND p.is_moderator = false');
 
-  // Role filter
-  if (opts.role === 'admin') q = q.eq('is_admin', true);
-  else if (opts.role === 'mod') q = q.eq('is_moderator', true).eq('is_admin', false);
-  else if (opts.role === 'user') q = q.eq('is_admin', false).eq('is_moderator', false);
-
-  // Plan filter
-  if (opts.plan) q = q.eq('server_creation_plan', opts.plan);
-
-  // Plan status filter (SQL-side)
-  if (opts.planStatus === 'unlimited') {
-    q = q.not('server_creation_plan', 'is', null).neq('server_creation_plan', 'none').is('server_creation_plan_end', null);
-  } else if (opts.planStatus === 'active') {
-    q = q.not('server_creation_plan', 'is', null).neq('server_creation_plan', 'none').gt('server_creation_plan_end', new Date().toISOString());
-  } else if (opts.planStatus === 'expired') {
-    q = q.not('server_creation_plan_end', 'is', null).lt('server_creation_plan_end', new Date().toISOString());
-  } else if (opts.planStatus === 'none') {
-    q = q.or('server_creation_plan.is.null,server_creation_plan.eq.none');
+  if (opts.plan) {
+    params.push(opts.plan);
+    where.push(`p.server_creation_plan = $${params.length}`);
   }
 
-  // Search (name, email)
+  if (opts.planStatus === 'unlimited') {
+    where.push(`p.server_creation_plan IS NOT NULL AND p.server_creation_plan <> 'none' AND p.server_creation_plan_end IS NULL`);
+  } else if (opts.planStatus === 'active') {
+    where.push(`p.server_creation_plan IS NOT NULL AND p.server_creation_plan <> 'none' AND p.server_creation_plan_end > now()`);
+  } else if (opts.planStatus === 'expired') {
+    where.push(`p.server_creation_plan_end IS NOT NULL AND p.server_creation_plan_end < now()`);
+  } else if (opts.planStatus === 'none') {
+    where.push(`(p.server_creation_plan IS NULL OR p.server_creation_plan = 'none')`);
+  }
+
   const s = (opts.search ?? '').trim();
   if (s) {
-    const esc = s.replace(/[%_]/g, (c) => `\\${c}`);
-    q = q.or(`display_name.ilike.%${esc}%,name.ilike.%${esc}%,email.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%`);
+    params.push(`%${s}%`);
+    where.push(`(p.display_name ILIKE $${params.length} OR p.name ILIKE $${params.length} OR p.email ILIKE $${params.length} OR p.first_name ILIKE $${params.length} OR p.last_name ILIKE $${params.length})`);
   }
 
-  // Sıralama
-  switch (opts.sort) {
-    case 'name-asc':
-      q = q.order('name', { ascending: true, nullsFirst: false });
-      break;
-    case 'name-desc':
-      q = q.order('name', { ascending: false, nullsFirst: false });
-      break;
-    case 'created-asc':
-      q = q.order('created_at', { ascending: true });
-      break;
-    case 'created-desc':
-    default:
-      q = q.order('created_at', { ascending: false });
-      break;
-  }
-  q = q.range(offset, offset + limit - 1);
-
-  const { data: profiles, error, count } = await q;
-  if (error) {
-    throw new Error(`profile query failed: ${error.message}`);
+  if (opts.ownership === 'has-server' || opts.ownership === 'only-owners') {
+    where.push(`EXISTS (SELECT 1 FROM servers s WHERE s.owner_user_id = p.id)`);
+  } else if (opts.ownership === 'no-server') {
+    where.push(`NOT EXISTS (SELECT 1 FROM servers s WHERE s.owner_user_id = p.id)`);
   }
 
-  const profileRows = (profiles ?? []) as Array<{
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const orderSql = (() => {
+    switch (opts.sort) {
+      case 'name-asc': return 'ORDER BY p.name ASC NULLS LAST';
+      case 'name-desc': return 'ORDER BY p.name DESC NULLS LAST';
+      case 'created-asc': return 'ORDER BY p.created_at ASC';
+      case 'created-desc':
+      default: return 'ORDER BY p.created_at DESC';
+    }
+  })();
+
+  const totalRow = await queryOne<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM profiles p ${whereSql}`,
+    params,
+  );
+  const total = parseInt(totalRow?.n ?? '0', 10) || 0;
+
+  params.push(limit, offset);
+  const profileRows = await queryMany<{
     id: string;
     name: string | null;
     email: string | null;
@@ -181,25 +155,28 @@ export async function listAllUsers(
     user_level_start_at: string | null;
     user_level_end_at: string | null;
     created_at: string | null;
-  }>;
+    owned_server_count: number;
+  }>(
+    `SELECT p.id::text, p.name, p.email, p.display_name, p.first_name, p.last_name,
+            p.avatar, p.role, p.is_admin, p.is_moderator, p.is_primary_admin,
+            p.is_muted, p.mute_expires, p.is_voice_banned, p.ban_expires,
+            p.server_creation_plan, p.server_creation_plan_source,
+            p.server_creation_plan_start::text, p.server_creation_plan_end::text,
+            p.user_level, p.user_level_source,
+            p.user_level_start_at::text, p.user_level_end_at::text,
+            p.created_at::text,
+            COALESCE((SELECT COUNT(*) FROM servers s WHERE s.owner_user_id = p.id), 0)::int AS owned_server_count
+       FROM profiles p
+       ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
 
   if (profileRows.length === 0) {
-    return { items: [], total: count ?? 0, limit, offset };
+    return { items: [], total, limit, offset };
   }
-
-  // 2) Backend pg pool'dan owned_server_count (tek batch query).
-  const ids = profileRows.map((p) => p.id);
-  const counts = await queryMany<{ owner_user_id: string; n: string }>(
-    'SELECT owner_user_id, COUNT(*)::text AS n FROM servers WHERE owner_user_id = ANY($1::text[]) GROUP BY owner_user_id',
-    [ids],
-  );
-  const countMap = new Map<string, number>(counts.map((c) => [c.owner_user_id, parseInt(c.n, 10) || 0]));
-
-  // Ownership filter — son aşamada uygulanır (Supabase bilmediği için).
-  // NOT: own-server filter'ı uygulanırken paginationın doğruluğu bozulur;
-  // bu durumda SQL-side'e çekmek gerek. Şimdilik ownership filtresi için
-  // ek path kullanıyoruz (ownership=only-owners ⇢ ayrı endpoint daha iyi).
-  let items: AdminUserRow[] = profileRows.map((p) => {
+  const items: AdminUserRow[] = profileRows.map((p) => {
     const plan = (p.server_creation_plan as PlanKey | 'none' | null) ?? 'none';
     const planStatus = computePlanStatus(plan, p.server_creation_plan_end);
     const first = (p.first_name ?? '').trim();
@@ -232,19 +209,11 @@ export async function listAllUsers(
       user_level_source: (p.user_level_source as PlanSource | null) ?? null,
       user_level_start_at: p.user_level_start_at,
       user_level_end_at: p.user_level_end_at,
-      owned_server_count: countMap.get(p.id) ?? 0,
+      owned_server_count: p.owned_server_count ?? 0,
       created_at: p.created_at,
     };
   });
-
-  // Ownership post-filter
-  if (opts.ownership === 'has-server' || opts.ownership === 'only-owners') {
-    items = items.filter((u) => u.owned_server_count > 0);
-  } else if (opts.ownership === 'no-server') {
-    items = items.filter((u) => u.owned_server_count === 0);
-  }
-
-  return { items, total: count ?? items.length, limit, offset };
+  return { items, total, limit, offset };
 }
 
 export interface OwnedServerRow {
@@ -301,14 +270,11 @@ function computeEndAt(durationType: DurationType, customEndAt?: string | null): 
 
 /** Paid plan'ı admin override ETMEZ. Manual plan tam kontrol. */
 export async function setUserPlanManual(input: SetUserPlanInput): Promise<void> {
-  const supa = scopedClient(input.adminToken);
   // Guard: existing source check
-  const { data: existing, error: readErr } = await supa
-    .from('profiles')
-    .select('server_creation_plan, server_creation_plan_source')
-    .eq('id', input.targetUserId)
-    .maybeSingle();
-  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+  const existing = await queryOne<{ server_creation_plan: string | null; server_creation_plan_source: string | null }>(
+    'SELECT server_creation_plan, server_creation_plan_source FROM profiles WHERE id = $1',
+    [input.targetUserId],
+  );
   if (existing && (existing as { server_creation_plan_source?: string }).server_creation_plan_source === 'paid') {
     const err = new Error('Ücretli (paid) planı admin override edemez');
     (err as Error & { code?: number }).code = 403;
@@ -318,16 +284,16 @@ export async function setUserPlanManual(input: SetUserPlanInput): Promise<void> 
   const startAt = new Date().toISOString();
   const endAt = computeEndAt(input.durationType, input.customEndAt);
 
-  const { error: updErr } = await supa
-    .from('profiles')
-    .update({
-      server_creation_plan: input.plan,
-      server_creation_plan_source: 'manual',
-      server_creation_plan_start: startAt,
-      server_creation_plan_end: endAt,
-    })
-    .eq('id', input.targetUserId);
-  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+  const updated = await execute(
+    `UPDATE profiles
+        SET server_creation_plan = $1,
+            server_creation_plan_source = 'manual',
+            server_creation_plan_start = $2,
+            server_creation_plan_end = $3
+      WHERE id = $4`,
+    [input.plan, startAt, endAt, input.targetUserId],
+  );
+  if (updated === 0) throw new Error('profile update failed: profile not found');
 
   await writeSystemAudit({
     adminUserId: input.adminUserId,
@@ -347,32 +313,34 @@ export async function setUserPlanManual(input: SetUserPlanInput): Promise<void> 
 
 export async function revokeUserPlanManual(
   adminUserId: string,
-  adminToken: string,
+  _adminToken: string,
   targetUserId: string,
 ): Promise<void> {
-  const supa = scopedClient(adminToken);
-  const { data: existing, error: readErr } = await supa
-    .from('profiles')
-    .select('server_creation_plan, server_creation_plan_source, server_creation_plan_start, server_creation_plan_end')
-    .eq('id', targetUserId)
-    .maybeSingle();
-  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+  const existing = await queryOne<{
+    server_creation_plan: string | null;
+    server_creation_plan_source: string | null;
+    server_creation_plan_start: string | null;
+    server_creation_plan_end: string | null;
+  }>(
+    'SELECT server_creation_plan, server_creation_plan_source, server_creation_plan_start::text, server_creation_plan_end::text FROM profiles WHERE id = $1',
+    [targetUserId],
+  );
   if (existing && (existing as { server_creation_plan_source?: string }).server_creation_plan_source === 'paid') {
     const err = new Error('Ücretli (paid) plan admin tarafından kaldırılamaz');
     (err as Error & { code?: number }).code = 403;
     throw err;
   }
 
-  const { error: updErr } = await supa
-    .from('profiles')
-    .update({
-      server_creation_plan: 'none',
-      server_creation_plan_source: null,
-      server_creation_plan_start: null,
-      server_creation_plan_end: null,
-    })
-    .eq('id', targetUserId);
-  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+  const updated = await execute(
+    `UPDATE profiles
+        SET server_creation_plan = 'none',
+            server_creation_plan_source = NULL,
+            server_creation_plan_start = NULL,
+            server_creation_plan_end = NULL
+      WHERE id = $1`,
+    [targetUserId],
+  );
+  if (updated === 0) throw new Error('profile update failed: profile not found');
 
   await writeSystemAudit({
     adminUserId,
@@ -398,14 +366,10 @@ export interface SetUserLevelInput {
 
 /** Manuel seviye atama. paid kaynaklıysa admin override etmez. */
 export async function setUserLevelManual(input: SetUserLevelInput): Promise<void> {
-  const supa = scopedClient(input.adminToken);
-
-  const { data: existing, error: readErr } = await supa
-    .from('profiles')
-    .select('user_level, user_level_source')
-    .eq('id', input.targetUserId)
-    .maybeSingle();
-  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+  const existing = await queryOne<{ user_level: string | null; user_level_source: string | null }>(
+    'SELECT user_level, user_level_source FROM profiles WHERE id = $1',
+    [input.targetUserId],
+  );
 
   if (existing && (existing as { user_level_source?: string }).user_level_source === 'paid') {
     const err = new Error('Ücretli (paid) seviyeyi admin override edemez');
@@ -416,16 +380,16 @@ export async function setUserLevelManual(input: SetUserLevelInput): Promise<void
   const startAt = new Date().toISOString();
   const endAt = computeEndAt(input.durationType, input.customEndAt);
 
-  const { error: updErr } = await supa
-    .from('profiles')
-    .update({
-      user_level: input.level,
-      user_level_source: 'manual',
-      user_level_start_at: startAt,
-      user_level_end_at: endAt,
-    })
-    .eq('id', input.targetUserId);
-  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+  const updated = await execute(
+    `UPDATE profiles
+        SET user_level = $1,
+            user_level_source = 'manual',
+            user_level_start_at = $2,
+            user_level_end_at = $3
+      WHERE id = $4`,
+    [input.level, startAt, endAt, input.targetUserId],
+  );
+  if (updated === 0) throw new Error('profile update failed: profile not found');
 
   await writeSystemAudit({
     adminUserId: input.adminUserId,
@@ -446,17 +410,18 @@ export async function setUserLevelManual(input: SetUserLevelInput): Promise<void
 /** Manuel seviyeyi kaldırır. paid kaynaklıysa yine yasak. */
 export async function revokeUserLevelManual(
   adminUserId: string,
-  adminToken: string,
+  _adminToken: string,
   targetUserId: string,
 ): Promise<void> {
-  const supa = scopedClient(adminToken);
-
-  const { data: existing, error: readErr } = await supa
-    .from('profiles')
-    .select('user_level, user_level_source, user_level_start_at, user_level_end_at')
-    .eq('id', targetUserId)
-    .maybeSingle();
-  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
+  const existing = await queryOne<{
+    user_level: string | null;
+    user_level_source: string | null;
+    user_level_start_at: string | null;
+    user_level_end_at: string | null;
+  }>(
+    'SELECT user_level, user_level_source, user_level_start_at::text, user_level_end_at::text FROM profiles WHERE id = $1',
+    [targetUserId],
+  );
 
   if (existing && (existing as { user_level_source?: string }).user_level_source === 'paid') {
     const err = new Error('Ücretli (paid) seviye admin tarafından kaldırılamaz');
@@ -466,15 +431,15 @@ export async function revokeUserLevelManual(
 
   const endAt = new Date().toISOString();
 
-  const { error: updErr } = await supa
-    .from('profiles')
-    .update({
-      user_level: null,
-      user_level_source: null,
-      user_level_end_at: endAt,
-    })
-    .eq('id', targetUserId);
-  if (updErr) throw new Error(`profile update failed: ${updErr.message}`);
+  const updated = await execute(
+    `UPDATE profiles
+        SET user_level = NULL,
+            user_level_source = NULL,
+            user_level_end_at = $1
+      WHERE id = $2`,
+    [endAt, targetUserId],
+  );
+  if (updated === 0) throw new Error('profile update failed: profile not found');
 
   await writeSystemAudit({
     adminUserId,
@@ -488,6 +453,3 @@ export async function revokeUserLevelManual(
     },
   });
 }
-
-// unused helper suppressed
-void serviceClient;

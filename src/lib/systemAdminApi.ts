@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getAuthToken } from './authClient';
 
 export type PlanKey = 'free' | 'pro' | 'ultra';
 
@@ -31,8 +31,7 @@ export interface ListResult {
 const API_BASE = import.meta.env.VITE_SERVER_API_URL || '';
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = getAuthToken();
   return token
     ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     : { 'Content-Type': 'application/json' };

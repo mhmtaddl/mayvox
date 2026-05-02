@@ -1,13 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
-
-const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
+import { AuthError, verifyAuthToken } from '../services/authService';
 
 /**
- * Supabase auth middleware.
- * Authorization: Bearer <access_token> header'ından token alır,
- * supabase.auth.getUser() ile doğrular, req.userId'ye user id koyar.
+ * JWT auth middleware.
+ * req.userId intentionally maps to profiles.id because domain tables use profiles.
+ * req.appUserId keeps the app_users.id value for auth/account operations.
  */
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -19,16 +16,14 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   const token = header.slice(7);
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
-      return;
-    }
-
-    (req as any).userId = user.id;
+    const user = verifyAuthToken(token);
+    (req as any).user = user;
+    (req as any).userId = user.profileId;
+    (req as any).profileId = user.profileId;
+    (req as any).appUserId = user.appUserId;
     next();
-  } catch {
-    res.status(401).json({ error: 'Token doğrulama hatası' });
+  } catch (err) {
+    const message = err instanceof AuthError ? err.message : 'Token doğrulama hatası';
+    res.status(401).json({ error: message });
   }
 }

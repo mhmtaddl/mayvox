@@ -106,11 +106,22 @@ function createPresenceService({ store, supabase, broadcastFn, log = console }) 
 
   function broadcastPresenceChange(userId, { online, lastSeenAt }) {
     try {
-      broadcastFn({
-        type: 'presence:update',
+      const user = {
         userId,
         online,
         lastSeenAt,
+        ...(online === false ? {
+          statusText: 'Çevrimdışı',
+          selfMuted: false,
+          selfDeafened: false,
+          autoStatus: null,
+          currentRoom: null,
+          gameActivity: null,
+        } : {}),
+      };
+      broadcastFn({
+        type: 'presence:update',
+        user,
         serverNow: new Date().toISOString(),
       });
     } catch (err) {

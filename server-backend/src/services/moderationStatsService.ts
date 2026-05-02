@@ -8,7 +8,7 @@
  */
 import { queryOne, queryMany } from '../repositories/db';
 import { AppError } from './serverService';
-import { supabase } from '../supabaseClient';
+import { fetchProfileSummaryMap } from './profileLookupService';
 
 export type ModKind = 'flood' | 'profanity' | 'spam' | 'auto_punish';
 
@@ -74,8 +74,7 @@ export interface ModEvent {
 }
 
 /**
- * Son N moderation event'i döner — Hetzner DB'den raw events + Supabase'den
- * profile enrichment + Hetzner channels'tan channel adı.
+ * Son N moderation event'i döner — raw events + profiles enrichment + channel adı.
  * Role gate üst katmanda (route) yapılır; bu fonksiyon sadece listeler.
  * Mesaj içeriği ASLA sorgulanmaz/dönülmez.
  */
@@ -117,22 +116,10 @@ export async function listEvents(
 
   // 2) Profile enrichment — Supabase'den batch fetch (profiles Hetzner'da değil)
   const userIds = [...new Set(rows.map(r => r.user_id).filter((x): x is string => !!x))];
-  const profileMap = new Map<string, { name: string; avatar: string | null }>();
+  let profileMap = new Map<string, { name: string; avatar: string | null }>();
   if (userIds.length > 0) {
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, display_name, first_name, last_name, name, avatar')
-        .in('id', userIds);
-      if (data) {
-        for (const p of data) {
-          const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-          profileMap.set(p.id as string, {
-            name: (p.display_name as string) || full || (p.name as string) || '',
-            avatar: (p.avatar as string) ?? null,
-          });
-        }
-      }
+      profileMap = await fetchProfileSummaryMap(userIds);
     } catch (err) {
       // Enrichment best-effort — fail olursa isim/avatar null döner
       console.warn('[moderation-events] profile enrich failed:', err instanceof Error ? err.message : err);

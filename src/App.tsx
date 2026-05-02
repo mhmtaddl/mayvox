@@ -12,12 +12,6 @@ import AppChrome from './components/AppChrome';
 import { AppView, User, VoiceChannel } from './types';
 // Theme types + adaptive theme artık useAppSettings hook'unda
 import {
-  signIn,
-  signOut,
-  signUp,
-  getSession,
-  saveProfile,
-  getProfile,
   getProfileByUsername,
   getAllProfiles,
   deleteChannel,
@@ -29,11 +23,13 @@ import {
   updateActivityOnLogout,
   updateShowLastSeen,
 } from './lib/supabase';
+import { getMe, login as authLogin, logout as authLogout, register as authRegister } from './lib/authClient';
 import { playSound } from './lib/sounds';
 import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
+import { sendPresencePatch } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 import {
@@ -77,6 +73,7 @@ import ChatView from './views/ChatView';
 import BanScreen from './components/BanScreen';
 import ForgotPasswordModal from './components/ForgotPasswordModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
+import LegalModal, { type LegalModalKind } from './components/legal/LegalModal';
 // getReleaseNotes artık App.tsx'te kullanılmıyor (auto-popup kaldırıldı).
 // Settings içindeki ReleaseNotesModal hala ./lib/releaseNotes'ten çağırıyor.
 import PermissionOnboarding from './components/PermissionOnboarding';
@@ -484,6 +481,7 @@ export default function App() {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
+  const [legalModal, setLegalModal] = useState<LegalModalKind | null>(null);
   // Admin panel state — hook çağrısı presenceChannelRef'ten sonra (aşağıda)
 
   useEffect(() => {
@@ -831,15 +829,12 @@ export default function App() {
       autoStatusRef.current = status;
       setAutoStatus(status);
       // Presence payload'ı güncelle — diğer kullanıcılar yeni durumu görsün
-      const ch = presenceChannelForAutoRef.current;
-      if (!ch || !currentUserRef.current.id) return;
-      ch.track({
-        userId: currentUserRef.current.id,
+      if (!currentUserRef.current.id) return;
+      sendPresencePatch({
         appVersion,
         selfMuted: isMuted,
         selfDeafened: isDeafened,
-        userName: currentUserRef.current.name,
-        currentRoom: activeChannelRef.current || undefined,
+        currentRoom: activeChannelRef.current || null,
         serverId: activeServerIdRef.current || undefined,
         autoStatus: status,
         onlineSince: onlineSinceRef.current,
@@ -1151,9 +1146,8 @@ export default function App() {
     // Render cold start — sunucu uyuyorsa şimdiden uyandır
     warmUpTokenServer();
 
-    withTimeout(getSession(), 8000, 'Oturum kontrolü').then(async ({ data }) => {
-      const session = data.session;
-      if (!session?.user) {
+    withTimeout(getMe(), 8000, 'Oturum kontrolü').then(async ({ user }) => {
+      if (!user?.profileId) {
         setStartupMaintenanceMessage(null);
         setView('login-password');
         setIsSessionLoading(false);
@@ -1162,15 +1156,15 @@ export default function App() {
 
       try {
 
-      const email = session.user.email || '';
-      const { data: profile } = await withTimeout(getProfile(session.user.id), 8000, 'Profil yükleme');
+      const email = user.email || '';
+      const profile = user.profile as DbProfile;
 
-      const restoredUser = buildOnlineUser(session.user.id, email, profile);
+      const restoredUser = buildOnlineUser(user.profileId, email, profile);
       if (!restoredUser.avatar) {
         restoredUser.avatar = ((restoredUser.firstName?.[0] || '') + '').toUpperCase() + (restoredUser.age || '');
       }
 
-      setAllUsers((prev) => [...prev.filter((u) => u.id !== session.user.id), restoredUser]);
+      setAllUsers((prev) => [...prev.filter((u) => u.id !== user.profileId), restoredUser]);
       setCurrentUser(restoredUser);
       // DB'deki son görülme tercihini localStorage'a sync et
       if (restoredUser.showLastSeen === false) localStorage.setItem('showLastSeen', 'false');
@@ -1208,7 +1202,7 @@ export default function App() {
         setIsSessionLoading(false);
       }
     }).catch(async (err) => {
-      logger.error('getSession failed', { error: err instanceof Error ? err.message : err });
+      logger.error('getMe failed', { error: err instanceof Error ? err.message : err });
       if (await shouldShowStartupMaintenance(err)) {
         setStartupMaintenanceMessage(STARTUP_MAINTENANCE_MESSAGE);
         setView('loading');
@@ -2081,30 +2075,10 @@ export default function App() {
   const handleLogin = async (nick: string, password: string) => {
     if (!nick || !password) throw new Error('Kullanıcı adı ve parola giriniz!');
 
-    let loginEmail = nick;
-    if (!nick.includes('@')) {
-      const { data: profileByName } = await getProfileByUsername(nick);
-      if (!profileByName) throw new Error('Kullanıcı bulunamadı!');
-      loginEmail = profileByName.email || nick;
-    }
-
-    const { data, error } = await signIn(loginEmail, password);
-
-    if (error) {
-      const authErrors: Record<string, string> = {
-        'Invalid login credentials': 'Kullanıcı adı veya parola hatalı!',
-        'Email not confirmed': 'E-posta adresiniz onaylanmamış.',
-        'Too many requests': 'Çok fazla deneme yaptınız. Lütfen bekleyin.',
-        'User not found': 'Kullanıcı bulunamadı!',
-        'Invalid email or password': 'Kullanıcı adı veya parola hatalı!',
-      };
-      logger.warn('Login failed', { nick, reason: error.message });
-      throw new Error(authErrors[error.message] ?? 'Giriş yapılamadı. Lütfen tekrar deneyin.');
-    }
-
-    const userId = data.user?.id || '';
-    const email = data.user?.email || nick;
-    const { data: profile } = await getProfile(userId);
+    const { user } = await authLogin(nick, password);
+    const userId = user.profileId;
+    const email = user.email || nick;
+    const profile = user.profile as DbProfile;
 
     const loggedInUser = buildOnlineUser(userId, email, profile);
     if (!loggedInUser.avatar) loggedInUser.avatar = getAvatarText(loggedInUser);
@@ -2165,7 +2139,7 @@ export default function App() {
     }
     await disconnectFromLiveKit();
     stopPresence();
-    await signOut();
+    authLogout();
     setView('login-password');
     setActiveChannel(null);
     setPasswordResetRequests([]);
@@ -2173,18 +2147,16 @@ export default function App() {
   };
 
   // ── Presence track — tek merkez, tek payload, burst coalesce ──────────────
-  // Supabase track() çağrısı her değişimde (mute/deafen/oda/sunucu/versiyon)
+  // WS presence:patch her değişimde (mute/deafen/oda/sunucu/versiyon)
   // tam payload'u yeniden basar. Aynı commit'te birden fazla dep değişirse
-  // 50ms micro-debounce ile tek track paketinde birleşir — network smooth.
+  // 50ms micro-debounce ile tek patch paketinde birleşir.
   const trackPresence = useCallback(() => {
-    if (!presenceChannelRef.current || !currentUser.id) return;
-    presenceChannelRef.current.track({
-      userId: currentUser.id,
+    if (!currentUser.id) return;
+    sendPresencePatch({
       appVersion,
       selfMuted: isMuted,
       selfDeafened: isDeafened,
-      userName: currentUser.name,
-      currentRoom: activeChannel || undefined,
+      currentRoom: activeChannel || null,
       serverId: activeServerId || undefined,
       autoStatus: autoStatusRef.current,
       // SABİT session bilgileri — track() replace yaptığı için her çağrıda gerekli.
@@ -2194,9 +2166,9 @@ export default function App() {
       statusText: currentUser.statusText || 'Online',
       // Otomatik oyun algılama — yalnız toggle açıksa + whitelist eşleşmesi varsa.
       // Kapalıyken undefined → presence payload'ta alan gitmez (backward-compat).
-      gameActivity: settings.gameActivityEnabled ? (currentUser.gameActivity || undefined) : undefined,
+      gameActivity: settings.gameActivityEnabled ? (currentUser.gameActivity || null) : null,
     });
-  }, [currentUser.id, currentUser.name, currentUser.statusText, currentUser.gameActivity, appVersion, isMuted, isDeafened, activeChannel, activeServerId, settings.gameActivityEnabled, presenceChannelRef, onlineSinceRef, platformRef]);
+  }, [currentUser.id, currentUser.statusText, currentUser.gameActivity, appVersion, isMuted, isDeafened, activeChannel, activeServerId, settings.gameActivityEnabled, onlineSinceRef, platformRef]);
 
   const trackDebounceRef = useRef<number | null>(null);
   useEffect(() => {
@@ -2284,20 +2256,6 @@ export default function App() {
       return;
     }
 
-    const { data, error } = await signUp(loginNick, loginPassword);
-
-    if (error) {
-      const signUpErrors: Record<string, string> = {
-        'User already registered': 'Bu e-posta zaten kayıtlı!',
-        'Email rate limit exceeded': 'Çok fazla deneme. Lütfen bekleyin.',
-        'Invalid email': 'Geçersiz e-posta adresi.',
-        'Password should be at least 6 characters': 'Parola en az 6 karakter olmalıdır.',
-        'Signup requires a valid password': 'Geçerli bir parola giriniz.',
-      };
-      setLoginError(signUpErrors[error.message] ?? 'Kayıt tamamlanamadı. Lütfen tekrar deneyin.');
-      return;
-    }
-
     if (pendingInviteCodeRef.current) {
       await useInviteCodeForEmail(pendingInviteCodeRef.current, loginNick);
       pendingInviteCodeRef.current = null;
@@ -2305,9 +2263,20 @@ export default function App() {
 
     const normalizedFirst = toTitleCaseTr(firstName);
     const normalizedLast = toTitleCaseTr(lastName);
+    const avatarText = ((normalizedFirst[0] || '') + ageNum).toUpperCase();
+    const { user: registeredUser } = await authRegister({
+      email: loginNick,
+      username,
+      password: loginPassword,
+      displayName: `${normalizedFirst} ${normalizedLast}`.trim(),
+      firstName: normalizedFirst,
+      lastName: normalizedLast,
+      age: ageNum,
+      avatar: avatarText,
+    });
 
     const newUser: User = {
-      id: data.user?.id || Math.random().toString(36).slice(2, 11),
+      id: registeredUser.profileId,
       name: username,
       displayName: `${normalizedFirst} ${normalizedLast}`.trim(),
       email: loginNick,
@@ -2321,18 +2290,7 @@ export default function App() {
       isPrimaryAdmin: false,
     };
 
-    newUser.avatar = getAvatarText(newUser);
-
-    await saveProfile({
-      id: newUser.id,
-      name: newUser.name,
-      display_name: newUser.displayName || `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim() || newUser.name,
-      email: loginNick,
-      first_name: newUser.firstName || '',
-      last_name: newUser.lastName || '',
-      age: newUser.age || 18,
-      avatar: newUser.avatar,
-    });
+    newUser.avatar = registeredUser.profile.avatar || getAvatarText(newUser);
 
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(newUser);
@@ -2615,6 +2573,7 @@ export default function App() {
                           loginError={loginError}
                           handleCompleteRegistration={handleCompleteRegistration}
                           onGoBack={() => setView('login-password')}
+                          onOpenKvkk={() => setLegalModal('kvkk')}
                         />
                       )}
                       {(view === 'chat' || view === 'settings') && (
@@ -2666,6 +2625,12 @@ export default function App() {
                       <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
                     )}
                   </AnimatePresence>
+
+                  <LegalModal
+                    kind={legalModal ?? 'kvkk'}
+                    open={legalModal !== null}
+                    onClose={() => setLegalModal(null)}
+                  />
 
                   {/* Toast bildirimi — dock içinde gösterilir, ayrı popup yok */}
 

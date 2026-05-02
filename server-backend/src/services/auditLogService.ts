@@ -1,9 +1,9 @@
 import { pool } from '../repositories/db';
 import type { PoolClient } from 'pg';
 import { queryMany } from '../repositories/db';
-import { supabase } from '../supabaseClient';
 import { getServerAccessContext, assertCapability } from './accessContextService';
 import { CAPABILITIES } from '../capabilities';
+import { fetchProfileNameMap } from './profileLookupService';
 
 export interface AuditLogEntry {
   serverId: string | null;
@@ -109,16 +109,9 @@ export async function listAuditLog(
     params,
   );
 
-  // Actor enrichment — Supabase profiles join
+  // Actor enrichment — profiles batch lookup
   const actorIds = Array.from(new Set(rows.map(r => r.actor_id)));
-  const nameMap = new Map<string, string>();
-  if (actorIds.length > 0) {
-    const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name').in('id', actorIds);
-    if (data) data.forEach((p: { id: string; name: string | null; display_name: string | null; first_name: string | null; last_name: string | null }) => {
-      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-      nameMap.set(p.id, p.display_name || full || p.name || '');
-    });
-  }
+  const nameMap = await fetchProfileNameMap(actorIds);
 
   return rows.map(r => ({
     id: r.id,

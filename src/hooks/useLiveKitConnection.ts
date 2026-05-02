@@ -15,6 +15,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { buildAudioCaptureOptions } from '../lib/audioConstraints';
+import { MicGainCompensationProcessor } from '../lib/audio/micGainCompensationProcessor';
 import { playSound } from '../lib/sounds';
 import { applyVolumeToAudioElement, getUserVolumePercent } from '../lib/userVolume';
 import type { User, VoiceChannel } from '../types';
@@ -24,6 +25,7 @@ import { safePublicName } from '../lib/formatName';
 
 // Toplam bağlantı süresi üst sınırı (token + connect + mic setup)
 const TOTAL_JOIN_TIMEOUT_MS = 25_000;
+const MIC_GAIN_PROCESSOR_NAME = 'mv-mic-gain-compensation';
 
 /** Ses publish'ini engelleyen tek-kaynak gerçeklik. null = konuşabilir. */
 export type VoiceDisabledReason =
@@ -148,6 +150,47 @@ export function useLiveKitConnection({
     && a.sessionVersion === b.sessionVersion
   );
 
+  const applyMicGainCompensation = useCallback(async (room: Room, enabled: boolean): Promise<void> => {
+    const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    const localTrack = (mic?.audioTrack ?? mic?.track) as unknown as
+      | (Record<string, unknown> & {
+          setProcessor?: (processor: MicGainCompensationProcessor) => Promise<void>;
+          stopProcessor?: (keepElement?: boolean) => Promise<void>;
+        })
+      | undefined;
+    if (!localTrack) return;
+
+    const currentProcessor = localTrack.processor as { name?: string } | undefined;
+    const isOurProcessor = currentProcessor?.name === MIC_GAIN_PROCESSOR_NAME;
+
+    if (!enabled) {
+      if (isOurProcessor && typeof localTrack.stopProcessor === 'function') {
+        await localTrack.stopProcessor(false).catch(err => {
+          console.warn('[mic-gain] stop failed:', err);
+        });
+      }
+      return;
+    }
+
+    if (isOurProcessor || typeof localTrack.setProcessor !== 'function') return;
+    if (currentProcessor?.name) {
+      console.warn('[mic-gain] skipped because another processor is active:', currentProcessor.name);
+      return;
+    }
+
+    if (!localTrack.audioContext) {
+      try {
+        localTrack.audioContext = new AudioContext({ sampleRate: 48000 });
+      } catch {
+        localTrack.audioContext = new AudioContext();
+      }
+    }
+
+    await localTrack.setProcessor(new MicGainCompensationProcessor()).catch(err => {
+      console.warn('[mic-gain] apply failed:', err);
+    });
+  }, []);
+
   const applyNoisePipeline = useCallback((settings: NoisePipelineSettings, options: { force?: boolean } = {}): Promise<void> => {
     noiseSettingsRef.current = settings;
 
@@ -165,6 +208,7 @@ export function useLiveKitConnection({
         };
         if (!options.force && sameNoiseConfig(lastAppliedNoiseConfigRef.current, nextConfig)) {
           console.debug('[ns] skip restart, config unchanged');
+          await applyMicGainCompensation(room, currentSettings.enabled);
           return;
         }
 
@@ -186,6 +230,7 @@ export function useLiveKitConnection({
           }
 
           await participant.setMicrophoneEnabled(true, captureOptions);
+          await applyMicGainCompensation(room, currentSettings.enabled);
           lastAppliedNoiseConfigRef.current = nextConfig;
         } finally {
           // no-op; kept to preserve serialized pipeline structure.
@@ -193,7 +238,7 @@ export function useLiveKitConnection({
       });
 
     return noisePipelinePromiseRef.current;
-  }, [isLocalMicEnabled]);
+  }, [isLocalMicEnabled, applyMicGainCompensation]);
 
   // useCallback — stable reference. Auto-leave effect'inin dep zinciri bu
   // fonksiyona kadar uzanıyor; her render'da yeni referans dönerse effect

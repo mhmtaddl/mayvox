@@ -2,10 +2,10 @@
  * MAYVOX WebSocket Chat Service
  * - Reconnect-safe
  * - Room-based
- * - Supabase JWT auth
+ * - App JWT auth
  */
 
-import { supabase } from './supabase';
+import { getAuthToken as getStoredAuthToken } from './authClient';
 import { handleDmMessage, setDmSocket, notifyDmConnected } from './dmService';
 import { getOrCreateDeviceId } from './deviceId';
 
@@ -54,6 +54,21 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let intentionalClose = false;
 let isConnecting = false;
+
+export interface PresencePatchPayload {
+  serverId?: string;
+  currentRoom?: string | null;
+  selfMuted?: boolean;
+  selfDeafened?: boolean;
+  statusText?: string;
+  autoStatus?: 'active' | 'idle' | 'deafened' | null;
+  gameActivity?: string | null;
+  appVersion?: string;
+  platform?: 'mobile' | 'desktop';
+  onlineSince?: number | null;
+}
+
+let latestPresencePatch: PresencePatchPayload = {};
 
 // ── Invite event bus ──
 // Backend'den gelen `invite:*` WS mesajlarını dinleyen subscribe'lara dağıtır.
@@ -110,28 +125,70 @@ function dispatchServerEvent(msg: unknown): boolean {
   return true;
 }
 
+export interface PresenceUserState {
+  userId: string;
+  online: boolean;
+  lastSeenAt: string | null;
+  serverId?: string;
+  currentRoom?: string | null;
+  selfMuted?: boolean;
+  selfDeafened?: boolean;
+  statusText?: string;
+  autoStatus?: 'active' | 'idle' | 'deafened' | null;
+  gameActivity?: string | null;
+  appVersion?: string;
+  platform?: 'mobile' | 'desktop';
+  onlineSince?: number | null;
+  updatedAt?: string;
+}
+
 // ── Presence event bus ──
-// Backend chat-server'dan gelen presence:update ve presence:snapshot mesajlarını
-// dinleyicilere dağıtır. useBackendPresence hook'u subscribe olur.
+// Tek format:
+//   snapshot => { type: 'presence:snapshot', users: PresenceUserState[] }
+//   update   => { type: 'presence:update', user: PresenceUserState }
 export interface PresenceUpdateEvent {
   type: 'presence:update';
-  userId: string;
-  online: boolean | null;
-  lastSeenAt: string | null;
+  user: PresenceUserState;
   serverNow: string;
 }
 export interface PresenceSnapshotEvent {
   type: 'presence:snapshot';
-  onlineUserIds: string[];
+  users: PresenceUserState[];
   serverNow: string;
 }
 export type PresenceEvent = PresenceUpdateEvent | PresenceSnapshotEvent;
 type PresenceEventHandler = (event: PresenceEvent) => void;
 const presenceSubscribers = new Set<PresenceEventHandler>();
+const latestPresenceByUser = new Map<string, PresenceUserState>();
+let latestPresenceSnapshot: PresenceSnapshotEvent | null = null;
 
 export function subscribePresenceEvents(handler: PresenceEventHandler): () => void {
   presenceSubscribers.add(handler);
+  if (latestPresenceSnapshot) {
+    try { handler(latestPresenceSnapshot); } catch (err) { console.warn('[chatService] presence subscriber error:', err); }
+  }
+  for (const user of latestPresenceByUser.values()) {
+    try {
+      handler({ type: 'presence:update', user, serverNow: user.updatedAt || new Date().toISOString() });
+    } catch (err) {
+      console.warn('[chatService] presence subscriber error:', err);
+    }
+  }
   return () => { presenceSubscribers.delete(handler); };
+}
+
+function emitPresenceEvent(event: PresenceEvent): void {
+  if (event.type === 'presence:snapshot') {
+    latestPresenceSnapshot = event;
+    for (const user of event.users || []) {
+      if (user?.userId) latestPresenceByUser.set(user.userId, user);
+    }
+  } else if (event.user?.userId) {
+    latestPresenceByUser.set(event.user.userId, event.user);
+  }
+  for (const h of presenceSubscribers) {
+    try { h(event); } catch (err) { console.warn('[chatService] presence subscriber error:', err); }
+  }
 }
 
 function dispatchPresenceEvent(msg: unknown): boolean {
@@ -139,15 +196,92 @@ function dispatchPresenceEvent(msg: unknown): boolean {
   const type = (msg as { type?: unknown }).type;
   if (type !== 'presence:update' && type !== 'presence:snapshot') return false;
   const event = msg as PresenceEvent;
-  for (const h of presenceSubscribers) {
-    try { h(event); } catch (err) { console.warn('[chatService] presence subscriber error:', err); }
+  if (event.type === 'presence:update') {
+    console.log('[presence] CLIENT RECEIVE', {
+      type: event.type,
+      userId: event.user?.userId,
+      online: event.user?.online,
+      selfMuted: event.user?.selfMuted,
+      selfDeafened: event.user?.selfDeafened,
+      statusText: event.user?.statusText,
+      autoStatus: event.user?.autoStatus,
+      currentRoom: event.user?.currentRoom,
+      serverId: event.user?.serverId,
+    });
+  } else {
+    console.log('[presence] CLIENT RECEIVE', {
+      type: event.type,
+      users: event.users?.length ?? 0,
+    });
   }
+  emitPresenceEvent(event);
+  return true;
+}
+
+// ── App realtime event bus ──
+// chat-server /internal/broadcast üzerinden gelen global eventleri dağıtır.
+export type AppRealtimeEventType =
+  | 'channel-update'
+  | 'channels-reordered'
+  | 'moderation-event'
+  | 'announcement-update'
+  | 'friend-update';
+
+export interface AppRealtimeEvent<TPayload = any> {
+  type: AppRealtimeEventType;
+  event?: AppRealtimeEventType;
+  payload: TPayload;
+}
+
+type AppRealtimeEventHandler = (event: AppRealtimeEvent) => void;
+const realtimeSubscribers = new Set<AppRealtimeEventHandler>();
+
+export function subscribeRealtimeEvents(handler: AppRealtimeEventHandler): () => void {
+  realtimeSubscribers.add(handler);
+  return () => { realtimeSubscribers.delete(handler); };
+}
+
+function isAppRealtimeType(type: unknown): type is AppRealtimeEventType {
+  return (
+    type === 'channel-update' ||
+    type === 'channels-reordered' ||
+    type === 'moderation-event' ||
+    type === 'announcement-update' ||
+    type === 'friend-update'
+  );
+}
+
+function dispatchRealtimeEvent(msg: unknown): boolean {
+  if (!msg || typeof msg !== 'object') return false;
+  const type = (msg as { type?: unknown }).type;
+  if (!isAppRealtimeType(type)) return false;
+  const event = msg as AppRealtimeEvent;
+  for (const h of realtimeSubscribers) {
+    try { h(event); } catch (err) { console.warn('[chatService] realtime subscriber error:', err); }
+  }
+
   return true;
 }
 
 // WebSocket instance erişimi — presence hook heartbeat göndermek için kullanır.
 export function getChatSocket(): WebSocket | null {
   return ws;
+}
+
+export function sendPresencePatch(payload: PresencePatchPayload): void {
+  latestPresencePatch = { ...latestPresencePatch, ...payload };
+  console.log('[presence] PATCH SEND', {
+    readyState: ws?.readyState,
+    queued: ws?.readyState !== WebSocket.OPEN,
+    payload,
+    latestPresencePatch,
+  });
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  try {
+    ws.send(JSON.stringify({ type: 'presence:patch', payload: latestPresencePatch }));
+  } catch (err) {
+    console.warn('[chatService] presence patch send failed:', err);
+  }
 }
 
 // ── Connection status event bus ──
@@ -174,14 +308,7 @@ function getReconnectDelay() {
 }
 
 async function getAuthToken(): Promise<string | null> {
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error) {
-    console.error('[chatService] getSession error:', error);
-    return null;
-  }
-
-  const token = data.session?.access_token ?? null;
+  const token = getStoredAuthToken();
   console.log(
     '[chatService] Token:',
     token ? `${token.slice(0, 20)}...` : 'YOK'
@@ -309,6 +436,9 @@ export async function connectChat() {
           setDmSocket(socket);
           notifyDmConnected();
           emitStatus('connected');
+          if (Object.keys(latestPresencePatch).length > 0) {
+            sendPresencePatch(latestPresencePatch);
+          }
 
           if (currentRoom && socket.readyState === WebSocket.OPEN) {
             console.log('[chatService] Auth sonrası join:', currentRoom);
@@ -354,6 +484,7 @@ export async function connectChat() {
           break;
 
         default:
+          if (dispatchRealtimeEvent(msg)) break;
           // Presence event'lerini dağıt (presence:update / presence:snapshot)
           if (dispatchPresenceEvent(msg)) break;
           // Invite event'lerini bus'a ilet

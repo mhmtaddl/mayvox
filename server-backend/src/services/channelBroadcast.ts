@@ -1,11 +1,8 @@
 /**
- * Channel metadata broadcast — pushes server-scoped channel list changes to clients
- * already subscribed to the shared Supabase realtime presence channel.
+ * Channel metadata broadcast.
  */
 import { config } from '../config';
 import type { ChannelResponse } from '../types';
-
-const BROADCAST_URL = `${config.supabaseUrl.replace(/\/+$/, '')}/realtime/v1/api/broadcast`;
 
 export type ChannelBroadcastPayload =
   | { action: 'create'; serverId: string; channel: ChannelResponse }
@@ -13,43 +10,44 @@ export type ChannelBroadcastPayload =
   | { action: 'delete'; serverId: string; channelId: string }
   | { action: 'reorder'; serverId: string; updates: Array<{ id: string; position: number }>; orderToken: string | null; timestamp?: number };
 
-export async function broadcastChannelUpdate(payload: ChannelBroadcastPayload): Promise<void> {
+async function postBroadcast(event: string, payload: Record<string, unknown>): Promise<void> {
+  if (!config.internalNotifySecret) {
+    console.warn('[channel-broadcast] disabled — INTERNAL_NOTIFY_SECRET tanımlı değil.');
+    return;
+  }
+
+  const url = `${config.chatServerUrl.replace(/\/$/, '')}/internal/broadcast`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 2_000);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2000);
-    const res = await fetch(BROADCAST_URL, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: config.supabaseAnonKey,
-        Authorization: `Bearer ${config.supabaseAnonKey}`,
+        'x-internal-secret': config.internalNotifySecret,
       },
-      body: JSON.stringify({
-        messages: [{
-          topic: 'app-presence',
-          event: 'channel-update',
-          payload,
-          private: false,
-        }, ...(payload.action === 'reorder' ? [{
-          topic: 'app-presence',
-          event: 'channels-reordered',
-          payload: {
-            serverId: payload.serverId,
-            channels: payload.updates,
-            orderToken: payload.orderToken,
-            timestamp: payload.timestamp ?? Date.now(),
-          },
-          private: false,
-        }] : [])],
-      }),
+      body: JSON.stringify({ event, payload }),
       signal: ctrl.signal,
     });
-    clearTimeout(t);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      console.warn('[channel-broadcast] non-2xx:', res.status, body.slice(0, 200), payload.action, payload.serverId);
+      console.warn('[channel-broadcast] non-ok:', res.status, body.slice(0, 200), event);
     }
   } catch (err) {
-    console.warn('[channel-broadcast] send failed:', (err as Error).message, payload.action, payload.serverId);
+    console.warn('[channel-broadcast] failed:', err instanceof Error ? err.message : err, event);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function broadcastChannelUpdate(payload: ChannelBroadcastPayload): Promise<void> {
+  await postBroadcast('channel-update', payload);
+  if (payload.action === 'reorder') {
+    await postBroadcast('channels-reordered', {
+      serverId: payload.serverId,
+      channels: payload.updates,
+      orderToken: payload.orderToken,
+      timestamp: payload.timestamp ?? Date.now(),
+    });
   }
 }

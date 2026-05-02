@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase';
+import { getAuthToken } from './authClient';
 
 export interface Server {
   id: string;
@@ -150,8 +151,7 @@ const SEARCH_CACHE_TTL_MS = 30_000;
 const serverSearchCache = new Map<string, { expiresAt: number; data: DiscoverServer[] }>();
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = getAuthToken();
   return token
     ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     : { 'Content-Type': 'application/json' };

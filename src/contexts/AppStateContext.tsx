@@ -1,6 +1,5 @@
 import React, { createContext, useContext } from 'react';
 import { AppView, User, InviteRequest } from '../types';
-import { supabase } from '../lib/supabase';
 import type { ResetRequest } from '../components/PasswordResetPanel';
 import type { VoiceDisabledReason } from '../hooks/useLiveKitConnection';
 
@@ -52,7 +51,10 @@ export interface AppStateContextType {
 
   // Refs
   livekitRoomRef: React.MutableRefObject<import('livekit-client').Room | null>;
-  presenceChannelRef: React.MutableRefObject<ReturnType<typeof supabase.channel> | null>;
+  presenceChannelRef: React.MutableRefObject<{
+    send?: (payload: unknown) => Promise<unknown> | unknown;
+    track?: (payload: unknown) => Promise<unknown> | unknown;
+  } | null>;
   /** Idle auto-leave countdown state — banner consume eder. */
   countdownRef: React.MutableRefObject<{
     active: boolean;

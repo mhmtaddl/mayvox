@@ -199,6 +199,9 @@ export default function FriendsSidebarContent({
             </span>
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
+            <span className="truncate min-w-0 text-[var(--theme-secondary-text)]/82">
+              {statusLabel}
+            </span>
             {userServerName && (
               <span className="truncate min-w-0 flex-1 text-[var(--theme-text)]/72">
                 {userServerName}
