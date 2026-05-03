@@ -448,6 +448,7 @@ export const adminSendInviteCode = async (requestId: string): Promise<{
   code?: string;
   expires_at?: number;
   email?: string;
+  mailed?: boolean;
   error?: string;
   current_status?: string;
 }> => {
@@ -470,6 +471,20 @@ export const adminRejectInvite = async (requestId: string): Promise<{
   const token = getAuthToken();
   const res = await fetch(`${SERVER_API_URL}/auth/invite/admin/requests/${encodeURIComponent(requestId)}/reject`, {
     method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  return await res.json();
+};
+
+// ADMIN: DAVET TALEBİNİ SİL / İPTAL ET
+export const adminDeleteInviteRequest = async (requestId: string): Promise<{
+  ok?: boolean;
+  deleted?: boolean;
+  error?: string;
+}> => {
+  const token = getAuthToken();
+  const res = await fetch(`${SERVER_API_URL}/auth/invite/admin/requests/${encodeURIComponent(requestId)}`, {
+    method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
   return await res.json();

@@ -29,7 +29,7 @@ import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
-import { connectChat, sendPresencePatch } from './lib/chatService';
+import { connectChat, disconnectChat, sendPresencePatch } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 import {
@@ -436,6 +436,11 @@ export default function App() {
     isPrimaryAdmin: false,
   });
   const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!currentUser.id) return;
+    void connectChat();
+  }, [currentUser.id]);
 
   useEffect(() => {
     if (!currentUser.id) return;
@@ -912,8 +917,14 @@ export default function App() {
   // ve last_seen kaynağı artık custom chat-server (Hetzner).
   useBackendPresence({
     currentUserId: currentUser.id || null,
+    allUsers,
     setAllUsers,
   });
+
+  useEffect(() => {
+    if (!currentUser.id || !activeServerId) return;
+    resyncPresenceRef.current();
+  }, [currentUser.id, activeServerId, channels]);
 
   // ── LiveKit hook ─────────────────────────────────────────────────────────
   const [speakingLevels, setSpeakingLevels] = useState<Record<string, number>>({});
@@ -2153,6 +2164,7 @@ export default function App() {
     }
     await disconnectFromLiveKit();
     stopPresence();
+    disconnectChat();
     authLogout();
     setView('login-password');
     setActiveChannel(null);
@@ -2482,6 +2494,7 @@ export default function App() {
     inviteRequests,
     handleSendInviteCode: adminPanel.handleSendInviteCode,
     handleRejectInvite: adminPanel.handleRejectInvite,
+    handleDeleteInviteRequest: adminPanel.handleDeleteInviteRequest,
     inviteCooldowns,
     inviteStatuses,
   };

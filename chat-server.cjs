@@ -234,6 +234,15 @@ const INTERNAL_BROADCAST_EVENTS = new Set([
   'friend-update',
 ]);
 
+const CLIENT_BROADCAST_EVENTS = new Set([
+  'invite',
+  'invite-cancelled',
+  'invite-accepted',
+  'invite-rejected',
+  'channel-update',
+  'moderation-event',
+]);
+
 const userPresenceByUserId = new Map();
 
 function registerUserConnection(userId, ws) {
@@ -358,6 +367,60 @@ function broadcastInternalEvent(event, payload) {
   }
 
   return { delivered: sendToSockets(targets, message), reason: 'ok' };
+}
+
+function broadcastClientEvent(event, payload, senderWs) {
+  if (!CLIENT_BROADCAST_EVENTS.has(event)) {
+    return { delivered: 0, reason: 'unsupported_event' };
+  }
+
+  const message = { type: event, event, payload };
+  const targets = new Set();
+
+  const inviteeId = typeof payload?.inviteeId === 'string' ? payload.inviteeId : '';
+  const inviterId = typeof payload?.inviterId === 'string' ? payload.inviterId : '';
+  const targetUserId =
+    event === 'invite' || event === 'invite-cancelled'
+      ? inviteeId
+      : event === 'invite-accepted' || event === 'invite-rejected'
+        ? inviterId
+        : typeof payload?.targetUserId === 'string'
+          ? payload.targetUserId
+          : '';
+
+  if (targetUserId && userConnections.has(targetUserId)) {
+    for (const ws of userConnections.get(targetUserId)) targets.add(ws);
+  }
+
+  const userIds = Array.isArray(payload?.userIds) ? payload.userIds.filter((id) => typeof id === 'string') : [];
+  for (const uid of userIds) {
+    const conns = userConnections.get(uid);
+    if (conns) for (const ws of conns) targets.add(ws);
+  }
+
+  const serverId = typeof payload?.serverId === 'string' ? payload.serverId : '';
+  if (!targetUserId && serverId && serverConnections.has(serverId)) {
+    for (const ws of serverConnections.get(serverId)) targets.add(ws);
+  }
+
+  const roomId = typeof payload?.roomId === 'string'
+    ? payload.roomId
+    : typeof payload?.channelId === 'string'
+      ? payload.channelId
+      : '';
+  if (!targetUserId && roomId && rooms.has(roomId)) {
+    for (const ws of rooms.get(roomId)) targets.add(ws);
+  }
+
+  targets.delete(senderWs);
+  const delivered = sendToSockets(targets, message);
+  console.log('[client-broadcast]', {
+    event,
+    from: senderWs?.userId || null,
+    targetUserId,
+    delivered,
+  });
+  return { delivered, reason: 'ok' };
 }
 
 function openConnectionCount(userId) {
@@ -1420,6 +1483,17 @@ wss.on('connection', (ws) => {
       // idempotent — DB update .is('disconnected_at', null) filtresiyle no-op olur.
       ws.presenceUserId = null;
       ws.presenceSessionKey = null;
+      return;
+    }
+
+    // ── CLIENT REALTIME BROADCAST ────────────────────────────────────────
+    if (msg.type === 'broadcast') {
+      const event = typeof msg.event === 'string' ? msg.event : '';
+      const payload = msg.payload && typeof msg.payload === 'object' ? msg.payload : {};
+      const result = broadcastClientEvent(event, payload, ws);
+      if (result.reason !== 'ok') {
+        return send(ws, { type: 'error', message: 'Broadcast desteklenmiyor', code: 'broadcast_unsupported' });
+      }
       return;
     }
 

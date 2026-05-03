@@ -12,7 +12,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import DeviceBadge from './chat/DeviceBadge';
-import type { User } from '../types';
+import type { User, VoiceChannel } from '../types';
 
 function lastSeenSortValue(user: User): number {
   if (!user.lastSeenAt) return 0;
@@ -31,7 +31,7 @@ interface Props {
   onUserClick: (userId: string, x: number, y: number) => void;
   onDM?: (userId: string) => void;
   // Desktop-specific props
-  channels?: any[];
+  channels?: VoiceChannel[];
   activeChannel?: string | null;
   inviteStatuses?: Record<string, string>;
   inviteCooldowns?: Record<string, number>;
@@ -138,6 +138,8 @@ export default function FriendsSidebarContent({
     const voicePresent = isVoicePresent(user);
     const displayStatusText = voicePresent && user.statusText === 'Çevrimdışı' ? 'Online' : user.statusText;
     const statusLabel = displayStatusText && displayStatusText !== 'Aktif' ? displayStatusText : 'Online';
+    const isDefaultOnline = statusLabel === 'Online';
+    const statusLineText = isDefaultOnline ? userServerName : statusLabel;
     const statusDotColor =
       statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor' ? '#ef4444'
       : statusLabel === 'AFK' || statusLabel === 'Pasif' ? '#f59e0b'
@@ -199,12 +201,9 @@ export default function FriendsSidebarContent({
             </span>
             {(isMe ? selfMuted : (!!user.selfMuted || !!user.isMuted)) && <Mic size={8} className="text-red-500 shrink-0" />}
             {(isMe ? selfDeafened : !!user.selfDeafened) && <Headphones size={8} className="text-red-500 shrink-0" />}
-            <span className="truncate min-w-0 text-[var(--theme-secondary-text)]/82">
-              {statusLabel}
-            </span>
-            {userServerName && (
-              <span className="truncate min-w-0 flex-1 text-[var(--theme-text)]/72">
-                {userServerName}
+            {statusLineText && (
+              <span className="truncate min-w-0 text-[var(--theme-secondary-text)]/82">
+                {statusLineText}
               </span>
             )}
           </div>

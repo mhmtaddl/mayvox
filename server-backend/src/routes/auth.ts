@@ -1101,6 +1101,31 @@ router.post('/invite/admin/requests/:id/mark-failed', authMiddleware as any, asy
   }
 });
 
+router.delete('/invite/admin/requests/:id', authMiddleware as any, async (req: Request, res: Response) => {
+  try {
+    await requireProfileAdmin((req as any).profileId as string);
+    const request = await queryOne<any>('SELECT * FROM invite_requests WHERE id::text = $1 LIMIT 1', [req.params.id]);
+    if (!request) {
+      res.json({ ok: true, deleted: false });
+      return;
+    }
+
+    await execute(
+      `DELETE FROM invite_codes
+        WHERE used = false
+          AND (
+            access_request_id = $1
+            OR (email IS NOT NULL AND lower(email) = lower($2) AND code = $3)
+          )`,
+      [request.id, request.email, request.code || request.approved_invite_code || null],
+    );
+    await execute('DELETE FROM invite_requests WHERE id = $1', [request.id]);
+    res.json({ ok: true, deleted: true });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
 router.post('/invite/admin/requests/:id/reject', authMiddleware as any, async (req: Request, res: Response) => {
   try {
     await requireProfileAdmin((req as any).profileId as string);

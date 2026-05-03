@@ -7,10 +7,9 @@ import {
   getPendingPasswordResets,
   getAdminInviteRequests,
   adminSendInviteCode,
-  adminMarkInviteSent,
+  adminDeleteInviteRequest,
   adminMarkInviteFailed,
   adminRejectInvite,
-  sendInviteEmail,
   sendRejectionEmail,
 } from '../../../lib/backendClient';
 import { getAuthToken } from '../../../lib/authClient';
@@ -177,44 +176,24 @@ export function useAdminPanel({
   };
 
   const handleSendInviteCode = async (req: InviteRequest): Promise<{ code?: string; error?: string }> => {
-    let optimisticApplied = false;
-    let lockedCode: string | undefined;
     try {
+      setInviteRequests(prev => prev.map(r =>
+        r.id === req.id ? { ...r, status: 'sending' as const } : r,
+      ));
       const result = await adminSendInviteCode(req.id);
       if (result.error) {
         if (result.error === 'invalid_status') return { error: 'Bu talep zaten işleme alınmış.' };
         return { error: result.error };
       }
       if (!result.ok || !result.code) return { error: 'Kod üretilemedi.' };
-      lockedCode = result.code;
-
-      setInviteRequests(prev => prev.map(r =>
-        r.id === req.id ? { ...r, status: 'sending' as const, sentCode: lockedCode } : r,
-      ));
-      optimisticApplied = true;
-
-      const emailResult = await sendInviteEmail(req.email, lockedCode, result.expires_at ?? 0);
-
-      if (emailResult.success) {
-        await adminMarkInviteSent(req.id);
-        setInviteRequests(prev => prev.filter(r => r.id !== req.id));
-        return { code: lockedCode };
-      } else {
-        const errMsg = emailResult.error ?? 'E-posta gönderilemedi';
-        await adminMarkInviteFailed(req.id, errMsg);
-        setInviteRequests(prev => prev.map(r =>
-          r.id === req.id ? { ...r, status: 'failed' as const, lastSendError: errMsg } : r,
-        ));
-        return { code: lockedCode, error: errMsg };
-      }
+      setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+      return { code: result.code };
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : 'Bilinmeyen hata';
-      if (optimisticApplied) {
-        setInviteRequests(prev => prev.map(r =>
-          r.id === req.id ? { ...r, status: 'failed' as const, lastSendError: errMsg } : r,
-        ));
-        if (lockedCode) adminMarkInviteFailed(req.id, errMsg).catch(() => {});
-      }
+      setInviteRequests(prev => prev.map(r =>
+        r.id === req.id ? { ...r, status: 'failed' as const, lastSendError: errMsg } : r,
+      ));
+      adminMarkInviteFailed(req.id, errMsg).catch(() => {});
       return { error: errMsg };
     }
   };
@@ -228,6 +207,16 @@ export function useAdminPanel({
     } finally {
       setInviteRequests(prev => prev.filter(r => r.id !== req.id));
     }
+  };
+
+  const handleDeleteInviteRequest = async (req: InviteRequest): Promise<void> => {
+    const result = await adminDeleteInviteRequest(req.id);
+    if (result.error || result.ok === false) {
+      setToastMsg(result.error || 'Davet talebi silinemedi');
+      return;
+    }
+    setInviteRequests(prev => prev.filter(r => r.id !== req.id));
+    setToastMsg('Davet talebi silindi');
   };
 
   // Login sonrası initial load için
@@ -248,6 +237,7 @@ export function useAdminPanel({
     handleAdminManualReset,
     handleSendInviteCode,
     handleRejectInvite,
+    handleDeleteInviteRequest,
     loadInitialAdminData,
   };
 }

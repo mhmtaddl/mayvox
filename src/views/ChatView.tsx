@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getPublicDisplayName } from '../lib/formatName';
+import { sendRealtimeBroadcast } from '../lib/chatService';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { useAppState } from '../contexts/AppStateContext';
 import { useAudio } from '../contexts/AudioContext';
@@ -871,27 +872,28 @@ export default function ChatView() {
 
   // ── Invitation modal callbacks ──
   const handleInvitationDecline = useCallback(() => {
-    if (presenceChannelRef.current && invitationModal) {
-      presenceChannelRef.current.send({
-        type: 'broadcast', event: 'invite-rejected',
-        payload: { inviterId: invitationModal.inviterId, inviteeId: currentUser.id, inviteeName: getPublicDisplayName(currentUser) },
+    if (invitationModal) {
+      sendRealtimeBroadcast('invite-rejected', {
+        inviterId: invitationModal.inviterId,
+        inviteeId: currentUser.id,
+        inviteeName: getPublicDisplayName(currentUser),
       });
     }
     // Reject sesi — stopInviteRingtone effect'i zaten modal=null'da tetiklenir.
     playReject();
     setInvitationModal(null);
-  }, [invitationModal, currentUser, presenceChannelRef, setInvitationModal]);
+  }, [invitationModal, currentUser, setInvitationModal]);
 
   const handleInvitationAccept = useCallback(() => {
-    if (presenceChannelRef.current && invitationModal) {
-      presenceChannelRef.current.send({
-        type: 'broadcast', event: 'invite-accepted',
-        payload: { inviterId: invitationModal.inviterId, inviteeId: currentUser.id },
+    if (invitationModal) {
+      sendRealtimeBroadcast('invite-accepted', {
+        inviterId: invitationModal.inviterId,
+        inviteeId: currentUser.id,
       });
     }
     if (invitationModal) handleJoinChannel(invitationModal.roomId, true);
     setInvitationModal(null);
-  }, [invitationModal, currentUser.id, presenceChannelRef, handleJoinChannel, setInvitationModal]);
+  }, [invitationModal, currentUser.id, handleJoinChannel, setInvitationModal]);
 
   // ── Context menu callbacks ──
   const handleEditRoom = useCallback((channel: { id: string; name: string; maxUsers?: number; isInviteOnly?: boolean; isHidden?: boolean; mode?: string; iconColor?: string; iconName?: string }) => {

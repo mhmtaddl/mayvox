@@ -117,6 +117,7 @@ export interface AppStateContextType {
   inviteRequests: InviteRequest[];
   handleSendInviteCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
   handleRejectInvite: (req: InviteRequest) => Promise<void>;
+  handleDeleteInviteRequest: (req: InviteRequest) => Promise<void>;
 
   // Davet cooldown: ret sonrası 60sn bekleme (key = hedef userId, value = expiresAt timestamp)
   inviteCooldowns: Record<string, number>;

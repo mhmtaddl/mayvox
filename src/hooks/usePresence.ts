@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type React from 'react';
-import { subscribeRealtimeEvents } from '../lib/chatService';
+import { getCachedPresenceStates, subscribePresenceEvents, subscribeRealtimeEvents } from '../lib/chatService';
 import { updateUserAppVersion } from '../lib/backendClient';
 import { logMemberIdentityDebug, normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../lib/channelOrder';
@@ -62,10 +62,17 @@ export function usePresence({
   setChatBannedUntil,
   setIsChatBanned,
   setVoiceDisabledReason,
+  setInvitationModal,
+  onInviteRejected,
+  onInviteAccepted,
 }: Props) {
   const presenceChannelRef = useRef<null>(null);
   const knownVersionsRef = useRef<Map<string, string>>(new Map());
   const onlineSinceRef = useRef<number | null>(null);
+  const onInviteRejectedRef = useRef(onInviteRejected);
+  const onInviteAcceptedRef = useRef(onInviteAccepted);
+  onInviteRejectedRef.current = onInviteRejected;
+  onInviteAcceptedRef.current = onInviteAccepted;
   const platformRef = useRef<'mobile' | 'desktop'>(
     (() => {
       const isMobile =
@@ -387,8 +394,48 @@ export function usePresence({
         handleChannelUpdate({ ...payload, action: 'reorder', updates: payload.channels ?? payload.updates });
       } else if (event.type === 'moderation-event') {
         void handleModerationEvent(event.payload);
+      } else if (event.type === 'invite') {
+        const payload = event.payload || {};
+        if (payload.inviteeId === currentUserRef.current.id) {
+          setInvitationModal({
+            inviterId: payload.inviterId,
+            inviterName: payload.inviterName,
+            inviterAvatar: payload.inviterAvatar,
+            roomName: payload.roomName,
+            roomId: payload.roomId,
+            serverName: payload.serverName,
+            serverAvatar: payload.serverAvatar,
+          });
+        }
+      } else if (event.type === 'invite-cancelled') {
+        const payload = event.payload || {};
+        if (payload.inviteeId === currentUserRef.current.id) {
+          setInvitationModal(null);
+        }
+      } else if (event.type === 'invite-accepted') {
+        const payload = event.payload || {};
+        if (payload.inviterId === currentUserRef.current.id && payload.inviteeId) {
+          onInviteAcceptedRef.current?.(payload.inviteeId);
+        }
+      } else if (event.type === 'invite-rejected') {
+        const payload = event.payload || {};
+        if (payload.inviterId === currentUserRef.current.id) {
+          const inviteeName = typeof payload.inviteeName === 'string' ? payload.inviteeName : 'Kullanıcı';
+          setToastMsg(`${inviteeName} davetinize icabet etmedi.`);
+          setTimeout(() => setToastMsg(null), 4000);
+          if (payload.inviteeId) onInviteRejectedRef.current?.(payload.inviteeId);
+        }
       }
     });
+  }, []);
+
+  useEffect(() => {
+    const syncFromCachedPresence = () => {
+      syncRoomMembersFromPresence(getCachedPresenceStates());
+    };
+    const unsubscribe = subscribePresenceEvents(syncFromCachedPresence);
+    syncFromCachedPresence();
+    return unsubscribe;
   }, []);
 
   const startPresence = (user: User, appVersion?: string) => {
@@ -405,7 +452,7 @@ export function usePresence({
   };
 
   const resyncPresence = () => {
-    // Presence online/offline state is now driven by chat-server events.
+    syncRoomMembersFromPresence(getCachedPresenceStates());
   };
 
   return { presenceChannelRef, knownVersionsRef, onlineSinceRef, platformRef, startPresence, stopPresence, resyncPresence };

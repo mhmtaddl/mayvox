@@ -6,19 +6,23 @@ interface Props {
   requests: InviteRequest[];
   onSendCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
   onReject: (req: InviteRequest) => Promise<void>;
+  onDelete: (req: InviteRequest) => Promise<void>;
 }
 
 function RequestCard({
   req,
   onSendCode,
   onReject,
+  onDelete,
 }: {
   req: InviteRequest;
   onSendCode: (req: InviteRequest) => Promise<{ code?: string; error?: string }>;
   onReject: (req: InviteRequest) => Promise<void>;
+  onDelete: (req: InviteRequest) => Promise<void>;
 }) {
   const [sending, setSending] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [sentCode, setSentCode] = useState<string | null>(req.status === 'sent' ? (req.sentCode ?? null) : null);
   const [copied, setCopied] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -57,6 +61,13 @@ function RequestCard({
     setRejecting(true);
     await onReject(req);
     setRejecting(false);
+  };
+
+  const handleDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    await onDelete(req);
+    setDeleting(false);
   };
 
   const handleCopy = (code: string) => {
@@ -125,7 +136,7 @@ function RequestCard({
         <div className="flex border-t border-[var(--theme-border)]">
           <button
             onClick={handleSend}
-            disabled={sending || rejecting}
+            disabled={sending || rejecting || deleting}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-50"
           >
             {sending ? <Loader size={11} className="animate-spin" /> : <RefreshCw size={11} />}
@@ -134,29 +145,50 @@ function RequestCard({
           <div className="w-px bg-[var(--theme-border)]" />
           <button
             onClick={handleReject}
-            disabled={sending || rejecting}
+            disabled={sending || rejecting || deleting}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
           >
             {rejecting ? <Loader size={11} className="animate-spin" /> : <X size={11} />}
             Daveti Reddet
+          </button>
+          <div className="w-px bg-[var(--theme-border)]" />
+          <button
+            onClick={handleDelete}
+            disabled={sending || rejecting || deleting}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-secondary-text)]/10 transition-colors disabled:opacity-50"
+          >
+            {deleting ? <Loader size={11} className="animate-spin" /> : <X size={11} />}
+            Sil
           </button>
         </div>
       </div>
     );
   }
 
-  // ── Gönderiliyor (sending) — spinner, butonlar devre dışı
+  // ── Gönderiliyor (sending) — takılı kalırsa iptal edilebilir
   if (req.status === 'sending') {
     return (
-      <div className="p-3">
-        <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 flex items-center justify-center">
-            <Loader size={14} className="text-[var(--theme-accent)] animate-spin" />
+      <div>
+        <div className="p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 flex items-center justify-center">
+              <Loader size={14} className="text-[var(--theme-accent)] animate-spin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold text-[var(--theme-text)]">Gönderiliyor…</p>
+              <p className="text-[10px] text-[var(--theme-secondary-text)] truncate mt-0.5">{req.email}</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-[var(--theme-text)]">Gönderiliyor…</p>
-            <p className="text-[10px] text-[var(--theme-secondary-text)] truncate mt-0.5">{req.email}</p>
-          </div>
+        </div>
+        <div className="flex border-t border-[var(--theme-border)]">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+          >
+            {deleting ? <Loader size={11} className="animate-spin" /> : <X size={11} />}
+            Gönderimi İptal Et
+          </button>
         </div>
       </div>
     );
@@ -192,7 +224,7 @@ function RequestCard({
       <div className="flex border-t border-[var(--theme-border)]">
         <button
           onClick={handleSend}
-          disabled={sending || rejecting}
+          disabled={sending || rejecting || deleting}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
         >
           {sending ? <Loader size={11} className="animate-spin" /> : <Send size={11} />}
@@ -201,25 +233,34 @@ function RequestCard({
         <div className="w-px bg-[var(--theme-border)]" />
         <button
           onClick={handleReject}
-          disabled={sending || rejecting}
+          disabled={sending || rejecting || deleting}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
         >
           {rejecting ? <Loader size={11} className="animate-spin" /> : <X size={11} />}
           Daveti Reddet
+        </button>
+        <div className="w-px bg-[var(--theme-border)]" />
+        <button
+          onClick={handleDelete}
+          disabled={sending || rejecting || deleting}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-secondary-text)]/10 transition-colors disabled:opacity-50"
+        >
+          {deleting ? <Loader size={11} className="animate-spin" /> : <X size={11} />}
+          Sil
         </button>
       </div>
     </div>
   );
 }
 
-export default function InviteRequestPanel({ requests, onSendCode, onReject }: Props) {
+export default function InviteRequestPanel({ requests, onSendCode, onReject, onDelete }: Props) {
   if (requests.length === 0) return null;
 
   return (
     <>
       {requests.map(req => (
         <React.Fragment key={req.id}>
-          <RequestCard req={req} onSendCode={onSendCode} onReject={onReject} />
+          <RequestCard req={req} onSendCode={onSendCode} onReject={onReject} onDelete={onDelete} />
         </React.Fragment>
       ))}
     </>

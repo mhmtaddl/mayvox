@@ -92,7 +92,10 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
       connectChat();
     });
     return () => {
-      import('../../../lib/chatService').then(({ disconnectChat }) => disconnectChat());
+      import('../../../lib/chatService').then(({ leaveRoom, setChatHandlers }) => {
+        leaveRoom();
+        setChatHandlers({});
+      });
       if (floodTimerRef.current) { clearTimeout(floodTimerRef.current); floodTimerRef.current = null; }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

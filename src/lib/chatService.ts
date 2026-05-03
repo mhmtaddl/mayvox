@@ -70,6 +70,14 @@ export interface PresencePatchPayload {
 
 let latestPresencePatch: PresencePatchPayload = {};
 
+export type ClientRealtimeEvent =
+  | 'invite'
+  | 'invite-cancelled'
+  | 'invite-accepted'
+  | 'invite-rejected'
+  | 'channel-update'
+  | 'moderation-event';
+
 // ── Invite event bus ──
 // Backend'den gelen `invite:*` WS mesajlarını dinleyen subscribe'lara dağıtır.
 // Birden fazla subscriber'a izin verir (test edilebilirlik + hook remount safety).
@@ -177,6 +185,10 @@ export function subscribePresenceEvents(handler: PresenceEventHandler): () => vo
   return () => { presenceSubscribers.delete(handler); };
 }
 
+export function getCachedPresenceStates(): PresenceUserState[] {
+  return Array.from(latestPresenceByUser.values());
+}
+
 function emitPresenceEvent(event: PresenceEvent): void {
   if (event.type === 'presence:snapshot') {
     latestPresenceSnapshot = event;
@@ -223,6 +235,10 @@ function dispatchPresenceEvent(msg: unknown): boolean {
 export type AppRealtimeEventType =
   | 'channel-update'
   | 'channels-reordered'
+  | 'invite'
+  | 'invite-cancelled'
+  | 'invite-accepted'
+  | 'invite-rejected'
   | 'moderation-event'
   | 'announcement-update'
   | 'friend-update';
@@ -245,6 +261,10 @@ function isAppRealtimeType(type: unknown): type is AppRealtimeEventType {
   return (
     type === 'channel-update' ||
     type === 'channels-reordered' ||
+    type === 'invite' ||
+    type === 'invite-cancelled' ||
+    type === 'invite-accepted' ||
+    type === 'invite-rejected' ||
     type === 'moderation-event' ||
     type === 'announcement-update' ||
     type === 'friend-update'
@@ -281,6 +301,20 @@ export function sendPresencePatch(payload: PresencePatchPayload): void {
     ws.send(JSON.stringify({ type: 'presence:patch', payload: latestPresencePatch }));
   } catch (err) {
     console.warn('[chatService] presence patch send failed:', err);
+  }
+}
+
+export function sendRealtimeBroadcast(event: ClientRealtimeEvent, payload: Record<string, unknown>): boolean {
+  if (ws?.readyState !== WebSocket.OPEN) {
+    console.warn('[chatService] realtime broadcast skipped, socket not open:', event);
+    return false;
+  }
+  try {
+    ws.send(JSON.stringify({ type: 'broadcast', event, payload }));
+    return true;
+  } catch (err) {
+    console.warn('[chatService] realtime broadcast send failed:', event, err);
+    return false;
   }
 }
 
@@ -556,6 +590,7 @@ export function joinRoom(roomId: string) {
   );
 
   currentRoom = roomId;
+  sendPresencePatch({ currentRoom: roomId });
 
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'join', roomId }));
@@ -570,6 +605,7 @@ export function leaveRoom() {
   }
 
   currentRoom = null;
+  sendPresencePatch({ currentRoom: null });
 }
 
 export function sendMessage(text: string) {

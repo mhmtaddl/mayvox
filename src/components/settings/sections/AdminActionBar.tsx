@@ -14,7 +14,7 @@ const PAGE_SIZE = 5;
 export default function AdminActionBar() {
   const {
     handleGenerateCode, generatedCode,
-    inviteRequests, handleSendInviteCode, handleRejectInvite,
+    inviteRequests, handleSendInviteCode, handleRejectInvite, handleDeleteInviteRequest,
   } = useAppState();
   const { setToastMsg, settingsTarget, setSettingsTarget } = useUI();
 
@@ -275,7 +275,12 @@ export default function AdminActionBar() {
                     : 'border-[var(--theme-border)]'
                 }`}
               >
-                <InviteRequestPanel requests={inviteRequests} onSendCode={handleSendInviteCode} onReject={handleRejectInvite} />
+                <InviteRequestPanel
+                  requests={inviteRequests}
+                  onSendCode={handleSendInviteCode}
+                  onReject={handleRejectInvite}
+                  onDelete={handleDeleteInviteRequest}
+                />
               </div>
             ) : (
               <p className="text-[11px] text-[var(--theme-secondary-text)]/70 italic px-1 py-2">Bekleyen davet talebi yok.</p>

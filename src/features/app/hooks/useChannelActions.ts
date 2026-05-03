@@ -19,6 +19,7 @@ import { resolveUserByMemberKey } from '../../../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../../../lib/channelOrder';
 import { applyLocalChannelIconColors, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { applyLocalChannelIcons, getDefaultChannelIconName } from '../../../lib/channelIcon';
+import { sendRealtimeBroadcast } from '../../../lib/chatService';
 // Kota enforcement backend'de. Frontend sadece CreateRoomModal'da
 // bilgisel sayaç gösterir (calcPersistentRoomsRemaining ChatView'dan çağrılır).
 import { INVITE_RING_DURATION_MS } from '../../../lib/sounds';
@@ -141,17 +142,24 @@ export function useChannelActions({
     if (cooldownUntil && Date.now() < cooldownUntil) return;
 
     const channel = channels.find(c => c.id === activeChannel);
-    if (!channel || !presenceChannelRef.current) return;
-    presenceChannelRef.current.send({
-      type: 'broadcast', event: 'invite',
-      payload: {
-        inviterId: currentUser.id, inviteeId: userId,
-        inviterName: getPublicDisplayName(currentUser),
-        inviterAvatar: currentUser.avatar, roomName: channel.name, roomId: channel.id,
-        serverName: serverContext?.name ?? undefined,
-        serverAvatar: serverContext?.avatar ?? undefined,
-      },
+    if (!channel) return;
+    const sent = sendRealtimeBroadcast('invite', {
+      inviterId: currentUser.id,
+      inviteeId: userId,
+      inviterName: getPublicDisplayName(currentUser),
+      inviterAvatar: currentUser.avatar,
+      roomName: channel.name,
+      roomId: channel.id,
+      serverId: activeServerId,
+      serverName: serverContext?.name ?? undefined,
+      serverAvatar: serverContext?.avatar ?? undefined,
     });
+    if (!sent) {
+      setToastMsg('Davet gönderilemedi. Bağlantı kuruluyor.');
+      return;
+    }
+    setToastMsg(`${channel.name} odasına davet gönderildi.`);
+    setTimeout(() => setToastMsg(null), 2500);
     setInviteStatuses(prev => ({ ...prev, [userId]: 'pending' }));
     // Eski timer varsa temizle (nadir: duplicate davet).
     const oldTimer = invitePendingTimersRef.current[userId];
@@ -167,10 +175,7 @@ export function useChannelActions({
   // Local state anında temizlenir; cooldown tetiklenmez (kullanıcı vazgeçti, ret değil).
   const handleCancelInvite = (userId: string) => {
     if (inviteStatuses[userId] !== 'pending') return;
-    presenceChannelRef.current?.send({
-      type: 'broadcast', event: 'invite-cancelled',
-      payload: { inviterId: currentUser.id, inviteeId: userId },
-    });
+    sendRealtimeBroadcast('invite-cancelled', { inviterId: currentUser.id, inviteeId: userId });
     const t = invitePendingTimersRef.current[userId];
     if (t) { clearTimeout(t); delete invitePendingTimersRef.current[userId]; }
     setInviteStatuses(prev => { const next = { ...prev }; delete next[userId]; return next; });

@@ -70,7 +70,7 @@ export function InviteCodeSection() {
 
 // ── Davet Talepleri ──
 export function InviteRequestsSection() {
-  const { inviteRequests, handleSendInviteCode, handleRejectInvite } = useAppState();
+  const { inviteRequests, handleSendInviteCode, handleRejectInvite, handleDeleteInviteRequest } = useAppState();
 
   return (
     <CardSection
@@ -84,7 +84,12 @@ export function InviteRequestsSection() {
     >
       {inviteRequests.length > 0 ? (
         <div className="rounded-xl overflow-hidden border border-[var(--theme-border)]">
-          <InviteRequestPanel requests={inviteRequests} onSendCode={handleSendInviteCode} onReject={handleRejectInvite} />
+          <InviteRequestPanel
+            requests={inviteRequests}
+            onSendCode={handleSendInviteCode}
+            onReject={handleRejectInvite}
+            onDelete={handleDeleteInviteRequest}
+          />
         </div>
       ) : (
         <p className="text-[11px] text-[var(--theme-secondary-text)] italic">Bekleyen davet talebi yok.</p>
