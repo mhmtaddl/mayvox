@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { KeyRound, Eye, EyeOff, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
-import { updateUserPassword } from '../lib/supabase';
+import { updateUserPassword } from '../lib/backendClient';
 import { getAuthToken } from '../lib/authClient';
 
-const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
+const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
 
 interface Props {
   onDone: () => void;

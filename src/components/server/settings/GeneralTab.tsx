@@ -4,7 +4,7 @@ import {
   Globe, Lock, Mail, UserPlus, LogOut, Sparkles,
 } from 'lucide-react';
 import { type Server, type ServerMember, getMembers } from '../../../lib/serverService';
-import { uploadServerLogo } from '../../../lib/supabase';
+import { uploadServerLogo } from '../../../lib/backendClient';
 import AvatarCropModal from '../../AvatarCropModal';
 import AvatarContent from '../../AvatarContent';
 import { fmtDate, memberDisplayName } from './shared';

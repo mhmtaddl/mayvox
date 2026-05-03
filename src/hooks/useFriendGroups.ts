@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
+import {
+  assignFriendGroup,
+  createFriendGroup,
+  deleteFriendGroup,
+  getFriendGroups,
+  removeFriendGroupAssignment,
+  renameFriendGroup,
+} from '../lib/friendsClient';
 
 export interface FriendGroup {
   id: string;
@@ -21,14 +28,10 @@ export function useFriendGroups(currentUserId: string | undefined) {
   const fetchGroups = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const { data } = await supabase
-        .from('friend_groups')
-        .select('id, name, sort_order')
-        .eq('owner_id', currentUserId)
-        .order('sort_order');
+      const data = await getFriendGroups();
 
       if (!mountedRef.current) return;
-      setGroups((data || []).map(g => ({ id: g.id, name: g.name, sortOrder: g.sort_order })));
+      setGroups((data.groups || []).map(g => ({ id: g.id, name: g.name, sortOrder: g.sort_order })));
     } catch (e) {
       console.error('fetchGroups error:', e);
     }
@@ -37,26 +40,15 @@ export function useFriendGroups(currentUserId: string | undefined) {
   const fetchMembers = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      // Get all group IDs for this user first
-      const { data: grps } = await supabase
-        .from('friend_groups')
-        .select('id')
-        .eq('owner_id', currentUserId);
-
-      if (!grps || grps.length === 0) {
+      const state = await getFriendGroups();
+      if (!state.groups || state.groups.length === 0) {
         if (mountedRef.current) setMemberMap(new Map());
         return;
       }
 
-      const groupIds = grps.map(g => g.id);
-      const { data } = await supabase
-        .from('friend_group_members')
-        .select('group_id, friend_user_id')
-        .in('group_id', groupIds);
-
       if (!mountedRef.current) return;
       const m = new Map<string, Set<string>>();
-      for (const row of data || []) {
+      for (const row of state.members || []) {
         if (!m.has(row.group_id)) m.set(row.group_id, new Set());
         m.get(row.group_id)!.add(row.friend_user_id);
       }
@@ -97,13 +89,11 @@ export function useFriendGroups(currentUserId: string | undefined) {
   const createGroup = useCallback(async (name: string): Promise<FriendGroup | null> => {
     if (!currentUserId) return null;
     const maxOrder = groups.reduce((max, g) => Math.max(max, g.sortOrder), -1);
-    const { data, error } = await supabase
-      .from('friend_groups')
-      .insert({ owner_id: currentUserId, name, sort_order: maxOrder + 1 })
-      .select('id, name, sort_order')
-      .single();
-
-    if (error || !data) {
+    let data;
+    try {
+      const res = await createFriendGroup(name, maxOrder + 1);
+      data = res.data;
+    } catch (error) {
       console.error('createGroup error:', error);
       return null;
     }
@@ -113,12 +103,9 @@ export function useFriendGroups(currentUserId: string | undefined) {
   }, [currentUserId, groups]);
 
   const renameGroup = useCallback(async (groupId: string, newName: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('friend_groups')
-      .update({ name: newName })
-      .eq('id', groupId);
-
-    if (error) {
+    try {
+      await renameFriendGroup(groupId, newName);
+    } catch (error) {
       console.error('renameGroup error:', error);
       return false;
     }
@@ -127,12 +114,9 @@ export function useFriendGroups(currentUserId: string | undefined) {
   }, []);
 
   const deleteGroup = useCallback(async (groupId: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('friend_groups')
-      .delete()
-      .eq('id', groupId);
-
-    if (error) {
+    try {
+      await deleteFriendGroup(groupId);
+    } catch (error) {
       console.error('deleteGroup error:', error);
       return false;
     }
@@ -150,21 +134,9 @@ export function useFriendGroups(currentUserId: string | undefined) {
 
     // Atomik: eski kaydı sil + yeni ekle (owner_id unique index korur)
     const currentGroupId = friendToGroup.get(friendId);
-    if (currentGroupId) {
-      await supabase
-        .from('friend_group_members')
-        .delete()
-        .eq('owner_id', currentUserId)
-        .eq('friend_user_id', friendId);
-    }
-
-    const { error } = await supabase
-      .from('friend_group_members')
-      .insert({ group_id: groupId, friend_user_id: friendId, owner_id: currentUserId });
-
-    if (error) {
-      // Unique violation = zaten bu grupta (race condition koruması)
-      if (error.code === '23505') return true;
+    try {
+      await assignFriendGroup(friendId, groupId);
+    } catch (error) {
       console.error('assignToGroup error:', error);
       return false;
     }
@@ -192,13 +164,9 @@ export function useFriendGroups(currentUserId: string | undefined) {
     const groupId = friendToGroup.get(friendId);
     if (!groupId) return true;
 
-    const { error } = await supabase
-      .from('friend_group_members')
-      .delete()
-      .eq('owner_id', currentUserId)
-      .eq('friend_user_id', friendId);
-
-    if (error) {
+    try {
+      await removeFriendGroupAssignment(friendId);
+    } catch (error) {
       console.error('removeFromGroup error:', error);
       return false;
     }

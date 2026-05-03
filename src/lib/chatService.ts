@@ -39,8 +39,8 @@ type ChatEventHandler = {
   onError?: (err: ChatErrorPayload) => void;
 };
 
-const CHAT_WS_URL =
-  import.meta.env.VITE_CHAT_WS_URL || 'wss://api.mayvox.com/ws/chat';
+const SERVER_API_URL = String(import.meta.env.VITE_SERVER_API_URL || '').replace(/\/$/, '');
+const CHAT_WS_URL = import.meta.env.VITE_CHAT_WS_URL;
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_RECONNECT_ATTEMPTS = 50;

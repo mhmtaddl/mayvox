@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Settings, Lock, Trash2, ShieldCheck, Users } from 'lucide-react';
-import { verifyChannelPassword } from '../../../lib/supabase';
+import { verifyChannelPassword } from '../../../lib/backendClient';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface Channel {

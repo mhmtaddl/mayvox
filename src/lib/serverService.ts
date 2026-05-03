@@ -3,7 +3,6 @@
  * Sunucu CRUD + keşif + yönetim işlemleri — Hetzner backend API.
  */
 
-import { supabase } from './supabase';
 import { getAuthToken } from './authClient';
 
 export interface Server {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, UserPlus, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../lib/supabase';
+import { getAllProfiles } from '../lib/backendClient';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import AvatarContent from './AvatarContent';
 import { getPublicDisplayName } from '../lib/formatName';
@@ -29,22 +29,21 @@ export default function UserSearch({ currentUserId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Supabase'den kullanıcı ara
+  // Backend'den kullanıcı ara
   const searchUsers = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed || trimmed.length < 2) { setResults([]); return; }
 
     setIsSearching(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, display_name, first_name, last_name, avatar, status')
-        .or(`display_name.ilike.%${trimmed}%,first_name.ilike.%${trimmed}%,last_name.ilike.%${trimmed}%,name.ilike.%${trimmed}%`)
-        .neq('id', currentUserId)
-        .limit(10);
-
+      const { data, error } = await getAllProfiles();
+      const query = trimmed.toLowerCase();
       if (!error && data) {
-        setResults(data.map(p => ({
+        setResults(data
+          .filter((p: any) => p.id !== currentUserId)
+          .filter((p: any) => `${p.display_name || ''} ${p.first_name || ''} ${p.last_name || ''} ${p.name || ''}`.toLowerCase().includes(query))
+          .slice(0, 10)
+          .map((p: any) => ({
           id: p.id,
           name: p.name || '',
           displayName: p.display_name || undefined,

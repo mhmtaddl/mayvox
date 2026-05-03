@@ -11,7 +11,6 @@ import {
   ParticipantEvent,
   type Participant,
 } from 'livekit-client';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getLiveKitToken, LIVEKIT_URL } from '../lib/livekit';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { buildAudioCaptureOptions } from '../lib/audioConstraints';
@@ -22,6 +21,10 @@ import type { User, VoiceChannel } from '../types';
 import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/formatTimeout';
 import { getMyModerationState } from '../lib/serverService';
 import { safePublicName } from '../lib/formatName';
+
+type PresenceChannelLike = {
+  send: (payload: unknown) => Promise<unknown> | unknown;
+};
 
 // Toplam bağlantı süresi üst sınırı (token + connect + mic setup)
 const TOTAL_JOIN_TIMEOUT_MS = 25_000;
@@ -36,7 +39,7 @@ export type VoiceDisabledReason =
   | null;
 
 interface Props {
-  presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
+  presenceChannelRef: React.MutableRefObject<PresenceChannelLike | null>;
   currentUserRef: React.MutableRefObject<User>;
   activeChannelRef: React.MutableRefObject<string | null>;
   activeServerIdRef: React.MutableRefObject<string>;

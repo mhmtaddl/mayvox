@@ -209,15 +209,9 @@ export function useAppSettings() {
     localStorage.setItem('avatarBorderColor', v);
     setAvatarBorderColorState(v);
     // Profile DB'ye de kaydet — diğer kullanıcılar görsün
-    Promise.all([
-      import('../../../lib/supabase'),
-      import('../../../lib/authClient'),
-    ]).then(([{ supabase }, { getAuthPayload }]) => {
-      const profileId = getAuthPayload()?.profileId;
-      if (profileId) {
-        supabase.from('profiles').update({ avatar_border_color: v }).eq('id', profileId).then(() => {});
-      }
-    });
+    import('../../../lib/backendClient')
+      .then(({ updateProfileFields }) => updateProfileFields({ avatar_border_color: v }))
+      .catch(() => {});
   };
 
   // ── Auto-leave — ZORUNLU (v4 policy) ──

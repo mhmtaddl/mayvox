@@ -11,7 +11,7 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-} from '../lib/supabase';
+} from '../lib/backendClient';
 import { subscribeRealtimeEvents } from '../lib/chatService';
 import { getPublicDisplayName } from '../lib/formatName';
 import { useJoinRequests } from '../hooks/useJoinRequests';

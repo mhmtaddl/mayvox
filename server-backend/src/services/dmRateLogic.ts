@@ -2,7 +2,7 @@
  * DM rate-limit + duplicate-send + convKey membership — saf mantık.
  * chat-server.cjs aynı invariant'ı uygular; burada unit test edilir.
  *
- * SQL yok, Supabase yok, ağ yok — pure function'lar.
+ * SQL yok, dış servis yok, ağ yok — pure function'lar.
  */
 
 // ── Rate limit (bucket reset) ─────────────────────────────────────────────

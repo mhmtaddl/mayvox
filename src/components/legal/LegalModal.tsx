@@ -50,7 +50,7 @@ const LEGAL_CONTENT: Record<LegalModalKind, {
       {
         group: 'Aktarım ve saklama',
         title: 'Üçüncü taraf hizmet sağlayıcılar',
-        body: 'Kimlik doğrulama ve veritabanı için Supabase, gerçek zamanlı ses altyapısı için LiveKit, e-posta bildirimleri için Resend ve barındırma altyapısı için Hetzner kullanılabilir.',
+        body: 'Kimlik doğrulama ve veritabanı için Mayvox altyapısı, gerçek zamanlı ses altyapısı için LiveKit, e-posta bildirimleri için Resend ve barındırma altyapısı için Hetzner kullanılabilir.',
       },
       {
         group: 'Aktarım ve saklama',
@@ -156,7 +156,7 @@ const LEGAL_CONTENT: Record<LegalModalKind, {
       {
         group: 'Sorumluluk',
         title: 'Üçüncü taraf bağımlılıkları',
-        body: 'Mayvox; Supabase, LiveKit, Resend, Hetzner ve benzeri üçüncü taraf sağlayıcılardan yararlanabilir. Bu servislerde yaşanan kesinti veya politika değişiklikleri hizmeti etkileyebilir.',
+        body: 'Mayvox; LiveKit, Resend, Hetzner ve benzeri üçüncü taraf sağlayıcılardan yararlanabilir. Bu servislerde yaşanan kesinti veya politika değişiklikleri hizmeti etkileyebilir.',
       },
       {
         group: 'Sorumluluk',

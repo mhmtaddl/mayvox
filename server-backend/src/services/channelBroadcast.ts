@@ -10,7 +10,7 @@ export type ChannelBroadcastPayload =
   | { action: 'delete'; serverId: string; channelId: string }
   | { action: 'reorder'; serverId: string; updates: Array<{ id: string; position: number }>; orderToken: string | null; timestamp?: number };
 
-async function postBroadcast(event: string, payload: Record<string, unknown>): Promise<void> {
+export async function postBroadcast(event: string, payload: Record<string, unknown>): Promise<void> {
   if (!config.internalNotifySecret) {
     console.warn('[channel-broadcast] disabled — INTERNAL_NOTIFY_SECRET tanımlı değil.');
     return;

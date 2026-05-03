@@ -9,8 +9,8 @@
  */
 
 const { WebSocketServer, WebSocket } = require('ws');
-const { createClient } = require('@supabase/supabase-js');
 const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -24,16 +24,25 @@ if (!process.env.ELECTRON_IS_PACKAGED) {
 
 // ── Config ────────────────────────────────────────────────────────────────
 const PORT = process.env.CHAT_PORT || 10001;
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET;
+const DATABASE_URL = process.env.DATABASE_URL;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET) {
-  console.error('[chat-server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / JWT_SECRET gerekli!');
+if (!JWT_SECRET || !DATABASE_URL) {
+  console.error('[chat-server] JWT_SECRET / DATABASE_URL gerekli!');
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+const pgPool = new Pool({ connectionString: DATABASE_URL });
+
+async function queryOne(text, params = []) {
+  const { rows } = await pgPool.query(text, params);
+  return rows[0] || null;
+}
+
+async function queryMany(text, params = []) {
+  const { rows } = await pgPool.query(text, params);
+  return rows;
+}
 
 function verifyAppJwt(token) {
   const payload = jwt.verify(token, JWT_SECRET);
@@ -480,7 +489,7 @@ function broadcastToAllAuthed(payload) {
 
 const presence = createPresenceService({
   store: presenceStore,
-  supabase,
+  db: pgPool,
   // UI presence is authored in this chat-server process via userPresenceByUserId.
   // PresenceService remains responsible for user_sessions / last_seen persistence.
   broadcastFn: () => {},
@@ -504,16 +513,10 @@ async function checkFriendship(userA, userB) {
   if (!a || !b || a === b) return false;
   const [low, high] = a < b ? [a, b] : [b, a];
   try {
-    const { data, error } = await supabase
-      .from('friendships')
-      .select('user_low_id, user_high_id')
-      .eq('user_low_id', low)
-      .eq('user_high_id', high)
-      .maybeSingle();
-    if (error) {
-      console.warn('[dm] friendship query error:', error.message);
-      return false;
-    }
+    const data = await queryOne(
+      'SELECT user_low_id, user_high_id FROM friendships WHERE user_low_id = $1 AND user_high_id = $2',
+      [low, high],
+    );
     if (!data || typeof data !== 'object') return false;
     if (data.user_low_id !== low || data.user_high_id !== high) return false;
     return true;
@@ -524,11 +527,10 @@ async function checkFriendship(userA, userB) {
 }
 
 async function getFriendIds(userId) {
-  const { data } = await supabase
-    .from('friendships')
-    .select('user_low_id, user_high_id')
-    .or(`user_low_id.eq.${userId},user_high_id.eq.${userId}`);
-  if (!data) return new Set();
+  const data = await queryMany(
+    'SELECT user_low_id, user_high_id FROM friendships WHERE user_low_id = $1 OR user_high_id = $1',
+    [userId],
+  );
   return new Set(data.map(r => r.user_low_id === userId ? r.user_high_id : r.user_low_id));
 }
 
@@ -637,13 +639,14 @@ async function getProfiles(userIds) {
   }
   if (miss.length > 0) {
     try {
-      const { data } = await supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', miss);
-      if (data) {
-        for (const p of data) {
-          const entry = { name: profileDisplayName(p), avatar: p.avatar ?? null, expiresAt: now + PROFILE_TTL_MS };
-          profileCache.set(p.id, entry);
-          result.set(p.id, { name: entry.name, avatar: entry.avatar });
-        }
+      const data = await queryMany(
+        'SELECT id, name, display_name, first_name, last_name, avatar FROM profiles WHERE id = ANY($1::uuid[])',
+        [miss],
+      );
+      for (const p of data) {
+        const entry = { name: profileDisplayName(p), avatar: p.avatar ?? null, expiresAt: now + PROFILE_TTL_MS };
+        profileCache.set(p.id, entry);
+        result.set(p.id, { name: entry.name, avatar: entry.avatar });
       }
     } catch (err) {
       console.warn('[dm] profile enrich failed:', err?.message);
@@ -1206,10 +1209,7 @@ function scheduleCleanup(roomId) {
     }
 
     try {
-      await supabase
-        .from('room_messages')
-        .delete()
-        .eq('channel_id', roomId);
+      await pgPool.query('DELETE FROM room_messages WHERE channel_id = $1', [roomId]);
 
       console.log(`[chat] Oda ${roomId} mesajları temizlendi (5dk boş)`);
     } catch (err) {
@@ -1275,15 +1275,10 @@ wss.on('connection', (ws) => {
 
         const authUser = verifyAppJwt(token);
 
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, name, avatar')
-          .eq('id', authUser.profileId)
-          .maybeSingle();
-
-        if (profileError) {
-          console.warn('[chat] Profil çekme uyarısı:', profileError.message);
-        }
+        const profile = await queryOne(
+          'SELECT first_name, last_name, name, avatar FROM profiles WHERE id = $1',
+          [authUser.profileId],
+        );
 
         userId = authUser.profileId;
         userName = getDisplayName(profile, { email: authUser.email, user_metadata: { name: authUser.username } });
@@ -1444,17 +1439,15 @@ wss.on('connection', (ws) => {
       // Aynı odaya tekrar join
       if (currentRoom === roomId) {
         try {
-          const { data: messages } = await supabase
-            .from('room_messages')
-            .select('*')
-            .eq('channel_id', roomId)
-            .order('created_at', { ascending: true })
-            .limit(200);
+          const messages = await queryMany(
+            'SELECT * FROM room_messages WHERE channel_id = $1 ORDER BY created_at ASC LIMIT 200',
+            [roomId],
+          );
 
           send(ws, {
             type: 'history',
             roomId,
-            messages: (messages || []).map(formatMsg),
+            messages: messages.map(formatMsg),
           });
         } catch {
           send(ws, { type: 'history', roomId, messages: [] });
@@ -1481,19 +1474,15 @@ wss.on('connection', (ws) => {
       rooms.get(roomId).add(ws);
 
       try {
-        const { data: messages, error } = await supabase
-          .from('room_messages')
-          .select('*')
-          .eq('channel_id', roomId)
-          .order('created_at', { ascending: true })
-          .limit(200);
-
-        if (error) throw error;
+        const messages = await queryMany(
+          'SELECT * FROM room_messages WHERE channel_id = $1 ORDER BY created_at ASC LIMIT 200',
+          [roomId],
+        );
 
         send(ws, {
           type: 'history',
           roomId,
-          messages: (messages || []).map(formatMsg),
+          messages: messages.map(formatMsg),
         });
       } catch (err) {
         console.warn('[chat] History yükleme hatası:', err?.message || err);
@@ -1565,19 +1554,12 @@ wss.on('connection', (ws) => {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('room_messages')
-          .insert({
-            channel_id: currentRoom,
-            sender_id: userId,
-            sender_name: userName,
-            sender_avatar: userAvatar,
-            text,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await queryOne(
+          `INSERT INTO room_messages (channel_id, sender_id, sender_name, sender_avatar, text)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [currentRoom, userId, userName, userAvatar, text],
+        );
 
         broadcastToRoom(currentRoom, {
           type: 'message',
@@ -1596,10 +1578,7 @@ wss.on('connection', (ws) => {
       if (!currentRoom || !msg.messageId) return;
 
       try {
-        await supabase
-          .from('room_messages')
-          .delete()
-          .eq('id', msg.messageId);
+        await pgPool.query('DELETE FROM room_messages WHERE id = $1', [msg.messageId]);
 
         broadcastToRoom(currentRoom, {
           type: 'delete',
@@ -1617,10 +1596,7 @@ wss.on('connection', (ws) => {
       if (!text || text.length > 2000) return;
 
       try {
-        await supabase
-          .from('room_messages')
-          .update({ text })
-          .eq('id', msg.messageId);
+        await pgPool.query('UPDATE room_messages SET text = $1 WHERE id = $2', [text, msg.messageId]);
 
         broadcastToRoom(currentRoom, {
           type: 'edit',
@@ -1636,10 +1612,7 @@ wss.on('connection', (ws) => {
       if (!currentRoom) return;
 
       try {
-        await supabase
-          .from('room_messages')
-          .delete()
-          .eq('channel_id', currentRoom);
+        await pgPool.query('DELETE FROM room_messages WHERE channel_id = $1', [currentRoom]);
 
         broadcastToRoom(currentRoom, {
           type: 'clear',

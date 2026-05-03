@@ -12,7 +12,7 @@ import {
   adminRejectInvite,
   sendInviteEmail,
   sendRejectionEmail,
-} from '../../../lib/supabase';
+} from '../../../lib/backendClient';
 import { getAuthToken } from '../../../lib/authClient';
 import type { ResetRequest } from '../../../components/PasswordResetPanel';
 import type { InviteRequest } from '../../../types';
@@ -77,7 +77,7 @@ export function useAdminPanel({
   const lastPasswordResetsFetchAtRef = useRef(0);
   const lastInviteRequestsFetchAtRef = useRef(0);
 
-  const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
+  const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
 
   const loadPasswordResetRequests = useCallback(async (opts: { force?: boolean } = {}) => {
     const now = Date.now();

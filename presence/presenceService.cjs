@@ -13,7 +13,7 @@ const HEARTBEAT_DB_THROTTLE_MS = 30_000; // DB'ye last_heartbeat_at yazım sıkl
 const STALE_THRESHOLD_MS = 45_000;        // Memory store için: bu süreyi aşan session stale
 const CLEANUP_INTERVAL_MS = 15_000;       // Memory store cleanup scan sıklığı
 
-function createPresenceService({ store, supabase, broadcastFn, log = console }) {
+function createPresenceService({ store, db, broadcastFn, log = console }) {
   // sessionKey -> lastDbWriteMs (heartbeat DB throttle için)
   const dbWriteThrottle = new Map();
 
@@ -21,22 +21,26 @@ function createPresenceService({ store, supabase, broadcastFn, log = console }) 
     const nowIso = new Date().toISOString(); // Node server time = Hetzner saati
 
     // 1) DB: session row oluştur (session_key PK, çakışma olmaz — ilk connect'te INSERT)
-    const { error: insertErr } = await supabase
-      .from('user_sessions')
-      .insert({
-        session_key: sessionKey,
-        user_id: userId,
-        device_id: meta.deviceId,
-        platform: meta.platform,
-        app_version: meta.appVersion || null,
-        connected_at: nowIso,
-        last_heartbeat_at: nowIso,
-        disconnected_at: null,
-        disconnect_reason: null,
-      });
-
-    if (insertErr) {
-      log.warn('[presence] insert session failed:', insertErr.message);
+    try {
+      await db.query(
+        `INSERT INTO user_sessions (
+           session_key, user_id, device_id, platform, app_version,
+           connected_at, last_heartbeat_at, disconnected_at, disconnect_reason
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $6, NULL, NULL)
+         ON CONFLICT (session_key) DO UPDATE SET
+           user_id = EXCLUDED.user_id,
+           device_id = EXCLUDED.device_id,
+           platform = EXCLUDED.platform,
+           app_version = EXCLUDED.app_version,
+           connected_at = EXCLUDED.connected_at,
+           last_heartbeat_at = EXCLUDED.last_heartbeat_at,
+           disconnected_at = NULL,
+           disconnect_reason = NULL`,
+        [sessionKey, userId, meta.deviceId, meta.platform, meta.appVersion || null, nowIso],
+      );
+    } catch (err) {
+      log.warn('[presence] insert session failed:', err.message);
       // DB başarısız olsa bile in-memory devam etsin — UI bozulmasın.
     }
 
@@ -61,14 +65,14 @@ function createPresenceService({ store, supabase, broadcastFn, log = console }) 
     if (now - lastWrite >= HEARTBEAT_DB_THROTTLE_MS) {
       dbWriteThrottle.set(sessionKey, now);
       // Fire-and-forget — hot path'i blocklamayalım
-      supabase
-        .from('user_sessions')
-        .update({ last_heartbeat_at: new Date().toISOString() })
-        .eq('session_key', sessionKey)
-        .is('disconnected_at', null)
-        .then(({ error }) => {
-          if (error) log.warn('[presence] hb db write failed:', error.message);
-        });
+      db.query(
+        `UPDATE user_sessions
+         SET last_heartbeat_at = $1
+         WHERE session_key = $2 AND disconnected_at IS NULL`,
+        [new Date().toISOString(), sessionKey],
+      ).catch(err => {
+        log.warn('[presence] hb db write failed:', err.message);
+      });
     }
   }
 
@@ -79,26 +83,25 @@ function createPresenceService({ store, supabase, broadcastFn, log = console }) 
     const disconnectIso = new Date().toISOString();
 
     // DB: sadece hala açık olan satırı kapat (idempotent)
-    const { error: closeErr } = await supabase
-      .from('user_sessions')
-      .update({
-        disconnected_at: disconnectIso,
-        disconnect_reason: reason,
-      })
-      .eq('session_key', sessionKey)
-      .is('disconnected_at', null);
-
-    if (closeErr) log.warn('[presence] close session failed:', closeErr.message);
+    try {
+      await db.query(
+        `UPDATE user_sessions
+         SET disconnected_at = $1, disconnect_reason = $2
+         WHERE session_key = $3 AND disconnected_at IS NULL`,
+        [disconnectIso, reason, sessionKey],
+      );
+    } catch (err) {
+      log.warn('[presence] close session failed:', err.message);
+    }
 
     // Son session kapandıysa profiles.last_seen_at yaz + broadcast
     if (remaining === 0) {
       const lastSeenIso = new Date().toISOString();
-      const { error: lsErr } = await supabase
-        .from('profiles')
-        .update({ last_seen_at: lastSeenIso })
-        .eq('id', userId);
-
-      if (lsErr) log.warn('[presence] last_seen update failed:', lsErr.message);
+      try {
+        await db.query('UPDATE profiles SET last_seen_at = $1 WHERE id = $2', [lastSeenIso, userId]);
+      } catch (err) {
+        log.warn('[presence] last_seen update failed:', err.message);
+      }
 
       broadcastPresenceChange(userId, { online: false, lastSeenAt: lastSeenIso });
     }
@@ -161,15 +164,17 @@ function createPresenceService({ store, supabase, broadcastFn, log = console }) 
    */
   async function bootCleanup() {
     const nowIso = new Date().toISOString();
-    const { error } = await supabase
-      .from('user_sessions')
-      .update({
-        disconnected_at: nowIso,
-        disconnect_reason: 'server_boot',
-      })
-      .is('disconnected_at', null);
-    if (error) log.warn('[presence] boot cleanup failed:', error.message);
-    else log.log && log.log('[presence] boot cleanup OK');
+    try {
+      await db.query(
+        `UPDATE user_sessions
+         SET disconnected_at = $1, disconnect_reason = 'server_boot'
+         WHERE disconnected_at IS NULL`,
+        [nowIso],
+      );
+      log.log && log.log('[presence] boot cleanup OK');
+    } catch (err) {
+      log.warn('[presence] boot cleanup failed:', err.message);
+    }
   }
 
   return {

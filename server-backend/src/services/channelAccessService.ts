@@ -128,7 +128,7 @@ export async function filterVisibleChannels(
     `SELECT c.id, c.owner_id, c.is_hidden,
             EXISTS (SELECT 1 FROM channel_access ca WHERE ca.channel_id = c.id AND ca.user_id = $2) AS granted
      FROM channels c
-     WHERE c.server_id = $1 AND c.id = ANY($3::uuid[])`,
+     WHERE c.server_id = $1 AND c.id = ANY($3::text[])`,
     [serverId, userId, channelIds]
   );
 

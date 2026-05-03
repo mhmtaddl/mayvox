@@ -4,7 +4,7 @@ import {
   Mail, Clock, Send, Ban, AlertCircle, Check, Loader,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { requestInvite, getInviteRequestStatus } from '../lib/supabase';
+import { requestInvite, getInviteRequestStatus } from '../lib/backendClient';
 import appLogo from '../assets/app-logo.png';
 import { makeEnterToNext } from '../lib/mobileFormNav';
 

@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import { authMiddleware } from '../middleware/auth';
 import { validateCreateServer, validateJoinServer } from '../validators/serverValidators';
 import * as serverService from '../services/serverService';
@@ -22,6 +24,14 @@ import { queryOne } from '../repositories/db';
 const router = Router();
 
 router.use(authMiddleware as any);
+
+const LOGO_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function logoExtension(contentType: string): string {
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  return 'jpg';
+}
 
 /** GET /servers/invites/incoming — kullanıcının gelen davetleri */
 router.get('/invites/incoming', async (req: Request, res: Response) => {
@@ -76,6 +86,37 @@ router.patch('/:id', async (req: Request, res: Response) => {
   try {
     await mgmt.updateServer(req.params.id as string, (req as any).userId, req.body);
     res.json({ ok: true });
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/logo — self-hosted logo upload (base64 JSON) */
+router.post('/:id/logo', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const userId = (req as any).userId as string;
+    const ctx = await getServerAccessContext(userId, serverId);
+    if (!ctx.flags.canManageServer) throw new AppError(403, 'Sunucu logosunu güncelleme yetkin yok');
+
+    const contentType = typeof req.body?.contentType === 'string' ? req.body.contentType : '';
+    const data = typeof req.body?.data === 'string' ? req.body.data : '';
+    if (!LOGO_CONTENT_TYPES.has(contentType) || !data) {
+      throw new AppError(400, 'Geçersiz logo dosyası');
+    }
+
+    const buffer = Buffer.from(data, 'base64');
+    if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) {
+      throw new AppError(400, 'Logo dosyası çok büyük');
+    }
+
+    const ext = logoExtension(contentType);
+    const dir = path.join(process.cwd(), 'uploads', 'server-logos', serverId);
+    const fileName = `logo-${Date.now()}.${ext}`;
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, fileName), buffer);
+
+    const avatarUrl = `/uploads/server-logos/${serverId}/${fileName}`;
+    await mgmt.updateServer(serverId, userId, { avatarUrl });
+    res.json({ url: avatarUrl });
   } catch (err) { handleError(res, err); }
 });
 

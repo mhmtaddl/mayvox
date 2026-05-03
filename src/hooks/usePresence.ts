@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type React from 'react';
 import { subscribeRealtimeEvents } from '../lib/chatService';
-import { updateUserAppVersion } from '../lib/supabase';
+import { updateUserAppVersion } from '../lib/backendClient';
 import { logMemberIdentityDebug, normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../lib/channelOrder';
 import { applyLocalChannelIcons } from '../lib/channelIcon';

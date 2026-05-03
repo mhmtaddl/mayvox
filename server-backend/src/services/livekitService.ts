@@ -7,7 +7,7 @@ import { queryMany } from '../repositories/db';
  *
  * Kurallar:
  *  - Room name  = channel.id (UUID string). Frontend getLiveKitToken çağrısında bu kullanılıyor.
- *  - Identity   = user.id (Supabase UUID). cylk-token-server `new AccessToken(..., { identity: user.id })`
+ *  - Identity   = profile id (UUID). cylk-token-server `new AccessToken(..., { identity: user.id })`
  *    ile üretiyor — ikisi aynı olmalı. Eğer token-server identity şeması değişirse burası da değişmeli.
  *  - ENV eksikse tüm fonksiyonlar no-op (0 channel etkilendi) döner, hata fırlatmaz.
  *    Bu deliberate: moderation aksiyonu DB tarafında başarılı, LiveKit tarafı sessiz downgrade.
@@ -68,7 +68,7 @@ export async function removeParticipantFromChannel(
   targetUserId: string
 ): Promise<{ configured: boolean; removed: boolean }> {
   if (!isLiveKitConfigured()) return { configured: false, removed: false };
-  // Identity = Supabase user.id (token-server convention'ıyla aynı).
+  // Identity = profile id (token-server convention'ıyla aynı).
   const removed = await removeFromOneRoom(channelId, targetUserId);
   return { configured: true, removed };
 }
@@ -88,7 +88,7 @@ export async function removeParticipantFromAllServerRooms(
   const channelIds = await listServerVoiceChannelIds(serverId);
   if (channelIds.length === 0) return { configured: true, channelsAffected: 0 };
 
-  // Identity = Supabase user.id. Paralel dene; her bir oda bağımsız.
+  // Identity = profile id. Paralel dene; her bir oda bağımsız.
   const results = await Promise.all(channelIds.map(id => removeFromOneRoom(id, targetUserId)));
   return { configured: true, channelsAffected: results.filter(Boolean).length };
 }

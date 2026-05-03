@@ -1,5 +1,6 @@
 import { queryMany, queryOne, pool } from '../repositories/db';
 import type { Channel, ChannelResponse } from '../types';
+import bcrypt from 'bcrypt';
 import { AppError } from './serverService';
 import { filterVisibleChannels } from './channelAccessService';
 import { getServerAccessContext, assertCapability, invalidateAccessContextForServer } from './accessContextService';
@@ -67,6 +68,7 @@ function toResponse(ch: Channel): ChannelResponse {
     mode: ch.mode,
     iconName: ch.icon_name,
     iconColor: ch.icon_color,
+    password: ch.password_hash || ch.password ? 'SET' : undefined,
     createdAt: ch.created_at,
     updatedAt: ch.updated_at,
   };
@@ -280,6 +282,88 @@ export async function updateChannel(
   return response;
 }
 
+export async function verifyChannelPassword(
+  channelId: string,
+  userId: string,
+  password: string,
+): Promise<boolean> {
+  const channel = await queryOne<Pick<Channel, 'id' | 'server_id' | 'password' | 'password_hash'>>(
+    'SELECT id, server_id, password, password_hash FROM channels WHERE id = $1',
+    [channelId],
+  );
+  if (!channel) throw new AppError(404, 'Kanal bulunamadı');
+
+  const member = await queryOne<{ id: string }>(
+    'SELECT id FROM server_members WHERE server_id = $1 AND user_id = $2',
+    [channel.server_id, userId],
+  );
+  if (!member) throw new AppError(403, 'Kanal şifresini doğrulama yetkin yok');
+
+  if (channel.password_hash) return bcrypt.compare(String(password || ''), channel.password_hash);
+  if (channel.password && channel.password !== 'SET') return channel.password === String(password || '');
+  return !channel.password && !channel.password_hash;
+}
+
+export async function setChannelPassword(
+  channelId: string,
+  userId: string,
+  password: string | null,
+): Promise<{ channelId: string; serverId: string; password: string | null }> {
+  const channel = await queryOne<Pick<Channel, 'id' | 'server_id'>>(
+    'SELECT id, server_id FROM channels WHERE id = $1',
+    [channelId],
+  );
+  if (!channel) throw new AppError(404, 'Kanal bulunamadı');
+
+  const ctx = await getServerAccessContext(userId, channel.server_id);
+  assertCapability(ctx, CAPABILITIES.CHANNEL_UPDATE, 'Kanal şifresini güncellemek için yetkin yok');
+
+  if (password === null || password === '') {
+    await pool.query(
+      'UPDATE channels SET password = NULL, password_hash = NULL, updated_at = now() WHERE id = $1',
+      [channelId],
+    );
+    await logAction({
+      serverId: channel.server_id,
+      actorId: userId,
+      action: 'channel.password.clear',
+      resourceType: 'channel',
+      resourceId: channelId,
+      metadata: {},
+    });
+    void broadcastChannelUpdate({
+      action: 'update',
+      serverId: channel.server_id,
+      channelId,
+      updates: { password: undefined },
+    });
+    return { channelId, serverId: channel.server_id, password: null };
+  }
+
+  const plain = String(password);
+  if (!/^\d{4}$/.test(plain)) throw new AppError(400, 'Kanal şifresi 4 haneli olmalı');
+  const hash = await bcrypt.hash(plain, 12);
+  await pool.query(
+    "UPDATE channels SET password = 'SET', password_hash = $1, updated_at = now() WHERE id = $2",
+    [hash, channelId],
+  );
+  await logAction({
+    serverId: channel.server_id,
+    actorId: userId,
+    action: 'channel.password.set',
+    resourceType: 'channel',
+    resourceId: channelId,
+    metadata: {},
+  });
+  void broadcastChannelUpdate({
+    action: 'update',
+    serverId: channel.server_id,
+    channelId,
+    updates: { password: 'SET' },
+  });
+  return { channelId, serverId: channel.server_id, password: 'SET' };
+}
+
 /** Kanal sıralamasını toplu güncelle — tek SQL (unnest), transactional, optimistic concurrency. */
 export async function reorderChannels(
   serverId: string,
@@ -332,7 +416,7 @@ export async function reorderChannels(
 
     // Tüm id'ler bu sunucuya mı ait? Tek query ile doğrula.
     const ownerCheck = await client.query<{ count: string }>(
-      'SELECT COUNT(*)::text AS count FROM channels WHERE server_id = $1 AND id = ANY($2::uuid[])',
+      'SELECT COUNT(*)::text AS count FROM channels WHERE server_id = $1 AND id = ANY($2::text[])',
       [serverId, ids]
     );
     if (parseInt(ownerCheck.rows[0]?.count ?? '0', 10) !== ids.length) {
@@ -344,7 +428,7 @@ export async function reorderChannels(
     await client.query(
       `UPDATE channels AS c
        SET position = v.position, updated_at = now()
-       FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS position) AS v
+       FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS position) AS v
        WHERE c.id = v.id AND c.server_id = $3`,
       [ids, positions, serverId]
     );

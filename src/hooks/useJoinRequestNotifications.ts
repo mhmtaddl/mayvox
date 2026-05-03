@@ -3,7 +3,7 @@ import { subscribeServerEvents, type ServerEvent } from '../lib/chatService';
 import { handleJoinRequest, handleJoinRequestAccepted, handleJoinRequestRejected } from '../features/notifications/notificationService';
 import { pushInformational } from '../features/notifications/informationalStore';
 import { getServerDetails } from '../lib/serverService';
-import { supabase } from '../lib/supabase';
+import { getProfile } from '../lib/backendClient';
 
 interface Options {
   /** Accept/reject event'i geldiğinde kullanıcının sunucu listesini refresh etmek için. */
@@ -41,7 +41,7 @@ export function useJoinRequestNotifications(opts: Options = {}): void {
         } catch { /* no-op */ }
         if (requesterId) {
           try {
-            const { data } = await supabase.from('profiles').select('name, display_name, first_name, last_name').eq('id', requesterId).maybeSingle();
+            const { data } = await getProfile(requesterId);
             const p = data as { name?: string | null; display_name?: string | null; first_name?: string | null; last_name?: string | null } | null;
             const full = `${p?.first_name ?? ''} ${p?.last_name ?? ''}`.trim();
             requesterName = p?.display_name || full || p?.name || null;

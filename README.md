@@ -4,7 +4,7 @@ Electron + React ile yazılmış, LiveKit tabanlı masaüstü sesli sohbet uygul
 
 ## Özellikler
 
-- Supabase Auth üzerinden kullanıcı girişi (davet kodu veya kullanıcı adı/parola)
+- Mayvox backend üzerinden kullanıcı girişi (davet kodu veya kullanıcı adı/parola)
 - LiveKit self-hosted ses odaları
 - Bas-konuş (PTT) — arka planda çalışırken de tuş/fare dinler (uiohook-napi)
 - Oda şifresi, davet-only oda, kullanıcı başına ses seviyesi
@@ -17,8 +17,8 @@ Electron + React ile yazılmış, LiveKit tabanlı masaüstü sesli sohbet uygul
 | UI | React 19, TypeScript, Tailwind CSS v4, Motion |
 | Masaüstü | Electron 41 |
 | Ses | LiveKit (self-hosted, `livekit-server-sdk`) |
-| Auth / DB | Supabase |
-| Token Server | Express — Render.com |
+| Auth / DB | Mayvox Backend + PostgreSQL |
+| Token Server | Express — Hetzner/PM2 |
 | PTT Hook | uiohook-napi |
 | Build | Vite 6, electron-builder (NSIS) |
 
@@ -31,7 +31,7 @@ Electron + React ile yazılmış, LiveKit tabanlı masaüstü sesli sohbet uygul
 - Node.js 20+
 - npm 10+
 - Çalışan bir LiveKit sunucusu
-- Supabase projesi
+- Çalışan Mayvox backend/PostgreSQL ortamı
 
 ### Kurulum
 
@@ -58,10 +58,10 @@ Portlar: Vite → `3000`, token server → `3001`
 
 | Değişken | Açıklama |
 |----------|----------|
-| `VITE_SUPABASE_URL` | Supabase proje URL'i |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public, RLS korumalı) |
 | `VITE_LIVEKIT_URL` | LiveKit WebSocket endpoint (`ws://` veya `wss://`) |
-| `VITE_TOKEN_SERVER_URL` | Token server adresi (dev: `http://localhost:3001`) |
+| `VITE_TOKEN_SERVER_URL` | Token server adresi (dev: `http://localhost:10000`) |
+| `VITE_API_BASE_URL` | Mayvox backend API adresi (dev: `http://localhost:4001`) |
+| `VITE_CHAT_SERVER_URL` | Chat/realtime bridge adresi (dev: `http://localhost:10001`) |
 
 > Production build için `.env.production` bu değerleri otomatik ezer.
 
@@ -69,10 +69,11 @@ Portlar: Vite → `3000`, token server → `3001`
 
 | Değişken | Açıklama |
 |----------|----------|
-| `SUPABASE_URL` | Supabase proje URL'i (token server kullanır) |
-| `SUPABASE_ANON_KEY` | Supabase anon key (token server kullanır) |
+| `DATABASE_URL` | PostgreSQL bağlantı adresi |
+| `JWT_SECRET` | Backend/token JWT imzalama sırrı |
 | `LIVEKIT_API_KEY` | LiveKit API anahtarı |
 | `LIVEKIT_API_SECRET` | LiveKit API sırrı |
+| `LIVEKIT_URL` | LiveKit server URL'i |
 
 > `LIVEKIT_URL` token server tarafından kullanılmaz; token üretmek için yalnızca `LIVEKIT_API_KEY` ve `LIVEKIT_API_SECRET` gereklidir.
 
@@ -96,24 +97,23 @@ Kullanıcılar bir sonraki açılışta güncellemeyi bildirim olarak görür.
 
 ---
 
-## Token Server (Render.com)
+## Token Server
 
-`server.cjs` — Express tabanlı, Supabase JWT doğrulamalı LiveKit token endpoint.
+`server.cjs` — Express tabanlı, Mayvox JWT doğrulamalı LiveKit token endpoint.
 
 ```
 POST /livekit-token
-Authorization: Bearer <supabase-access-token>
+Authorization: Bearer <mayvox-jwt>
 Body: { roomName, participantName }
 ```
 
-Render'a deploy için `render.yaml` hazırdır. Dashboard'da şu env var'ları set edin:
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
+Deploy ortamında şu env var'ları set edin:
+`DATABASE_URL`, `JWT_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
 
 ---
 
 ## Güvenlik Notları
 
-- Supabase anon key kasıtlı olarak public'tir; RLS politikaları ile korunur.
 - LiveKit `LIVEKIT_API_SECRET` hiçbir zaman istemci bundle'a girmez.
 - Token server rate-limit uygular (IP başına 20 istek/dakika).
 - CORS yalnızca `localhost:3000` ve packaged Electron origin'ine izin verir.

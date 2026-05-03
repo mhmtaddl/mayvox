@@ -220,6 +220,86 @@ export async function changeEmail(payload: JwtUserPayload, emailRaw: string): Pr
   }
 }
 
+export interface ProfileUpdateInput {
+  id?: string;
+  name?: string;
+  display_name?: string;
+  first_name?: string;
+  last_name?: string;
+  age?: number;
+  avatar?: string;
+  avatar_border_color?: string;
+  app_version?: string;
+  total_usage_minutes?: number;
+  show_last_seen?: boolean;
+}
+
+export async function updateProfile(payload: JwtUserPayload, input: ProfileUpdateInput) {
+  if (input.id && input.id !== payload.profileId) throw new AuthError(403, 'Profil yetkisi geçersiz');
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let i = 1;
+
+  if (input.name !== undefined) {
+    const name = String(input.name || '').trim();
+    if (!name) throw new AuthError(400, 'Kullanıcı adı boş olamaz');
+    sets.push(`name = $${i++}`);
+    values.push(name);
+  }
+  if (input.display_name !== undefined) {
+    const displayName = String(input.display_name || '').trim();
+    if (displayName.length < 2 || displayName.length > 24) throw new AuthError(400, 'Takma ad 2-24 karakter olmalı');
+    sets.push(`display_name = $${i++}`);
+    values.push(displayName);
+  }
+  if (input.first_name !== undefined) {
+    sets.push(`first_name = $${i++}`);
+    values.push(String(input.first_name || '').trim());
+  }
+  if (input.last_name !== undefined) {
+    sets.push(`last_name = $${i++}`);
+    values.push(String(input.last_name || '').trim());
+  }
+  if (input.age !== undefined) {
+    const age = Number(input.age);
+    if (!Number.isFinite(age) || age < 1 || age > 120) throw new AuthError(400, 'Yaş geçersiz');
+    sets.push(`age = $${i++}`);
+    values.push(Math.trunc(age));
+  }
+  if (input.avatar !== undefined) {
+    sets.push(`avatar = $${i++}`);
+    values.push(String(input.avatar || ''));
+  }
+  if (input.avatar_border_color !== undefined) {
+    sets.push(`avatar_border_color = $${i++}`);
+    values.push(String(input.avatar_border_color || '').trim());
+  }
+  if (input.app_version !== undefined) {
+    sets.push(`app_version = $${i++}`);
+    values.push(String(input.app_version || '').trim());
+  }
+  if (input.total_usage_minutes !== undefined) {
+    const total = Number(input.total_usage_minutes);
+    if (!Number.isFinite(total) || total < 0) throw new AuthError(400, 'Kullanım süresi geçersiz');
+    sets.push(`total_usage_minutes = $${i++}`);
+    values.push(Math.trunc(total));
+  }
+  if (input.show_last_seen !== undefined) {
+    sets.push(`show_last_seen = $${i++}`);
+    values.push(!!input.show_last_seen);
+  }
+
+  if (sets.length) {
+    sets.push('updated_at = now()');
+    values.push(payload.profileId);
+    const result = await pool.query(`UPDATE profiles SET ${sets.join(', ')} WHERE id = $${i}`, values);
+    if (!result.rowCount) throw new AuthError(404, 'Profil bulunamadı');
+  }
+
+  return me(payload);
+}
+
 export interface RegisterInput {
   email: string;
   username: string;

@@ -8,7 +8,7 @@ interface PresenceDeps {
 
 /**
  * Presence başlatma dizisi — login, register ve session restore sonrası çağrılır.
- * 1. startPresence: Supabase presence channel'ına subscribe ol
+ * 1. startPresence: realtime presence channel'ına subscribe ol
  * 2. resyncPresence: Mevcut presence state'ini uygula
  * 3. 1.5s fallback: WebSocket bağlantısı geç olabilir, tekrar dene
  */

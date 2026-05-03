@@ -9,7 +9,7 @@ import {
   getInvites, createInvite, deleteInvite,
   getMembers, sendServerInvite, getSentInvites, cancelSentInvite,
 } from '../../../lib/serverService';
-import { supabase } from '../../../lib/supabase';
+import { getAllProfiles } from '../../../lib/backendClient';
 import { fmtDate, Empty, Loader } from './shared';
 import JoinRequestsTab from './JoinRequestsTab';
 
@@ -416,14 +416,12 @@ function UserInvites({ serverId, showToast }: { serverId: string; showToast: (m:
     const seq = ++seqRef.current;
     const timer = setTimeout(async () => {
       try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, name, display_name, first_name, last_name, avatar')
-          .or(`display_name.ilike.%${query}%,name.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
-          .order('name')
-          .limit(10);
+        const { data } = await getAllProfiles();
         if (seq !== seqRef.current) return;
-        setResults((data ?? []) as SearchedUser[]);
+        const q = query.toLowerCase();
+        setResults(((data ?? []) as SearchedUser[])
+          .filter(u => `${u.display_name || ''} ${u.name || ''} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase().includes(q))
+          .slice(0, 10));
       } catch {
         if (seq === seqRef.current) setResults([]);
       } finally {

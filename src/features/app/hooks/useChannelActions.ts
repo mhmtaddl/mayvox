@@ -4,7 +4,7 @@
  */
 import React, { useState, useRef } from 'react';
 import { type RemoteParticipant, RemoteAudioTrack } from 'livekit-client';
-import { setChannelPassword } from '../../../lib/supabase';
+import { setChannelPassword } from '../../../lib/backendClient';
 import {
   createServerChannel,
   updateServerChannel,

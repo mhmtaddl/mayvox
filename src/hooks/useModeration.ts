@@ -1,29 +1,31 @@
 import type React from 'react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   updateUserModeration,
   deleteUser,
   signOut,
   toggleUserModerator,
   setServerCreationPlan as setServerCreationPlanRpc,
-} from '../lib/supabase';
+} from '../lib/backendClient';
 import { logger } from '../lib/logger';
 import type { User } from '../types';
+
+type PresenceChannelLike = {
+  send: (payload: unknown) => Promise<unknown> | unknown;
+};
 
 interface Props {
   currentUser: User;
   allUsers: User[];
-  presenceChannelRef: React.MutableRefObject<RealtimeChannel | null>;
+  presenceChannelRef: React.MutableRefObject<PresenceChannelLike | null>;
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setToastMsg: (v: string | null) => void;
   onSelfDelete: () => void;
 }
 
-// supabase.rpc dönüş tipi generic kısıtlaması nedeniyle unknown olur;
-// RPC uygulama hataları data.error alanında gelir.
+// Backend uygulama hataları bazı eski callsite'larda data.error alanında da gelebilir.
 type RpcData = { error?: string } | null;
 
-const isSupabaseUser = (userId: string) => userId.includes('-');
+const isUuidUser = (userId: string) => userId.includes('-');
 const rpcError = (data: unknown): string | undefined =>
   (data as RpcData)?.error;
 
@@ -53,7 +55,7 @@ export function useModeration({
   ): Promise<void> => {
     const expires = Date.now() + durationMinutes * 60 * 1000;
     const updates = { isMuted: true, muteExpires: expires };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await updateUserModeration(userId, {
         is_muted: true,
         mute_expires: expires,
@@ -74,7 +76,7 @@ export function useModeration({
   ): Promise<void> => {
     const expires = Date.now() + durationMinutes * 60 * 1000;
     const updates = { isVoiceBanned: true, banExpires: expires };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await updateUserModeration(userId, {
         is_voice_banned: true,
         ban_expires: expires,
@@ -90,7 +92,7 @@ export function useModeration({
 
   const handleUnmuteUser = async (userId: string): Promise<void> => {
     const updates = { isMuted: false, muteExpires: undefined };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await updateUserModeration(userId, {
         is_muted: false,
         mute_expires: null,
@@ -106,7 +108,7 @@ export function useModeration({
 
   const handleUnbanUser = async (userId: string): Promise<void> => {
     const updates = { isVoiceBanned: false, banExpires: undefined };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await updateUserModeration(userId, {
         is_voice_banned: false,
         ban_expires: null,
@@ -144,7 +146,7 @@ export function useModeration({
     if (!targetUser) return;
     const newIsAdmin = !targetUser.isAdmin;
     const updates = { isAdmin: newIsAdmin };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await updateUserModeration(userId, {
         is_admin: newIsAdmin,
       });
@@ -159,7 +161,7 @@ export function useModeration({
 
   const handleSetServerCreationPlan = async (userId: string, newPlan: 'none' | 'free' | 'pro' | 'ultra'): Promise<void> => {
     if (!currentUser.isPrimaryAdmin && !currentUser.isAdmin) return;
-    if (!isSupabaseUser(userId)) return;
+    if (!isUuidUser(userId)) return;
     const { data, error } = await setServerCreationPlanRpc(userId, newPlan);
     if (error || rpcError(data)) { showError(); return; }
     logger.info('Moderation: set-server-creation-plan', { by: currentUser.id, target: userId, newPlan });
@@ -173,7 +175,7 @@ export function useModeration({
     if (!targetUser) return;
     const newIsModerator = !targetUser.isModerator;
     const updates = { isModerator: newIsModerator };
-    if (isSupabaseUser(userId)) {
+    if (isUuidUser(userId)) {
       const { data, error } = await toggleUserModerator(userId, newIsModerator);
       if (error || rpcError(data)) { showError(); return; }
     }

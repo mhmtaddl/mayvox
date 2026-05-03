@@ -114,7 +114,7 @@ export async function listEvents(
     params,
   );
 
-  // 2) Profile enrichment — Supabase'den batch fetch (profiles Hetzner'da değil)
+  // 2) Profile enrichment — local profiles tablosundan batch fetch
   const userIds = [...new Set(rows.map(r => r.user_id).filter((x): x is string => !!x))];
   let profileMap = new Map<string, { name: string; avatar: string | null }>();
   if (userIds.length > 0) {

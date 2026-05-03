@@ -22,14 +22,14 @@ import {
   useInviteCodeForEmail,
   updateActivityOnLogout,
   updateShowLastSeen,
-} from './lib/supabase';
+} from './lib/backendClient';
 import { getMe, login as authLogin, logout as authLogout, register as authRegister } from './lib/authClient';
 import { playSound } from './lib/sounds';
 import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
-import { sendPresencePatch } from './lib/chatService';
+import { connectChat, sendPresencePatch } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 import {
@@ -39,7 +39,7 @@ import {
   getThemePack,
 } from './lib/themePacks';
 
-// Supabase DB satır tipleri
+// Backend DB satır tipleri
 type DbProfile = {
   id: string; name: string; display_name?: string; email?: string; first_name?: string; last_name?: string;
   age?: number; avatar?: string; is_admin?: boolean; is_primary_admin?: boolean;
@@ -102,7 +102,7 @@ import { pushInformational } from './features/notifications/informationalStore';
 import { playNotifyBeep } from './features/notifications/notificationSound';
 import { requestElectronFlash } from './features/notifications/electronAttention';
 
-const isSupabaseUser = (userId: string) => userId.includes('-');
+const isUuidUser = (userId: string) => userId.includes('-');
 
 function mapDbProfile(
   p: DbProfile,
@@ -227,16 +227,22 @@ function isConnectivityError(err: unknown): boolean {
 const STARTUP_MAINTENANCE_MESSAGE =
   'Şu anda MAYVOX sunucularına ulaşılamıyor. Kısa bir bakım veya bağlantı kesintisi olabilir.';
 
+function getBackendHealthUrl(): string | null {
+  const apiBase = import.meta.env.VITE_SERVER_API_URL;
+  if (!apiBase) return null;
+  return `${String(apiBase).replace(/\/$/, '')}/health`;
+}
+
 async function shouldShowStartupMaintenance(err: unknown): Promise<boolean> {
   if (!isConnectivityError(err)) return false;
 
-  const apiBase = import.meta.env.VITE_SERVER_API_URL || import.meta.env.VITE_TOKEN_SERVER_URL;
-  if (!apiBase) return true;
+  const healthUrl = getBackendHealthUrl();
+  if (!healthUrl) return true;
 
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`${String(apiBase).replace(/\/$/, '')}/health`, {
+    const res = await fetch(healthUrl, {
       method: 'GET',
       cache: 'no-store',
       signal: controller.signal,
@@ -307,6 +313,11 @@ export default function App() {
   const [view, setView] = useState<AppView>('loading');
   const [, setIsSessionLoading] = useState(true);
   const [startupMaintenanceMessage, setStartupMaintenanceMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log('CONNECT CHAT TRIGGERED');
+    void connectChat();
+  }, []);
 
   useEffect(() => {
     const api = (window as Window & { electronWindow?: { setAuthMode?: (enabled: boolean, kind?: string) => void } }).electronWindow;
@@ -897,7 +908,7 @@ export default function App() {
   const presenceDeps = { startPresence, resyncPresence, resyncPresenceRef };
 
   // ── Backend-driven presence (online + last_seen) ────────────────────────
-  // Supabase Realtime presence oda/audio state'i için kalıyor; global online
+  // Realtime presence oda/audio state'i için kalıyor; global online
   // ve last_seen kaynağı artık custom chat-server (Hetzner).
   useBackendPresence({
     currentUserId: currentUser.id || null,
@@ -1097,9 +1108,12 @@ export default function App() {
     // Fallback ping — sadece oda dışında
     const pingInterval = setInterval(async () => {
       if (isInRoom() || !navigator.onLine) return;
+      const healthUrl = getBackendHealthUrl();
+      if (!healthUrl) return;
       const start = Date.now();
       try {
-        await fetch(import.meta.env.VITE_SUPABASE_URL + '/rest/v1/', { method: 'HEAD', cache: 'no-store', headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY } });
+        const response = await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
+        if (!response.ok) throw new Error(`Backend health failed: ${response.status}`);
         const rtt = Date.now() - start;
         // Ref'i tekrar kontrol — fetch sırasında odaya girilmiş olabilir
         if (isInRoom()) return;
@@ -1237,7 +1251,7 @@ export default function App() {
             newUser.isMuted = false;
             newUser.muteExpires = undefined;
             updated = true;
-            if (isSupabaseUser(u.id)) updateUserModeration(u.id, { is_muted: false, mute_expires: null });
+            if (isUuidUser(u.id)) updateUserModeration(u.id, { is_muted: false, mute_expires: null });
             // Eğer süre dolan kullanıcı mevcut kullanıcıysa UI state'ini de sıfırla
             if (u.id === currentUserRef.current.id) {
               setCurrentUser(prev => ({ ...prev, isMuted: false, muteExpires: undefined }));
@@ -1248,7 +1262,7 @@ export default function App() {
             newUser.isVoiceBanned = false;
             newUser.banExpires = undefined;
             updated = true;
-            if (isSupabaseUser(u.id)) updateUserModeration(u.id, { is_voice_banned: false, ban_expires: null });
+            if (isUuidUser(u.id)) updateUserModeration(u.id, { is_voice_banned: false, ban_expires: null });
             if (u.id === currentUserRef.current.id) {
               setCurrentUser(prev => ({ ...prev, isVoiceBanned: false, banExpires: undefined }));
             }

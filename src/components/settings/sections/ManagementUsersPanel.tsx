@@ -14,7 +14,6 @@ import ConfirmModal from '../../ConfirmModal';
 import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
-import { supabase } from '../../../lib/supabase';
 import { getAuthToken } from '../../../lib/authClient';
 import {
   listAdminUsers,
@@ -247,7 +246,7 @@ export default function ManagementUsersPanel() {
             setToastMsg('Email yok, şifre sıfırlama maili gönderilemedi');
             break;
           }
-          const SERVER_URL = import.meta.env.VITE_TOKEN_SERVER_URL ?? 'https://api.mayvox.com';
+          const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
           const token = getAuthToken();
           if (!token) {
             setToastMsg('Oturum bulunamadı');

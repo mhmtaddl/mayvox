@@ -3,7 +3,7 @@ import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList } from 'lu
 import { CardSection, inputCls, labelCls } from '../shared';
 import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH, getPublicDisplayName } from '../../../lib/formatName';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
-import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../../../lib/supabase';
+import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../../../lib/backendClient';
 import { useUser } from '../../../contexts/UserContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useAppState } from '../../../contexts/AppStateContext';
@@ -203,7 +203,7 @@ function useAccountState() {
       setUpdateSuccessMessage('Profil fotoğrafı güncellendi!');
       setTimeout(() => setUpdateSuccessMessage(''), 3000);
     } catch {
-      setSettingsPasswordError('Fotoğraf yüklenemedi. Bucket ayarlarını kontrol edin.');
+      setSettingsPasswordError('Fotoğraf yüklenemedi. Lütfen tekrar deneyin.');
     } finally {
       setAvatarUploading(false);
     }

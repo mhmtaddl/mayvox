@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, UserPlus, UserMinus, Check, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../lib/supabase';
+import { getAllProfiles } from '../lib/backendClient';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -48,29 +48,13 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
 
     setIsSearching(true);
     try {
-      // Fetch broad candidates using first token (catches most relevant results)
-      const first = tokens[0];
-      const orClauses = tokens.length > 1
-        ? tokens.slice(0, 3).flatMap(t => [
-            `first_name.ilike.%${t}%`,
-            `last_name.ilike.%${t}%`,
-            `display_name.ilike.%${t}%`,
-            `name.ilike.%${t}%`,
-          ]).join(',')
-        : `display_name.ilike.%${first}%,first_name.ilike.%${first}%,last_name.ilike.%${first}%,name.ilike.%${first}%`;
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, name, display_name, first_name, last_name, avatar')
-        .or(orClauses)
-        .neq('id', currentUserId)
-        .limit(30); // fetch more, filter+rank client-side
+      const { data } = await getAllProfiles();
 
       if (!data) { setResults([]); setIsSearching(false); return; }
 
       // Client-side multi-token filter + ranking
       const scored: (SearchResult & { score: number })[] = [];
-      for (const p of data) {
+      for (const p of data.filter((profile: any) => profile.id !== currentUserId).slice(0, 100)) {
         const fn = (p.first_name || '').toLowerCase();
         const ln = (p.last_name || '').toLowerCase();
         const dn = (p.display_name || '').toLowerCase();

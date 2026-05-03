@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { BarChart3, AlertCircle, RefreshCw, RotateCw } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { getAllProfiles } from '../../../lib/backendClient';
 import {
   getServerInsights,
   refreshServerInsights,
@@ -89,7 +89,7 @@ export default function InsightsTab({ serverId }: Props) {
     }
   }, [serverId, refreshing, fetchInsights]);
 
-  // Supabase profile enrichment — backend user_id'lere name + avatar ekle.
+  // Profile enrichment — backend user_id'lere name + avatar ekle.
   useEffect(() => {
     if (!data) return;
     const ids = new Set<string>();
@@ -102,11 +102,12 @@ export default function InsightsTab({ serverId }: Props) {
     const needed = Array.from(ids).filter(id => !profiles.has(id));
     if (needed.length === 0) return;
 
-    supabase.from('profiles').select('id, name, display_name, first_name, last_name, avatar').in('id', needed).then(({ data: rows }) => {
+    getAllProfiles().then(({ data: allProfiles }) => {
+      const rows = (allProfiles ?? []).filter((profile: any) => needed.includes(profile.id));
       if (!rows) return;
       setProfiles(prev => {
         const next = new Map(prev);
-        for (const r of rows) {
+        for (const r of rows as any[]) {
           const full = `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim();
           next.set(r.id, { id: r.id, displayName: r.display_name || full || r.name || null, avatar: r.avatar ?? null });
         }

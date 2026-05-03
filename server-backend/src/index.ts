@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { config } from './config';
 import { pool } from './repositories/db';
 import serverRoutes from './routes/servers';
@@ -14,13 +15,17 @@ import { reconcileOrphanSessions, refreshActivityHeatmap } from './services/voic
 const app = express();
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+  maxAge: '30d',
+  immutable: true,
+}));
 
 // ── LiveKit webhook — JSON parser'dan ÖNCE raw body ile mount ──
 // WebhookReceiver HMAC verify raw string gerektirir; express.json() tüketirse bozulur.
 app.use('/webhooks', express.raw({ type: '*/*', limit: '256kb' }), webhookRoutes);
 
 // ── Genel JSON parser (diğer route'lar) ──
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // ── Health check ──
 app.get('/health', (_req, res) => {

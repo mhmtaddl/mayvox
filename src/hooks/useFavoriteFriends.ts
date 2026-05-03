@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { addFavoriteFriend, getFavoriteFriends, removeFavoriteFriend } from '../lib/friendsClient';
 
 /**
  * useFavoriteFriends — personal favorite/starred friends layer.
@@ -13,10 +13,7 @@ export function useFavoriteFriends(currentUserId: string | undefined) {
   const fetchFavorites = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const { data } = await supabase
-        .from('friend_favorites')
-        .select('friend_user_id')
-        .eq('owner_id', currentUserId);
+      const { data } = await getFavoriteFriends();
 
       if (!mountedRef.current) return;
       setFavoriteIds(new Set((data || []).map(r => r.friend_user_id)));
@@ -41,12 +38,9 @@ export function useFavoriteFriends(currentUserId: string | undefined) {
   const addFavorite = useCallback(async (friendId: string): Promise<boolean> => {
     if (!currentUserId || friendId === currentUserId) return false;
 
-    const { error } = await supabase
-      .from('friend_favorites')
-      .insert({ owner_id: currentUserId, friend_user_id: friendId });
-
-    if (error) {
-      if (error.code === '23505') return true; // already favorite
+    try {
+      await addFavoriteFriend(friendId);
+    } catch (error) {
       console.error('addFavorite error:', error);
       return false;
     }
@@ -58,13 +52,9 @@ export function useFavoriteFriends(currentUserId: string | undefined) {
   const removeFavorite = useCallback(async (friendId: string): Promise<boolean> => {
     if (!currentUserId) return false;
 
-    const { error } = await supabase
-      .from('friend_favorites')
-      .delete()
-      .eq('owner_id', currentUserId)
-      .eq('friend_user_id', friendId);
-
-    if (error) {
+    try {
+      await removeFavoriteFriend(friendId);
+    } catch (error) {
       console.error('removeFavorite error:', error);
       return false;
     }

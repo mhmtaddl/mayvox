@@ -64,6 +64,8 @@ export interface Channel {
   mode: string | null;
   icon_name: string | null;
   icon_color: string | null;
+  password: string | null;
+  password_hash: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +86,7 @@ export interface ChannelResponse {
   mode: string | null;
   iconName: string | null;
   iconColor: string | null;
+  password?: string | null;
   createdAt: string;
   updatedAt: string;
 }

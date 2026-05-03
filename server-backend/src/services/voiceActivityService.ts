@@ -214,8 +214,8 @@ export function refreshActivityHeatmapOnce(): Promise<Date> {
 export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Promise<InsightsResponse> {
   const startClause = `now() - INTERVAL '${rangeDays} days'`;
 
-  // Profiles tablosu çoğu yerde Supabase'de — ama bu sunucuda yerel cache/mirror varsa query'den alınabilir.
-  // Güvenlik: profiles tablosu Supabase, burada LEFT JOIN çalışmayabilir.
+  // Profiles tablosu yerel DB'de varsa query'den alınabilir.
+  // Güvenlik: profiles join'i başarısız olursa insights metrikleri yine dönmeli.
   // Pragmatik: display_name/avatar'ı NULL bırak; route layer'da isterse enrichment yap.
   // (moderationStatsService.listEvents paternini takip ediyoruz — profile enrichment route'ta)
 
@@ -243,7 +243,7 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     const sessionCount = Number(r.session_count) || 0;
     return {
       userId: r.user_id,
-      displayName: null,                 // Supabase enrichment route layer'da
+      displayName: null,                 // profile enrichment route layer'da
       avatarUrl: null,
       totalSec,
       sessionCount,

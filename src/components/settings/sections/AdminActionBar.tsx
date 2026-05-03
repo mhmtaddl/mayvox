@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useUI } from '../../../contexts/UIContext';
 import InviteRequestPanel from '../../InviteRequestPanel';
-import { listAdminInviteCodes, invalidateInviteCode, type AdminInviteCodeRow } from '../../../lib/supabase';
+import { listAdminInviteCodes, invalidateInviteCode, type AdminInviteCodeRow } from '../../../lib/backendClient';
 
 const PAGE_SIZE = 5;
 

@@ -1,6 +1,8 @@
 const AUTH_API_BASE = import.meta.env.VITE_SERVER_API_URL || '';
 const AUTH_TOKEN_KEY = 'mayvox-auth-token';
 
+console.log('[authClient] API BASE:', AUTH_API_BASE);
+
 export interface AuthProfile {
   id: string;
   email: string;

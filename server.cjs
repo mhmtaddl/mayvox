@@ -1,9 +1,9 @@
 const express = require('express');
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
-const { createClient } = require('@supabase/supabase-js');
 const { rateLimit } = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const { Pool } = require('pg');
 if (!process.env.ELECTRON_IS_PACKAGED) {
   require('dotenv').config();
 }
@@ -74,22 +74,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: Date.now() });
 });
 
-// ── Supabase helpers ──────────────────────────────────────────────────────
-const getSupabaseUrl = () => process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const getSupabaseAnonKey = () => process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const createAnonClient = () => createClient(getSupabaseUrl(), getSupabaseAnonKey());
-const createAdminClient = () => createClient(getSupabaseUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY);
+// ── Postgres helpers ──────────────────────────────────────────────────────
+const DATABASE_URL = process.env.DATABASE_URL;
+const JWT_SECRET = process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET;
+const pool = new Pool({ connectionString: DATABASE_URL });
+
+async function queryOne(text, params = []) {
+  const { rows } = await pool.query(text, params);
+  return rows[0] || null;
+}
 
 async function updateAppUserPasswordByProfileId(profileId, password) {
   const passwordHash = await bcrypt.hash(password, 12);
-  const { Pool } = require('pg');
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const result = await pool.query('UPDATE app_users SET password_hash = $1 WHERE profile_id = $2', [passwordHash, profileId]);
-    if (!result.rowCount) throw new Error('app_users kaydı bulunamadı');
-  } finally {
-    await pool.end().catch(() => {});
-  }
+  const result = await pool.query('UPDATE app_users SET password_hash = $1, updated_at = now() WHERE profile_id = $2', [passwordHash, profileId]);
+  if (!result.rowCount) throw new Error('app_users kaydı bulunamadı');
 }
 
 // ── Resend helpers ────────────────────────────────────────────────────────
@@ -138,7 +136,7 @@ async function verifyAuth(req, res) {
     return null;
   }
   try {
-    const payload = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET);
+    const payload = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
     if (!payload || typeof payload !== 'object' || !payload.profileId) throw new Error('invalid payload');
     return {
       id: String(payload.profileId),
@@ -156,8 +154,7 @@ async function verifyAuth(req, res) {
 async function verifyAdmin(req, res) {
   const user = await verifyAuth(req, res);
   if (!user) return null;
-  const { data: profile } = await createAdminClient()
-    .from('profiles').select('is_admin, is_primary_admin').eq('id', user.id).single();
+  const profile = await queryOne('SELECT is_admin, is_primary_admin FROM profiles WHERE id = $1', [user.id]);
   if (!profile?.is_admin && !profile?.is_primary_admin) {
     res.status(403).json({ error: 'Admin yetkisi gerekli' });
     return null;
@@ -299,9 +296,9 @@ app.post('/api/check-user', checkUserLimiter, async (req, res) => {
     return res.status(400).json({ error: 'identifier gerekli' });
   }
   const isEmail = identifier.includes('@');
-  const { data } = isEmail
-    ? await createAnonClient().from('profiles').select('id, name').eq('email', identifier.toLowerCase()).single()
-    : await createAnonClient().from('profiles').select('id, name').eq('name', identifier).single();
+  const data = isEmail
+    ? await queryOne('SELECT id, name FROM profiles WHERE lower(email) = lower($1)', [identifier])
+    : await queryOne('SELECT id, name FROM profiles WHERE name = $1', [identifier]);
   if (!data) return res.json({ exists: false });
   res.json({ exists: true, userId: data.id, name: data.name });
 });
@@ -312,9 +309,7 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId gerekli' });
   if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış' });
 
-  const admin = createAdminClient();
-  const { data: target } = await admin
-    .from('profiles').select('name, email').eq('id', userId).single();
+  const target = await queryOne('SELECT name, email FROM profiles WHERE id = $1', [userId]);
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
@@ -337,7 +332,10 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Şifre güncellenemedi, lütfen tekrar deneyin.' });
   }
 
-  await admin.from('profiles').update({ must_change_password: true, password_reset_requested: false }).eq('id', userId);
+  await pool.query(
+    'UPDATE profiles SET must_change_password = true, password_reset_requested = false WHERE id = $1',
+    [userId],
+  );
   res.json({ success: true });
 });
 
@@ -356,9 +354,7 @@ app.post('/api/admin-reset-password', async (req, res) => {
   const { targetUserId } = req.body;
   if (!targetUserId) return res.status(400).json({ error: 'targetUserId gerekli' });
 
-  const admin = createAdminClient();
-  const { data: target } = await admin
-    .from('profiles').select('name, email').eq('id', targetUserId).single();
+  const target = await queryOne('SELECT name, email FROM profiles WHERE id = $1', [targetUserId]);
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
@@ -381,7 +377,10 @@ app.post('/api/admin-reset-password', async (req, res) => {
     return res.status(500).json({ error: 'Şifre güncellenemedi, lütfen tekrar deneyin.' });
   }
 
-  await admin.from('profiles').update({ must_change_password: true, password_reset_requested: false }).eq('id', targetUserId);
+  await pool.query(
+    'UPDATE profiles SET must_change_password = true, password_reset_requested = false WHERE id = $1',
+    [targetUserId],
+  );
   res.json({ success: true });
 });
 
@@ -391,7 +390,7 @@ app.post('/api/dismiss-password-reset', async (req, res) => {
   if (!user) return;
   const { targetUserId } = req.body;
   if (!targetUserId) return res.status(400).json({ error: 'targetUserId gerekli' });
-  await createAdminClient().from('profiles').update({ password_reset_requested: false }).eq('id', targetUserId);
+  await pool.query('UPDATE profiles SET password_reset_requested = false WHERE id = $1', [targetUserId]);
   res.json({ success: true });
 });
 
@@ -449,19 +448,15 @@ app.post('/api/send-rejection-email', async (req, res) => {
 app.post('/api/clear-must-change-password', async (req, res) => {
   const user = await verifyAuth(req, res);
   if (!user) return;
-  const { error } = await createAdminClient()
-    .from('profiles').update({ must_change_password: false }).eq('id', user.id);
-  if (error) return res.status(500).json({ error: 'Flag temizlenemedi' });
+  await pool.query('UPDATE profiles SET must_change_password = false WHERE id = $1', [user.id]);
   res.json({ success: true });
 });
 
 // ── Startup ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 10000;
 
-const required = ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'SUPABASE_SERVICE_ROLE_KEY'];
+const required = ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'DATABASE_URL', 'JWT_SECRET'];
 const missing = required.filter(k => !process.env[k]);
-if (!getSupabaseUrl()) missing.push('SUPABASE_URL');
-if (!getSupabaseAnonKey()) missing.push('SUPABASE_ANON_KEY');
 if (!LIVEKIT_URL) missing.push('LIVEKIT_URL (veya LIVEKIT_HOST)');
 if (missing.length) console.warn(`[server] Eksik env: ${missing.join(', ')}`);
 

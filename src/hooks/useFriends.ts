@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
 import { subscribeRealtimeEvents } from '../lib/chatService';
 import { playNotification } from '../lib/audio/SoundManager';
 import { playNotifyBeep } from '../features/notifications/notificationSound';
+import {
+  getFriendState,
+  sendFriendRequest,
+  updateFriendRequest,
+  removeFriendship,
+} from '../lib/friendsClient';
 
 export type RequestDirection = 'incoming' | 'outgoing';
 
@@ -28,14 +33,11 @@ export function useFriends(currentUserId: string | undefined) {
   const fetchFriends = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const { data } = await supabase
-        .from('friendships')
-        .select('user_low_id, user_high_id')
-        .or(`user_low_id.eq.${currentUserId},user_high_id.eq.${currentUserId}`);
+      const data = await getFriendState();
 
       if (!mountedRef.current) return;
       const ids = new Set<string>();
-      for (const row of data || []) {
+      for (const row of data.friends || []) {
         ids.add(row.user_low_id === currentUserId ? row.user_high_id : row.user_low_id);
       }
       setFriendIds(ids);
@@ -48,15 +50,11 @@ export function useFriends(currentUserId: string | undefined) {
   const fetchRequests = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const { data } = await supabase
-        .from('friend_requests')
-        .select('id, sender_id, receiver_id, status, created_at')
-        .eq('status', 'pending')
-        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+      const data = await getFriendState();
 
       if (!mountedRef.current) return;
       setRequests(
-        (data || []).map(r => ({
+        (data.requests || []).map(r => ({
           id: r.id,
           senderId: r.sender_id,
           receiverId: r.receiver_id,
@@ -159,15 +157,11 @@ export function useFriends(currentUserId: string | undefined) {
     if (!currentUserId || otherId === currentUserId) return false;
     if (friendIds.has(otherId)) return false; // already friends
 
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .insert({ sender_id: currentUserId, receiver_id: otherId })
-      .select('id, sender_id, receiver_id, status, created_at')
-      .single();
-
-    if (error) {
-      // Duplicate pending (unique index)
-      if (error.code === '23505') return false;
+    let data;
+    try {
+      const res = await sendFriendRequest(otherId);
+      data = res.data;
+    } catch (error) {
       console.error('sendRequest error:', error);
       return false;
     }
@@ -189,28 +183,10 @@ export function useFriends(currentUserId: string | undefined) {
     const req = incomingMap.get(otherId);
     if (!req) return false;
 
-    // 1. Update request → accepted
-    const { error: updateErr } = await supabase
-      .from('friend_requests')
-      .update({ status: 'accepted', updated_at: new Date().toISOString() })
-      .eq('id', req.id);
-
-    if (updateErr) {
-      console.error('acceptRequest update error:', updateErr);
-      return false;
-    }
-
-    // 2. Insert into friendships
-    const [low, high] = currentUserId < otherId
-      ? [currentUserId, otherId]
-      : [otherId, currentUserId];
-
-    const { error: insertErr } = await supabase
-      .from('friendships')
-      .insert({ user_low_id: low, user_high_id: high });
-
-    if (insertErr && insertErr.code !== '23505') {
-      console.error('acceptRequest insert error:', insertErr);
+    try {
+      await updateFriendRequest(req.id, 'accepted');
+    } catch (error) {
+      console.error('acceptRequest error:', error);
       return false;
     }
 
@@ -225,12 +201,9 @@ export function useFriends(currentUserId: string | undefined) {
     const req = incomingMap.get(otherId);
     if (!req) return false;
 
-    const { error } = await supabase
-      .from('friend_requests')
-      .update({ status: 'rejected', updated_at: new Date().toISOString() })
-      .eq('id', req.id);
-
-    if (error) {
+    try {
+      await updateFriendRequest(req.id, 'rejected');
+    } catch (error) {
       console.error('rejectRequest error:', error);
       return false;
     }
@@ -244,12 +217,9 @@ export function useFriends(currentUserId: string | undefined) {
     const req = outgoingMap.get(otherId);
     if (!req) return false;
 
-    const { error } = await supabase
-      .from('friend_requests')
-      .update({ status: 'rejected', updated_at: new Date().toISOString() })
-      .eq('id', req.id);
-
-    if (error) {
+    try {
+      await updateFriendRequest(req.id, 'rejected');
+    } catch (error) {
       console.error('cancelRequest error:', error);
       return false;
     }
@@ -261,17 +231,9 @@ export function useFriends(currentUserId: string | undefined) {
   const removeFriend = useCallback(async (otherId: string): Promise<boolean> => {
     if (!currentUserId) return false;
 
-    const [low, high] = currentUserId < otherId
-      ? [currentUserId, otherId]
-      : [otherId, currentUserId];
-
-    const { error } = await supabase
-      .from('friendships')
-      .delete()
-      .eq('user_low_id', low)
-      .eq('user_high_id', high);
-
-    if (error) {
+    try {
+      await removeFriendship(otherId);
+    } catch (error) {
       console.error('removeFriend error:', error);
       return false;
     }

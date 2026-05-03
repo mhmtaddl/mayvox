@@ -6,7 +6,7 @@
  *   2. Sorgu `friendships` tablosunda tek satırla eşleşir.
  *   3. Sonuç `null`/`undefined` ise arkadaş DEĞİL.
  *
- * Burada SQL yok — sadece edge-case mantığı; Supabase mock'suz test edilir.
+ * Burada SQL yok — sadece edge-case mantığı; DB mock'suz test edilir.
  */
 
 export interface FriendshipRowLike {
@@ -33,7 +33,7 @@ export function canonicalPair(a: unknown, b: unknown): CanonicalPair | null {
 }
 
 /**
- * Supabase `friendships` satırından arkadaşlık durumunu türetir.
+ * `friendships` satırından arkadaşlık durumunu türetir.
  * null/undefined/boş array → false. Schema bozulsa bile fail-closed.
  */
 export function interpretFriendshipResult(
