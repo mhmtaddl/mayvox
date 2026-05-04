@@ -24,10 +24,10 @@ function cap(tier: AttentionTier, ceiling: AttentionTier): AttentionTier {
  *   - aksi halde NORMAL
  *
  * NOT: `isInVoiceRoom` (sadece odada oturmak) VOICE_PRIORITY'ye geçirmez.
- * Kullanıcı talebi: "sohbet odasında dahi olsa o ses, ton çalacak. mesaj sesini
- * duyacak herkes." Passive presence sound suppression'ına neden olmaz.
- * Sadece aktif konuşma anında ducking yapılır ki konuşma sırasında DM
- * tonu araya girmesin; aksi halde mesaj sesi her zaman duyulur.
+ * Passive presence DM bildirim tonunu kendiliğinden kısmaz. Oda içi yazılı
+ * mesaj sesi ayrı kullanıcı tercihiyle (`notify:room-message-sound`) kapatılır.
+ * Sadece aktif konuşma anında ducking yapılır ki konuşma sırasında DM tonu araya
+ * girmesin.
  */
 export function resolveEffectiveMode(ctx: PolicyContext): NotificationMode {
   if (ctx.mode === 'QUIET' || ctx.mode === 'FOCUS' || ctx.mode === 'VOICE_PRIORITY') return ctx.mode;

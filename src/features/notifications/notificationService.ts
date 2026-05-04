@@ -14,6 +14,7 @@ import type { DmMessage } from '../../lib/dmService';
 import { safePublicName } from '../../lib/formatName';
 import { playNotifyBeep } from './notificationSound';
 import { playMessageReceive, playNotification } from '../../lib/audio/SoundManager';
+import { shouldSuppressSettingsSoundInChatRoom } from '../../lib/soundRoomPreference';
 import { requestElectronFlash } from './electronAttention';
 import { hasSeen, markSeen } from './dedupeChannel';
 import {
@@ -637,6 +638,7 @@ function applySideEffects(kind: ToastKind, d: NotificationDecision) {
   // playNotifyBeep'in kendi 'notify:sound' check'i = aynı message-enabled key
   // olduğu için DM kapalıysa fallback de sessiz kalır (tutarlı davranış).
   if (d.sound === 'subtle') {
+    if (kind !== 'dm' && shouldSuppressSettingsSoundInChatRoom()) return;
     const now = Date.now();
     if (now - lastSoundAt[kind] >= SOUND_RATE_MS[kind]) {
       lastSoundAt[kind] = now;

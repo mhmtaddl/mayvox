@@ -377,6 +377,8 @@ export function usePresence({
       ...(updates.avatar !== undefined && { avatar: updates.avatar }),
       ...(updates.statusText !== undefined && { statusText: updates.statusText }),
       ...(updates.avatarBorderColor !== undefined && { avatarBorderColor: updates.avatarBorderColor }),
+      ...(updates.allowNonFriendDms !== undefined && { allowNonFriendDms: updates.allowNonFriendDms }),
+      ...(updates.showDmReadReceipts !== undefined && { showDmReadReceipts: updates.showDmReadReceipts }),
     };
     if (Object.keys(otherFields).length > 0) {
       setAllUsers(prev => prev.map(u => (u.id === payload.userId ? { ...u, ...otherFields } : u)));

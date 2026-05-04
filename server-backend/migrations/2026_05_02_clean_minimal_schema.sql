@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   last_seen_visibility TEXT NOT NULL DEFAULT 'everyone',
   online_visibility TEXT NOT NULL DEFAULT 'everyone',
   last_seen_except_ids UUID[] NOT NULL DEFAULT '{}',
+  allow_non_friend_dms BOOLEAN NOT NULL DEFAULT true,
+  show_dm_read_receipts BOOLEAN NOT NULL DEFAULT true,
   server_creation_plan TEXT NOT NULL DEFAULT 'none',
   server_creation_plan_source TEXT,
   server_creation_plan_start TIMESTAMPTZ,
@@ -76,6 +78,8 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS last_seen_visibility TEXT NOT NULL DEFAULT 'everyone',
   ADD COLUMN IF NOT EXISTS online_visibility TEXT NOT NULL DEFAULT 'everyone',
   ADD COLUMN IF NOT EXISTS last_seen_except_ids UUID[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS allow_non_friend_dms BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS show_dm_read_receipts BOOLEAN NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS server_creation_plan TEXT NOT NULL DEFAULT 'none',
   ADD COLUMN IF NOT EXISTS server_creation_plan_source TEXT,
   ADD COLUMN IF NOT EXISTS server_creation_plan_start TIMESTAMPTZ,
@@ -88,6 +92,12 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user',
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+ALTER TABLE profiles
+  ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+ALTER TABLE profiles
+  DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_lower ON profiles (LOWER(email)) WHERE email IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_name_lower ON profiles (LOWER(name)) WHERE name IS NOT NULL AND name <> '';
@@ -116,6 +126,9 @@ ALTER TABLE app_users
   ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user',
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+ALTER TABLE app_users
+  ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_auth_user_id ON app_users(auth_user_id) WHERE auth_user_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_profile_id ON app_users(profile_id);

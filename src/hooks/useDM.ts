@@ -5,10 +5,17 @@ import {
   dmLoadConversations,
   dmOpenConversation,
   dmSendMessage,
+  dmEditMessage,
+  dmDeleteMessage,
   dmMarkRead,
   dmRequestUnreadTotal,
   dmHideConversation,
   dmEmitTyping,
+  dmAcceptRequest,
+  dmRejectRequest,
+  dmBlockUser,
+  dmUnblockUser,
+  dmLoadBlocks,
   type DmConversation,
   type DmMessage,
 } from '../lib/dmService';
@@ -22,6 +29,9 @@ import { subscribeConnectionStatus } from '../lib/chatService';
  */
 export function useDM(currentUserId: string | undefined) {
   const [conversations, setConversations] = useState<DmConversation[]>([]);
+  const [requests, setRequests] = useState<DmConversation[]>([]);
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+  const [lastError, setLastError] = useState<string | null>(null);
   const [activeConvKey, setActiveConvKey] = useState<string | null>(null);
   const [activeRecipientId, setActiveRecipientId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DmMessage[]>([]);
@@ -30,6 +40,7 @@ export function useDM(currentUserId: string | undefined) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [typingFrom, setTypingFrom] = useState<string | null>(null);
   const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingEmitAtRef = useRef(0);
 
   const activeConvKeyRef = useRef(activeConvKey);
@@ -53,9 +64,10 @@ export function useDM(currentUserId: string | undefined) {
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
     setDmHandlers({
-      onConversations: (convos) => {
+      onConversations: (convos, requestConvos = []) => {
         // Optimistic hide filtresi — server henüz hide'ı işlememişse client tarafında filtrele
         const filtered = convos.filter(c => !hiddenKeysRef.current.has(c.conversationKey));
+        const filteredRequests = requestConvos.filter(c => !hiddenKeysRef.current.has(c.conversationKey));
         // Defensive: openConversation ile loadInitial arasında race oluşmuş olabilir
         // — server listesi aktif konuşma için hâlâ unread>0 taşıyorsa lokalde sıfırla
         // + authoritative mark-read yolla. markReadSafe idempotent.
@@ -67,6 +79,7 @@ export function useDM(currentUserId: string | undefined) {
           ? filtered.map(c => c.conversationKey === activeKey ? { ...c, unreadCount: 0 } : c)
           : filtered;
         setConversations(fixed);
+        setRequests(filteredRequests);
         if (staleUnread > 0 && activeKey) {
           markReadSafe(activeKey);
           setTotalUnread(prev => Math.max(0, prev - staleUnread));
@@ -74,11 +87,22 @@ export function useDM(currentUserId: string | undefined) {
       },
       onHistory: (convKey, _recipientId, msgs) => {
         if (convKey === activeConvKeyRef.current) {
+          if (historyTimeoutRef.current) {
+            clearTimeout(historyTimeoutRef.current);
+            historyTimeoutRef.current = null;
+          }
           setMessages(msgs);
           setLoadingHistory(false);
         }
       },
       onNewMessage: (msg) => {
+        const isIncomingRequest =
+          msg.senderId !== currentUserId
+          && (
+            msg.isRequest === true
+            || (msg.requestStatus === 'pending' && msg.requestReceiverId === currentUserId)
+          );
+
         // Yeni mesaj gelirse hidden set'ten kaldır — konuşma tekrar görünsün
         hiddenKeysRef.current.delete(msg.conversationKey);
 
@@ -102,7 +126,7 @@ export function useDM(currentUserId: string | undefined) {
         }
 
         // Conversation listesini güncelle
-        setConversations(prev => {
+        const updateList = (prev: DmConversation[]) => {
           const existing = prev.find(c => c.conversationKey === msg.conversationKey);
           const preview = msg.text.length > 100 ? msg.text.slice(0, 100) + '…' : msg.text;
 
@@ -132,9 +156,19 @@ export function useDM(currentUserId: string | undefined) {
             createdAt: msg.createdAt,
             recipientName: msg.senderName,
             recipientAvatar: msg.senderAvatar,
+            requestStatus: msg.requestStatus,
+            requestReceiverId: msg.requestReceiverId,
+            isRequest: msg.isRequest,
           };
           return [newConvo, ...prev];
-        });
+        };
+        if (isIncomingRequest) {
+          setRequests(updateList);
+          setConversations(prev => prev.filter(c => c.conversationKey !== msg.conversationKey));
+        } else {
+          setConversations(updateList);
+          setRequests(prev => prev.filter(c => c.conversationKey !== msg.conversationKey));
+        }
 
         // Unread total güncelle
         if (msg.senderId !== currentUserId && msg.conversationKey !== activeConvKeyRef.current) {
@@ -167,6 +201,36 @@ export function useDM(currentUserId: string | undefined) {
             : m
         ));
       },
+      onMessageEdited: (msg, lastMessage, lastMessageAt) => {
+        if (!msg?.id) return;
+        if (msg.conversationKey === activeConvKeyRef.current) {
+          setMessages(prev => prev.map(m =>
+            m.id === msg.id
+              ? { ...m, text: msg.text, editedAt: msg.editedAt ?? Date.now() }
+              : m
+          ));
+        }
+        if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
+          setConversations(prev => prev.map(c =>
+            c.conversationKey === msg.conversationKey
+              ? { ...c, lastMessage, lastMessageAt }
+              : c
+          ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
+        }
+      },
+      onMessageDeleted: (convKey, messageId, lastMessage, lastMessageAt) => {
+        if (!convKey || !messageId) return;
+        if (convKey === activeConvKeyRef.current) {
+          setMessages(prev => prev.filter(m => m.id !== messageId));
+        }
+        if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
+          setConversations(prev => prev.map(c =>
+            c.conversationKey === convKey
+              ? { ...c, lastMessage, lastMessageAt }
+              : c
+          ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
+        }
+      },
       onUnreadTotal: (count) => {
         setTotalUnread(Math.max(0, count));
       },
@@ -178,13 +242,27 @@ export function useDM(currentUserId: string | undefined) {
         if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
         typingClearTimerRef.current = setTimeout(() => setTypingFrom(null), TYPING_CLEAR_MS);
       },
+      onRequestUpdated: () => {
+        dmLoadConversations();
+        dmRequestUnreadTotal();
+      },
+      onBlocks: (ids) => {
+        setBlockedIds(new Set(ids));
+      },
       onError: (message) => {
         console.warn('[useDM] Error:', message);
+        setLastError(message);
+        if (historyTimeoutRef.current) {
+          clearTimeout(historyTimeoutRef.current);
+          historyTimeoutRef.current = null;
+        }
+        setLoadingHistory(false);
       },
       onConnected: () => {
         // WS auth tamamlandı — conversations ve unread yükle
         dmLoadConversations();
         dmRequestUnreadTotal();
+        dmLoadBlocks();
       },
     });
   }, [currentUserId, markReadSafe]);
@@ -194,6 +272,7 @@ export function useDM(currentUserId: string | undefined) {
     if (!currentUserId) return;
     dmLoadConversations();
     dmRequestUnreadTotal();
+    dmLoadBlocks();
   }, [currentUserId]);
 
   // Reconnect recovery — WS yeniden bağlandığında conversation + unread'i senkronize et.
@@ -209,6 +288,7 @@ export function useDM(currentUserId: string | undefined) {
       // Gerçek reconnect
       dmLoadConversations();
       dmRequestUnreadTotal();
+      dmLoadBlocks();
     });
     return unsub;
   }, [currentUserId]);
@@ -228,6 +308,13 @@ export function useDM(currentUserId: string | undefined) {
     setLoadingHistory(true);
     setTypingFrom(null);
     setPanelOpen(true);
+    if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
+    historyTimeoutRef.current = setTimeout(() => {
+      if (activeConvKeyRef.current === convKey) {
+        setLoadingHistory(false);
+      }
+      historyTimeoutRef.current = null;
+    }, 4500);
 
     dmOpenConversation(recipientId);
     // Authoritative mark-read — dm:open event'i mark-read GARANTİ ETMİYOR,
@@ -261,8 +348,32 @@ export function useDM(currentUserId: string | undefined) {
     lastDmSendRef.current = now;
     lastDmTextRef.current = trimmed;
     logger.info('DM send', { recipientId: activeRecipientId });
-    dmSendMessage(activeRecipientId, trimmed);
+    setLastError(null);
+    const sent = dmSendMessage(activeRecipientId, trimmed);
+    if (!sent) {
+      setLastError('Mesaj gönderilemedi: bağlantı hazır değil.');
+      return;
+    }
   }, [activeRecipientId]);
+
+  const deleteMessage = useCallback((messageId: string) => {
+    if (!messageId) return;
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    dmDeleteMessage(messageId);
+  }, []);
+
+  const editMessage = useCallback((messageId: string, text: string) => {
+    if (!messageId) return;
+    const trimmed = text.trim();
+    if (!trimmed) {
+      deleteMessage(messageId);
+      return;
+    }
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, text: trimmed, editedAt: Date.now() } : m
+    ));
+    dmEditMessage(messageId, trimmed);
+  }, [deleteMessage]);
 
   const closeConversation = useCallback(() => {
     setActiveConvKey(null);
@@ -270,7 +381,42 @@ export function useDM(currentUserId: string | undefined) {
     setMessages([]);
     setTypingFrom(null);
     setLoadingHistory(false);
+    if (historyTimeoutRef.current) { clearTimeout(historyTimeoutRef.current); historyTimeoutRef.current = null; }
     if (typingClearTimerRef.current) { clearTimeout(typingClearTimerRef.current); typingClearTimerRef.current = null; }
+  }, []);
+
+  const acceptRequest = useCallback((convKey: string) => {
+    if (!convKey) return;
+    dmAcceptRequest(convKey);
+    setRequests(prev => prev.filter(c => c.conversationKey !== convKey));
+    dmLoadConversations();
+  }, []);
+
+  const rejectRequest = useCallback((convKey: string) => {
+    if (!convKey) return;
+    dmRejectRequest(convKey);
+    setRequests(prev => prev.filter(c => c.conversationKey !== convKey));
+    if (activeConvKey === convKey) closeConversation();
+  }, [activeConvKey, closeConversation]);
+
+  const blockUser = useCallback((userId: string) => {
+    if (!userId) return;
+    dmBlockUser(userId);
+    setBlockedIds(prev => new Set(prev).add(userId));
+    setConversations(prev => prev.filter(c => c.recipientId !== userId));
+    setRequests(prev => prev.filter(c => c.recipientId !== userId));
+    if (activeRecipientId === userId) closeConversation();
+  }, [activeRecipientId, closeConversation]);
+
+  const unblockUser = useCallback((userId: string) => {
+    if (!userId) return;
+    dmUnblockUser(userId);
+    setBlockedIds(prev => {
+      const next = new Set(prev);
+      next.delete(userId);
+      return next;
+    });
+    dmLoadConversations();
   }, []);
 
   // Debounced typing emit — aktif sohbet olmadan NO-OP.
@@ -285,6 +431,7 @@ export function useDM(currentUserId: string | undefined) {
   // Unmount cleanup — kalıntı typing state olmasın.
   useEffect(() => () => {
     if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+    if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
   }, []);
 
   const closePanel = useCallback(() => {
@@ -297,22 +444,29 @@ export function useDM(currentUserId: string | undefined) {
     setActiveConvKey(null);
     setActiveRecipientId(null);
     setMessages([]);
+    setLoadingHistory(false);
+    if (historyTimeoutRef.current) { clearTimeout(historyTimeoutRef.current); historyTimeoutRef.current = null; }
   }, []);
 
   const hideConversation = useCallback((convKey: string) => {
     hiddenKeysRef.current.add(convKey);
     dmHideConversation(convKey);
     setConversations(prev => prev.filter(c => c.conversationKey !== convKey));
+    setRequests(prev => prev.filter(c => c.conversationKey !== convKey));
     // Aktif sohbet buysa kapat
     if (activeConvKey === convKey) {
       setActiveConvKey(null);
       setActiveRecipientId(null);
       setMessages([]);
+      setLoadingHistory(false);
+      if (historyTimeoutRef.current) { clearTimeout(historyTimeoutRef.current); historyTimeoutRef.current = null; }
     }
   }, [activeConvKey]);
 
   return {
     conversations,
+    requests,
+    blockedIds,
     activeConvKey,
     activeRecipientId,
     messages,
@@ -320,10 +474,17 @@ export function useDM(currentUserId: string | undefined) {
     panelOpen,
     loadingHistory,
     typingFrom,
+    lastError,
     setPanelOpen,
     loadInitial,
     openConversation,
     sendMessage,
+    editMessage,
+    deleteMessage,
+    acceptRequest,
+    rejectRequest,
+    blockUser,
+    unblockUser,
     emitTyping,
     closeConversation,
     resetViewOnClose,

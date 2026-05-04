@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
 import type { ChatMessage } from '../../../lib/chatService';
+import { isRoomMessageSoundEnabled } from '../../../features/notifications/notificationSound';
 
 interface UseChatMessagesOptions {
   activeChannel: string | null;
@@ -56,20 +57,10 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
           } else {
             setNewMsgCount(c => c + 1);
           }
-          // Mesaj bildirim tonu — kendi mesajın değilse her zaman çal.
-          // KURAL (kullanıcı talebi): Aynı sohbet/ses odasında bile olsan mesaj
-          // geldiğinde ton duyulacak. Hiçbir "in-room suppression" yok.
-          // bypassEnabled:true → global 'notify:sound' pref gate'i bypass edilir;
-          // fallback'te de previewNotifySound (gate'siz) kullanılır.
-          if (msg.senderId !== currentUserIdRef.current) {
+          // Oda içi yazılı mesaj tonu — kullanıcı mesaj ayarlarından sessize alabilir.
+          if (msg.senderId !== currentUserIdRef.current && isRoomMessageSoundEnabled()) {
             import('../../../lib/audio/SoundManager').then(({ playMessageReceive }) => {
-              const ok = playMessageReceive({ bypassEnabled: true });
-              if (!ok) {
-                // MP3 asset yüklenemezse web-audio beep fallback (pref-bypass).
-                import('../../../features/notifications/notificationSound')
-                  .then(({ previewNotifySound }) => previewNotifySound())
-                  .catch(() => { /* fallback da yüklenemezse sessiz geç */ });
-              }
+              playMessageReceive();
             });
           }
         },

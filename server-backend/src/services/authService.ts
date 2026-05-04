@@ -42,6 +42,8 @@ interface AuthUserRow {
   server_creation_plan: string | null;
   user_level: string | null;
   avatar_border_color: string | null;
+  allow_non_friend_dms: boolean | null;
+  show_dm_read_receipts: boolean | null;
 }
 
 export class AuthError extends Error {
@@ -79,7 +81,9 @@ const USER_SELECT = `
     p.show_last_seen,
     p.server_creation_plan,
     p.user_level,
-    p.avatar_border_color
+    p.avatar_border_color,
+    p.allow_non_friend_dms,
+    p.show_dm_read_receipts
   FROM app_users au
   JOIN profiles p ON p.id = au.profile_id
 `;
@@ -131,6 +135,8 @@ function toPublicUser(row: AuthUserRow) {
       server_creation_plan: row.server_creation_plan,
       user_level: row.user_level,
       avatar_border_color: row.avatar_border_color || '',
+      allow_non_friend_dms: row.allow_non_friend_dms !== false,
+      show_dm_read_receipts: row.show_dm_read_receipts !== false,
     },
   };
 }
@@ -232,6 +238,8 @@ export interface ProfileUpdateInput {
   app_version?: string;
   total_usage_minutes?: number;
   show_last_seen?: boolean;
+  allow_non_friend_dms?: boolean;
+  show_dm_read_receipts?: boolean;
 }
 
 export async function updateProfile(payload: JwtUserPayload, input: ProfileUpdateInput) {
@@ -282,18 +290,26 @@ export async function updateProfile(payload: JwtUserPayload, input: ProfileUpdat
   if (input.total_usage_minutes !== undefined) {
     const total = Number(input.total_usage_minutes);
     if (!Number.isFinite(total) || total < 0) throw new AuthError(400, 'Kullanım süresi geçersiz');
-    sets.push(`total_usage_minutes = $${i++}`);
+    sets.push(`total_usage_minutes = $${i++}::integer`);
     values.push(Math.trunc(total));
   }
   if (input.show_last_seen !== undefined) {
-    sets.push(`show_last_seen = $${i++}`);
+    sets.push(`show_last_seen = $${i++}::boolean`);
     values.push(!!input.show_last_seen);
+  }
+  if (input.allow_non_friend_dms !== undefined) {
+    sets.push(`allow_non_friend_dms = $${i++}::boolean`);
+    values.push(!!input.allow_non_friend_dms);
+  }
+  if (input.show_dm_read_receipts !== undefined) {
+    sets.push(`show_dm_read_receipts = $${i++}::boolean`);
+    values.push(!!input.show_dm_read_receipts);
   }
 
   if (sets.length) {
     sets.push('updated_at = now()');
     values.push(payload.profileId);
-    const result = await pool.query(`UPDATE profiles SET ${sets.join(', ')} WHERE id = $${i}`, values);
+    const result = await pool.query(`UPDATE profiles SET ${sets.join(', ')} WHERE id = $${i}::uuid`, values);
     if (!result.rowCount) throw new AuthError(404, 'Profil bulunamadı');
   }
 
@@ -336,7 +352,8 @@ export async function register(input: RegisterInput) {
        RETURNING id AS profile_id, email, name, display_name, first_name, last_name, age, avatar,
          is_admin, is_primary_admin, is_moderator, is_muted, mute_expires, is_voice_banned,
          ban_expires, must_change_password, app_version, last_seen_at, total_usage_minutes,
-         show_last_seen, server_creation_plan, role AS profile_role, user_level, avatar_border_color`,
+         show_last_seen, server_creation_plan, role AS profile_role, user_level, avatar_border_color,
+         allow_non_friend_dms, show_dm_read_receipts`,
       [
         username,
         email,

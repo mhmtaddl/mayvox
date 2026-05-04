@@ -25,10 +25,11 @@ import { useSettings } from '../contexts/SettingsCtx';
 import SettingsView from './SettingsView';
 import UserProfilePopup from '../components/UserProfilePopup';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
-import SocialSearchHub from '../components/SocialSearchHub';
+import SocialSearchHub, { type SearchResult } from '../components/SocialSearchHub';
 import FriendsSidebarContent from '../components/FriendsSidebarContent';
 import { startInviteRingtone, stopInviteRingtone, INVITE_RING_DURATION_MS } from '../lib/sounds';
 import { playReject } from '../lib/audio/SoundManager';
+import { setSoundChatRoomActive } from '../lib/soundRoomPreference';
 import { dismissInviteNotification } from '../lib/notifications';
 import { handleServerRestricted, handleServerUnrestricted } from '../features/notifications/notificationService';
 import { pushInformational } from '../features/notifications/informationalStore';
@@ -79,7 +80,7 @@ import { ConnectionQualityIndicator } from '../components/chat';
 import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import appLogo from '../assets/dock-logo-mv_tr.png';
 
-import type { VoiceChannel } from '../types';
+import type { User, VoiceChannel } from '../types';
 import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
 import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
@@ -113,6 +114,11 @@ export default function ChatView() {
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
 
   const [showDiscover, setShowDiscover] = useState(false);
+
+  useEffect(() => {
+    setSoundChatRoomActive(Boolean(activeChannel));
+    return () => setSoundChatRoomActive(false);
+  }, [activeChannel]);
 
   // ── Kanal seçildiğinde merkez panel zorla chat view'e geçer ──
   // KURAL: Kullanıcı sohbet/ses odasına nerede tıklarsa tıklasın, orta panel
@@ -191,7 +197,13 @@ export default function ChatView() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
-  const [profilePopup, setProfilePopup] = useState<{ userId: string; x: number; y: number } | null>(null);
+  const [profilePopup, setProfilePopup] = useState<{
+    userId: string;
+    x: number;
+    y: number;
+    source?: 'search';
+    fallbackUser?: User;
+  } | null>(null);
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
   // Oda içi sağ-tık role-aware context menu. Hedef sunucudan ayrılırsa (target
@@ -311,6 +323,17 @@ export default function ChatView() {
     setSettingsServerId(null);
     setSettingsInitialTab(undefined);
   }, []);
+
+  const toggleServerSettingsPanel = useCallback((serverId: string) => {
+    if (!serverId) return;
+    if (settingsServerId === serverId) {
+      closeSettingsPanel();
+      return;
+    }
+    setSettingsTarget(null);
+    setSettingsInitialTab(undefined);
+    setSettingsServerId(serverId);
+  }, [closeSettingsPanel, setSettingsTarget, settingsServerId]);
 
   useEffect(() => {
     // Mount'ta fires ama settingsServerId zaten null → no-op.
@@ -830,6 +853,27 @@ export default function ChatView() {
   const handleFriendProfileClick = useCallback((userId: string, x: number, y: number) => {
     setProfilePopup({ userId, x, y });
   }, []);
+  const handleSearchUserProfileClick = useCallback((user: SearchResult, position: { x: number; y: number }) => {
+    const knownUser = allUsers.find(u => u.id === user.id);
+    const fallbackUser: User = knownUser ?? {
+      id: user.id,
+      name: user.name || getPublicDisplayName(user),
+      displayName: user.displayName,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      status: 'offline',
+      statusText: 'Çevrimdışı',
+      avatar: user.avatar || '',
+      allowNonFriendDms: user.allowNonFriendDms !== false,
+    };
+    setProfilePopup({
+      userId: user.id,
+      x: position.x,
+      y: position.y,
+      source: 'search',
+      fallbackUser,
+    });
+  }, [allUsers]);
   const handleFriendDm = useCallback((userId: string) => {
     setDmTargetUserId(userId);
     setDmPanelOpen(true);
@@ -1004,7 +1048,7 @@ export default function ChatView() {
                     const hasServerStaffRole = activeServerData?.role === 'owner' || activeServerData?.role === 'admin' || activeServerData?.role === 'mod';
                     if (hasServerStaffRole) {
                       return (
-                        <button onClick={() => { activeServerData && setSettingsServerId(activeServerData.id); setMobileLeftOpen(false); }} title="Sunucu Ayarları"
+                        <button onClick={() => { activeServerData && toggleServerSettingsPanel(activeServerData.id); setMobileLeftOpen(false); }} title="Sunucu Ayarları"
                           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
                           <Settings size={13} />
                         </button>
@@ -1217,7 +1261,7 @@ export default function ChatView() {
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx > 40) setMobileRightOpen(false); }}
               >
-                <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
+                <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
                 <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
                   <div className="flex items-center gap-2">
                     <h3 className="text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/65">Arkadaşlar</h3>
@@ -1334,7 +1378,7 @@ export default function ChatView() {
             if (user) setRoomMemberMenu({ user, x, y });
           }}
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
-          activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && setSettingsServerId(activeServerData.id)}
+          activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && toggleServerSettingsPanel(activeServerData.id)}
           onShowDiscover={() => { setView('chat'); setShowDiscover(true); }} onLeaveServer={handleLeaveServer} />
 
         {/* ── Popover / Modal layers ── */}
@@ -1493,8 +1537,8 @@ export default function ChatView() {
         </main>
 
         {/* ── Right Sidebar ── */}
-        <aside className={`mv-shell-panel mv-shell-right-panel w-48 xl:w-56 2xl:w-60 shrink-0 flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--app-content-surface, var(--app-neutral-surface)) 96%, white 4%)', boxShadow: 'none', border: 0 }}>
-          <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" /></div>
+        <aside className={`mv-shell-panel mv-shell-right-panel w-56 2xl:w-60 shrink-0 flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--app-content-surface, var(--app-neutral-surface)) 96%, white 4%)', boxShadow: 'none', border: 0 }}>
+          <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
           <div className="px-4 pt-2 pb-2 flex items-center justify-between relative">
             <div className="flex items-center gap-2">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/65">Arkadaşlar</h3>
@@ -1789,7 +1833,7 @@ export default function ChatView() {
       {/* ── Profile Popup ── */}
       <AnimatePresence>
         {profilePopup && (() => {
-          const popupUser = allUsers.find(u => u.id === profilePopup.userId);
+          const popupUser = allUsers.find(u => u.id === profilePopup.userId) ?? profilePopup.fallbackUser;
           if (!popupUser) return null;
           const isMe = popupUser.id === currentUser.id;
           const activeMembers = activeChannel ? channels.find(c => c.id === activeChannel)?.members : undefined;
@@ -1803,7 +1847,7 @@ export default function ChatView() {
               canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
               onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
               cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
-              isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} />
+              isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} source={profilePopup.source} />
           );
         })()}
       </AnimatePresence>

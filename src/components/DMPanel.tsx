@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, ChevronDown, Smile, Settings2, Check, CheckCheck } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
+  isRoomMessageSoundEnabled, setRoomMessageSoundEnabled,
 } from '../features/notifications/notificationSound';
 import { SoundManager, stopAllSamples, type MessageVariant } from '../lib/audio/SoundManager';
 import { motion, AnimatePresence } from 'motion/react';
@@ -82,6 +83,7 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
   const [vol, setVol] = useState<number>(() => SoundManager.getMessageVolume());
   const [toastOn, setToastOn] = useState(() => isToastEnabled());
   const [groupOn, setGroupOn] = useState(() => isGroupingEnabled());
+  const [roomSoundOn, setRoomSoundOn] = useState(() => isRoomMessageSoundEnabled());
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -166,6 +168,9 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
         <Row label="Mesaj sesi">
           <Toggle on={soundOn} onChange={v => { setSoundOn(v); SoundManager.setMessageEnabled(v); }} />
         </Row>
+        <Row label="Sohbet odasında mesaj sesi">
+          <Toggle on={roomSoundOn} onChange={v => { setRoomSoundOn(v); setRoomMessageSoundEnabled(v); }} />
+        </Row>
         <Row label="Mesaj gönderim sesi">
           <Toggle on={sendOn} onChange={v => {
             setSendOn(v);
@@ -231,13 +236,16 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
 // ── Conversation Item ───────────────────────────────────────────────────
 
 function ConversationItem({
-  convo, allUsers, onClick, onDelete,
+  convo, allUsers, onClick, onDelete, isRequest = false, onAccept, onReject,
 }: {
   convo: DmConversation;
   allUsers: any[];
   currentUserId: string;
   onClick: () => void;
   onDelete: () => void;
+  isRequest?: boolean;
+  onAccept?: () => void;
+  onReject?: () => void;
 }) {
   const user = allUsers.find((u: any) => u.id === convo.recipientId);
   const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
@@ -254,11 +262,13 @@ function ConversationItem({
   })() : '';
 
   return (
-    <div className="relative group/conv">
+    <div
+      data-unread={hasUnread}
+      className="dm-conversation-item group/conv flex items-center gap-2 w-full pl-2.5 pr-2 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
+    >
       <button
         onClick={onClick}
-        data-unread={hasUnread}
-        className="dm-conversation-item flex items-center gap-3 w-full pl-2.5 pr-3 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.24)]"
       >
         {/* Avatar — tek pipeline: custom → status PNG → initial */}
         <div
@@ -279,43 +289,83 @@ function ConversationItem({
             <span className={`text-[13px] leading-tight truncate tracking-[-0.01em] ${hasUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
             {timeStr && <span className={`text-[10px] shrink-0 tabular-nums font-medium ${hasUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/50'}`}>{timeStr}</span>}
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-[11.5px] truncate leading-snug ${hasUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
+          <div className="flex min-w-0 items-center">
+            <span className={`min-w-0 truncate text-[11.5px] leading-snug ${hasUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
               {convo.lastMessage || <span className="italic opacity-70">Henüz mesaj yok</span>}
             </span>
-            {hasUnread && (
-              <span
-                className="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] leading-none"
-                style={{ boxShadow: '0 2px 6px -1px rgba(var(--theme-accent-rgb),0.45)' }}
-              >
-                {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
-              </span>
-            )}
           </div>
+          {isRequest && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] px-2 py-[2px] text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--theme-accent)]/80">
+                Mesaj isteği
+              </span>
+            </div>
+          )}
         </div>
       </button>
 
-      {/* Delete — sağ alt, hover'da görünür */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="absolute bottom-2.5 right-3 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover/conv:opacity-40 hover:!opacity-100 hover:bg-red-500/10 text-[var(--theme-secondary-text)] hover:text-red-400 transition-all duration-150"
-        title="Sohbeti sil"
-      >
-        <Trash2 size={11} />
-      </button>
+      <div className="flex w-7 shrink-0 flex-col items-end justify-center gap-1">
+        {hasUnread && (
+          <span
+            className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] leading-none"
+            style={{ boxShadow: '0 2px 6px -1px rgba(var(--theme-accent-rgb),0.45)' }}
+          >
+            {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
+          </span>
+        )}
+        {isRequest ? (
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
+              className="flex h-6 w-6 items-center justify-center rounded-[8px] text-emerald-300 transition-colors hover:bg-emerald-500/12"
+              title="Kabul et"
+              aria-label={`${name} mesaj isteğini kabul et`}
+            >
+              <Check size={12} strokeWidth={2.4} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onReject?.(); }}
+              className="flex h-6 w-6 items-center justify-center rounded-[8px] text-red-300 transition-colors hover:bg-red-500/12"
+              title="Reddet"
+              aria-label={`${name} mesaj isteğini reddet`}
+            >
+              <X size={12} strokeWidth={2.2} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="flex h-6 w-6 items-center justify-center rounded-[8px] border border-transparent text-[var(--theme-secondary-text)]/55 opacity-0 transition-[opacity,background-color,border-color,color] duration-150 group-hover/conv:opacity-70 group-focus-within/conv:opacity-70 hover:!opacity-100 hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/20"
+            title="Sohbeti sil"
+            aria-label={`${name} sohbetini sil`}
+          >
+            <Trash2 size={12} strokeWidth={2.1} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Message Bubble ──────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
+function MessageBubble({
+  msg, isOwn, isGrouped, isLastInGroup,
+  isEditing, editingText, onEditingTextChange, onSaveEdit, onCancelEdit, onStartEdit, onDelete,
+}: {
   msg: DmMessage;
   isOwn: boolean;
   /** Önceki mesaj aynı gönderen + ≤5dk → tighter spacing, tail radius korunur */
   isGrouped: boolean;
   /** Group'un son mesajı → timestamp göster */
   isLastInGroup: boolean;
+  isEditing: boolean;
+  editingText: string;
+  onEditingTextChange: (text: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onStartEdit: () => void;
+  onDelete: () => void;
 }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
@@ -327,9 +377,10 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
     : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${wrapperSpacing}`}>
+    <div className={`group/msg flex ${isOwn ? 'justify-end' : 'justify-start'} ${wrapperSpacing}`}>
+      <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
       <div
-        className={`max-w-[65%] px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+        className={`${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
         style={{
           background: isOwn ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
           color: isOwn ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
@@ -339,16 +390,84 @@ function MessageBubble({ msg, isOwn, isGrouped, isLastInGroup }: {
           WebkitBackdropFilter: isOwn ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
         } as React.CSSProperties}
       >
-        <MessageText text={msg.text} isOwn={isOwn} />
+        {isEditing ? (
+          <div className="min-w-[180px]">
+            <textarea
+              autoFocus
+              value={editingText}
+              onChange={(e) => onEditingTextChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  onSaveEdit();
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  onCancelEdit();
+                }
+              }}
+              maxLength={2000}
+              rows={3}
+              className="w-full resize-none rounded-[12px] border border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--glass-tint),0.08)] px-3 py-2 text-[13px] leading-[1.45] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/35 focus:border-[rgba(var(--theme-accent-rgb),0.42)]"
+              style={{ boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.05)' }}
+            />
+            <div className="mt-2 flex justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                className="flex h-7 w-7 items-center justify-center rounded-[9px] text-[var(--theme-secondary-text)]/70 transition-colors hover:bg-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]"
+                title="Vazgeç"
+                aria-label="Düzenlemeyi iptal et"
+              >
+                <X size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={onSaveEdit}
+                className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-[var(--theme-accent)]/14 text-[var(--theme-accent)] transition-colors hover:bg-[var(--theme-accent)]/22"
+                title="Kaydet"
+                aria-label="Düzenlemeyi kaydet"
+              >
+                <Check size={14} strokeWidth={2.3} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <MessageText text={msg.text} isOwn={isOwn} />
+        )}
         {isLastInGroup && (
           <div
             className={`flex items-center gap-1.5 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
             style={{ color: 'currentColor' }}
           >
+            {msg.editedAt && <span style={{ opacity: 0.42 }}>düzenlendi</span>}
             <span style={{ opacity: 0.55 }}>{time}</span>
             {isOwn && <MessageTick msg={msg} />}
           </div>
         )}
+      </div>
+      {isOwn && !isEditing && (
+        <div className="mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
+          <button
+            type="button"
+            onClick={onStartEdit}
+            className="flex h-6 w-6 items-center justify-center rounded-[8px] border border-transparent text-[var(--theme-secondary-text)]/60 transition-[background-color,border-color,color] hover:border-[rgba(var(--theme-accent-rgb),0.16)] hover:bg-[var(--theme-accent)]/10 hover:text-[var(--theme-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.24)]"
+            title="Mesajı düzenle"
+            aria-label="Mesajı düzenle"
+          >
+            <PencilLine size={12} strokeWidth={2.1} />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex h-6 w-6 items-center justify-center rounded-[8px] border border-transparent text-[var(--theme-secondary-text)]/60 transition-[background-color,border-color,color] hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/20"
+            title="Mesajı sil"
+            aria-label="Mesajı sil"
+          >
+            <Trash2 size={12} strokeWidth={2.1} />
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );
@@ -384,7 +503,8 @@ function MessageTick({ msg }: { msg: DmMessage }) {
 
 function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
-  onSend, onTyping, onBack, onNearBottomChange,
+  onSend, onEditMessage, onDeleteMessage, onTyping, onBack, onNearBottomChange,
+  lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -393,12 +513,23 @@ function ChatArea({
   loadingHistory: boolean;
   typingFrom: string | null;
   onSend: (text: string) => void;
+  onEditMessage: (messageId: string, text: string) => void;
+  onDeleteMessage: (messageId: string) => void;
   onTyping: () => void;
   onBack: () => void;
   onNearBottomChange?: (near: boolean) => void;
+  lastError?: string | null;
+  isRequest?: boolean;
+  isBlocked?: boolean;
+  onAcceptRequest?: () => void;
+  onRejectRequest?: () => void;
+  onBlockUser?: () => void;
+  onUnblockUser?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
   const [nearBottom, setNearBottomState] = useState(true);
   const [showJump, setShowJump] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -428,6 +559,8 @@ function ChatArea({
     lastOwnMsgIdRef.current = null;
     setShowJump(false);
     setNearBottomState(true);
+    setEditingMsgId(null);
+    setEditingText('');
     prevRecipientRef.current = recipientId;
   }, [recipientId]);
 
@@ -515,6 +648,40 @@ function ChatArea({
     scheduleScroll(() => scrollToBottom(true));
   };
 
+  const startEditMessage = useCallback((msg: DmMessage) => {
+    if (msg.senderId !== currentUserId) return;
+    setEditingMsgId(msg.id);
+    setEditingText(msg.text);
+  }, [currentUserId]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingMsgId(null);
+    setEditingText('');
+  }, []);
+
+  const saveEdit = useCallback(() => {
+    if (!editingMsgId) return;
+    const trimmed = editingText.trim();
+    if (!trimmed) {
+      onDeleteMessage(editingMsgId);
+      cancelEdit();
+      return;
+    }
+    const original = messages.find(m => m.id === editingMsgId);
+    if (!original || original.text.trim() === trimmed) {
+      cancelEdit();
+      return;
+    }
+    onEditMessage(editingMsgId, trimmed);
+    cancelEdit();
+  }, [cancelEdit, editingMsgId, editingText, messages, onDeleteMessage, onEditMessage]);
+
+  const deleteOwnMessage = useCallback((messageId: string) => {
+    if (!messageId) return;
+    if (editingMsgId === messageId) cancelEdit();
+    onDeleteMessage(messageId);
+  }, [cancelEdit, editingMsgId, onDeleteMessage]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // ':) → 🙂' gibi text shortcut'lar yazılırken anlık dönüşür (ChatPanel ile aynı davranış)
     const converted = replaceEmojiShortcuts(e.target.value);
@@ -538,7 +705,8 @@ function ChatArea({
   }, [messages]);
 
   const typingActive = typingFrom === recipientId;
-  const canSend = input.trim().length > 0 && !sending;
+  const composerLocked = isRequest || isBlocked;
+  const canSend = input.trim().length > 0 && !sending && !composerLocked;
 
   return (
     <div className="flex flex-col h-full">
@@ -565,7 +733,29 @@ function ChatArea({
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{recipientName}</span>
           <AnimatePresence>
-            {typingActive && (
+            {isRequest ? (
+              <motion.span
+                key="request-hdr"
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="text-[10px] text-[var(--theme-accent)] opacity-70 leading-tight"
+              >
+                mesaj isteği
+              </motion.span>
+            ) : isBlocked ? (
+              <motion.span
+                key="blocked-hdr"
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="text-[10px] text-red-300/80 leading-tight"
+              >
+                engellendi
+              </motion.span>
+            ) : typingActive && (
               <motion.span
                 key="typing-hdr"
                 initial={{ opacity: 0, y: -2 }}
@@ -579,7 +769,27 @@ function ChatArea({
             )}
           </AnimatePresence>
         </div>
+        {!isRequest && (
+          <button
+            onClick={isBlocked ? onUnblockUser : onBlockUser}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+              isBlocked
+                ? 'text-emerald-300/80 hover:text-emerald-300 hover:bg-emerald-500/10'
+                : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300 hover:bg-red-500/10'
+            }`}
+            title={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
+            aria-label={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
+          >
+            <UserX size={14} />
+          </button>
+        )}
       </div>
+
+      {lastError && (
+        <div className="mx-3 mt-2 rounded-lg border border-red-400/15 bg-red-500/8 px-3 py-2 text-[11px] leading-snug text-red-300/85">
+          {lastError}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} onScroll={handleScroll} data-mv-chat-area="dm" className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
@@ -619,6 +829,13 @@ function ChatArea({
                     isOwn={msg.senderId === currentUserId}
                     isGrouped={isGrouped}
                     isLastInGroup={isLastInGroup}
+                    isEditing={editingMsgId === msg.id}
+                    editingText={editingMsgId === msg.id ? editingText : ''}
+                    onEditingTextChange={setEditingText}
+                    onSaveEdit={saveEdit}
+                    onCancelEdit={cancelEdit}
+                    onStartEdit={() => startEditMessage(msg)}
+                    onDelete={() => deleteOwnMessage(msg.id)}
                   />
                 </React.Fragment>
               );
@@ -649,7 +866,43 @@ function ChatArea({
         )}
       </AnimatePresence>
 
+      {isRequest && (
+        <div className="shrink-0 px-4 py-3 border-t border-[rgba(var(--glass-tint),0.06)]">
+          <div className="rounded-xl bg-[rgba(var(--theme-accent-rgb),0.07)] border border-[rgba(var(--theme-accent-rgb),0.12)] px-3 py-2.5">
+            <p className="text-[11px] leading-snug text-[var(--theme-text)]/80">
+              Bu kullanıcı arkadaşın değil. Sohbeti normal mesajlara taşımak için isteği kabul et.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={onAcceptRequest}
+                className="h-8 rounded-[10px] text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors"
+              >
+                Kabul et
+              </button>
+              <button
+                onClick={onRejectRequest}
+                className="h-8 rounded-[10px] text-[11px] font-semibold text-red-300 bg-red-500/10 hover:bg-red-500/15 transition-colors"
+              >
+                Reddet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBlocked && !isRequest && (
+        <div className="shrink-0 px-4 py-3 border-t border-[rgba(var(--glass-tint),0.06)]">
+          <button
+            onClick={onUnblockUser}
+            className="w-full h-9 rounded-[11px] text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors"
+          >
+            Engeli kaldır
+          </button>
+        </div>
+      )}
+
       {/* Input */}
+      {!composerLocked && (
       <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
         <div
           className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-colors duration-150 focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
@@ -711,6 +964,7 @@ function ChatArea({
           )}
         </AnimatePresence>
       </div>
+      )}
     </div>
   );
 }
@@ -734,12 +988,16 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const panelRef = useRef<HTMLDivElement>(null);
   const { openConfirm } = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeList, setActiveList] = useState<'messages' | 'requests'>('messages');
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openUserId) { dm.openConversation(openUserId); onOpenHandled?.(); } }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (dm.requests.length > 0 && dm.conversations.length === 0 && !dm.activeRecipientId) setActiveList('requests');
+  }, [dm.activeRecipientId, dm.conversations.length, dm.requests.length]);
 
   // Outside click
   useEffect(() => {
@@ -754,6 +1012,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   }, [isOpen, onClose, toggleRef]);
 
   useEscapeKey(onClose, isOpen);
+
+  const activeRequest = dm.activeConvKey
+    ? dm.requests.find(c => c.conversationKey === dm.activeConvKey)
+    : undefined;
+  const activeBlocked = dm.activeRecipientId ? dm.blockedIds.has(dm.activeRecipientId) : false;
+  const activeRecipient = dm.activeRecipientId
+    ? allUsers.find((u: any) => u.id === dm.activeRecipientId)
+    : null;
+  const activeRecipientName = activeRecipient ? getPublicDisplayName(activeRecipient) : 'Kullanıcı';
 
   return (
     <>
@@ -782,9 +1049,32 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               loadingHistory={dm.loadingHistory}
               typingFrom={dm.typingFrom}
               onSend={dm.sendMessage}
+              onEditMessage={dm.editMessage}
+              onDeleteMessage={dm.deleteMessage}
               onTyping={dm.emitTyping}
               onBack={dm.closeConversation}
               onNearBottomChange={onNearBottomChange}
+              lastError={dm.lastError}
+              isRequest={!!activeRequest}
+              isBlocked={activeBlocked}
+              onAcceptRequest={() => activeRequest && dm.acceptRequest(activeRequest.conversationKey)}
+              onRejectRequest={() => activeRequest && openConfirm({
+                title: 'Mesaj isteğini reddet',
+                description: `${activeRecipientName} mesaj isteği reddedilsin mi?`,
+                confirmText: 'Reddet',
+                cancelText: 'İptal',
+                danger: true,
+                onConfirm: () => dm.rejectRequest(activeRequest.conversationKey),
+              })}
+              onBlockUser={() => dm.activeRecipientId && openConfirm({
+                title: 'Kullanıcıyı engelle',
+                description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
+                confirmText: 'Engelle',
+                cancelText: 'İptal',
+                danger: true,
+                onConfirm: () => dm.blockUser(dm.activeRecipientId!),
+              })}
+              onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
             />
           ) : (
             <>
@@ -803,15 +1093,51 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 </AnimatePresence>
               </div>
 
+              <div className="px-3 pt-2 pb-1">
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-[rgba(var(--glass-tint),0.05)] p-1">
+                  <button
+                    onClick={() => setActiveList('messages')}
+                    className={`h-8 rounded-lg text-[11px] font-semibold transition-colors ${
+                      activeList === 'messages'
+                        ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)]'
+                        : 'text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
+                    }`}
+                  >
+                    Mesajlar
+                  </button>
+                  <button
+                    onClick={() => setActiveList('requests')}
+                    className={`relative h-8 rounded-lg text-[11px] font-semibold transition-colors ${
+                      activeList === 'requests'
+                        ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)]'
+                        : 'text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
+                    }`}
+                  >
+                    İstekler
+                    {dm.requests.length > 0 && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[16px] h-4 rounded-full bg-[var(--theme-badge-bg)] px-1 text-[9px] leading-4 text-[var(--theme-badge-text)]">
+                        {dm.requests.length > 9 ? '9+' : dm.requests.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
               {/* List */}
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {dm.conversations.length === 0 ? (
+                {activeList === 'messages' && dm.conversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-8">
                     <MessageSquare size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
                     <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
                     <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Bir arkadaşına mesaj göndererek başla</p>
                   </div>
-                ) : (
+                ) : activeList === 'requests' && dm.requests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+                    <Inbox size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
+                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Mesaj isteği yok</p>
+                    <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Arkadaş olmayanlardan gelen ilk mesajlar burada görünür</p>
+                  </div>
+                ) : activeList === 'messages' ? (
                   <div className="p-2">
                     {dm.conversations.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
@@ -831,6 +1157,34 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                               danger: true,
                               onConfirm: () => dm.hideConversation(convo.conversationKey),
                             })}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-2">
+                    {dm.requests.map(convo => {
+                      const u = allUsers.find((x: any) => x.id === convo.recipientId);
+                      const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
+                      return (
+                        <div key={convo.conversationKey}>
+                          <ConversationItem
+                            convo={convo}
+                            allUsers={allUsers}
+                            currentUserId={currentUser.id}
+                            isRequest
+                            onClick={() => dm.openConversation(convo.recipientId)}
+                            onAccept={() => dm.acceptRequest(convo.conversationKey)}
+                            onReject={() => openConfirm({
+                              title: 'Mesaj isteğini reddet',
+                              description: `${n} mesaj isteği reddedilsin mi?`,
+                              confirmText: 'Reddet',
+                              cancelText: 'İptal',
+                              danger: true,
+                              onConfirm: () => dm.rejectRequest(convo.conversationKey),
+                            })}
+                            onDelete={() => dm.rejectRequest(convo.conversationKey)}
                           />
                         </div>
                       );

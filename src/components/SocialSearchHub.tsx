@@ -9,21 +9,23 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import AvatarContent from './AvatarContent';
 import { getPublicDisplayName } from '../lib/formatName';
 
-interface SearchResult {
+export interface SearchResult {
   id: string;
   name: string;
   displayName?: string;
   firstName: string;
   lastName: string;
   avatar: string;
+  allowNonFriendDms?: boolean;
 }
 
 interface Props {
   currentUserId: string;
   variant?: 'center' | 'sidebar';
+  onUserClick?: (user: SearchResult, position: { x: number; y: number }) => void;
 }
 
-export default function SocialSearchHub({ currentUserId, variant = 'center' }: Props) {
+export default function SocialSearchHub({ currentUserId, variant = 'center', onUserClick }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -32,7 +34,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend } = useUser();
+  const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend, currentUser } = useUser();
   const { setToastMsg } = useUI();
   const { openConfirm } = useConfirm();
 
@@ -95,6 +97,7 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           firstName: p.first_name || '',
           lastName: p.last_name || '',
           avatar: p.avatar || '',
+          allowNonFriendDms: p.allow_non_friend_dms !== false,
           score,
         });
       }
@@ -123,6 +126,13 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
   useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => getPublicDisplayName(r);
+
+  const openUserCard = (user: SearchResult, position: { x: number; y: number }) => {
+    if (!onUserClick) return;
+    onUserClick(user, position);
+    setIsOpen(false);
+    inputRef.current?.blur();
+  };
 
   const triggerConfirm = (userId: string, userName: string, action: 'send' | 'remove' | 'cancel') => {
     openConfirm({
@@ -225,12 +235,27 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
     }
   };
 
-  const getStatusBadge = (userId: string) => {
-    const rel = getRelationship(userId);
-    if (rel === 'friend') return <span className="text-[8px] font-bold text-emerald-400/60 uppercase tracking-wide">Arkadaş</span>;
-    if (rel === 'incoming') return <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', opacity: 0.7 }}>İstek geldi</span>;
-    if (rel === 'outgoing') return <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', opacity: 0.5 }}>İstek gönderildi</span>;
-    return null;
+  const getStatusBadges = (user: SearchResult) => {
+    const rel = getRelationship(user.id);
+    return (
+      <>
+        {rel === 'friend' && (
+          <span className="rounded-full bg-emerald-500/10 px-1.5 py-[2px] text-[8px] font-bold text-emerald-400/70 uppercase tracking-wide">
+            Arkadaş
+          </span>
+        )}
+        {rel === 'incoming' && (
+          <span className="rounded-full px-1.5 py-[2px] text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+            İstek geldi
+          </span>
+        )}
+        {rel === 'outgoing' && (
+          <span className="rounded-full px-1.5 py-[2px] text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb),0.07)', opacity: 0.78 }}>
+            İstek gönderildi
+          </span>
+        )}
+      </>
+    );
   };
 
   return (
@@ -250,7 +275,14 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
           value={query}
           onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && results.length > 0) { /* ileride profil aç */ } }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || results.length === 0 || !onUserClick) return;
+            const rect = inputRef.current?.getBoundingClientRect();
+            openUserCard(results[0], {
+              x: rect ? rect.left + rect.width - 16 : window.innerWidth - 280,
+              y: rect ? rect.bottom + 8 : 72,
+            });
+          }}
           placeholder="Kullanıcı ara..."
           className={`search-input-field flex-1 bg-transparent outline-none min-w-0 ${isCenter ? 'text-[13px]' : 'text-[11px]'}`}
         />
@@ -286,8 +318,18 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
                 {results.map(user => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-3 px-3 py-2 transition-all duration-100 cursor-pointer rounded-lg mx-1 group"
+                    role={onUserClick ? 'button' : undefined}
+                    tabIndex={onUserClick ? 0 : undefined}
+                    className={`flex items-start gap-3 px-3 py-2 transition-all duration-100 rounded-lg mx-1 group ${onUserClick ? 'cursor-pointer' : ''}`}
                     style={{ background: 'transparent' }}
+                    onClick={(e) => openUserCard(user, { x: e.clientX, y: e.clientY })}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && onUserClick) {
+                        e.preventDefault();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        openUserCard(user, { x: rect.right - 20, y: rect.top + 8 });
+                      }
+                    }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover, rgba(var(--glass-tint),0.05))'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
@@ -296,10 +338,16 @@ export default function SocialSearchHub({ currentUserId, variant = 'center' }: P
                       <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.displayName || user.firstName} name={displayName(user)} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
                     </div>
                     {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium truncate leading-tight" style={{ color: 'var(--text-primary)' }}>{displayName(user)}</p>
-                      <div className="flex items-center gap-1.5">
-                        {getStatusBadge(user.id)}
+                    <div className="flex-1 min-w-0 pt-[1px]">
+                      <p
+                        className="text-[12px] font-medium leading-snug whitespace-normal"
+                        style={{ color: 'var(--text-primary)', overflowWrap: 'anywhere' }}
+                        title={displayName(user)}
+                      >
+                        {displayName(user)}
+                      </p>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                        {getStatusBadges(user)}
                       </div>
                     </div>
                     {/* Action */}

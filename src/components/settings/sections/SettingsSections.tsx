@@ -17,6 +17,7 @@ import {
 } from '../../../lib/themePacks';
 import { isMobile } from '../../../lib/platform';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
+import { isSoundsInChatRoomEnabled, setSoundsInChatRoomEnabled } from '../../../lib/soundRoomPreference';
 
 function PremiumColorControl({
   label,
@@ -358,6 +359,7 @@ export function SoundsSection() {
   const [notifOn, setNotifOn] = useState<boolean>(SoundManager.isNotificationEnabled());
   const [vol, setVol] = useState<number>(SoundManager.getMasterVolume());
   const [muted, setMuted] = useState<boolean>(SoundManager.isMuted());
+  const [soundsInRoomOn, setSoundsInRoomOn] = useState<boolean>(isSoundsInChatRoomEnabled());
 
   useEffect(() => { SoundManager.preloadAll(); }, []);
 
@@ -493,7 +495,25 @@ export function SoundsSection() {
           </div>
         </div>
 
-        {/* 6: Genel Ses Seviyesi (master vol slider + mute toggle, en altta) */}
+        {/* 6: Sohbet odasi sesleri */}
+        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Sesleri sohbet odasında çal</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Toggle
+              checked={soundsInRoomOn}
+              onChange={() => {
+                const next = !soundsInRoomOn;
+                setSoundsInRoomOn(next);
+                setSoundsInChatRoomEnabled(next);
+              }}
+              tooltip="Sohbet odasındayken bu bölümdeki sesler çalsın"
+            />
+          </div>
+        </div>
+
+        {/* 7: Genel Ses Seviyesi (master vol slider + mute toggle, en altta) */}
         <div className="flex flex-col gap-2 py-3 last:pb-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Genel Ses Seviyesi</p>

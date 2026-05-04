@@ -48,6 +48,8 @@ type DbProfile = {
   app_version?: string; last_seen_at?: string; total_usage_minutes?: number;
   show_last_seen?: boolean;
   server_creation_plan?: 'none' | 'free' | 'pro' | 'ultra';
+  allow_non_friend_dms?: boolean;
+  show_dm_read_receipts?: boolean;
 };
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
 import { AudioCtx, AudioContextType } from './contexts/AudioContext';
@@ -100,6 +102,7 @@ import {
 } from './features/notifications/emit';
 import { pushInformational } from './features/notifications/informationalStore';
 import { playNotifyBeep } from './features/notifications/notificationSound';
+import { shouldSuppressSettingsSoundInChatRoom } from './lib/soundRoomPreference';
 import { requestElectronFlash } from './features/notifications/electronAttention';
 
 const isUuidUser = (userId: string) => userId.includes('-');
@@ -131,6 +134,8 @@ function mapDbProfile(
     serverCreationPlan: resolveServerCreationPlan(p),
     userLevel: (p as { user_level?: string | null }).user_level ?? null,
     avatarBorderColor: (p as { avatar_border_color?: string }).avatar_border_color ?? '',
+    allowNonFriendDms: p.allow_non_friend_dms !== false,
+    showDmReadReceipts: p.show_dm_read_receipts !== false,
   };
 }
 
@@ -171,6 +176,8 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       serverCreationPlan: resolveServerCreationPlan(profile),
       userLevel: (profile as { user_level?: string | null }).user_level ?? null,
       avatarBorderColor: (profile as { avatar_border_color?: string }).avatar_border_color ?? '',
+      allowNonFriendDms: profile.allow_non_friend_dms !== false,
+      showDmReadReceipts: profile.show_dm_read_receipts !== false,
     };
   }
   logMemberIdentityDebug('missing_profile_fallback', { userId: id, email }, `missing_profile:${id}`);
@@ -598,7 +605,9 @@ export default function App() {
         createdAt: n.timestamp,
       });
     });
-    registerSoundSink(() => playNotifyBeep());
+    registerSoundSink(() => {
+      if (!shouldSuppressSettingsSoundInChatRoom()) playNotifyBeep();
+    });
     registerFlashSink(() => requestElectronFlash(true));
     return () => {
       registerToastSink(null);
@@ -692,6 +701,8 @@ export default function App() {
   const [lastName, setLastName] = useState('');
   const [age, setAge] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [publicDisplayName, setPublicDisplayName] = useState('');
+  const [isCompletingRegistration, setIsCompletingRegistration] = useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
   const connectionLostRef = useRef(false);
@@ -2244,93 +2255,132 @@ export default function App() {
   };
 
   const handleCompleteRegistration = async () => {
-    if (!displayName || !firstName || !lastName || !age) {
-      setLoginError('Lütfen tüm bilgileri eksiksiz giriniz!');
-      return;
-    }
-
-    const username = displayName.trim();
-    if (!/^[a-z0-9]{1,10}$/.test(username)) {
-      setLoginError('Kullanıcı adı sadece harf ve sayı olabilir.');
-      return;
-    }
-
-    if (!/^\p{L}+( \p{L}+)?$/u.test(firstName) || firstName.length > 15) {
-      setLoginError('Adınızı doğru giriniz.');
-      return;
-    }
-
-    if (!/^\p{L}+$/u.test(lastName) || lastName.length > 15) {
-      setLoginError('Soyadınızı doğru giriniz.');
-      return;
-    }
-
-    if (!loginNick || !loginPassword) {
-      setLoginError('E-posta ve parola eksik!');
-      return;
-    }
-
-    const ageNum = parseInt(age);
-    if (!ageNum || ageNum <= 0) {
-      setLoginError('Geçerli bir yaş giriniz!');
-      return;
-    }
-
-    const { data: existingProfile } = await getProfileByUsername(username);
-    if (existingProfile) {
-      setLoginError('Bu kullanıcı adı alınmış.');
-      return;
-    }
-
-    if (pendingInviteCodeRef.current) {
-      await useInviteCodeForEmail(pendingInviteCodeRef.current, loginNick);
-      pendingInviteCodeRef.current = null;
-    }
-
-    const normalizedFirst = toTitleCaseTr(firstName);
-    const normalizedLast = toTitleCaseTr(lastName);
-    const avatarText = ((normalizedFirst[0] || '') + ageNum).toUpperCase();
-    const { user: registeredUser } = await authRegister({
-      email: loginNick,
-      username,
-      password: loginPassword,
-      displayName: `${normalizedFirst} ${normalizedLast}`.trim(),
-      firstName: normalizedFirst,
-      lastName: normalizedLast,
-      age: ageNum,
-      avatar: avatarText,
-    });
-
-    const newUser: User = {
-      id: registeredUser.profileId,
-      name: username,
-      displayName: `${normalizedFirst} ${normalizedLast}`.trim(),
-      email: loginNick,
-      firstName: normalizedFirst,
-      lastName: normalizedLast,
-      age: ageNum,
-      avatar: '',
-      status: 'online',
-      statusText: 'Online',
-      isAdmin: false,
-      isPrimaryAdmin: false,
-    };
-
-    newUser.avatar = registeredUser.profile.avatar || getAvatarText(newUser);
-
-    sessionStartedAtRef.current = Date.now();
-    setCurrentUser(newUser);
-
-    await initPostAuth(newUser);
-    setView('chat');
-    setLoginNick('');
-    setLoginPassword('');
-    setDisplayName('');
-    setFirstName('');
-    setLastName('');
-    setAge('');
-    setGeneratedCode(null);
+    if (isCompletingRegistration) return;
+    setIsCompletingRegistration(true);
     setLoginError(null);
+
+    try {
+      if (!displayName || !publicDisplayName || !firstName || !lastName || !age) {
+        setLoginError('Lütfen tüm bilgileri eksiksiz giriniz!');
+        return;
+      }
+
+      const username = displayName.trim();
+      const publicName = publicDisplayName.trim().replace(/\s+/g, ' ');
+      if (!/^[a-z0-9]{1,10}$/.test(username)) {
+        setLoginError('Kullanıcı adı sadece harf ve sayı olabilir.');
+        return;
+      }
+
+      if (publicName.length < 2 || publicName.length > 24) {
+        setLoginError('Takma ad 2-24 karakter olmalıdır.');
+        return;
+      }
+
+      if (/[\p{C}]/u.test(publicName)) {
+        setLoginError('Takma ad geçersiz karakter içeriyor.');
+        return;
+      }
+
+      if (!/^\p{L}+( \p{L}+)?$/u.test(firstName) || firstName.length > 15) {
+        setLoginError('Adınızı doğru giriniz.');
+        return;
+      }
+
+      if (!/^\p{L}+$/u.test(lastName) || lastName.length > 15) {
+        setLoginError('Soyadınızı doğru giriniz.');
+        return;
+      }
+
+      if (!loginNick || !loginPassword) {
+        setLoginError('E-posta ve parola eksik!');
+        return;
+      }
+
+      const ageNum = parseInt(age);
+      if (!ageNum || ageNum <= 0) {
+        setLoginError('Geçerli bir yaş giriniz!');
+        return;
+      }
+
+      const { data: existingProfile, error: profileLookupError } = await getProfileByUsername(username);
+      if (profileLookupError) {
+        setLoginError(profileLookupError.message || 'Kullanıcı adı kontrol edilemedi.');
+        return;
+      }
+      if (existingProfile) {
+        setLoginError('Bu kullanıcı adı alınmış.');
+        return;
+      }
+
+      const pendingCode = pendingInviteCodeRef.current;
+      if (pendingCode) {
+        const stillValid = await verifyInviteCodeForEmail(pendingCode, loginNick);
+        if (!stillValid) {
+          setLoginError('Davet kodu geçersiz, süresi dolmuş veya daha önce kullanılmış.');
+          return;
+        }
+      }
+
+      const normalizedFirst = toTitleCaseTr(firstName);
+      const normalizedLast = toTitleCaseTr(lastName);
+      const avatarText = ((normalizedFirst[0] || '') + ageNum).toUpperCase();
+      const { user: registeredUser } = await authRegister({
+        email: loginNick,
+        username,
+        password: loginPassword,
+        displayName: publicName,
+        firstName: normalizedFirst,
+        lastName: normalizedLast,
+        age: ageNum,
+        avatar: avatarText,
+      });
+
+      if (pendingCode) {
+        const used = await useInviteCodeForEmail(pendingCode, loginNick);
+        if (!used) console.warn('[registration] Kullanıcı oluşturuldu ama davet kodu kullanıldı olarak işaretlenemedi.');
+        pendingInviteCodeRef.current = null;
+      }
+
+      const newUser: User = {
+        id: registeredUser.profileId,
+        name: username,
+        displayName: publicName,
+        email: loginNick,
+        firstName: normalizedFirst,
+        lastName: normalizedLast,
+        age: ageNum,
+        avatar: '',
+        status: 'online',
+        statusText: 'Online',
+        isAdmin: false,
+        isPrimaryAdmin: false,
+        allowNonFriendDms: true,
+        showDmReadReceipts: true,
+      };
+
+      newUser.avatar = registeredUser.profile.avatar || getAvatarText(newUser);
+
+      sessionStartedAtRef.current = Date.now();
+      setCurrentUser(newUser);
+
+      await initPostAuth(newUser);
+      setView('chat');
+      setLoginNick('');
+      setLoginPassword('');
+      setDisplayName('');
+      setPublicDisplayName('');
+      setFirstName('');
+      setLastName('');
+      setAge('');
+      setGeneratedCode(null);
+      setLoginError(null);
+    } catch (err) {
+      console.error('[registration] complete failed', err);
+      setLoginError(err instanceof Error ? err.message : 'Kayıt tamamlanamadı. Lütfen tekrar deneyin.');
+    } finally {
+      setIsCompletingRegistration(false);
+    }
   };
 
   // ── Build context values ──────────────────────────────────────────────────
@@ -2591,6 +2641,8 @@ export default function App() {
                         <RegisterDetailsView
                           displayName={displayName}
                           setDisplayName={setDisplayName}
+                          publicDisplayName={publicDisplayName}
+                          setPublicDisplayName={setPublicDisplayName}
                           firstName={firstName}
                           setFirstName={setFirstName}
                           lastName={lastName}
@@ -2598,6 +2650,7 @@ export default function App() {
                           age={age}
                           setAge={setAge}
                           loginError={loginError}
+                          isSubmitting={isCompletingRegistration}
                           handleCompleteRegistration={handleCompleteRegistration}
                           onGoBack={() => setView('login-password')}
                           onOpenKvkk={() => setLegalModal('kvkk')}

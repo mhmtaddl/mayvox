@@ -1,4 +1,5 @@
 import { createManagedAudioContext, unregisterAudioContext } from './audio/audioOutputRegistry';
+import { shouldSuppressSettingsSoundInChatRoom } from './soundRoomPreference';
 
 export type SoundCategory = 'JoinLeave' | 'MuteDeafen' | 'Ptt';
 export type SoundVariant = 1 | 2 | 3;
@@ -161,6 +162,7 @@ function buildRingtone(ctx: AudioContext, variant: InviteRingtoneVariant, cycles
 }
 
 export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
+  if (shouldSuppressSettingsSoundInChatRoom()) return;
   stopInviteRingtone();
   // Önce mp3 SoundManager dene; başarısızsa eski oscillator path'e fallback.
   // Lazy-import: SoundManager modülü yüklü değilse build/test ortamlarında fail-safe.
@@ -245,6 +247,7 @@ function getVariant(cat: SoundCategory): SoundVariant {
 // ── Public API ────────────────────────────────────────────────────────────────
 export function playSound(type: SoundType): void {
   try {
+    if (type !== 'moderation' && shouldSuppressSettingsSoundInChatRoom()) return;
     // Moderation özel path — MuteDeafen kategorisine bağlı (kullanıcı tek toggle ile kapatabilsin),
     // ama variant üretmez: tek net chime.
     if (type === 'moderation') {

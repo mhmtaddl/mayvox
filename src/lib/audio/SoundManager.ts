@@ -16,6 +16,7 @@
  */
 
 import { createManagedAudioContext } from './audioOutputRegistry';
+import { shouldSuppressSettingsSoundInChatRoom } from '../soundRoomPreference';
 
 export type CallVariant = '1' | '2' | '3';
 export type MessageVariant = '1' | '2' | '3';
@@ -253,7 +254,8 @@ function safePlay(src: string, perCallVolume: number, loop = false): HTMLAudioEl
 
 // ── Public API ───────────────────────────────────────────────────────────
 
-export function playCallRingtone(opts?: { variant?: CallVariant; maxMs?: number }): boolean {
+export function playCallRingtone(opts?: { variant?: CallVariant; maxMs?: number; bypassRoomSuppression?: boolean }): boolean {
+  if (!opts?.bypassRoomSuppression && shouldSuppressSettingsSoundInChatRoom()) return false;
   if (!cooldownPass('callRingtone', COOLDOWN_MS.callRingtone)) return false;
   stopCallRingtone();
   const variant = opts?.variant ?? getCallVariant();
@@ -295,7 +297,8 @@ export function playMessageSend(opts?: { bypassEnabled?: boolean }): boolean {
   return safePlay(MANIFEST.message.send, getMessageVolume() * SEND_VOLUME_SCALE) !== null;
 }
 
-export function playNotification(opts?: { variant?: NotificationVariant; bypassEnabled?: boolean }): boolean {
+export function playNotification(opts?: { variant?: NotificationVariant; bypassEnabled?: boolean; bypassRoomSuppression?: boolean }): boolean {
+  if (!opts?.bypassRoomSuppression && shouldSuppressSettingsSoundInChatRoom()) return false;
   if (!opts?.bypassEnabled && !getNotificationEnabled()) return false;
   if (!cooldownPass('notification', COOLDOWN_MS.notification)) return false;
   const variant = opts?.variant ?? getNotificationVariant();
@@ -389,7 +392,7 @@ export const SoundManager = {
   preview: {
     call: (v: CallVariant) => {
       stopAllSamples();
-      return playCallRingtone({ variant: v, maxMs: 5000 });
+      return playCallRingtone({ variant: v, maxMs: 5000, bypassRoomSuppression: true });
     },
     message: (v: MessageVariant) => {
       stopAllSamples();
@@ -401,7 +404,7 @@ export const SoundManager = {
     },
     notification: (v: NotificationVariant) => {
       stopAllSamples();
-      return playNotification({ variant: v, bypassEnabled: true });
+      return playNotification({ variant: v, bypassEnabled: true, bypassRoomSuppression: true });
     },
     reject: () => {
       stopAllSamples();

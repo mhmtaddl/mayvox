@@ -26,6 +26,7 @@ interface Props {
   isMe: boolean;
   currentAppVersion?: string;
   serverName?: string | null;
+  source?: 'default' | 'search';
 }
 
 const POPUP_W = 240;
@@ -55,7 +56,7 @@ const formatLastSeen = (lastSeenAt: string) => {
 
 export default function UserProfilePopup({
   user, position, onClose, onInvite, onDM, canInvite, inviteStatus,
-  onCooldown, cooldownRemaining, isMe, serverName,
+  onCooldown, cooldownRemaining, isMe, serverName, source = 'default',
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
@@ -71,8 +72,10 @@ export default function UserProfilePopup({
   const rel = getRelationship(user.id);
 
   const hasImage = hasCustomAvatar(user.avatar);
+  const isSearchMinimal = source === 'search' && !isMe && rel !== 'friend';
+  const popupHeight = isSearchMinimal ? 268 : POPUP_H;
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 16);
-  const y = Math.min(position.y - 40, window.innerHeight - POPUP_H - 16);
+  const y = Math.min(position.y - 40, window.innerHeight - popupHeight - 16);
 
   useEscapeKey(onClose);
 
@@ -97,6 +100,8 @@ export default function UserProfilePopup({
     : 'text-orange-400';
 
   const userName = getPublicDisplayName(user);
+  const canNonFriendDm = !!onDM && !isMe && rel !== 'friend' && currentUser.allowNonFriendDms !== false && user.allowNonFriendDms !== false;
+  const canDirectMessage = !!onDM && !isMe && (rel === 'friend' || canNonFriendDm);
 
 
   const handleAccept = async () => {
@@ -136,6 +141,229 @@ export default function UserProfilePopup({
       },
     });
   };
+
+  const renderSearchDmButton = () => {
+    if (!canNonFriendDm) return null;
+    return (
+      <button
+        onClick={() => { onDM?.(user.id); onClose(); }}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-[var(--theme-accent)] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
+        style={{ background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+        title="Mesaj gönder"
+        aria-label="Mesaj gönder"
+      >
+        <MessageSquare size={16} />
+      </button>
+    );
+  };
+
+  const renderSearchInviteButton = () => {
+    if (!canInvite && !inviteStatus) return null;
+    if (inviteStatus === 'pending') {
+      return (
+        <span
+          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-blue-300"
+          style={{ background: 'rgba(59,130,246,0.10)' }}
+          title="Davet bekliyor"
+          aria-label="Davet bekliyor"
+        >
+          <span className="h-2 w-2 rounded-full bg-blue-300 animate-pulse" />
+        </span>
+      );
+    }
+    if (inviteStatus === 'accepted') {
+      return (
+        <span
+          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-emerald-300"
+          style={{ background: 'rgba(16,185,129,0.10)' }}
+          title="Davet kabul edildi"
+          aria-label="Davet kabul edildi"
+        >
+          <Check size={16} strokeWidth={2.4} />
+        </span>
+      );
+    }
+    if (inviteStatus === 'rejected') {
+      return (
+        <span
+          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-red-300"
+          style={{ background: 'rgba(248,113,113,0.10)' }}
+          title="Davet reddedildi"
+          aria-label="Davet reddedildi"
+        >
+          <X size={16} strokeWidth={2.4} />
+        </span>
+      );
+    }
+    return (
+      <button
+        disabled={onCooldown}
+        onClick={() => onInvite?.()}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-default"
+        style={{ background: 'rgba(16,185,129,0.10)' }}
+        title={onCooldown ? `${cooldownRemaining}s` : 'Odaya davet et'}
+        aria-label={onCooldown ? `${cooldownRemaining} saniye sonra davet et` : 'Odaya davet et'}
+      >
+        <PhoneCall size={16} />
+      </button>
+    );
+  };
+
+  const renderSearchSecondaryActions = () => {
+    const dmButton = renderSearchDmButton();
+    const inviteButton = renderSearchInviteButton();
+    if (!dmButton && !inviteButton) return null;
+    return <div className="flex items-center justify-center gap-2">{dmButton}{inviteButton}</div>;
+  };
+
+  const renderSearchBadges = () => {
+    const relText =
+      rel === 'incoming' ? 'İstek geldi'
+      : rel === 'outgoing' ? 'İstek gönderildi'
+      : rel === 'friend' ? 'Arkadaş'
+      : 'Arkadaş değil';
+    return (
+      <div className="mb-4 flex max-w-full flex-wrap justify-center gap-1.5">
+        <span className={`rounded-full bg-[rgba(var(--glass-tint),0.07)] px-2 py-[3px] text-[9px] font-semibold ${statusColor}`}>
+          {statusText}
+        </span>
+        <span className="rounded-full bg-[rgba(var(--glass-tint),0.07)] px-2 py-[3px] text-[9px] font-semibold text-[var(--theme-secondary-text)]/70">
+          {relText}
+        </span>
+        {serverName && (
+          <span className="max-w-full truncate rounded-full bg-emerald-500/10 px-2 py-[3px] text-[9px] font-semibold text-emerald-300/85" title={serverName}>
+            {serverName}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderSearchFriendAction = () => {
+    if (rel === 'incoming') {
+      return (
+        <div className="w-full space-y-2">
+          <div className="grid grid-cols-2 gap-2 w-full">
+            <button
+              onClick={handleAccept}
+              disabled={actionLoading}
+              className="h-9 rounded-[10px] text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors disabled:opacity-40"
+            >
+              Kabul et
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={actionLoading}
+              className="h-9 rounded-[10px] text-[11px] font-semibold text-red-300 bg-red-500/10 hover:bg-red-500/15 transition-colors disabled:opacity-40"
+            >
+              Reddet
+            </button>
+          </div>
+          {renderSearchSecondaryActions()}
+        </div>
+      );
+    }
+
+    if (rel === 'outgoing') {
+      return (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => triggerConfirm('cancel')}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
+            style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+            title="İsteği iptal et"
+            aria-label="İsteği iptal et"
+          >
+            <Clock size={16} />
+          </button>
+          {renderSearchDmButton()}
+          {renderSearchInviteButton()}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => triggerConfirm('send')}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
+          style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+          title="Arkadaşlık isteği gönder"
+          aria-label="Arkadaşlık isteği gönder"
+        >
+          <UserPlus size={16} />
+        </button>
+        {renderSearchDmButton()}
+        {renderSearchInviteButton()}
+      </div>
+    );
+  };
+
+  if (isSearchMinimal) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[150]" onClick={onClose} />
+        <motion.div
+          ref={ref}
+          initial={{ opacity: 0, scale: 0.96, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: -4 }}
+          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: POPUP_W }}
+          className="rounded-[18px] overflow-hidden group/card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-[2px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="relative surface-floating"
+            style={{
+              borderRadius: 18,
+              backdropFilter: 'blur(14px) saturate(125%)',
+              WebkitBackdropFilter: 'blur(14px) saturate(125%)',
+            }}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-[radial-gradient(ellipse_at_35%_-10%,rgba(var(--theme-accent-rgb),0.09),transparent_55%)]" />
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/[0.10]" />
+            <div className="pointer-events-none absolute inset-0 rounded-[18px] ring-1 ring-inset ring-transparent group-hover/card:ring-[rgba(var(--theme-accent-rgb),0.22)] transition-[box-shadow] duration-200" />
+
+            <div className="flex flex-col items-center px-5 pt-6 pb-5">
+              <div
+                className="mb-4 overflow-hidden flex items-center justify-center avatar-squircle"
+                style={{
+                  width: 68,
+                  height: 68,
+                  background: 'rgba(var(--theme-accent-rgb), 0.06)',
+                  boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.18), inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 10px -2px rgba(0,0,0,0.22)',
+                }}
+              >
+                {hasImage || user.avatar ? (
+                  <AvatarContent
+                    avatar={user.avatar}
+                    statusText={statusText}
+                    firstName={user.displayName || user.firstName}
+                    name={userName}
+                    letterClassName="text-[24px] font-semibold tracking-tight"
+                  />
+                ) : (
+                  <UserIcon size={30} className="text-[var(--theme-secondary-text)] opacity-30" strokeWidth={1.5} />
+                )}
+              </div>
+
+              <h3
+                className="max-w-full text-center text-[15px] font-semibold leading-snug mb-2.5 whitespace-normal"
+                style={{ color: 'var(--theme-text)', overflowWrap: 'anywhere' }}
+              >
+                {userName}
+              </h3>
+
+              {renderSearchBadges()}
+
+              {renderSearchFriendAction()}
+            </div>
+          </div>
+        </motion.div>
+      </>
+    );
+  }
 
 
   return (
@@ -347,9 +575,9 @@ export default function UserProfilePopup({
                   </button>
                 )}
 
-                {rel === 'friend' && onDM && (
+                {canDirectMessage && (
                   <button
-                    onClick={() => { onDM(user.id); onClose(); }}
+                    onClick={() => { onDM?.(user.id); onClose(); }}
                     className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
                     title="Mesaj gönder"
                   >

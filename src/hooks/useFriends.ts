@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { subscribeRealtimeEvents } from '../lib/chatService';
 import { playNotification } from '../lib/audio/SoundManager';
 import { playNotifyBeep } from '../features/notifications/notificationSound';
+import { shouldSuppressSettingsSoundInChatRoom } from '../lib/soundRoomPreference';
 import {
   getFriendState,
   sendFriendRequest,
@@ -101,8 +102,10 @@ export function useFriends(currentUserId: string | undefined) {
         row.sender_id !== currentUserId &&
         row.status === 'pending'
       ) {
-        const ok = playNotification();
-        if (!ok) playNotifyBeep();
+        if (!shouldSuppressSettingsSoundInChatRoom()) {
+          const ok = playNotification();
+          if (!ok) playNotifyBeep();
+        }
       }
 
       void fetchRequests();

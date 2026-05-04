@@ -50,6 +50,10 @@ export interface User {
   userLevel?: string | null;
   /** Seçilen avatar çerçeve rengi (hex veya boş). Profiles tablosunda persist, tüm kullanıcılara görünür. */
   avatarBorderColor?: string;
+  /** Açıksa aynı ayarı açan arkadaş olmayan kullanıcılarla DM gönder/al yapılabilir. */
+  allowNonFriendDms?: boolean;
+  /** Kapalıysa karşı taraf DM mesajlarının okundu bilgisini görmez. */
+  showDmReadReceipts?: boolean;
   /**
    * Whitelist'te eşleşen aktif oyunun display name'i (ör "Valorant").
    * Sadece Electron desktop kullanıcılarında dolu; toggle kapalıyken veya

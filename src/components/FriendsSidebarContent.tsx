@@ -148,7 +148,7 @@ export default function FriendsSidebarContent({
     return (
       <div
         key={user.id}
-        className={`flex items-center gap-2.5 ${isDesktop ? 'px-3 py-2 rounded-lg' : 'px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+        className={`flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-2.5 px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
         onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
         onContextMenu={(e) => {
           if (isMe) return;
@@ -267,7 +267,7 @@ export default function FriendsSidebarContent({
     return (
     <div
       key={user.id}
-      className={`flex items-center gap-3 ${isDesktop ? 'px-3 py-2 rounded-lg' : 'px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+      className={`flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
       onContextMenu={(e) => {
         if (isMe) return;
@@ -339,7 +339,7 @@ export default function FriendsSidebarContent({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div className={`flex-1 overflow-y-auto ${isDesktop ? 'px-3 py-4' : 'p-4'} space-y-4 custom-scrollbar`}>
         {friendsLoading ? (
           <div className="flex flex-col items-center justify-center py-12 px-4">
             <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />

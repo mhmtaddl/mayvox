@@ -14,6 +14,8 @@ const normalizeLastNameInput = (value: string) =>
 interface RegisterDetailsViewProps {
   displayName: string;
   setDisplayName: (v: string) => void;
+  publicDisplayName: string;
+  setPublicDisplayName: (v: string) => void;
   firstName: string;
   setFirstName: (v: string) => void;
   lastName: string;
@@ -21,6 +23,7 @@ interface RegisterDetailsViewProps {
   age: string;
   setAge: (v: string) => void;
   loginError: string | null;
+  isSubmitting?: boolean;
   handleCompleteRegistration: () => Promise<void>;
   onGoBack: () => void;
   onOpenKvkk?: () => void;
@@ -29,6 +32,8 @@ interface RegisterDetailsViewProps {
 export default function RegisterDetailsView({
   displayName,
   setDisplayName,
+  publicDisplayName,
+  setPublicDisplayName,
   firstName,
   setFirstName,
   lastName,
@@ -36,6 +41,7 @@ export default function RegisterDetailsView({
   age,
   setAge,
   loginError,
+  isSubmitting = false,
   handleCompleteRegistration,
   onGoBack,
   onOpenKvkk,
@@ -43,6 +49,7 @@ export default function RegisterDetailsView({
   const [pressing, setPressing] = React.useState(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const displayNameRef = useRef<HTMLInputElement>(null);
+  const publicDisplayNameRef = useRef<HTMLInputElement>(null);
   const firstNameRef = useRef<HTMLInputElement>(null);
   const lastNameRef = useRef<HTMLInputElement>(null);
   const ageRef = useRef<HTMLInputElement>(null);
@@ -55,15 +62,16 @@ export default function RegisterDetailsView({
   }, [onGoBack]);
 
   const triggerSubmit = () => {
+    if (isSubmitting) return;
     setPressing(true);
     setTimeout(() => setPressing(false), 150);
-    handleCompleteRegistration();
+    void handleCompleteRegistration();
   };
 
-  const onEnterNext = makeEnterToNext([displayNameRef, firstNameRef, lastNameRef, ageRef], triggerSubmit);
+  const onEnterNext = makeEnterToNext([displayNameRef, publicDisplayNameRef, firstNameRef, lastNameRef, ageRef], triggerSubmit);
 
   return (
-    <div className="auth-screen flex flex-col items-center justify-center min-h-full h-full p-4 relative overflow-hidden" style={{ background: 'transparent' }}>
+    <div className="auth-screen flex h-[calc(100vh-var(--titlebar-height,0px))] min-h-0 flex-col items-center justify-center p-3 sm:p-4 relative overflow-hidden" style={{ background: 'transparent' }}>
       <div className="auth-ambient absolute inset-0 pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.07]" style={{ background: 'radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4), transparent 70%)' }} />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.05]" style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)' }} />
@@ -73,7 +81,7 @@ export default function RegisterDetailsView({
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="auth-card w-full max-w-[420px] relative z-10 rounded-3xl overflow-hidden"
+        className="auth-card w-full max-w-[420px] max-h-[calc(100%-32px)] relative z-10 rounded-2xl sm:rounded-3xl overflow-x-hidden overflow-y-auto"
         style={{ background: 'transparent', border: '0', boxShadow: 'none' }}
       >
         <div className="auth-card-line absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -85,49 +93,67 @@ export default function RegisterDetailsView({
           Geri
         </button>
 
-        <div className="px-10 pt-10 pb-8">
-        <div className="flex justify-center mb-8">
+        <div className="px-6 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 [@media(max-height:760px)]:px-7 [@media(max-height:760px)]:pt-5 [@media(max-height:760px)]:pb-5 [@media(max-height:640px)]:px-5 [@media(max-height:640px)]:pt-4 [@media(max-height:640px)]:pb-4">
+        <div className="flex justify-center mb-5 [@media(max-height:760px)]:mb-3">
           <div className="relative">
             <div className="auth-logo-glow absolute inset-[-16px] rounded-full opacity-15 blur-2xl" style={{ background: 'rgba(var(--theme-accent-rgb), 0.3)' }} />
-            <div className="relative w-24 h-24 sm:w-36 sm:h-36 max-[700px]:w-20 max-[700px]:h-20 [@media(max-height:700px)]:w-20 [@media(max-height:700px)]:h-20 [@media(max-height:600px)]:w-16 [@media(max-height:600px)]:h-16 overflow-hidden rounded-[22%]">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 max-[700px]:w-[72px] max-[700px]:h-[72px] [@media(max-height:760px)]:w-16 [@media(max-height:760px)]:h-16 [@media(max-height:620px)]:w-14 [@media(max-height:620px)]:h-14 overflow-hidden rounded-[22%]">
               <img src={appLogo} alt="MAYVOX" className="auth-logo w-full h-full object-cover" />
             </div>
           </div>
         </div>
 
-        <div className="text-center mb-8">
-          <h1 className="auth-title text-[#F5F5F5] text-[24px] font-bold tracking-[-0.01em] leading-tight">Profil Bilgileri</h1>
-          <p className="auth-subtitle text-white/50 mt-2 text-[13px] max-w-[80%] mx-auto">Son adım — bilgilerini tamamla</p>
+        <div className="text-center mb-5 [@media(max-height:760px)]:mb-4">
+          <h1 className="auth-title text-[#F5F5F5] text-[22px] [@media(max-height:760px)]:text-[20px] font-bold tracking-[-0.01em] leading-tight">Profil Bilgileri</h1>
+          <p className="auth-subtitle text-white/50 mt-1.5 text-[12px] max-w-[80%] mx-auto">Son adım — bilgilerini tamamla</p>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-3 [@media(max-height:760px)]:space-y-2.5">
           {loginError && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-bold text-center animate-pulse">
               {loginError}
             </div>
           )}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">KULLANICI ADI</label>
+          <div className="space-y-1.5 [@media(max-height:760px)]:space-y-1">
+            <label className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">KULLANICI ADI</label>
             <div className="relative">
-              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={displayNameRef}
                 type="text"
-                placeholder="Görünen adınızı giriniz"
+                placeholder="Kullanıcı adınızı giriniz"
                 value={displayName}
                 maxLength={10}
                 onChange={(e) => setDisplayName(normalizeUsernameInput(e.target.value))}
                 onKeyDown={onEnterNext(0)}
                 enterKeyHint="next"
-                className="auth-input w-full bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                className="auth-input w-full h-11 [@media(max-height:760px)]:h-10 bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl pl-10 pr-4 text-[13px] sm:text-[14px] text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">ADINIZ</label>
+          <div className="space-y-1.5 [@media(max-height:760px)]:space-y-1">
+            <label className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">TAKMA AD</label>
             <div className="relative">
-              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
+              <input
+                ref={publicDisplayNameRef}
+                type="text"
+                placeholder="Takma adınızı giriniz"
+                value={publicDisplayName}
+                maxLength={24}
+                onChange={(e) => setPublicDisplayName(e.target.value.replace(/[\p{C}]/gu, '').slice(0, 24))}
+                onKeyDown={onEnterNext(1)}
+                enterKeyHint="next"
+                className="auth-input w-full h-11 [@media(max-height:760px)]:h-10 bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl pl-10 pr-4 text-[13px] sm:text-[14px] text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5 [@media(max-height:760px)]:space-y-1">
+            <label className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">ADINIZ</label>
+            <div className="relative">
+              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={firstNameRef}
                 type="text"
@@ -135,17 +161,17 @@ export default function RegisterDetailsView({
                 value={firstName}
                 maxLength={NAME_INPUT_MAX_LENGTH}
                 onChange={(e) => setFirstName(normalizeNameInput(e.target.value.replace(/[^\p{L} ]/gu, '')))}
-                onKeyDown={onEnterNext(1)}
+                onKeyDown={onEnterNext(2)}
                 enterKeyHint="next"
-                className="auth-input w-full bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                className="auth-input w-full h-11 [@media(max-height:760px)]:h-10 bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl pl-10 pr-4 text-[13px] sm:text-[14px] text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">SOYADINIZ</label>
+          <div className="space-y-1.5 [@media(max-height:760px)]:space-y-1">
+            <label className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">SOYADINIZ</label>
             <div className="relative">
-              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={lastNameRef}
                 type="text"
@@ -153,38 +179,39 @@ export default function RegisterDetailsView({
                 value={lastName}
                 maxLength={NAME_INPUT_MAX_LENGTH}
                 onChange={(e) => setLastName(normalizeLastNameInput(e.target.value))}
-                onKeyDown={onEnterNext(2)}
+                onKeyDown={onEnterNext(3)}
                 enterKeyHint="next"
-                className="auth-input w-full bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                className="auth-input w-full h-11 [@media(max-height:760px)]:h-10 bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl pl-10 pr-4 text-[13px] sm:text-[14px] text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">YAŞINIZ</label>
+          <div className="space-y-1.5 [@media(max-height:760px)]:space-y-1">
+            <label className="text-[11px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">YAŞINIZ</label>
             <div className="relative">
-              <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={20} />
+              <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={18} />
               <input
                 ref={ageRef}
                 type="number"
                 placeholder="Yaşınızı giriniz"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                onKeyDown={onEnterNext(3)}
+                onKeyDown={onEnterNext(4)}
                 enterKeyHint="done"
-                className="auth-input w-full bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl py-4 pl-12 pr-4 text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
+                className="auth-input w-full h-11 [@media(max-height:760px)]:h-10 bg-[var(--theme-input-bg,rgba(var(--theme-sidebar-rgb),0.72))] border border-[var(--theme-input-border,var(--theme-border))] rounded-xl pl-10 pr-4 text-[13px] sm:text-[14px] text-[var(--theme-text)] focus:ring-2 focus:ring-[var(--theme-accent)] focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
           <button
             ref={submitBtnRef}
-            onClick={handleCompleteRegistration}
-            className={`w-full h-[50px] btn-primary text-[15px] flex items-center justify-center ${pressing ? 'opacity-90 scale-[0.97]' : ''}`}
+            onClick={triggerSubmit}
+            disabled={isSubmitting}
+            className={`w-full h-11 [@media(max-height:760px)]:h-10 btn-primary text-[14px] sm:text-[15px] flex items-center justify-center disabled:cursor-wait disabled:opacity-60 ${pressing ? 'opacity-90 scale-[0.97]' : ''}`}
           >
-            <span>Kaydını Tamamla</span>
+            <span>{isSubmitting ? 'Kaydediliyor...' : 'Kaydını Tamamla'}</span>
           </button>
-          <p className="px-1 text-center text-[11px] leading-relaxed text-[var(--theme-secondary-text)]/55">
+          <p className="px-1 text-center text-[10.5px] leading-relaxed text-[var(--theme-secondary-text)]/55">
             Kişisel verilerimin işlenmesine ilişkin{' '}
             <button
               type="button"

@@ -28,6 +28,8 @@ export interface AuthProfile {
   server_creation_plan?: 'none' | 'free' | 'pro' | 'ultra' | null;
   user_level?: string | null;
   avatar_border_color?: string | null;
+  allow_non_friend_dms?: boolean;
+  show_dm_read_receipts?: boolean;
 }
 
 export interface AuthUser {

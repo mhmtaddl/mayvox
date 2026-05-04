@@ -15,6 +15,7 @@ const SOUND_VARIANT_KEY = 'notify:sound-variant';
 const SOUND_VOLUME_KEY = 'notify:sound-volume';
 const TOAST_PREF_KEY = 'notify:toast';
 const GROUP_PREF_KEY = 'notify:group';
+const ROOM_MESSAGE_SOUND_PREF_KEY = 'notify:room-message-sound';
 const ENVELOPE_MS = 400;
 
 export type SoundVariant = 'ses1' | 'ses2';
@@ -58,6 +59,14 @@ export function isGroupingEnabled(): boolean {
 }
 export function setGroupingEnabled(on: boolean) {
   try { localStorage.setItem(GROUP_PREF_KEY, on ? '1' : '0'); }
+  catch { /* no-op */ }
+}
+export function isRoomMessageSoundEnabled(): boolean {
+  try { return localStorage.getItem(ROOM_MESSAGE_SOUND_PREF_KEY) !== '0'; }
+  catch { return true; }
+}
+export function setRoomMessageSoundEnabled(on: boolean) {
+  try { localStorage.setItem(ROOM_MESSAGE_SOUND_PREF_KEY, on ? '1' : '0'); }
   catch { /* no-op */ }
 }
 

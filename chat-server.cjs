@@ -77,6 +77,9 @@ dmDb.exec(`
     user_b_id TEXT NOT NULL,
     last_message TEXT DEFAULT '',
     last_message_at INTEGER DEFAULT 0,
+    request_status TEXT NOT NULL DEFAULT 'accepted',
+    request_receiver_id TEXT DEFAULT NULL,
+    request_created_at INTEGER DEFAULT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
   );
 
@@ -102,17 +105,47 @@ dmDb.exec(`
     hidden_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
     PRIMARY KEY (user_id, conversation_key)
   );
+
+  CREATE TABLE IF NOT EXISTS dm_blocks (
+    blocker_id TEXT NOT NULL,
+    blocked_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    PRIMARY KEY (blocker_id, blocked_id),
+    CHECK (blocker_id <> blocked_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_dm_blocks_blocked ON dm_blocks(blocked_id);
 `);
 
-// Idempotent migration — delivered_at eski DB'lere retroaktif eklenir.
+// Idempotent migration — eski DB'lere retroaktif eklenir.
 // Sıra önemli: önce kolon varlığı garanti edilir, sonra o kolonu kullanan index.
 {
-  const cols = dmDb.pragma('table_info(dm_messages)');
-  const hasDelivered = cols.some(c => c.name === 'delivered_at');
+  const messageCols = dmDb.pragma('table_info(dm_messages)');
+  const hasDelivered = messageCols.some(c => c.name === 'delivered_at');
   if (!hasDelivered) {
     dmDb.exec(`ALTER TABLE dm_messages ADD COLUMN delivered_at INTEGER DEFAULT NULL`);
     console.log('[chat-server] Migration: dm_messages.delivered_at eklendi');
   }
+  const hasEdited = messageCols.some(c => c.name === 'edited_at');
+  if (!hasEdited) {
+    dmDb.exec(`ALTER TABLE dm_messages ADD COLUMN edited_at INTEGER DEFAULT NULL`);
+    console.log('[chat-server] Migration: dm_messages.edited_at eklendi');
+  }
+
+  const conversationCols = dmDb.pragma('table_info(dm_conversations)');
+  if (!conversationCols.some(c => c.name === 'request_status')) {
+    dmDb.exec(`ALTER TABLE dm_conversations ADD COLUMN request_status TEXT NOT NULL DEFAULT 'accepted'`);
+    console.log('[chat-server] Migration: dm_conversations.request_status eklendi');
+  }
+  if (!conversationCols.some(c => c.name === 'request_receiver_id')) {
+    dmDb.exec(`ALTER TABLE dm_conversations ADD COLUMN request_receiver_id TEXT DEFAULT NULL`);
+    console.log('[chat-server] Migration: dm_conversations.request_receiver_id eklendi');
+  }
+  if (!conversationCols.some(c => c.name === 'request_created_at')) {
+    dmDb.exec(`ALTER TABLE dm_conversations ADD COLUMN request_created_at INTEGER DEFAULT NULL`);
+    console.log('[chat-server] Migration: dm_conversations.request_created_at eklendi');
+  }
+
   // Kolon varlığı her iki path'te de (yeni DB / eski DB) garanti altında → index güvenle eklenir.
   dmDb.exec(`CREATE INDEX IF NOT EXISTS idx_dm_msg_recv_delivered ON dm_messages(receiver_id, delivered_at)`);
 }
@@ -142,6 +175,16 @@ const dmStmt = {
     INSERT OR IGNORE INTO dm_conversations (conversation_key, user_a_id, user_b_id, created_at)
     VALUES (?, ?, ?, ?)
   `),
+  createConversationWithRequest: dmDb.prepare(`
+    INSERT OR IGNORE INTO dm_conversations
+      (conversation_key, user_a_id, user_b_id, created_at, request_status, request_receiver_id, request_created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `),
+  setConversationRequestStatus: dmDb.prepare(`
+    UPDATE dm_conversations
+    SET request_status = ?, request_receiver_id = ?, request_created_at = ?
+    WHERE conversation_key = ?
+  `),
   getMessages: dmDb.prepare(`
     SELECT * FROM dm_messages
     WHERE conversation_key = ?
@@ -162,6 +205,24 @@ const dmStmt = {
   insertMessage: dmDb.prepare(`
     INSERT INTO dm_messages (id, conversation_key, sender_id, receiver_id, text, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  getMessageById: dmDb.prepare(`
+    SELECT * FROM dm_messages WHERE id = ?
+  `),
+  getLatestMessage: dmDb.prepare(`
+    SELECT * FROM dm_messages
+    WHERE conversation_key = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `),
+  updateMessage: dmDb.prepare(`
+    UPDATE dm_messages
+    SET text = ?, edited_at = ?
+    WHERE id = ? AND sender_id = ?
+  `),
+  deleteMessage: dmDb.prepare(`
+    DELETE FROM dm_messages
+    WHERE id = ? AND sender_id = ?
   `),
   updateLastMessage: dmDb.prepare(`
     UPDATE dm_conversations
@@ -210,10 +271,46 @@ const dmStmt = {
   unhideConversation: dmDb.prepare(`
     DELETE FROM dm_conversation_hidden WHERE user_id = ? AND conversation_key = ?
   `),
+  getBlockBetween: dmDb.prepare(`
+    SELECT blocker_id, blocked_id
+    FROM dm_blocks
+    WHERE (blocker_id = ? AND blocked_id = ?)
+       OR (blocker_id = ? AND blocked_id = ?)
+    LIMIT 1
+  `),
+  getBlockedIds: dmDb.prepare(`
+    SELECT blocked_id AS id, 'outgoing' AS direction FROM dm_blocks WHERE blocker_id = ?
+    UNION ALL
+    SELECT blocker_id AS id, 'incoming' AS direction FROM dm_blocks WHERE blocked_id = ?
+  `),
+  blockUser: dmDb.prepare(`
+    INSERT OR REPLACE INTO dm_blocks (blocker_id, blocked_id, created_at)
+    VALUES (?, ?, ?)
+  `),
+  unblockUser: dmDb.prepare(`
+    DELETE FROM dm_blocks WHERE blocker_id = ? AND blocked_id = ?
+  `),
 };
 
 function makeDmKey(a, b) {
   return a < b ? `dm:${a}:${b}` : `dm:${b}:${a}`;
+}
+
+function previewDmText(text) {
+  return text.length > 100 ? text.slice(0, 100) + '…' : text;
+}
+
+function recomputeDmLastMessage(convKey) {
+  const latest = dmStmt.getLatestMessage.get(convKey);
+  if (latest) {
+    const preview = previewDmText(String(latest.text || ''));
+    dmStmt.updateLastMessage.run(preview, latest.created_at, convKey);
+    return { lastMessage: preview, lastMessageAt: latest.created_at };
+  }
+  const conv = dmStmt.getConversation.get(convKey);
+  const fallbackAt = conv?.created_at || Date.now();
+  dmStmt.updateLastMessage.run('', fallbackAt, convKey);
+  return { lastMessage: '', lastMessageAt: fallbackAt };
 }
 
 function generateId() {
@@ -589,6 +686,147 @@ async function checkFriendship(userA, userB) {
   }
 }
 
+async function getMutualNonFriendDmAllowedIds(userId, candidateIds) {
+  const self = typeof userId === 'string' ? userId.trim() : '';
+  const unique = Array.from(new Set(
+    (Array.isArray(candidateIds) ? candidateIds : [])
+      .map(id => (typeof id === 'string' ? id.trim() : ''))
+      .filter(id => id && id !== self),
+  ));
+  if (!self || unique.length === 0) return new Set();
+
+  try {
+    const rows = await queryMany(
+      `SELECT id::text AS id
+         FROM profiles
+        WHERE id::text = ANY($1::text[])
+          AND COALESCE(allow_non_friend_dms, false) = true`,
+      [[self, ...unique]],
+    );
+    const openIds = new Set(rows.map(r => r.id));
+    if (!openIds.has(self)) return new Set();
+    return new Set(unique.filter(id => openIds.has(id)));
+  } catch (err) {
+    console.warn('[dm] non-friend dm permission exception:', err?.message);
+    return new Set();
+  }
+}
+
+function getDmBlockState(userA, userB) {
+  if (typeof userA !== 'string' || typeof userB !== 'string') return null;
+  const a = userA.trim(), b = userB.trim();
+  if (!a || !b || a === b) return null;
+  try {
+    return dmStmt.getBlockBetween.get(a, b, b, a) || null;
+  } catch (err) {
+    console.warn('[dm] block lookup exception:', err?.message);
+    return { blocker_id: a, blocked_id: b, failClosed: true };
+  }
+}
+
+async function checkDmAccess(userA, userB) {
+  const block = getDmBlockState(userA, userB);
+  if (block) {
+    const requesterBlockedTarget = block.blocker_id === userA;
+    return {
+      allowed: false,
+      via: 'blocked',
+      reason: requesterBlockedTarget ? 'blocked_by_self' : 'blocked_by_other',
+    };
+  }
+  const friends = await checkFriendship(userA, userB);
+  if (friends) return { allowed: true, via: 'friend' };
+  const mutualAllowed = await getMutualNonFriendDmAllowedIds(userA, [userB]);
+  return { allowed: mutualAllowed.has(userB), via: mutualAllowed.has(userB) ? 'mutual_non_friend' : 'blocked' };
+}
+
+function dmAccessMessage(access) {
+  if (access?.reason === 'blocked_by_self') return 'Bu kullanıcıyı engelledin';
+  if (access?.reason === 'blocked_by_other') return 'Bu kullanıcı sana mesaj almayı kapattı';
+  return 'Arkadaş olmayanlarla mesajlaşma iki tarafta da açık olmalı';
+}
+
+const dmProfileSettingsCache = new Map(); // userId -> { showDmReadReceipts, expiresAt }
+const DM_PROFILE_SETTINGS_TTL_MS = 20_000;
+
+async function getDmProfileSettings(userIds) {
+  const now = Date.now();
+  const result = new Map();
+  const miss = [];
+  for (const raw of Array.isArray(userIds) ? userIds : []) {
+    const id = typeof raw === 'string' ? raw.trim() : '';
+    if (!id) continue;
+    const hit = dmProfileSettingsCache.get(id);
+    if (hit && hit.expiresAt > now) {
+      result.set(id, { showDmReadReceipts: hit.showDmReadReceipts });
+    } else {
+      miss.push(id);
+    }
+  }
+  if (miss.length > 0) {
+    try {
+      const rows = await queryMany(
+        `SELECT id::text AS id, COALESCE(show_dm_read_receipts, true) AS show_dm_read_receipts
+           FROM profiles
+          WHERE id::text = ANY($1::text[])`,
+        [Array.from(new Set(miss))],
+      );
+      for (const row of rows) {
+        const entry = {
+          showDmReadReceipts: row.show_dm_read_receipts !== false,
+          expiresAt: now + DM_PROFILE_SETTINGS_TTL_MS,
+        };
+        dmProfileSettingsCache.set(row.id, entry);
+        result.set(row.id, { showDmReadReceipts: entry.showDmReadReceipts });
+      }
+    } catch (err) {
+      console.warn('[dm] profile settings failed:', err?.message);
+    }
+  }
+  for (const id of miss) {
+    if (!result.has(id)) result.set(id, { showDmReadReceipts: true });
+  }
+  return result;
+}
+
+function formatDmMessageForViewer(row, viewerId, senderProfile, settingsMap) {
+  const receiverSettings = settingsMap?.get(row.receiver_id);
+  const readAtVisible =
+    row.sender_id === viewerId
+      ? (receiverSettings?.showDmReadReceipts === false ? null : row.read_at)
+      : row.read_at;
+  return {
+    id: row.id,
+    conversationKey: row.conversation_key,
+    senderId: row.sender_id,
+    senderName: senderProfile?.name || '',
+    senderAvatar: senderProfile?.avatar ?? null,
+    recipientId: row.receiver_id,
+    text: row.text,
+    createdAt: row.created_at,
+    readAt: readAtVisible,
+    deliveredAt: row.delivered_at,
+    editedAt: row.edited_at,
+  };
+}
+
+function conversationDto(row, otherId, profile, isRequest = false) {
+  return {
+    conversationKey: row.conversation_key,
+    recipientId: otherId,
+    recipientName: profile?.name || '',
+    recipientAvatar: profile?.avatar ?? null,
+    lastMessage: row.last_message,
+    lastMessageAt: row.last_message_at,
+    unreadCount: row.unread_count,
+    createdAt: row.created_at,
+    requestStatus: row.request_status || 'accepted',
+    requestReceiverId: row.request_receiver_id || null,
+    requestCreatedAt: row.request_created_at || null,
+    isRequest,
+  };
+}
+
 async function getFriendIds(userId) {
   const data = await queryMany(
     'SELECT user_low_id, user_high_id FROM friendships WHERE user_low_id = $1 OR user_high_id = $1',
@@ -608,8 +846,8 @@ const floodControl = createFloodControl();
 const userJoinLimits = new Map();   // join: 5 / 15s
 const userTypingLimits = new Map(); // DM typing relay: 5 / 10s (burst guard)
 
-// Typing-only friendship cache — SADECE dm:typing relay'inde kullanılır.
-// DM send/open kendi sağlam checkFriendship akışını korur (stale sonuca izin yok).
+// Typing-only DM access cache — SADECE dm:typing relay'inde kullanılır.
+// DM send/open kendi sağlam checkDmAccess akışını korur (stale sonuca izin yok).
 // Typing ephemeral; 8 sn stale tolerable — tipik arkadaşlık kaldırma etkisi gecikir ama
 // DM send her seferinde DB'ye düştüğü için gerçek kapı kapalı kalır.
 const typingFriendCache = new Map(); // canonicalKey -> { ok: boolean, expiresAt: number }
@@ -625,7 +863,8 @@ async function checkFriendshipForTyping(userA, userB) {
   const hit = typingFriendCache.get(key);
   if (hit && hit.expiresAt > now) return hit.ok;
   // Miss → canonical DB yolu; hata fail-closed.
-  const ok = await checkFriendship(a, b);
+  const access = await checkDmAccess(a, b);
+  const ok = !!access.allowed;
   typingFriendCache.set(key, { ok, expiresAt: now + TYPING_FRIEND_TTL_MS });
   return ok;
 }
@@ -1720,36 +1959,48 @@ wss.on('connection', (ws) => {
     if (msg.type === 'dm:conversations') {
       try {
         const rows = dmStmt.getConversations.all(userId, userId, userId, userId);
-        // Aktif arkadaş ID'lerini tek sorguda çek
+        const allOtherIds = rows.map(row => row.user_a_id === userId ? row.user_b_id : row.user_a_id);
+        const blockedRows = dmStmt.getBlockedIds.all(userId, userId);
+        const blockedIds = new Set(blockedRows.map(r => r.id));
+        // Aktif arkadaş ID'lerini ve mutual non-friend DM izinlerini tekil sorgularla çek
         const friendIds = await getFriendIds(userId);
-        // Sadece aktif arkadaşlarla olan konuşmaları döndür
+        const mutualNonFriendDmIds = await getMutualNonFriendDmAllowedIds(
+          userId,
+          allOtherIds.filter(otherId => !friendIds.has(otherId) && !blockedIds.has(otherId)),
+        );
+        // Sadece aktif arkadaşlarla veya iki tarafın da izin verdiği non-friend konuşmaları döndür.
+        // Pending request alıcı tarafında ayrı "Mesaj İstekleri" listesine gider.
         const filtered = [];
+        const requests = [];
         const otherIds = [];
         for (const row of rows) {
           const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
-          if (!friendIds.has(otherId)) continue;
+          if (blockedIds.has(otherId)) continue;
+          const status = row.request_status || 'accepted';
+          if (status === 'rejected' && !friendIds.has(otherId)) continue;
+          if (status === 'pending' && row.request_receiver_id === userId && !friendIds.has(otherId)) {
+            requests.push({ row, otherId });
+            otherIds.push(otherId);
+            continue;
+          }
+          if (!friendIds.has(otherId) && !mutualNonFriendDmIds.has(otherId) && status !== 'pending') continue;
           filtered.push({ row, otherId });
           otherIds.push(otherId);
         }
         // Server-side enrichment: name/avatar — frontend ayrıca resolve etmesin.
         const profiles = otherIds.length > 0 ? await getProfiles(otherIds) : new Map();
-        const convos = filtered.map(({ row, otherId }) => {
-          const p = profiles.get(otherId);
-          return {
-            conversationKey: row.conversation_key,
-            recipientId: otherId,
-            recipientName: p?.name || '',
-            recipientAvatar: p?.avatar ?? null,
-            lastMessage: row.last_message,
-            lastMessageAt: row.last_message_at,
-            unreadCount: row.unread_count,
-            createdAt: row.created_at,
-          };
+        const convos = filtered.map(({ row, otherId }) => conversationDto(row, otherId, profiles.get(otherId), false));
+        const requestConvos = requests.map(({ row, otherId }) => conversationDto(row, otherId, profiles.get(otherId), true));
+        send(ws, {
+          type: 'dm:conversations',
+          conversations: convos,
+          requests: requestConvos,
+          requestCount: requestConvos.length,
+          blockedIds: blockedRows.filter(r => r.direction === 'outgoing').map(r => r.id),
         });
-        send(ws, { type: 'dm:conversations', conversations: convos });
       } catch (err) {
         console.error('[dm] conversations error:', err?.message);
-        send(ws, { type: 'dm:conversations', conversations: [] });
+        send(ws, { type: 'dm:conversations', conversations: [], requests: [], requestCount: 0, blockedIds: [] });
       }
       return;
     }
@@ -1762,18 +2013,34 @@ wss.on('connection', (ws) => {
       }
 
       try {
-        // Arkadaşlık kontrolü
-        const friends = await checkFriendship(userId, recipientId);
-        if (!friends) {
-          return send(ws, { type: 'dm:error', message: 'Bu kullanıcıyla arkadaş değilsin' });
+        // DM erişim kontrolü: arkadaşlık veya iki tarafta açık non-friend DM.
+        const access = await checkDmAccess(userId, recipientId);
+        if (!access.allowed) {
+          return send(ws, { type: 'dm:error', message: dmAccessMessage(access) });
         }
 
         const convKey = makeDmKey(userId, recipientId);
         const [userA, userB] = userId < recipientId ? [userId, recipientId] : [recipientId, userId];
 
-        // Conversation yoksa oluştur
         const now = Date.now();
-        dmStmt.createConversation.run(convKey, userA, userB, now);
+        const existingConv = dmStmt.getConversation.get(convKey);
+        if (!existingConv) {
+          if (access.via === 'friend') {
+            dmStmt.createConversation.run(convKey, userA, userB, now);
+          } else {
+            send(ws, {
+              type: 'dm:history',
+              conversationKey: convKey,
+              recipientId,
+              messages: [],
+              requestStatus: 'none',
+            });
+            return;
+          }
+        } else if ((existingConv.request_status || 'accepted') === 'rejected' && access.via !== 'friend') {
+          return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
+        }
+        const conversation = dmStmt.getConversation.get(convKey);
 
         // Mesaj geçmişini yükle
         const messages = dmStmt.getMessagesAfterHidden.all(convKey, userId, convKey);
@@ -1784,33 +2051,28 @@ wss.on('connection', (ws) => {
         // Sender enrichment — tarihsel mesajlar için sender adı/avatarı (batch, cached).
         const senderIds = [...new Set(messages.map(m => m.sender_id))];
         const senderProfiles = senderIds.length > 0 ? await getProfiles(senderIds) : new Map();
+        const readSettings = await getDmProfileSettings([...new Set(messages.map(m => m.receiver_id))]);
 
         send(ws, {
           type: 'dm:history',
           conversationKey: convKey,
           recipientId,
-          messages: messages.map(m => {
-            const p = senderProfiles.get(m.sender_id);
-            return {
-              id: m.id,
-              senderId: m.sender_id,
-              senderName: p?.name || '',
-              senderAvatar: p?.avatar ?? null,
-              text: m.text,
-              createdAt: m.created_at,
-              readAt: m.read_at,
-              deliveredAt: m.delivered_at,
-            };
-          }),
+          requestStatus: conversation?.request_status || 'accepted',
+          requestReceiverId: conversation?.request_receiver_id || null,
+          isRequest: (conversation?.request_status || 'accepted') === 'pending' && conversation?.request_receiver_id === userId,
+          messages: messages.map(m => formatDmMessageForViewer(m, userId, senderProfiles.get(m.sender_id), readSettings)),
         });
 
-        // Karşı tarafa okundu bilgisi gönder
-        sendToUser(recipientId, {
-          type: 'dm:read',
-          conversationKey: convKey,
-          readBy: userId,
-          readAt: now,
-        });
+        // Karşı tarafa okundu bilgisi gönder; kullanıcı kapattıysa sadece unread temizlenir.
+        const mySettings = await getDmProfileSettings([userId]);
+        if (mySettings.get(userId)?.showDmReadReceipts !== false) {
+          sendToUser(recipientId, {
+            type: 'dm:read',
+            conversationKey: convKey,
+            readBy: userId,
+            readAt: now,
+          });
+        }
       } catch (err) {
         console.error('[dm] open error:', err?.message);
         send(ws, { type: 'dm:error', message: 'Konuşma açılamadı' });
@@ -1855,10 +2117,10 @@ wss.on('connection', (ws) => {
       userLastDm.set(userId, { text, at: nowForDup });
 
       try {
-        // Arkadaşlık kontrolü
-        const friends = await checkFriendship(userId, recipientId);
-        if (!friends) {
-          return send(ws, { type: 'dm:error', message: 'Bu kullanıcıyla arkadaş değilsin' });
+        // DM erişim kontrolü: arkadaşlık veya iki tarafta açık non-friend DM.
+        const access = await checkDmAccess(userId, recipientId);
+        if (!access.allowed) {
+          return send(ws, { type: 'dm:error', message: dmAccessMessage(access) });
         }
 
         const convKey = makeDmKey(userId, recipientId);
@@ -1866,15 +2128,58 @@ wss.on('connection', (ws) => {
         const now = Date.now();
         const msgId = generateId();
 
-        // Conversation yoksa oluştur — created audit'i için rowCount bak.
-        const createRes = dmStmt.createConversation.run(convKey, userA, userB, now);
-        const conversationCreated = createRes && createRes.changes > 0;
+        let conversation = dmStmt.getConversation.get(convKey);
+        let conversationCreated = false;
+        let requestStatus = conversation?.request_status || 'accepted';
+        let requestReceiverId = conversation?.request_receiver_id || null;
+
+        if (access.via === 'friend') {
+          if (!conversation) {
+            const createRes = dmStmt.createConversation.run(convKey, userA, userB, now);
+            conversationCreated = !!(createRes && createRes.changes > 0);
+            conversation = dmStmt.getConversation.get(convKey);
+          }
+          if (conversation && (conversation.request_status || 'accepted') !== 'accepted') {
+            dmStmt.setConversationRequestStatus.run('accepted', null, null, convKey);
+            requestStatus = 'accepted';
+            requestReceiverId = null;
+          }
+        } else if (!conversation) {
+          const createRes = dmStmt.createConversationWithRequest.run(
+            convKey,
+            userA,
+            userB,
+            now,
+            'pending',
+            recipientId,
+            now,
+          );
+          conversationCreated = !!(createRes && createRes.changes > 0);
+          conversation = dmStmt.getConversation.get(convKey);
+          requestStatus = 'pending';
+          requestReceiverId = recipientId;
+        } else {
+          requestStatus = conversation.request_status || 'accepted';
+          requestReceiverId = conversation.request_receiver_id || null;
+          if (requestStatus === 'rejected') {
+            return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
+          }
+          if (requestStatus === 'pending') {
+            if (requestReceiverId === userId) {
+              dmStmt.setConversationRequestStatus.run('accepted', null, null, convKey);
+              requestStatus = 'accepted';
+              requestReceiverId = null;
+            } else {
+              return send(ws, { type: 'dm:error', message: 'Mesaj isteği yanıt bekliyor' });
+            }
+          }
+        }
 
         // Mesajı kaydet
         dmStmt.insertMessage.run(msgId, convKey, userId, recipientId, text, now);
 
         // Son mesajı güncelle
-        const preview = text.length > 100 ? text.slice(0, 100) + '…' : text;
+        const preview = previewDmText(text);
         dmStmt.updateLastMessage.run(preview, now, convKey);
 
         // Recipient online ise anında delivered_at işaretle — sender çift gri tik görür.
@@ -1896,13 +2201,39 @@ wss.on('connection', (ws) => {
           createdAt: now,
           deliveredAt,
           readAt: null,
+          editedAt: null,
         };
 
         // Gönderene teslim (deliveredAt payload'da — UI anında çift gri gösterir)
-        sendToUser(userId, { type: 'dm:new_message', message: newMsg });
+        sendToUser(userId, {
+          type: 'dm:new_message',
+          message: {
+            ...newMsg,
+            requestStatus,
+            requestReceiverId,
+            isRequest: false,
+          },
+        });
 
         // Alıcıya teslim
-        sendToUser(recipientId, { type: 'dm:new_message', message: newMsg });
+        sendToUser(recipientId, {
+          type: 'dm:new_message',
+          message: {
+            ...newMsg,
+            requestStatus,
+            requestReceiverId,
+            isRequest: requestStatus === 'pending' && requestReceiverId === recipientId,
+          },
+        });
+
+        if (requestStatus === 'pending' && requestReceiverId === recipientId) {
+          sendToUser(recipientId, {
+            type: 'dm:request_updated',
+            conversationKey: convKey,
+            status: 'pending',
+            otherUserId: userId,
+          });
+        }
 
         console.log(`[dm] ${userName} -> ${recipientId} messageId=${msgId} len=${text.length}`);
 
@@ -1926,11 +2257,124 @@ wss.on('connection', (ws) => {
             recipientId,
             textLength: text.length,
             conversationCreated: !!conversationCreated,
+            accessVia: access.via,
+            requestStatus,
           },
         });
       } catch (err) {
         console.error('[dm] send error:', err?.message);
         send(ws, { type: 'dm:error', message: 'Mesaj gönderilemedi' });
+      }
+      return;
+    }
+
+    // ── DM:EDIT ──────────────────────────────────────────────────────────
+    if (msg.type === 'dm:edit') {
+      const messageId = String(msg.messageId || '').trim();
+      const text = String(msg.text || '').trim();
+
+      if (!messageId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
+      }
+      if (!text || text.length > 2000) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
+      }
+
+      try {
+        const row = dmStmt.getMessageById.get(messageId);
+        if (!row || row.sender_id !== userId) {
+          return send(ws, { type: 'dm:error', message: 'Bu mesaj düzenlenemedi' });
+        }
+
+        const editedAt = Date.now();
+        const update = dmStmt.updateMessage.run(text, editedAt, messageId, userId);
+        if (update.changes === 0) {
+          return send(ws, { type: 'dm:error', message: 'Bu mesaj düzenlenemedi' });
+        }
+
+        const lastMeta = recomputeDmLastMessage(row.conversation_key);
+        const editedMessage = {
+          id: row.id,
+          conversationKey: row.conversation_key,
+          senderId: row.sender_id,
+          senderName: userName,
+          senderAvatar: userAvatar,
+          recipientId: row.receiver_id,
+          text,
+          createdAt: row.created_at,
+          readAt: row.read_at,
+          deliveredAt: row.delivered_at,
+          editedAt,
+        };
+
+        const event = {
+          type: 'dm:message_edited',
+          message: editedMessage,
+          ...lastMeta,
+        };
+        sendToUser(userId, event);
+        sendToUser(row.receiver_id, event);
+
+        void auditDm({
+          actorId: userId,
+          action: 'dm.message.edit',
+          resourceType: 'dm_message',
+          resourceId: messageId,
+          metadata: {
+            conversationKey: row.conversation_key,
+            recipientId: row.receiver_id,
+            textLength: text.length,
+          },
+        });
+      } catch (err) {
+        console.error('[dm] edit error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj düzenlenemedi' });
+      }
+      return;
+    }
+
+    // ── DM:DELETE ────────────────────────────────────────────────────────
+    if (msg.type === 'dm:delete') {
+      const messageId = String(msg.messageId || '').trim();
+      if (!messageId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
+      }
+
+      try {
+        const row = dmStmt.getMessageById.get(messageId);
+        if (!row || row.sender_id !== userId) {
+          return send(ws, { type: 'dm:error', message: 'Bu mesaj silinemedi' });
+        }
+
+        const deleted = dmStmt.deleteMessage.run(messageId, userId);
+        if (deleted.changes === 0) {
+          return send(ws, { type: 'dm:error', message: 'Bu mesaj silinemedi' });
+        }
+
+        const lastMeta = recomputeDmLastMessage(row.conversation_key);
+        const event = {
+          type: 'dm:message_deleted',
+          conversationKey: row.conversation_key,
+          messageId,
+          deletedBy: userId,
+          ...lastMeta,
+        };
+        sendToUser(userId, event);
+        sendToUser(row.receiver_id, event);
+
+        void auditDm({
+          actorId: userId,
+          action: 'dm.message.delete',
+          resourceType: 'dm_message',
+          resourceId: messageId,
+          metadata: {
+            conversationKey: row.conversation_key,
+            recipientId: row.receiver_id,
+          },
+        });
+      } catch (err) {
+        console.error('[dm] delete error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj silinemedi' });
       }
       return;
     }
@@ -1945,7 +2389,7 @@ wss.on('connection', (ws) => {
       if (!userTypingLimits) return; // defensive (init order)
       if (checkRateLimit(userTypingLimits, userId, 5, 10_000)) return; // sessiz drop
 
-      // Friendship gate — stalker typing spam önlensin.
+      // DM access gate — stalker typing spam önlensin.
       // Typing-only 8s cache: yüksek trafikte DB'yi yormaz; send/open hâlâ sağlam DB check yapar.
       const friends = await checkFriendshipForTyping(userId, recipientId);
       if (!friends) return;
@@ -1956,6 +2400,94 @@ wss.on('connection', (ws) => {
         conversationKey: convKey,
         fromUserId: userId,
       });
+      return;
+    }
+
+    // ── DM:ACCEPT_REQUEST ───────────────────────────────────────────────
+    if (msg.type === 'dm:accept_request') {
+      const convKey = String(msg.conversationKey || '').trim();
+      if (!convKey) return;
+      try {
+        const row = dmStmt.getConversation.get(convKey);
+        if (!row || (row.request_status || 'accepted') !== 'pending' || row.request_receiver_id !== userId) {
+          return send(ws, { type: 'dm:error', message: 'Mesaj isteği bulunamadı' });
+        }
+        const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+        dmStmt.setConversationRequestStatus.run('accepted', null, null, convKey);
+        const event = { type: 'dm:request_updated', conversationKey: convKey, status: 'accepted', otherUserId: otherId };
+        sendToUser(userId, event);
+        sendToUser(otherId, event);
+      } catch (err) {
+        console.error('[dm] accept_request error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj isteği kabul edilemedi' });
+      }
+      return;
+    }
+
+    // ── DM:REJECT_REQUEST ───────────────────────────────────────────────
+    if (msg.type === 'dm:reject_request') {
+      const convKey = String(msg.conversationKey || '').trim();
+      if (!convKey) return;
+      try {
+        const row = dmStmt.getConversation.get(convKey);
+        if (!row || (row.request_status || 'accepted') !== 'pending' || row.request_receiver_id !== userId) {
+          return send(ws, { type: 'dm:error', message: 'Mesaj isteği bulunamadı' });
+        }
+        const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+        dmStmt.setConversationRequestStatus.run('rejected', userId, row.request_created_at || Date.now(), convKey);
+        dmStmt.hideConversation.run(userId, convKey, Date.now());
+        const event = { type: 'dm:request_updated', conversationKey: convKey, status: 'rejected', otherUserId: otherId };
+        sendToUser(userId, event);
+        sendToUser(otherId, event);
+      } catch (err) {
+        console.error('[dm] reject_request error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj isteği reddedilemedi' });
+      }
+      return;
+    }
+
+    // ── DM:BLOCK / UNBLOCK ──────────────────────────────────────────────
+    if (msg.type === 'dm:block_user' || msg.type === 'dm:unblock_user') {
+      const targetId = String(msg.userId || msg.targetUserId || '').trim();
+      if (!targetId || targetId === userId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz kullanıcı' });
+      }
+      try {
+        const convKey = makeDmKey(userId, targetId);
+        if (msg.type === 'dm:block_user') {
+          dmStmt.blockUser.run(userId, targetId, Date.now());
+          dmStmt.hideConversation.run(userId, convKey, Date.now());
+        } else {
+          dmStmt.unblockUser.run(userId, targetId);
+        }
+        const blocked = dmStmt.getBlockedIds
+          .all(userId, userId)
+          .filter(r => r.direction === 'outgoing')
+          .map(r => r.id);
+        send(ws, { type: 'dm:blocks', blockedIds: blocked });
+        send(ws, {
+          type: 'dm:request_updated',
+          conversationKey: convKey,
+          status: msg.type === 'dm:block_user' ? 'blocked' : 'unblocked',
+          otherUserId: targetId,
+        });
+      } catch (err) {
+        console.error('[dm] block toggle error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Engelleme işlemi başarısız' });
+      }
+      return;
+    }
+
+    if (msg.type === 'dm:blocks') {
+      try {
+        const blocked = dmStmt.getBlockedIds
+          .all(userId, userId)
+          .filter(r => r.direction === 'outgoing')
+          .map(r => r.id);
+        send(ws, { type: 'dm:blocks', blockedIds: blocked });
+      } catch {
+        send(ws, { type: 'dm:blocks', blockedIds: [] });
+      }
       return;
     }
 
@@ -1978,12 +2510,15 @@ wss.on('connection', (ws) => {
         const changes = dmStmt.markRead.run(now, convKey, userId);
         if (changes.changes === 0) return; // hiç güncelleme olmadıysa bildirim gönderme
 
-        sendToUser(otherId, {
-          type: 'dm:read',
-          conversationKey: convKey,
-          readBy: userId,
-          readAt: now,
-        });
+        const mySettings = await getDmProfileSettings([userId]);
+        if (mySettings.get(userId)?.showDmReadReceipts !== false) {
+          sendToUser(otherId, {
+            type: 'dm:read',
+            conversationKey: convKey,
+            readBy: userId,
+            readAt: now,
+          });
+        }
       } catch (err) {
         console.error('[dm] mark_read error:', err?.message);
       }
@@ -1994,11 +2529,19 @@ wss.on('connection', (ws) => {
     if (msg.type === 'dm:unread_total') {
       try {
         const rows = dmStmt.getUnreadBySender.all(userId);
-        // Sadece aktif arkadaşlardan gelen okunmamış mesajları say
+        const senderIds = rows.map(row => row.sender_id);
+        const blockedRows = dmStmt.getBlockedIds.all(userId, userId);
+        const blockedIds = new Set(blockedRows.map(r => r.id));
+        // Sadece aktif arkadaşlardan veya mutual non-friend DM izni olanlardan gelen okunmamışları say
         const friendIds = await getFriendIds(userId);
+        const mutualNonFriendDmIds = await getMutualNonFriendDmAllowedIds(
+          userId,
+          senderIds.filter(senderId => !friendIds.has(senderId) && !blockedIds.has(senderId)),
+        );
         let count = 0;
         for (const row of rows) {
-          if (friendIds.has(row.sender_id)) count += row.count;
+          if (blockedIds.has(row.sender_id)) continue;
+          if (friendIds.has(row.sender_id) || mutualNonFriendDmIds.has(row.sender_id)) count += row.count;
         }
         send(ws, { type: 'dm:unread_total', count });
       } catch {
