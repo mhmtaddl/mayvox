@@ -83,6 +83,7 @@ class GameDetector {
     this.published = null;
     this.candidate = null;
     this.candidateSince = 0;
+    this.activationTimer = null;
     this.lastSeenAt = 0;
     this._suspended = false;
     this._loopBusy = false;
@@ -121,16 +122,33 @@ class GameDetector {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    this._clearActivationTimer();
   }
 
   _reset() {
     this.candidate = null;
     this.candidateSince = 0;
+    this._clearActivationTimer();
     this.lastSeenAt = 0;
     if (this.published !== null) {
       this.published = null;
       this._emit(null);
     }
+  }
+
+  _clearActivationTimer() {
+    if (this.activationTimer) {
+      clearTimeout(this.activationTimer);
+      this.activationTimer = null;
+    }
+  }
+
+  _scheduleActivationCheck() {
+    this._clearActivationTimer();
+    this.activationTimer = setTimeout(() => {
+      this.activationTimer = null;
+      void this._tick();
+    }, ACTIVATION_DELAY_MS + 50);
   }
 
   async _tick() {
@@ -161,11 +179,13 @@ class GameDetector {
       if (this.candidate !== detected) {
         this.candidate = detected;
         this.candidateSince = now;
+        this._scheduleActivationCheck();
       }
       // Aday yeterince sabit kaldı mı?
       if (now - this.candidateSince >= ACTIVATION_DELAY_MS) {
         this.published = detected;
         this.candidate = null;
+        this._clearActivationTimer();
         this.lastSeenAt = now;
         this._emit(detected);
       }
@@ -173,6 +193,7 @@ class GameDetector {
       // Oyun bulunamadı — candidate'ı düşür
       this.candidate = null;
       this.candidateSince = 0;
+      this._clearActivationTimer();
       // Yayında bir oyun varsa tolerance bekle
       if (this.published !== null) {
         if (this.lastSeenAt === 0) this.lastSeenAt = now;
@@ -238,6 +259,16 @@ function setupGameDetection(mainWin, logger) {
       mainWin.webContents.send('game:activity-changed', { name });
     } catch {}
   };
+
+  if (_detectorSingleton) {
+    _detectorSingleton.onChange = (name) => _sendFn && _sendFn(name);
+    bindPowerHandlers(_detectorSingleton);
+    if (_detectorSingleton.enabled) {
+      _detectorSingleton._emit(_detectorSingleton.published);
+      void _detectorSingleton._tick();
+    }
+    return _detectorSingleton;
+  }
 
   _detectorSingleton = new GameDetector({
     onChange: (name) => _sendFn && _sendFn(name),
