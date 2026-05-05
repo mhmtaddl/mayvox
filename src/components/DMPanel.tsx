@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -1058,6 +1058,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeList, setActiveList] = useState<'messages' | 'requests'>('messages');
   const [requestActionKeys, setRequestActionKeys] = useState<Set<string>>(new Set());
+  const [listQuery, setListQuery] = useState('');
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1095,6 +1096,17 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     const user = allUsers.find((u: any) => u.id === id);
     return { id, name: user ? getPublicDisplayName(user) : 'Kullanıcı' };
   }), [allUsers, dm.blockedIds]);
+  const filterConversations = useCallback((list: DmConversation[]) => {
+    const q = listQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(convo => {
+      const user = allUsers.find((u: any) => u.id === convo.recipientId);
+      const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
+      return name.toLowerCase().includes(q) || String(convo.lastMessage || '').toLowerCase().includes(q);
+    });
+  }, [allUsers, listQuery]);
+  const visibleConversations = useMemo(() => filterConversations(dm.conversations), [dm.conversations, filterConversations]);
+  const visibleRequests = useMemo(() => filterConversations(dm.requests), [dm.requests, filterConversations]);
 
   const handleSendFriendRequest = useCallback(async () => {
     if (!dm.activeRecipientId) return;
@@ -1222,6 +1234,25 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               </div>
 
               <div className="px-3 pt-2 pb-1">
+                <div className="mb-2 flex h-8 items-center gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.04)] px-2.5">
+                  <Search size={13} className="shrink-0 text-[var(--theme-secondary-text)]/45" />
+                  <input
+                    value={listQuery}
+                    onChange={(e) => setListQuery(e.target.value)}
+                    placeholder="Mesajlarda ara"
+                    className="min-w-0 flex-1 bg-transparent text-[11.5px] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/35"
+                  />
+                  {listQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setListQuery('')}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--theme-secondary-text)]/45 hover:bg-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]"
+                      aria-label="Aramayı temizle"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-1 rounded-xl bg-[rgba(var(--glass-tint),0.05)] p-1">
                   <button
                     onClick={() => setActiveList('messages')}
@@ -1259,15 +1290,25 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
                     <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Bir arkadaşına mesaj göndererek başla</p>
                   </div>
+                ) : activeList === 'messages' && visibleConversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+                    <Search size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
+                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Sonuç yok</p>
+                  </div>
                 ) : activeList === 'requests' && dm.requests.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-8">
                     <Inbox size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
                     <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Mesaj isteği yok</p>
                     <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Arkadaş olmayanlardan gelen ilk mesajlar burada görünür</p>
                   </div>
+                ) : activeList === 'requests' && visibleRequests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+                    <Search size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
+                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Sonuç yok</p>
+                  </div>
                 ) : activeList === 'messages' ? (
                   <div className="p-2">
-                    {dm.conversations.map(convo => {
+                    {visibleConversations.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
                       const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
                       return (
@@ -1292,7 +1333,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   </div>
                 ) : (
                   <div className="p-2">
-                    {dm.requests.map(convo => {
+                    {visibleRequests.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
                       const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
                       return (
