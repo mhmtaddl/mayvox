@@ -1035,7 +1035,11 @@ async function canModerateRoomChat(roomId, profileId) {
   if (!room || !user) return false;
   try {
     const row = await queryOne(
-      `SELECT sm.role AS member_role, p.role AS profile_role
+      `SELECT sm.role AS member_role,
+              p.role AS profile_role,
+              p.is_admin,
+              p.is_primary_admin,
+              p.is_moderator
          FROM channels c
          JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
          LEFT JOIN profiles p ON p.id::text = $2
@@ -1044,7 +1048,10 @@ async function canModerateRoomChat(roomId, profileId) {
       [room, user],
     );
     return ['owner', 'admin', 'mod'].includes(String(row?.member_role || ''))
-      || String(row?.profile_role || '') === 'system_admin';
+      || String(row?.profile_role || '') === 'system_admin'
+      || row?.is_admin === true
+      || row?.is_primary_admin === true
+      || row?.is_moderator === true;
   } catch (err) {
     console.warn('[chat] room chat permission lookup failed:', err?.message);
     return false;
