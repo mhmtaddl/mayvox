@@ -23,6 +23,9 @@ import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 import { playMessageSend } from '../lib/audio/SoundManager';
 import MessageText from './chat/MessageText';
 import { rangeVisualStyle } from '../lib/rangeStyle';
+import { updateProfileFields } from '../lib/backendClient';
+import { sendRealtimeBroadcast } from '../lib/chatService';
+import type { DmPrivacyMode } from '../types';
 // SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
@@ -79,12 +82,18 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
 // Mesaj sesi seçimi BURADA yönetilir; ana Settings > Sesler'de "Mesaj" YOK.
 function MessageSettingsPanel({
   onClose,
-  blockedUsers,
-  onUnblockUser,
+  currentUser,
+  allUsers,
+  setCurrentUser,
+  setAllUsers,
+  setToastMsg,
 }: {
   onClose: () => void;
-  blockedUsers: Array<{ id: string; name: string }>;
-  onUnblockUser: (userId: string) => void;
+  currentUser: any;
+  allUsers: any[];
+  setCurrentUser: React.Dispatch<React.SetStateAction<any>>;
+  setAllUsers: React.Dispatch<React.SetStateAction<any[]>>;
+  setToastMsg: (message: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [soundOn, setSoundOn] = useState(() => SoundManager.isMessageEnabled());
@@ -94,6 +103,14 @@ function MessageSettingsPanel({
   const [toastOn, setToastOn] = useState(() => isToastEnabled());
   const [groupOn, setGroupOn] = useState(() => isGroupingEnabled());
   const [roomSoundOn, setRoomSoundOn] = useState(() => isRoomMessageSoundEnabled());
+  const dmMode: DmPrivacyMode = currentUser.dmPrivacyMode || (currentUser.allowNonFriendDms === false ? 'friends_only' : 'everyone');
+  const readReceiptsOn = currentUser.showDmReadReceipts !== false;
+  const dmModeOptions: Array<{ value: DmPrivacyMode; label: string }> = [
+    { value: 'everyone', label: 'Herkes' },
+    { value: 'mutual_servers', label: 'Ortak' },
+    { value: 'friends_only', label: 'Arkadaş' },
+    { value: 'closed', label: 'Kapalı' },
+  ];
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -151,6 +168,48 @@ function MessageSettingsPanel({
 
   const variantOptions: ReadonlyArray<MessageVariant> = ['1', '2', '3'];
 
+  const setDmModeLocal = (value: DmPrivacyMode) => {
+    const allowNonFriendDms = value === 'everyone' || value === 'mutual_servers';
+    setCurrentUser((prev: any) => ({ ...prev, dmPrivacyMode: value, allowNonFriendDms }));
+    setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, dmPrivacyMode: value, allowNonFriendDms } : u));
+  };
+
+  const updateDmMode = async (next: DmPrivacyMode) => {
+    if (next === dmMode) return;
+    setDmModeLocal(next);
+    try {
+      const allowNonFriendDms = next === 'everyone' || next === 'mutual_servers';
+      await updateProfileFields({ dm_privacy_mode: next, allow_non_friend_dms: allowNonFriendDms });
+      sendRealtimeBroadcast('moderation-event', {
+        userId: currentUser.id,
+        userIds: allUsers.map(u => u.id),
+        updates: { dmPrivacyMode: next, allowNonFriendDms },
+      });
+      setToastMsg('DM gizlilik ayarı güncellendi');
+    } catch {
+      setDmModeLocal(dmMode);
+      setToastMsg('Mesajlaşma ayarı güncellenemedi');
+    }
+  };
+
+  const updateReadReceipts = async (next: boolean) => {
+    setCurrentUser((prev: any) => ({ ...prev, showDmReadReceipts: next }));
+    setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, showDmReadReceipts: next } : u));
+    try {
+      await updateProfileFields({ show_dm_read_receipts: next });
+      sendRealtimeBroadcast('moderation-event', {
+        userId: currentUser.id,
+        userIds: allUsers.map(u => u.id),
+        updates: { showDmReadReceipts: next },
+      });
+      setToastMsg(next ? 'Okundu bilgisi açıldı' : 'Okundu bilgisi gizlendi');
+    } catch {
+      setCurrentUser((prev: any) => ({ ...prev, showDmReadReceipts: readReceiptsOn }));
+      setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, showDmReadReceipts: readReceiptsOn } : u));
+      setToastMsg('Okundu bilgisi güncellenemedi');
+    }
+  };
+
   return (
     <motion.div
       ref={ref}
@@ -175,9 +234,88 @@ function MessageSettingsPanel({
         </span>
       </div>
       <div className="px-3.5 py-1 divide-y divide-[rgba(var(--glass-tint),0.05)]">
-        <Row label="Mesaj sesi">
-          <Toggle on={soundOn} onChange={v => { setSoundOn(v); SoundManager.setMessageEnabled(v); }} />
+        <div className="py-[7px]">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">DM gizliliği</span>
+            <span className="text-[10px] text-[var(--theme-secondary-text)]/50">{dmModeOptions.find(o => o.value === dmMode)?.label}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {dmModeOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateDmMode(opt.value)}
+                className={`h-6 rounded-[7px] px-1 text-[9.5px] font-semibold transition-colors ${
+                  dmMode === opt.value
+                    ? 'bg-[rgba(var(--theme-accent-rgb),0.16)] text-[var(--theme-accent)]'
+                    : 'bg-[rgba(var(--glass-tint),0.045)] text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Row label="Okundu bilgisini göster">
+          <Toggle on={readReceiptsOn} onChange={updateReadReceipts} />
         </Row>
+        <div className="py-[8px]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Mesaj sesi</span>
+            <Toggle on={soundOn} onChange={v => { setSoundOn(v); SoundManager.setMessageEnabled(v); }} />
+          </div>
+          <div
+            className={`rounded-[10px] bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2 shadow-[inset_0_0_0_1px_rgba(var(--glass-tint),0.045)] transition-opacity ${
+              soundOn ? 'opacity-100' : 'opacity-40'
+            }`}
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[10.5px] text-[var(--theme-secondary-text)]/65">Ton</span>
+              <div className="flex items-center gap-0.5 -mr-1">
+                {variantOptions.map(opt => {
+                  const active = variant === opt;
+                  return (
+                    <button
+                      key={opt}
+                      disabled={!soundOn}
+                      onClick={() => {
+                        stopAllSamples();
+                        setVariant(opt);
+                        SoundManager.setMessageVariant(opt);
+                        SoundManager.preview.message(opt);
+                      }}
+                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-not-allowed disabled:active:scale-100"
+                      aria-label={`Ses ${opt}`}
+                    >
+                      <RadioDot active={active} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-[10.5px] text-[var(--theme-secondary-text)]/65">Ses seviyesi</span>
+                <span className="w-9 text-right text-[10px] tabular-nums text-[var(--theme-secondary-text)]/70">{Math.round(vol * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={vol}
+                disabled={!soundOn}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setVol(v);
+                  SoundManager.setMessageVolume(v);
+                }}
+                className="premium-range w-full disabled:cursor-not-allowed"
+                style={rangeVisualStyle(vol, 0, 1)}
+              />
+            </div>
+          </div>
+        </div>
         <Row label="Sohbet odasında mesaj sesi">
           <Toggle on={roomSoundOn} onChange={v => { setRoomSoundOn(v); setRoomMessageSoundEnabled(v); }} />
         </Row>
@@ -188,80 +326,176 @@ function MessageSettingsPanel({
             if (v) { stopAllSamples(); SoundManager.preview.messageSend(); }
           }} />
         </Row>
-        {/* Ton — tek satır, sağa hizalı radio */}
-        <Row label="Ton">
-          <div className="flex items-center gap-0.5 -mr-1">
-            {variantOptions.map(opt => {
-              const active = variant === opt;
-              return (
-                <button
-                  key={opt}
-                  onClick={() => {
-                    stopAllSamples();
-                    setVariant(opt);
-                    SoundManager.setMessageVariant(opt);
-                    SoundManager.preview.message(opt);
-                  }}
-                  className="p-1 rounded-full transition-transform active:scale-90"
-                  aria-label={`Ses ${opt}`}
-                >
-                  <RadioDot active={active} />
-                </button>
-              );
-            })}
-          </div>
-        </Row>
-        {/* Mesaj ses seviyesi — kompakt iki satır */}
-        <div className="py-[7px]">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Mesaj ses seviyesi</span>
-            <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/70 w-9 text-right">{Math.round(vol * 100)}%</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={vol}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              setVol(v);
-              SoundManager.setMessageVolume(v);
-            }}
-            className="premium-range w-full"
-            style={rangeVisualStyle(vol, 0, 1)}
-          />
-        </div>
         <Row label="Masaüstü bildirimi">
           <Toggle on={toastOn} onChange={v => { setToastOn(v); setToastEnabled(v); }} />
         </Row>
         <Row label="Ardışık mesajları grupla">
           <Toggle on={groupOn} onChange={v => { setGroupOn(v); setGroupingEnabled(v); }} />
         </Row>
-        <div className="py-[7px]">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Engellenenler</span>
-            <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/50">{blockedUsers.length}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+function BlockedUsersPanel({
+  onClose,
+  blockedUsers,
+  onUnblockUser,
+}: {
+  onClose: () => void;
+  blockedUsers: Array<{ id: string; name: string }>;
+  onUnblockUser: (userId: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      onClick={e => e.stopPropagation()}
+      className="absolute right-12 top-[48px] z-20 w-[244px] rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
+        border: '1px solid var(--theme-popover-border, var(--theme-border))',
+        boxShadow:
+          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
+          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
+          Engellenenler
+        </span>
+        <span className="min-w-[18px] rounded-full bg-[rgba(var(--glass-tint),0.08)] px-1.5 py-[1px] text-center text-[9.5px] font-semibold text-[var(--theme-secondary-text)]/65">
+          {blockedUsers.length}
+        </span>
+      </div>
+      <div className="max-h-56 overflow-y-auto p-2 custom-scrollbar">
+        {blockedUsers.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-[11px] text-[var(--theme-secondary-text)]/45">
+            <UserX size={13} />
+            <span>Engellenen kullanıcı yok.</span>
           </div>
-          {blockedUsers.length === 0 ? (
-            <p className="text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/45">Engellenen kullanıcı yok.</p>
-          ) : (
-            <div className="max-h-28 space-y-1 overflow-y-auto pr-1 custom-scrollbar">
-              {blockedUsers.map(user => (
-                <div key={user.id} className="flex items-center justify-between gap-2 rounded-[9px] bg-[rgba(var(--glass-tint),0.04)] px-2 py-1.5">
-                  <span className="min-w-0 truncate text-[10.5px] font-medium text-[var(--theme-text)]/80">{user.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => onUnblockUser(user.id)}
-                    className="shrink-0 rounded-[7px] px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
-                  >
-                    Kaldır
-                  </button>
+        ) : (
+          <div className="space-y-1">
+            {blockedUsers.map(user => (
+              <div key={user.id} className="flex items-center justify-between gap-2 rounded-[10px] bg-[rgba(var(--glass-tint),0.04)] px-2 py-1.5">
+                <span className="min-w-0 truncate text-[11px] font-medium text-[var(--theme-text)]/82">{user.name}</span>
+                <button
+                  type="button"
+                  onClick={() => onUnblockUser(user.id)}
+                  className="shrink-0 rounded-[8px] px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
+                >
+                  Kaldır
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function DmRequestsPanel({
+  onClose,
+  requests,
+  allUsers,
+  currentUserId,
+  requestActionKeys,
+  onOpen,
+  onAccept,
+  onReject,
+}: {
+  onClose: () => void;
+  requests: DmConversation[];
+  allUsers: any[];
+  currentUserId: string;
+  requestActionKeys: Set<string>;
+  onOpen: (recipientId: string) => void;
+  onAccept: (convo: DmConversation) => void;
+  onReject: (convo: DmConversation, name: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      onClick={e => e.stopPropagation()}
+      className="absolute right-[76px] top-[48px] z-20 w-[286px] rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
+        border: '1px solid var(--theme-popover-border, var(--theme-border))',
+        boxShadow:
+          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
+          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
+          Mesaj İstekleri
+        </span>
+        <span className="min-w-[18px] rounded-full bg-[rgba(var(--theme-accent-rgb),0.14)] px-1.5 py-[1px] text-center text-[9.5px] font-semibold text-[var(--theme-accent)]">
+          {requests.length}
+        </span>
+      </div>
+      <div className="max-h-[320px] overflow-y-auto p-2 custom-scrollbar">
+        {requests.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-[11px] text-[var(--theme-secondary-text)]/45">
+            <Inbox size={13} />
+            <span>Mesaj isteği yok.</span>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {requests.map(convo => {
+              const u = allUsers.find((x: any) => x.id === convo.recipientId);
+              const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
+              return (
+                <div key={convo.conversationKey}>
+                  <ConversationItem
+                    convo={convo}
+                    allUsers={allUsers}
+                    currentUserId={currentUserId}
+                    isRequest
+                    requestActionPending={requestActionKeys.has(convo.conversationKey)}
+                    onClick={() => {
+                      onOpen(convo.recipientId);
+                      onClose();
+                    }}
+                    onAccept={() => onAccept(convo)}
+                    onReject={() => onReject(convo, n)}
+                    onDelete={() => onReject(convo, n)}
+                  />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -1087,14 +1321,15 @@ interface DMPanelProps {
 }
 
 export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
-  const { currentUser, allUsers } = useUser();
+  const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const friends = useFriends(currentUser.id || undefined);
   const { setToastMsg } = useUI();
   const panelRef = useRef<HTMLDivElement>(null);
   const { openConfirm } = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeList, setActiveList] = useState<'messages' | 'requests'>('messages');
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const [requestsOpen, setRequestsOpen] = useState(false);
   const [requestActionKeys, setRequestActionKeys] = useState<Set<string>>(new Set());
   const [listQuery, setListQuery] = useState('');
 
@@ -1103,10 +1338,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openUserId) { dm.openConversation(openUserId); onOpenHandled?.(); } }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (dm.requests.length > 0 && dm.conversations.length === 0 && !dm.activeRecipientId) setActiveList('requests');
-  }, [dm.activeRecipientId, dm.conversations.length, dm.requests.length]);
-
   // Outside click
   useEffect(() => {
     if (!isOpen) return;
@@ -1144,7 +1375,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     });
   }, [allUsers, listQuery]);
   const visibleConversations = useMemo(() => filterConversations(dm.conversations), [dm.conversations, filterConversations]);
-  const visibleRequests = useMemo(() => filterConversations(dm.requests), [dm.requests, filterConversations]);
 
   const handleSendFriendRequest = useCallback(async () => {
     if (!dm.activeRecipientId) return;
@@ -1166,14 +1396,13 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const handleAcceptRequest = useCallback((convKey: string) => {
     markRequestAction(convKey);
     dm.acceptRequest(convKey);
-    setActiveList('messages');
+    setRequestsOpen(false);
     setToastMsg('Mesaj isteği kabul edildi');
   }, [dm, markRequestAction, setToastMsg]);
 
   const handleRejectRequest = useCallback((convKey: string) => {
     markRequestAction(convKey);
     dm.rejectRequest(convKey);
-    setActiveList('requests');
     setToastMsg('Mesaj isteği reddedildi');
   }, [dm, markRequestAction, setToastMsg]);
 
@@ -1251,17 +1480,84 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               {/* Header */}
               <div className="px-4 py-3.5 shrink-0 flex items-center justify-between relative" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
                 <span className="text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
-                <button
-                  onClick={() => setSettingsOpen(o => !o)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] transition-colors"
-                  title="Mesaj ayarları"
-                >
-                  <Settings2 size={14} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setRequestsOpen(o => !o);
+                      setBlockedOpen(false);
+                      setSettingsOpen(false);
+                    }}
+                    className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      requestsOpen
+                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                    }`}
+                    title="Mesaj istekleri"
+                    aria-label="Mesaj istekleri"
+                  >
+                    <Inbox size={14} />
+                    {dm.requests.length > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 min-w-[14px] h-[14px] rounded-full bg-[var(--theme-badge-bg)] px-[3px] text-[8px] font-bold leading-[14px] text-[var(--theme-badge-text)]">
+                        {dm.requests.length > 9 ? '9+' : dm.requests.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBlockedOpen(o => !o);
+                      setRequestsOpen(false);
+                      setSettingsOpen(false);
+                    }}
+                    className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      blockedOpen
+                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                    }`}
+                    title="Engellenenler"
+                    aria-label="Engellenenler"
+                  >
+                    <UserX size={14} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSettingsOpen(o => !o);
+                      setRequestsOpen(false);
+                      setBlockedOpen(false);
+                    }}
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      settingsOpen
+                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                    }`}
+                    title="Mesaj ayarları"
+                    aria-label="Mesaj ayarları"
+                  >
+                    <Settings2 size={14} />
+                  </button>
+                </div>
                 <AnimatePresence>
-                  {settingsOpen && (
-                    <MessageSettingsPanel
-                      onClose={() => setSettingsOpen(false)}
+                  {requestsOpen && (
+                    <DmRequestsPanel
+                      onClose={() => setRequestsOpen(false)}
+                      requests={dm.requests}
+                      allUsers={allUsers}
+                      currentUserId={currentUser.id}
+                      requestActionKeys={requestActionKeys}
+                      onOpen={dm.openConversation}
+                      onAccept={(convo) => handleAcceptRequest(convo.conversationKey)}
+                      onReject={(convo, name) => openConfirm({
+                        title: 'Mesaj isteğini reddet',
+                        description: `${name} mesaj isteği reddedilsin mi?`,
+                        confirmText: 'Reddet',
+                        cancelText: 'İptal',
+                        danger: true,
+                        onConfirm: () => handleRejectRequest(convo.conversationKey),
+                      })}
+                    />
+                  )}
+                  {blockedOpen && (
+                    <BlockedUsersPanel
+                      onClose={() => setBlockedOpen(false)}
                       blockedUsers={blockedUsers}
                       onUnblockUser={(userId) => {
                         dm.unblockUser(userId);
@@ -1269,17 +1565,28 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                       }}
                     />
                   )}
+                  {settingsOpen && (
+                    <MessageSettingsPanel
+                      onClose={() => setSettingsOpen(false)}
+                      currentUser={currentUser}
+                      allUsers={allUsers}
+                      setCurrentUser={setCurrentUser}
+                      setAllUsers={setAllUsers}
+                      setToastMsg={setToastMsg}
+                    />
+                  )}
                 </AnimatePresence>
               </div>
 
-              <div className="px-3 pt-2 pb-1">
-                <div className="mb-2 flex h-8 items-center gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.04)] px-2.5">
+              <div className="px-3 pt-2 pb-1.5">
+                <div className="flex h-[34px] items-center gap-2 rounded-[8px] border border-[rgba(var(--glass-tint),0.12)] bg-transparent px-3">
                   <Search size={13} className="shrink-0 text-[var(--theme-secondary-text)]/45" />
                   <input
                     value={listQuery}
                     onChange={(e) => setListQuery(e.target.value)}
                     placeholder="Mesajlarda ara"
-                    className="min-w-0 flex-1 bg-transparent text-[11.5px] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/35"
+                    className="min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[11.5px] text-[var(--theme-text)] shadow-none outline-none ring-0 placeholder:text-[var(--theme-secondary-text)]/35 focus:border-0 focus:outline-none focus:ring-0"
+                    style={{ background: 'transparent', border: 0, boxShadow: 'none' }}
                   />
                   {listQuery && (
                     <button
@@ -1292,60 +1599,22 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-[rgba(var(--glass-tint),0.05)] p-1">
-                  <button
-                    onClick={() => setActiveList('messages')}
-                    className={`h-8 rounded-lg text-[11px] font-semibold transition-colors ${
-                      activeList === 'messages'
-                        ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)]'
-                        : 'text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
-                    }`}
-                  >
-                    Mesajlar
-                  </button>
-                  <button
-                    onClick={() => setActiveList('requests')}
-                    className={`relative h-8 rounded-lg text-[11px] font-semibold transition-colors ${
-                      activeList === 'requests'
-                        ? 'bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)]'
-                        : 'text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
-                    }`}
-                  >
-                    İstekler
-                    {dm.requests.length > 0 && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[16px] h-4 rounded-full bg-[var(--theme-badge-bg)] px-1 text-[9px] leading-4 text-[var(--theme-badge-text)]">
-                        {dm.requests.length > 9 ? '9+' : dm.requests.length}
-                      </span>
-                    )}
-                  </button>
-                </div>
               </div>
 
               {/* List */}
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {activeList === 'messages' && dm.conversations.length === 0 ? (
+                {dm.conversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-8">
                     <MessageSquare size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
                     <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
                     <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Bir arkadaşına mesaj göndererek başla</p>
                   </div>
-                ) : activeList === 'messages' && visibleConversations.length === 0 ? (
+                ) : visibleConversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-8">
                     <Search size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
                     <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Sonuç yok</p>
                   </div>
-                ) : activeList === 'requests' && dm.requests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                    <Inbox size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Mesaj isteği yok</p>
-                    <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Arkadaş olmayanlardan gelen ilk mesajlar burada görünür</p>
-                  </div>
-                ) : activeList === 'requests' && visibleRequests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                    <Search size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Sonuç yok</p>
-                  </div>
-                ) : activeList === 'messages' ? (
+                ) : (
                   <div className="p-2">
                     {visibleConversations.map(convo => {
                       const u = allUsers.find((x: any) => x.id === convo.recipientId);
@@ -1365,35 +1634,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                               danger: true,
                               onConfirm: () => dm.hideConversation(convo.conversationKey),
                             })}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-2">
-                    {visibleRequests.map(convo => {
-                      const u = allUsers.find((x: any) => x.id === convo.recipientId);
-                      const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
-                      return (
-                        <div key={convo.conversationKey}>
-                          <ConversationItem
-                            convo={convo}
-                            allUsers={allUsers}
-                            currentUserId={currentUser.id}
-                            isRequest
-                            requestActionPending={requestActionKeys.has(convo.conversationKey)}
-                            onClick={() => dm.openConversation(convo.recipientId)}
-                            onAccept={() => handleAcceptRequest(convo.conversationKey)}
-                            onReject={() => openConfirm({
-                              title: 'Mesaj isteğini reddet',
-                              description: `${n} mesaj isteği reddedilsin mi?`,
-                              confirmText: 'Reddet',
-                              cancelText: 'İptal',
-                              danger: true,
-                              onConfirm: () => handleRejectRequest(convo.conversationKey),
-                            })}
-                            onDelete={() => handleRejectRequest(convo.conversationKey)}
                           />
                         </div>
                       );

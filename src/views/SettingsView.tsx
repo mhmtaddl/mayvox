@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, MessageSquare } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -9,9 +9,6 @@ import { getPublicDisplayName } from '../lib/formatName';
 import { Toggle } from '../components/settings/shared';
 import { isGameActivityAvailable } from '../features/game-activity/useGameActivity';
 import { rangeVisualStyle } from '../lib/rangeStyle';
-import { updateProfileFields } from '../lib/backendClient';
-import { sendRealtimeBroadcast } from '../lib/chatService';
-import type { DmPrivacyMode } from '../types';
 
 // ── Components ──
 import AccountSection from '../components/settings/sections/AccountSection';
@@ -102,116 +99,6 @@ function LastSeenCard() {
         </p>
       </div>
       <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
-    </div>
-  );
-}
-
-function NonFriendDmCard() {
-  const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
-  const { setToastMsg } = useUI();
-  const mode: DmPrivacyMode = currentUser.dmPrivacyMode || (currentUser.allowNonFriendDms === false ? 'friends_only' : 'everyone');
-  const options: Array<{ value: DmPrivacyMode; label: string; description: string }> = [
-    { value: 'everyone', label: 'Herkes', description: 'DM izni açık olan herkes mesaj isteği gönderebilir.' },
-    { value: 'mutual_servers', label: 'Ortak sunucu', description: 'Sadece ortak sunucudaki kullanıcılar mesaj isteği gönderebilir.' },
-    { value: 'friends_only', label: 'Arkadaşlar', description: 'Arkadaş olmayanlardan mesaj isteği alınmaz.' },
-    { value: 'closed', label: 'Kapalı', description: 'DM alımı tamamen kapalıdır.' },
-  ];
-  const activeDescription = options.find(o => o.value === mode)?.description || options[0].description;
-
-  const setLocal = (value: DmPrivacyMode) => {
-    const allowNonFriendDms = value === 'everyone' || value === 'mutual_servers';
-    setCurrentUser(prev => ({ ...prev, dmPrivacyMode: value, allowNonFriendDms }));
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, dmPrivacyMode: value, allowNonFriendDms } : u));
-  };
-
-  const updateMode = async (next: DmPrivacyMode) => {
-    if (next === mode) return;
-    setLocal(next);
-    try {
-      const allowNonFriendDms = next === 'everyone' || next === 'mutual_servers';
-      await updateProfileFields({ dm_privacy_mode: next, allow_non_friend_dms: allowNonFriendDms });
-      sendRealtimeBroadcast('moderation-event', {
-        userId: currentUser.id,
-        userIds: allUsers.map(u => u.id),
-        updates: { dmPrivacyMode: next, allowNonFriendDms },
-      });
-      setToastMsg('DM gizlilik ayarı güncellendi');
-    } catch {
-      setLocal(mode);
-      setToastMsg('Mesajlaşma ayarı güncellenemedi');
-    }
-  };
-
-  return (
-    <div className="settings-account-card surface-card flex items-start gap-3 px-4 py-3 rounded-xl">
-      <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-        <MessageSquare size={14} className="text-[var(--theme-accent)]/80" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">DM Gizliliği</p>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-          {activeDescription}
-        </p>
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => updateMode(opt.value)}
-              className={`h-7 rounded-[9px] px-2 text-[10px] font-semibold transition-colors ${
-                mode === opt.value
-                  ? 'bg-[var(--theme-accent)]/14 text-[var(--theme-accent)]'
-                  : 'bg-[rgba(var(--glass-tint),0.05)] text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReadReceiptsCard() {
-  const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
-  const { setToastMsg } = useUI();
-  const enabled = currentUser.showDmReadReceipts !== false;
-
-  const setLocal = (value: boolean) => {
-    setCurrentUser(prev => ({ ...prev, showDmReadReceipts: value }));
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, showDmReadReceipts: value } : u));
-  };
-
-  const toggle = async () => {
-    const next = !enabled;
-    setLocal(next);
-    try {
-      await updateProfileFields({ show_dm_read_receipts: next });
-      sendRealtimeBroadcast('moderation-event', {
-        userId: currentUser.id,
-        userIds: allUsers.map(u => u.id),
-        updates: { showDmReadReceipts: next },
-      });
-      setToastMsg(next ? 'Okundu bilgisi açıldı' : 'Okundu bilgisi gizlendi');
-    } catch {
-      setLocal(enabled);
-      setToastMsg('Okundu bilgisi güncellenemedi');
-    }
-  };
-
-  return (
-    <div className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
-      <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-        <Eye size={14} className="text-[var(--theme-accent)]/80" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Okundu Bilgisini Göster</p>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-          Kapalıyken DM mesajlarını okuduğunu karşı taraf görmez.
-        </p>
-      </div>
-      <Toggle checked={enabled} onChange={toggle} />
     </div>
   );
 }
@@ -1141,8 +1028,6 @@ export default function SettingsView() {
                 <DomainTitle icon={<Eye size={11} strokeWidth={2.2} />} title="Gizlilik" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <LastSeenCard />
-                  <NonFriendDmCard />
-                  <ReadReceiptsCard />
                   {isElectron() && isGameActivityAvailable() && <GameActivityCard />}
                 </div>
               </SettingsSectionCard>

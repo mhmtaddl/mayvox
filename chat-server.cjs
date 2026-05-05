@@ -2109,6 +2109,7 @@ wss.on('connection', (ws) => {
           const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
           if (blockedIds.has(otherId)) continue;
           const status = row.request_status || 'accepted';
+          if (status === 'reset' && !friendIds.has(otherId)) continue;
           if (status === 'rejected' && !friendIds.has(otherId)) continue;
           if (status === 'pending' && row.request_receiver_id === userId && !friendIds.has(otherId)) {
             requests.push({ row, otherId });
@@ -2297,6 +2298,11 @@ wss.on('connection', (ws) => {
         } else {
           requestStatus = conversation.request_status || 'accepted';
           requestReceiverId = conversation.request_receiver_id || null;
+          if (requestStatus === 'reset') {
+            dmStmt.setConversationRequestStatus.run('pending', recipientId, now, convKey);
+            requestStatus = 'pending';
+            requestReceiverId = recipientId;
+          }
           if (requestStatus === 'rejected') {
             return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
           }
@@ -2636,6 +2642,11 @@ wss.on('connection', (ws) => {
           dmStmt.hideConversation.run(userId, convKey, Date.now());
         } else {
           dmStmt.unblockUser.run(userId, targetId);
+          const friends = await checkFriendship(userId, targetId);
+          if (!friends) {
+            dmStmt.setConversationRequestStatus.run('reset', userId, Date.now(), convKey);
+            dmStmt.hideConversation.run(userId, convKey, Date.now());
+          }
         }
         const blocked = dmStmt.getBlockedIds
           .all(userId, userId)
