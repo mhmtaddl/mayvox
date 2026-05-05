@@ -187,6 +187,11 @@ export function dmUnblockUser(userId: string) {
   wsSend({ type: 'dm:unblock_user', userId });
 }
 
+export function dmReportUser(userId: string, conversationKey?: string | null) {
+  if (!userId) return;
+  wsSend({ type: 'dm:report_user', userId, conversationKey: conversationKey || undefined });
+}
+
 export function dmLoadBlocks() {
   wsSend({ type: 'dm:blocks' });
 }

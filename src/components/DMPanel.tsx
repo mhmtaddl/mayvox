@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -77,7 +77,15 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
 // ── Mesaj Ayarları Panel ────────────────────────────────────────────────
 // Compact inline dropdown — DMPanel header'ından anchor'lı, modal değil.
 // Mesaj sesi seçimi BURADA yönetilir; ana Settings > Sesler'de "Mesaj" YOK.
-function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
+function MessageSettingsPanel({
+  onClose,
+  blockedUsers,
+  onUnblockUser,
+}: {
+  onClose: () => void;
+  blockedUsers: Array<{ id: string; name: string }>;
+  onUnblockUser: (userId: string) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [soundOn, setSoundOn] = useState(() => SoundManager.isMessageEnabled());
   const [sendOn, setSendOn] = useState(() => SoundManager.isMessageSendEnabled());
@@ -230,6 +238,30 @@ function MessageSettingsPanel({ onClose }: { onClose: () => void }) {
         <Row label="Ardışık mesajları grupla">
           <Toggle on={groupOn} onChange={v => { setGroupOn(v); setGroupingEnabled(v); }} />
         </Row>
+        <div className="py-[7px]">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Engellenenler</span>
+            <span className="text-[10px] tabular-nums text-[var(--theme-secondary-text)]/50">{blockedUsers.length}</span>
+          </div>
+          {blockedUsers.length === 0 ? (
+            <p className="text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/45">Engellenen kullanıcı yok.</p>
+          ) : (
+            <div className="max-h-28 space-y-1 overflow-y-auto pr-1 custom-scrollbar">
+              {blockedUsers.map(user => (
+                <div key={user.id} className="flex items-center justify-between gap-2 rounded-[9px] bg-[rgba(var(--glass-tint),0.04)] px-2 py-1.5">
+                  <span className="min-w-0 truncate text-[10.5px] font-medium text-[var(--theme-text)]/80">{user.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => onUnblockUser(user.id)}
+                    className="shrink-0 rounded-[7px] px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
+                  >
+                    Kaldır
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -507,7 +539,7 @@ function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
   onSend, onEditMessage, onDeleteMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
-  friendRelation = null, onSendFriendRequest,
+  friendRelation = null, onSendFriendRequest, onReportUser,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -530,6 +562,7 @@ function ChatArea({
   onUnblockUser?: () => void;
   friendRelation?: 'friend' | 'incoming' | 'outgoing' | null;
   onSendFriendRequest?: () => void;
+  onReportUser?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -789,6 +822,14 @@ function ChatArea({
               </button>
             )}
             <button
+              onClick={onReportUser}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/45 hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+              title="Kullanıcıyı bildir"
+              aria-label="Kullanıcıyı bildir"
+            >
+              <Flag size={14} />
+            </button>
+            <button
               onClick={isBlocked ? onUnblockUser : onBlockUser}
               className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                 isBlocked
@@ -1043,6 +1084,10 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     : null;
   const activeRecipientName = activeRecipient ? getPublicDisplayName(activeRecipient) : 'Kullanıcı';
   const activeFriendRelation = dm.activeRecipientId ? friends.getRelationship(dm.activeRecipientId) : null;
+  const blockedUsers = useMemo(() => Array.from(dm.blockedIds).map(id => {
+    const user = allUsers.find((u: any) => u.id === id);
+    return { id, name: user ? getPublicDisplayName(user) : 'Kullanıcı' };
+  }), [allUsers, dm.blockedIds]);
 
   const handleSendFriendRequest = useCallback(async () => {
     if (!dm.activeRecipientId) return;
@@ -1087,6 +1132,17 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               isBlocked={activeBlocked}
               friendRelation={activeFriendRelation}
               onSendFriendRequest={handleSendFriendRequest}
+              onReportUser={() => dm.activeRecipientId && openConfirm({
+                title: 'Kullanıcıyı bildir',
+                description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
+                confirmText: 'Bildir',
+                cancelText: 'İptal',
+                danger: true,
+                onConfirm: () => {
+                  dm.reportUser(dm.activeRecipientId!);
+                  setToastMsg('Bildirim gönderildi');
+                },
+              })}
               onAcceptRequest={() => activeRequest && dm.acceptRequest(activeRequest.conversationKey)}
               onRejectRequest={() => activeRequest && openConfirm({
                 title: 'Mesaj isteğini reddet',
@@ -1119,7 +1175,16 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   <Settings2 size={14} />
                 </button>
                 <AnimatePresence>
-                  {settingsOpen && <MessageSettingsPanel onClose={() => setSettingsOpen(false)} />}
+                  {settingsOpen && (
+                    <MessageSettingsPanel
+                      onClose={() => setSettingsOpen(false)}
+                      blockedUsers={blockedUsers}
+                      onUnblockUser={(userId) => {
+                        dm.unblockUser(userId);
+                        setToastMsg('Engel kaldırıldı');
+                      }}
+                    />
+                  )}
                 </AnimatePresence>
               </div>
 

@@ -2548,6 +2548,35 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'dm:report_user') {
+      const targetId = String(msg.userId || msg.targetUserId || '').trim();
+      const convKey = String(msg.conversationKey || makeDmKey(userId, targetId)).trim();
+      if (!targetId || targetId === userId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz kullanıcı' });
+      }
+      try {
+        const expectedKey = makeDmKey(userId, targetId);
+        if (convKey !== expectedKey) {
+          return send(ws, { type: 'dm:error', message: 'Geçersiz konuşma' });
+        }
+        void auditDm({
+          actorId: userId,
+          action: 'dm.user.report',
+          resourceType: 'dm_conversation',
+          resourceId: convKey,
+          metadata: {
+            reportedUserId: targetId,
+            createdAt: Date.now(),
+          },
+        });
+        send(ws, { type: 'dm:request_updated', conversationKey: convKey, status: 'reported', otherUserId: targetId });
+      } catch (err) {
+        console.error('[dm] report_user error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Bildirim gönderilemedi' });
+      }
+      return;
+    }
+
     if (msg.type === 'dm:blocks') {
       try {
         const blocked = dmStmt.getBlockedIds

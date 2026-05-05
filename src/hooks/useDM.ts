@@ -15,6 +15,7 @@ import {
   dmRejectRequest,
   dmBlockUser,
   dmUnblockUser,
+  dmReportUser,
   dmLoadBlocks,
   type DmConversation,
   type DmMessage,
@@ -426,6 +427,11 @@ export function useDM(currentUserId: string | undefined) {
     dmLoadConversations();
   }, []);
 
+  const reportUser = useCallback((userId: string) => {
+    if (!userId) return;
+    dmReportUser(userId, activeConvKeyRef.current);
+  }, []);
+
   // Debounced typing emit — aktif sohbet olmadan NO-OP.
   const emitTyping = useCallback(() => {
     if (!activeRecipientId) return;
@@ -492,6 +498,7 @@ export function useDM(currentUserId: string | undefined) {
     rejectRequest,
     blockUser,
     unblockUser,
+    reportUser,
     emitTyping,
     closeConversation,
     resetViewOnClose,
