@@ -392,11 +392,15 @@ export function useDM(currentUserId: string | undefined) {
       deleteMessage(messageId);
       return;
     }
-    setMessages(prev => prev.map(m =>
-      m.id === messageId ? { ...m, text: trimmed, editedAt: Date.now() } : m
-    ));
+    const target = messages.find(m => m.id === messageId);
+    if (!target || String(target.senderId) !== String(currentUserId)) return;
+    setMessages(prev => prev.map(m => (
+      m.id === messageId && String(m.senderId) === String(currentUserId)
+        ? { ...m, text: trimmed, editedAt: Date.now() }
+        : m
+    )));
     dmEditMessage(messageId, trimmed);
-  }, [deleteMessage]);
+  }, [currentUserId, deleteMessage, messages]);
 
   const closeConversation = useCallback(() => {
     setActiveConvKey(null);

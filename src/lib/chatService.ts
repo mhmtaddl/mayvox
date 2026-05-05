@@ -35,6 +35,7 @@ type ChatEventHandler = {
   onEdit?: (messageId: string, text: string) => void;
   onClear?: (roomId: string) => void;
   onHistory?: (roomId: string, messages: ChatMessage[]) => void;
+  onChatMute?: (roomId: string, muted: boolean) => void;
   onStatusChange?: (status: ChatStatus) => void;
   onError?: (err: ChatErrorPayload) => void;
 };
@@ -489,6 +490,9 @@ export async function connectChat() {
         }
 
         case 'history':
+          if (typeof msg.chatMuted === 'boolean') {
+            handlers.onChatMute?.(msg.roomId, msg.chatMuted);
+          }
           handlers.onHistory?.(msg.roomId, msg.messages || []);
           break;
 
@@ -506,6 +510,10 @@ export async function connectChat() {
 
         case 'clear':
           handlers.onClear?.(msg.roomId);
+          break;
+
+        case 'chat_mute':
+          handlers.onChatMute?.(msg.roomId, !!msg.muted);
           break;
 
         case 'error':
@@ -634,6 +642,12 @@ export function deleteMessage(messageId: string) {
 export function editMessage(messageId: string, text: string) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'edit', messageId, text: text.slice(0, MAX_MESSAGE_LENGTH) }));
+  }
+}
+
+export function setRoomChatMuted(muted: boolean) {
+  if (ws?.readyState === WebSocket.OPEN && currentRoom) {
+    ws.send(JSON.stringify({ type: 'chat_mute', muted }));
   }
 }
 

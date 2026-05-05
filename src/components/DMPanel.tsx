@@ -648,6 +648,8 @@ function MessageBubble({
     ? (isLastInGroup ? 'rounded-[16px] rounded-br-[6px]' : 'rounded-[16px]')
     : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
 
+  const hasReactions = !!msg.reactions?.length;
+
   return (
     <div className={`group/msg ${wrapperSpacing}`}>
       <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -760,9 +762,9 @@ function MessageBubble({
         </div>
       )}
       </div>
-      {!!msg.reactions?.length && (
-        <div className={`mt-1 flex flex-wrap gap-1 ${isOwn ? 'justify-end pr-7' : 'justify-start pl-7'}`}>
-          {msg.reactions.map(reaction => (
+      {hasReactions && (
+        <div className={`mt-1 flex flex-wrap gap-1 ${isOwn ? 'justify-end pr-9' : 'justify-start pl-9'}`}>
+          {msg.reactions!.map(reaction => (
             <button
               key={reaction.emoji}
               type="button"
@@ -988,7 +990,7 @@ function ChatArea({
   };
 
   const startEditMessage = useCallback((msg: DmMessage) => {
-    if (msg.senderId !== currentUserId) return;
+    if (String(msg.senderId) !== String(currentUserId)) return;
     setEditingMsgId(msg.id);
     setEditingText(msg.text);
   }, [currentUserId]);
@@ -1007,7 +1009,11 @@ function ChatArea({
       return;
     }
     const original = messages.find(m => m.id === editingMsgId);
-    if (!original || original.text.trim() === trimmed) {
+    if (!original || String(original.senderId) !== String(currentUserId)) {
+      cancelEdit();
+      return;
+    }
+    if (original.text.trim() === trimmed) {
       cancelEdit();
       return;
     }
@@ -1017,9 +1023,11 @@ function ChatArea({
 
   const deleteOwnMessage = useCallback((messageId: string) => {
     if (!messageId) return;
+    const original = messages.find(m => m.id === messageId);
+    if (!original || String(original.senderId) !== String(currentUserId)) return;
     if (editingMsgId === messageId) cancelEdit();
     onDeleteMessage(messageId);
-  }, [cancelEdit, editingMsgId, onDeleteMessage]);
+  }, [cancelEdit, currentUserId, editingMsgId, messages, onDeleteMessage]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // ':) → 🙂' gibi text shortcut'lar yazılırken anlık dönüşür (ChatPanel ile aynı davranış)

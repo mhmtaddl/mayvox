@@ -181,6 +181,7 @@ export default function ChatView() {
     isChatBanned: isChatBannedFromCtx,
     onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
     onSendRejected: (message) => setToastMsg(message),
+    onChatMuteChange: setChatMuted,
   });
 
   // ── Dominant speaker hook ──
@@ -892,7 +893,11 @@ export default function ChatView() {
     setProfilePopup({ userId, x, y });
   }, [currentUser.id]);
   const handleToggleChatMuted = useCallback(() => {
-    setChatMuted(prev => !prev);
+    setChatMuted(prev => {
+      const next = !prev;
+      import('../lib/chatService').then(({ setRoomChatMuted }) => setRoomChatMuted(next));
+      return next;
+    });
   }, []);
   const handleRequestRoomMemberMenu = useCallback((user: typeof sortedChannelMembers[0], x: number, y: number) => {
     setRoomMemberMenu({ user, x, y });

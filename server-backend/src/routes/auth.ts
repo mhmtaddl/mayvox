@@ -946,7 +946,7 @@ router.patch('/room-messages/:id', authMiddleware as any, async (req: Request, r
       [req.params.id],
     );
     if (!msg) throw new AuthError(404, 'Mesaj bulunamadı');
-    if (msg.sender_id !== profileId && !(await canModerateRoomMessages(msg.server_id, userId))) {
+    if (msg.sender_id !== profileId) {
       throw new AuthError(403, 'Mesajı düzenleme yetkin yok');
     }
     const row = await queryOne(

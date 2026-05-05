@@ -971,9 +971,10 @@ async function getFriendIds(userId) {
   return new Set(data.map(r => r.user_low_id === userId ? r.user_high_id : r.user_low_id));
 }
 
-// ── State ─────────────────────────────────────────────────────────────────
-const rooms = new Map();          // roomId -> Set<ws>
-const cleanupTimers = new Map();  // roomId -> timeout
+  // ── State ─────────────────────────────────────────────────────────────────
+  const rooms = new Map();          // roomId -> Set<ws>
+  const roomChatMuted = new Map();  // roomId -> boolean
+  const cleanupTimers = new Map();  // roomId -> timeout
 
 // ── Per-user rate limits ──────────────────────────────────────────────────
 // Room chat + DM → flood-control modülü (sliding window + cooldown + offense).
@@ -1026,6 +1027,28 @@ function checkRateLimit(map, userId, maxCount, windowMs) {
   }
   entry.count += 1;
   return entry.count > maxCount;
+}
+
+async function canModerateRoomChat(roomId, profileId) {
+  const room = String(roomId || '').trim();
+  const user = String(profileId || '').trim();
+  if (!room || !user) return false;
+  try {
+    const row = await queryOne(
+      `SELECT sm.role AS member_role, p.role AS profile_role
+         FROM channels c
+         JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
+         LEFT JOIN profiles p ON p.id::text = $2
+        WHERE c.id::text = $1
+        LIMIT 1`,
+      [room, user],
+    );
+    return ['owner', 'admin', 'mod'].includes(String(row?.member_role || ''))
+      || String(row?.profile_role || '') === 'system_admin';
+  } catch (err) {
+    console.warn('[chat] room chat permission lookup failed:', err?.message);
+    return false;
+  }
 }
 
 // ── Internal notify secret (server-backend ↔ chat-server) ────────────────
@@ -1527,7 +1550,6 @@ const httpServer = http.createServer((req, res) => {
     });
     return;
   }
-
   // Internal: server-backend global realtime event broadcast.
   // Body: { event: string, payload: object } — loopback + shared secret.
   if (req.method === 'POST' && req.url === '/internal/broadcast') {
@@ -1896,6 +1918,7 @@ wss.on('connection', (ws) => {
           send(ws, {
             type: 'history',
             roomId,
+            chatMuted: roomChatMuted.get(roomId) === true,
             messages: messages.map(formatMsg),
           });
         } catch {
@@ -1931,6 +1954,7 @@ wss.on('connection', (ws) => {
         send(ws, {
           type: 'history',
           roomId,
+          chatMuted: roomChatMuted.get(roomId) === true,
           messages: messages.map(formatMsg),
         });
       } catch (err) {
@@ -1946,6 +1970,14 @@ wss.on('connection', (ws) => {
     if (msg.type === 'send') {
       if (!currentRoom) {
         return send(ws, { type: 'error', message: 'Odada değilsin' });
+      }
+
+      if (roomChatMuted.get(currentRoom) === true && !(await canModerateRoomChat(currentRoom, userId))) {
+        return send(ws, {
+          type: 'error',
+          code: 'room_chat_muted',
+          message: 'Sohbet engellendi',
+        });
       }
 
       const text = String(msg.text || '').trim();
@@ -2022,6 +2054,25 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // ── ROOM CHAT MUTE ───────────────────────────────────────────────────
+    if (msg.type === 'chat_mute') {
+      if (!currentRoom) {
+        return send(ws, { type: 'error', message: 'Odada değilsin' });
+      }
+      if (!(await canModerateRoomChat(currentRoom, userId))) {
+        return send(ws, { type: 'error', message: 'Yetkin yok' });
+      }
+      const muted = msg.muted === true;
+      if (muted) roomChatMuted.set(currentRoom, true);
+      else roomChatMuted.delete(currentRoom);
+      broadcastToRoom(currentRoom, {
+        type: 'chat_mute',
+        roomId: currentRoom,
+        muted,
+      });
+      return;
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────
     if (msg.type === 'delete') {
       if (!currentRoom || !msg.messageId) return;
@@ -2045,7 +2096,13 @@ wss.on('connection', (ws) => {
       if (!text || text.length > 2000) return;
 
       try {
-        await pgPool.query('UPDATE room_messages SET text = $1 WHERE id = $2', [text, msg.messageId]);
+        const result = await pgPool.query(
+          'UPDATE room_messages SET text = $1 WHERE id = $2 AND sender_id = $3',
+          [text, msg.messageId, userId],
+        );
+        if (result.rowCount === 0) {
+          return send(ws, { type: 'error', message: 'Bu mesaj düzenlenemedi' });
+        }
 
         broadcastToRoom(currentRoom, {
           type: 'edit',

@@ -14,9 +14,10 @@ interface UseChatMessagesOptions {
   onChatBannedBlocked?: () => void;
   /** Sunucu tarafı send reddi (flood / profanity / generic). Toast göstermek için. */
   onSendRejected?: (message: string, code?: string) => void;
+  onChatMuteChange?: (muted: boolean) => void;
 }
 
-export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onSendRejected }: UseChatMessagesOptions) {
+export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onSendRejected, onChatMuteChange }: UseChatMessagesOptions) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -40,6 +41,8 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
   // onSendRejected callback stale olmasın — ref ile taşı (onMessage gibi tek-sefer handler).
   const onSendRejectedRef = useRef(onSendRejected);
   useEffect(() => { onSendRejectedRef.current = onSendRejected; }, [onSendRejected]);
+  const onChatMuteChangeRef = useRef(onChatMuteChange);
+  useEffect(() => { onChatMuteChangeRef.current = onChatMuteChange; }, [onChatMuteChange]);
 
   // WebSocket chat bağlantısı
   useEffect(() => {
@@ -67,6 +70,10 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
         onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),
         onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
         onClear: () => setChatMessages([]),
+        onChatMute: (_roomId, muted) => {
+          // Oda sohbet kilidi server state'idir; admin/mod toggle'ı herkese yansır.
+          onChatMuteChangeRef.current?.(muted);
+        },
         onError: (err) => {
           // Cooldown yalnızca flood_control için — diğer rejection'lar anlık reddedilir.
           if (err.code === 'flood_control') {
@@ -152,19 +159,30 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     import('../../../lib/chatService').then(({ clearAllMessages: clearAll }) => clearAll());
   }, []);
 
-  const startEditMessage = useCallback((msg: { id: string; text: string }) => {
+  const startEditMessage = useCallback((msg: { id: string; text: string; senderId?: string }) => {
+    if (String(msg.senderId || '') !== String(currentUser.id)) return;
     setEditingMsgId(msg.id);
     setEditingText(msg.text);
-  }, []);
+  }, [currentUser.id]);
 
   const saveEditMessage = useCallback(() => {
     if (!editingMsgId) return;
     const t = editingText.trim();
     if (!t) { deleteChatMessage(editingMsgId); setEditingMsgId(null); return; }
-    setChatMessages(prev => prev.map(m => m.id === editingMsgId ? { ...m, text: t } : m));
+    const original = chatMessages.find(m => m.id === editingMsgId);
+    if (!original || String(original.senderId) !== String(currentUser.id)) {
+      setEditingMsgId(null);
+      setEditingText('');
+      return;
+    }
+    setChatMessages(prev => prev.map(m => (
+      m.id === editingMsgId && String(m.senderId) === String(currentUser.id)
+        ? { ...m, text: t }
+        : m
+    )));
     import('../../../lib/chatService').then(({ editMessage }) => editMessage(editingMsgId!, t));
     setEditingMsgId(null); setEditingText('');
-  }, [editingMsgId, editingText, deleteChatMessage]);
+  }, [chatMessages, currentUser.id, editingMsgId, editingText, deleteChatMessage]);
 
   const cancelEdit = useCallback(() => {
     setEditingMsgId(null);
