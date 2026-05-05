@@ -35,7 +35,7 @@ type ChatEventHandler = {
   onEdit?: (messageId: string, text: string) => void;
   onClear?: (roomId: string) => void;
   onHistory?: (roomId: string, messages: ChatMessage[]) => void;
-  onChatMute?: (roomId: string, muted: boolean) => void;
+  onChatMute?: (roomId: string, muted: boolean, chatMuteRank: number) => void;
   onStatusChange?: (status: ChatStatus) => void;
   onError?: (err: ChatErrorPayload) => void;
 };
@@ -491,7 +491,7 @@ export async function connectChat() {
 
         case 'history':
           if (typeof msg.chatMuted === 'boolean') {
-            handlers.onChatMute?.(msg.roomId, msg.chatMuted);
+            handlers.onChatMute?.(msg.roomId, msg.chatMuted, typeof msg.chatMuteRank === 'number' ? msg.chatMuteRank : 0);
           }
           handlers.onHistory?.(msg.roomId, msg.messages || []);
           break;
@@ -513,7 +513,7 @@ export async function connectChat() {
           break;
 
         case 'chat_mute':
-          handlers.onChatMute?.(msg.roomId, !!msg.muted);
+          handlers.onChatMute?.(msg.roomId, !!msg.muted, typeof msg.chatMuteRank === 'number' ? msg.chatMuteRank : 0);
           break;
 
         case 'error':

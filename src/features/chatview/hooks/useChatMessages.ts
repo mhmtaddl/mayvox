@@ -6,18 +6,19 @@ import { isRoomMessageSoundEnabled } from '../../../features/notifications/notif
 interface UseChatMessagesOptions {
   activeChannel: string | null;
   channels: Array<{ id: string; mode?: string }>;
-  currentUser: { id: string; isAdmin?: boolean; isModerator?: boolean };
+  currentUser: { id: string; isAdmin?: boolean; isPrimaryAdmin?: boolean; isModerator?: boolean };
   chatMuted: boolean;
+  chatMuteRank: number;
   /** Moderasyon chat ban aktif mi — aktifse kullanıcı bypass YAPAMAZ, isAdmin/isModerator farketmez. */
   isChatBanned?: boolean;
   /** Chat ban nedeniyle gönderim engellendiğinde kullanıcıya toast gösterme callback'i. */
   onChatBannedBlocked?: () => void;
   /** Sunucu tarafı send reddi (flood / profanity / generic). Toast göstermek için. */
   onSendRejected?: (message: string, code?: string) => void;
-  onChatMuteChange?: (muted: boolean) => void;
+  onChatMuteChange?: (muted: boolean, rank: number) => void;
 }
 
-export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, isChatBanned, onChatBannedBlocked, onSendRejected, onChatMuteChange }: UseChatMessagesOptions) {
+export function useChatMessages({ activeChannel, channels, currentUser, chatMuted, chatMuteRank, isChatBanned, onChatBannedBlocked, onSendRejected, onChatMuteChange }: UseChatMessagesOptions) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -70,9 +71,9 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
         onDelete: (messageId) => setChatMessages(prev => prev.filter(m => m.id !== messageId)),
         onEdit: (messageId, text) => setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text } : m)),
         onClear: () => setChatMessages([]),
-        onChatMute: (_roomId, muted) => {
+        onChatMute: (_roomId, muted, rank) => {
           // Oda sohbet kilidi server state'idir; admin/mod toggle'ı herkese yansır.
-          onChatMuteChangeRef.current?.(muted);
+          onChatMuteChangeRef.current?.(muted, rank);
         },
         onError: (err) => {
           // Cooldown yalnızca flood_control için — diğer rejection'lar anlık reddedilir.
@@ -136,7 +137,8 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     }
     // Flood cooldown — sunucu WS error dönmüş, UI mesajı gönderme (no-op, sessiz).
     if (Date.now() < floodCooldownUntil) return;
-    if (chatMuted && !currentUser.isAdmin && !currentUser.isModerator) return;
+    const userRank = currentUser.isPrimaryAdmin ? 40 : currentUser.isAdmin ? 30 : currentUser.isModerator ? 20 : 0;
+    if (chatMuted && userRank < chatMuteRank) return;
     const text = chatInput.trim();
     if (!text) return;
     const now = Date.now();
@@ -147,7 +149,7 @@ export function useChatMessages({ activeChannel, channels, currentUser, chatMute
     setChatInput('');
     import('../../../lib/chatService').then(({ sendMessage }) => sendMessage(text));
     setTimeout(scrollToBottom, 100);
-  }, [activeChannel, channels, chatMuted, isChatBanned, onChatBannedBlocked, floodCooldownUntil, currentUser.isAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
+  }, [activeChannel, channels, chatMuted, chatMuteRank, isChatBanned, onChatBannedBlocked, floodCooldownUntil, currentUser.isAdmin, currentUser.isPrimaryAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
 
   const deleteChatMessage = useCallback((id: string) => {
     setChatMessages(prev => prev.filter(m => m.id !== id));

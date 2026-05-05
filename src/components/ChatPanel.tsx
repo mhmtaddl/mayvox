@@ -25,6 +25,7 @@ interface Props {
   isAdmin: boolean;
   isModerator: boolean;
   chatMuted: boolean;
+  chatMuteRank: number;
   onToggleChatMuted: () => void;
   editingMsgId: string | null;
   editingText: string;
@@ -64,6 +65,7 @@ export default function ChatPanel({
   isAdmin,
   isModerator,
   chatMuted,
+  chatMuteRank,
   onToggleChatMuted,
   editingMsgId,
   editingText,
@@ -124,7 +126,10 @@ export default function ChatPanel({
     );
   }
 
-  const isChatMutedDisabled = chatMuted && !isAdmin && !isModerator;
+  const myChatRank = isAdmin ? 30 : isModerator ? 20 : 0;
+  const canBypassChatMute = !chatMuted || myChatRank >= chatMuteRank;
+  const canToggleChatMute = myChatRank > 0 && (!chatMuted || myChatRank >= chatMuteRank);
+  const isChatMutedDisabled = !canBypassChatMute;
   // Flood cooldown herkese uygulanır (admin/mod dahil) — sunucu reddi geldi, client bypass etmesin.
   const isChatDisabled = isChatMutedDisabled || !!isFloodCooling;
   const fs = chatFontSize;
@@ -301,7 +306,7 @@ export default function ChatPanel({
             <button onClick={onClearAll} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Tüm mesajları sil">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             </button>
-            <button onClick={onToggleChatMuted} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
+            <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
             </button>
           </>

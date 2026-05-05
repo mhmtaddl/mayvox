@@ -171,17 +171,21 @@ export default function ChatView() {
 
   // ── Chat messages hook ──
   const [chatMuted, setChatMuted] = useState(false);
+  const [chatMuteRank, setChatMuteRank] = useState(0);
   const {
     chatMessages, chatInput, setChatInput, editingMsgId, editingText, setEditingText,
     isAtBottom, newMsgCount, chatScrollRef, handleChatScroll, scrollToBottom,
     sendChatMessage, deleteChatMessage, clearAllMessages, startEditMessage, saveEditMessage, cancelEdit,
     isFloodCooling,
   } = useChatMessages({
-    activeChannel, channels, currentUser, chatMuted,
+    activeChannel, channels, currentUser, chatMuted, chatMuteRank,
     isChatBanned: isChatBannedFromCtx,
     onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
     onSendRejected: (message) => setToastMsg(message),
-    onChatMuteChange: setChatMuted,
+    onChatMuteChange: (muted, rank) => {
+      setChatMuted(muted);
+      setChatMuteRank(rank);
+    },
   });
 
   // ── Dominant speaker hook ──
@@ -895,6 +899,7 @@ export default function ChatView() {
   const handleToggleChatMuted = useCallback(() => {
     setChatMuted(prev => {
       const next = !prev;
+      if (!next) setChatMuteRank(0);
       import('../lib/chatService').then(({ setRoomChatMuted }) => setRoomChatMuted(next));
       return next;
     });
@@ -1489,7 +1494,7 @@ export default function ChatView() {
                   cardScale={cardScale} cardStyle={cardStyle} onProfileClick={handleVoiceParticipantProfileClick}
                   onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isModerator={currentUser.isModerator || false}
                   onRequestMemberMenu={handleRequestRoomMemberMenu}
-                  activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted}
+                  activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted} chatMuteRank={chatMuteRank}
                   onToggleChatMuted={handleToggleChatMuted} editingMsgId={editingMsgId} editingText={editingText}
                   onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
                   onDeleteMessage={deleteChatMessage} onClearAll={clearAllMessages} onSendMessage={sendChatMessage}

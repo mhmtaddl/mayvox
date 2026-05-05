@@ -973,7 +973,7 @@ async function getFriendIds(userId) {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const rooms = new Map();          // roomId -> Set<ws>
-  const roomChatMuted = new Map();  // roomId -> boolean
+  const roomChatMuteState = new Map();  // roomId -> { by: userId, rank: number }
   const cleanupTimers = new Map();  // roomId -> timeout
 
 // ── Per-user rate limits ──────────────────────────────────────────────────
@@ -1029,10 +1029,17 @@ function checkRateLimit(map, userId, maxCount, windowMs) {
   return entry.count > maxCount;
 }
 
-async function canModerateRoomChat(roomId, profileId) {
+function roleRank(role) {
+  if (role === 'owner') return 40;
+  if (role === 'admin') return 30;
+  if (role === 'mod' || role === 'moderator') return 20;
+  return 0;
+}
+
+async function getRoomChatRank(roomId, profileId) {
   const room = String(roomId || '').trim();
   const user = String(profileId || '').trim();
-  if (!room || !user) return false;
+  if (!room || !user) return 0;
   try {
     const row = await queryOne(
       `SELECT sm.role AS member_role,
@@ -1047,14 +1054,14 @@ async function canModerateRoomChat(roomId, profileId) {
         LIMIT 1`,
       [room, user],
     );
-    return ['owner', 'admin', 'mod'].includes(String(row?.member_role || ''))
-      || String(row?.profile_role || '') === 'system_admin'
-      || row?.is_admin === true
-      || row?.is_primary_admin === true
-      || row?.is_moderator === true;
+    let rank = roleRank(String(row?.member_role || ''));
+    if (String(row?.profile_role || '') === 'system_admin' || row?.is_primary_admin === true) rank = Math.max(rank, 40);
+    if (row?.is_admin === true) rank = Math.max(rank, 30);
+    if (row?.is_moderator === true) rank = Math.max(rank, 20);
+    return rank;
   } catch (err) {
     console.warn('[chat] room chat permission lookup failed:', err?.message);
-    return false;
+    return 0;
   }
 }
 
@@ -1925,7 +1932,8 @@ wss.on('connection', (ws) => {
           send(ws, {
             type: 'history',
             roomId,
-            chatMuted: roomChatMuted.get(roomId) === true,
+            chatMuted: roomChatMuteState.has(roomId),
+            chatMuteRank: roomChatMuteState.get(roomId)?.rank || 0,
             messages: messages.map(formatMsg),
           });
         } catch {
@@ -1961,7 +1969,8 @@ wss.on('connection', (ws) => {
         send(ws, {
           type: 'history',
           roomId,
-          chatMuted: roomChatMuted.get(roomId) === true,
+          chatMuted: roomChatMuteState.has(roomId),
+          chatMuteRank: roomChatMuteState.get(roomId)?.rank || 0,
           messages: messages.map(formatMsg),
         });
       } catch (err) {
@@ -1979,7 +1988,8 @@ wss.on('connection', (ws) => {
         return send(ws, { type: 'error', message: 'Odada değilsin' });
       }
 
-      if (roomChatMuted.get(currentRoom) === true && !(await canModerateRoomChat(currentRoom, userId))) {
+      const muteState = roomChatMuteState.get(currentRoom);
+      if (muteState && (await getRoomChatRank(currentRoom, userId)) < muteState.rank) {
         return send(ws, {
           type: 'error',
           code: 'room_chat_muted',
@@ -2066,16 +2076,22 @@ wss.on('connection', (ws) => {
       if (!currentRoom) {
         return send(ws, { type: 'error', message: 'Odada değilsin' });
       }
-      if (!(await canModerateRoomChat(currentRoom, userId))) {
+      const actorRank = await getRoomChatRank(currentRoom, userId);
+      if (actorRank <= 0) {
         return send(ws, { type: 'error', message: 'Yetkin yok' });
       }
       const muted = msg.muted === true;
-      if (muted) roomChatMuted.set(currentRoom, true);
-      else roomChatMuted.delete(currentRoom);
+      const currentMuteState = roomChatMuteState.get(currentRoom);
+      if (!muted && currentMuteState && actorRank < currentMuteState.rank) {
+        return send(ws, { type: 'error', message: 'Bu sohbet engelini açma yetkin yok' });
+      }
+      if (muted) roomChatMuteState.set(currentRoom, { by: userId, rank: actorRank });
+      else roomChatMuteState.delete(currentRoom);
       broadcastToRoom(currentRoom, {
         type: 'chat_mute',
         roomId: currentRoom,
         muted,
+        chatMuteRank: muted ? actorRank : 0,
       });
       return;
     }

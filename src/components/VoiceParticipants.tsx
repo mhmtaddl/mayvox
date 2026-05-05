@@ -35,6 +35,7 @@ interface Props {
   channels: { id: string; mode?: string }[];
   chatMessages: ChatMessage[];
   chatMuted: boolean;
+  chatMuteRank: number;
   onToggleChatMuted: () => void;
   editingMsgId: string | null;
   editingText: string;
@@ -81,6 +82,7 @@ function VoiceParticipants({
   channels,
   chatMessages,
   chatMuted,
+  chatMuteRank,
   onToggleChatMuted,
   editingMsgId,
   editingText,
@@ -244,6 +246,7 @@ function VoiceParticipants({
           isAdmin={isAdmin}
           isModerator={isModerator}
           chatMuted={chatMuted}
+          chatMuteRank={chatMuteRank}
           onToggleChatMuted={onToggleChatMuted}
           editingMsgId={editingMsgId}
           editingText={editingText}
