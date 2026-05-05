@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { ThemePackId, ThemeCustomizationOverrides } from '../lib/themePacks';
+import type { OverlayDisplayMode } from '../overlay/types';
 
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
@@ -84,6 +85,9 @@ export interface SettingsContextType {
   /** Overlay görünüm stili — 3 premium tasarım + "Yok" (sade avatar+isim). */
   overlayVariant: 'capsule' | 'card' | 'badge' | 'none';
   setOverlayVariant: (v: 'capsule' | 'card' | 'badge' | 'none') => void;
+  /** Overlay gösterim kapsamı: sadece oyun algılanınca veya masaüstünde de. */
+  overlayDisplayMode: OverlayDisplayMode;
+  setOverlayDisplayMode: (v: OverlayDisplayMode) => void;
 }
 
 export const SettingsCtx = createContext<SettingsContextType | null>(null);

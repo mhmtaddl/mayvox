@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Monitor } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -674,6 +674,60 @@ function OverlaySizeSegmented({ value, onChange, disabled, disabledReason, onDis
   );
 }
 
+function OverlayDisplayModeSegmented({ value, onChange, disabled, disabledReason, onDisabledClick }: {
+  value: 'game-only' | 'always';
+  onChange: (v: 'game-only' | 'always') => void;
+  disabled?: boolean;
+  disabledReason?: string;
+  onDisabledClick?: () => void;
+}) {
+  const opts: Array<{ v: 'game-only' | 'always'; label: string; hint: string; icon: React.ReactNode }> = [
+    { v: 'game-only', label: 'Sadece oyun içinde', hint: 'Oyun algılanınca görünür', icon: <Gamepad2 size={14} /> },
+    { v: 'always', label: 'Masaüstünde de göster', hint: 'Ses odasındayken hep görünür', icon: <Monitor size={14} /> },
+  ];
+  return (
+    <div
+      className="grid grid-cols-2 gap-1 p-1 rounded-xl"
+      style={{
+        background: 'rgba(var(--glass-tint), 0.05)',
+        boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.06)',
+        opacity: disabled ? 0.7 : 1,
+      }}
+      title={disabled ? disabledReason : undefined}
+    >
+      {opts.map(o => {
+        const active = value === o.v;
+        return (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => {
+              if (disabled) {
+                onDisabledClick?.();
+                return;
+              }
+              onChange(o.v);
+            }}
+            className="min-w-0 flex items-center gap-2 rounded-[10px] px-2.5 py-2 text-left transition-all"
+            style={{
+              background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
+              boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.28)' : 'none',
+              color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
+            }}
+            aria-pressed={active}
+          >
+            <span className="shrink-0 inline-flex items-center justify-center">{o.icon}</span>
+            <span className="min-w-0 flex flex-col">
+              <span className="truncate text-[10.5px] font-semibold leading-tight">{o.label}</span>
+              <span className="truncate text-[9px] leading-tight opacity-60">{o.hint}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // İkonlu + açıklamalı toggle satırı
 function OverlayToggleRow({ icon, label, hint, checked, onChange, disabled, disabledReason, onDisabledClick }: {
   icon: React.ReactNode;
@@ -734,6 +788,7 @@ function VoiceOverlayCard() {
     overlayClickThrough, setOverlayClickThrough,
     overlayCardOpacity, setOverlayCardOpacity,
     overlayVariant, setOverlayVariant,
+    overlayDisplayMode, setOverlayDisplayMode,
   } = useSettings();
   const off = !overlayEnabled;
   const previewName = getPublicDisplayName(currentUser) || 'Mayvox';
@@ -852,6 +907,17 @@ function VoiceOverlayCard() {
             avatarUrl={currentUser.avatar || null}
           />
           <div className="vox-right w-full min-w-0 flex flex-col gap-3">
+            <div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Gösterim</div>
+              <OverlayDisplayModeSegmented
+                value={overlayDisplayMode}
+                onChange={setOverlayDisplayMode}
+                disabled={off}
+                disabledReason={overlayDisabledReason}
+                onDisabledClick={showOverlayDisabledFeedback}
+              />
+            </div>
+
             <div>
               <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
               <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} disabledReason={overlayDisabledReason} onDisabledClick={showOverlayDisabledFeedback} />

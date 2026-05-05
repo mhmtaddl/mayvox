@@ -13,6 +13,8 @@ export type OverlaySize = 'small' | 'medium' | 'large';
 /** Overlay görünüm stili — 3 tasarım + "Yok" (kart/waveform yok, sade avatar+isim). */
 export type OverlayVariant = 'capsule' | 'card' | 'badge' | 'none';
 
+export type OverlayDisplayMode = 'game-only' | 'always';
+
 export interface OverlaySettings {
   enabled: boolean;
   position: OverlayPosition;
@@ -24,6 +26,8 @@ export interface OverlaySettings {
   cardOpacity: number;
   /** Görünüm stili — capsule (pill), card (info-dense kare), badge (ultra minimal). */
   variant: OverlayVariant;
+  /** game-only: desteklenen oyun algılanınca göster; always: masaüstünde de göster. */
+  displayMode: OverlayDisplayMode;
 }
 
 export interface OverlayParticipant {
@@ -61,6 +65,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   clickThrough: true,
   cardOpacity: 50,
   variant: 'capsule',
+  displayMode: 'always',
 };
 
 /** Tüm anchor'lar + preview picker konumları (0..1 fraction, sol-üst kökenli). */

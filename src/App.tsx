@@ -1425,7 +1425,7 @@ export default function App() {
   // ── Ses odası overlay — ayrı Electron BrowserWindow'a sanitize snapshot ───
   // Electron dışında no-op; toggle kapalıyken IPC durur.
   const overlaySettings = useMemo(() => ({
-    enabled: settings.overlayEnabled,
+    enabled: settings.overlayEnabled && (settings.overlayDisplayMode !== 'game-only' || !!detectedGame),
     position: settings.overlayPosition,
     size: settings.overlaySize,
     showOnlySpeaking: settings.overlayShowOnlySpeaking,
@@ -1433,8 +1433,11 @@ export default function App() {
     clickThrough: settings.overlayClickThrough,
     cardOpacity: settings.overlayCardOpacity,
     variant: settings.overlayVariant,
+    displayMode: settings.overlayDisplayMode,
   }), [
     settings.overlayEnabled,
+    settings.overlayDisplayMode,
+    detectedGame,
     settings.overlayPosition,
     settings.overlaySize,
     settings.overlayShowOnlySpeaking,
@@ -2476,6 +2479,8 @@ export default function App() {
     setOverlayShowSelf: settings.setOverlayShowSelf,
     overlayClickThrough: settings.overlayClickThrough,
     setOverlayClickThrough: settings.setOverlayClickThrough,
+    overlayDisplayMode: settings.overlayDisplayMode,
+    setOverlayDisplayMode: settings.setOverlayDisplayMode,
   };
 
   const appStateValue: AppStateContextType = {

@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { type VoiceMode } from '../../../contexts/SettingsCtx';
+import type { OverlayDisplayMode } from '../../../overlay/types';
 import {
   THEME_PACKS,
   DEFAULT_THEME_PACK_ID,
@@ -341,6 +342,15 @@ export function useAppSettings() {
     setOverlayCardOpacityState(c);
   };
 
+  const [overlayDisplayMode, setOverlayDisplayModeState] = useState<OverlayDisplayMode>(() => {
+    const v = localStorage.getItem('overlayDisplayMode');
+    return v === 'game-only' ? 'game-only' : 'always';
+  });
+  const setOverlayDisplayMode = (v: OverlayDisplayMode) => {
+    localStorage.setItem('overlayDisplayMode', v);
+    setOverlayDisplayModeState(v);
+  };
+
   return {
     themePackId, setThemePackId,
     customThemeOverrides, setCustomThemeOverrides, commitCustomThemeOverrides, resetCustomThemeOverrides,
@@ -373,5 +383,6 @@ export function useAppSettings() {
     overlayClickThrough, setOverlayClickThrough,
     overlayCardOpacity, setOverlayCardOpacity,
     overlayVariant, setOverlayVariant,
+    overlayDisplayMode, setOverlayDisplayMode,
   };
 }
