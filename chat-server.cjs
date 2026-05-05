@@ -2269,6 +2269,7 @@ wss.on('connection', (ws) => {
         let conversationCreated = false;
         let requestStatus = conversation?.request_status || 'accepted';
         let requestReceiverId = conversation?.request_receiver_id || null;
+        let convertedResetToPending = false;
 
         if (access.via === 'friend') {
           if (!conversation) {
@@ -2302,11 +2303,12 @@ wss.on('connection', (ws) => {
             dmStmt.setConversationRequestStatus.run('pending', recipientId, now, convKey);
             requestStatus = 'pending';
             requestReceiverId = recipientId;
+            convertedResetToPending = true;
           }
           if (requestStatus === 'rejected') {
             return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
           }
-          if (requestStatus === 'pending') {
+          if (requestStatus === 'pending' && !convertedResetToPending) {
             if (requestReceiverId === userId) {
               dmStmt.setConversationRequestStatus.run('accepted', null, null, convKey);
               requestStatus = 'accepted';

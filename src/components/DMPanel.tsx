@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3 } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -786,6 +786,16 @@ function MessageBubble({
 // Opacity zinciri (0.5 × X) beyaz bubble'da kontrastı çöpe atıyor, bu yüzden
 // tick time'dan ayrı sarmalanır ve tam opacity ile renderlanır.
 function MessageTick({ msg }: { msg: DmMessage }) {
+  if (msg.requestStatus === 'pending') {
+    return (
+      <Clock3
+        size={14}
+        strokeWidth={2.3}
+        style={{ color: '#9ca3af' }}
+        aria-label="Mesaj isteği yanıt bekliyor"
+      />
+    );
+  }
   if (msg.readAt) {
     return (
       <CheckCheck
