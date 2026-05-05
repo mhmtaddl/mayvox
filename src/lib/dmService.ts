@@ -19,6 +19,13 @@ export interface DmMessage {
   requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected';
   requestReceiverId?: string | null;
   isRequest?: boolean;
+  reactions?: DmMessageReaction[];
+}
+
+export interface DmMessageReaction {
+  emoji: string;
+  count: number;
+  reactedByMe?: boolean;
 }
 
 export interface DmConversation {
@@ -45,6 +52,7 @@ export type DmEventHandler = {
   onDelivered?: (convKey: string, messageIds: string[], deliveredAt: number) => void;
   onMessageEdited?: (msg: DmMessage, lastMessage?: string, lastMessageAt?: number) => void;
   onMessageDeleted?: (convKey: string, messageId: string, lastMessage?: string, lastMessageAt?: number) => void;
+  onReaction?: (convKey: string, messageId: string, reactions: DmMessageReaction[]) => void;
   onUnreadTotal?: (count: number) => void;
   onTyping?: (convKey: string, fromUserId: string) => void;
   onRequestUpdated?: (conversationKey: string, status: string, otherUserId?: string) => void;
@@ -95,6 +103,9 @@ export function handleDmMessage(msg: any): boolean {
       return true;
     case 'dm:message_deleted':
       handlers.onMessageDeleted?.(msg.conversationKey, msg.messageId, msg.lastMessage, msg.lastMessageAt);
+      return true;
+    case 'dm:reaction':
+      handlers.onReaction?.(msg.conversationKey, msg.messageId, msg.reactions || []);
       return true;
     case 'dm:unread_total':
       handlers.onUnreadTotal?.(msg.count ?? 0);
@@ -151,6 +162,11 @@ export function dmEditMessage(messageId: string, text: string) {
 export function dmDeleteMessage(messageId: string) {
   if (!messageId) return;
   wsSend({ type: 'dm:delete', messageId });
+}
+
+export function dmReactMessage(messageId: string, emoji: string) {
+  if (!messageId || !emoji) return;
+  wsSend({ type: 'dm:react', messageId, emoji });
 }
 
 export function dmHideConversation(conversationKey: string) {

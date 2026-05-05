@@ -388,7 +388,7 @@ function ConversationItem({
 
 function MessageBubble({
   msg, isOwn, isGrouped, isLastInGroup,
-  isEditing, editingText, onEditingTextChange, onSaveEdit, onCancelEdit, onStartEdit, onDelete,
+  isEditing, editingText, onEditingTextChange, onSaveEdit, onCancelEdit, onStartEdit, onDelete, onReact,
 }: {
   msg: DmMessage;
   isOwn: boolean;
@@ -403,8 +403,10 @@ function MessageBubble({
   onCancelEdit: () => void;
   onStartEdit: () => void;
   onDelete: () => void;
+  onReact: (emoji: string) => void;
 }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const reactionOptions = ['👍', '❤️', '😂', '🔥'];
 
   // Spec: same user 4px / different group 12px
   const wrapperSpacing = isGrouped ? 'mt-1' : 'mt-3';
@@ -414,8 +416,8 @@ function MessageBubble({
     : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
 
   return (
-    <div className={`group/msg flex ${isOwn ? 'justify-end' : 'justify-start'} ${wrapperSpacing}`}>
-      <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+    <div className={`group/msg ${wrapperSpacing}`}>
+      <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end flex-row-reverse' : 'justify-start'}`}>
       <div
         className={`${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
         style={{
@@ -505,7 +507,41 @@ function MessageBubble({
           </button>
         </div>
       )}
+      {!isEditing && (
+        <div className={`mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${isOwn ? 'mr-0.5' : 'ml-0.5'}`}>
+          {reactionOptions.map(emoji => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => onReact(emoji)}
+              className="flex h-6 w-6 items-center justify-center rounded-[8px] text-[12px] transition-colors hover:bg-[rgba(var(--glass-tint),0.08)]"
+              title="Tepki ekle"
+              aria-label={`${emoji} tepkisi ekle`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
       </div>
+      {!!msg.reactions?.length && (
+        <div className={`mt-1 flex flex-wrap gap-1 ${isOwn ? 'justify-end pr-7' : 'justify-start pl-7'}`}>
+          {msg.reactions.map(reaction => (
+            <button
+              key={reaction.emoji}
+              type="button"
+              onClick={() => onReact(reaction.emoji)}
+              className={`rounded-full px-1.5 py-[2px] text-[10px] font-semibold transition-colors ${
+                reaction.reactedByMe
+                  ? 'bg-[var(--theme-accent)]/16 text-[var(--theme-accent)]'
+                  : 'bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)]/75 hover:text-[var(--theme-text)]'
+              }`}
+            >
+              <span className="mr-1">{reaction.emoji}</span>{reaction.count}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -540,7 +576,7 @@ function MessageTick({ msg }: { msg: DmMessage }) {
 
 function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
-  onSend, onEditMessage, onDeleteMessage, onTyping, onBack, onNearBottomChange,
+  onSend, onEditMessage, onDeleteMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
   friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser,
 }: {
@@ -553,6 +589,7 @@ function ChatArea({
   onSend: (text: string) => void;
   onEditMessage: (messageId: string, text: string) => void;
   onDeleteMessage: (messageId: string) => void;
+  onReactMessage: (messageId: string, emoji: string) => void;
   onTyping: () => void;
   onBack: () => void;
   onNearBottomChange?: (near: boolean) => void;
@@ -900,6 +937,7 @@ function ChatArea({
                     onCancelEdit={cancelEdit}
                     onStartEdit={() => startEditMessage(msg)}
                     onDelete={() => deleteOwnMessage(msg.id)}
+                    onReact={(emoji) => onReactMessage(msg.id, emoji)}
                   />
                 </React.Fragment>
               );
@@ -1168,6 +1206,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               onSend={dm.sendMessage}
               onEditMessage={dm.editMessage}
               onDeleteMessage={dm.deleteMessage}
+              onReactMessage={dm.reactMessage}
               onTyping={dm.emitTyping}
               onBack={dm.closeConversation}
               onNearBottomChange={onNearBottomChange}

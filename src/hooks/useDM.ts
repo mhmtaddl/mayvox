@@ -7,6 +7,7 @@ import {
   dmSendMessage,
   dmEditMessage,
   dmDeleteMessage,
+  dmReactMessage,
   dmMarkRead,
   dmRequestUnreadTotal,
   dmHideConversation,
@@ -236,6 +237,12 @@ export function useDM(currentUserId: string | undefined) {
           ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
         }
       },
+      onReaction: (convKey, messageId, reactions) => {
+        if (convKey !== activeConvKeyRef.current) return;
+        setMessages(prev => prev.map(m => (
+          m.id === messageId ? { ...m, reactions } : m
+        )));
+      },
       onUnreadTotal: (count) => {
         setTotalUnread(Math.max(0, count));
       },
@@ -370,6 +377,11 @@ export function useDM(currentUserId: string | undefined) {
     dmDeleteMessage(messageId);
   }, []);
 
+  const reactMessage = useCallback((messageId: string, emoji: string) => {
+    if (!messageId || !emoji) return;
+    dmReactMessage(messageId, emoji);
+  }, []);
+
   const editMessage = useCallback((messageId: string, text: string) => {
     if (!messageId) return;
     const trimmed = text.trim();
@@ -494,6 +506,7 @@ export function useDM(currentUserId: string | undefined) {
     sendMessage,
     editMessage,
     deleteMessage,
+    reactMessage,
     acceptRequest,
     rejectRequest,
     blockUser,

@@ -99,6 +99,17 @@ dmDb.exec(`
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_a ON dm_conversations(user_a_id);
   CREATE INDEX IF NOT EXISTS idx_dm_conv_user_b ON dm_conversations(user_b_id);
 
+  CREATE TABLE IF NOT EXISTS dm_message_reactions (
+    message_id TEXT NOT NULL REFERENCES dm_messages(id) ON DELETE CASCADE,
+    conversation_key TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    emoji TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    PRIMARY KEY (message_id, user_id, emoji)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_dm_reactions_conv ON dm_message_reactions(conversation_key, message_id);
+
   CREATE TABLE IF NOT EXISTS dm_conversation_hidden (
     user_id TEXT NOT NULL,
     conversation_key TEXT NOT NULL,
@@ -223,6 +234,35 @@ const dmStmt = {
   deleteMessage: dmDb.prepare(`
     DELETE FROM dm_messages
     WHERE id = ? AND sender_id = ?
+  `),
+  getMessageReactionsForConversation: dmDb.prepare(`
+    SELECT message_id, emoji, COUNT(*) as count,
+      SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as reacted_by_me
+    FROM dm_message_reactions
+    WHERE conversation_key = ?
+    GROUP BY message_id, emoji
+    ORDER BY MIN(created_at) ASC
+  `),
+  getMessageReactions: dmDb.prepare(`
+    SELECT emoji, COUNT(*) as count,
+      SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as reacted_by_me
+    FROM dm_message_reactions
+    WHERE message_id = ?
+    GROUP BY emoji
+    ORDER BY MIN(created_at) ASC
+  `),
+  getMessageReaction: dmDb.prepare(`
+    SELECT 1 FROM dm_message_reactions
+    WHERE message_id = ? AND user_id = ? AND emoji = ?
+    LIMIT 1
+  `),
+  addMessageReaction: dmDb.prepare(`
+    INSERT OR IGNORE INTO dm_message_reactions (message_id, conversation_key, user_id, emoji, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `),
+  removeMessageReaction: dmDb.prepare(`
+    DELETE FROM dm_message_reactions
+    WHERE message_id = ? AND user_id = ? AND emoji = ?
   `),
   updateLastMessage: dmDb.prepare(`
     UPDATE dm_conversations
@@ -878,6 +918,28 @@ function formatDmMessageForViewer(row, viewerId, senderProfile, settingsMap) {
     deliveredAt: row.delivered_at,
     editedAt: row.edited_at,
   };
+}
+
+function buildDmReactionMap(conversationKey, viewerId) {
+  const rows = dmStmt.getMessageReactionsForConversation.all(viewerId, conversationKey);
+  const map = new Map();
+  for (const row of rows) {
+    if (!map.has(row.message_id)) map.set(row.message_id, []);
+    map.get(row.message_id).push({
+      emoji: row.emoji,
+      count: Number(row.count || 0),
+      reactedByMe: Number(row.reacted_by_me || 0) > 0,
+    });
+  }
+  return map;
+}
+
+function getDmMessageReactions(messageId, viewerId) {
+  return dmStmt.getMessageReactions.all(viewerId, messageId).map(row => ({
+    emoji: row.emoji,
+    count: Number(row.count || 0),
+    reactedByMe: Number(row.reacted_by_me || 0) > 0,
+  }));
 }
 
 function conversationDto(row, otherId, profile, isRequest = false) {
@@ -2122,6 +2184,7 @@ wss.on('connection', (ws) => {
         const senderIds = [...new Set(messages.map(m => m.sender_id))];
         const senderProfiles = senderIds.length > 0 ? await getProfiles(senderIds) : new Map();
         const readSettings = await getDmProfileSettings([...new Set(messages.map(m => m.receiver_id))]);
+        const reactionMap = buildDmReactionMap(convKey, userId);
 
         send(ws, {
           type: 'dm:history',
@@ -2130,7 +2193,10 @@ wss.on('connection', (ws) => {
           requestStatus: conversation?.request_status || 'accepted',
           requestReceiverId: conversation?.request_receiver_id || null,
           isRequest: (conversation?.request_status || 'accepted') === 'pending' && conversation?.request_receiver_id === userId,
-          messages: messages.map(m => formatDmMessageForViewer(m, userId, senderProfiles.get(m.sender_id), readSettings)),
+          messages: messages.map(m => ({
+            ...formatDmMessageForViewer(m, userId, senderProfiles.get(m.sender_id), readSettings),
+            reactions: reactionMap.get(m.id) || [],
+          })),
         });
 
         // Karşı tarafa okundu bilgisi gönder; kullanıcı kapattıysa sadece unread temizlenir.
@@ -2272,6 +2338,7 @@ wss.on('connection', (ws) => {
           deliveredAt,
           readAt: null,
           editedAt: null,
+          reactions: [],
         };
 
         // Gönderene teslim (deliveredAt payload'da — UI anında çift gri gösterir)
@@ -2445,6 +2512,46 @@ wss.on('connection', (ws) => {
       } catch (err) {
         console.error('[dm] delete error:', err?.message);
         send(ws, { type: 'dm:error', message: 'Mesaj silinemedi' });
+      }
+      return;
+    }
+
+    // ── DM:REACT ─────────────────────────────────────────────────────────
+    if (msg.type === 'dm:react') {
+      const messageId = String(msg.messageId || '').trim();
+      const emoji = String(msg.emoji || '').trim();
+      const allowed = new Set(['👍', '❤️', '😂', '🔥']);
+      if (!messageId || !allowed.has(emoji)) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz tepki' });
+      }
+      try {
+        const row = dmStmt.getMessageById.get(messageId);
+        if (!row || (row.sender_id !== userId && row.receiver_id !== userId)) {
+          return send(ws, { type: 'dm:error', message: 'Mesaj bulunamadı' });
+        }
+        const existing = dmStmt.getMessageReaction.get(messageId, userId, emoji);
+        if (existing) {
+          dmStmt.removeMessageReaction.run(messageId, userId, emoji);
+        } else {
+          dmStmt.addMessageReaction.run(messageId, row.conversation_key, userId, emoji, Date.now());
+        }
+        const senderReactions = getDmMessageReactions(messageId, row.sender_id);
+        const receiverReactions = getDmMessageReactions(messageId, row.receiver_id);
+        sendToUser(row.sender_id, {
+          type: 'dm:reaction',
+          conversationKey: row.conversation_key,
+          messageId,
+          reactions: senderReactions,
+        });
+        sendToUser(row.receiver_id, {
+          type: 'dm:reaction',
+          conversationKey: row.conversation_key,
+          messageId,
+          reactions: receiverReactions,
+        });
+      } catch (err) {
+        console.error('[dm] react error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Tepki eklenemedi' });
       }
       return;
     }
