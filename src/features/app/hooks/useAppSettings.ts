@@ -318,10 +318,10 @@ export function useAppSettings() {
   };
 
   // ── Overlay görünüm stili ──
-  // capsule: pill (default), card: info-dense kare, badge: ultra minimal, none: kart yok / sade.
+  // capsule: pill, card: info-dense kare, badge: ultra minimal (default), none: kart yok / sade.
   const [overlayVariant, setOverlayVariantState] = useState<'capsule' | 'card' | 'badge' | 'none'>(() => {
     const v = localStorage.getItem('overlayVariant');
-    return (v === 'card' || v === 'badge' || v === 'capsule' || v === 'none') ? v : 'capsule';
+    return (v === 'card' || v === 'badge' || v === 'capsule' || v === 'none') ? v : 'badge';
   });
   const setOverlayVariant = (v: 'capsule' | 'card' | 'badge' | 'none') => {
     localStorage.setItem('overlayVariant', v);
@@ -344,7 +344,7 @@ export function useAppSettings() {
 
   const [overlayDisplayMode, setOverlayDisplayModeState] = useState<OverlayDisplayMode>(() => {
     const v = localStorage.getItem('overlayDisplayMode');
-    return v === 'game-only' ? 'game-only' : 'always';
+    return v === 'always' ? 'always' : 'game-only';
   });
   const setOverlayDisplayMode = (v: OverlayDisplayMode) => {
     localStorage.setItem('overlayDisplayMode', v);
