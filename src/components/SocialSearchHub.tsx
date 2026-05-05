@@ -17,6 +17,7 @@ export interface SearchResult {
   lastName: string;
   avatar: string;
   allowNonFriendDms?: boolean;
+  dmPrivacyMode?: 'everyone' | 'mutual_servers' | 'friends_only' | 'closed';
 }
 
 interface Props {
@@ -97,7 +98,8 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
           firstName: p.first_name || '',
           lastName: p.last_name || '',
           avatar: p.avatar || '',
-          allowNonFriendDms: p.allow_non_friend_dms !== false,
+          dmPrivacyMode: p.dm_privacy_mode || (p.allow_non_friend_dms === false ? 'friends_only' : 'everyone'),
+          allowNonFriendDms: p.dm_privacy_mode === 'everyone' || p.dm_privacy_mode === 'mutual_servers' || (!p.dm_privacy_mode && p.allow_non_friend_dms !== false),
           score,
         });
       }

@@ -11,6 +11,7 @@ import { isGameActivityAvailable } from '../features/game-activity/useGameActivi
 import { rangeVisualStyle } from '../lib/rangeStyle';
 import { updateProfileFields } from '../lib/backendClient';
 import { sendRealtimeBroadcast } from '../lib/chatService';
+import type { DmPrivacyMode } from '../types';
 
 // ── Components ──
 import AccountSection from '../components/settings/sections/AccountSection';
@@ -108,42 +109,66 @@ function LastSeenCard() {
 function NonFriendDmCard() {
   const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
   const { setToastMsg } = useUI();
-  const enabled = currentUser.allowNonFriendDms !== false;
+  const mode: DmPrivacyMode = currentUser.dmPrivacyMode || (currentUser.allowNonFriendDms === false ? 'friends_only' : 'everyone');
+  const options: Array<{ value: DmPrivacyMode; label: string; description: string }> = [
+    { value: 'everyone', label: 'Herkes', description: 'DM izni açık olan herkes mesaj isteği gönderebilir.' },
+    { value: 'mutual_servers', label: 'Ortak sunucu', description: 'Sadece ortak sunucudaki kullanıcılar mesaj isteği gönderebilir.' },
+    { value: 'friends_only', label: 'Arkadaşlar', description: 'Arkadaş olmayanlardan mesaj isteği alınmaz.' },
+    { value: 'closed', label: 'Kapalı', description: 'DM alımı tamamen kapalıdır.' },
+  ];
+  const activeDescription = options.find(o => o.value === mode)?.description || options[0].description;
 
-  const setLocal = (value: boolean) => {
-    setCurrentUser(prev => ({ ...prev, allowNonFriendDms: value }));
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, allowNonFriendDms: value } : u));
+  const setLocal = (value: DmPrivacyMode) => {
+    const allowNonFriendDms = value === 'everyone' || value === 'mutual_servers';
+    setCurrentUser(prev => ({ ...prev, dmPrivacyMode: value, allowNonFriendDms }));
+    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, dmPrivacyMode: value, allowNonFriendDms } : u));
   };
 
-  const toggle = async () => {
-    const next = !enabled;
+  const updateMode = async (next: DmPrivacyMode) => {
+    if (next === mode) return;
     setLocal(next);
     try {
-      await updateProfileFields({ allow_non_friend_dms: next });
+      const allowNonFriendDms = next === 'everyone' || next === 'mutual_servers';
+      await updateProfileFields({ dm_privacy_mode: next, allow_non_friend_dms: allowNonFriendDms });
       sendRealtimeBroadcast('moderation-event', {
         userId: currentUser.id,
         userIds: allUsers.map(u => u.id),
-        updates: { allowNonFriendDms: next },
+        updates: { dmPrivacyMode: next, allowNonFriendDms },
       });
-      setToastMsg(next ? 'Arkadaş olmayanlarla mesajlaşma açıldı' : 'Arkadaş olmayanlarla mesajlaşma kapatıldı');
+      setToastMsg('DM gizlilik ayarı güncellendi');
     } catch {
-      setLocal(enabled);
+      setLocal(mode);
       setToastMsg('Mesajlaşma ayarı güncellenemedi');
     }
   };
 
   return (
-    <div className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
+    <div className="settings-account-card surface-card flex items-start gap-3 px-4 py-3 rounded-xl">
       <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
         <MessageSquare size={14} className="text-[var(--theme-accent)]/80" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Arkadaş Olmayanlarla Mesajlaş</p>
+        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">DM Gizliliği</p>
         <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-          Sadece bu ayarı açan kullanıcılarla karşılıklı mesaj gönderip alabilirsin.
+          {activeDescription}
         </p>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => updateMode(opt.value)}
+              className={`h-7 rounded-[9px] px-2 text-[10px] font-semibold transition-colors ${
+                mode === opt.value
+                  ? 'bg-[var(--theme-accent)]/14 text-[var(--theme-accent)]'
+                  : 'bg-[rgba(var(--glass-tint),0.05)] text-[var(--theme-secondary-text)]/70 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <Toggle checked={enabled} onChange={toggle} />
     </div>
   );
 }

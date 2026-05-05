@@ -864,6 +864,7 @@ export default function ChatView() {
       status: 'offline',
       statusText: 'Çevrimdışı',
       avatar: user.avatar || '',
+      dmPrivacyMode: user.dmPrivacyMode || (user.allowNonFriendDms === false ? 'friends_only' : 'everyone'),
       allowNonFriendDms: user.allowNonFriendDms !== false,
     };
     setProfilePopup({

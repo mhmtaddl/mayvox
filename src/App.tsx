@@ -49,6 +49,7 @@ type DbProfile = {
   show_last_seen?: boolean;
   server_creation_plan?: 'none' | 'free' | 'pro' | 'ultra';
   allow_non_friend_dms?: boolean;
+  dm_privacy_mode?: 'everyone' | 'mutual_servers' | 'friends_only' | 'closed';
   show_dm_read_receipts?: boolean;
 };
 import { AppStateContext, AppStateContextType } from './contexts/AppStateContext';
@@ -107,10 +108,17 @@ import { requestElectronFlash } from './features/notifications/electronAttention
 
 const isUuidUser = (userId: string) => userId.includes('-');
 
+function resolveDmPrivacyMode(p: { dm_privacy_mode?: string | null; allow_non_friend_dms?: boolean }): User['dmPrivacyMode'] {
+  const raw = p.dm_privacy_mode;
+  if (raw === 'everyone' || raw === 'mutual_servers' || raw === 'friends_only' || raw === 'closed') return raw;
+  return p.allow_non_friend_dms === false ? 'friends_only' : 'everyone';
+}
+
 function mapDbProfile(
   p: DbProfile,
   knownVersions?: Map<string, string>,
 ): User {
+  const dmPrivacyMode = resolveDmPrivacyMode(p);
   return {
     id: p.id,
     email: p.email || '',
@@ -134,7 +142,8 @@ function mapDbProfile(
     serverCreationPlan: resolveServerCreationPlan(p),
     userLevel: (p as { user_level?: string | null }).user_level ?? null,
     avatarBorderColor: (p as { avatar_border_color?: string }).avatar_border_color ?? '',
-    allowNonFriendDms: p.allow_non_friend_dms !== false,
+    dmPrivacyMode,
+    allowNonFriendDms: dmPrivacyMode === 'everyone' || dmPrivacyMode === 'mutual_servers',
     showDmReadReceipts: p.show_dm_read_receipts !== false,
   };
 }
@@ -150,6 +159,7 @@ function resolveServerCreationPlan(p: { server_creation_plan?: string; is_admin?
 
 function buildOnlineUser(id: string, email: string, profile: DbProfile | null): User {
   if (profile) {
+    const dmPrivacyMode = resolveDmPrivacyMode(profile);
     return {
       id,
       email,
@@ -176,7 +186,8 @@ function buildOnlineUser(id: string, email: string, profile: DbProfile | null): 
       serverCreationPlan: resolveServerCreationPlan(profile),
       userLevel: (profile as { user_level?: string | null }).user_level ?? null,
       avatarBorderColor: (profile as { avatar_border_color?: string }).avatar_border_color ?? '',
-      allowNonFriendDms: profile.allow_non_friend_dms !== false,
+      dmPrivacyMode,
+      allowNonFriendDms: dmPrivacyMode === 'everyone' || dmPrivacyMode === 'mutual_servers',
       showDmReadReceipts: profile.show_dm_read_receipts !== false,
     };
   }
@@ -2356,6 +2367,7 @@ export default function App() {
         isAdmin: false,
         isPrimaryAdmin: false,
         allowNonFriendDms: true,
+        dmPrivacyMode: 'everyone',
         showDmReadReceipts: true,
       };
 

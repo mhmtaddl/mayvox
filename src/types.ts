@@ -52,6 +52,8 @@ export interface User {
   avatarBorderColor?: string;
   /** Açıksa aynı ayarı açan arkadaş olmayan kullanıcılarla DM gönder/al yapılabilir. */
   allowNonFriendDms?: boolean;
+  /** DM kabul politikası: herkes, ortak sunucular, sadece arkadaşlar, kapalı. */
+  dmPrivacyMode?: DmPrivacyMode;
   /** Kapalıysa karşı taraf DM mesajlarının okundu bilgisini görmez. */
   showDmReadReceipts?: boolean;
   /**
@@ -61,6 +63,8 @@ export interface User {
    */
   gameActivity?: string;
 }
+
+export type DmPrivacyMode = 'everyone' | 'mutual_servers' | 'friends_only' | 'closed';
 
 export type ServerCreationPlan = 'none' | 'free' | 'pro' | 'ultra';
 

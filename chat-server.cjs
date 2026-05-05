@@ -686,7 +686,58 @@ async function checkFriendship(userA, userB) {
   }
 }
 
-async function getMutualNonFriendDmAllowedIds(userId, candidateIds) {
+function normalizeDmPrivacyMode(row) {
+  const mode = row?.dm_privacy_mode;
+  if (mode === 'everyone' || mode === 'mutual_servers' || mode === 'friends_only' || mode === 'closed') return mode;
+  return row?.allow_non_friend_dms === false ? 'friends_only' : 'everyone';
+}
+
+async function getSharedServerMemberIds(userId, candidateIds) {
+  const self = typeof userId === 'string' ? userId.trim() : '';
+  const unique = Array.from(new Set(
+    (Array.isArray(candidateIds) ? candidateIds : [])
+      .map(id => (typeof id === 'string' ? id.trim() : ''))
+      .filter(id => id && id !== self),
+  ));
+  if (!self || unique.length === 0) return new Set();
+  try {
+    const rows = await queryMany(
+      `SELECT DISTINCT other.user_id::text AS id
+         FROM server_members mine
+         JOIN server_members other ON other.server_id = mine.server_id
+        WHERE mine.user_id::text = $1
+          AND other.user_id::text = ANY($2::text[])`,
+      [self, unique],
+    );
+    return new Set(rows.map(r => r.id));
+  } catch (err) {
+    console.warn('[dm] shared server lookup exception:', err?.message);
+    return new Set();
+  }
+}
+
+async function getDmPrivacyModes(userIds) {
+  const ids = Array.from(new Set(
+    (Array.isArray(userIds) ? userIds : [])
+      .map(id => (typeof id === 'string' ? id.trim() : ''))
+      .filter(Boolean),
+  ));
+  if (ids.length === 0) return new Map();
+  try {
+    const rows = await queryMany(
+      `SELECT id::text AS id, dm_privacy_mode, allow_non_friend_dms
+         FROM profiles
+        WHERE id::text = ANY($1::text[])`,
+      [ids],
+    );
+    return new Map(rows.map(row => [row.id, normalizeDmPrivacyMode(row)]));
+  } catch (err) {
+    console.warn('[dm] privacy mode lookup exception:', err?.message);
+    return new Map();
+  }
+}
+
+async function getNonFriendDmAllowedIds(userId, candidateIds) {
   const self = typeof userId === 'string' ? userId.trim() : '';
   const unique = Array.from(new Set(
     (Array.isArray(candidateIds) ? candidateIds : [])
@@ -697,15 +748,29 @@ async function getMutualNonFriendDmAllowedIds(userId, candidateIds) {
 
   try {
     const rows = await queryMany(
-      `SELECT id::text AS id
+      `SELECT id::text AS id, dm_privacy_mode, allow_non_friend_dms
          FROM profiles
-        WHERE id::text = ANY($1::text[])
-          AND COALESCE(allow_non_friend_dms, false) = true`,
+        WHERE id::text = ANY($1::text[])`,
       [[self, ...unique]],
     );
-    const openIds = new Set(rows.map(r => r.id));
-    if (!openIds.has(self)) return new Set();
-    return new Set(unique.filter(id => openIds.has(id)));
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const selfMode = normalizeDmPrivacyMode(byId.get(self));
+    if (selfMode === 'closed' || selfMode === 'friends_only') return new Set();
+
+    const needsSharedServer = unique.filter(id => {
+      const otherMode = normalizeDmPrivacyMode(byId.get(id));
+      return otherMode === 'mutual_servers' || selfMode === 'mutual_servers';
+    });
+    const sharedServerIds = needsSharedServer.length > 0
+      ? await getSharedServerMemberIds(self, needsSharedServer)
+      : new Set();
+
+    return new Set(unique.filter(id => {
+      const otherMode = normalizeDmPrivacyMode(byId.get(id));
+      if (otherMode === 'closed' || otherMode === 'friends_only') return false;
+      if (selfMode === 'mutual_servers' || otherMode === 'mutual_servers') return sharedServerIds.has(id);
+      return selfMode === 'everyone' && otherMode === 'everyone';
+    }));
   } catch (err) {
     console.warn('[dm] non-friend dm permission exception:', err?.message);
     return new Set();
@@ -735,14 +800,19 @@ async function checkDmAccess(userA, userB) {
     };
   }
   const friends = await checkFriendship(userA, userB);
+  const modes = await getDmPrivacyModes([userA, userB]);
+  if (modes.get(userA) === 'closed') return { allowed: false, via: 'blocked', reason: 'closed_by_self' };
+  if (modes.get(userB) === 'closed') return { allowed: false, via: 'blocked', reason: 'closed_by_other' };
   if (friends) return { allowed: true, via: 'friend' };
-  const mutualAllowed = await getMutualNonFriendDmAllowedIds(userA, [userB]);
+  const mutualAllowed = await getNonFriendDmAllowedIds(userA, [userB]);
   return { allowed: mutualAllowed.has(userB), via: mutualAllowed.has(userB) ? 'mutual_non_friend' : 'blocked' };
 }
 
 function dmAccessMessage(access) {
   if (access?.reason === 'blocked_by_self') return 'Bu kullanıcıyı engelledin';
   if (access?.reason === 'blocked_by_other') return 'Bu kullanıcı sana mesaj almayı kapattı';
+  if (access?.reason === 'closed_by_self') return 'DM alımını kapattın';
+  if (access?.reason === 'closed_by_other') return 'Bu kullanıcı DM almayı kapattı';
   return 'Arkadaş olmayanlarla mesajlaşma iki tarafta da açık olmalı';
 }
 
@@ -1964,7 +2034,7 @@ wss.on('connection', (ws) => {
         const blockedIds = new Set(blockedRows.map(r => r.id));
         // Aktif arkadaş ID'lerini ve mutual non-friend DM izinlerini tekil sorgularla çek
         const friendIds = await getFriendIds(userId);
-        const mutualNonFriendDmIds = await getMutualNonFriendDmAllowedIds(
+        const mutualNonFriendDmIds = await getNonFriendDmAllowedIds(
           userId,
           allOtherIds.filter(otherId => !friendIds.has(otherId) && !blockedIds.has(otherId)),
         );
@@ -2534,7 +2604,7 @@ wss.on('connection', (ws) => {
         const blockedIds = new Set(blockedRows.map(r => r.id));
         // Sadece aktif arkadaşlardan veya mutual non-friend DM izni olanlardan gelen okunmamışları say
         const friendIds = await getFriendIds(userId);
-        const mutualNonFriendDmIds = await getMutualNonFriendDmAllowedIds(
+        const mutualNonFriendDmIds = await getNonFriendDmAllowedIds(
           userId,
           senderIds.filter(senderId => !friendIds.has(senderId) && !blockedIds.has(senderId)),
         );

@@ -29,6 +29,7 @@ export interface AuthProfile {
   user_level?: string | null;
   avatar_border_color?: string | null;
   allow_non_friend_dms?: boolean;
+  dm_privacy_mode?: 'everyone' | 'mutual_servers' | 'friends_only' | 'closed' | null;
   show_dm_read_receipts?: boolean;
 }
 

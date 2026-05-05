@@ -43,6 +43,7 @@ interface AuthUserRow {
   user_level: string | null;
   avatar_border_color: string | null;
   allow_non_friend_dms: boolean | null;
+  dm_privacy_mode: string | null;
   show_dm_read_receipts: boolean | null;
 }
 
@@ -83,6 +84,7 @@ const USER_SELECT = `
     p.user_level,
     p.avatar_border_color,
     p.allow_non_friend_dms,
+    p.dm_privacy_mode,
     p.show_dm_read_receipts
   FROM app_users au
   JOIN profiles p ON p.id = au.profile_id
@@ -108,6 +110,13 @@ function toPayload(row: AuthUserRow): JwtUserPayload {
 
 function toPublicUser(row: AuthUserRow) {
   const payload = toPayload(row);
+  const dmPrivacyMode =
+    row.dm_privacy_mode === 'everyone' ||
+    row.dm_privacy_mode === 'mutual_servers' ||
+    row.dm_privacy_mode === 'friends_only' ||
+    row.dm_privacy_mode === 'closed'
+      ? row.dm_privacy_mode
+      : (row.allow_non_friend_dms === false ? 'friends_only' : 'everyone');
   return {
     ...payload,
     profile: {
@@ -135,7 +144,8 @@ function toPublicUser(row: AuthUserRow) {
       server_creation_plan: row.server_creation_plan,
       user_level: row.user_level,
       avatar_border_color: row.avatar_border_color || '',
-      allow_non_friend_dms: row.allow_non_friend_dms !== false,
+      dm_privacy_mode: dmPrivacyMode,
+      allow_non_friend_dms: dmPrivacyMode === 'everyone' || dmPrivacyMode === 'mutual_servers',
       show_dm_read_receipts: row.show_dm_read_receipts !== false,
     },
   };
@@ -239,6 +249,7 @@ export interface ProfileUpdateInput {
   total_usage_minutes?: number;
   show_last_seen?: boolean;
   allow_non_friend_dms?: boolean;
+  dm_privacy_mode?: string;
   show_dm_read_receipts?: boolean;
 }
 
@@ -301,6 +312,18 @@ export async function updateProfile(payload: JwtUserPayload, input: ProfileUpdat
     sets.push(`allow_non_friend_dms = $${i++}::boolean`);
     values.push(!!input.allow_non_friend_dms);
   }
+  if (input.dm_privacy_mode !== undefined) {
+    const mode = String(input.dm_privacy_mode || '').trim();
+    if (mode !== 'everyone' && mode !== 'mutual_servers' && mode !== 'friends_only' && mode !== 'closed') {
+      throw new AuthError(400, 'DM gizlilik modu geçersiz');
+    }
+    sets.push(`dm_privacy_mode = $${i++}::text`);
+    values.push(mode);
+    if (input.allow_non_friend_dms === undefined) {
+      sets.push(`allow_non_friend_dms = $${i++}::boolean`);
+      values.push(mode === 'everyone' || mode === 'mutual_servers');
+    }
+  }
   if (input.show_dm_read_receipts !== undefined) {
     sets.push(`show_dm_read_receipts = $${i++}::boolean`);
     values.push(!!input.show_dm_read_receipts);
@@ -353,7 +376,7 @@ export async function register(input: RegisterInput) {
          is_admin, is_primary_admin, is_moderator, is_muted, mute_expires, is_voice_banned,
          ban_expires, must_change_password, app_version, last_seen_at, total_usage_minutes,
          show_last_seen, server_creation_plan, role AS profile_role, user_level, avatar_border_color,
-         allow_non_friend_dms, show_dm_read_receipts`,
+         allow_non_friend_dms, dm_privacy_mode, show_dm_read_receipts`,
       [
         username,
         email,

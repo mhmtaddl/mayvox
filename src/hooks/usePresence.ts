@@ -378,6 +378,7 @@ export function usePresence({
       ...(updates.statusText !== undefined && { statusText: updates.statusText }),
       ...(updates.avatarBorderColor !== undefined && { avatarBorderColor: updates.avatarBorderColor }),
       ...(updates.allowNonFriendDms !== undefined && { allowNonFriendDms: updates.allowNonFriendDms }),
+      ...(updates.dmPrivacyMode !== undefined && { dmPrivacyMode: updates.dmPrivacyMode }),
       ...(updates.showDmReadReceipts !== undefined && { showDmReadReceipts: updates.showDmReadReceipts }),
     };
     if (Object.keys(otherFields).length > 0) {
