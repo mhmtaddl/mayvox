@@ -270,7 +270,7 @@ function MessageSettingsPanel({
 // ── Conversation Item ───────────────────────────────────────────────────
 
 function ConversationItem({
-  convo, allUsers, onClick, onDelete, isRequest = false, onAccept, onReject,
+  convo, allUsers, onClick, onDelete, isRequest = false, requestActionPending = false, onAccept, onReject,
 }: {
   convo: DmConversation;
   allUsers: any[];
@@ -278,6 +278,7 @@ function ConversationItem({
   onClick: () => void;
   onDelete: () => void;
   isRequest?: boolean;
+  requestActionPending?: boolean;
   onAccept?: () => void;
   onReject?: () => void;
 }) {
@@ -351,6 +352,7 @@ function ConversationItem({
           <div className="flex flex-col gap-1">
             <button
               onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
+              disabled={requestActionPending}
               className="flex h-6 w-6 items-center justify-center rounded-[8px] text-emerald-300 transition-colors hover:bg-emerald-500/12"
               title="Kabul et"
               aria-label={`${name} mesaj isteğini kabul et`}
@@ -359,6 +361,7 @@ function ConversationItem({
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onReject?.(); }}
+              disabled={requestActionPending}
               className="flex h-6 w-6 items-center justify-center rounded-[8px] text-red-300 transition-colors hover:bg-red-500/12"
               title="Reddet"
               aria-label={`${name} mesaj isteğini reddet`}
@@ -539,7 +542,7 @@ function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
   onSend, onEditMessage, onDeleteMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
-  friendRelation = null, onSendFriendRequest, onReportUser,
+  friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -556,6 +559,7 @@ function ChatArea({
   lastError?: string | null;
   isRequest?: boolean;
   isBlocked?: boolean;
+  requestActionPending?: boolean;
   onAcceptRequest?: () => void;
   onRejectRequest?: () => void;
   onBlockUser?: () => void;
@@ -935,13 +939,15 @@ function ChatArea({
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 onClick={onAcceptRequest}
-                className="h-8 rounded-[10px] text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors"
+                disabled={requestActionPending}
+                className="h-8 rounded-[10px] text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors disabled:opacity-40"
               >
-                Kabul et
+                {requestActionPending ? 'İşleniyor' : 'Kabul et'}
               </button>
               <button
                 onClick={onRejectRequest}
-                className="h-8 rounded-[10px] text-[11px] font-semibold text-red-300 bg-red-500/10 hover:bg-red-500/15 transition-colors"
+                disabled={requestActionPending}
+                className="h-8 rounded-[10px] text-[11px] font-semibold text-red-300 bg-red-500/10 hover:bg-red-500/15 transition-colors disabled:opacity-40"
               >
                 Reddet
               </button>
@@ -1051,6 +1057,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const { openConfirm } = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeList, setActiveList] = useState<'messages' | 'requests'>('messages');
+  const [requestActionKeys, setRequestActionKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1095,6 +1102,31 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'Arkadaşlık isteği gönderilemedi');
   }, [dm.activeRecipientId, friends, setToastMsg]);
 
+  const markRequestAction = useCallback((convKey: string) => {
+    setRequestActionKeys(prev => new Set(prev).add(convKey));
+    window.setTimeout(() => {
+      setRequestActionKeys(prev => {
+        const next = new Set(prev);
+        next.delete(convKey);
+        return next;
+      });
+    }, 1600);
+  }, []);
+
+  const handleAcceptRequest = useCallback((convKey: string) => {
+    markRequestAction(convKey);
+    dm.acceptRequest(convKey);
+    setActiveList('messages');
+    setToastMsg('Mesaj isteği kabul edildi');
+  }, [dm, markRequestAction, setToastMsg]);
+
+  const handleRejectRequest = useCallback((convKey: string) => {
+    markRequestAction(convKey);
+    dm.rejectRequest(convKey);
+    setActiveList('requests');
+    setToastMsg('Mesaj isteği reddedildi');
+  }, [dm, markRequestAction, setToastMsg]);
+
   return (
     <>
     {createPortal(
@@ -1130,6 +1162,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               lastError={dm.lastError}
               isRequest={!!activeRequest}
               isBlocked={activeBlocked}
+              requestActionPending={!!activeRequest && requestActionKeys.has(activeRequest.conversationKey)}
               friendRelation={activeFriendRelation}
               onSendFriendRequest={handleSendFriendRequest}
               onReportUser={() => dm.activeRecipientId && openConfirm({
@@ -1143,14 +1176,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   setToastMsg('Bildirim gönderildi');
                 },
               })}
-              onAcceptRequest={() => activeRequest && dm.acceptRequest(activeRequest.conversationKey)}
+              onAcceptRequest={() => activeRequest && handleAcceptRequest(activeRequest.conversationKey)}
               onRejectRequest={() => activeRequest && openConfirm({
                 title: 'Mesaj isteğini reddet',
                 description: `${activeRecipientName} mesaj isteği reddedilsin mi?`,
                 confirmText: 'Reddet',
                 cancelText: 'İptal',
                 danger: true,
-                onConfirm: () => dm.rejectRequest(activeRequest.conversationKey),
+                onConfirm: () => handleRejectRequest(activeRequest.conversationKey),
               })}
               onBlockUser={() => dm.activeRecipientId && openConfirm({
                 title: 'Kullanıcıyı engelle',
@@ -1269,17 +1302,18 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                             allUsers={allUsers}
                             currentUserId={currentUser.id}
                             isRequest
+                            requestActionPending={requestActionKeys.has(convo.conversationKey)}
                             onClick={() => dm.openConversation(convo.recipientId)}
-                            onAccept={() => dm.acceptRequest(convo.conversationKey)}
+                            onAccept={() => handleAcceptRequest(convo.conversationKey)}
                             onReject={() => openConfirm({
                               title: 'Mesaj isteğini reddet',
                               description: `${n} mesaj isteği reddedilsin mi?`,
                               confirmText: 'Reddet',
                               cancelText: 'İptal',
                               danger: true,
-                              onConfirm: () => dm.rejectRequest(convo.conversationKey),
+                              onConfirm: () => handleRejectRequest(convo.conversationKey),
                             })}
-                            onDelete={() => dm.rejectRequest(convo.conversationKey)}
+                            onDelete={() => handleRejectRequest(convo.conversationKey)}
                           />
                         </div>
                       );
