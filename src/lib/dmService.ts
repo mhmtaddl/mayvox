@@ -16,7 +16,7 @@ export interface DmMessage {
   readAt?: number | null;
   deliveredAt?: number | null;
   editedAt?: number | null;
-  requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected';
+  requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected' | 'reset';
   requestReceiverId?: string | null;
   isRequest?: boolean;
   reactions?: DmMessageReaction[];
@@ -38,7 +38,7 @@ export interface DmConversation {
   // Server-side enrichment (chat-server profiles cache). Yoksa client fallback.
   recipientName?: string;
   recipientAvatar?: string | null;
-  requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected';
+  requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected' | 'reset';
   requestReceiverId?: string | null;
   requestCreatedAt?: number | null;
   isRequest?: boolean;

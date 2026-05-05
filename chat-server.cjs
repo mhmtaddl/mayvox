@@ -2170,8 +2170,6 @@ wss.on('connection', (ws) => {
             });
             return;
           }
-        } else if ((existingConv.request_status || 'accepted') === 'rejected' && access.via !== 'friend') {
-          return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
         }
         const conversation = dmStmt.getConversation.get(convKey);
 
@@ -2306,7 +2304,10 @@ wss.on('connection', (ws) => {
             convertedResetToPending = true;
           }
           if (requestStatus === 'rejected') {
-            return send(ws, { type: 'dm:error', message: 'Bu mesaj isteği reddedilmiş' });
+            dmStmt.setConversationRequestStatus.run('pending', recipientId, now, convKey);
+            requestStatus = 'pending';
+            requestReceiverId = recipientId;
+            convertedResetToPending = true;
           }
           if (requestStatus === 'pending' && !convertedResetToPending) {
             if (requestReceiverId === userId) {
