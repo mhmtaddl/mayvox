@@ -1041,9 +1041,9 @@ async function canModerateRoomChat(roomId, profileId) {
               p.is_primary_admin,
               p.is_moderator
          FROM channels c
-         JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
-         LEFT JOIN profiles p ON p.id::text = $2
-        WHERE c.id::text = $1
+         JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id::text = $2::text
+         LEFT JOIN profiles p ON p.id::text = $2::text
+        WHERE c.id = $1::uuid
         LIMIT 1`,
       [room, user],
     );
