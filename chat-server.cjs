@@ -256,6 +256,10 @@ const dmStmt = {
     WHERE message_id = ? AND user_id = ? AND emoji = ?
     LIMIT 1
   `),
+  removeUserMessageReactions: dmDb.prepare(`
+    DELETE FROM dm_message_reactions
+    WHERE message_id = ? AND user_id = ?
+  `),
   addMessageReaction: dmDb.prepare(`
     INSERT OR IGNORE INTO dm_message_reactions (message_id, conversation_key, user_id, emoji, created_at)
     VALUES (?, ?, ?, ?, ?)
@@ -2546,8 +2550,9 @@ wss.on('connection', (ws) => {
         }
         const existing = dmStmt.getMessageReaction.get(messageId, userId, emoji);
         if (existing) {
-          dmStmt.removeMessageReaction.run(messageId, userId, emoji);
+          dmStmt.removeUserMessageReactions.run(messageId, userId);
         } else {
+          dmStmt.removeUserMessageReactions.run(messageId, userId);
           dmStmt.addMessageReaction.run(messageId, row.conversation_key, userId, emoji, Date.now());
         }
         const senderReactions = getDmMessageReactions(messageId, row.sender_id);

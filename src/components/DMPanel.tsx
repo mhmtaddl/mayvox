@@ -635,6 +635,11 @@ function MessageBubble({
 }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const reactionOptions = ['👍', '❤️', '😂', '🔥'];
+  const [actionsSuppressed, setActionsSuppressed] = useState(false);
+  const suppressActionsBriefly = useCallback(() => {
+    setActionsSuppressed(true);
+    window.setTimeout(() => setActionsSuppressed(false), 650);
+  }, []);
 
   // Spec: same user 4px / different group 12px
   const wrapperSpacing = isGrouped ? 'mt-1' : 'mt-3';
@@ -645,9 +650,9 @@ function MessageBubble({
 
   return (
     <div className={`group/msg ${wrapperSpacing}`}>
-      <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end flex-row-reverse' : 'justify-start'}`}>
+      <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+        className={`${isOwn ? 'order-3' : 'order-1'} ${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
         style={{
           background: isOwn ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
           color: isOwn ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
@@ -714,7 +719,7 @@ function MessageBubble({
         )}
       </div>
       {isOwn && !isEditing && (
-        <div className="mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
+        <div className={`order-2 mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${actionsSuppressed ? '!opacity-0 pointer-events-none' : ''}`}>
           <button
             type="button"
             onClick={onStartEdit}
@@ -735,13 +740,16 @@ function MessageBubble({
           </button>
         </div>
       )}
-      {!isEditing && (
-        <div className={`mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${isOwn ? 'mr-0.5' : 'ml-0.5'}`}>
+      {!isOwn && !isEditing && (
+        <div className={`order-2 ml-0.5 mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${actionsSuppressed ? '!opacity-0 pointer-events-none' : ''}`}>
           {reactionOptions.map(emoji => (
             <button
               key={emoji}
               type="button"
-              onClick={() => onReact(emoji)}
+              onClick={() => {
+                onReact(emoji);
+                suppressActionsBriefly();
+              }}
               className="flex h-6 w-6 items-center justify-center rounded-[8px] text-[12px] transition-colors hover:bg-[rgba(var(--glass-tint),0.08)]"
               title="Tepki ekle"
               aria-label={`${emoji} tepkisi ekle`}
@@ -758,12 +766,16 @@ function MessageBubble({
             <button
               key={reaction.emoji}
               type="button"
-              onClick={() => onReact(reaction.emoji)}
+              onClick={() => {
+                if (isOwn) return;
+                onReact(reaction.emoji);
+                suppressActionsBriefly();
+              }}
               className={`rounded-full px-1.5 py-[2px] text-[10px] font-semibold transition-colors ${
                 reaction.reactedByMe
                   ? 'bg-[var(--theme-accent)]/16 text-[var(--theme-accent)]'
                   : 'bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)]/75 hover:text-[var(--theme-text)]'
-              }`}
+              } ${isOwn ? 'cursor-default' : ''}`}
             >
               <span className="mr-1">{reaction.emoji}</span>{reaction.count}
             </button>
