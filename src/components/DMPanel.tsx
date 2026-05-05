@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -12,7 +12,9 @@ import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useUser } from '../contexts/UserContext';
+import { useUI } from '../contexts/UIContext';
 import { useDM } from '../hooks/useDM';
+import { useFriends } from '../hooks/useFriends';
 import type { DmConversation, DmMessage } from '../lib/dmService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { isNearBottom, scheduleScroll } from '../lib/dmUxLogic';
@@ -505,6 +507,7 @@ function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
   onSend, onEditMessage, onDeleteMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
+  friendRelation = null, onSendFriendRequest,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -525,6 +528,8 @@ function ChatArea({
   onRejectRequest?: () => void;
   onBlockUser?: () => void;
   onUnblockUser?: () => void;
+  friendRelation?: 'friend' | 'incoming' | 'outgoing' | null;
+  onSendFriendRequest?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -707,6 +712,7 @@ function ChatArea({
   const typingActive = typingFrom === recipientId;
   const composerLocked = isRequest || isBlocked;
   const canSend = input.trim().length > 0 && !sending && !composerLocked;
+  const canSendFriendRequest = friendRelation === null && !isRequest && !isBlocked;
 
   return (
     <div className="flex flex-col h-full">
@@ -770,18 +776,31 @@ function ChatArea({
           </AnimatePresence>
         </div>
         {!isRequest && (
-          <button
-            onClick={isBlocked ? onUnblockUser : onBlockUser}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-              isBlocked
-                ? 'text-emerald-300/80 hover:text-emerald-300 hover:bg-emerald-500/10'
-                : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300 hover:bg-red-500/10'
-            }`}
-            title={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
-            aria-label={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
-          >
-            <UserX size={14} />
-          </button>
+          <div className="flex items-center gap-1">
+            {friendRelation !== 'friend' && (
+              <button
+                onClick={canSendFriendRequest ? onSendFriendRequest : undefined}
+                disabled={!canSendFriendRequest}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/45"
+                title={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
+                aria-label={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
+              >
+                <UserPlus size={14} />
+              </button>
+            )}
+            <button
+              onClick={isBlocked ? onUnblockUser : onBlockUser}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                isBlocked
+                  ? 'text-emerald-300/80 hover:text-emerald-300 hover:bg-emerald-500/10'
+                  : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300 hover:bg-red-500/10'
+              }`}
+              title={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
+              aria-label={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
+            >
+              <UserX size={14} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -985,6 +1004,8 @@ interface DMPanelProps {
 export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
   const { currentUser, allUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
+  const friends = useFriends(currentUser.id || undefined);
+  const { setToastMsg } = useUI();
   const panelRef = useRef<HTMLDivElement>(null);
   const { openConfirm } = useConfirm();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1021,6 +1042,13 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     ? allUsers.find((u: any) => u.id === dm.activeRecipientId)
     : null;
   const activeRecipientName = activeRecipient ? getPublicDisplayName(activeRecipient) : 'Kullanıcı';
+  const activeFriendRelation = dm.activeRecipientId ? friends.getRelationship(dm.activeRecipientId) : null;
+
+  const handleSendFriendRequest = useCallback(async () => {
+    if (!dm.activeRecipientId) return;
+    const ok = await friends.sendRequest(dm.activeRecipientId);
+    setToastMsg(ok ? 'Arkadaşlık isteği gönderildi' : 'Arkadaşlık isteği gönderilemedi');
+  }, [dm.activeRecipientId, friends, setToastMsg]);
 
   return (
     <>
@@ -1057,6 +1085,8 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               lastError={dm.lastError}
               isRequest={!!activeRequest}
               isBlocked={activeBlocked}
+              friendRelation={activeFriendRelation}
+              onSendFriendRequest={handleSendFriendRequest}
               onAcceptRequest={() => activeRequest && dm.acceptRequest(activeRequest.conversationKey)}
               onRejectRequest={() => activeRequest && openConfirm({
                 title: 'Mesaj isteğini reddet',

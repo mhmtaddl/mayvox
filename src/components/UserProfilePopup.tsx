@@ -5,7 +5,7 @@ import type { User } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { getPublicDisplayName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
-import { hasCustomAvatar } from '../lib/statusAvatar';
+import { getStatusAvatar, hasCustomAvatar } from '../lib/statusAvatar';
 import { useSettings } from '../contexts/SettingsCtx';
 import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
@@ -70,8 +70,10 @@ export default function UserProfilePopup({
   const [actionLoading, setActionLoading] = useState(false);
 
   const rel = getRelationship(user.id);
+  const canViewPresence = isMe || rel === 'friend';
 
   const hasImage = hasCustomAvatar(user.avatar);
+  const nonFriendFallbackAvatar = !canViewPresence && !hasImage ? getStatusAvatar('Çevrimdışı') : null;
   const isSearchMinimal = source === 'search' && !isMe && rel !== 'friend';
   const popupHeight = isSearchMinimal ? 268 : POPUP_H;
   const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 16);
@@ -147,12 +149,11 @@ export default function UserProfilePopup({
     return (
       <button
         onClick={() => { onDM?.(user.id); onClose(); }}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-[var(--theme-accent)] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
-        style={{ background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--theme-accent)]/70 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] hover:bg-[var(--theme-accent)]/10 hover:text-[var(--theme-accent)] active:scale-[0.98]"
         title="Mesaj gönder"
         aria-label="Mesaj gönder"
       >
-        <MessageSquare size={16} />
+        <MessageSquare size={15} />
       </button>
     );
   };
@@ -162,8 +163,7 @@ export default function UserProfilePopup({
     if (inviteStatus === 'pending') {
       return (
         <span
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-blue-300"
-          style={{ background: 'rgba(59,130,246,0.10)' }}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-blue-400"
           title="Davet bekliyor"
           aria-label="Davet bekliyor"
         >
@@ -174,24 +174,22 @@ export default function UserProfilePopup({
     if (inviteStatus === 'accepted') {
       return (
         <span
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-emerald-300"
-          style={{ background: 'rgba(16,185,129,0.10)' }}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-emerald-400"
           title="Davet kabul edildi"
           aria-label="Davet kabul edildi"
         >
-          <Check size={16} strokeWidth={2.4} />
+          <Check size={15} strokeWidth={2.4} />
         </span>
       );
     }
     if (inviteStatus === 'rejected') {
       return (
         <span
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-red-300"
-          style={{ background: 'rgba(248,113,113,0.10)' }}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-red-400"
           title="Davet reddedildi"
           aria-label="Davet reddedildi"
         >
-          <X size={16} strokeWidth={2.4} />
+          <X size={15} strokeWidth={2.4} />
         </span>
       );
     }
@@ -199,12 +197,11 @@ export default function UserProfilePopup({
       <button
         disabled={onCooldown}
         onClick={() => onInvite?.()}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-default"
-        style={{ background: 'rgba(16,185,129,0.10)' }}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-emerald-400/75 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] hover:bg-emerald-500/10 hover:text-emerald-400 active:scale-[0.98] disabled:cursor-default disabled:opacity-25 disabled:hover:scale-100 disabled:hover:bg-transparent"
         title={onCooldown ? `${cooldownRemaining}s` : 'Odaya davet et'}
         aria-label={onCooldown ? `${cooldownRemaining} saniye sonra davet et` : 'Odaya davet et'}
       >
-        <PhoneCall size={16} />
+        <PhoneCall size={15} />
       </button>
     );
   };
@@ -224,13 +221,15 @@ export default function UserProfilePopup({
       : 'Arkadaş değil';
     return (
       <div className="mb-4 flex max-w-full flex-wrap justify-center gap-1.5">
-        <span className={`rounded-full bg-[rgba(var(--glass-tint),0.07)] px-2 py-[3px] text-[9px] font-semibold ${statusColor}`}>
-          {statusText}
-        </span>
+        {canViewPresence && (
+          <span className={`rounded-full bg-[rgba(var(--glass-tint),0.07)] px-2 py-[3px] text-[9px] font-semibold ${statusColor}`}>
+            {statusText}
+          </span>
+        )}
         <span className="rounded-full bg-[rgba(var(--glass-tint),0.07)] px-2 py-[3px] text-[9px] font-semibold text-[var(--theme-secondary-text)]/70">
           {relText}
         </span>
-        {serverName && (
+        {canViewPresence && serverName && (
           <span className="max-w-full truncate rounded-full bg-emerald-500/10 px-2 py-[3px] text-[9px] font-semibold text-emerald-300/85" title={serverName}>
             {serverName}
           </span>
@@ -269,12 +268,11 @@ export default function UserProfilePopup({
         <div className="flex items-center justify-center gap-2">
           <button
             onClick={() => triggerConfirm('cancel')}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
-            style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-blue-400/75 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] hover:bg-blue-500/10 hover:text-blue-400 active:scale-[0.98]"
             title="İsteği iptal et"
             aria-label="İsteği iptal et"
           >
-            <Clock size={16} />
+            <Clock size={15} />
           </button>
           {renderSearchDmButton()}
           {renderSearchInviteButton()}
@@ -286,12 +284,11 @@ export default function UserProfilePopup({
       <div className="flex items-center justify-center gap-2">
         <button
           onClick={() => triggerConfirm('send')}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
-          style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb), 0.10)' }}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-emerald-400/75 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] hover:bg-emerald-500/10 hover:text-emerald-400 active:scale-[0.98]"
           title="Arkadaşlık isteği gönder"
           aria-label="Arkadaşlık isteği gönder"
         >
-          <UserPlus size={16} />
+          <UserPlus size={15} />
         </button>
         {renderSearchDmButton()}
         {renderSearchInviteButton()}
@@ -335,10 +332,12 @@ export default function UserProfilePopup({
                   boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.18), inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 10px -2px rgba(0,0,0,0.22)',
                 }}
               >
-                {hasImage || user.avatar ? (
+                {nonFriendFallbackAvatar ? (
+                  <img src={nonFriendFallbackAvatar} alt="" className="h-full w-full object-cover" draggable={false} />
+                ) : hasImage || user.avatar ? (
                   <AvatarContent
                     avatar={user.avatar}
-                    statusText={statusText}
+                    statusText={canViewPresence ? statusText : undefined}
                     firstName={user.displayName || user.firstName}
                     name={userName}
                     letterClassName="text-[24px] font-semibold tracking-tight"
@@ -431,10 +430,12 @@ export default function UserProfilePopup({
                   transition: 'box-shadow 0.2s ease-out',
                 }}
               >
-                {hasImage || user.avatar ? (
+                {nonFriendFallbackAvatar ? (
+                  <img src={nonFriendFallbackAvatar} alt="" className="h-full w-full object-cover" draggable={false} />
+                ) : hasImage || user.avatar ? (
                   <AvatarContent
                     avatar={user.avatar}
-                    statusText={statusText}
+                    statusText={canViewPresence ? statusText : undefined}
                     firstName={user.displayName || user.firstName}
                     name={userName}
                     letterClassName="text-[26px] font-semibold tracking-tight"
@@ -476,11 +477,13 @@ export default function UserProfilePopup({
             </div>
 
             {/* Status text — secondary tier */}
-            <div className={`text-[11px] font-medium tracking-wide ${statusColor} mb-2.5`}>
-              {statusText}
-            </div>
+            {canViewPresence && (
+              <div className={`text-[11px] font-medium tracking-wide ${statusColor} mb-2.5`}>
+                {statusText}
+              </div>
+            )}
 
-            {(serverName || user.gameActivity) && (
+            {canViewPresence && (serverName || user.gameActivity) && (
               <div className="w-full mb-2.5 space-y-1.5">
                 {serverName && (
                   <div className="flex items-center justify-center gap-1.5 min-w-0 text-[11px] font-semibold text-[var(--theme-text)]/85">
@@ -499,19 +502,19 @@ export default function UserProfilePopup({
 
             {/* Meta chips — hairline, borderless */}
             <div className="flex flex-wrap items-center justify-center gap-1 mb-2.5">
-              {user.platform && (
+              {canViewPresence && user.platform && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-[3px] rounded-full text-[var(--theme-secondary-text)]/80" style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
                   {user.platform === 'mobile' ? <Smartphone size={10} strokeWidth={2} /> : <Monitor size={10} strokeWidth={2} />}
                   {user.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}
                 </span>
               )}
-              {isOnline && user.onlineSince && (
+              {canViewPresence && isOnline && user.onlineSince && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-[3px] rounded-full text-[var(--theme-secondary-text)]/80" style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
                   <Clock size={9} strokeWidth={2} />
                   {formatOnlineDuration(user.onlineSince)}
                 </span>
               )}
-              {!isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
+              {canViewPresence && !isOnline && showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-[3px] rounded-full text-[var(--theme-secondary-text)]/80" style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
                   <History size={9} strokeWidth={2} />
                   {formatLastSeen(user.lastSeenAt)}

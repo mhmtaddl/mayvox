@@ -91,6 +91,7 @@ export function useDM(currentUserId: string | undefined) {
             clearTimeout(historyTimeoutRef.current);
             historyTimeoutRef.current = null;
           }
+          setLastError(null);
           setMessages(msgs);
           setLoadingHistory(false);
         }
@@ -105,6 +106,9 @@ export function useDM(currentUserId: string | undefined) {
 
         // Yeni mesaj gelirse hidden set'ten kaldır — konuşma tekrar görünsün
         hiddenKeysRef.current.delete(msg.conversationKey);
+        if (msg.conversationKey === activeConvKeyRef.current) {
+          setLastError(null);
+        }
 
         // Yeni mesaj geldiyse "yazıyor" yanılsamasını anında temizle.
         if (msg.conversationKey === activeConvKeyRef.current && msg.senderId !== currentUserId) {
@@ -243,6 +247,7 @@ export function useDM(currentUserId: string | undefined) {
         typingClearTimerRef.current = setTimeout(() => setTypingFrom(null), TYPING_CLEAR_MS);
       },
       onRequestUpdated: () => {
+        setLastError(null);
         dmLoadConversations();
         dmRequestUnreadTotal();
       },
@@ -302,9 +307,11 @@ export function useDM(currentUserId: string | undefined) {
       ? `dm:${currentUserId}:${recipientId}`
       : `dm:${recipientId}:${currentUserId}`;
 
+    activeConvKeyRef.current = convKey;
     setActiveConvKey(convKey);
     setActiveRecipientId(recipientId);
     setMessages([]);
+    setLastError(null);
     setLoadingHistory(true);
     setTypingFrom(null);
     setPanelOpen(true);
