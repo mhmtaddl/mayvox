@@ -460,9 +460,6 @@ function DmRequestsPanel({
         <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
           Mesaj İstekleri
         </span>
-        <span className="min-w-[18px] rounded-full bg-[rgba(var(--theme-accent-rgb),0.14)] px-1.5 py-[1px] text-center text-[9.5px] font-semibold text-[var(--theme-accent)]">
-          {requests.length}
-        </span>
       </div>
       <div className="max-h-[320px] overflow-y-auto p-2 custom-scrollbar">
         {requests.length === 0 ? (
@@ -520,6 +517,7 @@ function ConversationItem({
   const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
   const avatar = user?.avatar || convo.recipientAvatar || '';
   const hasUnread = convo.unreadCount > 0;
+  const showUnread = hasUnread && !isRequest;
 
   const timeStr = convo.lastMessageAt ? (() => {
     const d = new Date(convo.lastMessageAt);
@@ -532,7 +530,7 @@ function ConversationItem({
 
   return (
     <div
-      data-unread={hasUnread}
+      data-unread={showUnread}
       className="dm-conversation-item group/conv flex items-center gap-2 w-full pl-2.5 pr-2 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
     >
       <button
@@ -544,7 +542,7 @@ function ConversationItem({
           className="shrink-0 relative w-10 h-10 rounded-[11px] overflow-hidden flex items-center justify-center"
           style={{
             background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
-            boxShadow: hasUnread
+            boxShadow: showUnread
               ? 'inset 0 0 0 1.5px rgba(var(--theme-accent-rgb),0.45), 0 2px 6px -1px rgba(0,0,0,0.2)'
               : 'inset 0 0 0 1px rgba(var(--glass-tint),0.10), 0 1px 3px rgba(0,0,0,0.15)',
           }}
@@ -555,26 +553,19 @@ function ConversationItem({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-[3px]">
-            <span className={`text-[13px] leading-tight truncate tracking-[-0.01em] ${hasUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
-            {timeStr && <span className={`text-[10px] shrink-0 tabular-nums font-medium ${hasUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/50'}`}>{timeStr}</span>}
+            <span className={`text-[13px] leading-tight truncate tracking-[-0.01em] ${showUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
+            {!isRequest && timeStr && <span className={`text-[10px] shrink-0 tabular-nums font-medium ${showUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/50'}`}>{timeStr}</span>}
           </div>
           <div className="flex min-w-0 items-center">
-            <span className={`min-w-0 truncate text-[11.5px] leading-snug ${hasUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
+            <span className={`min-w-0 truncate text-[11.5px] leading-snug ${showUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
               {convo.lastMessage || <span className="italic opacity-70">Henüz mesaj yok</span>}
             </span>
           </div>
-          {isRequest && (
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="rounded-full bg-[rgba(var(--theme-accent-rgb),0.10)] px-2 py-[2px] text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--theme-accent)]/80">
-                Mesaj isteği
-              </span>
-            </div>
-          )}
         </div>
       </button>
 
-      <div className="flex w-7 shrink-0 flex-col items-end justify-center gap-1">
-        {hasUnread && (
+      <div className={`flex shrink-0 flex-col items-end justify-center gap-1 ${isRequest ? 'w-12' : 'w-7'}`}>
+        {showUnread && (
           <span
             className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--theme-badge-bg)] text-[var(--theme-badge-text)] leading-none"
             style={{ boxShadow: '0 2px 6px -1px rgba(var(--theme-accent-rgb),0.45)' }}
@@ -583,25 +574,28 @@ function ConversationItem({
           </span>
         )}
         {isRequest ? (
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
-              disabled={requestActionPending}
-              className="flex h-6 w-6 items-center justify-center rounded-[8px] text-emerald-300 transition-colors hover:bg-emerald-500/12"
-              title="Kabul et"
-              aria-label={`${name} mesaj isteğini kabul et`}
-            >
-              <Check size={12} strokeWidth={2.4} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onReject?.(); }}
-              disabled={requestActionPending}
-              className="flex h-6 w-6 items-center justify-center rounded-[8px] text-red-300 transition-colors hover:bg-red-500/12"
-              title="Reddet"
-              aria-label={`${name} mesaj isteğini reddet`}
-            >
-              <X size={12} strokeWidth={2.2} />
-            </button>
+          <div className="flex flex-col items-end gap-1">
+            {timeStr && <span className="text-[10px] font-medium tabular-nums text-[var(--theme-secondary-text)]/55">{timeStr}</span>}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); onAccept?.(); }}
+                disabled={requestActionPending}
+                className="flex h-5 w-5 items-center justify-center rounded-[7px] text-emerald-300 transition-colors hover:bg-emerald-500/12 disabled:opacity-40"
+                title="Kabul et"
+                aria-label={`${name} mesaj isteğini kabul et`}
+              >
+                <Check size={11} strokeWidth={2.5} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onReject?.(); }}
+                disabled={requestActionPending}
+                className="flex h-5 w-5 items-center justify-center rounded-[7px] text-red-300 transition-colors hover:bg-red-500/12 disabled:opacity-40"
+                title="Reddet"
+                aria-label={`${name} mesaj isteğini reddet`}
+              >
+                <X size={11} strokeWidth={2.3} />
+              </button>
+            </div>
           </div>
         ) : (
           <button
@@ -793,6 +787,16 @@ function MessageTick({ msg }: { msg: DmMessage }) {
         strokeWidth={2.3}
         style={{ color: '#9ca3af' }}
         aria-label="Mesaj isteği yanıt bekliyor"
+      />
+    );
+  }
+  if (msg.requestStatus === 'rejected') {
+    return (
+      <X
+        size={14}
+        strokeWidth={2.5}
+        style={{ color: '#f87171' }}
+        aria-label="Mesaj isteği reddedildi"
       />
     );
   }
@@ -1325,12 +1329,13 @@ interface DMPanelProps {
   openUserId?: string | null;
   onOpenHandled?: () => void;
   onUnreadChange?: (count: number) => void;
+  onRequestCountChange?: (count: number) => void;
   onActiveConvKeyChange?: (key: string | null) => void;
   onNearBottomChange?: (near: boolean) => void;
   toggleRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
+export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onRequestCountChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
   const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const friends = useFriends(currentUser.id || undefined);
@@ -1344,6 +1349,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const [listQuery, setListQuery] = useState('');
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onRequestCountChange?.(dm.requests.length); }, [dm.requests.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onActiveConvKeyChange?.(dm.activeConvKey); }, [dm.activeConvKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1500,7 +1506,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                       requestsOpen
                         ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
-                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.10)]'
                     }`}
                     title="Mesaj istekleri"
                     aria-label="Mesaj istekleri"
@@ -1520,8 +1526,8 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     }}
                     className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                       blockedOpen
-                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
-                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                        ? 'text-red-300 bg-red-500/10'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-red-300 hover:bg-red-500/10'
                     }`}
                     title="Engellenenler"
                     aria-label="Engellenenler"
@@ -1536,8 +1542,8 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     }}
                     className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
                       settingsOpen
-                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
-                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                        ? 'text-[var(--theme-text)] bg-[rgba(var(--glass-tint),0.10)]'
+                        : 'text-[var(--theme-secondary-text)]/62 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
                     }`}
                     title="Mesaj ayarları"
                     aria-label="Mesaj ayarları"

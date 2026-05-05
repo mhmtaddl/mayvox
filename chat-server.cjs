@@ -2194,6 +2194,8 @@ wss.on('connection', (ws) => {
           isRequest: (conversation?.request_status || 'accepted') === 'pending' && conversation?.request_receiver_id === userId,
           messages: messages.map(m => ({
             ...formatDmMessageForViewer(m, userId, senderProfiles.get(m.sender_id), readSettings),
+            requestStatus: conversation?.request_status || 'accepted',
+            requestReceiverId: conversation?.request_receiver_id || null,
             reactions: reactionMap.get(m.id) || [],
           })),
         });
@@ -2767,6 +2769,14 @@ wss.on('connection', (ws) => {
           if (blockedIds.has(row.sender_id)) continue;
           if (friendIds.has(row.sender_id) || mutualNonFriendDmIds.has(row.sender_id)) count += row.count;
         }
+        const requestRows = dmStmt.getConversations.all(userId, userId, userId, userId);
+        const pendingRequestCount = requestRows.filter(row => {
+          const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+          if (blockedIds.has(otherId)) return false;
+          if ((row.request_status || 'accepted') !== 'pending') return false;
+          return row.request_receiver_id === userId;
+        }).length;
+        count += pendingRequestCount;
         send(ws, { type: 'dm:unread_total', count });
       } catch {
         send(ws, { type: 'dm:unread_total', count: 0 });

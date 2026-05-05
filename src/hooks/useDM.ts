@@ -254,8 +254,11 @@ export function useDM(currentUserId: string | undefined) {
         if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
         typingClearTimerRef.current = setTimeout(() => setTypingFrom(null), TYPING_CLEAR_MS);
       },
-      onRequestUpdated: () => {
+      onRequestUpdated: (convKey, status) => {
         setLastError(null);
+        if (convKey && status && convKey === activeConvKeyRef.current) {
+          setMessages(prev => prev.map(m => ({ ...m, requestStatus: status as DmMessage['requestStatus'] })));
+        }
         dmLoadConversations();
         dmRequestUnreadTotal();
       },

@@ -215,6 +215,7 @@ export default function ChatView() {
     if (!stillPresent) setRoomMemberMenu(null);
   }, [roomMemberMenu, sortedChannelMembers]);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+  const [dmRequestCount, setDmRequestCount] = useState(0);
   const [activeDmConvKey, setActiveDmConvKey] = useState<string | null>(null);
   const [dmAtBottom, setDmAtBottom] = useState(true);
   const dmToggleRef = useRef<HTMLButtonElement>(null);
@@ -1284,7 +1285,9 @@ export default function ChatView() {
                       )}
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
-                    {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
+                    {dmUnreadCount > 0 && !dmPanelOpen && (
+                      <NotificationBadge count={dmUnreadCount} variant="accent" className={`absolute -top-0.5 ${dmRequestCount > 0 ? '-left-0.5' : '-right-0.5'}`} />
+                    )}
                   </button>
                   <button onClick={() => {
                       setMobileRightOpen(false);
@@ -1559,7 +1562,9 @@ export default function ChatView() {
                 )}
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
-              {dmUnreadCount > 0 && !dmPanelOpen && <NotificationBadge count={dmUnreadCount} variant="accent" className="absolute -top-0.5 -right-0.5" />}
+              {dmUnreadCount > 0 && !dmPanelOpen && (
+                <NotificationBadge count={dmUnreadCount} variant="accent" className={`absolute -top-0.5 ${dmRequestCount > 0 ? '-left-0.5' : '-right-0.5'}`} />
+              )}
             </button>
             <button onClick={() => {
                 if (view === 'settings') { setView('chat'); }
@@ -1874,6 +1879,7 @@ export default function ChatView() {
       {/* ── DM Panel ── */}
       <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}
         onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount}
+        onRequestCountChange={setDmRequestCount}
         onActiveConvKeyChange={setActiveDmConvKey} onNearBottomChange={setDmAtBottom} toggleRef={dmToggleRef} />
 
       {/* ── Oda içi üye moderation context menu (sağ-tık, role-aware) ──
