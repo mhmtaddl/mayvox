@@ -2325,6 +2325,10 @@ wss.on('connection', (ws) => {
         // Son mesajı güncelle
         const preview = previewDmText(text);
         dmStmt.updateLastMessage.run(preview, now, convKey);
+        if (requestStatus === 'pending') {
+          dmStmt.unhideConversation.run(userId, convKey);
+          dmStmt.unhideConversation.run(recipientId, convKey);
+        }
 
         // Recipient online ise anında delivered_at işaretle — sender çift gri tik görür.
         // Offline ise null kalır; recipient reconnect'te auth handler'da batch flush eder.
