@@ -125,6 +125,20 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
+  useEffect(() => {
+    const onFocusSearch = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0;
+      if (!visible) return;
+      setIsOpen(true);
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener('mayvox:social-search-focus', onFocusSearch);
+    return () => window.removeEventListener('mayvox:social-search-focus', onFocusSearch);
+  }, []);
+
   useEscapeKey(() => setIsOpen(false), isOpen);
 
   const displayName = (r: SearchResult) => getPublicDisplayName(r);

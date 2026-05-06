@@ -103,6 +103,24 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
   useEffect(() => { loadServer(); }, [loadServer]);
 
+  useEffect(() => {
+    const onHighlight = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      window.setTimeout(() => {
+        const el = document.querySelector(`[data-server-command-target="${id}"]`);
+        if (!(el instanceof HTMLElement)) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('command-target-pulse');
+        void el.offsetWidth;
+        el.classList.add('command-target-pulse');
+        window.setTimeout(() => el.classList.remove('command-target-pulse'), 1800);
+      }, 120);
+    };
+    window.addEventListener('mayvox:highlight-server-setting', onHighlight);
+    return () => window.removeEventListener('mayvox:highlight-server-setting', onHighlight);
+  }, []);
+
   // Overview verisi — header strip ve OverviewTab paylaşımlı kullanır.
   const [overview, setOverview] = useState<ServerOverview | null>(null);
   useEffect(() => {

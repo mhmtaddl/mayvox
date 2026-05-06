@@ -855,6 +855,20 @@ export default function AnnouncementsPanel({
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
+  useEffect(() => {
+    const onOpenComposer = (event: Event) => {
+      if (!canManage) return;
+      const detail = (event as CustomEvent<{ type?: AnnouncementType }>).detail;
+      const type: AnnouncementType = detail?.type === 'event' ? 'event' : 'announcement';
+      setActiveTab(type);
+      setEditTarget(null);
+      setModalType(type);
+      setModalOpen(true);
+    };
+    window.addEventListener('mayvox:announcements-open-composer', onOpenComposer);
+    return () => window.removeEventListener('mayvox:announcements-open-composer', onOpenComposer);
+  }, [canManage]);
+
   // ── Fetch ──
   const fetchAnnouncements = useCallback(async () => {
     const { data } = await getAnnouncements();

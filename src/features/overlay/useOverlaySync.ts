@@ -33,11 +33,27 @@ export interface UseOverlaySyncOpts {
   activeChannelId: string | null;
   activeChannelName?: string | null;
   roomMembers: User[]; // currentChannel.members → allUsers filter sonucu
+  speakingLevels: Record<string, number>;
   selfSpeaking: boolean; // isPttPressed && !isMuted vb
   selfMuted: boolean;
   selfDeafened: boolean;
   selfUser: Pick<User, 'id' | 'displayName' | 'firstName' | 'lastName' | 'name' | 'avatar'>;
   themeAccentRgb?: string;
+}
+
+const AUDIO_LEVEL_SPEAKING_THRESHOLD = 0.02;
+
+function getAudioLevelForUser(
+  levels: Record<string, number>,
+  user: Pick<User, 'id' | 'name' | 'displayName' | 'firstName' | 'lastName' | 'email'>,
+): number {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  const keys = [user.id, user.name, user.displayName, fullName, user.email].filter(Boolean) as string[];
+  for (const key of keys) {
+    const level = levels[key];
+    if (typeof level === 'number') return level;
+  }
+  return 0;
 }
 
 export function useOverlaySync({
@@ -46,6 +62,7 @@ export function useOverlaySync({
   activeChannelId,
   activeChannelName,
   roomMembers,
+  speakingLevels,
   selfSpeaking,
   selfMuted,
   selfDeafened,
@@ -109,7 +126,8 @@ export function useOverlaySync({
       // Diğer üyeler
       for (const u of roomMembers) {
         if (u.id === currentUserId) continue;
-        const isSpeaking = !!u.isSpeaking && !u.selfMuted && !u.isMuted;
+        const audioLevel = getAudioLevelForUser(speakingLevels, u);
+        const isSpeaking = (!!u.isSpeaking || audioLevel >= AUDIO_LEVEL_SPEAKING_THRESHOLD) && !u.selfMuted && !u.isMuted;
         if (settings.showOnlySpeaking && !isSpeaking) continue;
         const name = getPublicDisplayName(u);
         partList.push({
@@ -186,6 +204,7 @@ export function useOverlaySync({
     activeChannelId,
     activeChannelName,
     roomMembers,
+    speakingLevels,
     selfSpeaking,
     selfMuted,
     selfDeafened,

@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react';
 
 // Ayarlar sayfasına deep-link intent'i — bildirim tıklamasından gelen
 // navigasyon talebi (örn: davet talepleri listesine direkt iniş)
-export type SettingsTarget = 'invite_requests' | 'app' | 'account' | null;
+export type SettingsTarget = 'invite_requests' | 'app' | 'account' | 'shortcuts' | null;
 
 export interface UIContextType {
   toastMsg: string | null;

@@ -589,6 +589,7 @@ function rebuildMainWindowAfterAuth(oldWin, bounds) {
     setupGlobalPtt(nextWin);
     setupTray(nextWin);
     setupGameDetection(nextWin, logger);
+    if (pendingGameDetectionEnabled !== null) applyGameDetectionEnabled(pendingGameDetectionEnabled);
     try {
       nextWin.webContents.send("window:state", {
         maximized: nextWin.isMaximized(),
@@ -796,10 +797,17 @@ function setupAutoUpdater(win) {
 // ── Game Activity — renderer toggle IPC ─────────────────────────────────────
 // Renderer setEnabled(true/false) gönderir; detector toggle'a göre polling
 // başlatır/durdurur. Kapalıyken hiçbir tarama/publish olmaz (privacy-first).
+let pendingGameDetectionEnabled = null;
+
+function applyGameDetectionEnabled(enabled) {
+  pendingGameDetectionEnabled = !!enabled;
+  const det = getDetector();
+  if (det) det.setEnabled(pendingGameDetectionEnabled);
+}
+
 ipcMain.on("game:set-enabled", (_event, enabled) => {
   try {
-    const det = getDetector();
-    if (det) det.setEnabled(!!enabled);
+    applyGameDetectionEnabled(!!enabled);
   } catch (err) {
     logger.warn?.("[game] set-enabled hatası: " + (err?.message || err));
   }
@@ -1118,6 +1126,7 @@ app.whenReady().then(() => {
   setupTray(mainWin);
   // Oyun algılama — opt-in; renderer enable komutu gelene kadar polling durur.
   setupGameDetection(mainWin, logger);
+  if (pendingGameDetectionEnabled !== null) applyGameDetectionEnabled(pendingGameDetectionEnabled);
   // Ses overlay — opt-in; settings update gelmediği sürece window oluşturulmaz.
   setupOverlayWindow({ isDev, logger });
 

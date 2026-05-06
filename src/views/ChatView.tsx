@@ -114,10 +114,16 @@ export default function ChatView() {
   const { volumeLevel, isPttPressed, speakingLevels, connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
 
   const [showDiscover, setShowDiscover] = useState(false);
+  const [roomMembersHidden, setRoomMembersHidden] = useState(false);
+  const lastChannelIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setSoundChatRoomActive(Boolean(activeChannel));
     return () => setSoundChatRoomActive(false);
+  }, [activeChannel]);
+
+  useEffect(() => {
+    if (activeChannel) lastChannelIdRef.current = activeChannel;
   }, [activeChannel]);
 
   // ── Kanal seçildiğinde merkez panel zorla chat view'e geçer ──
@@ -225,6 +231,87 @@ export default function ChatView() {
   const [dmAtBottom, setDmAtBottom] = useState(true);
   const dmToggleRef = useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    const onOpenDm = (event: Event) => {
+      const userId = (event as CustomEvent<{ userId?: string }>).detail?.userId;
+      if (!userId) return;
+      setView('chat');
+      setSettingsTarget(null);
+      setDmTargetUserId(userId);
+      setDmPanelOpen(true);
+    };
+    window.addEventListener('mayvox:open-dm', onOpenDm);
+    return () => window.removeEventListener('mayvox:open-dm', onOpenDm);
+  }, [setSettingsTarget, setView]);
+
+  useEffect(() => {
+    const onOpenDiscover = () => {
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+      setShowDiscover(true);
+      setMobileLeftOpen(false);
+      setMobileRightOpen(false);
+    };
+    window.addEventListener('mayvox:open-discover', onOpenDiscover);
+    return () => window.removeEventListener('mayvox:open-discover', onOpenDiscover);
+  }, [setSettingsTarget, setView]);
+
+  useEffect(() => {
+    const onOpenUserProfile = (event: Event) => {
+      const userId = (event as CustomEvent<{ userId?: string }>).detail?.userId;
+      if (!userId) return;
+      setView('chat');
+      setSettingsTarget(null);
+      setDmPanelOpen(false);
+      setProfilePopup({
+        userId,
+        x: Math.round(Math.max(320, window.innerWidth - 540)),
+        y: 150,
+        source: 'search',
+      });
+    };
+    window.addEventListener('mayvox:open-user-profile', onOpenUserProfile);
+    return () => window.removeEventListener('mayvox:open-user-profile', onOpenUserProfile);
+  }, [setSettingsTarget, setView]);
+
+  useEffect(() => {
+    const onFocusUserSearch = () => {
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+      setShowDiscover(false);
+      setMobileRightOpen(true);
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('mayvox:social-search-focus'));
+      }, 120);
+    };
+    window.addEventListener('mayvox:focus-user-search', onFocusUserSearch);
+    return () => window.removeEventListener('mayvox:focus-user-search', onFocusUserSearch);
+  }, [setSettingsTarget, setView]);
+
+  useEffect(() => {
+    const onOpenMessages = (event: Event) => {
+      const settings = !!(event as CustomEvent<{ settings?: boolean }>).detail?.settings;
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+      setShowDiscover(false);
+      setMobileRightOpen(false);
+      setDmPanelOpen(true);
+      if (settings) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('mayvox:open-message-settings'));
+        }, 80);
+      }
+    };
+    window.addEventListener('mayvox:open-messages', onOpenMessages);
+    return () => window.removeEventListener('mayvox:open-messages', onOpenMessages);
+  }, [setSettingsTarget, setView]);
+
   // ── Notification system v3 context sync ──
   const isAppFocused = useWindowActivity();
   // Real isUserSpeaking — speakingLevels[me] threshold + 400ms hold hysteresis.
@@ -311,7 +398,8 @@ export default function ChatView() {
   const [createError, setCreateError] = useState('');
   // joinCode/joinError artık JoinServerModal içinde yönetiliyor
   const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'overview' | 'members' | 'roles' | 'invites' | 'requests' | 'bans' | 'audit' | undefined>(undefined);
+  type ServerSettingsInitialTab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'requests' | 'bans' | 'audit' | 'insights';
+  const [settingsInitialTab, setSettingsInitialTab] = useState<ServerSettingsInitialTab | undefined>(undefined);
 
   // ══════════════════════════════════════════════════════════
   // Server Settings otomatik kapanma
@@ -538,8 +626,35 @@ export default function ChatView() {
   const hasServer = serverList.length > 0;
   const activeServerCanManage = accessContext?.flags.canManageServer
     ?? (activeServerData?.role === 'owner' || activeServerData?.role === 'admin');
+  const activeServerCanOpenSettings = !!activeServerId && (
+    activeServerCanManage ||
+    !!accessContext?.flags.canKickMembers ||
+    !!accessContext?.flags.canCreateInvite ||
+    !!accessContext?.flags.canRevokeInvite ||
+    !!accessContext?.flags.canViewInsights
+  );
   // App-level rol + 0 sahip sunucu → sunucu oluşturma butonları görünür.
   const canCreateServer = canUserCreateServer(currentUser, serverList);
+
+  useEffect(() => {
+    const onOpenServerSettings = (event: Event) => {
+      if (!activeServerId || !activeServerCanOpenSettings) return;
+      const detail = (event as CustomEvent<{ highlightId?: string; tab?: ServerSettingsInitialTab }>).detail;
+      const highlightId = detail?.highlightId;
+      const tab = detail?.tab ?? 'overview';
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsInitialTab(tab);
+      setSettingsServerId(activeServerId);
+      if (highlightId) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('mayvox:highlight-server-setting', { detail: { id: highlightId } }));
+        }, 220);
+      }
+    };
+    window.addEventListener('mayvox:open-server-settings', onOpenServerSettings);
+    return () => window.removeEventListener('mayvox:open-server-settings', onOpenServerSettings);
+  }, [activeServerCanOpenSettings, activeServerId, setSettingsTarget, setView]);
 
   // ── Sunucu kanalları — instant cache + background refresh ──
   const channelCacheRef = useRef(new Map<string, VoiceChannel[]>());
@@ -705,6 +820,19 @@ export default function ChatView() {
     // activeChannel yoksa zaten natural server_home — ek aksiyon yok
   }, [view, setView, showDiscover, activeChannel]);
 
+  useEffect(() => {
+    const onCreateAnnouncement = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: 'announcement' | 'event' }>).detail;
+      const type = detail?.type === 'event' ? 'event' : 'announcement';
+      handleGoHome();
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('mayvox:announcements-open-composer', { detail: { type } }));
+      }, 180);
+    };
+    window.addEventListener('mayvox:create-announcement', onCreateAnnouncement);
+    return () => window.removeEventListener('mayvox:create-announcement', onCreateAnnouncement);
+  }, [handleGoHome]);
+
   // handleReturnToRoom — en son odaya geri dön.
   // activeChannel set değilse hiçbir şey yapmaz (Return zaten görünmemeli).
   const handleReturnToRoom = useCallback(() => {
@@ -833,6 +961,18 @@ export default function ChatView() {
     handleInviteUser(userId, { name: activeServerData?.name, avatar: activeServerData?.avatarUrl ?? null });
   }, [handleInviteUser, activeServerData]);
 
+  useEffect(() => {
+    const onInviteUserToRoom = (event: Event) => {
+      const userId = (event as CustomEvent<{ userId?: string }>).detail?.userId;
+      if (!userId || !activeChannel) return;
+      setView('chat');
+      setSettingsTarget(null);
+      handleInviteUserWithContext(userId);
+    };
+    window.addEventListener('mayvox:invite-user-to-room', onInviteUserToRoom);
+    return () => window.removeEventListener('mayvox:invite-user-to-room', onInviteUserToRoom);
+  }, [activeChannel, handleInviteUserWithContext, setSettingsTarget, setView]);
+
   // Auto-dismiss: toast 3s sonra kapanır (hover'da beklenir, yeni toastMsg render'ında
   // timer sıfırlanır). setInterval yerine setTimeout — ilk tick 3s'de garanti.
   useEffect(() => {
@@ -904,6 +1044,99 @@ export default function ChatView() {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const onShortcutAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+      if (!action) return;
+
+      if (action === 'toggle-room') {
+        if (activeChannel) {
+          void disconnectFromLiveKit();
+          setActiveChannel(null);
+          setIsServerHomeView(false);
+          return;
+        }
+        const target = lastChannelIdRef.current;
+        if (target && channels.some(channel => channel.id === target)) {
+          setIsServerHomeView(false);
+          if (showDiscover) setShowDiscover(false);
+          void handleJoinChannel(target);
+        }
+        return;
+      }
+
+      if (action === 'toggle-room-chat-muted') {
+        if (activeChannel) handleToggleChatMuted();
+        return;
+      }
+
+      if (action === 'toggle-room-members') {
+        if (activeChannel) setRoomMembersHidden(prev => !prev);
+        return;
+      }
+
+      if (action === 'open-server-home') {
+        handleGoHome();
+        return;
+      }
+
+      if (action === 'previous-server' || action === 'next-server') {
+        if (serverList.length < 2) return;
+        const currentIndex = Math.max(0, serverList.findIndex(server => server.id === activeServerId));
+        const delta = action === 'next-server' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + serverList.length) % serverList.length;
+        setActiveServerId(serverList[nextIndex].id);
+        setShowDiscover(false);
+        return;
+      }
+
+      if (action === 'previous-room' || action === 'next-room') {
+        const roomList = channels.filter(channel => !channel.isSystemChannel);
+        if (roomList.length < 1) return;
+        const currentIndex = activeChannel ? roomList.findIndex(channel => channel.id === activeChannel) : -1;
+        const delta = action === 'next-room' ? 1 : -1;
+        const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+        const nextIndex = (baseIndex + delta + roomList.length) % roomList.length;
+        setIsServerHomeView(false);
+        if (showDiscover) setShowDiscover(false);
+        void handleJoinChannel(roomList[nextIndex].id);
+        return;
+      }
+
+      if (action === 'open-unread-dm') {
+        setView('chat');
+        setSettingsTarget(null);
+        setSettingsServerId(null);
+        setSettingsInitialTab(undefined);
+        setShowDiscover(false);
+        setDmPanelOpen(true);
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent('mayvox:open-first-unread-dm')), 80);
+        return;
+      }
+
+      if (action === 'close-dm') {
+        setDmPanelOpen(false);
+      }
+    };
+
+    window.addEventListener('mayvox:shortcut-action', onShortcutAction);
+    return () => window.removeEventListener('mayvox:shortcut-action', onShortcutAction);
+  }, [
+    activeChannel,
+    activeServerId,
+    channels,
+    disconnectFromLiveKit,
+    handleGoHome,
+    handleJoinChannel,
+    handleToggleChatMuted,
+    serverList,
+    setActiveChannel,
+    setActiveServerId,
+    setSettingsTarget,
+    setView,
+    showDiscover,
+  ]);
   const handleRequestRoomMemberMenu = useCallback((user: typeof sortedChannelMembers[0], x: number, y: number) => {
     setRoomMemberMenu({ user, x, y });
   }, []);
@@ -1487,7 +1720,7 @@ export default function ChatView() {
                 </div>
               </div>
               <div className="relative z-[1] flex-1">
-                <VoiceParticipants forceMobile={FORCE_MOBILE} members={sortedChannelMembers} currentUser={currentUser}
+                <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
                   currentChannel={currentChannel} getIntensity={getIntensity} getEffectiveStatus={getEffectiveStatus}

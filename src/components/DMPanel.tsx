@@ -1374,6 +1374,29 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openUserId) { dm.openConversation(openUserId); onOpenHandled?.(); } }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onOpenFirstUnread = () => {
+      const unread = dm.conversations.find(convo => convo.unreadCount > 0);
+      if (unread) {
+        setSettingsOpen(false);
+        setRequestsOpen(false);
+        setBlockedOpen(false);
+        dm.openConversation(unread.recipientId);
+      }
+    };
+    window.addEventListener('mayvox:open-first-unread-dm', onOpenFirstUnread);
+    return () => window.removeEventListener('mayvox:open-first-unread-dm', onOpenFirstUnread);
+  }, [dm]);
+  useEffect(() => {
+    const onOpenMessageSettings = () => {
+      setSettingsOpen(true);
+      setRequestsOpen(false);
+      setBlockedOpen(false);
+      dm.closeConversation();
+    };
+    window.addEventListener('mayvox:open-message-settings', onOpenMessageSettings);
+    return () => window.removeEventListener('mayvox:open-message-settings', onOpenMessageSettings);
+  }, [dm]);
   // Outside click
   useEffect(() => {
     if (!isOpen) return;

@@ -74,6 +74,7 @@ export default function ManagementUsersPanel() {
   } = useAppState();
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [debounced, setDebounced] = useState('');
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
@@ -168,6 +169,23 @@ export default function ManagementUsersPanel() {
   const resetFilters = () => {
     setFPlan(''); setFPlanStatus(''); setFOwnership('all'); setSearch(''); setOffset(0);
   };
+
+  useEffect(() => {
+    const onAdminUsersAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: 'user-filters' | 'user-search' }>).detail?.action;
+      if (action === 'user-filters') {
+        setShowFilters(true);
+      }
+      if (action === 'user-search') {
+        window.setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 60);
+      }
+    };
+    window.addEventListener('mayvox:admin-users-action', onAdminUsersAction);
+    return () => window.removeEventListener('mayvox:admin-users-action', onAdminUsersAction);
+  }, []);
 
   // ── Row confirm config + runner ──
   const rowConfirmConfig = useMemo(() => {
@@ -358,6 +376,7 @@ export default function ManagementUsersPanel() {
               className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-150 text-[var(--theme-secondary-text)]/50 group-focus-within/search:text-[var(--theme-accent)]/70"
             />
             <input
+              ref={searchInputRef}
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}

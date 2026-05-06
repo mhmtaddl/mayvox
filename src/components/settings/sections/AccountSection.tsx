@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList } from 'lucide-react';
-import { CardSection, inputCls, labelCls } from '../shared';
+import { CardSection, Toggle, inputCls, labelCls } from '../shared';
 import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH, getPublicDisplayName } from '../../../lib/formatName';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
 import { saveProfile, updateUserEmail, updateUserPassword, uploadAvatar } from '../../../lib/backendClient';
@@ -456,7 +456,7 @@ function SecurityCard() {
   } = ctx;
 
   return (
-    <CardSection icon={<Shield size={12} />} title="" className="settings-account-card xl:h-full xl:flex xl:flex-col">
+    <CardSection icon={<Shield size={12} />} title="" className="settings-account-card">
       <div className="space-y-2">
         <div className="space-y-1">
           <label className={labelCls}>Yeni Şifre</label>
@@ -507,6 +507,26 @@ function SecurityCard() {
   );
 }
 
+function LastSeenCard() {
+  const { showLastSeen, setShowLastSeen } = useSettings();
+  return (
+    <CardSection icon={<Eye size={12} />} title="" className="settings-account-card">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+          <Eye size={14} className="text-[var(--theme-accent)]/80" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Son Görülme</p>
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+            Kapalıyken arkadaşların seni en son ne zaman gördüğünü göremez.
+          </p>
+        </div>
+        <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
+      </div>
+    </CardSection>
+  );
+}
+
 // ── MAIN EXPORT — wraps all 3 cards with shared state ──
 export default function AccountSection() {
   const state = useAccountState();
@@ -541,8 +561,15 @@ export default function AccountSection() {
               <span className="text-[var(--theme-accent)]/70"><Shield size={11} strokeWidth={2.2} /></span>
               <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Güvenlik</h3>
             </div>
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 grid grid-rows-[auto_1fr] gap-3 md:gap-4">
               <SecurityCard />
+              <div data-command-target="privacy" className="flex flex-col justify-end min-h-0">
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <span className="text-[var(--theme-accent)]/70"><Eye size={11} strokeWidth={2.2} /></span>
+                  <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Gizlilik</h3>
+                </div>
+                <LastSeenCard />
+              </div>
             </div>
           </section>
         </div>

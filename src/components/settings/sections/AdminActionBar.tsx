@@ -81,6 +81,27 @@ export default function AdminActionBar() {
     return () => { clearTimeout(scrollT); clearTimeout(flashT); };
   }, [settingsTarget, setSettingsTarget]);
 
+  useEffect(() => {
+    const onOpenAdminAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: 'invite-codes' | 'invite-requests' }>).detail?.action;
+      if (action === 'invite-codes') {
+        setCodesOpen(true);
+        setRequestsOpen(false);
+      }
+      if (action === 'invite-requests') {
+        setRequestsOpen(true);
+        setCodesOpen(false);
+        window.setTimeout(() => {
+          requestsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setFlashRequests(true);
+          window.setTimeout(() => setFlashRequests(false), 1400);
+        }, 60);
+      }
+    };
+    window.addEventListener('mayvox:open-admin-action', onOpenAdminAction);
+    return () => window.removeEventListener('mayvox:open-admin-action', onOpenAdminAction);
+  }, []);
+
   const onGenerateClick = async () => {
     if (generating) return;
     setGenerating(true);

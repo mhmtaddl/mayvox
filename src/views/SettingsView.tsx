@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Eye, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -9,6 +9,18 @@ import { getPublicDisplayName } from '../lib/formatName';
 import { Toggle } from '../components/settings/shared';
 import { isGameActivityAvailable } from '../features/game-activity/useGameActivity';
 import { rangeVisualStyle } from '../lib/rangeStyle';
+import {
+  formatCommandShortcut,
+  isReservedShortcut,
+  readAppShortcuts,
+  resetAppShortcut,
+  saveAppShortcut,
+  shortcutFromEvent,
+  type AppShortcuts,
+  type CommandShortcut,
+  type OptionalCommandShortcut,
+  type ShortcutActionId,
+} from '../lib/commandShortcut';
 
 // ── Components ──
 import AccountSection from '../components/settings/sections/AccountSection';
@@ -20,7 +32,7 @@ import SystemServersPanel from '../components/settings/sections/SystemServersPan
 import ManagementUsersPanel from '../components/settings/sections/ManagementUsersPanel';
 import LegalModal, { type LegalModalKind } from '../components/legal/LegalModal';
 
-type MainTab = 'account' | 'app' | 'admin';
+type MainTab = 'account' | 'app' | 'shortcuts' | 'admin';
 type AdminSubTab = 'users' | 'servers';
 
 // Premium segmented control — motion layoutId ile active pill smooth kayar
@@ -74,32 +86,14 @@ function DomainTitle({ icon, title }: { icon: React.ReactNode; title: string }) 
   );
 }
 
-function SettingsSectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function SettingsSectionCard({ children, className = '', commandTarget }: { children: React.ReactNode; className?: string; commandTarget?: string }) {
   return (
-    <section className={`settings-section-card min-w-0 rounded-2xl p-3 md:p-4 ${className}`}>
+    <section
+      data-command-target={commandTarget}
+      className={`settings-section-card min-w-0 rounded-2xl p-3 md:p-4 ${className}`}
+    >
       {children}
     </section>
-  );
-}
-
-// Son görülme inline toggle kartı — Hesap sekmesi için
-function LastSeenCard() {
-  const { showLastSeen, setShowLastSeen } = useSettings();
-  return (
-    <div
-      className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl"
-    >
-      <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
-        <Eye size={14} className="text-[var(--theme-accent)]/80" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Son Görülme</p>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
-          Kapalıyken arkadaşların seni en son ne zaman gördüğünü göremez.
-        </p>
-      </div>
-      <Toggle checked={showLastSeen} onChange={() => setShowLastSeen(!showLastSeen)} />
-    </div>
   );
 }
 
@@ -952,7 +946,7 @@ function VoiceOverlayCard() {
 function GameActivityCard() {
   const { gameActivityEnabled, setGameActivityEnabled } = useSettings();
   return (
-    <div className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
+    <div data-command-target="game-activity" className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
       <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
         <Gamepad2 size={14} className="text-[var(--theme-accent)]/80" />
       </div>
@@ -967,13 +961,192 @@ function GameActivityCard() {
   );
 }
 
+const SHORTCUT_ROWS: Array<{ id: ShortcutActionId; title: string; description: string; group: 'Genel' | 'Sesli Sohbet' | 'Navigasyon' | 'Mesajlaşma' }> = [
+  { id: 'command-palette', title: 'Komut Paleti', description: 'Kullanıcı, oda, mesaj, sunucu ve ayarları hızlıca bul.', group: 'Genel' },
+  { id: 'toggle-mute', title: 'Mikrofon Aç-Kapat', description: 'Mikrofonu hızlıca kapat veya geri aç.', group: 'Sesli Sohbet' },
+  { id: 'toggle-deafen', title: 'Hoparlör / Kulaklık Aç-Kapat', description: 'Uygulama sesini hızlıca kapat veya geri aç.', group: 'Sesli Sohbet' },
+  { id: 'user-search', title: 'Kullanıcı Ara', description: 'Sağ üstteki kullanıcı aramasına odaklan.', group: 'Genel' },
+  { id: 'open-settings', title: 'Ayarları Aç', description: 'Uygulama ayarlarını aç.', group: 'Genel' },
+  { id: 'open-shortcuts', title: 'Kısayolları Aç', description: 'Kısayollar sekmesine hızlıca git.', group: 'Genel' },
+  { id: 'open-server-settings', title: 'Sunucu Ayarları', description: 'Yetkin varsa aktif sunucunun ayarlarını aç.', group: 'Navigasyon' },
+  { id: 'toggle-room', title: 'Son Odaya Katıl / Odadan Ayrıl', description: 'Odadaysan ayrıl, değilsen son odaya geri dön.', group: 'Sesli Sohbet' },
+  { id: 'toggle-room-chat-muted', title: 'Aktif Odayı Sessize Al', description: 'Aktif odanın yazılı sohbet sesini kapat veya aç.', group: 'Sesli Sohbet' },
+  { id: 'toggle-room-members', title: 'Odadaki Kullanıcıları Göster/Gizle', description: 'Oda içi kullanıcı görünümünü aç veya kapat.', group: 'Sesli Sohbet' },
+  { id: 'open-discover', title: 'Topluluk Keşfet Aç', description: 'Topluluk keşfet sayfasına git.', group: 'Navigasyon' },
+  { id: 'open-server-home', title: 'Aktif Sunucu Ana Sayfasına Git', description: 'Aktif sunucunun ana sayfasını aç.', group: 'Navigasyon' },
+  { id: 'open-admin', title: 'Yönetim Panelini Aç', description: 'Sadece adminlerde yönetim paneline gider.', group: 'Navigasyon' },
+  { id: 'previous-server', title: 'Önceki Sunucuya Geç', description: 'Sunucu listesindeki önceki sunucuya geç.', group: 'Navigasyon' },
+  { id: 'next-server', title: 'Sonraki Sunucuya Geç', description: 'Sunucu listesindeki sonraki sunucuya geç.', group: 'Navigasyon' },
+  { id: 'previous-room', title: 'Önceki Odaya Geç', description: 'Aktif sunucudaki önceki ses odasına geç.', group: 'Navigasyon' },
+  { id: 'next-room', title: 'Sonraki Odaya Geç', description: 'Aktif sunucudaki sonraki ses odasına geç.', group: 'Navigasyon' },
+  { id: 'open-unread-dm', title: 'Okunmamış İlk DM’ye Git', description: 'Mesaj panelini okunmamış konuşmaya odaklanacak şekilde aç.', group: 'Mesajlaşma' },
+  { id: 'close-dm', title: 'Aktif DM’yi Kapat', description: 'Açık mesaj panelini kapat.', group: 'Mesajlaşma' },
+];
+
+function shortcutEquals(a: OptionalCommandShortcut, b: CommandShortcut) {
+  if (!a) return false;
+  return a.ctrl === b.ctrl
+    && a.alt === b.alt
+    && a.shift === b.shift
+    && a.meta === b.meta
+    && a.key.toLocaleLowerCase('tr') === b.key.toLocaleLowerCase('tr');
+}
+
+function ShortcutsCard() {
+  const { currentUser } = useUser();
+  const [shortcuts, setShortcuts] = useState<AppShortcuts>(() => readAppShortcuts());
+  const [recording, setRecording] = useState<ShortcutActionId | null>(null);
+  const [error, setError] = useState('');
+  const [errorTarget, setErrorTarget] = useState<ShortcutActionId | null>(null);
+  const canUseAdminShortcuts = !!currentUser.isAdmin || !!currentUser.isPrimaryAdmin;
+  const visibleRows = SHORTCUT_ROWS.filter(row => row.id !== 'open-admin' || canUseAdminShortcuts);
+  const shortcutGroups: Array<typeof SHORTCUT_ROWS[number]['group']> = ['Genel', 'Sesli Sohbet', 'Navigasyon', 'Mesajlaşma'];
+  const groupStyles: Record<typeof SHORTCUT_ROWS[number]['group'], { border: string; background: string; text: string }> = {
+    Genel: { border: 'rgba(96, 165, 250, 0.22)', background: 'rgba(96, 165, 250, 0.045)', text: 'rgb(147, 197, 253)' },
+    'Sesli Sohbet': { border: 'rgba(52, 211, 153, 0.22)', background: 'rgba(52, 211, 153, 0.045)', text: 'rgb(110, 231, 183)' },
+    Navigasyon: { border: 'rgba(251, 191, 36, 0.22)', background: 'rgba(251, 191, 36, 0.045)', text: 'rgb(252, 211, 77)' },
+    'Mesajlaşma': { border: 'rgba(244, 114, 182, 0.22)', background: 'rgba(244, 114, 182, 0.045)', text: 'rgb(249, 168, 212)' },
+  };
+
+  const shortcutWarning = (shortcut: AppShortcuts[ShortcutActionId]) => {
+    if (!shortcut) return '';
+    const key = shortcut.key.toLocaleLowerCase('tr');
+    const ctrlOrMeta = shortcut.ctrl || shortcut.meta;
+    if (ctrlOrMeta && ['a', 'c', 'f', 'n', 'p', 's', 'v', 'x', 'y', 'z'].includes(key)) {
+      return 'Windows/tarayıcı kısayoluyla çakışabilir.';
+    }
+    if (shortcut.alt && key === 'f4') return 'Windows kapatma kısayoluyla çakışabilir.';
+    return '';
+  };
+
+  useEffect(() => {
+    const onChanged = () => setShortcuts(readAppShortcuts());
+    window.addEventListener('mayvox:app-shortcuts-changed', onChanged);
+    window.addEventListener('storage', onChanged);
+    return () => {
+      window.removeEventListener('mayvox:app-shortcuts-changed', onChanged);
+      window.removeEventListener('storage', onChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!recording) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        setRecording(false);
+        setError('');
+        setErrorTarget(null);
+        return;
+      }
+      const next = shortcutFromEvent(event);
+      if (!next) {
+        setError('Ctrl, Alt, Cmd veya Shift ile birlikte bir tuşa bas.');
+        setErrorTarget(recording);
+        return;
+      }
+      if (isReservedShortcut(next)) {
+        setError('Bu kısayol sistem/tarayıcı işlemiyle çakışıyor.');
+        setErrorTarget(recording);
+        return;
+      }
+      const duplicate = SHORTCUT_ROWS.find(row => row.id !== recording && shortcutEquals(shortcuts[row.id], next));
+      if (duplicate) {
+        setError(`Bu kombinasyon "${duplicate.title}" için kullanılıyor.`);
+        setErrorTarget(recording);
+        return;
+      }
+      saveAppShortcut(recording, next);
+      setShortcuts(prev => ({ ...prev, [recording]: next }));
+      setRecording(null);
+      setError('');
+      setErrorTarget(null);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [recording, shortcuts]);
+
+  return (
+    <div data-command-target="shortcuts" className="settings-shortcuts-card settings-account-card surface-card rounded-xl px-4 py-3">
+      <div className="space-y-4">
+        {shortcutGroups.map(group => {
+          const rows = visibleRows.filter(row => row.group === group);
+          if (!rows.length) return null;
+          const style = groupStyles[group];
+          return (
+            <div
+              key={group}
+              className="rounded-xl border px-3 py-2.5"
+              style={{ borderColor: style.border, background: style.background }}
+            >
+              <p className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: style.text }}>{group}</p>
+              <div className="divide-y divide-[var(--theme-border)]/35">
+                {rows.map(row => {
+                  const isRecording = recording === row.id;
+                  const hasShortcut = !!shortcuts[row.id];
+                  const warning = shortcutWarning(shortcuts[row.id]);
+                  return (
+                    <div key={row.id} className="relative flex items-center gap-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11.5px] font-semibold text-[var(--theme-text)] leading-tight">{row.title}</p>
+                        <p className="text-[10px] text-[var(--theme-secondary-text)]/58 mt-0.5 leading-snug">{row.description}</p>
+                        {warning && <p className="mt-1 text-[9.5px] font-semibold text-amber-300/70">{warning}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = resetAppShortcut(row.id);
+                          setShortcuts(prev => ({ ...prev, [row.id]: next }));
+                          setRecording(null);
+                          setError('');
+                          setErrorTarget(null);
+                        }}
+                        className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/55 bg-transparent"
+                        title="Varsayılana dön"
+                        aria-label={`${row.title} varsayılana dön`}
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRecording(row.id); setError(''); setErrorTarget(null); }}
+                        className={`min-w-[92px] h-8 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-bold transition-colors ${
+                          isRecording
+                            ? 'border-[rgba(var(--theme-accent-rgb),0.42)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+                            : hasShortcut
+                              ? 'border-[rgba(var(--theme-accent-rgb),0.32)] bg-[rgba(var(--theme-accent-rgb),0.075)] text-[var(--theme-text)]/90'
+                              : 'border-dashed border-[var(--theme-border)]/55 bg-transparent text-[var(--theme-secondary-text)]/42'
+                        }`}
+                        title="Kısayolu değiştirmek için tıkla"
+                      >
+                        {isRecording ? 'Tuşa bas...' : formatCommandShortcut(shortcuts[row.id])}
+                      </button>
+                      {error && errorTarget === row.id && (
+                        <div className="absolute right-0 top-[-18px] z-20 rounded-lg border border-red-400/25 bg-red-500/15 px-2.5 py-1 text-[10px] font-semibold text-red-200 shadow-[0_10px_22px_rgba(0,0,0,0.20)] backdrop-blur-md">
+                          {error}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsView() {
   const { currentUser } = useUser();
   const { settingsTarget, setSettingsTarget } = useUI();
-  const isAdmin = !!currentUser.isAdmin;
+  const isAdmin = !!currentUser.isAdmin || !!currentUser.isPrimaryAdmin;
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
   const [legalModal, setLegalModal] = useState<LegalModalKind | null>(null);
+  const showServersSub = !!currentUser.isPrimaryAdmin;
 
   // Deep-link intent — bildirim tıklamasından / dock ikonundan gelen hedef
   // tab'ına otomatik geçer. 'invite_requests' AdminActionBar'da ek iş yapıyor;
@@ -984,8 +1157,8 @@ export default function SettingsView() {
       setActiveTab('admin');
       setAdminSub('users');
       // temizlik AdminActionBar'da
-    } else if (settingsTarget === 'app') {
-      setActiveTab('app');
+    } else if (settingsTarget === 'app' || settingsTarget === 'shortcuts') {
+      setActiveTab(settingsTarget);
       setSettingsTarget(null);
     } else if (settingsTarget === 'account') {
       setActiveTab('account');
@@ -993,7 +1166,57 @@ export default function SettingsView() {
     }
   }, [settingsTarget, isAdmin, setSettingsTarget]);
 
-  const showServersSub = !!currentUser.isPrimaryAdmin;
+  useEffect(() => {
+    const highlight = (id: string) => {
+      window.setTimeout(() => {
+        const el = document.querySelector(`[data-command-target="${id}"]`);
+        if (!(el instanceof HTMLElement)) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('command-target-pulse');
+        void el.offsetWidth;
+        el.classList.add('command-target-pulse');
+        window.setTimeout(() => el.classList.remove('command-target-pulse'), 1800);
+      }, 80);
+    };
+
+    const onHighlight = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (id) highlight(id);
+    };
+    window.addEventListener('mayvox:highlight-setting', onHighlight);
+    return () => window.removeEventListener('mayvox:highlight-setting', onHighlight);
+  }, []);
+
+  useEffect(() => {
+    const onOpenLegal = (event: Event) => {
+      const kind = (event as CustomEvent<{ kind?: LegalModalKind }>).detail?.kind;
+      if (!kind) return;
+      setActiveTab('account');
+      setLegalModal(kind);
+    };
+    window.addEventListener('mayvox:open-legal', onOpenLegal);
+    return () => window.removeEventListener('mayvox:open-legal', onOpenLegal);
+  }, []);
+
+  useEffect(() => {
+    const onOpenAdmin = (event: Event) => {
+      if (!isAdmin) return;
+      const target = (event as CustomEvent<{ target?: 'users' | 'servers' | 'invite-codes' | 'invite-requests' | 'user-filters' | 'user-search' }>).detail?.target ?? 'users';
+      setActiveTab('admin');
+      setAdminSub(target === 'servers' && showServersSub ? 'servers' : 'users');
+      window.setTimeout(() => {
+        if (target === 'invite-codes' || target === 'invite-requests') {
+          window.dispatchEvent(new CustomEvent('mayvox:open-admin-action', { detail: { action: target } }));
+        }
+        if (target === 'user-filters' || target === 'user-search') {
+          window.dispatchEvent(new CustomEvent('mayvox:admin-users-action', { detail: { action: target } }));
+        }
+      }, 140);
+    };
+    window.addEventListener('mayvox:open-admin', onOpenAdmin);
+    return () => window.removeEventListener('mayvox:open-admin', onOpenAdmin);
+  }, [isAdmin, showServersSub]);
+
   const effectiveSub: AdminSubTab = adminSub === 'servers' && !showServersSub ? 'users' : adminSub;
   const effectiveTab: MainTab = activeTab === 'admin' && !isAdmin ? 'account' : activeTab;
 
@@ -1004,6 +1227,7 @@ export default function SettingsView() {
   const mainTabs: Array<{ key: MainTab; icon: React.ReactNode; label: string }> = [
     { key: 'account', icon: <UserIcon size={13} strokeWidth={2} />, label: 'Hesap' },
     { key: 'app', icon: <Palette size={13} strokeWidth={2} />, label: 'Uygulama' },
+    { key: 'shortcuts', icon: <Keyboard size={13} strokeWidth={2} />, label: 'Kısayollar' },
     ...(isAdmin ? [{ key: 'admin' as MainTab, icon: <ShieldCheck size={13} strokeWidth={2} />, label: 'Yönetim' }] : []),
   ];
 
@@ -1032,18 +1256,11 @@ export default function SettingsView() {
         >
           {effectiveTab === 'account' && (
             <div className="flex flex-col gap-5 md:gap-6">
-              <SettingsSectionCard>
+              <SettingsSectionCard commandTarget="profile-photo">
                 <DomainTitle icon={<UserIcon size={11} strokeWidth={2.2} />} title="Profil & Hesap" />
                 <AccountSection />
               </SettingsSectionCard>
-              <SettingsSectionCard>
-                <DomainTitle icon={<Eye size={11} strokeWidth={2.2} />} title="Gizlilik" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <LastSeenCard />
-                  {isElectron() && isGameActivityAvailable() && <GameActivityCard />}
-                </div>
-              </SettingsSectionCard>
-              <SettingsSectionCard>
+              <SettingsSectionCard commandTarget="legal">
                 <DomainTitle icon={<ShieldCheck size={11} strokeWidth={2.2} />} title="Hukuki" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <LegalCard
@@ -1081,14 +1298,14 @@ export default function SettingsView() {
                   yükseklikleri otomatik eşit. AppearanceSection (Tema Paketleri) içeriği
                   küçük olsa da kart yan kartın yüksekliğine kadar uzar. */}
               <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
-                <SettingsSectionCard className="flex flex-col h-full">
+                <SettingsSectionCard className="flex flex-col h-full" commandTarget="appearance">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
                   <div className="flex-1 flex flex-col">
                     <AppearanceSection />
                   </div>
                 </SettingsSectionCard>
                 {isElectron() ? (
-                  <SettingsSectionCard className="flex flex-col h-full">
+                  <SettingsSectionCard className="flex flex-col h-full" commandTarget="voice-overlay">
                     <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
                     <div className="flex-1 flex flex-col">
                       <VoiceOverlayCard />
@@ -1103,38 +1320,55 @@ export default function SettingsView() {
                   </SettingsSectionCard>
                 )}
 
-                <SettingsSectionCard className="self-start">
+                {isElectron() && (
+                  <SettingsSectionCard commandTarget="performance">
+                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                    <PerformanceSection />
+                  </SettingsSectionCard>
+                )}
+
+                <SettingsSectionCard className="self-start" commandTarget="sounds">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
                 {showVoiceMode && (
-                  <SettingsSectionCard>
+                  <SettingsSectionCard commandTarget="performance">
                     <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
                     <VoiceModeSection />
                   </SettingsSectionCard>
                 )}
-                {isElectron() && (
-                  <SettingsSectionCard>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                    <PerformanceSection />
+                {isElectron() && isGameActivityAvailable() && (
+                  <SettingsSectionCard commandTarget="game-activity">
+                    <DomainTitle icon={<Gamepad2 size={11} strokeWidth={2.2} />} title="Oyun" />
+                    <GameActivityCard />
                   </SettingsSectionCard>
                 )}
               </div>
 
               {/* base–lg: tek kolon */}
               <div className="flex flex-col gap-5 xl:hidden">
-                <SettingsSectionCard>
+                <SettingsSectionCard commandTarget="appearance">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
                   <AppearanceSection />
                 </SettingsSectionCard>
-                <SettingsSectionCard>
+                <SettingsSectionCard commandTarget="sounds">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
                 {isElectron() && (
-                  <SettingsSectionCard>
+                  <SettingsSectionCard commandTarget="voice-overlay">
                     <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
                     <VoiceOverlayCard />
+                  </SettingsSectionCard>
+                )}
+                <SettingsSectionCard commandTarget="performance">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  <PerformanceSection />
+                </SettingsSectionCard>
+                {isElectron() && isGameActivityAvailable() && (
+                  <SettingsSectionCard commandTarget="game-activity">
+                    <DomainTitle icon={<Gamepad2 size={11} strokeWidth={2.2} />} title="Oyun" />
+                    <GameActivityCard />
                   </SettingsSectionCard>
                 )}
                 {showVoiceMode && (
@@ -1143,11 +1377,13 @@ export default function SettingsView() {
                     <VoiceModeSection />
                   </SettingsSectionCard>
                 )}
-                <SettingsSectionCard>
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                  <PerformanceSection />
-                </SettingsSectionCard>
               </div>
+            </div>
+          )}
+
+          {effectiveTab === 'shortcuts' && (
+            <div data-command-target="shortcuts">
+              <ShortcutsCard />
             </div>
           )}
 

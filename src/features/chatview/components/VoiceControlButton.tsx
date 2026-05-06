@@ -6,8 +6,6 @@ import type { LucideIcon } from 'lucide-react';
  *
  * ON  (active=true)  → accent renk (temaya göre, orijinal davranış)
  * OFF (active=false) → kırmızı + slashed ikon
- *                      (Kızıl temada kırmızı-üstü-kırmızı olmasın diye nötr gri;
- *                       override CSS ile `[data-theme-pack="crimson"]` altında)
  * override="warning" → admin-muted turuncu
  */
 interface Props {

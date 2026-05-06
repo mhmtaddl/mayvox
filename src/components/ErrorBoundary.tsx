@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 function ErrorFallback() {
   return (
     <div
+      className="mv-error-fallback"
       style={{
         display: 'flex',
         flexDirection: 'column',

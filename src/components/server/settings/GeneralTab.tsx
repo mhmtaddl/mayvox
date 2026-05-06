@@ -378,7 +378,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
         <GroupLabel>Temel Bilgiler</GroupLabel>
 
         {/* Avatar block — üstte, left-aligned, belirgin */}
-        <div className="mt-3 flex items-center gap-4">
+        <div data-server-command-target="server-avatar" className="mt-3 flex items-center gap-4 rounded-2xl p-2 -m-2">
           <button
             type="button"
             onClick={() => canEdit && logoRef.current?.click()}

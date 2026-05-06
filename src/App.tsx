@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AppChrome from './components/AppChrome';
+import CommandPalette from './components/CommandPalette';
 import { AppView, User, VoiceChannel } from './types';
 // Theme types + adaptive theme artık useAppSettings hook'unda
 import {
@@ -32,6 +33,7 @@ import { logger } from './lib/logger';
 import { connectChat, disconnectChat, sendPresencePatch } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
+import { readAppShortcuts, shortcutMatchesEvent, type AppShortcuts } from './lib/commandShortcut';
 import {
   DEFAULT_THEME_PACK_ID,
   canAccessThemePack,
@@ -105,6 +107,8 @@ import { pushInformational } from './features/notifications/informationalStore';
 import { playNotifyBeep } from './features/notifications/notificationSound';
 import { shouldSuppressSettingsSoundInChatRoom } from './lib/soundRoomPreference';
 import { requestElectronFlash } from './features/notifications/electronAttention';
+import { getDefaultChannelIconColor } from './lib/channelIconColor';
+import { getDefaultChannelIconName } from './lib/channelIcon';
 
 const isUuidUser = (userId: string) => userId.includes('-');
 
@@ -378,7 +382,11 @@ export default function App() {
 
   // Oyun algılama hook'u (IPC dinleyici) — currentUser declaration'ından ÖNCE
   // çağrılmalı ki hook sırası sabit kalsın; reflect effect aşağıda.
-  const detectedGame = useGameActivity(settings.gameActivityEnabled);
+  // Overlay game-only modunda da local detector gerekir; bu, oyun durumunu
+  // presence'a yayınlamakla aynı şey değil. Presence payload'ı aşağıda ayrıca
+  // settings.gameActivityEnabled ile gate edilir.
+  const overlayNeedsGameDetection = settings.overlayEnabled && settings.overlayDisplayMode === 'game-only';
+  const detectedGame = useGameActivity(settings.gameActivityEnabled || overlayNeedsGameDetection);
 
   // avatarBorderColor değişimini izle → currentUser + allUsers + broadcast sync
   const prevFrameColorRef = useRef(settings.avatarBorderColor);
@@ -397,17 +405,17 @@ export default function App() {
   }, [settings.avatarBorderColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Oyun algılama — detected game değişince self user state'e yansıt ───────
-  // Toggle kapalıyken detectedGame null → gameActivity undefined → presence'ta
-  // alan bile gitmez (backward-compat). Deps avatarBorderColor effect pattern'iyle
-  // uyumlu — eslint-disable ile minimal deps.
+  // Toggle kapalıyken gameActivity undefined → presence'ta alan bile gitmez
+  // (backward-compat). Overlay için local detection çalışsa bile kullanıcı oyun
+  // durumunu paylaşmayı kapattıysa currentUser.gameActivity doldurulmaz.
   useEffect(() => {
     if (!currentUser.id) return;
-    const next = detectedGame ?? undefined;
+    const next = settings.gameActivityEnabled ? (detectedGame ?? undefined) : undefined;
     setCurrentUser(prev => prev.gameActivity === next ? prev : { ...prev, gameActivity: next });
     setAllUsers(prev => prev.map(u => u.id === currentUser.id
       ? (u.gameActivity === next ? u : { ...u, gameActivity: next })
       : u));
-  }, [detectedGame]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [detectedGame, settings.gameActivityEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
 // ── Audio control state ──────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false);
@@ -695,6 +703,7 @@ export default function App() {
     return getAllUserVolumePercents();
   });
   const [settingsTarget, setSettingsTarget] = useState<import('./contexts/UIContext').SettingsTarget>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   // Invite cooldown + status artık useChannelActions hook'unda
   // Stable ref wrapper'lar — usePresence çağrısı bu fonksiyonlardan önce geldiği için ref gerekir
@@ -1466,6 +1475,7 @@ export default function App() {
     activeChannelId: activeChannel,
     activeChannelName: currentChannel?.name ?? null,
     roomMembers: channelMembers,
+    speakingLevels,
     selfSpeaking: isPttPressed && !isMuted && !currentUser.isVoiceBanned && !isBroadcastListener,
     selfMuted: isMuted,
     selfDeafened: isDeafened,
@@ -2106,6 +2116,242 @@ export default function App() {
   // Keep forward ref current so usePresence.onMoved always calls the real function
   handleJoinChannelRef.current = handleJoinChannel;
 
+  const openCommandSettings = useCallback((target: import('./contexts/UIContext').SettingsTarget, highlightId?: string) => {
+    setSettingsTarget(target);
+    setView('settings');
+    if (highlightId) {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('mayvox:highlight-setting', { detail: { id: highlightId } }));
+      }, 180);
+    }
+  }, []);
+
+  const openCommandDm = useCallback((userId: string) => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:open-dm', { detail: { userId } }));
+  }, []);
+
+  const openCommandUserProfile = useCallback((userId: string) => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:open-user-profile', { detail: { userId } }));
+  }, []);
+
+  const inviteCommandUserToRoom = useCallback((userId: string) => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:invite-user-to-room', { detail: { userId } }));
+  }, []);
+
+  const openCommandUserSearch = useCallback(() => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:focus-user-search'));
+  }, []);
+
+  const openCommandMessages = useCallback((settingsPanel = false) => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:open-messages', { detail: { settings: settingsPanel } }));
+  }, []);
+
+  const openCommandLegal = useCallback((kind: 'kvkk' | 'storage' | 'terms') => {
+    setView('settings');
+    setSettingsTarget('account');
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('mayvox:open-legal', { detail: { kind } }));
+    }, 120);
+  }, [setSettingsTarget]);
+
+  const openCommandAdmin = useCallback((target: 'users' | 'servers' | 'invite-codes' | 'invite-requests' | 'user-filters' | 'user-search' = 'users') => {
+    setView('settings');
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('mayvox:open-admin', { detail: { target } }));
+    }, 120);
+  }, []);
+
+  const openCommandDiscover = useCallback(() => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:open-discover'));
+  }, []);
+
+  const createCommandRoom = useCallback(() => {
+    setView('chat');
+    setRoomModal({
+      isOpen: true,
+      type: 'create',
+      name: '',
+      maxUsers: 0,
+      isInviteOnly: false,
+      isHidden: false,
+      mode: 'social',
+      iconColor: getDefaultChannelIconColor('social'),
+      iconName: getDefaultChannelIconName('social'),
+    });
+  }, []);
+
+  const openCommandInputSettings = useCallback(() => {
+    setView('chat');
+    setShowInputSettings(true);
+    setShowOutputSettings(false);
+  }, [setShowInputSettings, setShowOutputSettings]);
+
+  const openCommandOutputSettings = useCallback(() => {
+    setView('chat');
+    setShowOutputSettings(true);
+    setShowInputSettings(false);
+  }, [setShowInputSettings, setShowOutputSettings]);
+
+  const openCommandServerSettings = useCallback((highlightId?: string, tab?: string) => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:open-server-settings', { detail: { highlightId, tab } }));
+  }, []);
+
+  const createCommandAnnouncement = useCallback((type: 'announcement' | 'event') => {
+    setView('chat');
+    window.dispatchEvent(new CustomEvent('mayvox:create-announcement', { detail: { type } }));
+  }, []);
+
+  const toggleCommandDeafen = useCallback(() => {
+    setIsDeafened(!isDeafenedRef.current);
+  }, []);
+
+  const toggleCommandMute = useCallback(() => {
+    if (voiceDisabledReason) {
+      setToastMsg(
+        voiceDisabledReason === 'server_muted' ? 'Bu sunucuda susturuldunuz'
+        : voiceDisabledReason === 'timeout' ? 'Zamanaşımı aktif'
+        : voiceDisabledReason === 'kicked' ? 'Bu odadan çıkarıldınız'
+        : voiceDisabledReason === 'banned' ? 'Sunucuya erişiminiz kaldırıldı'
+        : 'Mikrofon şu anda kullanılamıyor',
+      );
+      return;
+    }
+    if (isBroadcastListener) {
+      setToastMsg('Bu odada yalnızca konuşmacılar yayın yapabilir.');
+      return;
+    }
+    if (currentUser.isMuted) return;
+    if (isMuted && isDeafenedRef.current) setIsDeafened(false);
+    setIsMuted(!isMuted);
+  }, [currentUser.isMuted, isBroadcastListener, isMuted, setToastMsg, voiceDisabledReason]);
+
+  const [appShortcuts, setAppShortcuts] = useState<AppShortcuts>(() => readAppShortcuts());
+  useEffect(() => {
+    const onChanged = () => setAppShortcuts(readAppShortcuts());
+    window.addEventListener('mayvox:app-shortcuts-changed', onChanged);
+    window.addEventListener('storage', onChanged);
+    return () => {
+      window.removeEventListener('mayvox:app-shortcuts-changed', onChanged);
+      window.removeEventListener('storage', onChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (commandPaletteOpen) return;
+      const target = event.target as HTMLElement | null;
+      const typing = !!target?.closest('input, textarea, [contenteditable="true"]');
+      if (typing) return;
+
+      if (shortcutMatchesEvent(appShortcuts['toggle-mute'], event)) {
+        event.preventDefault();
+        toggleCommandMute();
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['toggle-deafen'], event)) {
+        event.preventDefault();
+        toggleCommandDeafen();
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['user-search'], event)) {
+        event.preventDefault();
+        openCommandUserSearch();
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-server-settings'], event)) {
+        if (!activeServerId || !(
+          accessContext?.flags.canManageServer ||
+          accessContext?.flags.canKickMembers ||
+          accessContext?.flags.canCreateInvite ||
+          accessContext?.flags.canRevokeInvite ||
+          accessContext?.flags.canViewInsights
+        )) return;
+        event.preventDefault();
+        openCommandServerSettings();
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-admin'], event)) {
+        if (!currentUser.isAdmin && !currentUser.isPrimaryAdmin) return;
+        event.preventDefault();
+        openCommandAdmin('users');
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['toggle-room'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'toggle-room' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['toggle-room-chat-muted'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'toggle-room-chat-muted' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['toggle-room-members'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'toggle-room-members' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-discover'], event)) {
+        event.preventDefault();
+        openCommandDiscover();
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-server-home'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'open-server-home' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['previous-server'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'previous-server' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['next-server'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'next-server' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['previous-room'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'previous-room' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['next-room'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'next-room' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-unread-dm'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'open-unread-dm' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['close-dm'], event)) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('mayvox:shortcut-action', { detail: { action: 'close-dm' } }));
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-settings'], event)) {
+        event.preventDefault();
+        openCommandSettings('app');
+        return;
+      }
+      if (shortcutMatchesEvent(appShortcuts['open-shortcuts'], event)) {
+        event.preventDefault();
+        openCommandSettings('shortcuts');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [accessContext, activeServerId, appShortcuts, commandPaletteOpen, currentUser.isAdmin, currentUser.isPrimaryAdmin, openCommandAdmin, openCommandDiscover, openCommandServerSettings, openCommandSettings, openCommandUserSearch, toggleCommandDeafen, toggleCommandMute]);
+
   const handleVerifyPassword = async () => {
     if (!passwordModal) return;
     const channel = channels.find(c => c.id === passwordModal.channelId);
@@ -2625,6 +2871,45 @@ export default function App() {
                 <div className={`font-sans selection:bg-blue-500/30 mv-app-shell ${view === 'login-password' || view === 'login-code' || view === 'register-details' ? 'mv-auth-shell' : ''}`}>
                   {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
                   <AppChrome />
+                  <CommandPalette
+                    open={commandPaletteOpen}
+                    onOpenChange={setCommandPaletteOpen}
+                    currentUserId={currentUser.id}
+                    users={allUsers}
+                    friendIds={friendIds}
+                    channels={channels}
+                    activeChannelId={activeChannel}
+                    hasActiveServer={!!activeServerId}
+                    canManageServer={!!accessContext?.flags.canManageServer}
+                    canCreateRoom={!!accessContext?.flags.canCreateChannel}
+                    canManageAnnouncements={!!currentUser.isAdmin || !!currentUser.isModerator}
+                    canKickMembers={!!accessContext?.flags.canKickMembers}
+                    canCreateInvite={!!accessContext?.flags.canCreateInvite}
+                    canRevokeInvite={!!accessContext?.flags.canRevokeInvite}
+                    canViewInsights={!!accessContext?.flags.canViewInsights}
+                    isAdmin={!!currentUser.isAdmin || !!currentUser.isPrimaryAdmin}
+                    isPrimaryAdmin={!!currentUser.isPrimaryAdmin}
+                    onJoinChannel={(channelId) => {
+                      setView('chat');
+                      return handleJoinChannel(channelId);
+                    }}
+                    onOpenSettings={openCommandSettings}
+                    onOpenServerSettings={openCommandServerSettings}
+                    onOpenDm={openCommandDm}
+                    onOpenUserProfile={openCommandUserProfile}
+                    onInviteUserToRoom={inviteCommandUserToRoom}
+                    onOpenUserSearch={openCommandUserSearch}
+                    onOpenMessages={openCommandMessages}
+                    onOpenLegal={openCommandLegal}
+                    onOpenAdmin={openCommandAdmin}
+                    onOpenDiscover={openCommandDiscover}
+                    onCreateAnnouncement={createCommandAnnouncement}
+                    onCreateRoom={createCommandRoom}
+                    onOpenInputSettings={openCommandInputSettings}
+                    onOpenOutputSettings={openCommandOutputSettings}
+                    onToggleMute={toggleCommandMute}
+                    onToggleDeafen={toggleCommandDeafen}
+                  />
                   {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}
                   {!permissionsGranted ? (
                     <PermissionOnboarding onComplete={handlePermissionsComplete} />
