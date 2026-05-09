@@ -1031,7 +1031,7 @@ export default function CommandPalette({
               }
             }}
             placeholder="Kullanıcı, oda veya ayar ara..."
-            className="h-9 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[var(--theme-secondary-text)]/45"
+            className="mv-font-title h-9 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[var(--theme-secondary-text)]/45"
           />
           <kbd className="rounded-md px-1.5 py-1 text-[10px] font-semibold" style={{ background: 'rgba(var(--glass-tint), 0.06)', color: 'var(--theme-secondary-text)' }}>
             ESC
@@ -1040,7 +1040,7 @@ export default function CommandPalette({
 
         <div className="max-h-[430px] overflow-y-auto p-2 custom-scrollbar">
           {results.length === 0 ? (
-            <div className="px-4 py-10 text-center text-[13px] text-[var(--theme-secondary-text)]/70">
+            <div className="mv-font-message px-4 py-10 text-center text-[13px] text-[var(--theme-secondary-text)]/70">
               Sonuç bulunamadı
             </div>
           ) : results.map((item, index) => {
@@ -1067,8 +1067,8 @@ export default function CommandPalette({
                     <KindIcon kind={item.kind} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold">{item.title}</span>
-                    <span className="block truncate text-[11px] text-[var(--theme-secondary-text)]/65">{item.subtitle}</span>
+                    <span className="mv-font-message block truncate text-[13px] font-semibold">{item.title}</span>
+                    <span className="mv-font-meta block truncate text-[11px] text-[var(--theme-secondary-text)]/65">{item.subtitle}</span>
                   </span>
                   <KindBadge kind={item.kind} />
                 </div>

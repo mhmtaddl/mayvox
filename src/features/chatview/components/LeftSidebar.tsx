@@ -21,6 +21,7 @@ import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
 import { ConnectionQualityIndicator } from '../../../components/chat';
 import appLogo from '../../../assets/dock-logo-mv_tr.png';
 import DeviceBadge from '../../../components/chat/DeviceBadge';
+import RoleBadge, { getUserRoleBadge } from '../../../components/RoleBadge';
 import UpdateVersionHub from '../../update/components/UpdateVersionHub';
 import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
@@ -223,7 +224,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         )}
         <div className="flex flex-col leading-none min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h1 className="text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">
+            <h1 className="mv-font-title text-[14px] font-bold text-[var(--theme-text)] truncate tracking-[-0.01em]">
               {(() => {
                 // Marka rengi uyumu: ikinci kelime (veya MAYVOX'ta "VOX") accent renginde.
                 const raw = activeServerName ?? 'MAYVOX';
@@ -267,7 +268,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
       </div>
       <div className="mx-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint), 0.07), transparent)' }} />
 
-      <div className="px-5 pt-4 pb-4 flex flex-col flex-1 min-h-0">
+      <div className="mv-density-sidebar-content px-5 pt-4 pb-4 flex flex-col flex-1 min-h-0">
         {visibleChannels.length === 0 ? (
           /* Sunucusuz durum — sidebar empty state */
           <div className="flex-1 flex flex-col items-center justify-center px-2">
@@ -285,14 +286,14 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           <span className="uppercase text-[9px] tracking-[0.18em] font-bold opacity-40">Ses Kanalları</span>
         </div>
 
-        <nav ref={channelScrollRef} className="flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
+        <nav ref={channelScrollRef} className="mv-density-channel-stack flex-1 space-y-1 overflow-y-auto custom-scrollbar" onClick={() => setContextMenu(null)}>
           {visibleChannels.map(channel => {
             // Capability-driven: resolver falsy iken legacy isAdmin fallback.
             const canReorderThis = canReorderChannels || serverAdminFallback;
             const isDragging = draggingChannelId === channel.id;
             const isDropTarget = dropTargetChannelId === channel.id && draggingChannelId && draggingChannelId !== channel.id;
             return (
-            <div key={channel.id} className="space-y-1">
+            <div key={channel.id} className="mv-density-channel-stack space-y-1">
               <button
                 draggable={canReorderThis}
                 onDragStart={(e) => {
@@ -355,7 +356,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                       }
                     : undefined
                 }
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${
+                className={`mv-density-channel-row w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${
                   isDragging ? 'opacity-40 ' : ''
                 }${
                   activeChannel === channel.id
@@ -385,7 +386,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                   )}
                 </div>
                 <div className="flex items-center justify-between flex-1 min-w-0">
-                  <span className="font-medium truncate" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
+                  <span className="mv-font-title font-medium truncate" style={{ fontSize: channel.name.length > 14 ? 'var(--mv-font-body)' : 'var(--mv-font-title)' }}>{channel.name}</span>
                   {channel.deletionTimer !== undefined && !channel.userCount && (
                     <div className="flex items-center gap-1 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
                       <Timer size={10} className="text-red-500 animate-pulse" />
@@ -450,7 +451,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                           </>
                         )}
                       {/* Crossfade: placeholder ↔ real user */}
-                      <div className="relative h-7">
+                      <div className="mv-density-member-row relative h-7">
                         {/* Placeholder layer */}
                         <div className={`absolute inset-0 flex items-center gap-2 py-1 px-1.5 transition-opacity duration-150 ${user ? 'opacity-0' : 'opacity-40'}`}>
                           <div className="h-5 w-5 rounded-[6px] bg-[rgba(var(--glass-tint),0.08)] shrink-0" />
@@ -477,7 +478,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             e.preventDefault();
                             onUserContextMenu?.(user.id, e.clientX, e.clientY);
                           }}
-                          className={`absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
+                          className={`mv-font-meta absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
                             isBc && isSp
                               ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
                               : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
@@ -526,6 +527,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             ) : (
                               <>
                                 <span className="truncate flex-1">{getPublicDisplayName(user)}</span>
+                                <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
                                 {isBc && (isSp
                                   ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
                                   : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
@@ -560,7 +562,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 }
                 setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social', iconColor: getDefaultChannelIconColor('social'), iconName: getDefaultChannelIconName('social') });
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+              className={`mv-density-channel-row w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                 atLimit
                   ? 'text-[var(--theme-secondary-text)]/70 cursor-pointer hover:bg-[rgba(var(--glass-tint),0.04)]'
                   : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'

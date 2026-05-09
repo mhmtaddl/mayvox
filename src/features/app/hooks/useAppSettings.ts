@@ -3,7 +3,7 @@
  * Tema CSS efekti dahil. Hiçbir dış state'e bağımlılığı yok (saf settings domain).
  */
 import { useState, useEffect, useRef } from 'react';
-import { type VoiceMode } from '../../../contexts/SettingsCtx';
+import { type UiDensity, type VoiceMode } from '../../../contexts/SettingsCtx';
 import type { OverlayDisplayMode } from '../../../overlay/types';
 import {
   THEME_PACKS,
@@ -18,7 +18,73 @@ import {
   type ThemePackId,
 } from '../../../lib/themePacks';
 
+const UI_FONT_SCALE_STEPS = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15] as const;
+const DEFAULT_UI_FONT_SCALE = 0.8;
+const UI_DOCK_SCALE_STEPS = [0.8, 0.9, 1, 1.1, 1.2] as const;
+const DEFAULT_UI_DOCK_SCALE = 0.8;
+
+function sanitizeUiFontScale(value: string | number | null): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_UI_FONT_SCALE;
+  const rounded = Math.round(parsed * 100) / 100;
+  return UI_FONT_SCALE_STEPS.includes(rounded as typeof UI_FONT_SCALE_STEPS[number]) ? rounded : DEFAULT_UI_FONT_SCALE;
+}
+
+function sanitizeUiDockScale(value: string | number | null): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_UI_DOCK_SCALE;
+  const rounded = Math.round(parsed * 100) / 100;
+  return UI_DOCK_SCALE_STEPS.includes(rounded as typeof UI_DOCK_SCALE_STEPS[number]) ? rounded : DEFAULT_UI_DOCK_SCALE;
+}
+
 export function useAppSettings() {
+  const [uiDensity, setUiDensityState] = useState<UiDensity>(() => {
+    const saved = localStorage.getItem('uiDensity');
+    return saved === 'compact' ? 'compact' : 'comfortable';
+  });
+  const setUiDensity = (v: UiDensity) => {
+    localStorage.setItem('uiDensity', v);
+    setUiDensityState(v);
+  };
+  useEffect(() => {
+    document.documentElement.setAttribute('data-ui-density', uiDensity);
+    return () => document.documentElement.removeAttribute('data-ui-density');
+  }, [uiDensity]);
+
+  const [uiFontScale, setUiFontScaleState] = useState<number>(() => {
+    return sanitizeUiFontScale(localStorage.getItem('uiFontScale'));
+  });
+  const setUiFontScale = (v: number) => {
+    const next = sanitizeUiFontScale(v);
+    localStorage.setItem('uiFontScale', next.toFixed(2));
+    setUiFontScaleState(next);
+  };
+  useEffect(() => {
+    document.documentElement.style.setProperty('--mv-font-scale', String(uiFontScale));
+    document.documentElement.setAttribute('data-ui-font-scale', String(Math.round(uiFontScale * 100)));
+    return () => {
+      document.documentElement.style.removeProperty('--mv-font-scale');
+      document.documentElement.removeAttribute('data-ui-font-scale');
+    };
+  }, [uiFontScale]);
+
+  const [uiDockScale, setUiDockScaleState] = useState<number>(() => {
+    return sanitizeUiDockScale(localStorage.getItem('uiDockScale'));
+  });
+  const setUiDockScale = (v: number) => {
+    const next = sanitizeUiDockScale(v);
+    localStorage.setItem('uiDockScale', next.toFixed(2));
+    setUiDockScaleState(next);
+  };
+  useEffect(() => {
+    document.documentElement.style.setProperty('--mv-dock-scale', String(uiDockScale));
+    document.documentElement.setAttribute('data-ui-dock-scale', String(Math.round(uiDockScale * 100)));
+    return () => {
+      document.documentElement.style.removeProperty('--mv-dock-scale');
+      document.documentElement.removeAttribute('data-ui-dock-scale');
+    };
+  }, [uiDockScale]);
+
   // ── Theme Pack — single source of truth for appearance ──
   const [themePackId, setThemePackIdState] = useState<ThemePackId>(() => {
     const saved = localStorage.getItem('themePack') as ThemePackId | null;
@@ -354,6 +420,9 @@ export function useAppSettings() {
   return {
     themePackId, setThemePackId,
     customThemeOverrides, setCustomThemeOverrides, commitCustomThemeOverrides, resetCustomThemeOverrides,
+    uiDensity, setUiDensity,
+    uiFontScale, setUiFontScale,
+    uiDockScale, setUiDockScale,
     isLowDataMode, setIsLowDataMode,
     isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled,
     noiseThreshold, setNoiseThreshold,

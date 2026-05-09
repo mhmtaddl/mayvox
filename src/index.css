@@ -79,6 +79,56 @@ html.lowperf [style*="brand-shimmer"] {
   --panel-blur: 20px;
   --panel-radius: 18px;
   --panel-gap: 6px;
+  --density-chat-area-px: 1rem;
+  --density-chat-area-py: 0.75rem;
+  --density-message-padding-x: 0.875rem;
+  --density-message-padding-y: 0.5rem;
+  --density-message-group-gap: 0.25rem;
+  --density-message-stack-gap: 0.75rem;
+  --density-date-separator-my: 1rem;
+  --density-list-item-px: 0.625rem;
+  --density-list-item-py: 0.625rem;
+  --density-list-avatar-size: 2.5rem;
+  --density-friend-item-px: 0.625rem;
+  --density-friend-item-py: 0.5rem;
+  --density-friend-avatar-size: 2.125rem;
+  --density-server-row-px: 0.75rem;
+  --density-server-row-py: 0.5rem;
+  --density-channel-row-px: 1rem;
+  --density-channel-row-py: 0.75rem;
+  --density-channel-stack-gap: 0.25rem;
+  --density-sidebar-content-py: 1rem;
+  --density-member-row-height: 1.75rem;
+  --density-member-row-py: 0.25rem;
+  --density-dock-gap: 0.375rem;
+  --density-dock-py: 0.25rem;
+  --mv-dock-scale: 0.8;
+  --mv-dock-actual-height: 42px;
+  --mv-dock-visual-height: calc(48px * var(--mv-dock-scale, 1));
+  --mv-dock-height: var(--mv-dock-visual-height);
+  --mv-dock-avatar-size: calc(36px * var(--mv-dock-scale, 1));
+  --mv-dock-server-size: calc(40px * var(--mv-dock-scale, 1));
+  --mv-dock-button-size: calc(40px * var(--mv-dock-scale, 1));
+  --mv-dock-small-button-size: calc(36px * var(--mv-dock-scale, 1));
+  --mv-dock-icon-size: calc(16px * var(--mv-dock-scale, 1));
+  --mv-dock-small-icon-size: calc(13px * var(--mv-dock-scale, 1));
+  --mv-dock-gap: calc(var(--density-dock-gap) * var(--mv-dock-scale, 1));
+  --mv-dock-padding-x: calc(8px * var(--mv-dock-scale, 1));
+  --mv-dock-padding-y: calc(var(--density-dock-py) * var(--mv-dock-scale, 1));
+  --mv-dock-name-font: calc(11px * var(--mv-dock-scale, 1) * var(--mv-font-scale, 1));
+  --mv-dock-game-font: calc(9px * var(--mv-dock-scale, 1) * var(--mv-font-scale, 1));
+  --mv-dock-edge-gap: 6px;
+  --mv-dock-bottom-offset: var(--mv-dock-edge-gap);
+  --mv-dock-content-gap: var(--mv-dock-edge-gap);
+  --mv-content-bottom-reserve: calc(var(--mv-dock-actual-height) + (var(--mv-dock-edge-gap) * 2));
+  --mv-dock-reserved-bottom-space: var(--mv-content-bottom-reserve);
+  --mv-room-chat-bottom-gap: 24px;
+  --mv-font-scale: 1;
+  --mv-font-caption: calc(10.5px * var(--mv-font-scale, 1));
+  --mv-font-meta: calc(11px * var(--mv-font-scale, 1));
+  --mv-font-body: calc(12px * var(--mv-font-scale, 1));
+  --mv-font-message: calc(13px * var(--mv-font-scale, 1));
+  --mv-font-title: calc(14px * var(--mv-font-scale, 1));
   --panel-shadow: 0 4px 30px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(var(--glass-tint), 0.02) inset;
   --app-neutral-bg: #151515;
   --app-neutral-surface: #151515;
@@ -94,7 +144,7 @@ html.lowperf [style*="brand-shimmer"] {
   --surface-floating: var(--app-surface-floating);
   --surface-floating-hover: color-mix(in srgb, rgba(24, 24, 24, 0.76) 90%, white 4%);
   --surface-floating-control: color-mix(in srgb, rgba(24, 24, 24, 0.58) 94%, white 2%);
-  --voice-bar-safe-area: 72px;
+  --voice-bar-safe-area: var(--mv-dock-reserved-bottom-space);
   --topbar-gradient-start: var(--sidebar-tint-bg);
   --topbar-gradient-mid-strong: color-mix(in srgb, var(--sidebar-tint-bg) 62%, var(--app-neutral-bg) 38%);
   --topbar-gradient-mid-soft: color-mix(in srgb, var(--sidebar-tint-bg) 34%, var(--app-neutral-bg) 66%);
@@ -122,6 +172,194 @@ html.lowperf [style*="brand-shimmer"] {
   /* Custom desktop chrome height — frameless Electron */
   --titlebar-height: 50px;
   color-scheme: dark;
+}
+
+html[data-ui-density="compact"] {
+  --density-chat-area-px: 0.5rem;
+  --density-chat-area-py: 0.375rem;
+  --density-message-padding-x: 0.625rem;
+  --density-message-padding-y: 0.25rem;
+  --density-message-group-gap: 0.0625rem;
+  --density-message-stack-gap: 0.3125rem;
+  --density-date-separator-my: 0.375rem;
+  --density-list-item-px: 0.375rem;
+  --density-list-item-py: 0.1875rem;
+  --density-list-avatar-size: 2.125rem;
+  --density-friend-item-px: 0.375rem;
+  --density-friend-item-py: 0.1875rem;
+  --density-friend-avatar-size: 1.875rem;
+  --density-server-row-px: 0.4375rem;
+  --density-server-row-py: 0.25rem;
+  --density-channel-row-px: 0.5625rem;
+  --density-channel-row-py: 0.3125rem;
+  --density-channel-stack-gap: 0rem;
+  --density-sidebar-content-py: 0.4375rem;
+  --density-member-row-height: 1.35rem;
+  --density-member-row-py: 0.0625rem;
+  --density-dock-gap: 0.1875rem;
+  --density-dock-py: 0.125rem;
+}
+
+@media (min-width: 1024px) {
+  html {
+    --mv-room-chat-bottom-gap: 24px;
+  }
+}
+
+.mv-density-chat-area {
+  padding: var(--density-chat-area-py) var(--density-chat-area-px) !important;
+}
+
+.mv-density-message-bubble {
+  padding: var(--density-message-padding-y) var(--density-message-padding-x) !important;
+}
+
+.mv-density-date-separator {
+  margin-top: var(--density-date-separator-my) !important;
+  margin-bottom: var(--density-date-separator-my) !important;
+}
+
+.mv-density-list-item {
+  padding: var(--density-list-item-py) var(--density-list-item-px) !important;
+}
+
+.mv-density-list-avatar {
+  width: var(--density-list-avatar-size) !important;
+  height: var(--density-list-avatar-size) !important;
+}
+
+.mv-density-friend-item {
+  padding: var(--density-friend-item-py) var(--density-friend-item-px) !important;
+}
+
+.mv-density-friend-avatar {
+  width: var(--density-friend-avatar-size) !important;
+  height: var(--density-friend-avatar-size) !important;
+}
+
+.mv-density-server-row {
+  padding: var(--density-server-row-py) var(--density-server-row-px) !important;
+}
+
+.mv-density-channel-stack {
+  row-gap: var(--density-channel-stack-gap) !important;
+}
+
+.mv-density-channel-row {
+  padding: var(--density-channel-row-py) var(--density-channel-row-px) !important;
+}
+
+.mv-density-sidebar-content {
+  padding-top: var(--density-sidebar-content-py) !important;
+  padding-bottom: var(--density-sidebar-content-py) !important;
+}
+
+.mv-density-member-row {
+  height: var(--density-member-row-height) !important;
+}
+
+.mv-density-member-row > div {
+  padding-top: var(--density-member-row-py) !important;
+  padding-bottom: var(--density-member-row-py) !important;
+}
+
+.mv-density-dock {
+  gap: var(--density-dock-gap) !important;
+  padding-top: var(--density-dock-py) !important;
+  padding-bottom: var(--density-dock-py) !important;
+}
+
+.mv-desktop-dock {
+  min-height: var(--mv-dock-height) !important;
+}
+
+.mv-desktop-dock:not(.mv-dock-inline) {
+  bottom: var(--mv-dock-bottom-offset) !important;
+}
+
+.mv-desktop-dock.mv-density-dock {
+  gap: var(--mv-dock-gap) !important;
+  padding: var(--mv-dock-padding-y) var(--mv-dock-padding-x) !important;
+}
+
+.mv-dock-user {
+  gap: calc(8px * var(--mv-dock-scale, 1)) !important;
+  padding-left: calc(4px * var(--mv-dock-scale, 1)) !important;
+  padding-right: calc(10px * var(--mv-dock-scale, 1)) !important;
+  padding-top: calc(4px * var(--mv-dock-scale, 1)) !important;
+  padding-bottom: calc(4px * var(--mv-dock-scale, 1)) !important;
+}
+
+.mv-dock-user-avatar,
+.mv-dock-user-avatar-img {
+  width: var(--mv-dock-avatar-size) !important;
+  height: var(--mv-dock-avatar-size) !important;
+}
+
+.mv-dock-user-name {
+  font-size: var(--mv-dock-name-font) !important;
+}
+
+.mv-dock-user-game {
+  font-size: var(--mv-dock-game-font) !important;
+}
+
+.mv-server-dock-button,
+.mv-server-dock-button > img,
+.mv-dock-square-btn {
+  width: var(--mv-dock-button-size) !important;
+  height: var(--mv-dock-button-size) !important;
+}
+
+.mv-dock-small-square-btn {
+  width: var(--mv-dock-small-button-size) !important;
+  height: var(--mv-dock-small-button-size) !important;
+}
+
+.mv-dock-square-btn > svg,
+.mv-server-dock-button > svg,
+.mv-dock-icon {
+  width: var(--mv-dock-icon-size) !important;
+  height: var(--mv-dock-icon-size) !important;
+}
+
+.mv-dock-small-icon {
+  width: var(--mv-dock-small-icon-size) !important;
+  height: var(--mv-dock-small-icon-size) !important;
+}
+
+.mv-dock-small-square-btn > svg {
+  width: var(--mv-dock-icon-size) !important;
+  height: var(--mv-dock-icon-size) !important;
+}
+
+.mv-server-dock-area {
+  gap: calc(4px * var(--mv-dock-scale, 1)) !important;
+}
+
+.mv-dock-status-dot {
+  width: calc(8px * var(--mv-dock-scale, 1)) !important;
+  height: calc(8px * var(--mv-dock-scale, 1)) !important;
+}
+
+.mv-font-caption {
+  font-size: var(--mv-font-caption) !important;
+}
+
+.mv-font-meta {
+  font-size: var(--mv-font-meta) !important;
+}
+
+.mv-font-body {
+  font-size: var(--mv-font-body) !important;
+}
+
+.mv-font-message {
+  font-size: var(--mv-font-message) !important;
+}
+
+.mv-font-title {
+  font-size: var(--mv-font-title) !important;
 }
 
 /* ─── 3-katman sabit shell ─────────────────────────────────────
@@ -166,7 +404,37 @@ html.mv-electron-window.mv-window-maximized .mv-app-shell {
   height: 100vh;
   margin: 0;
   overflow: hidden;
+  font-size: calc(16px * var(--mv-font-scale, 1));
 }
+
+html[data-ui-font-scale] body {
+  font-size: calc(16px * var(--mv-font-scale, 1));
+}
+
+/* Global UI text scale bridge.
+   Tailwind arbitrary px text utilities do not inherit root font-size, so the
+   common MayVox text sizes are mapped to the user font scale here. Exact
+   class-token selectors keep icons, avatars, spacing, and button geometry out. */
+html[data-ui-font-scale] body [class~="text-[8px]"] { font-size: calc(8px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[9px]"] { font-size: calc(9px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[9.5px]"] { font-size: calc(9.5px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[10px]"] { font-size: calc(10px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[10.5px]"] { font-size: calc(10.5px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[11px]"] { font-size: calc(11px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[11.5px]"] { font-size: calc(11.5px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[12px]"] { font-size: calc(12px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[12.5px]"] { font-size: calc(12.5px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[13px]"] { font-size: calc(13px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[13.5px]"] { font-size: calc(13.5px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[14px]"] { font-size: calc(14px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[15px]"] { font-size: calc(15px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[16px]"] { font-size: calc(16px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[18px]"] { font-size: calc(18px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[20px]"] { font-size: calc(20px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[21px]"] { font-size: calc(21px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[24px]"] { font-size: calc(24px * var(--mv-font-scale, 1)) !important; }
+html[data-ui-font-scale] body [class~="text-[25px]"] { font-size: calc(25px * var(--mv-font-scale, 1)) !important; }
+
 .mv-app-shell > header {
   flex: 0 0 var(--titlebar-height);
 }
@@ -1749,7 +2017,7 @@ html {
   --surface-floating: var(--app-surface-floating);
   --surface-floating-hover: color-mix(in srgb, rgba(24, 24, 24, 0.76) 90%, white 4%);
   --surface-floating-control: color-mix(in srgb, rgba(24, 24, 24, 0.58) 94%, white 2%);
-  --voice-bar-safe-area: 72px;
+  --voice-bar-safe-area: var(--mv-dock-reserved-bottom-space);
 }
 .titlebar,
 .window-titlebar,
@@ -2300,7 +2568,7 @@ html[data-theme-pack] .settings-flat-light .theme-card[aria-selected="true"] {
 }
 @media (max-height: 760px) {
   html {
-  --voice-bar-safe-area: 68px;
+    --voice-bar-safe-area: var(--mv-dock-reserved-bottom-space);
   }
 }
 

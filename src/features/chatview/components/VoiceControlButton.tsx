@@ -32,7 +32,7 @@ export default function VoiceControlButton({
   className = '',
 }: Props) {
   const base =
-    'voice-control-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150';
+    'voice-control-btn mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150';
 
   if (override === 'warning') {
     return (

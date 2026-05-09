@@ -10,6 +10,7 @@ import OwnVoiceEqualizer from './OwnVoiceEqualizer';
 import MiniEqualizer from './MiniEqualizer';
 import { getPublicDisplayName } from '../../lib/formatName';
 import AvatarContent from '../AvatarContent';
+import RoleBadge, { getUserRoleBadge } from '../RoleBadge';
 
 // ─── Refined transition curves ────────────────────────────────────
 // Property-specific transitions — no "all", no "filter"
@@ -187,31 +188,7 @@ function UserCardInner({
             {user.age}
           </span>
 
-          {/* ─── 4) Refined inline role indicators ──────────── */}
-          {user.isAdmin && (
-            <span
-              className={`shrink-0 ${s.dense ? 'text-[7px] px-1' : s.icon === 13 ? 'text-[7px] px-1.5' : 'text-[8px] px-1.5'} font-bold py-px rounded leading-none tracking-wide`}
-              style={{
-                background: 'rgba(var(--theme-accent-rgb), 0.1)',
-                color: 'var(--theme-accent)',
-                border: '1px solid rgba(var(--theme-accent-rgb), 0.15)',
-              }}
-            >
-              ADMIN
-            </span>
-          )}
-          {!user.isAdmin && user.isModerator && (
-            <span
-              className={`shrink-0 ${s.dense ? 'text-[7px] px-1' : s.icon === 13 ? 'text-[7px] px-1.5' : 'text-[8px] px-1.5'} font-bold py-px rounded leading-none tracking-wide`}
-              style={{
-                background: 'rgba(139, 92, 246, 0.08)',
-                color: 'rgb(167, 139, 250)',
-                border: '1px solid rgba(139, 92, 246, 0.15)',
-              }}
-            >
-              MOD
-            </span>
-          )}
+          <RoleBadge role={getUserRoleBadge(user)} size={s.dense ? 'xs' : 'sm'} subtle />
         </div>
 
         <div className={s.dense ? '' : 'mt-0.5'}>

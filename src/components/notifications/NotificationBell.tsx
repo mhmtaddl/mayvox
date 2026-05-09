@@ -266,7 +266,7 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
             {/* Başlık — title + counter + Temizle butonu */}
             <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between gap-2" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.08)' }}>
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
+                <span className="mv-font-meta text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/85">
                   Bildirimler
                 </span>
                 {items.length > 0 && (
@@ -302,10 +302,10 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                     </svg>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-[12.5px] font-semibold text-[var(--theme-text)]/90 tracking-[-0.01em]">
+                    <span className="mv-font-body text-[12.5px] font-semibold text-[var(--theme-text)]/90 tracking-[-0.01em]">
                       Her şey güncel
                     </span>
-                    <span className="text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug max-w-[200px]">
+                    <span className="mv-font-caption text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug max-w-[200px]">
                       Yeni bir bildirim geldiğinde burada görünecek.
                     </span>
                   </div>
@@ -661,7 +661,7 @@ const FriendRequestItem: React.FC<{
       {/* Metin */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className={`text-[11px] font-semibold block truncate leading-tight ${
+          <span className={`mv-font-meta text-[11px] font-semibold block truncate leading-tight ${
             isNew ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)]/70'
           }`}>
             {item.label}
@@ -672,7 +672,7 @@ const FriendRequestItem: React.FC<{
             </span>
           )}
         </div>
-        <span className="text-[10px] block truncate leading-tight mt-0.5 text-[var(--theme-secondary-text)]/55">
+        <span className="mv-font-caption text-[10px] block truncate leading-tight mt-0.5 text-[var(--theme-secondary-text)]/55">
           {item.detail}
         </span>
       </div>

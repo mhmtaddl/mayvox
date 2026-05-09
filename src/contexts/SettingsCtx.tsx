@@ -4,6 +4,7 @@ import type { OverlayDisplayMode } from '../overlay/types';
 
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
+export type UiDensity = 'compact' | 'comfortable';
 
 /**
  * Noise suppression modeli (v2 — preset sistemi kaldırıldı):
@@ -20,6 +21,12 @@ export interface SettingsContextType {
   setCustomThemeOverrides: (v: ThemeCustomizationOverrides) => void;
   commitCustomThemeOverrides: (v?: ThemeCustomizationOverrides) => void;
   resetCustomThemeOverrides: (tier?: 'pro' | 'elite') => void;
+  uiDensity: UiDensity;
+  setUiDensity: (v: UiDensity) => void;
+  uiFontScale: number;
+  setUiFontScale: (v: number) => void;
+  uiDockScale: number;
+  setUiDockScale: (v: number) => void;
   isLowDataMode: boolean;
   setIsLowDataMode: (v: boolean) => void;
   isNoiseSuppressionEnabled: boolean;

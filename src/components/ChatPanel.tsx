@@ -119,7 +119,7 @@ export default function ChatPanel({
   // Quiet mode — chat kapali
   if (!chatEnabled) {
     return (
-      <div className="absolute left-3 right-3 bottom-[var(--voice-bar-safe-area,76px)] flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
+      <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
         <VolumeX size={22} className="text-[var(--theme-secondary-text)] opacity-10 mb-2" />
         <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-25">Bu oda modunda mesajlasma kapali</p>
       </div>
@@ -135,7 +135,7 @@ export default function ChatPanel({
   const fs = chatFontSize;
 
   return (
-    <div className="absolute left-3 right-3 bottom-[var(--voice-bar-safe-area,76px)] flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
+    <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
       {/* Yazi boyutu ayari */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
         <button onClick={() => changeFontSize(-1)} disabled={fs === 0} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Küçült">A-</button>
@@ -143,7 +143,7 @@ export default function ChatPanel({
       </div>
 
       {/* Mesaj listesi */}
-      <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
+      <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="mv-density-chat-area flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
         <div className="flex-1" />
         {messages.length === 0 ? (
           <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajlari burada gorunecek</p>
@@ -186,7 +186,10 @@ export default function ChatPanel({
                   <div className="flex-1 h-px" style={{ background: 'rgba(var(--glass-tint), 0.04)' }} />
                 </div>
               )}
-              <div className={`flex items-start gap-2 group/msg ${isMe ? 'flex-row-reverse' : ''} ${isGrouped ? 'mt-1' : 'mt-3'}`}>
+              <div
+                className={`flex items-start gap-2 group/msg ${isMe ? 'flex-row-reverse' : ''}`}
+                style={{ marginTop: isGrouped ? 'var(--density-message-group-gap)' : 'var(--density-message-stack-gap)' }}
+              >
                 {/* Avatar — sadece group'un ilk mesajında göster, yoksa spacer */}
                 {!isGrouped ? (
                   <div
@@ -210,17 +213,17 @@ export default function ChatPanel({
                 <div className={`flex flex-col max-w-[65%] min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
                   {!isGrouped && (
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: 10 + fs, color: nameColor }}>{senderName}</span>
-                      <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: 8 + fs }}>{ts}</span>
+                      <span className="font-semibold truncate max-w-[100px]" style={{ fontSize: `calc(var(--mv-font-caption) + ${fs}px)`, color: nameColor }}>{senderName}</span>
+                      <span className="text-[var(--theme-secondary-text)] opacity-25 tabular-nums" style={{ fontSize: `calc(var(--mv-font-caption) - 2px + ${fs}px)` }}>{ts}</span>
                     </div>
                   )}
                   {isEd ? (
                     <input autoFocus type="text" value={editingText} onChange={(e) => onEditingTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(); if (e.key === 'Escape') onCancelEdit(); }} onBlur={onSaveEdit} className="w-full bg-[rgba(var(--glass-tint),0.04)] border border-[var(--theme-accent)]/20 rounded-lg px-3 py-1.5 text-[12px] text-[var(--theme-text)] outline-none" />
                   ) : (
                     <div
-                      className={`px-3.5 py-2 break-words whitespace-pre-wrap transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+                      className={`mv-density-message-bubble px-3.5 py-2 break-words whitespace-pre-wrap transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
                       style={{
-                        fontSize: 13 + fs,
+                        fontSize: `calc(var(--mv-font-message) + ${fs}px)`,
                         background: isMe ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
                         color: isMe ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
                         border: isMe ? 'var(--msg-self-border)' : 'var(--msg-other-border)',
@@ -292,7 +295,7 @@ export default function ChatPanel({
           placeholder={isFloodCooling ? 'Biraz yavaşla, kısa bir bekleme var…' : isChatDisabled ? 'Sohbet engellendi' : 'Mesaj yaz...'}
           disabled={isChatDisabled}
           rows={1}
-          className="mv-chat-composer-field flex-1 px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none ring-0 focus:outline-none focus:ring-0 disabled:opacity-40 disabled:cursor-default resize-none max-h-24 overflow-y-auto"
+          className="mv-chat-composer-field mv-font-message flex-1 px-4 py-2 text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none ring-0 focus:outline-none focus:ring-0 disabled:opacity-40 disabled:cursor-default resize-none max-h-24 overflow-y-auto"
           style={{ minHeight: 36, background: 'transparent', border: 0, boxShadow: 'none' }}
           onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
         />

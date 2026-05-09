@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -34,44 +34,186 @@ import LegalModal, { type LegalModalKind } from '../components/legal/LegalModal'
 
 type MainTab = 'account' | 'app' | 'shortcuts' | 'admin';
 type AdminSubTab = 'users' | 'servers';
+type SettingsSearchItem = {
+  id: string;
+  tab: MainTab;
+  title: string;
+  description: string;
+  keywords: string[];
+  targetSectionId?: string;
+  adminOnly?: boolean;
+};
+
+const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
+  {
+    id: 'profile',
+    tab: 'account',
+    title: 'Profil & Hesap',
+    description: 'Profil fotoğrafı, hesap bilgileri, şifre ve güvenlik ayarları.',
+    keywords: ['hesap', 'profil', 'şifre', 'sifre', 'email', 'güvenlik', 'guvenlik', 'kullanıcı', 'kullanici'],
+    targetSectionId: 'profile-photo',
+  },
+  {
+    id: 'legal',
+    tab: 'account',
+    title: 'Hukuki ve Yerel Depolama',
+    description: 'KVKK, kullanım şartları, çerezler ve localStorage tercihleri.',
+    keywords: ['kvkk', 'hukuki', 'legal', 'şartlar', 'sartlar', 'çerez', 'cerez', 'localstorage', 'depolama'],
+    targetSectionId: 'legal',
+  },
+  {
+    id: 'appearance',
+    tab: 'app',
+    title: 'Görünüm yoğunluğu',
+    description: 'Rahat ve kompakt görünüm modu.',
+    keywords: ['görünüm', 'gorunum', 'kompakt', 'rahat', 'density', 'ui', 'arayüz', 'arayuz'],
+    targetSectionId: 'appearance',
+  },
+  {
+    id: 'font-size',
+    tab: 'app',
+    title: 'Yazı boyutu',
+    description: 'Uygulama içindeki metinlerin okunabilirliğini ayarlar.',
+    keywords: ['yazı', 'yazi', 'font', 'metin', 'büyüt', 'buyut', 'küçült', 'kucult', 'text'],
+    targetSectionId: 'appearance',
+  },
+  {
+    id: 'dock-size',
+    tab: 'app',
+    title: 'Alt kontrol çubuğu boyutu',
+    description: 'Alt dock avatar, buton ve boşluk boyutunu ayarlar.',
+    keywords: ['dock', 'alt bar', 'alt kontrol', 'kontrol çubuğu', 'kontrol cubugu', 'buton', 'boyut'],
+    targetSectionId: 'appearance',
+  },
+  {
+    id: 'theme-packs',
+    tab: 'app',
+    title: 'Tema paketleri',
+    description: 'Renk, açık/koyu görünüm ve tema paketleri.',
+    keywords: ['tema', 'renk', 'appearance', 'dark', 'light', 'açık', 'acik', 'koyu'],
+    targetSectionId: 'appearance',
+  },
+  {
+    id: 'overlay',
+    tab: 'app',
+    title: 'Oyun içi göstergeler',
+    description: 'Overlay konumu, stil, boyut ve oyun içi kart ayarları.',
+    keywords: ['overlay', 'oyun', 'gösterge', 'gosterge', 'konum', 'stil', 'kart', 'oyun içi', 'oyun ici'],
+    targetSectionId: 'voice-overlay',
+  },
+  {
+    id: 'sounds',
+    tab: 'app',
+    title: 'Sesler',
+    description: 'Bildirim, davet ve arayüz sesleri.',
+    keywords: ['ses', 'bildirim', 'notification', 'uyarı', 'uyari', 'davet', 'audio'],
+    targetSectionId: 'sounds',
+  },
+  {
+    id: 'voice',
+    tab: 'app',
+    title: 'Mikrofon ve konuşma modu',
+    description: 'Mikrofon, kulaklık, PTT, VAD ve gürültü temizleme ayarları.',
+    keywords: ['mikrofon', 'kulaklık', 'kulaklik', 'ptt', 'vad', 'push to talk', 'konuşma', 'konusma', 'gürültü', 'gurultu'],
+    targetSectionId: 'performance',
+  },
+  {
+    id: 'performance',
+    tab: 'app',
+    title: 'Performans',
+    description: 'Düşük veri modu, performans ve uygulama verimliliği.',
+    keywords: ['performans', 'düşük veri', 'dusuk veri', 'low data', 'veri'],
+    targetSectionId: 'performance',
+  },
+  {
+    id: 'game-activity',
+    tab: 'app',
+    title: 'Oyun aktivitesi',
+    description: 'Masaüstünde oynanan oyunu gösterme ayarları.',
+    keywords: ['oyun', 'aktivite', 'game', 'activity', 'masaüstü', 'masaustu'],
+    targetSectionId: 'game-activity',
+  },
+  {
+    id: 'shortcuts',
+    tab: 'shortcuts',
+    title: 'Kısayollar',
+    description: 'Ctrl, tuş kombinasyonları ve hızlı komut kısayolları.',
+    keywords: ['kısayol', 'kisayol', 'shortcut', 'tuş', 'tus', 'ctrl', 'mouse', 'push to talk'],
+    targetSectionId: 'shortcuts',
+  },
+  {
+    id: 'admin',
+    tab: 'admin',
+    title: 'Yönetim',
+    description: 'Admin, moderasyon, rol, yetki ve kullanıcı yönetimi.',
+    keywords: ['yönetim', 'yonetim', 'admin', 'moderasyon', 'rol', 'yetki', 'kullanıcı', 'kullanici', 'sunucu'],
+    adminOnly: true,
+  },
+  {
+    id: 'dm',
+    tab: 'app',
+    title: 'DM ve bildirimler',
+    description: 'Direkt mesaj, bildirim ve uyarı davranışları.',
+    keywords: ['dm', 'direkt mesaj', 'mesaj', 'bildirim', 'notification', 'uyarı', 'uyari'],
+    targetSectionId: 'sounds',
+  },
+];
+
+function normalizeSettingsSearch(value: string) {
+  return value
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .trim();
+}
 
 // Premium segmented control — motion layoutId ile active pill smooth kayar
-function SegmentedTabs({ tabs, value, onChange }: {
+function SegmentedTabs({ tabs, value, onChange, rightSlot }: {
   tabs: Array<{ key: MainTab; icon: React.ReactNode; label: string }>;
   value: MainTab;
   onChange: (v: MainTab) => void;
+  rightSlot?: React.ReactNode;
 }) {
   return (
-    <div className="settings-tabs surface-card inline-flex p-1 rounded-xl">
-      {tabs.map(tab => {
-        const active = value === tab.key;
-        return (
-          <button
-            key={tab.key}
-            onClick={() => onChange(tab.key)}
-            className={`settings-tab ${active ? 'active' : ''} relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap`}
-          >
-            {active && (
-              <motion.span
-                layoutId="settings-tab-active"
-                className="absolute inset-0 rounded-lg -z-10"
-                transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                style={{
-                  background: 'var(--surface-elevated)',
-                  border: 'var(--surface-card-border)',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)',
-                }}
-              />
-            )}
-            <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/70'}>
-              {tab.icon}
-            </span>
-            <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/80'}>
-              {tab.label}
-            </span>
-          </button>
-        );
-      })}
+    <div className="settings-tabs surface-card flex w-full flex-col gap-2 p-1 rounded-xl md:flex-row md:items-center md:justify-between">
+      <div className="inline-flex min-w-0 flex-wrap">
+        {tabs.map(tab => {
+          const active = value === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => onChange(tab.key)}
+              className={`settings-tab ${active ? 'active' : ''} relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap`}
+            >
+              {active && (
+                <motion.span
+                  layoutId="settings-tab-active"
+                  className="absolute inset-0 rounded-lg -z-10"
+                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                  style={{
+                    background: 'var(--surface-elevated)',
+                    border: 'var(--surface-card-border)',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}
+                />
+              )}
+              <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/70'}>
+                {tab.icon}
+              </span>
+              <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/80'}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {rightSlot}
     </div>
   );
 }
@@ -1146,6 +1288,7 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
   const [legalModal, setLegalModal] = useState<LegalModalKind | null>(null);
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
   const showServersSub = !!currentUser.isPrimaryAdmin;
 
   // Deep-link intent — bildirim tıklamasından / dock ikonundan gelen hedef
@@ -1230,9 +1373,41 @@ export default function SettingsView() {
     { key: 'shortcuts', icon: <Keyboard size={13} strokeWidth={2} />, label: 'Kısayollar' },
     ...(isAdmin ? [{ key: 'admin' as MainTab, icon: <ShieldCheck size={13} strokeWidth={2} />, label: 'Yönetim' }] : []),
   ];
+  const tabLabelByKey = useMemo(() => new Map(mainTabs.map(tab => [tab.key, tab.label])), [mainTabs]);
+  const normalizedSettingsSearchQuery = normalizeSettingsSearch(settingsSearchQuery);
+  const settingsSearchResults = useMemo(() => {
+    if (!normalizedSettingsSearchQuery) return [];
+    return SETTINGS_SEARCH_ITEMS
+      .filter(item => !item.adminOnly || isAdmin)
+      .filter(item => {
+        const haystack = normalizeSettingsSearch([
+          item.title,
+          item.description,
+          tabLabelByKey.get(item.tab) ?? '',
+          ...item.keywords,
+        ].join(' '));
+        return haystack.includes(normalizedSettingsSearchQuery);
+      });
+  }, [isAdmin, normalizedSettingsSearchQuery, tabLabelByKey]);
+
+  const openSearchResult = (item: SettingsSearchItem) => {
+    setActiveTab(item.tab);
+    if (item.tab === 'admin') setAdminSub('users');
+    setSettingsSearchQuery('');
+    if (!item.targetSectionId) return;
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-command-target="${item.targetSectionId}"]`);
+      if (!(el instanceof HTMLElement)) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('command-target-pulse');
+      void el.offsetWidth;
+      el.classList.add('command-target-pulse');
+      window.setTimeout(() => el.classList.remove('command-target-pulse'), 1800);
+    }, 140);
+  };
 
   return (
-    <div className="settings-flat-light w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-28 px-2 md:px-4 xl:px-6">
+    <div className="settings-flat-light w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] px-2 md:px-4 xl:px-6">
 
       {/* ── Header — başlık ve segmented nav dikey hizalı, central ── */}
       <div className="flex flex-col gap-4 pt-4 pb-5 md:pt-6 md:pb-6">
@@ -1242,10 +1417,66 @@ export default function SettingsView() {
           </div>
           <h2 className="text-base md:text-lg font-bold text-[var(--theme-text)] tracking-[-0.01em] leading-none">Ayarlar</h2>
         </div>
-        <SegmentedTabs tabs={mainTabs} value={effectiveTab} onChange={setActiveTab} />
+        <SegmentedTabs
+          tabs={mainTabs}
+          value={effectiveTab}
+          onChange={setActiveTab}
+          rightSlot={(
+          <div className="relative w-full md:w-[220px]">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
+            <input
+              value={settingsSearchQuery}
+              onChange={(event) => setSettingsSearchQuery(event.target.value)}
+              placeholder="Ayarlarda ara…"
+              className="h-7 w-full rounded-lg border border-[var(--theme-border)]/35 bg-[rgba(var(--glass-tint),0.025)] pl-9 pr-8 text-[11.5px] font-medium text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/38 focus:border-[var(--theme-accent)]/35 focus:bg-[rgba(var(--glass-tint),0.045)] focus:shadow-[0_0_0_2px_rgba(var(--theme-accent-rgb),0.07)]"
+            />
+            {settingsSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setSettingsSearchQuery('')}
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/55 transition-colors hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]"
+                aria-label="Aramayı temizle"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          )}
+        />
       </div>
 
       {/* ── Content ── */}
+      {normalizedSettingsSearchQuery ? (
+        <div className="mb-5 rounded-2xl border border-[var(--theme-border)]/45 bg-[rgba(var(--glass-tint),0.025)] p-2.5">
+          {settingsSearchResults.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2">
+              {settingsSearchResults.map(result => (
+                <button
+                  key={result.id}
+                  type="button"
+                  onClick={() => openSearchResult(result)}
+                  className="group flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-[var(--theme-accent)]/20 hover:bg-[rgba(var(--theme-accent-rgb),0.055)]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[12px] font-bold text-[var(--theme-text)]">{result.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">{result.description}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-[var(--theme-border)]/50 bg-[rgba(var(--glass-tint),0.035)] px-2 py-1 text-[9.5px] font-bold text-[var(--theme-secondary-text)]/65 group-hover:border-[var(--theme-accent)]/25 group-hover:text-[var(--theme-accent)]">
+                    {tabLabelByKey.get(result.tab) ?? 'Ayarlar'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+              <p className="text-[12px] font-bold text-[var(--theme-text)]/80">Sonuç bulunamadı</p>
+              <p className="mt-1 text-[10.5px] text-[var(--theme-secondary-text)]/55">Farklı bir kelime deneyin.</p>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {!normalizedSettingsSearchQuery && (
       <AnimatePresence mode="wait">
         <motion.div
           key={effectiveTab}
@@ -1435,6 +1666,7 @@ export default function SettingsView() {
           )}
         </motion.div>
       </AnimatePresence>
+      )}
 
       <LegalModal
         kind={legalModal ?? 'kvkk'}

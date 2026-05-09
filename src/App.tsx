@@ -2869,7 +2869,11 @@ export default function App() {
           <UIContext.Provider value={uiContextValue}>
             <AppStateContext.Provider value={appStateValue}>
               <AudioCtx.Provider value={audioValue}>
-                <div className={`font-sans selection:bg-blue-500/30 mv-app-shell ${view === 'login-password' || view === 'login-code' || view === 'register-details' ? 'mv-auth-shell' : ''}`}>
+                <div
+                  className={`font-sans selection:bg-blue-500/30 mv-app-shell ${view === 'login-password' || view === 'login-code' || view === 'register-details' ? 'mv-auth-shell' : ''}`}
+                  data-ui-density={settings.uiDensity}
+                  data-ui-font-scale={Math.round(settings.uiFontScale * 100)}
+                >
                   {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
                   <AppChrome />
                   <CommandPalette

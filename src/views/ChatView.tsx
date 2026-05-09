@@ -1681,7 +1681,7 @@ export default function ChatView() {
             return null;
           })()}
           <div
-            className={`flex-1 min-w-0 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[72px] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:p-8'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
+            className={`flex-1 min-w-0 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'p-3'}` : `lg:mb-[var(--mv-content-bottom-reserve)] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:px-8 sm:pt-8 sm:pb-[var(--mv-dock-edge-gap)]'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
           {settingsServerId ? (
             <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={() => refreshServers({ force: true })}
               onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers({ force: true }); }}

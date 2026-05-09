@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2 } from 'lucide-react';
+import { Monitor, Smartphone, Clock, History, User as UserIcon, UserPlus, UserMinus, Check, X, Star, MessageSquare, PhoneCall, Server as ServerIcon, Gamepad2 } from 'lucide-react';
 import type { User } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { getPublicDisplayName } from '../lib/formatName';
@@ -12,6 +12,7 @@ import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFra
 import { useUI } from '../contexts/UIContext';
 import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import RoleBadge, { getUserRoleBadge } from './RoleBadge';
 
 interface Props {
   user: User;
@@ -468,12 +469,7 @@ export default function UserProfilePopup({
               >
                 {userName}
               </span>
-              {user.isAdmin && (
-                <ShieldCheck size={13} className="text-[var(--theme-accent)] shrink-0" strokeWidth={2.5} />
-              )}
-              {!user.isAdmin && user.isModerator && (
-                <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-[13px] h-[13px] shrink-0"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-              )}
+              <RoleBadge role={getUserRoleBadge(user)} size="sm" showLabel />
             </div>
 
             {/* Status text — secondary tier */}

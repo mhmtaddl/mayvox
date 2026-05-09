@@ -134,8 +134,30 @@ export default function DesktopDock({
       : voiceBlockedTitle;
 
   // ── Self control panel ──
+  const dockRef = useRef<HTMLDivElement>(null);
   const [selfPanelOpen, setSelfPanelOpen] = useState(false);
   const selfPanelRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (isInline) return;
+    const dock = dockRef.current;
+    if (!dock) return;
+
+    const setDockHeight = (height: number) => {
+      if (!Number.isFinite(height) || height <= 0) return;
+      document.documentElement.style.setProperty('--mv-dock-actual-height', `${Math.ceil(height)}px`);
+    };
+
+    setDockHeight(dock.getBoundingClientRect().height);
+    const observer = new ResizeObserver(([entry]) => {
+      setDockHeight(entry.contentRect.height);
+    });
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--mv-dock-actual-height');
+    };
+  }, [isInline]);
+
   useEffect(() => {
     if (!selfPanelOpen) return;
     const handler = (e: MouseEvent) => {
@@ -294,10 +316,11 @@ export default function DesktopDock({
 
   return (
     <div
+      ref={dockRef}
       className={
         isInline
-          ? `mv-desktop-dock mv-dock-inline flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
-          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock fixed bottom-3 z-30 items-center gap-1.5 px-2 py-1 rounded-2xl min-h-[46px]`
+          ? `mv-desktop-dock mv-density-dock mv-dock-inline flex ${invitationData ? 'flex-nowrap justify-start overflow-hidden' : 'flex-wrap justify-center'} items-center gap-1.5 px-2 py-2 min-h-[48px]`
+          : `${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'} mv-desktop-dock mv-density-dock fixed bottom-3 z-30 items-center gap-1.5 px-2 py-1 rounded-2xl min-h-[46px]`
       }
       /* fixed mode: sidebar'lar arası content alanının tam ortası. inline mode: parent (MobileFooter) styling'i kullanır. */
       style={isInline
@@ -379,8 +402,8 @@ export default function DesktopDock({
                         }}
                       />
                     )}
-                    <div className="w-9 h-9 rounded-xl overflow-hidden bg-[var(--theme-accent)]/10 flex items-center justify-center">
-                      <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.displayName || currentUser.firstName} name={displayName} imgClassName="w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
+                    <div className="mv-dock-user-avatar w-9 h-9 rounded-xl overflow-hidden bg-[var(--theme-accent)]/10 flex items-center justify-center">
+                      <AvatarContent avatar={currentUser.avatar} statusText={effStatus} firstName={currentUser.displayName || currentUser.firstName} name={displayName} imgClassName="mv-dock-user-avatar-img w-9 h-9 object-cover" letterClassName="text-[12px] font-bold text-[var(--theme-accent)]" />
                     </div>
                     {/* Mobil: avatar sağ-alt köşe status dot — desktop'ta gösterilmez */}
                     {isInline && (
@@ -400,7 +423,7 @@ export default function DesktopDock({
                 </span>
                 {currentUser.gameActivity && (
                   <span className="mv-dock-user-game flex items-center gap-0.5 text-[9px] font-medium text-[var(--theme-accent)]/75 truncate mt-[1px]">
-                    <Gamepad2 size={8} strokeWidth={2.2} className="shrink-0" />
+                    <Gamepad2 size={8} strokeWidth={2.2} className="mv-dock-small-icon shrink-0" />
                     <span className="truncate">{currentUser.gameActivity}</span>
                   </span>
                 )}
@@ -478,7 +501,7 @@ export default function DesktopDock({
                 <div className="px-3 py-2 text-[8px] font-semibold text-[var(--theme-secondary-text)]/30 uppercase tracking-wider">Sunucular</div>
                 {otherServers.map(s => (
                   <button key={s.id} onClick={() => handleSelectServer(s.id)}
-                    className="mv-server-row w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0">
+                    className="mv-server-row mv-density-server-row w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0">
                     <div className="w-7 h-7 rounded-[8px] overflow-hidden flex items-center justify-center shrink-0" style={{ background: s.avatarUrl ? 'none' : 'rgba(var(--glass-tint), 0.08)' }}>
                       {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-7 h-7 rounded-[8px] object-cover" /> : <span className="text-[9px] font-bold text-[var(--theme-accent)]">{s.shortName}</span>}
                     </div>
@@ -496,7 +519,7 @@ export default function DesktopDock({
         {/* Sunucu oluştur — mobilde gizli, LeftSidebar'da aynı aksiyon */}
         {!isInline && canCreateServer && (
           <button onClick={() => onShowCreateModal()} title="Sunucu oluştur"
-            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-100 border bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-emerald-500/8 hover:text-emerald-400 hover:border-emerald-500/15">
+            className="mv-dock-small-square-btn w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-100 border bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/40 border-[rgba(var(--glass-tint),0.06)] hover:bg-emerald-500/8 hover:text-emerald-400 hover:border-emerald-500/15">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="4" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
             </svg>
@@ -584,7 +607,7 @@ export default function DesktopDock({
       {/* Gürültü Susturma — mobilde gizli, Ayarlar → Ses'te aynı seçenek */}
       {!isInline && activeChannel && <button
         onClick={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
-        className={`relative w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
+        className={`mv-dock-square-btn relative w-10 h-10 rounded-xl flex items-center justify-center btn-haptic ${
           isNoiseSuppressionEnabled
             ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/25'
             : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.06)]'
@@ -664,7 +687,7 @@ export default function DesktopDock({
           {/* Kart stili döngüsü — sadece room view'inde (tek anlamlı yer). */}
           {currentView === 'room' && !isInline && <button
             onClick={cycleCardStyle}
-            className="w-10 h-10 flex items-center justify-center btn-haptic"
+            className="mv-dock-square-btn w-10 h-10 flex items-center justify-center btn-haptic"
             style={{
               borderRadius: cardStyle === 'revolt' ? 8 : cardStyle === 'linear' ? 12 : 12,
               background: cardStyle === 'revolt'
@@ -699,7 +722,7 @@ export default function DesktopDock({
               null'a döner, voice avatar listesinden düşer. Home butonu "peek" için. */}
           <button
             onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
-            className="voice-leave-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150"
+            className="voice-leave-btn mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150"
             title="Çağrıdan Ayrıl"
           >
             <PhoneOff size={16} />
@@ -726,7 +749,7 @@ export default function DesktopDock({
             {showReturn && onReturnToRoom && (
               <button
                 onClick={onReturnToRoom}
-                className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
+                className="mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
                 title="Sohbet odasına dön"
               >
                 <Undo2 size={16} />
@@ -735,7 +758,7 @@ export default function DesktopDock({
             {showHome && onGoHome && (
               <button
                 onClick={onGoHome}
-                className="w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
+                className="mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
                 title="Sunucu ana sayfası"
               >
                 <Home size={16} />

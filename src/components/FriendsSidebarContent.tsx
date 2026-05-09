@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Mic, Headphones, ShieldCheck, ChevronDown, Check, X,
+  Mic, Headphones, ChevronDown, Check, X,
   UserPlus, Star, MessageSquare, PhoneCall, Gamepad2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,6 +12,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import DeviceBadge from './chat/DeviceBadge';
+import RoleBadge, { getUserRoleBadge } from './RoleBadge';
 import type { User, VoiceChannel } from '../types';
 
 function lastSeenSortValue(user: User): number {
@@ -148,7 +149,7 @@ export default function FriendsSidebarContent({
     return (
       <div
         key={user.id}
-        className={`flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-2.5 px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+        className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-2.5 px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
         onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
         onContextMenu={(e) => {
           if (isMe) return;
@@ -168,7 +169,7 @@ export default function FriendsSidebarContent({
           style={uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
         >
           <div
-            className={`${isDesktop ? 'h-[34px] w-[34px]' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
+            className={`${isDesktop ? 'mv-density-friend-avatar h-[34px] w-[34px]' : 'h-9 w-9'} overflow-hidden avatar-squircle flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
           >
             <AvatarContent avatar={user.avatar} statusText={displayStatusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
@@ -177,22 +178,13 @@ export default function FriendsSidebarContent({
           ); })()}
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-            <span className="text-[13px] font-semibold text-[var(--theme-text)] leading-[18px] truncate min-w-0 shrink">
+            <span className="mv-font-message text-[13px] font-semibold text-[var(--theme-text)] leading-[18px] truncate min-w-0 shrink">
               {publicName}
             </span>
             <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/70 shrink-0 tabular-nums">{user.age}</span>
-            {user.isAdmin && (
-              <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-                <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-              </span>
-            )}
-            {!user.isAdmin && user.isModerator && (
-              <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-              </span>
-            )}
+            <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
           </div>
-          <div className="flex items-center gap-1.5 mt-[2px] min-w-0 overflow-hidden whitespace-nowrap text-[11px] leading-[13px] font-medium text-[var(--theme-secondary-text)]/75">
+          <div className="mv-font-meta flex items-center gap-1.5 mt-[2px] min-w-0 overflow-hidden whitespace-nowrap text-[11px] leading-[13px] font-medium text-[var(--theme-secondary-text)]/75">
             <span className="inline-flex items-center shrink-0" title={statusLabel} aria-label={statusLabel}>
               <span
                 className="h-1.5 w-1.5 rounded-full shrink-0"
@@ -208,7 +200,7 @@ export default function FriendsSidebarContent({
             )}
           </div>
           {user.gameActivity && (
-            <div className="mt-[1px] min-w-0 overflow-hidden whitespace-nowrap text-[10.5px] leading-[13px] font-medium text-[var(--theme-text)]/62 flex items-center gap-1">
+            <div className="mv-font-caption mt-[1px] min-w-0 overflow-hidden whitespace-nowrap text-[10.5px] leading-[13px] font-medium text-[var(--theme-text)]/62 flex items-center gap-1">
               <Gamepad2 size={10} className="shrink-0 text-[var(--theme-accent)]/75" strokeWidth={2.2} />
               <span className="block truncate min-w-0">{user.gameActivity}</span>
             </div>
@@ -267,7 +259,7 @@ export default function FriendsSidebarContent({
     return (
     <div
       key={user.id}
-      className={`flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+      className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
       onContextMenu={(e) => {
         if (isMe) return;
@@ -288,7 +280,7 @@ export default function FriendsSidebarContent({
         style={isDesktop && uColor ? { ...getFrameStyle(uColor, uTier), borderRadius: '22%' } : undefined}
       >
         <div
-          className={`${isDesktop ? 'h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
+          className={`${isDesktop ? 'mv-density-friend-avatar h-8 w-8' : 'h-9 w-9'} overflow-hidden ${isDesktop ? 'avatar-squircle' : 'rounded-[10px] bg-[var(--theme-border)]/30'} flex items-center justify-center text-[var(--theme-text)] font-bold text-[10px]`}
         >
           <AvatarContent avatar={user.avatar} statusText="Çevrimdışı" firstName={user.displayName || user.firstName} name={publicName} imgClassName={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
         </div>
@@ -297,20 +289,11 @@ export default function FriendsSidebarContent({
         ); })()}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-          <span className={`text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate min-w-0 shrink`}>
+          <span className={`mv-font-message text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate min-w-0 shrink`}>
             {publicName}
           </span>
           <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0 tabular-nums`}>{user.age}</span>
-          {user.isAdmin && (
-            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--theme-accent-rgb), 0.2)' }}>
-              <ShieldCheck size={9} className="text-[var(--theme-accent)]" strokeWidth={2.5} />
-            </span>
-          )}
-          {!user.isAdmin && user.isModerator && (
-            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-              <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-            </span>
-          )}
+          <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
           {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
@@ -339,7 +322,7 @@ export default function FriendsSidebarContent({
 
   return (
     <>
-      <div className={`flex-1 overflow-y-auto ${isDesktop ? 'px-3 py-4' : 'p-4'} space-y-4 custom-scrollbar`}>
+      <div className={`mv-density-sidebar-content flex-1 overflow-y-auto ${isDesktop ? 'px-3 py-4' : 'p-4'} space-y-4 custom-scrollbar`}>
         {friendsLoading ? (
           <div className="flex flex-col items-center justify-center py-12 px-4">
             <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />

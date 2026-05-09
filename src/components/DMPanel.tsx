@@ -531,7 +531,7 @@ function ConversationItem({
   return (
     <div
       data-unread={showUnread}
-      className="dm-conversation-item group/conv flex items-center gap-2 w-full pl-2.5 pr-2 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
+      className="dm-conversation-item mv-density-list-item group/conv flex items-center gap-2 w-full pl-2.5 pr-2 py-2.5 rounded-[12px] text-left transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.995]"
     >
       <button
         onClick={onClick}
@@ -539,7 +539,7 @@ function ConversationItem({
       >
         {/* Avatar — tek pipeline: custom → status PNG → initial */}
         <div
-          className="shrink-0 relative w-10 h-10 rounded-[11px] overflow-hidden flex items-center justify-center"
+          className="mv-density-list-avatar shrink-0 relative w-10 h-10 rounded-[11px] overflow-hidden flex items-center justify-center"
           style={{
             background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
             boxShadow: showUnread
@@ -553,11 +553,11 @@ function ConversationItem({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-[3px]">
-            <span className={`text-[13px] leading-tight truncate tracking-[-0.01em] ${showUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
+            <span className={`mv-font-message text-[13px] leading-tight truncate tracking-[-0.01em] ${showUnread ? 'font-semibold text-[var(--theme-text)]' : 'font-medium text-[var(--theme-text)]/80'}`}>{name}</span>
             {!isRequest && timeStr && <span className={`text-[10px] shrink-0 tabular-nums font-medium ${showUnread ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/50'}`}>{timeStr}</span>}
           </div>
           <div className="flex min-w-0 items-center">
-            <span className={`min-w-0 truncate text-[11.5px] leading-snug ${showUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
+            <span className={`mv-font-meta min-w-0 truncate text-[11.5px] leading-snug ${showUnread ? 'text-[var(--theme-text)]/70' : 'text-[var(--theme-secondary-text)]/55'}`}>
               {convo.lastMessage || <span className="italic opacity-70">Henüz mesaj yok</span>}
             </span>
           </div>
@@ -642,7 +642,6 @@ function MessageBubble({
   }, []);
 
   // Spec: same user 4px / different group 12px
-  const wrapperSpacing = isGrouped ? 'mt-1' : 'mt-3';
   // Tail corner sadece group sonunda sert
   const radiusCls = isOwn
     ? (isLastInGroup ? 'rounded-[16px] rounded-br-[6px]' : 'rounded-[16px]')
@@ -651,10 +650,10 @@ function MessageBubble({
   const hasReactions = !!msg.reactions?.length;
 
   return (
-    <div className={`group/msg ${wrapperSpacing}`}>
+    <div className="group/msg" style={{ marginTop: isGrouped ? 'var(--density-message-group-gap)' : 'var(--density-message-stack-gap)' }}>
       <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`${isOwn ? 'order-3' : 'order-1'} ${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
+        className={`mv-density-message-bubble mv-font-message ${isOwn ? 'order-3' : 'order-1'} ${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
         style={{
           background: isOwn ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
           color: isOwn ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
@@ -682,7 +681,7 @@ function MessageBubble({
               }}
               maxLength={2000}
               rows={3}
-              className="w-full resize-none rounded-[12px] border border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--glass-tint),0.08)] px-3 py-2 text-[13px] leading-[1.45] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/35 focus:border-[rgba(var(--theme-accent-rgb),0.42)]"
+              className="mv-font-message w-full resize-none rounded-[12px] border border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--glass-tint),0.08)] px-3 py-2 text-[13px] leading-[1.45] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/35 focus:border-[rgba(var(--theme-accent-rgb),0.42)]"
               style={{ boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.05)' }}
             />
             <div className="mt-2 flex justify-end gap-1.5">
@@ -1161,7 +1160,7 @@ function ChatArea({
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} onScroll={handleScroll} data-mv-chat-area="dm" className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
+      <div ref={scrollRef} onScroll={handleScroll} data-mv-chat-area="dm" className="mv-density-chat-area flex-1 overflow-y-auto px-4 py-3 custom-scrollbar relative">
         {loadingHistory ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />
@@ -1175,7 +1174,7 @@ function ChatArea({
           </div>
         ) : grouped.map(group => (
           <div key={group.date}>
-            <div className="flex items-center gap-3 my-4">
+            <div className="mv-density-date-separator flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-[var(--theme-border)] opacity-30" />
               <span className="text-[9px] font-medium text-[var(--theme-secondary-text)] opacity-30 uppercase tracking-wider">{group.date}</span>
               <div className="flex-1 h-px bg-[var(--theme-border)] opacity-30" />
@@ -1538,7 +1537,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
             <>
               {/* Header */}
               <div className="px-4 py-3.5 shrink-0 flex items-center justify-between relative" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
-                <span className="text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
+          <span className="mv-font-title text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
@@ -1644,7 +1643,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     value={listQuery}
                     onChange={(e) => setListQuery(e.target.value)}
                     placeholder="Mesajlarda ara"
-                    className="min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[11.5px] text-[var(--theme-text)] shadow-none outline-none ring-0 placeholder:text-[var(--theme-secondary-text)]/35 focus:border-0 focus:outline-none focus:ring-0"
+                    className="mv-font-meta min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[11.5px] text-[var(--theme-text)] shadow-none outline-none ring-0 placeholder:text-[var(--theme-secondary-text)]/35 focus:border-0 focus:outline-none focus:ring-0"
                     style={{ background: 'transparent', border: 0, boxShadow: 'none' }}
                   />
                   {listQuery && (

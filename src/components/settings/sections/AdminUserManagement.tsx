@@ -7,6 +7,7 @@ import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useUI } from '../../../contexts/UIContext';
 import ConfirmModal from '../../ConfirmModal';
+import RoleBadge, { getUserRoleBadge } from '../../RoleBadge';
 
 // ── Confirmation dialog state ──
 type ConfirmAction =
@@ -269,11 +270,7 @@ export default function AdminUserManagement() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 md:gap-1.5 min-w-0">
                           <span className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)] truncate">{publicName}</span>
-                          {!user.isAdmin && user.isModerator && (
-                            <span className="shrink-0 w-3.5 h-3.5 rounded flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                              <svg viewBox="0 0 16 16" fill="rgb(167,139,250)" className="w-2 h-2"><path d="M2 11L3.5 4L8 7L12.5 4L14 11H2Z"/><rect x="2" y="12" width="12" height="1.5" rx="0.5"/></svg>
-                            </span>
-                          )}
+                          <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
                           <span className={`text-[7px] md:text-[8px] font-semibold shrink-0 px-1 py-0.5 rounded-full border ${outdated ? 'text-red-400 border-red-500/20 bg-red-500/8 animate-pulse' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/8'}`}>
                             {hasVersion ? `v${user.appVersion}` : 'Eski'}
                           </span>

@@ -158,6 +158,12 @@ export function AppearanceSection() {
     setCustomThemeOverrides,
     commitCustomThemeOverrides,
     resetCustomThemeOverrides,
+    uiDensity,
+    setUiDensity,
+    uiFontScale,
+    setUiFontScale,
+    uiDockScale,
+    setUiDockScale,
   } = useSettings();
   const { currentUser } = useUser();
   const [isProCustomizationOpen, setIsProCustomizationOpen] = useState(false);
@@ -167,6 +173,12 @@ export function AppearanceSection() {
   const visibleThemePacks = THEME_PACKS.filter(pack => canAccessThemePack(pack, themeAccessTier));
   const isEliteMember = themeAccessTier === 'elite';
   const isProMember = themeAccessTier === 'pro' || themeAccessTier === 'elite';
+  const fontScaleSteps = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15];
+  const currentFontScaleIndex = Math.max(0, fontScaleSteps.findIndex(step => Math.abs(step - uiFontScale) < 0.001));
+  const fontScalePercent = Math.round(uiFontScale * 100);
+  const dockScaleSteps = [0.8, 0.9, 1, 1.1, 1.2];
+  const currentDockScaleIndex = Math.max(0, dockScaleSteps.findIndex(step => Math.abs(step - uiDockScale) < 0.001));
+  const dockScalePercent = Math.round(uiDockScale * 100);
 
   const buildProOverride = (key: 'accent' | 'chromeTint', value: string) => ({
     ...customThemeOverrides,
@@ -212,6 +224,105 @@ export function AppearanceSection() {
 
   return (
     <CardSection icon={<Recycle size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
+      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-[var(--theme-text)]">Görünüm yoğunluğu</p>
+            <p className="mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+              Kompakt mod küçük ekranlarda daha fazla içeriği gösterir.
+            </p>
+          </div>
+          <div className="inline-flex shrink-0 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+            {[
+              { id: 'comfortable' as const, label: 'Rahat' },
+              { id: 'compact' as const, label: 'Kompakt' },
+            ].map(option => {
+              const active = uiDensity === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setUiDensity(option.id)}
+                  className={`h-7 rounded-md px-3 text-[10.5px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-[rgba(var(--theme-accent-rgb),0.16)] text-[var(--theme-accent)] shadow-[inset_0_0_0_1px_rgba(var(--theme-accent-rgb),0.22)]'
+                      : 'text-[var(--theme-secondary-text)]/65 hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)]'
+                  }`}
+                  aria-pressed={active}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Yazı boyutu</p>
+            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+              Uygulama içindeki metinlerin okunabilirliğini ayarlar.
+            </p>
+          </div>
+          <div className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+            <button
+              type="button"
+              onClick={() => setUiFontScale(fontScaleSteps[Math.max(0, currentFontScaleIndex - 1)])}
+              disabled={currentFontScaleIndex <= 0}
+              className="h-7 w-8 rounded-md text-[10.5px] font-bold text-[var(--theme-secondary-text)]/75 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/75"
+              aria-label="Yazı boyutunu küçült"
+            >
+              A−
+            </button>
+            <span className="min-w-[42px] rounded-md px-2 text-center text-[10.5px] font-bold tabular-nums text-[var(--theme-accent)]">
+              %{fontScalePercent}
+            </span>
+            <button
+              type="button"
+              onClick={() => setUiFontScale(fontScaleSteps[Math.min(fontScaleSteps.length - 1, currentFontScaleIndex + 1)])}
+              disabled={currentFontScaleIndex >= fontScaleSteps.length - 1}
+              className="h-7 w-8 rounded-md text-[10.5px] font-bold text-[var(--theme-secondary-text)]/75 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/75"
+              aria-label="Yazı boyutunu büyüt"
+            >
+              A+
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Alt kontrol çubuğu boyutu</p>
+            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+              Alt hızlı kontrol çubuğunun avatar, buton ve boşluk boyutunu ayarlar.
+            </p>
+          </div>
+          <div className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+            <button
+              type="button"
+              onClick={() => setUiDockScale(dockScaleSteps[Math.max(0, currentDockScaleIndex - 1)])}
+              disabled={currentDockScaleIndex <= 0}
+              className="h-7 w-8 rounded-md text-[12px] font-bold text-[var(--theme-secondary-text)]/75 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/75"
+              aria-label="Alt kontrol çubuğunu küçült"
+            >
+              −
+            </button>
+            <span className="min-w-[42px] rounded-md px-2 text-center text-[10.5px] font-bold tabular-nums text-[var(--theme-accent)]">
+              %{dockScalePercent}
+            </span>
+            <button
+              type="button"
+              onClick={() => setUiDockScale(dockScaleSteps[Math.min(dockScaleSteps.length - 1, currentDockScaleIndex + 1)])}
+              disabled={currentDockScaleIndex >= dockScaleSteps.length - 1}
+              className="h-7 w-8 rounded-md text-[12px] font-bold text-[var(--theme-secondary-text)]/75 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/75"
+              aria-label="Alt kontrol çubuğunu büyüt"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* ═══ THEME PACKS ═══ */}
       <div className="mb-1">
