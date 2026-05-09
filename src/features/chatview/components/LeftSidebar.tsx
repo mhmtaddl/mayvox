@@ -357,23 +357,29 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                       }
                     : undefined
                 }
-                className={`mv-density-channel-row w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group active:scale-[0.97] active:duration-75 ${
+                className={`mv-density-channel-row w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-[color,opacity,transform,background-color] duration-150 group active:scale-[0.985] active:duration-75 ${
                   isDragging ? 'opacity-40 ' : ''
                 }${
                   activeChannel === channel.id
-                    ? `bg-[var(--theme-accent)]/10 text-[var(--theme-text)] border border-[var(--theme-accent)]/20 shadow-[inset_0_0_12px_rgba(var(--theme-accent-rgb),0.08),inset_0_1px_0_rgba(var(--theme-accent-rgb),0.1)]${isConnecting ? ' animate-pulse' : ''}`
-                    : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-text)]'
+                    ? `text-[var(--theme-text)]${isConnecting ? ' animate-pulse' : ''}`
+                    : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
                 }`}
               >
-                <div className="relative">
+                <div
+                  className="relative text-[var(--theme-secondary-text)] opacity-55 transition-[color,opacity,filter] duration-150 group-hover:text-[var(--channel-icon-color)] group-hover:opacity-100 group-hover:brightness-110"
+                  style={{
+                    '--channel-icon-color': channel.iconColor ?? getDefaultChannelIconColor(channel.mode || 'social'),
+                    color: activeChannel === channel.id ? 'var(--channel-icon-color)' : undefined,
+                  } as React.CSSProperties}
+                >
                   {(() => {
                     const mode = channel.mode || 'social';
                     const IC = channelIconComponents[channel.iconName ?? getDefaultChannelIconName(mode)] || roomModeIcons[mode] || Coffee;
-                    return <IC size={16} className="opacity-90" style={{ color: channel.iconColor ?? getDefaultChannelIconColor(mode) }} />;
+                    return <IC size={16} />;
                   })()}
                 </div>
                 <div className="flex items-center justify-between flex-1 min-w-0">
-                  <span className="mv-font-title font-medium truncate" style={{ fontSize: channel.name.length > 14 ? 'var(--mv-font-body)' : 'var(--mv-font-title)' }}>{channel.name}</span>
+                  <span className="mv-font-title font-medium truncate opacity-82 transition-opacity duration-150 group-hover:opacity-100" style={{ fontSize: channel.name.length > 14 ? 'var(--mv-font-body)' : 'var(--mv-font-title)' }}>{channel.name}</span>
                   {channel.deletionTimer !== undefined && !channel.userCount && (
                     <div className="flex items-center gap-1 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
                       <Timer size={10} className="text-red-500 animate-pulse" />
@@ -409,7 +415,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 let shownListenerLabel = false;
 
                 return (
-                <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
+                <div className="pl-3 pr-2 space-y-0.5 pb-2 mt-0.5 ml-3 border-l border-[var(--theme-accent)]/10">
                   {sorted.map(({ memberId, stableId, user }) => {
                     if (!user) {
                       logMemberIdentityDebug('left_sidebar_unresolved_member', { memberId }, `left_sidebar:${memberId}`);
@@ -441,7 +447,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                       {/* Crossfade: placeholder ↔ real user */}
                       <div className="mv-density-member-row relative h-7">
                         {/* Placeholder layer */}
-                        <div className={`absolute inset-0 flex items-center gap-2 py-1 px-1.5 transition-opacity duration-150 ${user ? 'opacity-0' : 'opacity-40'}`}>
+                        <div className={`absolute inset-0 flex items-center gap-2 py-1 px-1 transition-opacity duration-150 ${user ? 'opacity-0' : 'opacity-40'}`}>
                           <div className="h-5 w-5 rounded-[6px] bg-[rgba(var(--glass-tint),0.08)] shrink-0" />
                           <div className="text-[10px] font-medium text-[var(--theme-secondary-text)] truncate">
                             Bilinmeyen kullanıcı
@@ -466,7 +472,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             e.preventDefault();
                             onUserContextMenu?.(user.id, e.clientX, e.clientY);
                           }}
-                          className={`mv-font-meta absolute inset-0 flex items-center gap-2 text-[11px] transition-all duration-150 group/member py-1 px-1.5 rounded-lg ${user ? 'cursor-pointer hover:bg-[var(--theme-accent)]/5 active:scale-[0.98]' : 'pointer-events-none'} ${user ? (
+                          className={`mv-font-meta absolute inset-0 flex items-center gap-2 text-[11px] transition-[color,opacity] duration-150 group/member py-1 px-1 rounded-lg ${user ? 'cursor-pointer' : 'pointer-events-none'} ${user ? (
                             isBc && isSp
                               ? 'font-semibold text-[var(--theme-text)] hover:text-[var(--theme-accent)]'
                               : 'font-medium text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)]'
@@ -514,13 +520,15 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                               </div>
                             ) : (
                               <>
-                                <span className="truncate flex-1">{getPublicDisplayName(user)}</span>
-                                <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
+                                <span className="truncate flex-1 min-w-0">{getPublicDisplayName(user)}</span>
                                 {isBc && (isSp
                                   ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
                                   : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
                                 )}
                                 <VolumeLabel value={userVolumes[user.id]} />
+                                <span className="ml-0.5 flex w-4 shrink-0 justify-end">
+                                  <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
+                                </span>
                               </>
                             )}
                           </>}
@@ -550,15 +558,15 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 }
                 setRoomModal({ isOpen: true, type: 'create', name: '', maxUsers: 0, isInviteOnly: false, isHidden: false, mode: 'social', iconColor: getDefaultChannelIconColor('social'), iconName: getDefaultChannelIconName('social') });
               }}
-              className={`mv-density-channel-row w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+              className={`mv-density-channel-row group w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-[color,opacity,transform] duration-150 ${
                 atLimit
-                  ? 'text-[var(--theme-secondary-text)]/70 cursor-pointer hover:bg-[rgba(var(--glass-tint),0.04)]'
-                  : 'text-[var(--theme-secondary-text)] hover:bg-[rgba(var(--glass-tint),0.04)] hover:text-[var(--theme-accent)]'
+                  ? 'text-[var(--theme-secondary-text)]/70 cursor-pointer'
+                  : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
               }`}
               title={atLimit ? roomLimitMessage(activeServerPlan) : undefined}
             >
-              <Sparkles size={15} />
-              <span className="mv-font-title font-medium">Oda Oluştur</span>
+              <Sparkles size={15} className="text-[var(--theme-secondary-text)]/55 transition-[color,opacity,filter] duration-150 group-hover:text-[var(--theme-accent)] group-hover:opacity-100 group-hover:brightness-110" />
+              <span className="mv-font-title font-medium opacity-82 transition-opacity duration-150 group-hover:opacity-100">Oda Oluştur</span>
             </button>
             );
           })()}
@@ -573,13 +581,13 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
 
         {/* Keşfet */}
         {onShowDiscover && (
-          <button onClick={onShowDiscover} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.05)] transition-all duration-150 mb-1.5 active:scale-[0.98]">
-            <Compass size={14} className="text-[var(--theme-accent)] opacity-50" /> Topluluk Keşfet
+          <button onClick={onShowDiscover} className="group mx-auto flex items-center justify-center gap-2.5 px-2 py-1.5 text-[11px] font-semibold text-[var(--theme-secondary-text)]/56 transition-[color,opacity,transform] duration-150 ease-out hover:text-[var(--theme-accent)] hover:opacity-95 active:scale-[0.99]">
+            <Compass size={14} className="text-[var(--theme-accent)] opacity-52 transition-opacity duration-150 group-hover:opacity-75" /> Topluluk Keşfet
           </button>
         )}
 
         {/* Sistem durumu */}
-        <div className="flex items-center justify-center gap-3 px-1 py-1.5 rounded-xl" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
+        <div className="mt-1.5 flex items-center justify-center gap-2 text-[var(--theme-secondary-text)]/38">
           {appVersion && (
             <UpdateVersionHub
               currentVersion={appVersion}

@@ -274,11 +274,11 @@ export default function ChatPanel({
       )}
 
       {/* Input */}
-      <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative transition-[box-shadow,border-color,background] focus-within:shadow-[inset_0_0_0_1px_rgba(var(--theme-accent-rgb),0.18)]" style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.05)' }}>
+      <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative transition-[border-color,background] duration-150" style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}>
         {/* Emoji */}
         <div ref={emojiRef} className="relative shrink-0">
-          <button onClick={() => setShowEmojiPicker(p => !p)} className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-40 hover:opacity-70 hover:bg-[rgba(var(--glass-tint),0.04)] transition-all" title="Emoji">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <button onClick={() => setShowEmojiPicker(p => !p)} className="w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)] opacity-42 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-80 active:scale-[0.96]" title="Emoji">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-1 z-50 p-2 grid grid-cols-8 gap-1 w-[280px] popup-surface">
@@ -313,17 +313,17 @@ export default function ChatPanel({
           onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
         />
         {/* Gonder */}
-        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all ${chatInput.trim() ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)] opacity-30'} disabled:cursor-default`}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 ${chatInput.trim() ? 'text-[var(--theme-accent)] opacity-82 hover:opacity-100 active:scale-[0.96]' : 'text-[var(--theme-secondary-text)] opacity-28'} disabled:cursor-default`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
         {/* Admin/Mod butonlari */}
         {(isAdmin || isModerator) && (
           <>
-            <button onClick={onClearAll} className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Tüm mesajları sil">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            <button onClick={onClearAll} className="shrink-0 w-8 h-8 flex items-center justify-center text-red-400/48 transition-[color,opacity,transform] duration-150 hover:text-red-400 hover:opacity-90 active:scale-[0.96]" title="Tüm mesajları sil">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             </button>
-            <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 bg-orange-500/15' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:bg-orange-500/10'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
+            <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 opacity-90' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:opacity-90 active:scale-[0.96]'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
             </button>
           </>
         )}

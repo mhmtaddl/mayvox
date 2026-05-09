@@ -1731,21 +1731,16 @@ export default function ChatView() {
             />
           ) : (
             <div className="flex-1 flex flex-col overflow-y-auto">
-              <div className="text-center pt-10 pb-2 px-6">
-                <div className="relative inline-block mb-6">
-                  <div className="relative w-16 h-16 rounded-2xl bg-[rgba(var(--theme-sidebar-rgb),0.5)] backdrop-blur-xl border border-[rgba(var(--glass-tint),0.06)] flex items-center justify-center">
-                    <Volume2 size={28} className="text-[var(--theme-accent)] opacity-70" />
-                  </div>
-                </div>
-                <h2 className="text-lg font-bold tracking-wide text-[var(--theme-text)] mb-2">Henüz Bir Odada Değilsiniz</h2>
-                <p className="text-xs text-[var(--theme-secondary-text)]/55 max-w-[260px] leading-relaxed mx-auto">Sohbete başlamak için sol taraftaki kanallardan birine katılın.</p>
-                {/* Mobil CTA — sol drawer'ı açar, kullanıcı kanalları görür */}
+              <div className="shrink-0 flex items-center justify-between gap-3 px-6 pt-3 pb-0">
+                <p className="flex min-w-0 items-center gap-1.5 text-[12px] leading-snug text-[var(--theme-secondary-text)]/50">
+                  <Volume2 size={14} className="shrink-0 text-[var(--theme-accent)]/55" />
+                  <span className="truncate">Bir ses kanalına katılarak sohbete başlayabilirsin.</span>
+                </p>
                 <button
                   onClick={() => setMobileLeftOpen(true)}
-                  className={`${FORCE_MOBILE ? 'inline-flex' : 'inline-flex lg:hidden'} mt-5 items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--theme-accent)]/15 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 font-bold text-[13px] active:scale-[0.97] transition-transform btn-haptic`}
+                  className={`${FORCE_MOBILE ? 'inline-flex' : 'inline-flex lg:hidden'} shrink-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-[var(--theme-accent)]/80 transition-transform active:scale-[0.97] btn-haptic`}
                 >
-                  <Volume2 size={14} />
-                  Bir Kanala Katıl
+                  Kanalları Gör
                 </button>
               </div>
               <AnnouncementsPanel
@@ -1776,10 +1771,10 @@ export default function ChatView() {
             onDM={handleFriendDm} channels={channels} activeChannel={activeChannel}
             inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
             servers={sidebarServers} />
-          <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
+          <div className="shrink-0 px-3 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
-              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {dmUnreadCount > 0 && !dmPanelOpen && (
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" className="notif-icon-pulse" />
                 )}
@@ -1793,8 +1788,8 @@ export default function ChatView() {
                 if (view === 'settings') { setView('chat'); }
                 else { setSettingsTarget('app'); setView('settings'); }
               }}
-              className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
-              <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+              className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
+              <Settings size={14} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
               {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
             </button>
             <NotificationBell
@@ -1861,7 +1856,7 @@ export default function ChatView() {
                 });
               }}
             />
-            <button onClick={confirmLogout} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
+            <button onClick={confirmLogout} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={14} /></button>
           </div>
         </aside>
       </div>

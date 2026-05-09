@@ -70,12 +70,12 @@ function ConnectionQualityIndicatorInner({ connectionLevel, isConnecting, isActi
   return (
     <div className="group relative flex flex-col items-center gap-0.5" aria-label={ariaLabel}>
       {tooltip}
-      <div className="flex flex-col items-center gap-0.5">
-        <div className="flex items-end gap-0.5 h-3">
+      <div className="flex flex-col items-center gap-0.5 opacity-75">
+        <div className="flex items-end gap-[2px] h-3">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className={`w-1 rounded-full ${i <= connectionLevel ? getBarColor(connectionLevel) : 'bg-[var(--theme-border)]'}`}
+              className={`w-[3px] rounded-full ${i <= connectionLevel ? getBarColor(connectionLevel) : 'bg-[var(--theme-border)]'}`}
               style={{ height: `${i * 25}%` }}
             />
           ))}

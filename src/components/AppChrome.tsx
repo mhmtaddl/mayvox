@@ -6,7 +6,7 @@ import { Minus, X } from 'lucide-react';
  * MayVox Custom Desktop Chrome — frameless Electron window'u premium kontrol rayı.
  * - Sol: küçük marka mark + "MAY/VOX" wordmark
  * - Orta: drag region (boş, ambient glow)
- * - Sağ: macOS tarzı renkli minimize / maximize-restore / close noktaları
+ * - Sağ: soft frameless minimize / maximize-restore / close kontrolleri
  *
  * Drag: header'in kendisi `-webkit-app-region: drag`, butonlar `no-drag`.
  */
@@ -167,13 +167,16 @@ export default function AppChrome() {
       <div className="relative h-full flex items-center justify-between px-3">
         {/* Header stays no-drag so renderer can implement reliable drag + double-click behavior. */}
         <div
-          className="group relative z-30 flex items-center gap-2 shrink-0 pr-3"
+          className="group relative z-30 flex items-center gap-[7px] shrink-0 pr-3 transition-opacity duration-160"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <BrandMark focused={focused} />
           <span
-            className={`text-[14px] font-semibold tracking-[0.10em] uppercase leading-none transition-opacity duration-150 group-hover:opacity-95 ${focused ? 'opacity-90' : 'opacity-55'}`}
-            style={{ color: 'rgba(var(--glass-tint), 0.88)' }}
+            className={`text-[11.5px] font-bold tracking-[0.12em] uppercase leading-none transition-[opacity,color] duration-160 group-hover:opacity-95 ${focused ? 'opacity-90' : 'opacity-56'}`}
+            style={{
+              color: 'rgba(var(--glass-tint), 0.82)',
+              textShadow: '0 1px 8px rgba(0,0,0,0.08)',
+            }}
           >
             MAYVOX
           </span>
@@ -182,9 +185,9 @@ export default function AppChrome() {
         {/* CENTER — drag area, ambient only */}
         <div className="flex-1 h-full" aria-hidden />
 
-        {/* RIGHT — macOS-style traffic light controls */}
+        {/* RIGHT — frameless window controls */}
         <div
-          className="relative z-30 flex items-center gap-[10px] shrink-0 pl-3 pr-2"
+          className="relative z-30 flex items-center gap-2 shrink-0 pl-3 pr-2"
           data-window-control
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
@@ -211,18 +214,16 @@ export default function AppChrome() {
 function BrandMark({ focused }: { focused: boolean }) {
   return (
     <div
-      className="relative w-6 h-6 flex items-center justify-center"
+      className="relative w-[14px] h-[14px] flex items-center justify-center transition-opacity duration-160 group-hover:opacity-100"
       style={{
-        opacity: focused ? 0.82 : 0.52,
-        transition: 'opacity 200ms ease',
+        opacity: focused ? 0.78 : 0.48,
       }}
     >
-      {/* Ses dalgası izlenimi — 3 mini bar */}
-      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" aria-hidden>
-        <rect x="1" y="4" width="2" height="4" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.62" />
-        <rect x="4.4" y="1.5" width="2.1" height="8" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.74" />
-        <rect x="8" y="2.8" width="2.1" height="5.4" rx="0.8" fill="rgba(var(--glass-tint), 0.82)" opacity="0.68" />
-        <rect x="11.5" y="4.4" width="1.7" height="2.8" rx="0.7" fill="rgba(var(--glass-tint), 0.82)" opacity="0.54" />
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+        <rect x="1.4" y="5.4" width="1.45" height="3.4" rx="0.72" fill="rgba(120,210,255,0.62)" />
+        <rect x="4.2" y="2.7" width="1.5" height="8.7" rx="0.75" fill="rgba(120,210,255,0.72)" />
+        <rect x="7.0" y="4.1" width="1.5" height="6.0" rx="0.75" fill="rgba(125,150,255,0.62)" />
+        <rect x="9.8" y="5.9" width="1.35" height="2.8" rx="0.68" fill="rgba(120,210,255,0.52)" />
       </svg>
     </div>
   );
@@ -236,49 +237,60 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
   children: React.ReactNode;
 }) {
   const [hover, setHover] = useState(false);
+  const [active, setActive] = useState(false);
   const palette = {
     neutral: {
-      bg: '#c8983c',
-      hoverBg: '#f5bf4f',
-      border: '#d99a25',
-      icon: '#7a5100',
+      hoverBg: 'rgba(245, 180, 64, 0.22)',
+      hoverBorder: 'rgba(245, 180, 64, 0.36)',
+      hoverIcon: 'rgba(251, 191, 36, 0.92)',
+      hoverShadow: '0 0 10px rgba(245, 180, 64, 0.10)',
     },
     accent: {
-      bg: '#459d43',
-      hoverBg: '#61c554',
-      border: '#3fae3b',
-      icon: '#155c18',
+      hoverBg: 'rgba(74, 222, 128, 0.20)',
+      hoverBorder: 'rgba(74, 222, 128, 0.34)',
+      hoverIcon: 'rgba(134, 239, 172, 0.92)',
+      hoverShadow: '0 0 10px rgba(74, 222, 128, 0.10)',
     },
     danger: {
-      bg: '#c94b47',
-      hoverBg: '#ff5f57',
-      border: '#e0443e',
-      icon: '#7b1511',
+      hoverBg: 'rgba(248, 113, 113, 0.22)',
+      hoverBorder: 'rgba(248, 113, 113, 0.38)',
+      hoverIcon: 'rgba(252, 165, 165, 0.95)',
+      hoverShadow: '0 0 11px rgba(248, 113, 113, 0.12)',
     },
   }[tone];
+  const idleBg = 'rgba(var(--glass-tint), 0.055)';
+  const idleBorder = 'rgba(var(--glass-tint), 0.11)';
+  const idleIcon = 'rgba(var(--glass-tint), 0.62)';
 
   return (
     <button
       data-window-control
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => {
+        setHover(false);
+        setActive(false);
+      }}
+      onMouseDown={() => setActive(true)}
+      onMouseUp={() => setActive(false)}
       title={ariaLabel}
       aria-label={ariaLabel}
-      className="group w-[16px] h-[16px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90"
+      className="group w-[13px] h-[13px] rounded-[4px] flex items-center justify-center"
       style={{
-        background: hover ? palette.hoverBg : palette.bg,
-        border: `1px solid ${palette.border}`,
-        color: palette.icon,
-        opacity: hover ? 1 : 0.66,
+        background: hover ? palette.hoverBg : idleBg,
+        border: `1px solid ${hover ? palette.hoverBorder : idleBorder}`,
+        color: hover ? palette.hoverIcon : idleIcon,
+        opacity: hover ? 1 : 0.94,
+        transform: active ? 'scale(0.96)' : hover ? 'scale(1.04)' : 'scale(1)',
         boxShadow: hover
-          ? 'inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.18)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.24), 0 1px 2px rgba(0,0,0,0.16)',
+          ? `inset 0 1px 0 rgba(255,255,255,0.14), ${palette.hoverShadow}`
+          : 'inset 0 1px 0 rgba(var(--glass-tint),0.10), inset 0 -1px 0 rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.10)',
+        transition: 'background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, opacity 140ms ease, transform 120ms ease',
       }}
     >
       <span
         className="flex items-center justify-center transition-opacity duration-120"
-        style={{ opacity: hover ? 0.98 : 0 }}
+        style={{ opacity: hover ? 0.86 : 0 }}
       >
         {children}
       </span>

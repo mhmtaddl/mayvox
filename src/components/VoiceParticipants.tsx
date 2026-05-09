@@ -108,7 +108,7 @@ function VoiceParticipants({
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setCardsHeight(e.contentRect.height + 16));
+    const ro = new ResizeObserver(([e]) => setCardsHeight(e.contentRect.height + 18));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -230,7 +230,7 @@ function VoiceParticipants({
     <>
       {/* Network visualization — desktop + forceMobile (Android) */}
       <div className={`${forceMobile ? 'block' : 'hidden lg:block'} relative h-full`}>
-        <div ref={cardsRef} className="px-3 pt-3 pb-1">
+        <div ref={cardsRef} className="px-3 pt-4 pb-2">
           <RoomNetworkVisualization
             cardStyle={cardStyle}
             participants={networkParticipants}

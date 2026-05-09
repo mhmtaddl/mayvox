@@ -246,7 +246,7 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
       <button
         ref={btnRef}
         onClick={() => setOpen(prev => !prev)}
-        className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/bell ${
+        className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 group/bell ${
           hasBellNotifications
             ? `${open ? 'bg-[rgba(245,181,68,0.08)]' : ''} mv-notification-bell-has hover:bg-[rgba(245,181,68,0.10)]`
             : `${open ? 'bg-[rgba(var(--glass-tint),0.05)]' : ''} mv-notification-bell-idle hover:bg-[rgba(var(--glass-tint),0.04)]`
@@ -254,7 +254,7 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         title="Bildirimler"
       >
         <svg
-          width="22" height="16" viewBox="-4 0 32 24" fill="none"
+          width="19" height="14" viewBox="-4 0 32 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           className={unread ? 'bell-swing-loop' : ''}
         >

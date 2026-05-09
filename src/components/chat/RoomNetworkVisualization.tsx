@@ -13,9 +13,9 @@ interface Props {
 
 function calcVisibleCount(containerW: number): number {
   if (containerW <= 0) return 6;
-  const gap = 16;
-  const minSlot = 108 + gap;
-  const row1 = Math.max(1, Math.floor((containerW - 156) / minSlot));
+  const gap = 12;
+  const minSlot = 92 + gap;
+  const row1 = Math.max(1, Math.floor((containerW - 132) / minSlot));
   const row2 = Math.max(1, Math.floor(containerW / minSlot));
   return Math.max(3, row1 + row2);
 }
@@ -61,14 +61,14 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
   const visibleRemotes = sortedRemotes.slice(0, visibleSlots);
   const hiddenRemotes = sortedRemotes.slice(visibleSlots);
 
-  const remoteScale = Math.max(0.6, Math.min(1.0, 1.0 - (visibleRemotes.length - 1) * 0.05));
+  const remoteScale = Math.max(0.62, Math.min(1.0, 1.0 - (visibleRemotes.length - 1) * 0.045));
 
   const ordered: PositionedNode[] = [];
   if (self) ordered.push({ ...self, x: 0, y: 0, ring: 0, scale: 1 });
   visibleRemotes.forEach(p => ordered.push({ ...p, x: 0, y: 0, ring: 1, scale: remoteScale }));
 
   return (
-    <div ref={containerRef} className="flex flex-wrap justify-center items-start content-center gap-4 py-4 overflow-hidden">
+    <div ref={containerRef} className="voice-participant-strip flex flex-wrap justify-center items-start content-center gap-x-2 gap-y-2 pt-1.5 pb-1 overflow-hidden">
       <AnimatePresence>
         {ordered.map(node => (
           <motion.div
@@ -92,22 +92,22 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
             onClick={() => setOverflowOpen(p => !p)}
             className="flex flex-col items-center justify-center cursor-pointer select-none"
             style={{
-              width: 108,
-              padding: '10px 8px 8px',
-              background: overflowOpen ? 'rgba(var(--glass-tint), 0.04)' : 'rgba(var(--glass-tint), 0.025)',
-              border: overflowOpen ? '1px solid rgba(var(--glass-tint), 0.08)' : '1px solid rgba(var(--glass-tint), 0.05)',
-              borderRadius: 16,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+              width: 92,
+              padding: '7px 7px 6px',
+              background: overflowOpen ? 'rgba(var(--glass-tint), 0.035)' : 'rgba(var(--glass-tint), 0.018)',
+              border: overflowOpen ? '1px solid rgba(var(--glass-tint), 0.07)' : '1px solid rgba(var(--glass-tint), 0.035)',
+              borderRadius: 18,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.045)',
               transition: 'background 0.2s, border-color 0.2s',
             }}
           >
             <div
               className="flex items-center justify-center"
-              style={{ width: 48, height: 48, borderRadius: '22%', background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1px solid rgba(var(--glass-tint), 0.06)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+              style={{ width: 38, height: 38, borderRadius: '999px', background: 'rgba(var(--theme-accent-rgb), 0.07)', border: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: '0 2px 6px rgba(0,0,0,0.07)' }}
             >
-              <span className="text-[var(--theme-accent)] font-bold text-[16px]">+{hiddenRemotes.length}</span>
+              <span className="text-[var(--theme-accent)] font-bold text-[14px]">+{hiddenRemotes.length}</span>
             </div>
-            <span className="mt-1.5 text-[10px] font-medium text-[var(--theme-secondary-text)] opacity-60">diğerleri</span>
+            <span className="mt-1 text-[9px] font-medium text-[var(--theme-secondary-text)] opacity-60">diğerleri</span>
           </button>
 
           <AnimatePresence>

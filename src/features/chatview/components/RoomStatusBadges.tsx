@@ -82,7 +82,7 @@ export default function RoomStatusBadges({ channel, isActive = false, hasActiveS
   if (!badges.length) return null;
 
   return (
-    <div className="ml-2 flex shrink-0 items-center gap-1 overflow-hidden">
+    <div className="ml-2 flex w-[42px] shrink-0 items-center justify-end gap-1 overflow-hidden">
       {badges.map(badge => (
         <span
           key={badge.key}

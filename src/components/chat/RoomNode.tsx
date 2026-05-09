@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { Mic, MicOff, Headphones, HeadphoneOff, ShieldCheck, Monitor, Smartphone } from 'lucide-react';
 import AvatarContent from '../AvatarContent';
 import type { PositionedNode } from './roomNetworkLayout';
@@ -14,6 +13,9 @@ interface StaticRoomAvatarProps {
   radius: string;
   border: string;
   shadow: string;
+  speaking?: boolean;
+  muted?: boolean;
+  deafened?: boolean;
 }
 
 const StaticRoomAvatar = React.memo(function StaticRoomAvatar({
@@ -25,11 +27,14 @@ const StaticRoomAvatar = React.memo(function StaticRoomAvatar({
   radius,
   border,
   shadow,
+  speaking,
+  muted,
+  deafened,
 }: StaticRoomAvatarProps) {
   return (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0" style={{ borderRadius: radius }}>
       <div
-        className="overflow-hidden flex items-center justify-center"
+        className="relative z-10 overflow-hidden flex items-center justify-center"
         style={{
           width: size,
           height: size,
@@ -41,6 +46,12 @@ const StaticRoomAvatar = React.memo(function StaticRoomAvatar({
       >
         <AvatarContent avatar={avatar} statusText={statusText} firstName={name || firstName} name={name} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
       </div>
+      {speaking && <span className="voice-participant-speaking-ring" />}
+      {(muted || deafened) && (
+        <span className="voice-participant-muted-badge">
+          {deafened ? <HeadphoneOff size={8} /> : <MicOff size={8} />}
+        </span>
+      )}
     </div>
   );
 });
@@ -59,20 +70,21 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   } = node;
 
   const t = getCardStyleTokens(cardStyle);
+  const showSpeaking = isSpeaking && !isMuted && !isDeafened;
 
   // Dynamic scale — node.scale drives sizing
   const s = isCenter ? 1 : node.scale;
-  const avatarSize = isCenter ? 80 : Math.round(48 + (80 - 48) * (s - 0.6) / 0.4);
-  const cardW = isCenter ? 156 : Math.round(108 + (156 - 108) * (s - 0.6) / 0.4);
-  const padV = isCenter ? 18 : Math.round(10 + (18 - 10) * (s - 0.6) / 0.4);
-  const padH = isCenter ? 16 : Math.round(8 + (16 - 8) * (s - 0.6) / 0.4);
-  const padB = isCenter ? 14 : Math.round(8 + (14 - 8) * (s - 0.6) / 0.4);
+  const defaultAvatarSize = 50;
+  const defaultCardW = 106;
+  const defaultPadV = 8;
+  const defaultPadH = 5;
+  const defaultPadB = 7;
 
   const nodeShellStyle: React.CSSProperties = {
     opacity: (isMuted && isDeafened) ? 0.55 : isMuted ? 0.7 : 1,
     filter: (isMuted && isDeafened) ? 'grayscale(0.5)' : 'none',
-    transform: cardStyle === 'revolt' ? 'none' : isSpeaking ? 'translateY(-2px)' : 'none',
-    transition: cardStyle === 'revolt' ? 'opacity 0.2s, filter 0.2s' : 'opacity 0.2s, filter 0.2s, transform 0.2s',
+    transform: 'none',
+    transition: 'opacity 0.2s, filter 0.2s',
   };
 
   const renderRoleMark = (size: number) => {
@@ -88,15 +100,9 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   };
 
   const renderSpeakingBars = (heightClass: string) => (
-    <div className={`flex items-end gap-[1.5px] ${heightClass} !opacity-100`}>
+    <div className={`voice-speaking-bars ${heightClass}`} aria-hidden="true">
       {[0, 1, 2].map(i => (
-        <motion.span
-          key={i}
-          className="w-[1.5px] rounded-full bg-[var(--theme-accent)]"
-          animate={{ height: ['25%', '85%', '25%'] }}
-          transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1, ease: 'easeInOut' }}
-          style={{ height: '25%' }}
-        />
+        <span key={i} style={{ animationDelay: `${i * 120}ms` }} />
       ))}
     </div>
   );
@@ -122,15 +128,17 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
     radius = '22%',
     border,
     shadow,
+    speaking,
   }: {
     size: number;
     radius?: string;
     border: string;
     shadow: string;
+    speaking?: boolean;
   }) => (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0" style={{ borderRadius: radius }}>
       <div
-        className="overflow-hidden flex items-center justify-center"
+        className="relative z-10 overflow-hidden flex items-center justify-center"
         style={{
           width: size,
           height: size,
@@ -142,6 +150,12 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
       >
         <AvatarContent avatar={avatar} statusText={statusText} firstName={name || firstName} name={name} letterClassName="text-[var(--theme-text)] font-semibold opacity-70" />
       </div>
+      {speaking && <span className="voice-participant-speaking-ring" />}
+      {(isMuted || isDeafened) && (
+        <span className="voice-participant-muted-badge">
+          {isDeafened ? <HeadphoneOff size={8} /> : <MicOff size={8} />}
+        </span>
+      )}
     </div>
   );
 
@@ -150,11 +164,13 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
     radius = '22%',
     border,
     shadow,
+    speaking,
   }: {
     size: number;
     radius?: string;
     border: string;
     shadow: string;
+    speaking?: boolean;
   }) => (
     <StaticRoomAvatar
       avatar={avatar}
@@ -165,6 +181,9 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
       radius={radius}
       border={border}
       shadow={shadow}
+      speaking={speaking}
+      muted={isMuted}
+      deafened={isDeafened}
     />
   );
 
@@ -178,59 +197,66 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
     <div
       className="relative flex flex-col items-center"
       style={{
-        width: cardW,
-        padding: `${padV}px ${padH}px ${padB}px`,
-        background: isSpeaking ? t.cardBgSpeaking : t.cardBg,
-        border: isSpeaking ? t.cardBorderSpeaking : t.cardBorder,
-        borderRadius: isCenter ? t.cardRadius + 4 : t.cardRadius,
-        boxShadow: isSpeaking ? t.cardShadowSpeaking : t.cardShadow,
-        backdropFilter: t.cardBackdrop,
-        WebkitBackdropFilter: t.cardBackdrop,
+        width: defaultCardW,
+        padding: `${defaultPadV}px ${defaultPadH}px ${defaultPadB}px`,
+        background: isSpeaking
+          ? 'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.082), rgba(var(--glass-tint),0.024))'
+          : 'linear-gradient(180deg, rgba(var(--glass-tint),0.042), rgba(var(--glass-tint),0.016))',
+        border: isSpeaking ? '1px solid rgba(var(--theme-accent-rgb),0.18)' : '1px solid rgba(var(--glass-tint),0.045)',
+        borderRadius: isCenter ? 18 : 16,
+        boxShadow: isSpeaking
+          ? '0 0 0 1px rgba(var(--theme-accent-rgb),0.035), 0 4px 12px rgba(var(--theme-accent-rgb),0.050), 0 2px 8px rgba(0,0,0,0.08)'
+          : '0 1px 5px rgba(0,0,0,0.055), inset 0 1px 0 rgba(var(--glass-tint),0.026)',
+        backdropFilter: t.cardBackdrop || 'blur(8px)',
+        WebkitBackdropFilter: t.cardBackdrop || 'blur(8px)',
         transition: 'background 0.2s, border 0.2s, box-shadow 0.3s',
       }}
     >
-      <div className="relative" style={{ marginBottom: isCenter ? 10 : 6 }}>
+      <div className="relative shrink-0">
         {renderAvatar({
-          size: avatarSize,
-          border: t.avatarBorder,
-          shadow: t.avatarShadow,
+          size: defaultAvatarSize,
+          radius: '24%',
+          border: showSpeaking ? '2px solid rgba(var(--theme-accent-rgb),0.58)' : '1px solid rgba(var(--glass-tint),0.055)',
+          shadow: showSpeaking ? '0 2px 8px rgba(var(--theme-accent-rgb),0.10)' : '0 2px 7px rgba(0,0,0,0.09)',
+          speaking: showSpeaking,
         })}
       </div>
 
-      <div className="flex items-center gap-1 max-w-full">
-        {renderName('font-medium', {
-          fontSize: isCenter ? 13 : Math.round(10 + (13 - 10) * (s - 0.6) / 0.4),
-          fontWeight: isCenter ? 600 : 500,
-          opacity: isCenter ? 1 : t.textOpacity,
-        })}
-        {renderRoleMark(isCenter ? 12 : 9)}
-      </div>
-
-      <div className={`${isCenter ? 'mt-1.5 gap-2' : 'mt-1 gap-1.5'} flex items-center text-[var(--theme-secondary-text)]`} style={{ opacity: t.iconOpacity }}>
-        {renderStatusIcons(isCenter ? 10 : 9)}
-        {isSpeaking && renderSpeakingBars(isCenter ? 'h-2.5' : 'h-2')}
+      <div className="mt-1.5 min-w-0 w-full">
+        <div className="flex items-center justify-center gap-1 min-w-0">
+          {renderName('font-medium min-w-0', {
+            fontSize: 10.5,
+            fontWeight: 550,
+            opacity: Math.max(0.84, t.textOpacity),
+          })}
+          {renderRoleMark(isCenter ? 9 : 8)}
+        </div>
+        <div className="mt-0.5 flex items-center justify-center gap-1 text-[var(--theme-secondary-text)]" style={{ opacity: Math.min(0.42, t.iconOpacity) }}>
+          {renderStatusIcons(7)}
+          {showSpeaking && renderSpeakingBars('h-1.5')}
+        </div>
       </div>
     </div>
   );
 
   const renderPill = () => {
-    const pillAvatar = isCenter ? 46 : Math.round(34 + (42 - 34) * (s - 0.6) / 0.4);
-    const pillW = isCenter ? 164 : Math.max(132, Math.min(164, Math.round(132 + (164 - 132) * (s - 0.6) / 0.4)));
+    const pillAvatar = 34;
+    const pillW = 120;
     return (
       <div
         className="relative flex items-center gap-2"
         style={{
           width: pillW,
-          minHeight: isCenter ? 62 : 50,
-          padding: isCenter ? '8px 12px 8px 9px' : '7px 10px 7px 8px',
+          minHeight: 44,
+          padding: '5px 6px 5px 5px',
           background: isSpeaking
-            ? 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.13), rgba(var(--glass-tint),0.045))'
-            : 'linear-gradient(135deg, rgba(var(--glass-tint),0.060), rgba(var(--glass-tint),0.025))',
-          border: isSpeaking ? '1px solid rgba(var(--theme-accent-rgb),0.32)' : '1px solid rgba(var(--glass-tint),0.080)',
+            ? 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.095), rgba(var(--glass-tint),0.032))'
+            : 'linear-gradient(135deg, rgba(var(--glass-tint),0.038), rgba(var(--glass-tint),0.016))',
+          border: isSpeaking ? '1px solid rgba(var(--theme-accent-rgb),0.20)' : '1px solid rgba(var(--glass-tint),0.045)',
           borderRadius: 999,
           boxShadow: isSpeaking
-            ? '0 0 0 1px rgba(var(--theme-accent-rgb),0.08), 0 8px 24px rgba(var(--theme-accent-rgb),0.10), 0 6px 18px rgba(0,0,0,0.16)'
-            : '0 3px 10px rgba(0,0,0,0.10), inset 0 1px 0 rgba(var(--glass-tint),0.045)',
+            ? '0 0 0 1px rgba(var(--theme-accent-rgb),0.040), 0 4px 14px rgba(var(--theme-accent-rgb),0.065), 0 3px 10px rgba(0,0,0,0.10)'
+            : '0 1px 5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(var(--glass-tint),0.032)',
           backdropFilter: 'blur(10px) saturate(1.08)',
           WebkitBackdropFilter: 'blur(10px) saturate(1.08)',
           transition: 'background 0.2s, border 0.2s, box-shadow 0.3s',
@@ -239,16 +265,18 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
         {renderStaticAvatar({
           size: pillAvatar,
           radius: '999px',
-          border: '1px solid rgba(var(--glass-tint),0.10)',
-          shadow: '0 2px 8px rgba(0,0,0,0.12)',
+          border: showSpeaking ? '2px solid rgba(var(--theme-accent-rgb),0.58)' : '1px solid rgba(var(--glass-tint),0.10)',
+          shadow: showSpeaking ? '0 2px 8px rgba(var(--theme-accent-rgb),0.10)' : '0 2px 8px rgba(0,0,0,0.12)',
+          speaking: showSpeaking,
         })}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 min-w-0">
-            {renderName(`${isCenter ? 'text-[12px]' : 'text-[11px]'} font-semibold min-w-0`)}
-            {renderRoleMark(isCenter ? 11 : 9)}
+            {renderName('text-[10px] font-semibold min-w-0')}
+            {renderRoleMark(8)}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[var(--theme-secondary-text)]" style={{ opacity: 0.48 }}>
-            {renderStatusIcons(isCenter ? 10 : 9)}
+          <div className="mt-0.5 flex items-center gap-1.5 text-[var(--theme-secondary-text)]" style={{ opacity: showSpeaking ? 0.86 : 0.48 }}>
+            {renderStatusIcons(8)}
+            {showSpeaking && renderSpeakingBars('h-1.5')}
           </div>
         </div>
       </div>
@@ -256,35 +284,35 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
   };
 
   const renderMinimal = () => {
-    const minimalAvatar = isCenter ? 78 : Math.round(50 + (66 - 50) * (s - 0.6) / 0.4);
-    const slotW = isCenter ? 136 : Math.round(104 + (128 - 104) * (s - 0.6) / 0.4);
+    const minimalAvatar = 44;
+    const slotW = 76;
     return (
       <div
         className="relative flex flex-col items-center justify-center"
-        style={{ width: slotW, padding: isCenter ? '8px 8px 6px' : '6px 6px 4px' }}
+        style={{ width: slotW, padding: '5px 4px 3px' }}
       >
         {renderAvatar({
           size: minimalAvatar,
-          radius: '999px',
-          border: '1px solid rgba(var(--glass-tint),0.08)',
-          shadow: '0 4px 14px rgba(0,0,0,0.18)',
+          radius: '24%',
+          border: showSpeaking ? '2px solid rgba(var(--theme-accent-rgb),0.62)' : '1px solid rgba(var(--glass-tint),0.070)',
+          shadow: showSpeaking ? '0 2px 8px rgba(var(--theme-accent-rgb),0.12)' : '0 2px 7px rgba(0,0,0,0.11)',
+          speaking: showSpeaking,
         })}
 
         <div
-          className="mt-1.5 flex max-w-full items-center gap-1 rounded-full px-2 py-1"
+          className="mt-1 flex max-w-full items-center gap-1 rounded-full px-2 py-0.5"
           style={{
-            background: 'rgba(var(--theme-bg-rgb),0.56)',
-            border: '1px solid rgba(var(--glass-tint),0.06)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            background: showSpeaking ? 'rgba(var(--theme-accent-rgb),0.10)' : 'rgba(15,23,42,0.28)',
+            border: showSpeaking ? '1px solid rgba(var(--theme-accent-rgb),0.20)' : '1px solid rgba(148,163,184,0.10)',
+            boxShadow: '0 1px 5px rgba(0,0,0,0.065)',
           }}
         >
-          {renderName(`${isCenter ? 'text-[11px]' : 'text-[10px]'} font-semibold max-w-[88px]`)}
-          {renderRoleMark(isCenter ? 10 : 8)}
+          {renderName(`${isCenter ? 'text-[10.5px]' : 'text-[10px]'} font-medium max-w-[60px]`, { opacity: showSpeaking ? 1 : 0.78 })}
+          {renderRoleMark(isCenter ? 9 : 8)}
+          {showSpeaking && renderSpeakingBars('h-2')}
           {(isMuted || isDeafened) && (
             <span className="flex items-center gap-1 text-red-400">
-              {renderStatusIcons(isCenter ? 9 : 8, { minimal: true })}
+              {renderStatusIcons(8, { minimal: true })}
             </span>
           )}
         </div>

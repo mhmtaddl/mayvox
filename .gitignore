@@ -16,3 +16,8 @@ github-recovery-codes.txt
 # Claude Code session/permission state — secret'lar içerebilir, repo'ya girmesin
 .claude/
 android/.claude/
+
+# Local backups / migration dumps
+backups/
+supabase-dumps/
+supabase/.temp/
