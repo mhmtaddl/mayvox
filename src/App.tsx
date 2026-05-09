@@ -30,6 +30,7 @@ import { setAudioOutputDevice } from './lib/audio/audioOutputRegistry';
 import { checkChannelAccess, getServerAccessContext, getMyModerationState, type ServerAccessContext } from './lib/serverService';
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
+import { createVoiceJoinTrace, logVoiceJoinTrace } from './lib/voiceJoinTrace';
 import { connectChat, disconnectChat, sendPresencePatch } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
@@ -1741,8 +1742,9 @@ export default function App() {
   const [countdownActive, setCountdownActive] = useState(false);
 
   const performAutoLeave = useCallback(() => {
+    setActiveChannel(null);
+    activeChannelRef.current = null;
     disconnectFromLiveKit().then(() => {
-      setActiveChannel(null);
       const afkUser = { ...currentUserRef.current, statusText: 'AFK' };
       setCurrentUser(afkUser);
       setAllUsers(prev => prev.map(u => u.id === afkUser.id ? afkUser : u));
@@ -1859,11 +1861,13 @@ export default function App() {
   //      gerçek liste updateMembers() tarafından yazılır. Bu effect sadece çıkışı işler.
   useEffect(() => {
     if (activeChannel !== null) return;
-    const id = currentUserRef.current.id;
-    if (!id) return;
+    const user = currentUserRef.current;
+    const selfKeys = new Set([user.id, user.name].filter(Boolean));
+    if (selfKeys.size === 0) return;
     setChannels(prev => prev.map(c => {
-      if (!c.members?.includes(id)) return c;
-      const members = c.members.filter(m => m !== id);
+      const currentMembers = c.members || [];
+      const members = currentMembers.filter(m => m && !selfKeys.has(m));
+      if (members.length === currentMembers.length) return c;
       return { ...c, members, userCount: members.length };
     }));
   }, [activeChannel]);
@@ -1940,6 +1944,8 @@ export default function App() {
     // Client-side join throttle — 2sn cooldown
     if (Date.now() - lastJoinRef.current < 2000) return;
     lastJoinRef.current = Date.now();
+    const joinTrace = createVoiceJoinTrace(channelId);
+    logVoiceJoinTrace(joinTrace, 'click', { t: 0 });
     logger.info('Room join', { channelId, channelName, userId: currentUser.id });
     // AFK veya manuel Çevrimdışı durumundaysa kanala girince Online'a dön
     if (currentUser.statusText === 'AFK' || currentUser.statusText === 'Çevrimdışı') {
@@ -1954,6 +1960,7 @@ export default function App() {
     }
     const now = Date.now();
     const myId = currentUser.id;
+    const selfKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
     setActiveChannel(channelId);
     // Ref'i hemen güncelle — React render'ı beklemeden.
     // channel-update handler'ı activeChannelRef'i okur; stale kalırsa
@@ -1961,11 +1968,14 @@ export default function App() {
     activeChannelRef.current = channelId;
     setIsConnecting(true);
     setChannels(prev => prev.map(c => {
-      const members = (c.members || []).filter(m => m !== myId);
-      return c.id === channelId
-        ? { ...c, members: [...members, myId], userCount: members.length + 1 }
-        : { ...c, members, userCount: members.length };
+      const members = (c.members || []).filter(m => m && !selfKeys.has(m));
+      if (c.id === channelId) {
+        const nextMembers = members.includes(myId) ? members : [...members, myId];
+        return { ...c, members: nextMembers, userCount: nextMembers.length };
+      }
+      return { ...c, members, userCount: members.length };
     }));
+    logVoiceJoinTrace(joinTrace, 'optimistic-ui');
     setCurrentUser(prev => ({ ...prev, joinedAt: now }));
     setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, joinedAt: now } : u));
 
@@ -1995,7 +2005,7 @@ export default function App() {
           activeChannelRef.current = null;
           setIsConnecting(false);
           setChannels(prev => prev.map(c => {
-            const members = (c.members || []).filter(m => m !== myId);
+            const members = (c.members || []).filter(m => m && !selfKeys.has(m));
             return { ...c, members, userCount: members.length };
           }));
           setCurrentUser(prev => ({ ...prev, joinedAt: undefined }));
@@ -2028,7 +2038,7 @@ export default function App() {
       }
     }
 
-    const connected = await connectToLiveKit(channelId);
+    const connected = await connectToLiveKit(channelId, joinTrace);
     setIsConnecting(false);
     if (!connected) {
       setActiveChannel(null);
@@ -2434,12 +2444,13 @@ export default function App() {
       const newTotal = (currentUser.totalUsageMinutes || 0) + sessionMins;
       await updateActivityOnLogout(currentUser.id, newTotal).catch(() => {});
     }
+    setActiveChannel(null);
+    activeChannelRef.current = null;
     await disconnectFromLiveKit();
     stopPresence();
     disconnectChat();
     authLogout();
     setView('login-password');
-    setActiveChannel(null);
     setPasswordResetRequests([]);
     setInviteRequests([]);
   };

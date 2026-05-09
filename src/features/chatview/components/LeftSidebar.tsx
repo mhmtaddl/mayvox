@@ -34,6 +34,7 @@ import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../constants
 import { Coffee } from 'lucide-react';
 import { getDefaultChannelIconColor } from '../../../lib/channelIconColor';
 import { getDefaultChannelIconName } from '../../../lib/channelIcon';
+import RoomStatusBadges from './RoomStatusBadges';
 
 interface Props {
   handleDragOver: (e: React.DragEvent) => void;
@@ -370,20 +371,6 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                     const IC = channelIconComponents[channel.iconName ?? getDefaultChannelIconName(mode)] || roomModeIcons[mode] || Coffee;
                     return <IC size={16} className="opacity-90" style={{ color: channel.iconColor ?? getDefaultChannelIconColor(mode) }} />;
                   })()}
-                  {channel.password && (
-                    <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
-                      <Lock size={8} className="text-white" />
-                    </div>
-                  )}
-                  {!channel.password && channel.isInviteOnly && (
-                    <div
-                      className="absolute -top-1 -right-1 rounded-full p-0.5 border border-[var(--theme-border)]"
-                      style={{ background: 'rgba(var(--theme-accent-rgb), 0.7)' }}
-                      title="Özel kanal"
-                    >
-                      <Lock size={8} className="text-white" />
-                    </div>
-                  )}
                 </div>
                 <div className="flex items-center justify-between flex-1 min-w-0">
                   <span className="mv-font-title font-medium truncate" style={{ fontSize: channel.name.length > 14 ? 'var(--mv-font-body)' : 'var(--mv-font-title)' }}>{channel.name}</span>
@@ -396,13 +383,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                     </div>
                   )}
                 </div>
-                {channel.userCount > 0 && (
-                  <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    activeChannel === channel.id ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]'
-                  }`}>
-                    {channel.userCount}
-                  </span>
-                )}
+                <RoomStatusBadges channel={channel} isActive={activeChannel === channel.id} compact />
               </button>
 
               {/* Members List */}
@@ -411,18 +392,25 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                 const speakers = channel.speakerIds || [];
                 const hasSpeakers = isBc && (speakers.length > 0 || !!channel.ownerId);
                 const isSpeakerFn = (uid: string) => speakers.length > 0 ? speakers.includes(uid) : channel.ownerId === uid;
+                const memberRows: Array<{ memberId: string; stableId: string; user: ReturnType<typeof resolveMemberUser> }> = [];
+                for (const memberId of channel.members || []) {
+                  if (!memberId) continue;
+                  const user = resolveMemberUser(memberId);
+                  const stableId = user?.id || memberId;
+                  if (memberRows.some(row => row.stableId === stableId)) continue;
+                  memberRows.push({ memberId, stableId, user });
+                }
 
                 const sorted = isBc
-                  ? [...channel.members].sort((a, b) => (isSpeakerFn(b) ? 1 : 0) - (isSpeakerFn(a) ? 1 : 0))
-                  : channel.members;
+                  ? [...memberRows].sort((a, b) => (isSpeakerFn(b.stableId) ? 1 : 0) - (isSpeakerFn(a.stableId) ? 1 : 0))
+                  : memberRows;
 
                 let shownSpeakerLabel = false;
                 let shownListenerLabel = false;
 
                 return (
                 <div className="pl-8 pr-2 space-y-0.5 pb-2 mt-0.5 ml-4 border-l border-[var(--theme-accent)]/10">
-                  {sorted.map((memberId, idx) => {
-                    const user = resolveMemberUser(memberId);
+                  {sorted.map(({ memberId, stableId, user }) => {
                     if (!user) {
                       logMemberIdentityDebug('left_sidebar_unresolved_member', { memberId }, `left_sidebar:${memberId}`);
                     }
@@ -435,7 +423,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                     }
 
                     return (
-                      <React.Fragment key={idx}>
+                      <React.Fragment key={`${channel.id}:${stableId}`}>
                         {groupLabel && (
                           <>
                             {groupLabel === 'Dinleyiciler' && (
@@ -570,7 +558,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
               title={atLimit ? roomLimitMessage(activeServerPlan) : undefined}
             >
               <Sparkles size={15} />
-              <span className="text-sm font-medium">Oda Oluştur</span>
+              <span className="mv-font-title font-medium">Oda Oluştur</span>
             </button>
             );
           })()}

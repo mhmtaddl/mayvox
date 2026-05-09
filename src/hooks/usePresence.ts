@@ -86,6 +86,41 @@ export function usePresence({
   const disconnectRef = useRef(disconnectFromLiveKit);
   disconnectRef.current = disconnectFromLiveKit;
 
+  const normalizeLocalChannelMembership = (channels: VoiceChannel[]): VoiceChannel[] => {
+    const currentUser = currentUserRef.current;
+    const myId = currentUser.id;
+    const selfKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
+    const myChannel = activeChannelRef.current;
+    if (selfKeys.size === 0) return channels;
+
+    let changed = false;
+    const next = channels.map(channel => {
+      const currentMembers = channel.members || [];
+      const seen = new Set<string>();
+      const members = currentMembers.filter(memberId => {
+        if (!memberId || selfKeys.has(memberId)) return false;
+        if (seen.has(memberId)) return false;
+        seen.add(memberId);
+        return true;
+      });
+
+      if (channel.id === myChannel && myId && !seen.has(myId)) {
+        members.push(myId);
+        seen.add(myId);
+      }
+
+      const sameMembers =
+        members.length === currentMembers.length &&
+        members.every((memberId, index) => memberId === currentMembers[index]);
+      if (sameMembers) return channel;
+
+      changed = true;
+      return { ...channel, members, userCount: members.length };
+    });
+
+    return changed ? next : channels;
+  };
+
   const syncRoomMembersFromPresence = (
     presenceData: Array<{ currentRoom?: string; userId?: string; serverId?: string }>,
   ) => {
@@ -99,7 +134,9 @@ export function usePresence({
       roomMembers.set(p.currentRoom, list);
     }
 
-    const myId = currentUserRef.current.id;
+    const currentUser = currentUserRef.current;
+    const myId = currentUser.id;
+    const selfKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
     const myChannel = activeChannelRef.current;
 
     setChannels(prev => {
@@ -115,9 +152,9 @@ export function usePresence({
           });
         }
         if (myChannel === c.id && myId && !members.includes(myId)) members.push(myId);
-        if (myChannel !== c.id && myId) {
+        if (myChannel !== c.id && selfKeys.size > 0) {
           const liveHasSelf = live.channelId === c.id && live.memberIds.has(myId);
-          if (!liveHasSelf) members = members.filter(m => m !== myId);
+          if (!liveHasSelf) members = members.filter(m => !selfKeys.has(m));
         }
         const sortedNew = [...members].sort();
         const sortedOld = [...currentMembers].sort();
@@ -130,7 +167,8 @@ export function usePresence({
         }
         return c;
       });
-      return hasChanges ? next : prev;
+      const normalized = normalizeLocalChannelMembership(next);
+      return hasChanges || normalized !== next ? normalized : prev;
     });
   };
 
@@ -147,16 +185,18 @@ export function usePresence({
       };
       setChannels(prev => {
         const prevMap = new Map<string, VoiceChannel>(prev.map(c => [c.id, c] as const));
-        const myId = currentUserRef.current.id;
+        const currentUser = currentUserRef.current;
+        const myId = currentUser.id;
+        const selfKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
         const myChannel = activeChannelRef.current;
-        return applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(serverId, fresh.channels.map(ch => {
+        return normalizeLocalChannelMembership(applyLocalChannelIcons(applyLocalChannelIconColors(applyLocalChannelOrder(serverId, fresh.channels.map(ch => {
           const existing = prevMap.get(ch.id);
-          let members = existing?.members ?? [];
+          let members = (existing?.members ?? []).filter(m => m && (!selfKeys.has(m) || ch.id === myChannel));
           let userCount = existing?.userCount ?? 0;
-          if (ch.id === myChannel && myId && !members.includes(myId)) {
-            members = [...members, myId];
-            userCount = members.length;
+          if (ch.id === myChannel && myId) {
+            members = [...members.filter(m => !selfKeys.has(m)), myId];
           }
+          userCount = members.length;
           return {
             id: ch.id,
             name: displayNameMap[ch.name] ?? ch.name,
@@ -175,7 +215,7 @@ export function usePresence({
             position: ch.position,
             password: existing?.password,
           } satisfies VoiceChannel;
-        }))));
+        })))));
       });
     } catch (err) {
       console.warn('[usePresence] channel refetch failed:', err);
@@ -205,11 +245,11 @@ export function usePresence({
       };
       setChannels(prev =>
         prev.find(c => c.id === channelToAdd.id)
-          ? prev
-          : applyLocalChannelOrder(activeServerIdRef.current, [...prev, channelToAdd]),
+          ? normalizeLocalChannelMembership(prev)
+          : normalizeLocalChannelMembership(applyLocalChannelOrder(activeServerIdRef.current, [...prev, channelToAdd])),
       );
     } else if (payload.action === 'delete') {
-      setChannels(prev => prev.filter(c => c.id !== payload.channelId));
+      setChannels(prev => normalizeLocalChannelMembership(prev.filter(c => c.id !== payload.channelId)));
       setActiveChannel(prev => (prev === payload.channelId ? null : prev));
     } else if (payload.action === 'reorder') {
       if (payload.serverId) void refetchServerChannels(payload.serverId);
@@ -230,15 +270,17 @@ export function usePresence({
           if (a.position !== b.position) return a.position - b.position;
           return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
         });
-        return applyLocalChannelOrder(activeServerIdRef.current, next);
+        return normalizeLocalChannelMembership(applyLocalChannelOrder(activeServerIdRef.current, next));
       });
       if (typeof payload.orderToken === 'string' || payload.orderToken === null) {
         channelOrderTokenRef.current = payload.orderToken;
       }
     } else if (payload.action === 'update') {
       setChannels(prev =>
-        prev.map(c => {
-          const myId = currentUserRef.current.id;
+        normalizeLocalChannelMembership(prev.map(c => {
+          const currentUser = currentUserRef.current;
+          const myId = currentUser.id;
+          const selfKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
           const myChannel = activeChannelRef.current;
 
           if (c.id !== payload.channelId) {
@@ -248,7 +290,10 @@ export function usePresence({
                 allUsersRef.current,
                 'presence_channel_update_incoming',
               );
-              const filtered = (c.members || []).filter(m => m === myId || !incomingMembers.includes(m));
+              const filtered = (c.members || []).filter(m => {
+                if (selfKeys.has(m)) return c.id === myChannel;
+                return !incomingMembers.includes(m);
+              });
               if (filtered.length !== (c.members || []).length) {
                 return { ...c, members: filtered, userCount: filtered.length };
               }
@@ -263,9 +308,9 @@ export function usePresence({
               allUsersRef.current,
               'presence_channel_update_target',
             );
-            updates.members = (updates.members as string[]).filter(m => m !== myId);
+            updates.members = (updates.members as string[]).filter(m => !selfKeys.has(m));
             if (myChannel === payload.channelId && myId) {
-              updates.members = [...updates.members, myId];
+              updates.members = [...new Set([...(updates.members as string[]), myId])];
             }
             const live = liveVoicePresenceRef.current;
             if (live.channelId === payload.channelId && live.memberIds.size > 0) {
@@ -283,7 +328,7 @@ export function usePresence({
             updates.userCount = updates.members.length;
           }
           return { ...c, ...updates };
-        }),
+        })),
       );
     }
   };

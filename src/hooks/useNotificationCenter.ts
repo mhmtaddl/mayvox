@@ -44,6 +44,7 @@ export interface NotificationSummary {
 
   friendRequestCount: number;
   dmUnreadCount: number;
+  dmRequestCount: number;
   updateActionable: boolean;
   inviteReceivedCount: number;
   joinRequestCount: number;
@@ -73,6 +74,7 @@ export interface JoinRequestSource {
  */
 export function useNotificationCenter(
   dmUnreadCount: number = 0,
+  dmRequestCount: number = 0,
   updateActionable: boolean = false,
   incomingInvites: UserInvite[] = [],
   joinRequestSources: JoinRequestSource[] = [],
@@ -97,12 +99,37 @@ export function useNotificationCenter(
     const informationalCount = informational.filter(i => !i.readAt).length;
     const inviteRequestCount = isAdmin ? inviteRequests.length : 0;
     const passwordResetCount = isAdmin ? passwordResetRequests.length : 0;
-    // DM unread'leri artık bell badge'ine beslenmez — Mesajlar bölümüne özel.
-    const bellCount = friendRequestCount + inviteReceivedCount + joinRequestCount + informationalCount + inviteRequestCount + (updateActionable ? 1 : 0);
+    // DM unread bell badge'ine beslenmez — Mesajlar butonunda ayrı badge var.
+    // DM request ise aksiyon isteyen bir istek olduğu için çan sayısına dahil edilir.
+    const bellCount = friendRequestCount + dmRequestCount + inviteReceivedCount + joinRequestCount + informationalCount + inviteRequestCount + (updateActionable ? 1 : 0);
     const settingsCount = 0;
 
     // ── Item listesi oluştur ──
     const items: NotifItem[] = [];
+
+    if (dmRequestCount > 0) {
+      items.push({
+        key: 'dm-requests',
+        kind: 'message',
+        priority: 'medium',
+        label: 'Mesaj istekleri',
+        detail: dmRequestCount === 1 ? '1 bekleyen istek' : `${dmRequestCount} bekleyen istek`,
+        count: dmRequestCount,
+        isActionable: true,
+      });
+    }
+
+    if (dmUnreadCount > 0) {
+      items.push({
+        key: 'dm-unread',
+        kind: 'message',
+        priority: 'low',
+        label: 'Okunmamış mesajlar',
+        detail: dmUnreadCount === 1 ? '1 okunmamış mesaj' : `${dmUnreadCount} okunmamış mesaj`,
+        count: dmUnreadCount,
+        isActionable: true,
+      });
+    }
 
     // Her arkadaşlık isteği için ayrı item — popover'da inline Kabul/Reddet'e olanak verir.
     // Kullanıcı aksiyonu almadığı sürece item silinmez (incomingRequests source of truth).
@@ -208,6 +235,7 @@ export function useNotificationCenter(
       settingsCount,
       friendRequestCount,
       dmUnreadCount,
+      dmRequestCount,
       updateActionable,
       inviteReceivedCount,
       joinRequestCount,
@@ -220,6 +248,7 @@ export function useNotificationCenter(
     incomingRequests,
     allUsers,
     dmUnreadCount,
+    dmRequestCount,
     updateActionable,
     incomingInvites,
     joinRequestSources,

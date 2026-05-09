@@ -21,6 +21,7 @@ import type { User, VoiceChannel } from '../types';
 import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/formatTimeout';
 import { getMyModerationState } from '../lib/serverService';
 import { safePublicName } from '../lib/formatName';
+import { logVoiceJoinTrace, type VoiceJoinTrace } from '../lib/voiceJoinTrace';
 
 type PresenceChannelLike = {
   send: (payload: unknown) => Promise<unknown> | unknown;
@@ -272,6 +273,7 @@ export function useLiveKitConnection({
 
   const connectToLiveKit = async (
     channelId: string,
+    joinTrace?: VoiceJoinTrace,
   ): Promise<boolean> => {
     if (isConnectingRef.current) {
       return false;
@@ -306,9 +308,14 @@ export function useLiveKitConnection({
       // doesn't see the new room when it fires.
       const oldRoom = livekitRoomRef.current;
       if (oldRoom) {
+        const oldDisconnectStart = performance.now();
+        logVoiceJoinTrace(joinTrace, 'old-disconnect-start');
         livekitRoomRef.current = null;
         lastAppliedNoiseConfigRef.current = null;
         await oldRoom.disconnect();
+        logVoiceJoinTrace(joinTrace, 'old-disconnect-done', {
+          ms: Math.round(performance.now() - oldDisconnectStart),
+        });
       }
 
       // ── AŞAMA 1: Token al ──
@@ -316,6 +323,7 @@ export function useLiveKitConnection({
 
       if (joinAbort.signal.aborted) throw new Error('Bağlantı zaman aşımına uğradı.');
 
+      logVoiceJoinTrace(joinTrace, 'token-start');
       const token = await getLiveKitToken(
         channelId,
         currentUserRef.current.name,
@@ -324,6 +332,7 @@ export function useLiveKitConnection({
       );
 
       const tokenMs = Math.round(performance.now() - t0);
+      logVoiceJoinTrace(joinTrace, 'token-done', { ms: tokenMs });
       logger.info('Token alındı, LiveKit bağlantısı başlıyor', { channelId, tokenMs });
 
       if (joinAbort.signal.aborted) throw new Error('Bağlantı zaman aşımına uğradı.');
@@ -353,6 +362,7 @@ export function useLiveKitConnection({
         });
       };
 
+      let membersUpdatedLogged = false;
       const updateMembers = () => {
         const localIdentity =
           room.localParticipant.identity || currentUserRef.current.id;
@@ -382,6 +392,10 @@ export function useLiveKitConnection({
               : c,
           ),
         );
+        if (!membersUpdatedLogged) {
+          membersUpdatedLogged = true;
+          logVoiceJoinTrace(joinTrace, 'members-updated', { count: participants.length });
+        }
         broadcastMemberUpdate(participants, participants.length);
       };
 
@@ -621,6 +635,11 @@ export function useLiveKitConnection({
         cleanupAudioUnlock();
         const identity =
           room.localParticipant?.identity || currentUserRef.current.id;
+        const selfKeys = new Set([
+          identity,
+          currentUserRef.current.id,
+          currentUserRef.current.name,
+        ].filter(Boolean));
         if (liveVoicePresenceRef.current.channelId === channelId) {
           liveVoicePresenceRef.current = { channelId: null, memberIds: new Set() };
         }
@@ -628,7 +647,7 @@ export function useLiveKitConnection({
         setChannels(prev => {
           const updated = prev.map(c => {
             if (c.id !== channelId) return c;
-            const members = c.members?.filter(m => m !== identity) || [];
+            const members = c.members?.filter(m => !selfKeys.has(m)) || [];
             return { ...c, members, userCount: members.length };
           });
           const ch = updated.find(c => c.id === channelId);
@@ -705,9 +724,23 @@ export function useLiveKitConnection({
         }
       });
 
+      let livekitConnectedLogged = false;
+      let livekitConnectStart = 0;
+      const logLiveKitConnected = () => {
+        if (livekitConnectedLogged) return;
+        livekitConnectedLogged = true;
+        logVoiceJoinTrace(joinTrace, 'livekit-connected', {
+          ms: Math.round(performance.now() - livekitConnectStart),
+        });
+      };
+      room.once(RoomEvent.Connected, logLiveKitConnected);
+
       const t1 = performance.now();
+      livekitConnectStart = t1;
       logger.info('LiveKit connecting', { channelId, url: LIVEKIT_URL });
+      logVoiceJoinTrace(joinTrace, 'livekit-connect-start');
       await room.connect(LIVEKIT_URL, token);
+      logLiveKitConnected();
       noiseSessionVersionRef.current += 1;
       lastAppliedNoiseConfigRef.current = null;
       const connectMs = Math.round(performance.now() - t1);
@@ -780,6 +813,10 @@ export function useLiveKitConnection({
         setVoiceDisabledReason(prev => (prev === 'server_muted' || prev === 'kicked' ? null : prev));
       }
       // undefined → no-op; ParticipantPermissionsChanged event geldiğinde düzeltir.
+      logVoiceJoinTrace(joinTrace, 'local-participant-ready', {
+        canPublish: initialCanPublish ?? 'unknown',
+        identity: room.localParticipant.identity,
+      });
 
       await room.localParticipant.setMicrophoneEnabled(false);
 
@@ -810,6 +847,9 @@ export function useLiveKitConnection({
       } catch { /* baseline best-effort */ }
 
       isConnectingRef.current = false;
+      logVoiceJoinTrace(joinTrace, 'ready', {
+        totalMs: joinTrace ? Math.round(performance.now() - joinTrace.startedAt) : totalMs,
+      });
       clearTimeout(joinTimer);
       return true;
     } catch (err) {

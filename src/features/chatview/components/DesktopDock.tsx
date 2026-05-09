@@ -634,6 +634,7 @@ export default function DesktopDock({
         const activeCh = channels.find(c => c.id === activeChannel);
         const vc = activeCh ? getRoomModeConfig(activeCh.mode).voice : null;
         const canSwitch = vc ? vc.allowedModes.length > 1 : true;
+        const pttDockLabel = pttKey ? pttKey.replace(/^Mouse\s+(\d+)$/i, 'M$1') : '';
 
         return (
           <div className="relative group/vmode">
@@ -648,7 +649,7 @@ export default function DesktopDock({
             ) : (
               <button
                 onClick={() => setIsListeningForKey(true)}
-                className={`min-w-10 h-10 px-2.5 rounded-xl flex items-center justify-center btn-haptic text-[10px] font-black whitespace-nowrap transition-all duration-150 active:scale-[0.97] ${
+                className={`mv-dock-square-btn rounded-xl flex items-center justify-center btn-haptic text-[9px] font-black whitespace-nowrap overflow-hidden transition-all duration-150 active:scale-[0.97] ${
                   isListeningForKey
                     ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 animate-pulse'
                     : pttKeyMissing
@@ -657,7 +658,7 @@ export default function DesktopDock({
                 }`}
                 title={pttKeyMissing ? 'Bas-Konuş tuşunuzu seçiniz' : 'Bas-Konuş tuşu — tıkla değiştir'}
               >
-                {isListeningForKey ? '...' : pttKeyMissing ? 'Bas-Konuş' : pttKey}
+                {isListeningForKey ? '...' : pttKeyMissing ? 'Bas-Konuş' : pttDockLabel}
               </button>
             )}
             {pttKeyMissing && !isListeningForKey && (
@@ -721,7 +722,7 @@ export default function DesktopDock({
               Kullanıcı gerçekten ayrılsın: voice bağlantısı kapanır, activeChannel
               null'a döner, voice avatar listesinden düşer. Home butonu "peek" için. */}
           <button
-            onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }}
+            onClick={async () => { setActiveChannel(null); await disconnectFromLiveKit(); }}
             className="voice-leave-btn mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150"
             title="Çağrıdan Ayrıl"
           >
@@ -828,12 +829,15 @@ function SelfControlPanel({
       onClick={(e) => e.stopPropagation()}
       className="absolute bottom-full left-0 mb-2 w-[240px] rounded-2xl overflow-hidden z-50"
       style={{
-        background: 'var(--theme-bg)',
-        border: '1px solid var(--theme-border)',
+        background:
+          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+        border: '1px solid var(--theme-popover-border, var(--theme-border))',
         boxShadow:
-          '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
-          ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
-          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+          '0 24px 56px -16px rgba(var(--shadow-base),0.50),' +
+          ' 0 6px 16px -4px rgba(var(--shadow-base),0.20),' +
+          ' inset 0 1px 0 rgba(255,255,255,0.045)',
+        backdropFilter: 'blur(16px) saturate(125%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
       }}
     >
       {/* Status section */}

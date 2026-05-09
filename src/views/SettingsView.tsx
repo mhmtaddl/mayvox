@@ -31,6 +31,7 @@ import PermissionSection from '../components/settings/sections/PermissionSection
 import SystemServersPanel from '../components/settings/sections/SystemServersPanel';
 import ManagementUsersPanel from '../components/settings/sections/ManagementUsersPanel';
 import LegalModal, { type LegalModalKind } from '../components/legal/LegalModal';
+import EmptyState from '../components/EmptyState';
 
 type MainTab = 'account' | 'app' | 'shortcuts' | 'admin';
 type AdminSubTab = 'users' | 'servers';
@@ -1434,7 +1435,8 @@ export default function SettingsView() {
               <button
                 type="button"
                 onClick={() => setSettingsSearchQuery('')}
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/55 transition-colors hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]"
+                className="mv-icon-button mv-interactive mv-focus-ring absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)]"
+                style={{ '--mv-icon-button-size': '24px', '--mv-icon-size': '13px' } as React.CSSProperties}
                 aria-label="Aramayı temizle"
               >
                 <X size={13} />
@@ -1468,10 +1470,21 @@ export default function SettingsView() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-              <p className="text-[12px] font-bold text-[var(--theme-text)]/80">Sonuç bulunamadı</p>
-              <p className="mt-1 text-[10.5px] text-[var(--theme-secondary-text)]/55">Farklı bir kelime deneyin.</p>
-            </div>
+            <EmptyState
+              size="sm"
+              icon={<Search size={18} />}
+              title="Sonuç bulunamadı"
+              description="Farklı bir kelimeyle tekrar deneyin."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setSettingsSearchQuery('')}
+                  className="rounded-lg border border-[var(--theme-border)]/55 bg-[rgba(var(--glass-tint),0.035)] px-3 py-1.5 text-[10.5px] font-bold text-[var(--theme-secondary-text)]/70 transition-colors hover:border-[var(--theme-accent)]/25 hover:text-[var(--theme-accent)]"
+                >
+                  Aramayı temizle
+                </button>
+              }
+            />
           )}
         </div>
       ) : null}

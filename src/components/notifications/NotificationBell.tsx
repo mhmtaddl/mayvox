@@ -64,9 +64,38 @@ const PRIORITY_ACCENT = {
   low: 'bg-transparent',
 } as const;
 
+type NotificationCategory = 'all' | 'requests' | 'dm' | 'invites' | 'system';
+
+const CATEGORY_TABS: Array<{ key: NotificationCategory; label: string }> = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'requests', label: 'İstekler' },
+  { key: 'dm', label: 'DM' },
+  { key: 'invites', label: 'Davetler' },
+  { key: 'system', label: 'Sistem' },
+];
+
+const CATEGORY_EMPTY: Record<NotificationCategory, { title: string; detail: string }> = {
+  all: { title: 'Her şey güncel', detail: 'Yeni bir bildirim geldiğinde burada görünecek.' },
+  requests: { title: 'Bekleyen istek yok', detail: 'Yeni bir istek olduğunda burada görünecek.' },
+  dm: { title: 'Yeni mesaj yok', detail: 'Yeni bir DM veya mesaj isteği olduğunda burada görünecek.' },
+  invites: { title: 'Yeni davet yok', detail: 'Yeni bir davet olduğunda burada görünecek.' },
+  system: { title: 'Sistem bildirimi yok', detail: 'Yeni bir sistem bildirimi olduğunda burada görünecek.' },
+};
+
+function getNotificationCategory(item: NotifItem): NotificationCategory {
+  if (item.key === 'dm-requests') return 'requests';
+  if (item.key === 'dm-unread' || item.kind === 'message' || item.kind === 'missedCall') return 'dm';
+  if (item.key.startsWith('friend-req:') || item.kind === 'joinRequest' || item.key === 'admin-invite-requests') return 'requests';
+  if (item.key.startsWith('server-inv:')) return 'invites';
+  if (item.key.startsWith('info:')) return 'system';
+  if (item.kind === 'invite') return 'invites';
+  return 'system';
+}
+
 export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite }: Props) {
   const [open, setOpen] = useState(false);
   const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
+  const [activeCategory, setActiveCategory] = useState<NotificationCategory>('all');
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -128,17 +157,35 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
   }, [open]);
 
   const { bellCount, items } = summary;
+  const categoryCounts = useMemo(() => {
+    const counts: Record<NotificationCategory, number> = { all: items.length, requests: 0, dm: 0, invites: 0, system: 0 };
+    for (const item of items) {
+      const category = getNotificationCategory(item);
+      counts[category] += 1;
+      if (item.key === 'dm-requests') counts.dm += 1;
+    }
+    return counts;
+  }, [items]);
+  const filteredItems = useMemo(
+    () => activeCategory === 'all'
+      ? items
+      : items.filter(item => getNotificationCategory(item) === activeCategory || (activeCategory === 'dm' && item.key === 'dm-requests')),
+    [activeCategory, items],
+  );
 
   // Pagination state — items veya page değişince clamp et (liste küçüldüyse son sayfa boşalmış olabilir).
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
   const pageItems = useMemo(
-    () => items.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
-    [items, safePage],
+    () => filteredItems.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [filteredItems, safePage],
   );
   useEffect(() => {
     if (safePage !== page) setPage(safePage);
   }, [safePage, page]);
+  useEffect(() => {
+    setPage(0);
+  }, [activeCategory]);
 
   // "Temizle" butonu — informational store'daki okunmuşları siler. Friend-req / server-inv
   // itemları source-based (accept/reject gerekli) olduğu için etkilenmez.
@@ -176,6 +223,8 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     const map: Record<string, (() => void) | undefined> = {
       friends: onOpenFriendRequests,
       dm: onOpenDM,
+      'dm-unread': onOpenDM,
+      'dm-requests': onOpenDM,
       update: onOpenUpdate,
       invites: onOpenInvites,
       'admin-invite-requests': onOpenAdminInviteRequests,
@@ -255,12 +304,15 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                       right: window.innerWidth - btnRect.right,
                     }
                   : { top: 80, right: 20 }),
-                background: 'var(--theme-bg)',
-                border: '1px solid var(--theme-border)',
+                background:
+                  'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+                border: '1px solid var(--theme-popover-border, var(--theme-border))',
                 boxShadow:
-                  '0 24px 56px -16px rgba(var(--shadow-base),0.55),' +
-                  ' 0 6px 16px -4px rgba(var(--shadow-base),0.22),' +
-                  ' inset 0 1px 0 rgba(255,255,255,0.04)',
+                  '0 24px 56px -16px rgba(var(--shadow-base),0.50),' +
+                  ' 0 6px 16px -4px rgba(var(--shadow-base),0.20),' +
+                  ' inset 0 1px 0 rgba(255,255,255,0.045)',
+                backdropFilter: 'blur(16px) saturate(125%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(125%)',
               }}
             >
             {/* Başlık — title + counter + Temizle butonu */}
@@ -280,15 +332,45 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                 disabled={!hasClearableRead}
                 title="Okunmuş bildirimleri temizle"
                 aria-label="Okunmuş bildirimleri temizle"
-                className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/65 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="mv-icon-button mv-icon-button-danger mv-interactive mv-focus-ring shrink-0"
+                style={{ '--mv-icon-button-size': '24px', '--mv-icon-size': '12px' } as React.CSSProperties}
               >
                 <Trash2 size={12} strokeWidth={2} />
               </button>
             </div>
 
+            <div className="flex items-center gap-1 overflow-x-auto px-3 py-2 custom-scrollbar" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+              {CATEGORY_TABS.map(tab => {
+                const active = activeCategory === tab.key;
+                const count = categoryCounts[tab.key];
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveCategory(tab.key)}
+                    aria-pressed={active}
+                    className={`mv-interactive mv-focus-ring inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-bold ${
+                      active
+                        ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)]'
+                        : 'text-[var(--theme-secondary-text)]/62 hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)]/82'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {count > 0 && (
+                      <span className={`min-w-4 rounded-full px-1 text-center text-[8.5px] leading-4 tabular-nums ${
+                        active ? 'bg-[var(--theme-accent)]/16 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)]/58'
+                      }`}>
+                        {count > 9 ? '9+' : count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* İçerik */}
             <div className="py-1.5">
-              {items.length === 0 ? (
+              {filteredItems.length === 0 ? (
                 <div className="flex flex-col items-center text-center gap-2.5 px-6 py-8">
                   <div
                     className="relative w-11 h-11 rounded-2xl flex items-center justify-center"
@@ -303,10 +385,10 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="mv-font-body text-[12.5px] font-semibold text-[var(--theme-text)]/90 tracking-[-0.01em]">
-                      Her şey güncel
+                      {CATEGORY_EMPTY[activeCategory].title}
                     </span>
                     <span className="mv-font-caption text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug max-w-[200px]">
-                      Yeni bir bildirim geldiğinde burada görünecek.
+                      {CATEGORY_EMPTY[activeCategory].detail}
                     </span>
                   </div>
                 </div>
@@ -437,7 +519,8 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   disabled={safePage === 0}
                   aria-label="Önceki sayfa"
                   title="Önceki sayfa"
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="mv-icon-button mv-interactive mv-focus-ring"
+                  style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                 >
                   <ChevronLeft size={14} />
                 </button>
@@ -449,7 +532,8 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
                   disabled={safePage >= totalPages - 1}
                   aria-label="Sonraki sayfa"
                   title="Sonraki sayfa"
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="mv-icon-button mv-interactive mv-focus-ring"
+                  style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -684,31 +768,31 @@ const FriendRequestItem: React.FC<{
           disabled={!!pending || !onAccept}
           title="Kabul et"
           aria-label="Arkadaşlık isteğini kabul et"
-          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-default transition-colors"
+          className="mv-icon-button mv-interactive mv-focus-ring"
           style={{
+            '--mv-icon-button-size': '28px',
+            '--mv-icon-size': '13px',
             color: 'var(--theme-accent)',
             background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
             border: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
-          }}
-          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.18)'; }}
-          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.10)'; }}
+          } as React.CSSProperties}
         >
-          <Check size={13} strokeWidth={2.5} className={pending === 'accept' ? 'animate-pulse' : ''} />
+          {pending === 'accept' ? <span className="mv-loading-spinner" /> : <Check size={13} strokeWidth={2.5} />}
         </button>
         <button
           onClick={() => handle('reject')}
           disabled={!!pending || !onReject}
           title="Reddet"
           aria-label="Arkadaşlık isteğini reddet"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-default transition-colors"
+          className="mv-icon-button mv-icon-button-danger mv-interactive mv-focus-ring"
           style={{
+            '--mv-icon-button-size': '28px',
+            '--mv-icon-size': '13px',
             background: pending === 'reject' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
             border: '1px solid rgba(var(--glass-tint), 0.10)',
-          }}
-          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)'; }}
-          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--glass-tint), 0.05)'; }}
+          } as React.CSSProperties}
         >
-          <XIcon size={13} strokeWidth={2.5} className={pending === 'reject' ? 'animate-pulse' : ''} />
+          {pending === 'reject' ? <span className="mv-loading-spinner" /> : <XIcon size={13} strokeWidth={2.5} />}
         </button>
       </div>
     </motion.div>
@@ -791,31 +875,31 @@ const ServerInviteItem: React.FC<{
           disabled={!!pending || !onAccept}
           title="Daveti kabul et"
           aria-label="Sunucu davetini kabul et"
-          className="w-7 h-7 rounded-md flex items-center justify-center disabled:opacity-40 disabled:cursor-default transition-colors"
+          className="mv-icon-button mv-interactive mv-focus-ring"
           style={{
+            '--mv-icon-button-size': '28px',
+            '--mv-icon-size': '13px',
             color: 'var(--theme-accent)',
             background: pending === 'accept' ? 'rgba(var(--theme-accent-rgb), 0.22)' : 'rgba(var(--theme-accent-rgb), 0.10)',
             border: '1px solid rgba(var(--theme-accent-rgb), 0.22)',
-          }}
-          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.18)'; }}
-          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.10)'; }}
+          } as React.CSSProperties}
         >
-          <Check size={13} strokeWidth={2.5} className={pending === 'accept' ? 'animate-pulse' : ''} />
+          {pending === 'accept' ? <span className="mv-loading-spinner" /> : <Check size={13} strokeWidth={2.5} />}
         </button>
         <button
           onClick={() => handle('decline')}
           disabled={!!pending || !onDecline}
           title="Reddet"
           aria-label="Sunucu davetini reddet"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--theme-secondary-text)]/75 hover:text-red-400 disabled:opacity-40 disabled:cursor-default transition-colors"
+          className="mv-icon-button mv-icon-button-danger mv-interactive mv-focus-ring"
           style={{
+            '--mv-icon-button-size': '28px',
+            '--mv-icon-size': '13px',
             background: pending === 'decline' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(var(--glass-tint), 0.05)',
             border: '1px solid rgba(var(--glass-tint), 0.10)',
-          }}
-          onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)'; }}
-          onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(var(--glass-tint), 0.05)'; }}
+          } as React.CSSProperties}
         >
-          <XIcon size={13} strokeWidth={2.5} className={pending === 'decline' ? 'animate-pulse' : ''} />
+          {pending === 'decline' ? <span className="mv-loading-spinner" /> : <XIcon size={13} strokeWidth={2.5} />}
         </button>
       </div>
     </motion.div>

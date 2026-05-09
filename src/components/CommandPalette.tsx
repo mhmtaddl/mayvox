@@ -4,6 +4,7 @@ import type { User, VoiceChannel } from '../types';
 import type { SettingsTarget } from '../contexts/UIContext';
 import { getPublicDisplayName } from '../lib/formatName';
 import { readCommandShortcut, shortcutMatchesEvent, type CommandShortcut } from '../lib/commandShortcut';
+import EmptyState from './EmptyState';
 
 type CommandKind = 'user' | 'room' | 'setting' | 'discover';
 
@@ -1040,9 +1041,12 @@ export default function CommandPalette({
 
         <div className="max-h-[430px] overflow-y-auto p-2 custom-scrollbar">
           {results.length === 0 ? (
-            <div className="mv-font-message px-4 py-10 text-center text-[13px] text-[var(--theme-secondary-text)]/70">
-              Sonuç bulunamadı
-            </div>
+            <EmptyState
+              size="xs"
+              icon={<Search size={16} />}
+              title="Sonuç bulunamadı"
+              description="Komut, oda, kullanıcı veya ayar adı deneyin."
+            />
           ) : results.map((item, index) => {
             const active = index === activeIndex;
             return (

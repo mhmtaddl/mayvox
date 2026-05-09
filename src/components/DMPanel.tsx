@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3 } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -26,6 +26,8 @@ import { rangeVisualStyle } from '../lib/rangeStyle';
 import { updateProfileFields } from '../lib/backendClient';
 import { sendRealtimeBroadcast } from '../lib/chatService';
 import type { DmPrivacyMode } from '../types';
+import EmptyState from './EmptyState';
+import DMDetailsPanel from './dm/DMDetailsPanel';
 // SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
@@ -839,7 +841,7 @@ function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
   onSend, onEditMessage, onDeleteMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
-  friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser,
+  friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser, detailsOpen = false, onToggleDetails, onCloseDetails,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -865,6 +867,9 @@ function ChatArea({
   friendRelation?: 'friend' | 'incoming' | 'outgoing' | null;
   onSendFriendRequest?: () => void;
   onReportUser?: () => void;
+  detailsOpen?: boolean;
+  onToggleDetails?: () => void;
+  onCloseDetails?: () => void;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -904,24 +909,34 @@ function ChatArea({
     prevRecipientRef.current = recipientId;
   }, [recipientId]);
 
-  // Mouse geri tuşu (X1, button === 3) → sohbet listesine dön
+  // Mouse geri tuşu (X1, button === 3) → detay açıksa kapat, değilse sohbet listesine dön.
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (e.button === 3) {
         e.preventDefault();
         e.stopPropagation();
+        if (detailsOpen) {
+          onCloseDetails?.();
+          return;
+        }
         onBack();
       }
     };
     window.addEventListener('mousedown', onMouseDown);
     // Bazı tarayıcılar mouse back'i popstate olarak da firlatır
-    const onPopState = () => onBack();
+    const onPopState = () => {
+      if (detailsOpen) {
+        onCloseDetails?.();
+        return;
+      }
+      onBack();
+    };
     window.addEventListener('popstate', onPopState);
     return () => {
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('popstate', onPopState);
     };
-  }, [onBack]);
+  }, [detailsOpen, onBack, onCloseDetails]);
 
   // Initial history veya thread ilk render'da dipe in
   useEffect(() => {
@@ -1056,7 +1071,7 @@ function ChatArea({
   const canSendFriendRequest = friendRelation === null && !isRequest && !isBlocked;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onMouseDown={() => { if (detailsOpen) onCloseDetails?.(); }}>
       {/* Header */}
       <div
         className="flex items-center gap-3 px-4 py-3 shrink-0"
@@ -1065,7 +1080,13 @@ function ChatArea({
           background: 'linear-gradient(180deg, rgba(255,255,255,0.04), transparent)',
         }}
       >
-        <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)] opacity-60 hover:opacity-100 hover:bg-[rgba(var(--glass-tint),0.06)] transition-all duration-150">
+        <button
+          onClick={onBack}
+          className="mv-icon-button mv-interactive mv-focus-ring opacity-60 hover:opacity-100"
+          style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '16px' } as React.CSSProperties}
+          title="Geri"
+          aria-label="Geri"
+        >
           <ArrowLeft size={16} />
         </button>
         <div
@@ -1116,13 +1137,30 @@ function ChatArea({
             )}
           </AnimatePresence>
         </div>
-        {!isRequest && (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={onToggleDetails}
+            className={`mv-icon-button mv-interactive mv-focus-ring ${
+              detailsOpen
+                ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
+                : 'text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10'
+            }`}
+            style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
+            title="Sohbet detayları"
+            aria-label="Sohbet detayları"
+            aria-pressed={detailsOpen}
+          >
+            <Info size={14} />
+          </button>
+          {!isRequest && (
+            <>
             {friendRelation !== 'friend' && (
               <button
                 onClick={canSendFriendRequest ? onSendFriendRequest : undefined}
                 disabled={!canSendFriendRequest}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--theme-secondary-text)]/45"
+                className="mv-icon-button mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10"
+                style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                 title={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
                 aria-label={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
               >
@@ -1131,7 +1169,8 @@ function ChatArea({
             )}
             <button
               onClick={onReportUser}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/45 hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+              className="mv-icon-button mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-amber-300 hover:bg-amber-500/10"
+              style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
               title="Kullanıcıyı bildir"
               aria-label="Kullanıcıyı bildir"
             >
@@ -1139,18 +1178,20 @@ function ChatArea({
             </button>
             <button
               onClick={isBlocked ? onUnblockUser : onBlockUser}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+              className={`mv-icon-button mv-interactive mv-focus-ring ${isBlocked ? '' : 'mv-icon-button-danger'} ${
                 isBlocked
                   ? 'text-emerald-300/80 hover:text-emerald-300 hover:bg-emerald-500/10'
                   : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300 hover:bg-red-500/10'
               }`}
+              style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
               title={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
               aria-label={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
             >
               <UserX size={14} />
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {lastError && (
@@ -1167,11 +1208,14 @@ function ChatArea({
             <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Yükleniyor…</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <MessageSquare size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-            <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesaj yok</p>
-            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Bir mesaj göndererek başla</p>
-          </div>
+          <EmptyState
+            size="md"
+            tone="accent"
+            icon={<MessageSquare size={19} />}
+            title="Henüz mesaj yok"
+            description="Bir mesaj göndererek konuşmayı başlat."
+            className="h-full"
+          />
         ) : grouped.map(group => (
           <div key={group.date}>
             <div className="mv-density-date-separator flex items-center gap-3 my-4">
@@ -1366,6 +1410,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [requestActionKeys, setRequestActionKeys] = useState<Set<string>>(new Set());
   const [listQuery, setListQuery] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onRequestCountChange?.(dm.requests.length); }, [dm.requests.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1373,6 +1418,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   useEffect(() => { if (!isOpen) dm.resetViewOnClose(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (isOpen) dm.loadInitial(); }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openUserId) { dm.openConversation(openUserId); onOpenHandled?.(); } }, [openUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setDetailsOpen(false); }, [dm.activeRecipientId]);
   useEffect(() => {
     const onOpenFirstUnread = () => {
       const unread = dm.conversations.find(convo => convo.unreadCount > 0);
@@ -1480,59 +1526,68 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           // materyali sağlar; Görünüm/Sesler/Performans vs aynı class üzerinden
           // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
           // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
-          className="surface-card dm-glass-panel fixed bottom-[60px] right-3 z-[110] w-[360px] h-[500px] rounded-2xl overflow-hidden flex flex-col"
+          className={`surface-card dm-glass-panel fixed bottom-[60px] right-3 z-[110] max-w-[calc(100vw-24px)] max-h-[calc(100vh-84px)] rounded-2xl overflow-hidden flex flex-col transition-[width,height] duration-200 ease-out ${
+            detailsOpen && dm.activeRecipientId
+              ? 'w-[640px] h-[580px]'
+              : 'w-[360px] h-[500px]'
+          }`}
         >
           {dm.activeRecipientId ? (
-            <ChatArea
-              messages={dm.messages}
-              currentUserId={currentUser.id}
-              recipientId={dm.activeRecipientId}
-              allUsers={allUsers}
-              loadingHistory={dm.loadingHistory}
-              typingFrom={dm.typingFrom}
-              onSend={dm.sendMessage}
-              onEditMessage={dm.editMessage}
-              onDeleteMessage={dm.deleteMessage}
-              onReactMessage={dm.reactMessage}
-              onTyping={dm.emitTyping}
-              onBack={dm.closeConversation}
-              onNearBottomChange={onNearBottomChange}
-              lastError={dm.lastError}
-              isRequest={!!activeRequest}
-              isBlocked={activeBlocked}
-              requestActionPending={!!activeRequest && requestActionKeys.has(activeRequest.conversationKey)}
-              friendRelation={activeFriendRelation}
-              onSendFriendRequest={handleSendFriendRequest}
-              onReportUser={() => dm.activeRecipientId && openConfirm({
-                title: 'Kullanıcıyı bildir',
-                description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
-                confirmText: 'Bildir',
-                cancelText: 'İptal',
-                danger: true,
-                onConfirm: () => {
-                  dm.reportUser(dm.activeRecipientId!);
-                  setToastMsg('Bildirim gönderildi');
-                },
-              })}
-              onAcceptRequest={() => activeRequest && handleAcceptRequest(activeRequest.conversationKey)}
-              onRejectRequest={() => activeRequest && openConfirm({
-                title: 'Mesaj isteğini reddet',
-                description: `${activeRecipientName} mesaj isteği reddedilsin mi?`,
-                confirmText: 'Reddet',
-                cancelText: 'İptal',
-                danger: true,
-                onConfirm: () => handleRejectRequest(activeRequest.conversationKey),
-              })}
-              onBlockUser={() => dm.activeRecipientId && openConfirm({
-                title: 'Kullanıcıyı engelle',
-                description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
-                confirmText: 'Engelle',
-                cancelText: 'İptal',
-                danger: true,
-                onConfirm: () => dm.blockUser(dm.activeRecipientId!),
-              })}
-              onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
-            />
+            <div className={`flex h-full min-h-0 flex-col transition-[padding-right] duration-200 ease-out ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}>
+              <ChatArea
+                messages={dm.messages}
+                currentUserId={currentUser.id}
+                recipientId={dm.activeRecipientId}
+                allUsers={allUsers}
+                loadingHistory={dm.loadingHistory}
+                typingFrom={dm.typingFrom}
+                onSend={dm.sendMessage}
+                onEditMessage={dm.editMessage}
+                onDeleteMessage={dm.deleteMessage}
+                onReactMessage={dm.reactMessage}
+                onTyping={dm.emitTyping}
+                onBack={dm.closeConversation}
+                onNearBottomChange={onNearBottomChange}
+                lastError={dm.lastError}
+                isRequest={!!activeRequest}
+                isBlocked={activeBlocked}
+                requestActionPending={!!activeRequest && requestActionKeys.has(activeRequest.conversationKey)}
+                friendRelation={activeFriendRelation}
+                onSendFriendRequest={handleSendFriendRequest}
+                detailsOpen={detailsOpen}
+                onToggleDetails={() => setDetailsOpen(open => !open)}
+                onCloseDetails={() => setDetailsOpen(false)}
+                onReportUser={() => dm.activeRecipientId && openConfirm({
+                  title: 'Kullanıcıyı bildir',
+                  description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
+                  confirmText: 'Bildir',
+                  cancelText: 'İptal',
+                  danger: true,
+                  onConfirm: () => {
+                    dm.reportUser(dm.activeRecipientId!);
+                    setToastMsg('Bildirim gönderildi');
+                  },
+                })}
+                onAcceptRequest={() => activeRequest && handleAcceptRequest(activeRequest.conversationKey)}
+                onRejectRequest={() => activeRequest && openConfirm({
+                  title: 'Mesaj isteğini reddet',
+                  description: `${activeRecipientName} mesaj isteği reddedilsin mi?`,
+                  confirmText: 'Reddet',
+                  cancelText: 'İptal',
+                  danger: true,
+                  onConfirm: () => handleRejectRequest(activeRequest.conversationKey),
+                })}
+                onBlockUser={() => dm.activeRecipientId && openConfirm({
+                  title: 'Kullanıcıyı engelle',
+                  description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
+                  confirmText: 'Engelle',
+                  cancelText: 'İptal',
+                  danger: true,
+                  onConfirm: () => dm.blockUser(dm.activeRecipientId!),
+                })}
+                onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
+              />
+            </div>
           ) : (
             <>
               {/* Header */}
@@ -1545,13 +1600,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                       setBlockedOpen(false);
                       setSettingsOpen(false);
                     }}
-                    className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                    className={`mv-icon-button mv-interactive mv-focus-ring relative ${
                       requestsOpen
                         ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
                         : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.10)]'
                     }`}
+                    style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Mesaj istekleri"
                     aria-label="Mesaj istekleri"
+                    aria-pressed={requestsOpen}
                   >
                     <Inbox size={14} />
                     {dm.requests.length > 0 && (
@@ -1566,13 +1623,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                       setRequestsOpen(false);
                       setSettingsOpen(false);
                     }}
-                    className={`relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                    className={`mv-icon-button mv-interactive mv-focus-ring relative ${
                       blockedOpen
                         ? 'text-red-300 bg-red-500/10'
                         : 'text-[var(--theme-secondary-text)]/60 hover:text-red-300 hover:bg-red-500/10'
                     }`}
+                    style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Engellenenler"
                     aria-label="Engellenenler"
+                    aria-pressed={blockedOpen}
                   >
                     <UserX size={14} />
                   </button>
@@ -1582,13 +1641,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                       setRequestsOpen(false);
                       setBlockedOpen(false);
                     }}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                    className={`mv-icon-button mv-interactive mv-focus-ring ${
                       settingsOpen
                         ? 'text-[var(--theme-text)] bg-[rgba(var(--glass-tint),0.10)]'
                         : 'text-[var(--theme-secondary-text)]/62 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
                     }`}
+                    style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Mesaj ayarları"
                     aria-label="Mesaj ayarları"
+                    aria-pressed={settingsOpen}
                   >
                     <Settings2 size={14} />
                   </button>
@@ -1662,16 +1723,21 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               {/* List */}
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {dm.conversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                    <MessageSquare size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Henüz mesajın yok</p>
-                    <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 mt-1">Bir arkadaşına mesaj göndererek başla</p>
-                  </div>
+                  <EmptyState
+                    size="sm"
+                    icon={<Inbox size={18} />}
+                    title="Henüz mesajın yok"
+                    description="Bir arkadaşını seçerek veya yeni bir sohbet başlatarak mesajlaşmaya başlayabilirsin."
+                    className="h-full px-6"
+                  />
                 ) : visibleConversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                    <Search size={24} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
-                    <p className="text-[12px] text-[var(--theme-secondary-text)] opacity-40">Sonuç yok</p>
-                  </div>
+                  <EmptyState
+                    size="xs"
+                    icon={<Search size={16} />}
+                    title="Sonuç bulunamadı"
+                    description="Farklı bir isim veya kelimeyle tekrar dene."
+                    className="h-full px-6"
+                  />
                 ) : (
                   <div className="p-2">
                     {visibleConversations.map(convo => {
@@ -1700,6 +1766,38 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 )}
               </div>
             </>
+          )}
+          {dm.activeRecipientId && activeRecipient && (
+            <DMDetailsPanel
+              open={detailsOpen}
+              recipient={activeRecipient}
+              relationship={activeFriendRelation}
+              isBlocked={activeBlocked}
+              isRequest={!!activeRequest}
+              requestStatus={activeRequest?.requestStatus}
+              messages={dm.messages}
+              onClose={() => setDetailsOpen(false)}
+              onReportUser={() => dm.activeRecipientId && openConfirm({
+                title: 'Kullanıcıyı bildir',
+                description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
+                confirmText: 'Bildir',
+                cancelText: 'İptal',
+                danger: true,
+                onConfirm: () => {
+                  dm.reportUser(dm.activeRecipientId!);
+                  setToastMsg('Bildirim gönderildi');
+                },
+              })}
+              onBlockUser={() => dm.activeRecipientId && openConfirm({
+                title: 'Kullanıcıyı engelle',
+                description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
+                confirmText: 'Engelle',
+                cancelText: 'İptal',
+                danger: true,
+                onConfirm: () => dm.blockUser(dm.activeRecipientId!),
+              })}
+              onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
+            />
           )}
           </motion.div>
         )}

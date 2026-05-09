@@ -28,26 +28,22 @@ export default function ConfirmModal({
         <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1.5">{title}</h3>
         <p className="text-[12px] text-[var(--theme-secondary-text)] leading-relaxed">{description}</p>
       </div>
-      <div className="flex border-t border-[var(--theme-border)]">
+      <div className="flex gap-2 border-t border-[var(--theme-border)] p-3">
         <button
           onClick={onCancel}
-          className={`flex-1 py-3.5 text-[13px] font-semibold transition-colors ${
-            danger ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-red-400 hover:bg-red-500/10'
-          }`}
+          disabled={loading}
+          className="mv-action-button-ghost mv-interactive mv-focus-ring flex-1"
         >
           {cancelText}
         </button>
-        <div className="w-px bg-[var(--theme-border)]" />
         <button
           onClick={onConfirm}
           disabled={loading}
-          className={`flex-1 py-3.5 text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-default ${
-            danger ? 'text-red-400 hover:bg-red-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'
-          }`}
+          className={`${danger ? 'mv-action-button-danger' : 'mv-action-button'} mv-interactive mv-focus-ring flex-1`}
         >
           {loading ? (
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <span className="mv-loading-spinner" />
               İşleniyor...
             </span>
           ) : confirmText}

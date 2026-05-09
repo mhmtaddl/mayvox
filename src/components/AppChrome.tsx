@@ -32,7 +32,7 @@ declare global {
   }
 }
 
-const TITLEBAR_HEIGHT = 40;
+const TITLEBAR_HEIGHT = 36;
 const WINDOW_DRAG_THRESHOLD = 2;
 
 type WindowDragPayload = {

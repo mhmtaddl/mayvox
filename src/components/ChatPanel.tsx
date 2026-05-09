@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { VolumeX } from 'lucide-react';
+import { MessageCircle, VolumeX } from 'lucide-react';
 import AvatarContent from './AvatarContent';
 import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -7,6 +7,7 @@ import { useUser } from '../contexts/UserContext';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 import MessageText from './chat/MessageText';
+import EmptyState from './EmptyState';
 
 export interface ChatMessage {
   id: string;
@@ -120,8 +121,13 @@ export default function ChatPanel({
   if (!chatEnabled) {
     return (
       <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex flex-col items-center justify-end pointer-events-none" style={{ top: cardsHeight || '50%' }}>
-        <VolumeX size={22} className="text-[var(--theme-secondary-text)] opacity-10 mb-2" />
-        <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-25">Bu oda modunda mesajlasma kapali</p>
+        <EmptyState
+          size="sm"
+          icon={<VolumeX size={18} />}
+          title="Mesajlaşma kapalı"
+          description="Bu oda modunda yazılı sohbet kullanılamaz."
+          className="pb-6"
+        />
       </div>
     );
   }
@@ -146,7 +152,14 @@ export default function ChatPanel({
       <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="mv-density-chat-area flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
         <div className="flex-1" />
         {messages.length === 0 ? (
-          <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-20 text-center py-4">Sohbet mesajlari burada gorunecek</p>
+          <EmptyState
+            size="sm"
+            tone="accent"
+            icon={<MessageCircle size={18} />}
+            title="Henüz mesaj yok"
+            description="İlk mesajı yazarak sohbeti başlat."
+            className="py-6"
+          />
         ) : messages.map((msg, idx) => {
           const d = new Date(msg.time);
           const now = new Date();

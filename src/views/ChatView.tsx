@@ -70,6 +70,7 @@ import ChatViewPasswordModal from '../features/chatview/components/ChatViewPassw
 import DesktopDock from '../features/chatview/components/DesktopDock';
 import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
+import RoomStatusBadges from '../features/chatview/components/RoomStatusBadges';
 import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
@@ -761,6 +762,7 @@ export default function ChatView() {
   // ── Notification center ──
   const notifications = useNotificationCenter(
     dmUnreadCount,
+    dmRequestCount,
     false,
     incomingInvites.invites,
     myPendingJoinRequests.items.map(it => ({ serverId: it.serverId, serverName: it.serverName, pendingCount: it.pendingCount })),
@@ -1337,16 +1339,6 @@ export default function ChatView() {
                               const IC = channelIconComponents[channel.iconName ?? getDefaultChannelIconName(mode)] || roomModeIcons[mode] || Coffee;
                               return <IC size={16} className="opacity-90" style={{ color: channel.iconColor ?? getDefaultChannelIconColor(mode) }} />;
                             })()}
-                            {channel.password && (
-                              <div className="absolute -top-1 -right-1 bg-amber-500 rounded-full p-0.5 border border-[var(--theme-border)]">
-                                <Lock size={8} className="text-white" />
-                              </div>
-                            )}
-                            {!channel.password && channel.isInviteOnly && (
-                              <div className="absolute -top-1 -right-1 rounded-full p-0.5 border border-[var(--theme-border)]" style={{ background: 'rgba(var(--theme-accent-rgb), 0.7)' }} title="Özel kanal">
-                                <Lock size={8} className="text-white" />
-                              </div>
-                            )}
                           </div>
                           <div className="flex items-center justify-between flex-1 min-w-0">
                             <span className="font-medium truncate" style={{ fontSize: channel.name.length > 14 ? '12px' : '14px' }}>{channel.name}</span>
@@ -1357,13 +1349,7 @@ export default function ChatView() {
                               </div>
                             )}
                           </div>
-                          {channel.userCount > 0 && (
-                            <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                              activeChannel === channel.id ? 'bg-[var(--theme-accent)]/20 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]'
-                            }`}>
-                              {channel.userCount}
-                            </span>
-                          )}
+                          <RoomStatusBadges channel={channel} isActive={activeChannel === channel.id} compact />
                         </button>
 
                         {/* Members List */}
@@ -1454,7 +1440,7 @@ export default function ChatView() {
                         }`}
                         title={atLimit ? roomLimitMessage(activePlan) : undefined}>
                         <Sparkles size={15} />
-                        <span className="text-sm font-medium">Oda Oluştur</span>
+                        <span className="mv-font-title font-medium">Oda Oluştur</span>
                       </button>
                       );
                     })()}
