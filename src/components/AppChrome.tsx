@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRef } from 'react';
 import { Minus, X } from 'lucide-react';
 
 /**
@@ -14,6 +15,9 @@ interface ElectronWindowAPI {
   minimize: () => void;
   maximizeRestore: () => void | Promise<void>;
   toggleMaximize?: () => void | Promise<void>;
+  dragStart?: (payload: WindowDragPayload) => void;
+  dragMove?: (payload: WindowDragPayload) => void;
+  dragEnd?: () => void;
   close: () => void;
   setAuthMode?: (enabled: boolean, kind?: string) => void;
   isMaximized: () => Promise<boolean>;
@@ -29,12 +33,46 @@ declare global {
 }
 
 const TITLEBAR_HEIGHT = 40;
+const WINDOW_DRAG_THRESHOLD = 2;
+
+type WindowDragPayload = {
+  screenX: number;
+  screenY: number;
+  clientX: number;
+  clientY: number;
+};
+
+type WindowDragState = {
+  pointerId: number;
+  startScreenX: number;
+  startScreenY: number;
+  dragging: boolean;
+};
+
+function isInteractiveWindowTarget(target: HTMLElement | null) {
+  if (!target) return true;
+  if (target.closest('[data-window-control]')) return true;
+  if (target.closest('[data-no-window-drag], [data-no-drag], .no-drag')) return true;
+  if (target.closest('button, input, textarea, select, a, [role="button"]')) return true;
+  if (target.closest('[contenteditable="true"]')) return true;
+  return false;
+}
+
+function toWindowDragPayload(event: React.PointerEvent<HTMLElement>): WindowDragPayload {
+  return {
+    screenX: event.screenX,
+    screenY: event.screenY,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  };
+}
 
 export default function AppChrome() {
   const api = typeof window !== 'undefined' ? window.electronWindow : undefined;
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
   const [authMode, setAuthMode] = useState(false);
+  const dragStateRef = useRef<WindowDragState | null>(null);
 
   useEffect(() => {
     if (!api) return;
@@ -67,27 +105,69 @@ export default function AppChrome() {
   const onTitlebarDoubleClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (authMode) return;
     const target = event.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest('[data-window-control]')) return;
-    if (target.closest('[data-no-drag], .no-drag')) return;
-    if (target.closest('button, input, select, textarea, a')) return;
+    if (isInteractiveWindowTarget(target)) return;
     event.preventDefault();
     event.stopPropagation();
     void (api.toggleMaximize?.() ?? api.maximizeRestore());
   }, [api, authMode]);
+
+  const onTitlebarPointerDown = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    if (authMode || event.button !== 0) return;
+    if (isInteractiveWindowTarget(event.target as HTMLElement | null)) return;
+
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startScreenX: event.screenX,
+      startScreenY: event.screenY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [authMode]);
+
+  const onTitlebarPointerMove = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+
+    const dx = event.screenX - state.startScreenX;
+    const dy = event.screenY - state.startScreenY;
+    if (!state.dragging) {
+      if (Math.hypot(dx, dy) < WINDOW_DRAG_THRESHOLD) return;
+      state.dragging = true;
+      api.dragStart?.(toWindowDragPayload(event));
+    }
+
+    event.preventDefault();
+    api.dragMove?.(toWindowDragPayload(event));
+  }, [api]);
+
+  const finishTitlebarDrag = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (state.dragging) api.dragEnd?.();
+    dragStateRef.current = null;
+  }, [api]);
+
   return (
     <header
       className="titlebar window-titlebar app-titlebar relative w-full select-none"
+      onDoubleClick={onTitlebarDoubleClick}
+      onPointerDown={onTitlebarPointerDown}
+      onPointerMove={onTitlebarPointerMove}
+      onPointerUp={finishTitlebarDrag}
+      onPointerCancel={finishTitlebarDrag}
       style={{
         height: TITLEBAR_HEIGHT,
-        WebkitAppRegion: 'drag',
+        WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
     >
       <div className="relative h-full flex items-center justify-between px-3">
-        {/* Drag regions do not reliably emit renderer double-click; brand is the manual maximize zone. */}
+        {/* Header stays no-drag so renderer can implement reliable drag + double-click behavior. */}
         <div
           className="group relative z-30 flex items-center gap-2 shrink-0 pr-3"
-          onDoubleClick={onTitlebarDoubleClick}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <BrandMark focused={focused} />
@@ -104,14 +184,14 @@ export default function AppChrome() {
 
         {/* RIGHT — macOS-style traffic light controls */}
         <div
-          className="relative z-30 flex items-center gap-[9px] shrink-0 pl-3 pr-2"
+          className="relative z-30 flex items-center gap-[10px] shrink-0 pl-3 pr-2"
           data-window-control
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {!authMode && (
             <>
               <ControlButton onClick={onMin} ariaLabel="Küçült" tone="neutral">
-                <Minus size={9} strokeWidth={2.8} />
+                <Minus size={10} strokeWidth={2.8} />
               </ControlButton>
               <ControlButton onClick={onMaxRestore} ariaLabel={maximized ? 'Geri al' : 'Tam ekran'} tone="accent">
                 {maximized ? <RestoreIcon /> : <MaximizeIcon />}
@@ -119,7 +199,7 @@ export default function AppChrome() {
             </>
           )}
           <ControlButton onClick={onClose} ariaLabel="Kapat" tone="danger">
-            <X size={9} strokeWidth={2.8} />
+            <X size={10} strokeWidth={2.8} />
           </ControlButton>
         </div>
       </div>
@@ -162,21 +242,18 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
       hoverBg: '#f5bf4f',
       border: '#d99a25',
       icon: '#7a5100',
-      glow: '245, 191, 79',
     },
     accent: {
       bg: '#459d43',
       hoverBg: '#61c554',
       border: '#3fae3b',
       icon: '#155c18',
-      glow: '97, 197, 84',
     },
     danger: {
       bg: '#c94b47',
       hoverBg: '#ff5f57',
       border: '#e0443e',
       icon: '#7b1511',
-      glow: '255, 95, 87',
     },
   }[tone];
 
@@ -188,20 +265,20 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
       onMouseLeave={() => setHover(false)}
       title={ariaLabel}
       aria-label={ariaLabel}
-      className="group w-[15px] h-[15px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90"
+      className="group w-[16px] h-[16px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90"
       style={{
         background: hover ? palette.hoverBg : palette.bg,
         border: `1px solid ${palette.border}`,
         color: palette.icon,
-        opacity: hover ? 1 : 0.84,
+        opacity: hover ? 1 : 0.66,
         boxShadow: hover
-          ? `inset 0 1px 0 rgba(255,255,255,0.46), 0 0 0 3px rgba(${palette.glow}, 0.13), 0 0 13px rgba(${palette.glow}, 0.28)`
-          : `inset 0 1px 0 rgba(255,255,255,0.24), 0 1px 2px rgba(0,0,0,0.20)`,
+          ? 'inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.18)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.24), 0 1px 2px rgba(0,0,0,0.16)',
       }}
     >
       <span
         className="flex items-center justify-center transition-opacity duration-120"
-        style={{ opacity: hover ? 1 : 0.28 }}
+        style={{ opacity: hover ? 0.98 : 0 }}
       >
         {children}
       </span>

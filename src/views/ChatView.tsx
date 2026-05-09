@@ -278,19 +278,13 @@ export default function ChatView() {
 
   useEffect(() => {
     const onFocusUserSearch = () => {
-      setView('chat');
-      setSettingsTarget(null);
-      setSettingsServerId(null);
-      setSettingsInitialTab(undefined);
-      setShowDiscover(false);
-      setMobileRightOpen(true);
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('mayvox:social-search-focus'));
-      }, 120);
+      }, 0);
     };
     window.addEventListener('mayvox:focus-user-search', onFocusUserSearch);
     return () => window.removeEventListener('mayvox:focus-user-search', onFocusUserSearch);
-  }, [setSettingsTarget, setView]);
+  }, []);
 
   useEffect(() => {
     const onOpenMessages = (event: Event) => {

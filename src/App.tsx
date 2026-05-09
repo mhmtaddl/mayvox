@@ -2142,7 +2142,6 @@ export default function App() {
   }, []);
 
   const openCommandUserSearch = useCallback(() => {
-    setView('chat');
     window.dispatchEvent(new CustomEvent('mayvox:focus-user-search'));
   }, []);
 
@@ -2200,7 +2199,9 @@ export default function App() {
 
   const openCommandServerSettings = useCallback((highlightId?: string, tab?: string) => {
     setView('chat');
-    window.dispatchEvent(new CustomEvent('mayvox:open-server-settings', { detail: { highlightId, tab } }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('mayvox:open-server-settings', { detail: { highlightId, tab } }));
+    }, 0);
   }, []);
 
   const createCommandAnnouncement = useCallback((type: 'announcement' | 'event') => {

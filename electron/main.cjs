@@ -579,6 +579,62 @@ function toggleMaximize(win) {
   if (win.isMaximized()) win.unmaximize(); else win.maximize();
 }
 
+let windowDragState = null;
+
+function getWindowFromEvent(event) {
+  return BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+}
+
+function readDragPoint(payload) {
+  return {
+    screenX: Number.isFinite(payload?.screenX) ? payload.screenX : 0,
+    screenY: Number.isFinite(payload?.screenY) ? payload.screenY : 0,
+    clientX: Number.isFinite(payload?.clientX) ? payload.clientX : 0,
+    clientY: Number.isFinite(payload?.clientY) ? payload.clientY : 0,
+  };
+}
+
+function startWindowDrag(event, payload) {
+  const win = getWindowFromEvent(event);
+  if (!win || win.isDestroyed() || authWindowMode) return;
+
+  const point = readDragPoint(payload);
+  if (win.isMaximized()) {
+    win.unmaximize();
+    const restored = win.getBounds();
+    const anchorX = Math.max(0, Math.min(point.clientX, restored.width - 1));
+    const anchorY = Math.max(0, Math.min(point.clientY, restored.height - 1));
+    win.setPosition(Math.round(point.screenX - anchorX), Math.round(point.screenY - anchorY));
+  }
+
+  windowDragState = {
+    webContentsId: event.sender.id,
+    startMouseX: point.screenX,
+    startMouseY: point.screenY,
+    startBounds: win.getBounds(),
+  };
+}
+
+function moveWindowDrag(event, payload) {
+  const win = getWindowFromEvent(event);
+  if (!win || win.isDestroyed() || !windowDragState) return;
+  if (windowDragState.webContentsId !== event.sender.id) return;
+
+  const point = readDragPoint(payload);
+  const dx = point.screenX - windowDragState.startMouseX;
+  const dy = point.screenY - windowDragState.startMouseY;
+  win.setPosition(
+    Math.round(windowDragState.startBounds.x + dx),
+    Math.round(windowDragState.startBounds.y + dy),
+  );
+}
+
+function endWindowDrag(event) {
+  if (!windowDragState || windowDragState.webContentsId === event.sender.id) {
+    windowDragState = null;
+  }
+}
+
 function rebuildMainWindowAfterAuth(oldWin, bounds) {
   const nextWin = createMainWindow(bounds);
   const showNext = () => {
@@ -609,6 +665,9 @@ ipcMain.on("window:minimize", (e) => withWin(e, (w) => w.minimize()));
 ipcMain.on("window:maximize-restore", (e) => withWin(e, toggleMaximize));
 ipcMain.on("window:toggle-maximize", (e) => withWin(e, toggleMaximize));
 ipcMain.handle("window:toggle-maximize", (e) => withWin(e, toggleMaximize));
+ipcMain.on("window:drag-start", startWindowDrag);
+ipcMain.on("window:drag-move", moveWindowDrag);
+ipcMain.on("window:drag-end", endWindowDrag);
 ipcMain.on("window:close", (e) => withWin(e, (w) => {
   if (authWindowMode) {
     isQuitting = true;
