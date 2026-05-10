@@ -30,6 +30,7 @@ interface Props {
   /** Sağ-tık / context menü talebi — ChatView seviyesinde role-aware menü açar. */
   onRequestMemberMenu?: (user: User, x: number, y: number) => void;
   isAdmin: boolean;
+  isPrimaryAdmin?: boolean;
   // Chat panel props
   activeChannel: string | null;
   channels: { id: string; mode?: string }[];
@@ -44,6 +45,9 @@ interface Props {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onDeleteMessage: (id: string) => void;
+  onReportMessage?: (msg: ChatMessage) => void;
+  onMessageContextMenu?: (msg: ChatMessage, x: number, y: number) => void;
+  reportedMessageIds?: Set<string>;
   onClearAll: () => void;
   onSendMessage: () => void;
   chatInput: string;
@@ -56,6 +60,13 @@ interface Props {
   isModerator: boolean;
   /** Flood cooldown aktif mi — aktifse input + send disabled. */
   isFloodCooling?: boolean;
+  canModerateMessages?: boolean;
+  highlightedMessageId?: string | null;
+  activityPanel?: React.ReactNode;
+  activityPanelRatio?: number;
+  activityPanelOpen?: boolean;
+  onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onToggleActivityPanel?: () => void;
 }
 
 function VoiceParticipants({
@@ -78,6 +89,7 @@ function VoiceParticipants({
   onKickUser,
   onRequestMemberMenu,
   isAdmin,
+  isPrimaryAdmin,
   activeChannel,
   channels,
   chatMessages,
@@ -91,6 +103,9 @@ function VoiceParticipants({
   onSaveEdit,
   onCancelEdit,
   onDeleteMessage,
+  onReportMessage,
+  onMessageContextMenu,
+  reportedMessageIds,
   onClearAll,
   onSendMessage,
   chatInput,
@@ -102,6 +117,13 @@ function VoiceParticipants({
   onScrollToBottom,
   isModerator,
   isFloodCooling,
+  canModerateMessages,
+  highlightedMessageId,
+  activityPanel,
+  activityPanelRatio,
+  activityPanelOpen,
+  onActivityResizeStart,
+  onToggleActivityPanel,
 }: Props) {
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
@@ -244,6 +266,7 @@ function VoiceParticipants({
           messages={chatMessages}
           currentUserId={currentUser.id}
           isAdmin={isAdmin}
+          isPrimaryAdmin={isPrimaryAdmin}
           isModerator={isModerator}
           chatMuted={chatMuted}
           chatMuteRank={chatMuteRank}
@@ -255,6 +278,9 @@ function VoiceParticipants({
           onSaveEdit={onSaveEdit}
           onCancelEdit={onCancelEdit}
           onDeleteMessage={onDeleteMessage}
+          onReportMessage={onReportMessage}
+          onMessageContextMenu={onMessageContextMenu}
+          reportedMessageIds={reportedMessageIds}
           onClearAll={onClearAll}
           onSendMessage={onSendMessage}
           chatInput={chatInput}
@@ -265,6 +291,13 @@ function VoiceParticipants({
           newMsgCount={newMsgCount}
           onScrollToBottom={onScrollToBottom}
           isFloodCooling={isFloodCooling}
+          canModerateMessages={canModerateMessages}
+          highlightedMessageId={highlightedMessageId}
+          activityPanel={activityPanel}
+          activityPanelRatio={activityPanelRatio}
+          activityPanelOpen={activityPanelOpen}
+          onActivityResizeStart={onActivityResizeStart}
+          onToggleActivityPanel={onToggleActivityPanel}
         />
       </div>
 

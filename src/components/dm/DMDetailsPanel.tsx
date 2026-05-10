@@ -1,13 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ExternalLink, Flag, Gamepad2, Globe2, Lock, Monitor, Shield, Smartphone, UserRound, UserX, X } from 'lucide-react';
+import { ExternalLink, Flag, Gamepad2, Globe2, Image as ImageIcon, Link2, Lock, Monitor, Pin, Shield, Smartphone, UserRound, UserX, X } from 'lucide-react';
 import AvatarContent from '../AvatarContent';
 import EmptyState from '../EmptyState';
 import { getPublicDisplayName } from '../../lib/formatName';
 import { openExternalUrl } from '../../lib/openExternalUrl';
 import type { DmConversation, DmMessage } from '../../lib/dmService';
 import type { User } from '../../types';
-import { extractLinksFromMessages } from './dmDetailsUtils';
+import { extractLinksFromMessages, extractMediaFromMessages } from './dmDetailsUtils';
 
 type Relationship = 'friend' | 'incoming' | 'outgoing' | null;
 
@@ -23,6 +23,7 @@ interface Props {
   onBlockUser: () => void;
   onUnblockUser: () => void;
   onReportUser: () => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 export default function DMDetailsPanel({
@@ -37,8 +38,17 @@ export default function DMDetailsPanel({
   onBlockUser,
   onUnblockUser,
   onReportUser,
+  onJumpToMessage,
 }: Props) {
+  const [tab, setTab] = useState<'pins' | 'links' | 'media'>('pins');
   const links = useMemo(() => extractLinksFromMessages(messages), [messages]);
+  const media = useMemo(() => extractMediaFromMessages(messages), [messages]);
+  const pinnedMessages = useMemo(() => (
+    messages
+      .filter(message => !!message.pinnedAt)
+      .slice()
+      .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0))
+  ), [messages]);
   const name = getPublicDisplayName(recipient);
   const statusText = getStatusText(recipient);
   const statusTone = getStatusTone(statusText, recipient.status);
@@ -127,35 +137,105 @@ export default function DMDetailsPanel({
             </section>
 
             <section className="mt-3.5 space-y-2">
-              <SectionTitle>Paylaşılan linkler</SectionTitle>
-              {links.length > 0 ? (
-                <div className="space-y-1.5">
-                  {links.map(link => (
-                    <button
-                      key={link.url}
-                      type="button"
-                      onClick={() => openExternalUrl(link.url)}
-                      className="group/link flex w-full items-center gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.07)] bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2 text-left transition-colors hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)]"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-accent)]/75">
-                        <Globe2 size={13} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="mv-font-body block truncate text-[11.5px] font-semibold text-[var(--theme-text)]/88">{link.title}</span>
-                        <span className="mv-font-caption block truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">{link.domain}</span>
-                      </span>
-                      <ExternalLink size={12} className="shrink-0 text-[var(--theme-secondary-text)]/35 transition-colors group-hover/link:text-[var(--theme-accent)]/75" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  size="xs"
-                  icon={<Globe2 size={15} />}
-                  title="Paylaşılan link yok"
-                  description="Bu sohbette paylaşılan bağlantılar burada görünür."
-                  className="min-h-[92px] rounded-xl border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] px-3"
-                />
+              <SectionTitle>Paylaşımlar</SectionTitle>
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-[rgba(var(--glass-tint),0.065)] bg-[rgba(var(--glass-tint),0.025)] p-1">
+                <ShareTab active={tab === 'pins'} icon={<Pin size={11} />} label="Sabit" count={pinnedMessages.length} onClick={() => setTab('pins')} />
+                <ShareTab active={tab === 'links'} icon={<Link2 size={11} />} label="Link" count={links.length} onClick={() => setTab('links')} />
+                <ShareTab active={tab === 'media'} icon={<ImageIcon size={11} />} label="Medya" count={media.length} onClick={() => setTab('media')} />
+              </div>
+
+              {tab === 'pins' && (
+                pinnedMessages.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {pinnedMessages.map(message => (
+                      <button
+                        key={message.id}
+                        type="button"
+                        onClick={() => onJumpToMessage?.(message.id)}
+                        className="group/link flex w-full items-start gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.07)] bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2 text-left transition-colors hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)]"
+                      >
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(var(--theme-accent-rgb),0.09)] text-[var(--theme-accent)]/80">
+                          <Pin size={13} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="mv-font-body line-clamp-2 text-[11.5px] font-semibold leading-snug text-[var(--theme-text)]/88">{message.text}</span>
+                          <span className="mv-font-caption mt-1 block text-[10px] font-medium text-[var(--theme-secondary-text)]/55">
+                            {formatCompactDate(message.pinnedAt || message.createdAt)}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    size="xs"
+                    icon={<Pin size={15} />}
+                    title="Sabitlenen mesaj yok"
+                    description="Önemli mesajları sabitleyince burada görünür."
+                    className="min-h-[92px] rounded-xl border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] px-3"
+                  />
+                )
+              )}
+
+              {tab === 'links' && (
+                links.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {links.map(link => (
+                      <button
+                        key={link.url}
+                        type="button"
+                        onClick={() => openExternalUrl(link.url)}
+                        className="group/link flex w-full items-center gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.07)] bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2 text-left transition-colors hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)]"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-accent)]/75">
+                          <Globe2 size={13} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="mv-font-body block truncate text-[11.5px] font-semibold text-[var(--theme-text)]/88">{link.title}</span>
+                          <span className="mv-font-caption block truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">{link.domain}</span>
+                        </span>
+                        <ExternalLink size={12} className="shrink-0 text-[var(--theme-secondary-text)]/35 transition-colors group-hover/link:text-[var(--theme-accent)]/75" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    size="xs"
+                    icon={<Globe2 size={15} />}
+                    title="Paylaşılan link yok"
+                    description="Bu sohbette paylaşılan bağlantılar burada görünür."
+                    className="min-h-[92px] rounded-xl border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] px-3"
+                  />
+                )
+              )}
+
+              {tab === 'media' && (
+                media.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {media.map(item => (
+                      <button
+                        key={item.url}
+                        type="button"
+                        onClick={() => openExternalUrl(item.url)}
+                        className="group/link min-w-0 rounded-xl border border-[rgba(var(--glass-tint),0.07)] bg-[rgba(var(--glass-tint),0.035)] p-2 text-left transition-colors hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.08)]"
+                      >
+                        <span className="mb-1.5 flex h-14 items-center justify-center rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-accent)]/75">
+                          <ImageIcon size={17} />
+                        </span>
+                        <span className="mv-font-body block truncate text-[10.5px] font-semibold text-[var(--theme-text)]/86">{item.title}</span>
+                        <span className="mv-font-caption block truncate text-[9.5px] font-medium text-[var(--theme-secondary-text)]/55">{item.kind}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    size="xs"
+                    icon={<ImageIcon size={15} />}
+                    title="Medya yok"
+                    description="Görsel ve video linkleri burada toplanır."
+                    className="min-h-[92px] rounded-xl border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] px-3"
+                  />
+                )
               )}
             </section>
 
@@ -214,12 +294,40 @@ function StatusChip({ icon, label, tone = 'neutral' }: { icon: React.ReactNode; 
   );
 }
 
+function ShareTab({ active, icon, label, count, onClick }: { active: boolean; icon: React.ReactNode; label: string; count: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-7 min-w-0 items-center justify-center gap-1 rounded-lg text-[10px] font-bold transition-colors ${
+        active
+          ? 'bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+          : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-text)]'
+      }`}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+      <span className="rounded-full bg-[rgba(var(--glass-tint),0.07)] px-1 text-[9px] text-current/70">{count}</span>
+    </button>
+  );
+}
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="mv-font-caption text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/58">
       {children}
     </h3>
   );
+}
+
+function formatCompactDate(value: number): string {
+  const date = new Date(value);
+  return date.toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function getRelationshipLabel(relationship: Relationship): string | null {

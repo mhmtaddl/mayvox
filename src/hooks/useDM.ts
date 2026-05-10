@@ -7,6 +7,7 @@ import {
   dmSendMessage,
   dmEditMessage,
   dmDeleteMessage,
+  dmSetMessagePinned,
   dmReactMessage,
   dmMarkRead,
   dmRequestUnreadTotal,
@@ -24,6 +25,7 @@ import {
 import { TYPING_CLEAR_MS, shouldEmitTyping } from '../lib/dmUxLogic';
 import { handleDmMessage as notifyDmMessage } from '../features/notifications/notificationService';
 import { subscribeConnectionStatus } from '../lib/chatService';
+import { decryptTextIfNeeded, encryptTextForUsers } from '../lib/e2ee';
 
 /**
  * useDM — DM state yönetimi.
@@ -63,6 +65,11 @@ export function useDM(currentUserId: string | undefined) {
     dmMarkRead(convKey);
   }, []);
 
+  const decryptDmMessage = useCallback(async (msg: DmMessage): Promise<DmMessage> => {
+    const result = await decryptTextIfNeeded(msg.text);
+    return { ...msg, text: result.text };
+  }, []);
+
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
     setDmHandlers({
@@ -93,12 +100,16 @@ export function useDM(currentUserId: string | undefined) {
             clearTimeout(historyTimeoutRef.current);
             historyTimeoutRef.current = null;
           }
-          setLastError(null);
-          setMessages(msgs);
-          setLoadingHistory(false);
+          void Promise.all(msgs.map(decryptDmMessage)).then(decrypted => {
+            if (convKey !== activeConvKeyRef.current) return;
+            setLastError(null);
+            setMessages(decrypted);
+            setLoadingHistory(false);
+          });
         }
       },
-      onNewMessage: (msg) => {
+      onNewMessage: (rawMsg) => {
+        void decryptDmMessage(rawMsg).then(msg => {
         const isIncomingRequest =
           msg.senderId !== currentUserId
           && (
@@ -185,6 +196,7 @@ export function useDM(currentUserId: string | undefined) {
         if (msg.senderId !== currentUserId) {
           try { notifyDmMessage(msg); } catch { /* no-op */ }
         }
+        });
       },
       onRead: (convKey, _readBy, _readAt) => {
         // Aktif sohbetteki mesajları güncelle
@@ -209,20 +221,23 @@ export function useDM(currentUserId: string | undefined) {
       },
       onMessageEdited: (msg, lastMessage, lastMessageAt) => {
         if (!msg?.id) return;
-        if (msg.conversationKey === activeConvKeyRef.current) {
-          setMessages(prev => prev.map(m =>
-            m.id === msg.id
-              ? { ...m, text: msg.text, editedAt: msg.editedAt ?? Date.now() }
-              : m
-          ));
-        }
-        if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
-          setConversations(prev => prev.map(c =>
-            c.conversationKey === msg.conversationKey
-              ? { ...c, lastMessage, lastMessageAt }
-              : c
-          ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
-        }
+        void decryptDmMessage(msg).then(decrypted => {
+          if (decrypted.conversationKey === activeConvKeyRef.current) {
+            setMessages(prev => prev.map(m =>
+              m.id === decrypted.id
+                ? { ...m, text: decrypted.text, editedAt: decrypted.editedAt ?? Date.now() }
+                : m
+            ));
+          }
+          const preview = decrypted.text.length > 100 ? decrypted.text.slice(0, 100) + '…' : decrypted.text;
+          if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
+            setConversations(prev => prev.map(c =>
+              c.conversationKey === decrypted.conversationKey
+                ? { ...c, lastMessage: preview, lastMessageAt }
+                : c
+            ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
+          }
+        });
       },
       onMessageDeleted: (convKey, messageId, lastMessage, lastMessageAt) => {
         if (!convKey || !messageId) return;
@@ -241,6 +256,14 @@ export function useDM(currentUserId: string | undefined) {
         if (convKey !== activeConvKeyRef.current) return;
         setMessages(prev => prev.map(m => (
           m.id === messageId ? { ...m, reactions } : m
+        )));
+      },
+      onMessagePinned: (convKey, messageId, pinned, pinnedBy, pinnedAt) => {
+        if (convKey !== activeConvKeyRef.current) return;
+        setMessages(prev => prev.map(m => (
+          m.id === messageId
+            ? { ...m, pinnedBy: pinned ? (pinnedBy ?? null) : null, pinnedAt: pinned ? (pinnedAt ?? null) : null }
+            : m
         )));
       },
       onUnreadTotal: (count) => {
@@ -281,7 +304,7 @@ export function useDM(currentUserId: string | undefined) {
         dmLoadBlocks();
       },
     });
-  }, [currentUserId, markReadSafe]);
+  }, [currentUserId, decryptDmMessage, markReadSafe]);
 
   // İlk yüklemede konuşmaları ve unread çek
   const loadInitial = useCallback(() => {
@@ -367,12 +390,13 @@ export function useDM(currentUserId: string | undefined) {
     lastDmTextRef.current = trimmed;
     logger.info('DM send', { recipientId: activeRecipientId });
     setLastError(null);
-    const sent = dmSendMessage(activeRecipientId, trimmed);
-    if (!sent) {
-      setLastError('Mesaj gönderilemedi: bağlantı hazır değil.');
-      return;
-    }
-  }, [activeRecipientId]);
+    void encryptTextForUsers(trimmed, [currentUserId || '', activeRecipientId])
+      .then(encrypted => {
+        const sent = dmSendMessage(activeRecipientId, encrypted);
+        if (!sent) setLastError('Mesaj gönderilemedi: bağlantı hazır değil.');
+      })
+      .catch(err => setLastError(err instanceof Error ? err.message : 'Mesaj şifrelenemedi.'));
+  }, [activeRecipientId, currentUserId]);
 
   const deleteMessage = useCallback((messageId: string) => {
     if (!messageId) return;
@@ -384,6 +408,16 @@ export function useDM(currentUserId: string | undefined) {
     if (!messageId || !emoji) return;
     dmReactMessage(messageId, emoji);
   }, []);
+
+  const pinMessage = useCallback((messageId: string, pinned: boolean) => {
+    if (!messageId) return;
+    setMessages(prev => prev.map(m => (
+      m.id === messageId
+        ? { ...m, pinnedBy: pinned ? (currentUserId ?? null) : null, pinnedAt: pinned ? Date.now() : null }
+        : m
+    )));
+    dmSetMessagePinned(messageId, pinned);
+  }, [currentUserId]);
 
   const editMessage = useCallback((messageId: string, text: string) => {
     if (!messageId) return;
@@ -399,8 +433,10 @@ export function useDM(currentUserId: string | undefined) {
         ? { ...m, text: trimmed, editedAt: Date.now() }
         : m
     )));
-    dmEditMessage(messageId, trimmed);
-  }, [currentUserId, deleteMessage, messages]);
+    void encryptTextForUsers(trimmed, [currentUserId || '', activeRecipientId || ''])
+      .then(encrypted => dmEditMessage(messageId, encrypted))
+      .catch(err => setLastError(err instanceof Error ? err.message : 'Mesaj şifrelenemedi.'));
+  }, [activeRecipientId, currentUserId, deleteMessage, messages]);
 
   const closeConversation = useCallback(() => {
     setActiveConvKey(null);
@@ -513,6 +549,7 @@ export function useDM(currentUserId: string | undefined) {
     sendMessage,
     editMessage,
     deleteMessage,
+    pinMessage,
     reactMessage,
     acceptRequest,
     rejectRequest,

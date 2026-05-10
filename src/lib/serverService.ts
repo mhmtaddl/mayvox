@@ -900,6 +900,36 @@ export async function getModerationEvents(
   return apiFetch<ModerationEvent[]>(`/servers/${serverId}/moderation-events${qs ? `?${qs}` : ''}`);
 }
 
+export interface RoomActivityEvent {
+  id: string;
+  serverId: string;
+  channelId: string;
+  type: string;
+  actorId: string | null;
+  targetUserId: string | null;
+  label: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export async function listRoomActivityEvents(
+  serverId: string,
+  channelId: string,
+  limit = 75,
+): Promise<RoomActivityEvent[]> {
+  return apiFetch<RoomActivityEvent[]>(
+    `/servers/${serverId}/channels/${encodeURIComponent(channelId)}/activity-events?limit=${Math.max(1, Math.min(75, limit))}`,
+  );
+}
+
+export async function clearRoomActivityEvents(serverId: string, channelId: string): Promise<{ deleted: number }> {
+  return apiFetch<{ deleted: number }>(
+    `/servers/${serverId}/channels/${encodeURIComponent(channelId)}/activity-events`,
+    { method: 'DELETE' },
+  );
+}
+
 /** Moderation events export — XLSX (ExcelJS server-side). Browser download tetikler. */
 export async function exportModerationEventsXlsx(
   serverId: string,

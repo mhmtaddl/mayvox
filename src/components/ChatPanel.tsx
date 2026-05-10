@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { MessageCircle, VolumeX } from 'lucide-react';
+import { Flag, History, PencilLine, Trash2, VolumeX } from 'lucide-react';
 import AvatarContent from './AvatarContent';
 import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -24,6 +24,7 @@ interface Props {
   messages: ChatMessage[];
   currentUserId: string;
   isAdmin: boolean;
+  isPrimaryAdmin?: boolean;
   isModerator: boolean;
   chatMuted: boolean;
   chatMuteRank: number;
@@ -35,6 +36,9 @@ interface Props {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onDeleteMessage: (id: string) => void;
+  onReportMessage?: (msg: ChatMessage) => void;
+  onMessageContextMenu?: (msg: ChatMessage, x: number, y: number) => void;
+  reportedMessageIds?: Set<string>;
   onClearAll: () => void;
   onSendMessage: () => void;
   chatInput: string;
@@ -46,6 +50,13 @@ interface Props {
   onScrollToBottom: () => void;
   /** Flood cooldown aktif mi — aktifse input disabled + send disabled. */
   isFloodCooling?: boolean;
+  canModerateMessages?: boolean;
+  highlightedMessageId?: string | null;
+  activityPanel?: React.ReactNode;
+  activityPanelRatio?: number;
+  activityPanelOpen?: boolean;
+  onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onToggleActivityPanel?: () => void;
 }
 
 const EMOJI_LIST = ['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'];
@@ -64,6 +75,7 @@ export default function ChatPanel({
   messages,
   currentUserId,
   isAdmin,
+  isPrimaryAdmin,
   isModerator,
   chatMuted,
   chatMuteRank,
@@ -75,6 +87,9 @@ export default function ChatPanel({
   onSaveEdit,
   onCancelEdit,
   onDeleteMessage,
+  onReportMessage,
+  onMessageContextMenu,
+  reportedMessageIds,
   onClearAll,
   onSendMessage,
   chatInput,
@@ -85,6 +100,13 @@ export default function ChatPanel({
   newMsgCount,
   onScrollToBottom,
   isFloodCooling,
+  canModerateMessages,
+  highlightedMessageId,
+  activityPanel,
+  activityPanelRatio = 25,
+  activityPanelOpen = false,
+  onActivityResizeStart,
+  onToggleActivityPanel,
 }: Props) {
   const { avatarBorderColor } = useSettings();
   const { currentUser, allUsers } = useUser();
@@ -132,34 +154,35 @@ export default function ChatPanel({
     );
   }
 
-  const myChatRank = isAdmin ? 30 : isModerator ? 20 : 0;
+  const myChatRank = isPrimaryAdmin ? 40 : isAdmin ? 30 : isModerator ? 20 : 0;
+  const canModerateRoomMessages = canModerateMessages ?? myChatRank > 0;
   const canBypassChatMute = !chatMuted || myChatRank >= chatMuteRank;
   const canToggleChatMute = myChatRank > 0 && (!chatMuted || myChatRank >= chatMuteRank);
   const isChatMutedDisabled = !canBypassChatMute;
   // Flood cooldown herkese uygulanır (admin/mod dahil) — sunucu reddi geldi, client bypass etmesin.
   const isChatDisabled = isChatMutedDisabled || !!isFloodCooling;
   const fs = chatFontSize;
+  const hasActivityPanel = !!activityPanel;
+  const isActivityPanelVisible = hasActivityPanel && activityPanelOpen;
+  const showCollapsedActivityButton = !!onToggleActivityPanel && hasActivityPanel && !isActivityPanelVisible;
 
   return (
-    <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex flex-col rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)' }}>
-      {/* Yazi boyutu ayari */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
-        <button onClick={() => changeFontSize(-1)} disabled={fs === 0} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Küçült">A-</button>
-        <button onClick={() => changeFontSize(1)} disabled={fs === 5} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Büyüt">A+</button>
-      </div>
+    <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {/* Yazi boyutu ayari */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          <button onClick={() => changeFontSize(-1)} disabled={fs === 0} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Küçült">A-</button>
+          <button onClick={() => changeFontSize(1)} disabled={fs === 5} className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-[var(--theme-accent)] opacity-40 hover:opacity-70 disabled:opacity-10 transition-opacity" title="Büyüt">A+</button>
+        </div>
 
-      {/* Mesaj listesi */}
-      <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="mv-density-chat-area flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative" style={{ background: 'rgba(0,0,0,0.10)' }}>
+        {/* Mesaj listesi */}
+        <div ref={chatScrollRef} onScroll={onScroll} data-mv-chat-area="room" className="mv-density-chat-area flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 flex flex-col relative">
         <div className="flex-1" />
         {messages.length === 0 ? (
-          <EmptyState
-            size="sm"
-            tone="accent"
-            icon={<MessageCircle size={18} />}
-            title="Henüz mesaj yok"
-            description="İlk mesajı yazarak sohbeti başlat."
-            className="py-6"
-          />
+          <div className="flex min-h-[120px] flex-col items-center justify-center px-3 pb-8 pt-4 text-center">
+            <p className="text-[12px] font-semibold text-[var(--theme-text)]/74">Henüz mesaj yok</p>
+            <p className="mt-1 text-[10px] leading-snug text-[var(--theme-secondary-text)]/52">İlk mesajı yazarak sohbeti başlat.</p>
+          </div>
         ) : messages.map((msg, idx) => {
           const d = new Date(msg.time);
           const now = new Date();
@@ -200,6 +223,12 @@ export default function ChatPanel({
                 </div>
               )}
               <div
+                data-room-message-id={msg.id}
+                onContextMenu={(event) => {
+                  if (!onMessageContextMenu || msg.senderId === currentUserId) return;
+                  event.preventDefault();
+                  onMessageContextMenu(msg, event.clientX, event.clientY);
+                }}
                 className={`flex items-start gap-2 group/msg ${isMe ? 'flex-row-reverse' : ''}`}
                 style={{ marginTop: isGrouped ? 'var(--density-message-group-gap)' : 'var(--density-message-stack-gap)' }}
               >
@@ -239,7 +268,7 @@ export default function ChatPanel({
                         fontSize: `calc(var(--mv-font-message) + ${fs}px)`,
                         background: isMe ? 'var(--msg-self-bg)' : 'var(--msg-other-bg)',
                         color: isMe ? 'var(--msg-self-text)' : 'var(--msg-other-text)',
-                        border: isMe ? 'var(--msg-self-border)' : 'var(--msg-other-border)',
+                        border: highlightedMessageId === msg.id ? '1px solid rgba(251,191,36,0.95)' : isMe ? 'var(--msg-self-border)' : 'var(--msg-other-border)',
                         boxShadow: 'var(--msg-shadow)',
                         backdropFilter: isMe ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
                         WebkitBackdropFilter: isMe ? 'var(--msg-self-backdrop)' : 'var(--msg-other-backdrop)',
@@ -249,32 +278,41 @@ export default function ChatPanel({
                     </div>
                   )}
                 </div>
-                {/* Edit/Delete */}
-                {!isEd && isMe && (
+                {/* Message actions */}
+                {!isEd && (
                   <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1">
-                    <button onClick={() => onStartEdit(msg)} className="p-1 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--theme-accent-rgb), 0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                    </button>
-                    <button onClick={() => onDeleteMessage(msg.id)} className="p-1 rounded hover:bg-red-500/10 transition-colors" title="Sil">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    </button>
+                    {isMe && (
+                      <button onClick={() => onStartEdit(msg)} className="p-1 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle" aria-label="Mesajı düzenle">
+                        <PencilLine size={10} strokeWidth={2.1} className="text-[rgba(var(--theme-accent-rgb),0.62)]" />
+                      </button>
+                    )}
+                    {!isMe && onReportMessage && !reportedMessageIds?.has(msg.id) && (
+                      <button onClick={() => onReportMessage(msg)} className="p-1 rounded hover:bg-amber-500/10 transition-colors" title="Bildir" aria-label="Mesajı bildir">
+                        <Flag size={10} strokeWidth={2.1} className="text-amber-300/70" />
+                      </button>
+                    )}
+                    {(isMe || canModerateRoomMessages) && (
+                      <button onClick={() => onDeleteMessage(msg.id)} className="p-1 rounded hover:bg-red-500/10 transition-colors" title="Sil" aria-label="Mesajı sil">
+                        <Trash2 size={10} strokeWidth={2.1} className="text-red-400/70" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             </React.Fragment>
           );
         })}
-      </div>
+        </div>
 
-      {/* Yeni mesajlar butonu */}
-      {newMsgCount > 0 && !isAtBottom && (
-        <button onClick={onScrollToBottom} className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-[10px] font-bold transition-all" style={{ background: 'var(--theme-accent)', color: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-          ↓ {newMsgCount} yeni mesaj
-        </button>
-      )}
+        {/* Yeni mesajlar butonu */}
+        {newMsgCount > 0 && !isAtBottom && (
+          <button onClick={onScrollToBottom} className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-[10px] font-bold transition-all" style={{ background: 'var(--theme-accent)', color: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+            ↓ {newMsgCount} yeni mesaj
+          </button>
+        )}
 
-      {/* Input */}
-      <div className="shrink-0 flex items-end gap-1.5 px-3 py-2 relative transition-[border-color,background] duration-150" style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}>
+        {/* Input */}
+        <div className="shrink-0 flex min-h-[53px] items-end gap-1.5 px-3 py-2 relative transition-[border-color,background] duration-150" style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}>
         {/* Emoji */}
         <div ref={emojiRef} className="relative shrink-0">
           <button onClick={() => setShowEmojiPicker(p => !p)} className="w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)] opacity-42 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-80 active:scale-[0.96]" title="Emoji">
@@ -319,15 +357,58 @@ export default function ChatPanel({
         {/* Admin/Mod butonlari */}
         {(isAdmin || isModerator) && (
           <>
-            <button onClick={onClearAll} className="shrink-0 w-8 h-8 flex items-center justify-center text-red-400/48 transition-[color,opacity,transform] duration-150 hover:text-red-400 hover:opacity-90 active:scale-[0.96]" title="Tüm mesajları sil">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-text)]/54 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+              title="Tüm mesajları sil"
+              aria-label="Tüm mesajları sil"
+            >
+              <Trash2 size={13} strokeWidth={2.1} />
             </button>
             <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 opacity-90' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:opacity-90 active:scale-[0.96]'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
             </button>
           </>
         )}
+        {showCollapsedActivityButton && (
+          <button
+            type="button"
+            onClick={onToggleActivityPanel}
+            className="shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)]/34 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-90 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+            aria-label="Son olayları aç"
+          >
+            <History size={13} strokeWidth={2.1} />
+          </button>
+        )}
+        </div>
       </div>
+
+      {hasActivityPanel && (
+        <div
+          className="relative hidden shrink-0 overflow-hidden transition-[width,opacity] duration-200 ease-out lg:block"
+          style={{
+            width: isActivityPanelVisible ? `${activityPanelRatio}%` : 0,
+            minWidth: isActivityPanelVisible ? 220 : 0,
+            maxWidth: isActivityPanelVisible ? '50%' : 0,
+            opacity: isActivityPanelVisible ? 1 : 0,
+            pointerEvents: isActivityPanelVisible ? 'auto' : 'none',
+          }}
+        >
+          {isActivityPanelVisible && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={onActivityResizeStart}
+              className="absolute left-0 top-0 bottom-[53px] z-10 w-2 cursor-col-resize"
+              aria-label="Panel genişliğini değiştir"
+            >
+              <span className="block h-full w-px bg-[rgba(var(--glass-tint),0.055)]" />
+            </div>
+          )}
+          {activityPanel}
+        </div>
+      )}
     </div>
   );
 }

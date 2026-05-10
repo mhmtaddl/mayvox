@@ -61,6 +61,7 @@ import RestrictedServerScreen from '../components/RestrictedServerScreen';
 
 // Feature imports
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
+import { useRoomActivityLog } from '../features/chatview/hooks/useRoomActivityLog';
 import { useDominantSpeaker } from '../features/chatview/hooks/useDominantSpeaker';
 import InvitationModal from '../features/chatview/components/InvitationModal';
 import ChatViewContextMenu from '../features/chatview/components/ChatViewContextMenu';
@@ -71,9 +72,11 @@ import DesktopDock from '../features/chatview/components/DesktopDock';
 import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import RoomStatusBadges from '../features/chatview/components/RoomStatusBadges';
+import RoomActivityLogPanel from '../features/chatview/components/RoomActivityLogPanel';
 import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
+import { registerE2eeDeviceKey } from '../lib/e2ee';
 import AvatarContent from '../components/AvatarContent';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { hasCustomAvatar } from '../lib/statusAvatar';
@@ -82,7 +85,7 @@ import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import appLogo from '../assets/dock-logo-mv_tr.png';
 
 import type { User, VoiceChannel } from '../types';
-import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, type Server } from '../lib/serverService';
+import { listMyServers, createServer, joinServer, leaveServer, previewSlug, getServerChannels, clearRoomActivityEvents, type Server } from '../lib/serverService';
 import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
 import { getPlanVisual } from '../lib/planStyles';
@@ -179,21 +182,113 @@ export default function ChatView() {
   // ── Chat messages hook ──
   const [chatMuted, setChatMuted] = useState(false);
   const [chatMuteRank, setChatMuteRank] = useState(0);
+  const [chatMuteActivityEvent, setChatMuteActivityEvent] = useState<{ seq: number; muted: boolean; actorId?: string; actorName?: string } | null>(null);
+  const [chatClearActivityEvent, setChatClearActivityEvent] = useState<{ seq: number; roomId: string; actorId?: string; actorName?: string } | null>(null);
+  const [automodActivityEvent, setAutomodActivityEvent] = useState<{ seq: number; code?: string; userId?: string; userName?: string; label?: string } | null>(null);
+  const [messageDeleteActivityEvent, setMessageDeleteActivityEvent] = useState<{ seq: number; roomId: string; type?: 'message_delete' | 'message_edit'; actorId?: string; actorName?: string; targetUserId?: string; targetName?: string; messageId?: string } | null>(null);
+  const [messageReportActivityEvent, setMessageReportActivityEvent] = useState<{ seq: number; roomId: string; actorId?: string; actorName?: string; targetUserId?: string; targetName?: string; messageId?: string; reportCount?: number } | null>(null);
+  const [highlightedRoomMessageId, setHighlightedRoomMessageId] = useState<string | null>(null);
+  const [reportedRoomMessageIds, setReportedRoomMessageIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    void registerE2eeDeviceKey().catch(err => {
+      console.warn('[e2ee] device key registration failed', err instanceof Error ? err.message : err);
+    });
+  }, [currentUser?.id]);
+  const pendingChatMuteActorRef = useRef<{ muted: boolean; actorId: string; actorName: string; at: number } | null>(null);
+  const pendingChatClearActorRef = useRef<{ actorId: string; actorName: string; at: number } | null>(null);
   const {
     chatMessages, chatInput, setChatInput, editingMsgId, editingText, setEditingText,
     isAtBottom, newMsgCount, chatScrollRef, handleChatScroll, scrollToBottom,
-    sendChatMessage, deleteChatMessage, clearAllMessages, startEditMessage, saveEditMessage, cancelEdit,
+    sendChatMessage, deleteChatMessage, reportChatMessage, clearAllMessages: clearAllMessagesBase, startEditMessage, saveEditMessage, cancelEdit,
     isFloodCooling,
   } = useChatMessages({
-    activeChannel, channels, currentUser, chatMuted, chatMuteRank,
+    activeChannel, channels, roomRecipientIds: channelMembers.map(member => member.id), currentUser, chatMuted, chatMuteRank,
     isChatBanned: isChatBannedFromCtx,
     onChatBannedBlocked: () => setToastMsg('Bu sunucuda sohbet yasağınız aktif — mesaj yazamazsınız.'),
-    onSendRejected: (message) => setToastMsg(message),
-    onChatMuteChange: (muted, rank) => {
+    onSendRejected: (message, code) => {
+      setToastMsg(message);
+      const normalizedCode = (code || '').toLocaleLowerCase('tr-TR');
+      if (normalizedCode.includes('flood') || normalizedCode.includes('profanity') || normalizedCode.includes('spam')) {
+        setAutomodActivityEvent({
+          seq: Date.now(),
+          code,
+          userId: currentUser.id,
+          userName: getPublicDisplayName(currentUser),
+        });
+      }
+    },
+    onChatMuteChange: (muted, rank, meta) => {
+      const pending = pendingChatMuteActorRef.current;
+      const fallback = pending && pending.muted === muted && Date.now() - pending.at < 5_000 ? pending : null;
+      setChatMuteActivityEvent({
+        seq: Date.now(),
+        muted,
+        actorId: meta?.actorId || fallback?.actorId,
+        actorName: meta?.actorName || fallback?.actorName,
+      });
       setChatMuted(muted);
       setChatMuteRank(rank);
     },
+    onChatCleared: (roomId, meta) => {
+      const pending = pendingChatClearActorRef.current;
+      const fallback = pending && Date.now() - pending.at < 5_000 ? pending : null;
+      setChatClearActivityEvent({
+        seq: Date.now(),
+        roomId,
+        actorId: meta?.actorId || fallback?.actorId,
+        actorName: meta?.actorName || fallback?.actorName,
+      });
+    },
+    onMessageDeleted: (_messageId, meta) => {
+      if (!activeChannel) return;
+      setMessageDeleteActivityEvent({
+        seq: Date.now(),
+        roomId: activeChannel,
+        type: meta?.moderated === false ? 'message_delete' : 'message_delete',
+        actorId: meta.actorId,
+        actorName: meta.actorName,
+        targetUserId: meta.targetUserId,
+        targetName: meta.targetName,
+        messageId: meta.messageId,
+      });
+    },
+    onMessageEdited: (_messageId, meta) => {
+      if (!activeChannel) return;
+      setMessageDeleteActivityEvent({
+        seq: Date.now(),
+        roomId: activeChannel,
+        type: 'message_edit',
+        actorId: meta?.actorId,
+        actorName: meta?.actorName,
+        targetUserId: meta?.targetUserId,
+        targetName: meta?.targetName,
+        messageId: meta?.messageId,
+        reportCount: meta?.reportCount,
+      });
+    },
+    onMessageReported: (_messageId, meta) => {
+      if (!activeChannel) return;
+      setMessageReportActivityEvent({
+        seq: Date.now(),
+        roomId: activeChannel,
+        actorId: meta?.actorId,
+        actorName: meta?.actorName,
+        targetUserId: meta?.targetUserId,
+        targetName: meta?.targetName,
+        messageId: meta?.messageId,
+      });
+    },
   });
+  const clearAllMessages = useCallback(() => {
+    pendingChatClearActorRef.current = {
+      actorId: currentUser.id,
+      actorName: getPublicDisplayName(currentUser),
+      at: Date.now(),
+    };
+    clearAllMessagesBase();
+  }, [clearAllMessagesBase, currentUser]);
 
   // ── Dominant speaker hook ──
   const sortedChannelMembers = useMemo(
@@ -208,6 +303,10 @@ export default function ChatView() {
   // ── Local UI state ──
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [roomActivityPanelOpen, setRoomActivityPanelOpen] = useState(true);
+  const [roomActivityPanelRatio, setRoomActivityPanelRatio] = useState(25);
+  const [roomActivityClearing, setRoomActivityClearing] = useState(false);
+  const roomActivitySplitRef = useRef<HTMLDivElement>(null);
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
   const [profilePopup, setProfilePopup] = useState<{
     userId: string;
@@ -628,6 +727,69 @@ export default function ChatView() {
     !!accessContext?.flags.canRevokeInvite ||
     !!accessContext?.flags.canViewInsights
   );
+  const activeServerRole = activeServerData?.role as string | undefined;
+  const hasRoomActivityStaffRole = [
+    'owner',
+    'sahip',
+    'primary_admin',
+    'super_admin',
+    'süper yönetici',
+    'super yönetici',
+    'super yonetici',
+    'admin',
+    'yönetici',
+    'yonetici',
+    'super_mod',
+    'super_moderator',
+    'moderator',
+    'mod',
+    'süper moderatör',
+    'super moderator',
+    'moderatör',
+  ].includes((activeServerRole || '').toLocaleLowerCase('tr-TR'));
+  const canViewRoomActivityLog = Boolean(
+    hasRoomActivityStaffRole ||
+    currentUser.isPrimaryAdmin ||
+    currentUser.isAdmin ||
+    currentUser.isModerator,
+  );
+  const canClearRoomActivityLog = ['owner', 'super_admin'].includes((activeServerRole || '').toLocaleLowerCase('tr-TR'));
+  const { activities: roomActivities, clearActivities: clearRoomActivities } = useRoomActivityLog({
+    activeChannel,
+    activeServerId,
+    members: sortedChannelMembers,
+    allUsers,
+    chatMuted,
+    chatMuteEvent: chatMuteActivityEvent,
+    chatClearEvent: chatClearActivityEvent,
+    automodEvent: automodActivityEvent,
+    messageDeleteEvent: messageDeleteActivityEvent,
+    messageReportEvent: messageReportActivityEvent,
+    enabled: canViewRoomActivityLog,
+  });
+  const beginRoomActivityResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!roomActivitySplitRef.current) return;
+    event.preventDefault();
+    const rect = roomActivitySplitRef.current.getBoundingClientRect();
+    const startX = event.clientX;
+    const startRatio = roomActivityPanelRatio;
+    const width = Math.max(1, rect.width);
+    document.body.style.userSelect = 'none';
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = startX - moveEvent.clientX;
+      if (Math.abs(delta) < 5) return;
+      const next = Math.min(50, Math.max(20, startRatio + (delta / width) * 100));
+      setRoomActivityPanelRatio(next);
+    };
+    const onUp = () => {
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  }, [roomActivityPanelRatio]);
   // App-level rol + 0 sahip sunucu → sunucu oluşturma butonları görünür.
   const canCreateServer = canUserCreateServer(currentUser, serverList);
 
@@ -1033,13 +1195,15 @@ export default function ChatView() {
     setProfilePopup({ userId, x, y });
   }, [currentUser.id]);
   const handleToggleChatMuted = useCallback(() => {
-    setChatMuted(prev => {
-      const next = !prev;
-      if (!next) setChatMuteRank(0);
-      import('../lib/chatService').then(({ setRoomChatMuted }) => setRoomChatMuted(next));
-      return next;
-    });
-  }, []);
+    const next = !chatMuted;
+    pendingChatMuteActorRef.current = {
+      muted: next,
+      actorId: currentUser.id,
+      actorName: getPublicDisplayName(currentUser),
+      at: Date.now(),
+    };
+    import('../lib/chatService').then(({ setRoomChatMuted }) => setRoomChatMuted(next));
+  }, [chatMuted, currentUser]);
 
   useEffect(() => {
     const onShortcutAction = (event: Event) => {
@@ -1137,6 +1301,21 @@ export default function ChatView() {
     setRoomMemberMenu({ user, x, y });
   }, []);
 
+  const handleMessageContextMenu = useCallback((msg: { senderId: string; sender: string; avatar?: string }, x: number, y: number) => {
+    const user =
+      sortedChannelMembers.find(member => member.id === msg.senderId) ||
+      allUsers.find(candidate => candidate.id === msg.senderId) ||
+      ({
+        id: msg.senderId,
+        name: msg.sender,
+        displayName: msg.sender,
+        avatar: msg.avatar || '',
+        status: 'online',
+        statusText: 'Online',
+      } as User);
+    setRoomMemberMenu({ user, x, y });
+  }, [allUsers, sortedChannelMembers]);
+
   const getIntensity = useCallback((user: typeof sortedChannelMembers[0]): number => {
     const isMe = user.id === currentUser.id;
     if (isMe && isPttPressed && !isMuted && !currentUser.isVoiceBanned) return Math.min(1, volumeLevel / 80);
@@ -1154,6 +1333,64 @@ export default function ChatView() {
       onConfirm: () => { try { navigator.vibrate?.(300); } catch {} handleLogout(); },
     });
   };
+
+  const handleClearRoomActivityLog = useCallback(() => {
+    if (!activeServerId || !activeChannel || !canClearRoomActivityLog || roomActivityClearing) return;
+    openConfirm({
+      title: 'Son olayları temizle',
+      description: 'Bu odadaki kayıtlı son olay geçmişi temizlenecek.',
+      confirmText: 'Temizle',
+      cancelText: 'İptal',
+      danger: true,
+      onConfirm: async () => {
+        setRoomActivityClearing(true);
+        try {
+          await clearRoomActivityEvents(activeServerId, activeChannel);
+          clearRoomActivities();
+          setToastMsg('Son olaylar temizlendi');
+        } catch (err) {
+          setToastMsg(err instanceof Error ? err.message : 'Son olaylar temizlenemedi');
+        } finally {
+          setRoomActivityClearing(false);
+        }
+      },
+    });
+  }, [activeServerId, activeChannel, canClearRoomActivityLog, roomActivityClearing, openConfirm, clearRoomActivities, setToastMsg]);
+
+  const handleReportRoomMessage = useCallback((msg: { id: string; sender?: string }) => {
+    if (!msg.id) return;
+    openConfirm({
+      title: 'Mesajı bildir',
+      description: `${msg.sender || 'Bu kullanıcı'} tarafından gönderilen mesaj moderasyon ekibine bildirilecek.`,
+      confirmText: 'Bildir',
+      cancelText: 'İptal',
+      danger: true,
+      onConfirm: () => {
+        reportChatMessage(msg.id);
+        setReportedRoomMessageIds(prev => {
+          const next = new Set(prev);
+          next.add(msg.id);
+          return next;
+        });
+        setToastMsg('Mesaj bildirildi');
+      },
+    });
+  }, [openConfirm, reportChatMessage, setToastMsg]);
+
+  const handleSelectRoomActivity = useCallback((item: { messageId?: string }) => {
+    if (!item.messageId) return;
+    const selector = `[data-room-message-id="${CSS.escape(item.messageId)}"]`;
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) {
+      setToastMsg('Bu mesaj artık sohbet geçmişinde görünmüyor');
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedRoomMessageId(item.messageId);
+    window.setTimeout(() => {
+      setHighlightedRoomMessageId(prev => prev === item.messageId ? null : prev);
+    }, 2600);
+  }, [setToastMsg]);
 
   // ── Invitation modal callbacks ──
   const handleInvitationDecline = useCallback(() => {
@@ -1699,21 +1936,41 @@ export default function ChatView() {
                   <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="p-2.5 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all" title="Odadan Ayrıl"><PhoneOff size={18} /></button>
                 </div>
               </div>
-              <div className="relative z-[1] flex-1">
+              <div ref={roomActivitySplitRef} className="relative z-[1] flex-1 min-h-0 overflow-hidden">
                 <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
                   currentChannel={currentChannel} getIntensity={getIntensity} getEffectiveStatus={getEffectiveStatus}
                   cardScale={cardScale} cardStyle={cardStyle} onProfileClick={handleVoiceParticipantProfileClick}
-                  onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isModerator={currentUser.isModerator || false}
+                  onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isPrimaryAdmin={currentUser.isPrimaryAdmin || false} isModerator={currentUser.isModerator || false}
                   onRequestMemberMenu={handleRequestRoomMemberMenu}
                   activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted} chatMuteRank={chatMuteRank}
                   onToggleChatMuted={handleToggleChatMuted} editingMsgId={editingMsgId} editingText={editingText}
                   onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
                   onDeleteMessage={deleteChatMessage} onClearAll={clearAllMessages} onSendMessage={sendChatMessage}
+                  onReportMessage={handleReportRoomMessage}
+                  onMessageContextMenu={handleMessageContextMenu}
+                  reportedMessageIds={reportedRoomMessageIds}
                   chatInput={chatInput} onChatInputChange={setChatInput} chatScrollRef={chatScrollRef} onChatScroll={handleChatScroll}
                   isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom}
-                  isFloodCooling={isFloodCooling} />
+                  isFloodCooling={isFloodCooling}
+                  canModerateMessages={canViewRoomActivityLog}
+                  highlightedMessageId={highlightedRoomMessageId}
+                  activityPanel={canViewRoomActivityLog ? (
+                    <RoomActivityLogPanel
+                      activities={roomActivities}
+                      onCollapse={() => setRoomActivityPanelOpen(false)}
+                      onSelectActivity={handleSelectRoomActivity}
+                      onClear={handleClearRoomActivityLog}
+                      canClear={canClearRoomActivityLog}
+                      clearing={roomActivityClearing}
+                    />
+                  ) : undefined}
+                  activityPanelRatio={roomActivityPanelRatio}
+                  activityPanelOpen={roomActivityPanelOpen}
+                  onActivityResizeStart={roomActivityPanelOpen ? beginRoomActivityResize : undefined}
+                  onToggleActivityPanel={canViewRoomActivityLog ? () => setRoomActivityPanelOpen(prev => !prev) : undefined}
+                />
               </div>
             </div>
           ) : serverLoading ? (

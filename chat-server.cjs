@@ -114,6 +114,15 @@ dmDb.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_dm_reactions_conv ON dm_message_reactions(conversation_key, message_id);
 
+  CREATE TABLE IF NOT EXISTS dm_pinned_messages (
+    message_id TEXT PRIMARY KEY REFERENCES dm_messages(id) ON DELETE CASCADE,
+    conversation_key TEXT NOT NULL,
+    pinned_by TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_dm_pins_conv ON dm_pinned_messages(conversation_key, pinned_at DESC);
+
   CREATE TABLE IF NOT EXISTS dm_conversation_hidden (
     user_id TEXT NOT NULL,
     conversation_key TEXT NOT NULL,
@@ -271,6 +280,19 @@ const dmStmt = {
   removeMessageReaction: dmDb.prepare(`
     DELETE FROM dm_message_reactions
     WHERE message_id = ? AND user_id = ? AND emoji = ?
+  `),
+  getPinnedMessagesForConversation: dmDb.prepare(`
+    SELECT message_id, pinned_by, pinned_at
+    FROM dm_pinned_messages
+    WHERE conversation_key = ?
+    ORDER BY pinned_at DESC
+  `),
+  pinMessage: dmDb.prepare(`
+    INSERT OR REPLACE INTO dm_pinned_messages (message_id, conversation_key, pinned_by, pinned_at)
+    VALUES (?, ?, ?, ?)
+  `),
+  unpinMessage: dmDb.prepare(`
+    DELETE FROM dm_pinned_messages WHERE message_id = ?
   `),
   updateLastMessage: dmDb.prepare(`
     UPDATE dm_conversations
@@ -934,6 +956,18 @@ function getDmMessageReactions(messageId, viewerId) {
     count: Number(row.count || 0),
     reactedByMe: Number(row.reacted_by_me || 0) > 0,
   }));
+}
+
+function buildDmPinMap(conversationKey) {
+  const rows = dmStmt.getPinnedMessagesForConversation.all(conversationKey);
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.message_id, {
+      pinnedBy: row.pinned_by,
+      pinnedAt: row.pinned_at,
+    });
+  }
+  return map;
 }
 
 function conversationDto(row, otherId, profile, isRequest = false) {
@@ -2341,6 +2375,7 @@ wss.on('connection', (ws) => {
         const senderProfiles = senderIds.length > 0 ? await getProfiles(senderIds) : new Map();
         const readSettings = await getDmProfileSettings([...new Set(messages.map(m => m.receiver_id))]);
         const reactionMap = buildDmReactionMap(convKey, userId);
+        const pinMap = buildDmPinMap(convKey);
 
         send(ws, {
           type: 'dm:history',
@@ -2351,6 +2386,7 @@ wss.on('connection', (ws) => {
           isRequest: (conversation?.request_status || 'accepted') === 'pending' && conversation?.request_receiver_id === userId,
           messages: messages.map(m => ({
             ...formatDmMessageForViewer(m, userId, senderProfiles.get(m.sender_id), readSettings),
+            ...(pinMap.get(m.id) || {}),
             requestStatus: conversation?.request_status || 'accepted',
             requestReceiverId: conversation?.request_receiver_id || null,
             reactions: reactionMap.get(m.id) || [],
@@ -2510,6 +2546,8 @@ wss.on('connection', (ws) => {
           deliveredAt,
           readAt: null,
           editedAt: null,
+          pinnedBy: null,
+          pinnedAt: null,
           reactions: [],
         };
 
@@ -2684,6 +2722,52 @@ wss.on('connection', (ws) => {
       } catch (err) {
         console.error('[dm] delete error:', err?.message);
         send(ws, { type: 'dm:error', message: 'Mesaj silinemedi' });
+      }
+      return;
+    }
+
+    // ── DM:PIN ───────────────────────────────────────────────────────────
+    if (msg.type === 'dm:pin') {
+      const messageId = String(msg.messageId || '').trim();
+      const pinned = msg.pinned !== false;
+      if (!messageId) {
+        return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
+      }
+
+      try {
+        const row = dmStmt.getMessageById.get(messageId);
+        if (!row || (row.sender_id !== userId && row.receiver_id !== userId)) {
+          return send(ws, { type: 'dm:error', message: 'Mesaj bulunamadı' });
+        }
+
+        const pinnedAt = pinned ? Date.now() : null;
+        if (pinned) dmStmt.pinMessage.run(messageId, row.conversation_key, userId, pinnedAt);
+        else dmStmt.unpinMessage.run(messageId);
+
+        const event = {
+          type: 'dm:message_pinned',
+          conversationKey: row.conversation_key,
+          messageId,
+          pinned,
+          pinnedBy: pinned ? userId : null,
+          pinnedAt,
+        };
+        sendToUser(row.sender_id, event);
+        sendToUser(row.receiver_id, event);
+
+        void auditDm({
+          actorId: userId,
+          action: pinned ? 'dm.message.pin' : 'dm.message.unpin',
+          resourceType: 'dm_message',
+          resourceId: messageId,
+          metadata: {
+            conversationKey: row.conversation_key,
+            otherUserId: row.sender_id === userId ? row.receiver_id : row.sender_id,
+          },
+        });
+      } catch (err) {
+        console.error('[dm] pin error:', err?.message);
+        send(ws, { type: 'dm:error', message: 'Mesaj sabitlenemedi' });
       }
       return;
     }

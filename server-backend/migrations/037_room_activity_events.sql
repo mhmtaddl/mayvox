@@ -67,6 +67,9 @@ BEGIN
           'room_kick',
           'chat_ban',
           'chat_unban',
+          'message_delete',
+          'message_edit',
+          'message_report',
           'settings'
         )
       );

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Sparkles, Settings, Infinity as InfinityIcon } from 'lucide-react';
+import { LockKeyhole, Sparkles, Settings, Infinity as InfinityIcon } from 'lucide-react';
 import { ROOM_MODE_LIST } from '../../../lib/roomModeConfig';
+import { ROOM_PRESETS, type RoomPreset } from '../../../lib/roomPresets';
 import { channelIconComponents, roomModeIcons } from '../constants';
 import { CHANNEL_ICON_COLOR_OPTIONS, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { CHANNEL_ICON_POOL_OPTIONS, getDefaultChannelIconName, QUICK_CHANNEL_ICON_OPTIONS } from '../../../lib/channelIcon';
@@ -63,6 +64,7 @@ function getIconTileStyle(selected: boolean, accent: string): React.CSSPropertie
 export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave, persistentInfo }: Props) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [primaryHover, setPrimaryHover] = useState(false);
+  const [selectedRoomPresetId, setSelectedRoomPresetId] = useState<RoomPreset['id'] | null>(null);
   // Create modunda kota bilgisi olması beklenir; edit'te gösterilmez.
   const showPersistentRow = roomModal.type === 'create' && persistentInfo !== undefined;
   const quotaReached = showPersistentRow && persistentInfo!.remaining <= 0;
@@ -88,6 +90,19 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
   const handlePrimaryAction = () => {
     if (!primaryActionEnabled) return;
     onSave();
+  };
+  const applyRoomPreset = (preset: RoomPreset) => {
+    setSelectedRoomPresetId(preset.id);
+    onUpdate({
+      name: roomModal.name.trim().length === 0 ? preset.suggestedName : roomModal.name,
+      mode: preset.mode,
+      iconName: preset.iconName,
+      iconColor: preset.iconColor,
+      maxUsers: preset.maxUsers,
+      isInviteOnly: preset.isHidden ? true : preset.isInviteOnly,
+      isHidden: preset.isHidden,
+      isPersistent: preset.isPersistent,
+    });
   };
   // Quota/backend rules remain authoritative; the primary action only mirrors the
   // local required-name validation so the modal does not look actionable too early.
@@ -174,8 +189,56 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
           )}
 
+          {roomModal.type === 'create' && (
+            <div className="mb-3.5">
+              <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 mb-1.5">
+                <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em]">Oda Şablonları</label>
+                <span className="text-[9px] font-medium leading-none text-[var(--theme-secondary-text)]/50">Formu doldurur, oluşturmaz</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {ROOM_PRESETS.map(preset => {
+                  const Icon = channelIconComponents[preset.iconName];
+                  const selected = selectedRoomPresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyRoomPreset(preset)}
+                      className="rounded-xl border px-3 py-2 text-left transition-[background,border-color,box-shadow,transform,color] duration-150 active:scale-[0.98] min-w-0"
+                      style={selected ? {
+                        background: `linear-gradient(135deg, ${preset.iconColor}17, rgba(var(--glass-tint), 0.03)), var(--surface-soft)`,
+                        borderColor: `${preset.iconColor}52`,
+                        boxShadow: `0 0 0 1px ${preset.iconColor}14, inset 0 1px 0 rgba(var(--glass-tint),0.08)`,
+                      } : {
+                        background: 'rgba(var(--glass-tint),0.028)',
+                        borderColor: 'rgba(var(--glass-tint),0.09)',
+                      }}
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span
+                          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border"
+                          style={{
+                            color: preset.iconColor,
+                            background: `${preset.iconColor}10`,
+                            borderColor: selected ? `${preset.iconColor}52` : 'rgba(var(--glass-tint),0.10)',
+                          }}
+                        >
+                          {Icon && <Icon size={14} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-bold text-[var(--theme-text)]">{preset.label}</span>
+                          <span className="mt-0.5 line-clamp-2 block text-[9.5px] leading-snug text-[var(--theme-secondary-text)]/60">{preset.description}</span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="mb-3.5">
-            <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Preset</label>
+            <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.1em] mb-1.5">Oda Stili</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {CHANNEL_SEMANTIC_PRESETS.map(preset => {
                 const Icon = channelIconComponents[preset.iconName];
@@ -186,12 +249,12 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                     type="button"
                     title={preset.label}
                     onClick={() => onUpdate({ iconName: preset.iconName, iconColor: preset.iconColor, mode: preset.mode })}
-                    className="relative text-left rounded-xl px-3 py-2 transition-all duration-150 border active:scale-[0.97] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/35"
+                    className="relative text-left rounded-xl px-3 py-1.5 transition-all duration-150 border active:scale-[0.98] text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/28 opacity-90"
                     style={getIconTileStyle(selected, preset.iconColor)}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      {Icon && <Icon size={14} className="shrink-0" />}
-                      <span className={`text-[11px] font-bold truncate ${selected ? '' : 'text-[var(--theme-text)]/90'}`}>{preset.label}</span>
+                      {Icon && <Icon size={13} className="shrink-0" />}
+                      <span className={`text-[10.5px] font-bold truncate ${selected ? '' : 'text-[var(--theme-text)]/80'}`}>{preset.label}</span>
                     </div>
                   </button>
                 );
@@ -426,8 +489,13 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
 
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
-                <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>
-                <p className="text-[9.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Kanal listesinde görünmez, sadece davet ile ulaşılır.</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>
+                  <LockKeyhole size={12} className={roomModal.isHidden ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40'} />
+                </div>
+                <p className="text-[9.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+                  Kanal listesinde görünmez, sadece davet ile ulaşılır. Açıldığında oda mesajları uçtan uca şifreleme moduna alınır.
+                </p>
               </div>
               <button
                 type="button"

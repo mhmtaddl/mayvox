@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info, LockKeyhole, Pin } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -215,27 +215,36 @@ function MessageSettingsPanel({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
       onClick={e => e.stopPropagation()}
-      className="absolute right-3 top-[48px] z-20 w-[260px] rounded-xl overflow-hidden"
+      className="absolute inset-y-0 right-0 z-30 flex w-[286px] max-w-[86%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
       style={{
-        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
-        border: '1px solid var(--theme-popover-border, var(--theme-border))',
-        boxShadow:
-          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
-          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
-          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+        background:
+          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+        boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
+        backdropFilter: 'blur(16px) saturate(125%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
       }}
     >
-      <div className="px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
-          Mesaj Ayarları
-        </span>
+      <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
+        <div className="min-w-0">
+          <div className="mv-font-title truncate text-[13px] font-bold text-[var(--theme-text)]">Mesaj ayarları</div>
+          <div className="mv-font-caption truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">Gizlilik ve bildirimler</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-text)]"
+          title="Ayarları kapat"
+          aria-label="Ayarları kapat"
+        >
+          <X size={14} />
+        </button>
       </div>
-      <div className="px-3.5 py-1 divide-y divide-[rgba(var(--glass-tint),0.05)]">
+      <div className="custom-scrollbar flex-1 overflow-y-auto px-3.5 py-1 divide-y divide-[rgba(var(--glass-tint),0.05)]">
         <div className="py-[7px]">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">DM gizliliği</span>
@@ -361,30 +370,36 @@ function BlockedUsersPanel({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
       onClick={e => e.stopPropagation()}
-      className="absolute right-12 top-[48px] z-20 w-[244px] rounded-xl overflow-hidden"
+      className="absolute inset-y-0 right-0 z-30 flex w-[272px] max-w-[86%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
       style={{
-        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
-        border: '1px solid var(--theme-popover-border, var(--theme-border))',
-        boxShadow:
-          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
-          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
-          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+        background:
+          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+        boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
+        backdropFilter: 'blur(16px) saturate(125%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
       }}
     >
-      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
-          Engellenenler
-        </span>
-        <span className="min-w-[18px] rounded-full bg-[rgba(var(--glass-tint),0.08)] px-1.5 py-[1px] text-center text-[9.5px] font-semibold text-[var(--theme-secondary-text)]/65">
-          {blockedUsers.length}
-        </span>
+      <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
+        <div className="min-w-0">
+          <div className="mv-font-title truncate text-[13px] font-bold text-[var(--theme-text)]">Engellenenler</div>
+          <div className="mv-font-caption truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">{blockedUsers.length} kullanıcı</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-text)]"
+          title="Engellenenleri kapat"
+          aria-label="Engellenenleri kapat"
+        >
+          <X size={14} />
+        </button>
       </div>
-      <div className="max-h-56 overflow-y-auto p-2 custom-scrollbar">
+      <div className="custom-scrollbar flex-1 overflow-y-auto p-2">
         {blockedUsers.length === 0 ? (
           <div className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-[11px] text-[var(--theme-secondary-text)]/45">
             <UserX size={13} />
@@ -443,27 +458,36 @@ function DmRequestsPanel({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
       onClick={e => e.stopPropagation()}
-      className="absolute right-[76px] top-[48px] z-20 w-[286px] rounded-xl overflow-hidden"
+      className="absolute inset-y-0 right-0 z-30 flex w-[300px] max-w-[88%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
       style={{
-        background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))',
-        border: '1px solid var(--theme-popover-border, var(--theme-border))',
-        boxShadow:
-          '0 18px 40px -12px rgba(var(--shadow-base),0.55),' +
-          ' 0 4px 12px -4px rgba(var(--shadow-base),0.25),' +
-          ' inset 0 1px 0 rgba(255,255,255,0.04)',
+        background:
+          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+        boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
+        backdropFilter: 'blur(16px) saturate(125%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
       }}
     >
-      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">
-          Mesaj İstekleri
-        </span>
+      <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
+        <div className="min-w-0">
+          <div className="mv-font-title truncate text-[13px] font-bold text-[var(--theme-text)]">Mesaj istekleri</div>
+          <div className="mv-font-caption truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">{requests.length} bekleyen istek</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-text)]"
+          title="İstekleri kapat"
+          aria-label="İstekleri kapat"
+        >
+          <X size={14} />
+        </button>
       </div>
-      <div className="max-h-[320px] overflow-y-auto p-2 custom-scrollbar">
+      <div className="custom-scrollbar flex-1 overflow-y-auto p-2">
         {requests.length === 0 ? (
           <div className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-[11px] text-[var(--theme-secondary-text)]/45">
             <Inbox size={13} />
@@ -618,7 +642,7 @@ function ConversationItem({
 
 function MessageBubble({
   msg, isOwn, isGrouped, isLastInGroup,
-  isEditing, editingText, onEditingTextChange, onSaveEdit, onCancelEdit, onStartEdit, onDelete, onReact,
+  isEditing, editingText, isHighlighted = false, onEditingTextChange, onSaveEdit, onCancelEdit, onStartEdit, onDelete, onPin, onReact,
 }: {
   msg: DmMessage;
   isOwn: boolean;
@@ -628,11 +652,13 @@ function MessageBubble({
   isLastInGroup: boolean;
   isEditing: boolean;
   editingText: string;
+  isHighlighted?: boolean;
   onEditingTextChange: (text: string) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onStartEdit: () => void;
   onDelete: () => void;
+  onPin: () => void;
   onReact: (emoji: string) => void;
 }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -650,9 +676,14 @@ function MessageBubble({
     : (isLastInGroup ? 'rounded-[16px] rounded-bl-[6px]' : 'rounded-[16px]');
 
   const hasReactions = !!msg.reactions?.length;
+  const isPinned = !!msg.pinnedAt;
 
   return (
-    <div className="group/msg" style={{ marginTop: isGrouped ? 'var(--density-message-group-gap)' : 'var(--density-message-stack-gap)' }}>
+    <div
+      data-dm-message-id={msg.id}
+      className={`group/msg rounded-[18px] transition-[background-color,box-shadow] duration-300 ${isHighlighted ? 'bg-[rgba(var(--theme-accent-rgb),0.10)] shadow-[0_0_0_1px_rgba(var(--theme-accent-rgb),0.18)]' : ''}`}
+      style={{ marginTop: isGrouped ? 'var(--density-message-group-gap)' : 'var(--density-message-stack-gap)' }}
+    >
       <div className={`flex w-full min-w-0 items-end gap-1.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`mv-density-message-bubble mv-font-message ${isOwn ? 'order-3' : 'order-1'} ${isEditing ? 'max-w-[78%]' : 'max-w-[65%]'} px-3.5 py-2 text-[13px] leading-[1.45] transition-[filter,transform] duration-150 hover:brightness-[1.03] active:scale-[0.995] ${radiusCls}`}
@@ -708,7 +739,15 @@ function MessageBubble({
             </div>
           </div>
         ) : (
-          <MessageText text={msg.text} isOwn={isOwn} />
+          <>
+            {isPinned && (
+              <div className={`mb-1 flex items-center gap-1 text-[10px] font-semibold ${isOwn ? 'text-[var(--msg-self-text)]/70' : 'text-[var(--theme-accent)]/78'}`}>
+                <Pin size={10} />
+                <span>Sabitlendi</span>
+              </div>
+            )}
+            <MessageText text={msg.text} isOwn={isOwn} />
+          </>
         )}
         {isLastInGroup && (
           <div
@@ -723,6 +762,15 @@ function MessageBubble({
       </div>
       {isOwn && !isEditing && (
         <div className={`order-2 mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${actionsSuppressed ? '!opacity-0 pointer-events-none' : ''}`}>
+          <button
+            type="button"
+            onClick={onPin}
+            className="flex h-6 w-6 items-center justify-center rounded-[8px] border border-transparent text-[var(--theme-secondary-text)]/60 transition-[background-color,border-color,color] hover:border-[rgba(var(--theme-accent-rgb),0.16)] hover:bg-[var(--theme-accent)]/10 hover:text-[var(--theme-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.24)]"
+            title={isPinned ? 'Sabitlemeyi kaldır' : 'Mesajı sabitle'}
+            aria-label={isPinned ? 'Sabitlemeyi kaldır' : 'Mesajı sabitle'}
+          >
+            <Pin size={12} strokeWidth={2.1} />
+          </button>
           <button
             type="button"
             onClick={onStartEdit}
@@ -745,6 +793,15 @@ function MessageBubble({
       )}
       {!isOwn && !isEditing && (
         <div className={`order-2 ml-0.5 mb-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 ${actionsSuppressed ? '!opacity-0 pointer-events-none' : ''}`}>
+          <button
+            type="button"
+            onClick={onPin}
+            className="flex h-6 w-6 items-center justify-center rounded-[8px] text-[var(--theme-secondary-text)]/60 transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.10)] hover:text-[var(--theme-accent)]"
+            title={isPinned ? 'Sabitlemeyi kaldır' : 'Mesajı sabitle'}
+            aria-label={isPinned ? 'Sabitlemeyi kaldır' : 'Mesajı sabitle'}
+          >
+            <Pin size={12} strokeWidth={2.1} />
+          </button>
           {reactionOptions.map(emoji => (
             <button
               key={emoji}
@@ -839,7 +896,7 @@ function MessageTick({ msg }: { msg: DmMessage }) {
 
 function ChatArea({
   messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
-  onSend, onEditMessage, onDeleteMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
+  onSend, onEditMessage, onDeleteMessage, onPinMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
   friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser, detailsOpen = false, onToggleDetails, onCloseDetails,
 }: {
@@ -852,6 +909,7 @@ function ChatArea({
   onSend: (text: string) => void;
   onEditMessage: (messageId: string, text: string) => void;
   onDeleteMessage: (messageId: string) => void;
+  onPinMessage: (messageId: string, pinned: boolean) => void;
   onReactMessage: (messageId: string, emoji: string) => void;
   onTyping: () => void;
   onBack: () => void;
@@ -878,6 +936,7 @@ function ChatArea({
   const [nearBottom, setNearBottomState] = useState(true);
   const [showJump, setShowJump] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMsgLenRef = useRef(0);
@@ -970,6 +1029,20 @@ function ChatArea({
   }, [messages, currentUserId, nearBottom, scrollToBottom]);
 
   useEffect(() => { inputRef.current?.focus(); }, [recipientId]);
+
+  useEffect(() => {
+    const onJump = (event: Event) => {
+      const messageId = (event as CustomEvent<{ messageId?: string }>).detail?.messageId;
+      if (!messageId) return;
+      const el = scrollRef.current?.querySelector<HTMLElement>(`[data-dm-message-id="${CSS.escape(messageId)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMessageId(messageId);
+      window.setTimeout(() => setHighlightedMessageId(current => current === messageId ? null : current), 1800);
+    };
+    window.addEventListener('mayvox:dm-jump-message', onJump);
+    return () => window.removeEventListener('mayvox:dm-jump-message', onJump);
+  }, []);
 
   // Safety: sending 4s'den uzun sürerse düşür (echo gelmedi bile)
   useEffect(() => {
@@ -1099,7 +1172,9 @@ function ChatArea({
           <AvatarContent avatar={recipientAvatar} statusText={recipient?.statusText} firstName={recipient?.displayName || recipient?.firstName} name={recipientName} letterClassName="text-[13px] font-bold text-[var(--theme-accent)]/85" />
         </div>
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate leading-tight">{recipientName}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-[13px] font-semibold leading-tight text-[var(--theme-text)]">{recipientName}</span>
+          </div>
           <AnimatePresence>
             {isRequest ? (
               <motion.span
@@ -1141,10 +1216,10 @@ function ChatArea({
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onToggleDetails}
-            className={`mv-icon-button mv-interactive mv-focus-ring ${
+            className={`mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring ${
               detailsOpen
-                ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/10'
-                : 'text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10'
+                ? 'text-sky-300'
+                : 'text-[var(--theme-secondary-text)]/45 hover:text-sky-300'
             }`}
             style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
             title="Sohbet detayları"
@@ -1159,7 +1234,7 @@ function ChatArea({
               <button
                 onClick={canSendFriendRequest ? onSendFriendRequest : undefined}
                 disabled={!canSendFriendRequest}
-                className="mv-icon-button mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10"
+                className="mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-emerald-300"
                 style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                 title={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
                 aria-label={friendRelation === 'outgoing' ? 'Arkadaşlık isteği gönderildi' : friendRelation === 'incoming' ? 'Bu kullanıcıdan arkadaşlık isteği var' : 'Arkadaş ekle'}
@@ -1169,7 +1244,7 @@ function ChatArea({
             )}
             <button
               onClick={onReportUser}
-              className="mv-icon-button mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-amber-300 hover:bg-amber-500/10"
+              className="mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring text-[var(--theme-secondary-text)]/45 hover:text-amber-300"
               style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
               title="Kullanıcıyı bildir"
               aria-label="Kullanıcıyı bildir"
@@ -1178,10 +1253,10 @@ function ChatArea({
             </button>
             <button
               onClick={isBlocked ? onUnblockUser : onBlockUser}
-              className={`mv-icon-button mv-interactive mv-focus-ring ${isBlocked ? '' : 'mv-icon-button-danger'} ${
+              className={`mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring ${
                 isBlocked
-                  ? 'text-emerald-300/80 hover:text-emerald-300 hover:bg-emerald-500/10'
-                  : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300 hover:bg-red-500/10'
+                  ? 'text-emerald-300/80 hover:text-emerald-300'
+                  : 'text-[var(--theme-secondary-text)]/45 hover:text-red-300'
               }`}
               style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
               title={isBlocked ? 'Engeli kaldır' : 'Kullanıcıyı engelle'}
@@ -1243,11 +1318,13 @@ function ChatArea({
                     isLastInGroup={isLastInGroup}
                     isEditing={editingMsgId === msg.id}
                     editingText={editingMsgId === msg.id ? editingText : ''}
+                    isHighlighted={highlightedMessageId === msg.id}
                     onEditingTextChange={setEditingText}
                     onSaveEdit={saveEdit}
                     onCancelEdit={cancelEdit}
                     onStartEdit={() => startEditMessage(msg)}
                     onDelete={() => deleteOwnMessage(msg.id)}
+                    onPin={() => onPinMessage(msg.id, !msg.pinnedAt)}
                     onReact={(emoji) => onReactMessage(msg.id, emoji)}
                   />
                 </React.Fragment>
@@ -1510,6 +1587,8 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     setToastMsg('Mesaj isteği reddedildi');
   }, [dm, markRequestAction, setToastMsg]);
 
+  const listSidePanelOpen = !dm.activeRecipientId && (requestsOpen || blockedOpen || settingsOpen);
+
   return (
     <>
     {createPortal(
@@ -1527,10 +1606,18 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
           // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
           className={`surface-card dm-glass-panel fixed bottom-[60px] right-3 z-[110] max-w-[calc(100vw-24px)] max-h-[calc(100vh-84px)] rounded-2xl overflow-hidden flex flex-col transition-[width,height] duration-200 ease-out ${
-            detailsOpen && dm.activeRecipientId
-              ? 'w-[640px] h-[580px]'
+            dm.activeRecipientId
+              ? detailsOpen
+                ? 'w-[640px] h-[580px]'
+                : 'w-[360px] h-[500px]'
+              : listSidePanelOpen
+                ? 'w-[640px] h-[500px]'
               : 'w-[360px] h-[500px]'
           }`}
+          style={{
+            boxShadow: 'none',
+            border: '1px solid rgba(var(--glass-tint), 0.055)',
+          }}
         >
           {dm.activeRecipientId ? (
             <div className={`flex h-full min-h-0 flex-col transition-[padding-right] duration-200 ease-out ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}>
@@ -1544,6 +1631,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 onSend={dm.sendMessage}
                 onEditMessage={dm.editMessage}
                 onDeleteMessage={dm.deleteMessage}
+                onPinMessage={dm.pinMessage}
                 onReactMessage={dm.reactMessage}
                 onTyping={dm.emitTyping}
                 onBack={dm.closeConversation}
@@ -1589,21 +1677,32 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               />
             </div>
           ) : (
-            <>
+            <div className={`relative flex h-full min-h-0 flex-col transition-[padding-right] duration-200 ease-out ${listSidePanelOpen ? 'pr-[300px]' : 'pr-0'}`}>
               {/* Header */}
-              <div className="px-4 py-3.5 shrink-0 flex items-center justify-between relative" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
-          <span className="mv-font-title text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
+              <div className="px-4 py-3.5 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-emerald-200/80 ring-1 ring-emerald-300/12"
+                    style={{ background: 'rgba(16,185,129,0.07)' }}
+                    title="DM mesajları uçtan uca şifrelenmektedir"
+                    aria-label="DM mesajları uçtan uca şifrelenmektedir"
+                  >
+                    <LockKeyhole size={13} strokeWidth={2.2} />
+                  </span>
+                  <span className="mv-font-title truncate text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
+                </div>
                 <div className="flex items-center gap-1">
                   <button
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setRequestsOpen(o => !o);
                       setBlockedOpen(false);
                       setSettingsOpen(false);
                     }}
-                    className={`mv-icon-button mv-interactive mv-focus-ring relative ${
+                    className={`mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring relative ${
                       requestsOpen
-                        ? 'text-[var(--theme-accent)] bg-[rgba(var(--theme-accent-rgb),0.12)]'
-                        : 'text-[var(--theme-secondary-text)]/60 hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.10)]'
+                        ? 'text-sky-300'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-sky-300'
                     }`}
                     style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Mesaj istekleri"
@@ -1618,15 +1717,16 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     )}
                   </button>
                   <button
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setBlockedOpen(o => !o);
                       setRequestsOpen(false);
                       setSettingsOpen(false);
                     }}
-                    className={`mv-icon-button mv-interactive mv-focus-ring relative ${
+                    className={`mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring relative ${
                       blockedOpen
-                        ? 'text-red-300 bg-red-500/10'
-                        : 'text-[var(--theme-secondary-text)]/60 hover:text-red-300 hover:bg-red-500/10'
+                        ? 'text-red-300'
+                        : 'text-[var(--theme-secondary-text)]/60 hover:text-red-300'
                     }`}
                     style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Engellenenler"
@@ -1636,15 +1736,16 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     <UserX size={14} />
                   </button>
                   <button
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setSettingsOpen(o => !o);
                       setRequestsOpen(false);
                       setBlockedOpen(false);
                     }}
-                    className={`mv-icon-button mv-interactive mv-focus-ring ${
+                    className={`mv-icon-button dm-icon-quiet mv-interactive mv-focus-ring ${
                       settingsOpen
-                        ? 'text-[var(--theme-text)] bg-[rgba(var(--glass-tint),0.10)]'
-                        : 'text-[var(--theme-secondary-text)]/62 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)]'
+                        ? 'text-violet-300'
+                        : 'text-[var(--theme-secondary-text)]/62 hover:text-violet-300'
                     }`}
                     style={{ '--mv-icon-button-size': '28px', '--mv-icon-size': '14px' } as React.CSSProperties}
                     title="Mesaj ayarları"
@@ -1654,47 +1755,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     <Settings2 size={14} />
                   </button>
                 </div>
-                <AnimatePresence>
-                  {requestsOpen && (
-                    <DmRequestsPanel
-                      onClose={() => setRequestsOpen(false)}
-                      requests={dm.requests}
-                      allUsers={allUsers}
-                      currentUserId={currentUser.id}
-                      requestActionKeys={requestActionKeys}
-                      onOpen={dm.openConversation}
-                      onAccept={(convo) => handleAcceptRequest(convo.conversationKey)}
-                      onReject={(convo, name) => openConfirm({
-                        title: 'Mesaj isteğini reddet',
-                        description: `${name} mesaj isteği reddedilsin mi?`,
-                        confirmText: 'Reddet',
-                        cancelText: 'İptal',
-                        danger: true,
-                        onConfirm: () => handleRejectRequest(convo.conversationKey),
-                      })}
-                    />
-                  )}
-                  {blockedOpen && (
-                    <BlockedUsersPanel
-                      onClose={() => setBlockedOpen(false)}
-                      blockedUsers={blockedUsers}
-                      onUnblockUser={(userId) => {
-                        dm.unblockUser(userId);
-                        setToastMsg('Engel kaldırıldı');
-                      }}
-                    />
-                  )}
-                  {settingsOpen && (
-                    <MessageSettingsPanel
-                      onClose={() => setSettingsOpen(false)}
-                      currentUser={currentUser}
-                      allUsers={allUsers}
-                      setCurrentUser={setCurrentUser}
-                      setAllUsers={setAllUsers}
-                      setToastMsg={setToastMsg}
-                    />
-                  )}
-                </AnimatePresence>
               </div>
 
               <div className="px-3 pt-2 pb-1.5">
@@ -1765,7 +1825,48 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   </div>
                 )}
               </div>
-            </>
+              <AnimatePresence>
+                {requestsOpen && (
+                  <DmRequestsPanel
+                    onClose={() => setRequestsOpen(false)}
+                    requests={dm.requests}
+                    allUsers={allUsers}
+                    currentUserId={currentUser.id}
+                    requestActionKeys={requestActionKeys}
+                    onOpen={dm.openConversation}
+                    onAccept={(convo) => handleAcceptRequest(convo.conversationKey)}
+                    onReject={(convo, name) => openConfirm({
+                      title: 'Mesaj isteğini reddet',
+                      description: `${name} mesaj isteği reddedilsin mi?`,
+                      confirmText: 'Reddet',
+                      cancelText: 'İptal',
+                      danger: true,
+                      onConfirm: () => handleRejectRequest(convo.conversationKey),
+                    })}
+                  />
+                )}
+                {blockedOpen && (
+                  <BlockedUsersPanel
+                    onClose={() => setBlockedOpen(false)}
+                    blockedUsers={blockedUsers}
+                    onUnblockUser={(userId) => {
+                      dm.unblockUser(userId);
+                      setToastMsg('Engel kaldırıldı');
+                    }}
+                  />
+                )}
+                {settingsOpen && (
+                  <MessageSettingsPanel
+                    onClose={() => setSettingsOpen(false)}
+                    currentUser={currentUser}
+                    allUsers={allUsers}
+                    setCurrentUser={setCurrentUser}
+                    setAllUsers={setAllUsers}
+                    setToastMsg={setToastMsg}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
           )}
           {dm.activeRecipientId && activeRecipient && (
             <DMDetailsPanel
@@ -1788,6 +1889,9 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   setToastMsg('Bildirim gönderildi');
                 },
               })}
+              onJumpToMessage={(messageId) => {
+                window.dispatchEvent(new CustomEvent('mayvox:dm-jump-message', { detail: { messageId } }));
+              }}
               onBlockUser={() => dm.activeRecipientId && openConfirm({
                 title: 'Kullanıcıyı engelle',
                 description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,

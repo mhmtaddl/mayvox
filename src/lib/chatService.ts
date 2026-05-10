@@ -29,13 +29,24 @@ export interface ChatErrorPayload {
   retryAfter?: number;   // ms — cooldown süresi (flood_control için)
 }
 
+export interface ChatEventMeta {
+  actorId?: string;
+  actorName?: string;
+  targetUserId?: string;
+  targetName?: string;
+  moderated?: boolean;
+  messageId?: string;
+  reportCount?: number;
+}
+
 type ChatEventHandler = {
   onMessage?: (msg: ChatMessage) => void;
-  onDelete?: (messageId: string) => void;
-  onEdit?: (messageId: string, text: string) => void;
-  onClear?: (roomId: string) => void;
+  onDelete?: (messageId: string, meta?: ChatEventMeta) => void;
+  onMessageReported?: (messageId: string, meta?: ChatEventMeta) => void;
+  onEdit?: (messageId: string, text: string, meta?: ChatEventMeta) => void;
+  onClear?: (roomId: string, meta?: ChatEventMeta) => void;
   onHistory?: (roomId: string, messages: ChatMessage[]) => void;
-  onChatMute?: (roomId: string, muted: boolean, chatMuteRank: number) => void;
+  onChatMute?: (roomId: string, muted: boolean, chatMuteRank: number, meta?: ChatEventMeta) => void;
   onStatusChange?: (status: ChatStatus) => void;
   onError?: (err: ChatErrorPayload) => void;
 };
@@ -501,19 +512,49 @@ export async function connectChat() {
           break;
 
         case 'delete':
-          handlers.onDelete?.(msg.messageId);
+          handlers.onDelete?.(msg.messageId, {
+            actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
+            actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
+            targetUserId: typeof msg.targetUserId === 'string' ? msg.targetUserId : undefined,
+            targetName: typeof msg.targetName === 'string' ? msg.targetName : undefined,
+            moderated: msg.moderated === true,
+            messageId: typeof msg.messageId === 'string' ? msg.messageId : undefined,
+          });
+          break;
+
+        case 'message_report':
+          handlers.onMessageReported?.(msg.messageId, {
+            actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
+            actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
+            targetUserId: typeof msg.targetUserId === 'string' ? msg.targetUserId : undefined,
+            targetName: typeof msg.targetName === 'string' ? msg.targetName : undefined,
+            messageId: typeof msg.messageId === 'string' ? msg.messageId : undefined,
+            reportCount: typeof msg.reportCount === 'number' ? msg.reportCount : undefined,
+          });
           break;
 
         case 'edit':
-          handlers.onEdit?.(msg.messageId, msg.text);
+          handlers.onEdit?.(msg.messageId, msg.text, {
+            actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
+            actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
+            targetUserId: typeof msg.targetUserId === 'string' ? msg.targetUserId : undefined,
+            targetName: typeof msg.targetName === 'string' ? msg.targetName : undefined,
+            messageId: typeof msg.messageId === 'string' ? msg.messageId : undefined,
+          });
           break;
 
         case 'clear':
-          handlers.onClear?.(msg.roomId);
+          handlers.onClear?.(msg.roomId, {
+            actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
+            actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
+          });
           break;
 
         case 'chat_mute':
-          handlers.onChatMute?.(msg.roomId, !!msg.muted, typeof msg.chatMuteRank === 'number' ? msg.chatMuteRank : 0);
+          handlers.onChatMute?.(msg.roomId, !!msg.muted, typeof msg.chatMuteRank === 'number' ? msg.chatMuteRank : 0, {
+            actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
+            actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
+          });
           break;
 
         case 'error':
@@ -636,6 +677,13 @@ export function deleteMessage(messageId: string) {
   if (!messageId) return;
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'delete', messageId }));
+  }
+}
+
+export function reportMessage(messageId: string) {
+  if (!messageId) return;
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'report_message', messageId }));
   }
 }
 

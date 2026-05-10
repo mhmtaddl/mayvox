@@ -16,6 +16,8 @@ export interface DmMessage {
   readAt?: number | null;
   deliveredAt?: number | null;
   editedAt?: number | null;
+  pinnedBy?: string | null;
+  pinnedAt?: number | null;
   requestStatus?: 'none' | 'pending' | 'accepted' | 'rejected' | 'reset';
   requestReceiverId?: string | null;
   isRequest?: boolean;
@@ -52,6 +54,7 @@ export type DmEventHandler = {
   onDelivered?: (convKey: string, messageIds: string[], deliveredAt: number) => void;
   onMessageEdited?: (msg: DmMessage, lastMessage?: string, lastMessageAt?: number) => void;
   onMessageDeleted?: (convKey: string, messageId: string, lastMessage?: string, lastMessageAt?: number) => void;
+  onMessagePinned?: (convKey: string, messageId: string, pinned: boolean, pinnedBy?: string | null, pinnedAt?: number | null) => void;
   onReaction?: (convKey: string, messageId: string, reactions: DmMessageReaction[]) => void;
   onUnreadTotal?: (count: number) => void;
   onTyping?: (convKey: string, fromUserId: string) => void;
@@ -103,6 +106,9 @@ export function handleDmMessage(msg: any): boolean {
       return true;
     case 'dm:message_deleted':
       handlers.onMessageDeleted?.(msg.conversationKey, msg.messageId, msg.lastMessage, msg.lastMessageAt);
+      return true;
+    case 'dm:message_pinned':
+      handlers.onMessagePinned?.(msg.conversationKey, msg.messageId, !!msg.pinned, msg.pinnedBy ?? null, msg.pinnedAt ?? null);
       return true;
     case 'dm:reaction':
       handlers.onReaction?.(msg.conversationKey, msg.messageId, msg.reactions || []);
@@ -162,6 +168,11 @@ export function dmEditMessage(messageId: string, text: string) {
 export function dmDeleteMessage(messageId: string) {
   if (!messageId) return;
   wsSend({ type: 'dm:delete', messageId });
+}
+
+export function dmSetMessagePinned(messageId: string, pinned: boolean) {
+  if (!messageId) return;
+  wsSend({ type: 'dm:pin', messageId, pinned });
 }
 
 export function dmReactMessage(messageId: string, emoji: string) {
