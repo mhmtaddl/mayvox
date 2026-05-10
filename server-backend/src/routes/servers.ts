@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { authMiddleware } from '../middleware/auth';
 import { validateCreateServer, validateJoinServer } from '../validators/serverValidators';
 import * as serverService from '../services/serverService';
@@ -21,16 +22,25 @@ import { clearRoomActivityEvents, listRoomActivityEvents } from '../services/roo
 import { getInsights, refreshActivityHeatmapOnce } from '../services/voiceActivityService';
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
+import * as recommendationService from '../services/recommendationService';
 
 const router = Router();
 
 router.use(authMiddleware as any);
 
 const LOGO_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const RECOMMENDATION_COVER_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 function logoExtension(contentType: string): string {
   if (contentType === 'image/png') return 'png';
   if (contentType === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+function recommendationCoverExtension(contentType: string): string {
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  if (contentType === 'image/gif') return 'gif';
   return 'jpg';
 }
 
@@ -155,6 +165,167 @@ router.get('/:id/moderation-config', async (req: Request, res: Response) => {
   try {
     const cfg = await getServerModerationConfig(req.params.id as string, (req as any).userId);
     res.json(cfg);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/recommendations — sunucuya özel keşif önerileri */
+router.get('/:id/recommendations', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
+    const includeHidden = req.query.includeHidden === 'true' && (ctx.membership.isOwner || ctx.flags.canManageServer || ctx.flags.canKickMembers);
+    const items = await recommendationService.listRecommendations(serverId, {
+      category: typeof req.query.category === 'string' ? req.query.category : undefined,
+      q: typeof req.query.q === 'string' ? req.query.q : undefined,
+      limit: req.query.limit,
+      includeHidden,
+    });
+    res.json(items);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/recommendations/:itemId', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const ctx = await getServerAccessContext((req as any).userId, serverId);
+    if (!ctx.membership.exists) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
+    const item = await recommendationService.getRecommendation(serverId, req.params.itemId as string);
+    res.json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/recommendations/:itemId/ratings', async (req: Request, res: Response) => {
+  try {
+    const ratings = await recommendationService.listRecommendationRatings(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+    );
+    res.json(ratings);
+  } catch (err) { handleError(res, err); }
+});
+
+router.put('/:id/recommendations/:itemId/rating', async (req: Request, res: Response) => {
+  try {
+    const result = await recommendationService.setRecommendationRating(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+      req.body?.score,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+router.delete('/:id/recommendations/:itemId/rating', async (req: Request, res: Response) => {
+  try {
+    const result = await recommendationService.deleteRecommendationRating(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/recommendations/:itemId/comments', async (req: Request, res: Response) => {
+  try {
+    const comments = await recommendationService.listRecommendationComments(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+    );
+    res.json(comments);
+  } catch (err) { handleError(res, err); }
+});
+
+router.put('/:id/recommendations/:itemId/comment', async (req: Request, res: Response) => {
+  try {
+    const result = await recommendationService.upsertRecommendationComment(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+      req.body || {},
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+router.delete('/:id/recommendations/:itemId/comments/:commentId', async (req: Request, res: Response) => {
+  try {
+    const result = await recommendationService.hideRecommendationComment(
+      req.params.id as string,
+      req.params.itemId as string,
+      req.params.commentId as string,
+      (req as any).userId,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/recommendations', async (req: Request, res: Response) => {
+  try {
+    const item = await recommendationService.createRecommendation(req.params.id as string, (req as any).userId, req.body || {});
+    res.status(201).json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/recommendations/cover', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.params.id as string;
+    const userId = (req as any).userId as string;
+    const ctx = await getServerAccessContext(userId, serverId);
+    if (!ctx.membership.exists) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
+
+    const contentType = typeof req.body?.contentType === 'string'
+      ? req.body.contentType
+      : typeof req.body?.mimeType === 'string'
+        ? req.body.mimeType
+        : '';
+    const data = typeof req.body?.data === 'string'
+      ? req.body.data
+      : typeof req.body?.dataBase64 === 'string'
+        ? req.body.dataBase64
+        : '';
+    if (!RECOMMENDATION_COVER_CONTENT_TYPES.has(contentType) || !data) {
+      throw new AppError(400, 'Geçersiz kapak görseli');
+    }
+
+    const buffer = Buffer.from(data, 'base64');
+    if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
+      throw new AppError(400, 'Kapak görseli 5MB altında olmalı');
+    }
+
+    const ext = recommendationCoverExtension(contentType);
+    const dir = path.join(process.cwd(), 'uploads', 'recommendations', serverId);
+    const fileName = `${randomUUID()}.${ext}`;
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, fileName), buffer);
+
+    const coverUrl = `/uploads/recommendations/${serverId}/${fileName}`;
+    res.status(201).json({ url: coverUrl, coverUrl });
+  } catch (err) { handleError(res, err); }
+});
+
+router.patch('/:id/recommendations/:itemId', async (req: Request, res: Response) => {
+  try {
+    const item = await recommendationService.updateRecommendation(req.params.id as string, req.params.itemId as string, (req as any).userId, req.body || {});
+    res.json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/recommendations/:itemId/hide', async (req: Request, res: Response) => {
+  try {
+    const item = await recommendationService.hideRecommendation(req.params.id as string, req.params.itemId as string, (req as any).userId);
+    res.json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+router.delete('/:id/recommendations/:itemId', async (req: Request, res: Response) => {
+  try {
+    await recommendationService.deleteRecommendation(req.params.id as string, req.params.itemId as string, (req as any).userId);
+    res.status(204).send();
   } catch (err) { handleError(res, err); }
 });
 

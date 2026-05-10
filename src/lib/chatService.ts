@@ -253,7 +253,14 @@ export type AppRealtimeEventType =
   | 'invite-rejected'
   | 'moderation-event'
   | 'announcement-update'
-  | 'friend-update';
+  | 'friend-update'
+  | 'recommendation:item_created'
+  | 'recommendation:item_updated'
+  | 'recommendation:item_hidden'
+  | 'recommendation:item_deleted'
+  | 'recommendation:rating_updated'
+  | 'recommendation:comment_updated'
+  | 'recommendation:comment_deleted';
 
 export interface AppRealtimeEvent<TPayload = any> {
   type: AppRealtimeEventType;
@@ -279,7 +286,14 @@ function isAppRealtimeType(type: unknown): type is AppRealtimeEventType {
     type === 'invite-rejected' ||
     type === 'moderation-event' ||
     type === 'announcement-update' ||
-    type === 'friend-update'
+    type === 'friend-update' ||
+    type === 'recommendation:item_created' ||
+    type === 'recommendation:item_updated' ||
+    type === 'recommendation:item_hidden' ||
+    type === 'recommendation:item_deleted' ||
+    type === 'recommendation:rating_updated' ||
+    type === 'recommendation:comment_updated' ||
+    type === 'recommendation:comment_deleted'
   );
 }
 

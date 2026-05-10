@@ -149,6 +149,19 @@ if (!API_BASE) console.error('[serverService] VITE_SERVER_API_URL tanımlı değ
 const SEARCH_CACHE_TTL_MS = 30_000;
 const serverSearchCache = new Map<string, { expiresAt: number; data: DiscoverServer[] }>();
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      const comma = value.indexOf(',');
+      resolve(comma >= 0 ? value.slice(comma + 1) : value);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Dosya okunamadı'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const token = getAuthToken();
   return token
@@ -898,6 +911,175 @@ export async function getModerationEvents(
   if (opts.kind)  params.set('kind', opts.kind);
   const qs = params.toString();
   return apiFetch<ModerationEvent[]>(`/servers/${serverId}/moderation-events${qs ? `?${qs}` : ''}`);
+}
+
+export type RecommendationCategory = 'film' | 'series' | 'game' | 'music' | 'book' | 'hardware';
+export type RecommendationStatus = 'active' | 'hidden' | 'deleted';
+
+export interface RecommendationLink {
+  label?: string;
+  url: string;
+}
+
+export interface RecommendationItem {
+  id: string;
+  serverId: string;
+  createdBy: string;
+  createdByName: string | null;
+  createdByAvatar: string | null;
+  title: string;
+  category: RecommendationCategory;
+  description: string | null;
+  coverUrl: string | null;
+  tags: string[];
+  links: RecommendationLink[];
+  metadata: Record<string, unknown>;
+  status: RecommendationStatus;
+  averageRating: number;
+  ratingCount: number;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecommendationRating {
+  id: string;
+  itemId: string;
+  serverId: string;
+  userId: string;
+  userName: string | null;
+  userAvatar: string | null;
+  score: number;
+  updatedAt: string;
+}
+
+export interface RecommendationComment {
+  id: string;
+  itemId: string;
+  serverId: string;
+  createdBy: string;
+  createdByName: string | null;
+  createdByAvatar: string | null;
+  body: string;
+  isSpoiler: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecommendationPayload {
+  title: string;
+  category: RecommendationCategory;
+  description?: string;
+  coverUrl?: string;
+  tags?: string[];
+  links?: RecommendationLink[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface RecommendationFilters {
+  category?: RecommendationCategory | 'all';
+  q?: string;
+  limit?: number;
+}
+
+export async function getServerRecommendations(
+  serverId: string,
+  filters: RecommendationFilters = {},
+): Promise<RecommendationItem[]> {
+  const params = new URLSearchParams();
+  if (filters.category && filters.category !== 'all') params.set('category', filters.category);
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return apiFetch<RecommendationItem[]>(`/servers/${serverId}/recommendations${qs ? `?${qs}` : ''}`);
+}
+
+export async function getServerRecommendation(serverId: string, itemId: string): Promise<RecommendationItem> {
+  return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}`);
+}
+
+export async function createServerRecommendation(
+  serverId: string,
+  payload: RecommendationPayload,
+): Promise<RecommendationItem> {
+  return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadRecommendationCover(serverId: string, file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Kapak için sadece görsel dosyası seçebilirsin.');
+  if (file.size <= 0 || file.size > 5 * 1024 * 1024) throw new Error('Kapak görseli 5MB altında olmalı.');
+  const result = await apiFetch<{ url?: string; coverUrl?: string }>(`/servers/${serverId}/recommendations/cover`, {
+    method: 'POST',
+    body: JSON.stringify({
+      fileName: file.name,
+      mimeType: file.type || 'image/jpeg',
+      contentType: file.type || 'image/jpeg',
+      dataBase64: await fileToBase64(file),
+    }),
+  });
+  const url = String(result.coverUrl || result.url || '');
+  if (!url) throw new Error('Kapak URL alınamadı');
+  return url;
+}
+
+export async function updateServerRecommendation(
+  serverId: string,
+  itemId: string,
+  payload: RecommendationPayload,
+): Promise<RecommendationItem> {
+  return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function hideServerRecommendation(serverId: string, itemId: string): Promise<RecommendationItem> {
+  return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}/hide`, { method: 'POST' });
+}
+
+export async function deleteServerRecommendation(serverId: string, itemId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/recommendations/${itemId}`, { method: 'DELETE' });
+}
+
+export async function getRecommendationRatings(serverId: string, itemId: string): Promise<RecommendationRating[]> {
+  return apiFetch<RecommendationRating[]>(`/servers/${serverId}/recommendations/${itemId}/ratings`);
+}
+
+export async function setRecommendationRating(
+  serverId: string,
+  itemId: string,
+  score: number,
+): Promise<{ item: RecommendationItem; myRating: RecommendationRating }> {
+  return apiFetch<{ item: RecommendationItem; myRating: RecommendationRating }>(`/servers/${serverId}/recommendations/${itemId}/rating`, {
+    method: 'PUT',
+    body: JSON.stringify({ score }),
+  });
+}
+
+export async function deleteRecommendationRating(serverId: string, itemId: string): Promise<{ item: RecommendationItem }> {
+  return apiFetch<{ item: RecommendationItem }>(`/servers/${serverId}/recommendations/${itemId}/rating`, { method: 'DELETE' });
+}
+
+export async function getRecommendationComments(serverId: string, itemId: string): Promise<RecommendationComment[]> {
+  return apiFetch<RecommendationComment[]>(`/servers/${serverId}/recommendations/${itemId}/comments`);
+}
+
+export async function upsertRecommendationComment(
+  serverId: string,
+  itemId: string,
+  payload: { body: string; isSpoiler?: boolean },
+): Promise<{ item: RecommendationItem; comment: RecommendationComment }> {
+  return apiFetch<{ item: RecommendationItem; comment: RecommendationComment }>(`/servers/${serverId}/recommendations/${itemId}/comment`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteRecommendationComment(serverId: string, itemId: string, commentId: string): Promise<{ item: RecommendationItem }> {
+  return apiFetch<{ item: RecommendationItem }>(`/servers/${serverId}/recommendations/${itemId}/comments/${commentId}`, { method: 'DELETE' });
 }
 
 export interface RoomActivityEvent {

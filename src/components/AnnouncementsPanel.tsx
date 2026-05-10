@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Pin, Megaphone, Plus, Edit2, Trash2, X, AlertTriangle, AlertCircle,
-  Calendar, Clock, Users, ChevronDown, UserCheck, Check,
+  Calendar, Clock, Users, ChevronDown, UserCheck, Check, Compass,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { User, Announcement, AnnouncementPriority, AnnouncementType } from '../types';
@@ -16,6 +16,7 @@ import { subscribeRealtimeEvents } from '../lib/chatService';
 import { getPublicDisplayName } from '../lib/formatName';
 import { useJoinRequests } from '../hooks/useJoinRequests';
 import type { JoinRequestListItem } from '../lib/serverService';
+import RecommendationsTab from './recommendations/RecommendationsTab';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ const PRIORITY_BORDER: Record<AnnouncementPriority, string> = {
   critical: 'border-red-500/25',
 };
 
+const RECOMMENDATIONS_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_RECOMMENDATIONS_ENABLED === 'true';
+
 // ── Shared input classes ────────────────────────────────────────────────────
 
 const inputCls = 'w-full rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/40 focus:outline-none transition-colors' + ' ' + 'border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--shadow-base),0.15)] focus:border-[rgba(var(--theme-accent-rgb),0.4)] focus:shadow-[inset_0_1px_3px_rgba(var(--shadow-base),0.1),0_0_0_3px_rgba(var(--theme-accent-rgb),0.08)]';
@@ -70,7 +74,17 @@ const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-[var
 
 // ── Add menu ────────────────────────────────────────────────────────────────
 
-const AddMenu = ({ onSelect }: { onSelect: (type: AnnouncementType) => void }) => {
+const AddMenu = ({
+  canManage,
+  showRecommendations,
+  onSelect,
+  onSelectRecommendation,
+}: {
+  canManage: boolean;
+  showRecommendations: boolean;
+  onSelect: (type: AnnouncementType) => void;
+  onSelectRecommendation: () => void;
+}) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -100,22 +114,36 @@ const AddMenu = ({ onSelect }: { onSelect: (type: AnnouncementType) => void }) =
             exit={{ opacity: 0, y: -4, scale: 0.95 }}
             className="absolute right-0 top-full mt-1.5 z-30 min-w-[160px] rounded-lg border border-[var(--theme-border)]/40 bg-[var(--theme-surface)] shadow-xl overflow-hidden"
           >
-            <button
-              type="button"
-              onClick={() => { onSelect('announcement'); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/8 transition-colors"
-            >
-              <Megaphone size={13} className="text-[var(--theme-accent)]" />
-              Duyuru Ekle
-            </button>
-            <button
-              type="button"
-              onClick={() => { onSelect('event'); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/8 transition-colors"
-            >
-              <Calendar size={13} className="text-violet-400" />
-              Etkinlik Ekle
-            </button>
+            {canManage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { onSelect('announcement'); setOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/8 transition-colors"
+                >
+                  <Megaphone size={13} className="text-[var(--theme-accent)]" />
+                  Duyuru Ekle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onSelect('event'); setOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/8 transition-colors"
+                >
+                  <Calendar size={13} className="text-violet-400" />
+                  Etkinlik Ekle
+                </button>
+              </>
+            )}
+            {showRecommendations && (
+              <button
+                type="button"
+                onClick={() => { onSelectRecommendation(); setOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/8 transition-colors"
+              >
+                <Compass size={13} className="text-cyan-300" />
+                Keşif Ekle
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -815,7 +843,7 @@ interface Props {
   onOpenInviteApplications?: () => void;
 }
 
-type Tab = 'all' | 'announcement' | 'event' | 'invites';
+type Tab = 'all' | 'announcement' | 'event' | 'invites' | 'recommendations';
 
 export default function AnnouncementsPanel({
   currentUser,
@@ -830,11 +858,13 @@ export default function AnnouncementsPanel({
   const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('all');
+  const [recommendationCreateSignal, setRecommendationCreateSignal] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
   const canManage = currentUser.isAdmin || currentUser.isModerator;
   const isAdmin = currentUser.isAdmin;
   const showInvitesTab = !!serverId && canViewInviteApplications;
+  const showRecommendationsTab = !!serverId && RECOMMENDATIONS_ENABLED;
   const {
     items: joinRequestItems,
     error: joinRequestError,
@@ -851,7 +881,8 @@ export default function AnnouncementsPanel({
 
   useEffect(() => {
     if (activeTab === 'invites' && !showInvitesTab) setActiveTab('all');
-  }, [activeTab, showInvitesTab]);
+    if (activeTab === 'recommendations' && !showRecommendationsTab) setActiveTab('all');
+  }, [activeTab, showInvitesTab, showRecommendationsTab]);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
@@ -938,7 +969,7 @@ export default function AnnouncementsPanel({
   // ── Filter ──
   const filtered = activeTab === 'all'
     ? announcements
-    : activeTab === 'invites'
+    : activeTab === 'invites' || activeTab === 'recommendations'
       ? []
     : announcements.filter(a => a.type === activeTab);
 
@@ -968,7 +999,7 @@ export default function AnnouncementsPanel({
   const announcementCount = announcements.filter(a => a.type === 'announcement').length;
   const eventCount = announcements.filter(a => a.type === 'event').length;
 
-  if (announcements.length === 0 && !canManage && !showInvitesTab) return null;
+  if (announcements.length === 0 && !canManage && !showInvitesTab && !showRecommendationsTab) return null;
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-8 px-6 pb-8">
@@ -985,6 +1016,12 @@ export default function AnnouncementsPanel({
               label: 'Davetler',
               count: pendingJoinRequestCount,
               icon: <UserCheck size={11} />,
+            }] : []),
+            ...(showRecommendationsTab ? [{
+              id: 'recommendations' as Tab,
+              label: 'Keşif',
+              count: 0,
+              icon: <Compass size={11} />,
             }] : []),
           ]).map(tab => (
             <button
@@ -1012,13 +1049,21 @@ export default function AnnouncementsPanel({
           ))}
         </div>
 
-        {canManage && (
-          <AddMenu onSelect={(type) => { setEditTarget(null); setModalType(type); setModalOpen(true); }} />
+        {(canManage || showRecommendationsTab) && (
+          <AddMenu
+            canManage={canManage}
+            showRecommendations={showRecommendationsTab}
+            onSelect={(type) => { setEditTarget(null); setModalType(type); setModalOpen(true); }}
+            onSelectRecommendation={() => {
+              setActiveTab('recommendations');
+              setRecommendationCreateSignal(prev => prev + 1);
+            }}
+          />
         )}
       </div>
 
       {/* Empty state */}
-      {activeTab !== 'invites' && (activeTab === 'all' ? combinedItems.length === 0 : filtered.length === 0) && (
+      {activeTab !== 'invites' && activeTab !== 'recommendations' && (activeTab === 'all' ? combinedItems.length === 0 : filtered.length === 0) && (
         <div className="text-center py-12 text-[var(--theme-secondary-text)]/40 text-xs">
           {canManage
             ? (activeTab === 'event' ? 'Henüz etkinlik yok. İlk etkinliği siz ekleyin.' : activeTab === 'announcement' ? 'Henüz duyuru yok. İlk duyuruyu siz ekleyin.' : 'Henüz içerik yok.')
@@ -1029,7 +1074,9 @@ export default function AnnouncementsPanel({
 
       {/* Cards */}
       <div className="space-y-3">
-        {activeTab === 'invites' ? (
+        {activeTab === 'recommendations' ? (
+          <RecommendationsTab serverId={serverId} currentUser={currentUser} openCreateSignal={recommendationCreateSignal} />
+        ) : activeTab === 'invites' ? (
           <InviteApplicationsFeed
             items={joinRequestItems}
             error={joinRequestError}

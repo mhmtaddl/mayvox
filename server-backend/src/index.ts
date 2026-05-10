@@ -26,7 +26,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
 app.use('/webhooks', express.raw({ type: '*/*', limit: '256kb' }), webhookRoutes);
 
 // ── Genel JSON parser (diğer route'lar) ──
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '8mb' }));
 
 // ── Health check ──
 app.get('/health', (_req, res) => {

@@ -399,6 +399,13 @@ const INTERNAL_BROADCAST_EVENTS = new Set([
   'moderation-event',
   'announcement-update',
   'friend-update',
+  'recommendation:item_created',
+  'recommendation:item_updated',
+  'recommendation:item_hidden',
+  'recommendation:item_deleted',
+  'recommendation:rating_updated',
+  'recommendation:comment_updated',
+  'recommendation:comment_deleted',
 ]);
 
 const CLIENT_BROADCAST_EVENTS = new Set([
