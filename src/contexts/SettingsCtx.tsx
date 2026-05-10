@@ -5,6 +5,7 @@ import type { OverlayDisplayMode } from '../overlay/types';
 // Voice mode (PTT / VAD) — korundu, NS ile ilgisiz.
 export type VoiceMode = 'ptt' | 'vad';
 export type UiDensity = 'compact' | 'comfortable';
+export type CloseBehavior = 'tray' | 'quit';
 
 /**
  * Noise suppression modeli (v2 — preset sistemi kaldırıldı):
@@ -72,6 +73,9 @@ export interface SettingsContextType {
   /** Otomatik oyun algılama — Electron desktop only, default kapalı. */
   gameActivityEnabled: boolean;
   setGameActivityEnabled: (v: boolean) => void;
+  /** Electron pencere X davranışı — default tray. */
+  closeBehavior: CloseBehavior;
+  setCloseBehavior: (v: CloseBehavior) => void;
   /** Oyun içi ses overlay — Electron desktop only, default kapalı. */
   overlayEnabled: boolean;
   setOverlayEnabled: (v: boolean) => void;

@@ -246,10 +246,10 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
       <button
         ref={btnRef}
         onClick={() => setOpen(prev => !prev)}
-        className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 group/bell ${
+        className={`mv-icon-action mv-icon-bell-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 group/bell focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${
           hasBellNotifications
-            ? `${open ? 'bg-[rgba(245,181,68,0.08)]' : ''} mv-notification-bell-has hover:bg-[rgba(245,181,68,0.10)]`
-            : `${open ? 'bg-[rgba(var(--glass-tint),0.05)]' : ''} mv-notification-bell-idle hover:bg-[rgba(var(--glass-tint),0.04)]`
+            ? 'mv-notification-bell-has'
+            : 'mv-notification-bell-idle'
         }`}
         title="Bildirimler"
       >

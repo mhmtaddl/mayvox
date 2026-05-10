@@ -136,6 +136,13 @@ export async function changePassword(password: string): Promise<void> {
   });
 }
 
+export async function verifyCurrentPassword(password: string): Promise<void> {
+  await authFetch<{ ok: boolean }>('/auth/verify-password', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
 export async function changeEmail(email: string): Promise<void> {
   await authFetch<{ ok: boolean }>('/auth/change-email', {
     method: 'POST',

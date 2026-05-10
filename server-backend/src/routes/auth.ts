@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { changeEmail, changePassword, login, me, register, updateProfile, AuthError } from '../services/authService';
+import { changeEmail, changePassword, login, me, register, updateProfile, verifyCurrentPassword, AuthError } from '../services/authService';
 import { authMiddleware } from '../middleware/auth';
 import { execute, pool, queryMany, queryOne } from '../repositories/db';
 import * as channelService from '../services/channelService';
@@ -292,6 +292,15 @@ router.get('/profiles', authMiddleware as any, async (req: Request, res: Respons
 router.post('/change-password', authMiddleware as any, async (req: Request, res: Response) => {
   try {
     await changePassword((req as any).user, req.body?.password);
+    res.json({ ok: true });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+router.post('/verify-password', authMiddleware as any, async (req: Request, res: Response) => {
+  try {
+    await verifyCurrentPassword((req as any).user, req.body?.password);
     res.json({ ok: true });
   } catch (err) {
     handleAuthError(res, err);

@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('electronUpdate', {
 contextBridge.exposeInMainWorld('electronApp', {
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
   setTrayChannel: (name) => ipcRenderer.send('tray:set-channel', name || null),
+  setCloseBehavior: (behavior) => {
+    if (behavior !== 'tray' && behavior !== 'quit') return;
+    ipcRenderer.send('settings:set-close-behavior', behavior);
+  },
 });
 
 // ── Game Activity bridge — minimum IPC yüzeyi ──

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { hasCustomAvatar, getStatusAvatar } from '../lib/statusAvatar';
 import { safePublicName } from '../lib/formatName';
 
@@ -33,8 +33,14 @@ export default function AvatarContent({
   imgClassName = 'w-full h-full object-cover',
   alt = '',
 }: Props) {
-  if (hasCustomAvatar(avatar)) {
-    return <img src={avatar!} alt={alt} className={imgClassName} referrerPolicy="no-referrer" />;
+  const [customAvatarFailed, setCustomAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setCustomAvatarFailed(false);
+  }, [avatar]);
+
+  if (hasCustomAvatar(avatar) && !customAvatarFailed) {
+    return <img src={avatar!} alt={alt} className={imgClassName} referrerPolicy="no-referrer" onError={() => setCustomAvatarFailed(true)} />;
   }
   const statusSrc = getStatusAvatar(statusText);
   if (statusSrc) {

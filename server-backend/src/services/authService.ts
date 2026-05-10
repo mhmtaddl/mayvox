@@ -214,6 +214,17 @@ export async function changePassword(payload: JwtUserPayload, password: string):
   if (!result.rowCount) throw new AuthError(404, 'Kullanıcı bulunamadı');
 }
 
+export async function verifyCurrentPassword(payload: JwtUserPayload, password: string): Promise<void> {
+  if (!password) throw new AuthError(400, 'Parola gerekli');
+  const row = await queryOne<{ password_hash: string }>(
+    'SELECT password_hash FROM app_users WHERE id = $1 AND profile_id = $2 LIMIT 1',
+    [payload.appUserId, payload.profileId],
+  );
+  if (!row) throw new AuthError(404, 'Kullanıcı bulunamadı');
+  const ok = await bcrypt.compare(password, row.password_hash);
+  if (!ok) throw new AuthError(401, 'Parola hatalı');
+}
+
 export async function changeEmail(payload: JwtUserPayload, emailRaw: string): Promise<void> {
   const email = String(emailRaw || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AuthError(400, 'Geçersiz e-posta');

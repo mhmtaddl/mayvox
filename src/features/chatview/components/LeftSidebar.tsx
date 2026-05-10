@@ -251,7 +251,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
           if (hasServerStaffRole && onShowSettings) {
             return (
               <button onClick={onShowSettings} title="Sunucu Ayarları"
-                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
+                className="mv-icon-action mv-icon-action-accent mv-icon-gear-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]">
                 <Settings size={13} />
               </button>
             );
@@ -521,12 +521,12 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                             ) : (
                               <>
                                 <span className="truncate flex-1 min-w-0">{getPublicDisplayName(user)}</span>
-                                {isBc && (isSp
-                                  ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
-                                  : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
-                                )}
-                                <VolumeLabel value={userVolumes[user.id]} />
-                                <span className="ml-0.5 flex w-4 shrink-0 justify-end">
+                                <span className="ml-2 flex w-[42px] shrink-0 items-center justify-end gap-1 overflow-hidden">
+                                  {isBc && (isSp
+                                    ? <Radio size={9} className="shrink-0 text-[var(--theme-accent)]" />
+                                    : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
+                                  )}
+                                  <VolumeLabel value={userVolumes[user.id]} />
                                   <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
                                 </span>
                               </>

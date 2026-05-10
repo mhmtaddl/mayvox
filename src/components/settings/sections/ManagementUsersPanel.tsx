@@ -1459,6 +1459,89 @@ function DetailButton({ icon, label, description, tone, onClick }: {
   );
 }
 
+function EntitlementHeader({ title, user, displayName, meta }: {
+  title: string;
+  user: AdminUserRow;
+  displayName: string;
+  meta?: React.ReactNode;
+}) {
+  return (
+    <div className="px-5 py-4 border-b border-[var(--theme-border)]/35">
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center
+          bg-[var(--theme-accent)]/10 border border-[var(--theme-border)]/45 text-[var(--theme-accent)]">
+          <AvatarContent
+            avatar={user.avatar}
+            statusText={null}
+            firstName={user.display_name || user.first_name}
+            name={displayName}
+            alt={displayName}
+            letterClassName="text-[13px] font-bold text-[var(--theme-accent)]"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-[14px] font-bold text-[var(--theme-text)] truncate">{title}</h3>
+            {meta}
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-[var(--theme-secondary-text)]">
+            <span className="font-semibold text-[var(--theme-text)]/90">{displayName}</span>
+            <span className="mx-1.5 opacity-50">•</span>
+            <span className="opacity-80">{user.email || user.id}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryPanel({ title, badges, rows }: {
+  title: string;
+  badges?: React.ReactNode;
+  rows: Array<{ label: string; value: React.ReactNode; mono?: boolean }>;
+}) {
+  return (
+    <div className="rounded-2xl bg-[var(--theme-surface-card)]/80 border border-[var(--theme-border)]/45
+      px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/70">{title}</span>
+        {badges && <div className="flex items-center gap-1.5">{badges}</div>}
+      </div>
+      <div className="grid gap-1.5 text-[11.5px]">
+        {rows.map(row => (
+          <div key={row.label} className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3">
+            <span className="text-[var(--theme-secondary-text)]/75">{row.label}</span>
+            <span className={`min-w-0 text-right font-semibold text-[var(--theme-text)] ${row.mono ? 'font-mono text-[10.5px]' : ''}`}>
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/70">
+      {children}
+    </label>
+  );
+}
+
+function EntitlementFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 border-t border-[var(--theme-border)]/35 bg-[var(--theme-surface-card)]/25 px-5 py-3">
+      {children}
+    </div>
+  );
+}
+
+const footerButtonBase = 'h-9 rounded-xl px-4 text-[12px] font-semibold outline-none transition-[background,border-color,color,opacity] duration-150 focus-visible:ring-2 focus-visible:ring-white/15 disabled:cursor-default disabled:opacity-40';
+const footerButtonGhost = `${footerButtonBase} border border-[var(--theme-border)]/45 bg-[var(--theme-input-bg)] text-[var(--theme-secondary-text)] hover:bg-[var(--theme-panel-hover)]`;
+const footerButtonDanger = `${footerButtonBase} border border-red-500/30 bg-red-500/[0.08] text-red-400 hover:bg-red-500/[0.12] hover:border-red-500/[0.42]`;
+const footerButtonPrimary = `${footerButtonBase} border border-[rgba(var(--theme-accent-rgb),0.45)] bg-[rgba(var(--theme-accent-rgb),0.14)] text-[var(--theme-accent)] hover:bg-[rgba(var(--theme-accent-rgb),0.20)] hover:border-[rgba(var(--theme-accent-rgb),0.58)] font-bold`;
+
 // ── Plan Manage Modal ──
 
 function PlanManageModal({ user, onClose, onSuccess, onError }: {
@@ -1510,55 +1593,45 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
 
   return (
     <Modal open={true} onClose={onClose} width="md" padded={false}>
-      <div className="p-5 border-b border-[var(--theme-border)]">
-        <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1">Plan Yönetimi</h3>
-        <p className="text-[12px] text-[var(--theme-secondary-text)]">
-          {displayName} <span className="opacity-60">• {user.email || user.id}</span>
-        </p>
+      <EntitlementHeader
+        title="Plan Yönetimi"
+        user={user}
+        displayName={displayName}
+        meta={user.plan_source === 'paid' ? <PaidBadge /> : undefined}
+      />
+
+      <div className="px-5 py-4 space-y-3.5">
         {readOnly && (
-          <div className="mt-3 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[11px] flex items-center gap-2">
-            <Lock size={12} /> Bu kullanıcının planı <b>paid</b> — admin override edemez. Sadece görüntüleme.
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-2 text-emerald-300 text-[11px] flex items-center gap-2">
+            <Lock size={12} className="shrink-0" />
+            <span>Bu plan ödeme kaynağından geliyor, yönetim panelinden değiştirilemez.</span>
           </div>
         )}
-      </div>
-
-      <div className="p-5 space-y-4">
-        {/* Mevcut plan özeti */}
-        <div className="p-3 rounded-xl bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[11.5px] space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Mevcut plan</span>
-            <div className="flex items-center gap-1.5">
+        <SummaryPanel
+          title="Mevcut Plan"
+          badges={(
+            <>
               <PlanBadge plan={user.plan} />
               <StatusBadge status={user.plan_status} />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Kaynak</span>
-            <span className="font-semibold text-[var(--theme-text)]">{user.plan_source ?? '—'}</span>
-          </div>
-          {user.plan_start_at && (
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--theme-secondary-text)]">Başlangıç</span>
-              <span className="font-mono text-[10.5px]">{new Date(user.plan_start_at).toLocaleString('tr-TR')}</span>
-            </div>
+            </>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Bitiş</span>
-            <span className="font-mono text-[10.5px]">
-              {user.plan_end_at ? new Date(user.plan_end_at).toLocaleString('tr-TR') : 'sınırsız'}
-            </span>
-          </div>
-        </div>
+          rows={[
+            { label: 'Plan', value: PLAN_LABEL[user.plan] },
+            { label: 'Kaynak', value: user.plan_source ?? '—' },
+            ...(user.plan_start_at ? [{ label: 'Başlangıç', value: new Date(user.plan_start_at).toLocaleString('tr-TR'), mono: true }] : []),
+            { label: 'Bitiş', value: user.plan_end_at ? new Date(user.plan_end_at).toLocaleString('tr-TR') : 'sınırsız', mono: true },
+          ]}
+        />
 
         {!readOnly && (
           <>
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Plan</label>
-              <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+              <SectionLabel>Plan</SectionLabel>
+              <div className="grid grid-cols-3 gap-2 mt-1.5">
                 {([
                   { v: 'free' as PlanKey,  l: 'Free',  d: 'Temel kullanım' },
-                  { v: 'pro' as PlanKey,   l: 'Pro',   d: 'Genişletilmiş özellikler' },
-                  { v: 'ultra' as PlanKey, l: 'Ultra', d: 'Tüm premium kilitler' },
+                  { v: 'pro' as PlanKey,   l: 'Pro',   d: 'Gelişmiş limitler' },
+                  { v: 'ultra' as PlanKey, l: 'Ultra', d: 'Tüm premium' },
                 ]).map(p => (
                   <SelectableCard
                     key={p.v}
@@ -1572,7 +1645,7 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
             </div>
 
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Süre</label>
+              <SectionLabel>Süre</SectionLabel>
               <div className="grid grid-cols-5 gap-1.5 mt-1.5">
                 {([
                   { v: '1week' as const, l: '1 hafta' },
@@ -1594,7 +1667,7 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
                   type="datetime-local"
                   value={customEndAt}
                   onChange={e => setCustomEndAt(e.target.value)}
-                  className="mt-2 w-full rounded-lg px-3 py-2 text-[11.5px] outline-none
+                  className="mt-2 h-9 w-full rounded-xl px-3 text-[11.5px] outline-none
                     bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
                     focus:border-[rgba(var(--theme-accent-rgb),0.55)]
                     focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.14)]
@@ -1610,35 +1683,31 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
         )}
       </div>
 
-      <div className="flex border-t border-[var(--theme-border)]">
-        <button onClick={onClose} className="flex-1 py-3.5 text-[13px] font-semibold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-panel-hover)]">
+      <EntitlementFooter>
+        <button onClick={onClose} className={`${footerButtonGhost} mr-auto`}>
           Kapat
         </button>
         {!readOnly && (
           <>
-            <div className="w-px bg-[var(--theme-border)]" />
             {user.plan !== 'none' && (
-              <>
-                <button
-                  onClick={() => setConfirmingRevoke(true)}
-                  disabled={submitting}
-                  className="flex-1 py-3.5 text-[13px] font-semibold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-                >
-                  Planı Kaldır
-                </button>
-                <div className="w-px bg-[var(--theme-border)]" />
-              </>
+              <button
+                onClick={() => setConfirmingRevoke(true)}
+                disabled={submitting}
+                className={footerButtonDanger}
+              >
+                Planı Kaldır
+              </button>
             )}
             <button
               onClick={submit}
               disabled={submitting || (duration === 'custom' && !customEndAt)}
-              className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-default"
+              className={footerButtonPrimary}
             >
               {submitting ? 'Kaydediliyor...' : (user.plan === 'none' ? 'Plan Ata' : 'Planı Güncelle')}
             </button>
           </>
         )}
-      </div>
+      </EntitlementFooter>
       <ConfirmModal
         isOpen={confirmingRevoke}
         title="Planı Kaldır"
@@ -1730,42 +1799,37 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
 
   return (
     <Modal open={true} onClose={onClose} width="md" padded={false}>
-      <div className="p-5 border-b border-[var(--theme-border)]">
-        <h3 className="text-[15px] font-bold text-[var(--theme-text)] mb-1">Seviye Yönetimi</h3>
-        <p className="text-[12px] text-[var(--theme-secondary-text)]">
-          {displayName} <span className="opacity-60">• {user.email || user.id}</span>
-        </p>
-      </div>
+      <EntitlementHeader
+        title="Seviye Yönetimi"
+        user={user}
+        displayName={displayName}
+        meta={(
+          <span className="rounded-full border border-[rgba(var(--theme-accent-rgb),0.35)] bg-[rgba(var(--theme-accent-rgb),0.12)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[var(--theme-accent)]">
+            {labelFor(currentLevel)}
+          </span>
+        )}
+      />
 
-      <div className="p-5 space-y-4">
-        {/* Mevcut seviye özeti */}
-        <div className="p-3 rounded-xl bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[11.5px] space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Mevcut seviye</span>
-            <span className="font-semibold text-[var(--theme-text)]">{labelFor(currentLevel)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Kaynak</span>
-            <span className="font-semibold text-[var(--theme-text)]">{user.user_level_source ?? '—'}</span>
-          </div>
-          {user.user_level_start_at && (
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--theme-secondary-text)]">Başlangıç</span>
-              <span className="font-mono text-[10.5px]">{new Date(user.user_level_start_at).toLocaleString('tr-TR')}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-[var(--theme-secondary-text)]">Bitiş</span>
-            <span className="font-mono text-[10.5px]">
-              {user.user_level_end_at ? new Date(user.user_level_end_at).toLocaleString('tr-TR') : 'sınırsız'}
+      <div className="px-5 py-4 space-y-3.5">
+        <SummaryPanel
+          title="Mevcut Seviye"
+          badges={(
+            <span className="rounded-full border border-[rgba(var(--theme-accent-rgb),0.35)] bg-[rgba(var(--theme-accent-rgb),0.12)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[var(--theme-accent)]">
+              {labelFor(currentLevel)}
             </span>
-          </div>
-        </div>
+          )}
+          rows={[
+            { label: 'Seviye', value: labelFor(currentLevel) },
+            { label: 'Kaynak', value: user.user_level_source ?? '—' },
+            ...(user.user_level_start_at ? [{ label: 'Başlangıç', value: new Date(user.user_level_start_at).toLocaleString('tr-TR'), mono: true }] : []),
+            { label: 'Bitiş', value: user.user_level_end_at ? new Date(user.user_level_end_at).toLocaleString('tr-TR') : 'sınırsız', mono: true },
+          ]}
+        />
 
         {/* Seviye seçimi */}
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Seviye</label>
-          <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+          <SectionLabel>Seviye</SectionLabel>
+          <div className="grid grid-cols-3 gap-2 mt-1.5">
             {AVAILABLE_LEVELS.map(l => (
               <SelectableCard
                 key={l}
@@ -1780,7 +1844,7 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
 
         {/* Süre seçimi */}
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/70">Süre</label>
+          <SectionLabel>Süre</SectionLabel>
           <div className="grid grid-cols-5 gap-1.5 mt-1.5">
             {([
               { v: '1week' as const, l: '1 hafta' },
@@ -1802,7 +1866,7 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
               type="datetime-local"
               value={customEndAt}
               onChange={e => setCustomEndAt(e.target.value)}
-              className="mt-2 w-full rounded-lg px-3 py-2 text-[11.5px] outline-none
+              className="mt-2 h-9 w-full rounded-xl px-3 text-[11.5px] outline-none
                 bg-[var(--theme-input-bg)] border border-[var(--theme-input-border)]
                 focus:border-[rgba(var(--theme-accent-rgb),0.55)]
                 focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.14)]
@@ -1816,31 +1880,27 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
         )}
       </div>
 
-      <div className="flex border-t border-[var(--theme-border)]">
-        <button onClick={onClose} className="flex-1 py-3.5 text-[13px] font-semibold text-[var(--theme-secondary-text)] hover:bg-[var(--theme-panel-hover)]">
+      <EntitlementFooter>
+        <button onClick={onClose} className={`${footerButtonGhost} mr-auto`}>
           Kapat
         </button>
         {currentLevel && (
-          <>
-            <div className="w-px bg-[var(--theme-border)]" />
-            <button
-              onClick={() => setConfirmingRevoke(true)}
-              disabled={submitting}
-              className="flex-1 py-3.5 text-[13px] font-semibold text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-            >
-              Seviyeyi Geri Al
-            </button>
-          </>
+          <button
+            onClick={() => setConfirmingRevoke(true)}
+            disabled={submitting}
+            className={footerButtonDanger}
+          >
+            Seviyeyi Geri Al
+          </button>
         )}
-        <div className="w-px bg-[var(--theme-border)]" />
         <button
           onClick={submit}
           disabled={submitting || (duration === 'custom' && !customEndAt)}
-          className="flex-1 py-3.5 text-[13px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-default"
+          className={footerButtonPrimary}
         >
           {submitting ? 'Kaydediliyor...' : 'Seviye Belirle'}
         </button>
-      </div>
+      </EntitlementFooter>
 
       <ConfirmModal
         isOpen={confirmingRevoke}
@@ -2072,27 +2132,27 @@ function DevicesSection({
 }) {
   if (loading && sessions.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-2">
+      <div className="flex min-w-0 items-center gap-2 py-2">
         <RefreshCw size={12} className="animate-spin text-[var(--theme-secondary-text)]/50" />
-        <span className="text-[11px] text-[var(--theme-secondary-text)]/60">Oturumlar yükleniyor…</span>
+        <span className="min-w-0 truncate text-[11px] text-[var(--theme-secondary-text)]/60">Oturumlar yükleniyor…</span>
       </div>
     );
   }
 
   if (error && sessions.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-red-500/8 border border-red-500/20">
+      <div className="flex min-w-0 items-center gap-2 py-2 px-2.5 rounded-lg bg-red-500/8 border border-red-500/20">
         <AlertTriangle size={12} className="text-red-400 shrink-0" />
-        <span className="text-[11px] text-red-400/90">{error}</span>
+        <span className="min-w-0 break-words text-[11px] text-red-400/90">{error}</span>
       </div>
     );
   }
 
   if (sessions.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)]">
+      <div className="flex min-w-0 items-center gap-2 py-2 px-2.5 rounded-lg bg-[rgba(var(--glass-tint),0.04)] border border-[rgba(var(--glass-tint),0.08)]">
         <Circle size={8} strokeWidth={0} fill="currentColor" className="text-[var(--theme-secondary-text)]/40 shrink-0" />
-        <span className="text-[11px] text-[var(--theme-secondary-text)]/70">Bu kullanıcıya ait oturum kaydı yok.</span>
+        <span className="min-w-0 break-words text-[11px] text-[var(--theme-secondary-text)]/70">Bu kullanıcıya ait oturum kaydı yok.</span>
       </div>
     );
   }
@@ -2104,7 +2164,7 @@ function DevicesSection({
   const visible = active.length > 0 ? active : sessions.slice(0, 1);
 
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1 overflow-x-hidden">
       {visible.map((s) => {
         const timeLabel = s.is_active
           ? `Son aktivite: ${formatRelativeMs(s.last_heartbeat_at)}`
@@ -2114,7 +2174,7 @@ function DevicesSection({
         return (
           <div
             key={s.session_key}
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
+            className="flex min-w-0 flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
             style={{
               background: s.is_active
                 ? 'rgba(16,185,129,0.05)'
@@ -2124,7 +2184,7 @@ function DevicesSection({
           >
             <PlatformBadge platform={s.platform} />
             <VersionChip version={s.app_version} current={currentAppVersion} />
-            <div className="flex-1 min-w-0 flex items-center gap-2 justify-end">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
               <span className="text-[10.5px] text-[var(--theme-secondary-text)]/70 truncate">
                 {timeLabel}
               </span>

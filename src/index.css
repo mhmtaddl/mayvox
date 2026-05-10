@@ -879,6 +879,73 @@ button, a, input, [role="button"] {
   border-color: rgba(248, 113, 113, 0.16);
 }
 
+/* Icon-only action hover language: hit area remains, visual box stays invisible. */
+.mv-icon-action {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.mv-icon-action:hover {
+  background: transparent !important;
+}
+.mv-icon-action > svg {
+  transition: color 150ms ease, filter 150ms ease, transform 180ms ease;
+  will-change: transform, filter;
+}
+.mv-icon-action-accent:hover {
+  color: var(--theme-accent) !important;
+}
+.mv-icon-action-danger:hover {
+  color: rgb(251, 113, 133) !important;
+}
+.mv-icon-action-accent:hover > svg {
+  filter: none;
+}
+.mv-icon-action-danger:hover > svg {
+  filter: none;
+}
+.mv-notification-bell-has.mv-icon-action:hover,
+.mv-notification-bell-idle.mv-icon-action:hover {
+  color: var(--theme-accent) !important;
+}
+.mv-notification-bell-has.mv-icon-action:hover > svg,
+.mv-notification-bell-idle.mv-icon-action:hover > svg {
+  filter: none;
+}
+
+@keyframes mv-icon-gear-tick {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes mv-icon-message-pop {
+  0% { transform: translateY(0) scale(1); }
+  52% { transform: translateY(-1.5px) scale(1.035); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes mv-icon-bell-nudge {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  55% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes mv-icon-power-pulse {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.075); }
+  100% { transform: scale(1); }
+}
+.mv-icon-gear-hover:hover > svg {
+  animation: mv-icon-gear-tick 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 1;
+}
+.mv-icon-message-hover:hover > svg {
+  animation: mv-icon-message-pop 240ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.mv-icon-bell-hover:hover > svg {
+  transform-origin: 50% 0%;
+  animation: mv-icon-bell-nudge 300ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+.mv-icon-power-hover:hover > svg {
+  animation: mv-icon-power-pulse 260ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
 .mv-action-button,
 .mv-action-button-danger,
 .mv-action-button-ghost {
@@ -1317,6 +1384,50 @@ html {
   --overlay-picker-dot-hover: rgba(var(--theme-accent-rgb), 0.82);
   --overlay-picker-label: rgba(var(--glass-tint), 0.82);
   --overlay-picker-label-shadow: 0 1px 2px rgba(var(--shadow-base), 0.55);
+}
+
+.settings-content-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--glass-tint), 0.22) transparent;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar {
+  width: 3px !important;
+  height: 3px !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 24px;
+  background: rgba(var(--glass-tint), 0.22) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+}
+
+html .settings-shell .settings-content-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--glass-tint), 0.36) !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:single-button,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:start:decrement,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:end:increment,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:start:decrement,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  -webkit-appearance: none !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-corner {
+  background: transparent !important;
 }
 
 /* ─── Input surface — tema accent-tinted (mic/hoparlör butonlarıyla aynı aile) ─── */
@@ -1803,7 +1914,11 @@ html[data-theme-pack="frost-light"] .mv-notification-bell-idle {
   .bell-swing-loop,
   .bell-wave-l,
   .bell-wave-r,
-  .badge-pop { animation: none !important; }
+  .badge-pop,
+  .mv-icon-gear-hover:hover > svg,
+  .mv-icon-message-hover:hover > svg,
+  .mv-icon-bell-hover:hover > svg,
+  .mv-icon-power-hover:hover > svg { animation: none !important; }
 }
 
 /* ─── Discover: Katıl buton hover (theme-aware) ─── */
@@ -2598,7 +2713,7 @@ html .settings-flat-light .settings-shortcuts-card:hover,
 html .settings-flat-light .settings-shortcuts-card.surface-card:hover,
 html[data-theme-pack] .settings-flat-light .settings-shortcuts-card:hover,
 html[data-theme-pack] .settings-flat-light .settings-shortcuts-card.surface-card:hover {
-  background: var(--settings-inner-card-bg, var(--settings-card-bg)) !important;
+  background: var(--settings-card-bg) !important;
   border-color: var(--settings-border) !important;
   box-shadow: none !important;
   outline: none !important;
@@ -2606,17 +2721,64 @@ html[data-theme-pack] .settings-flat-light .settings-shortcuts-card.surface-card
 }
 
 html .settings-flat-light .settings-shortcuts-card,
-html .settings-flat-light .settings-shortcuts-card *,
 html[data-theme-pack] .settings-flat-light .settings-shortcuts-card,
-html[data-theme-pack] .settings-flat-light .settings-shortcuts-card * {
+html[data-theme-pack] .settings-flat-light .settings-shortcuts-card {
   transition: none !important;
   animation: none !important;
 }
 
-html .settings-flat-light .settings-shortcuts-card button:hover,
-html[data-theme-pack] .settings-flat-light .settings-shortcuts-card button:hover {
-  filter: none !important;
+html .settings-flat-light .settings-static-row-card,
+html[data-theme-pack] .settings-flat-light .settings-static-row-card,
+html .settings-flat-light .settings-static-row-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-static-row-card:hover {
+  background: var(--settings-card-bg) !important;
+  border-color: var(--settings-border) !important;
   box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+html .settings-flat-light .settings-account-page .settings-account-compact-card,
+html[data-theme-pack] .settings-flat-light .settings-account-page .settings-account-compact-card,
+html .settings-flat-light .settings-account-page .settings-account-compact-card:hover,
+html[data-theme-pack] .settings-flat-light .settings-account-page .settings-account-compact-card:hover,
+html .settings-flat-light .settings-account-page .settings-legal-tile,
+html[data-theme-pack] .settings-flat-light .settings-account-page .settings-legal-tile,
+html .settings-flat-light .settings-account-page .settings-legal-tile:hover,
+html[data-theme-pack] .settings-flat-light .settings-account-page .settings-legal-tile:hover {
+  background: var(--settings-card-bg) !important;
+  border-color: var(--settings-border) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+}
+
+html .settings-flat-light .settings-account-page .settings-account-compact-card > div:last-child {
+  padding: 12px !important;
+}
+
+html .settings-flat-light .settings-account-page .account-compact-input {
+  min-height: 34px;
+  padding-block: 7px !important;
+  padding-inline: 12px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+
+html .settings-flat-light .settings-account-page .account-compact-label {
+  font-size: 9px !important;
+  letter-spacing: 0.11em !important;
+}
+
+.settings-shortcut-group-card,
+.settings-shortcut-group-card:hover,
+.settings-shortcut-group-card:focus-within {
+  opacity: 1 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+  transition: none !important;
 }
 
 html .settings-flat-light .settings-content-card:hover,

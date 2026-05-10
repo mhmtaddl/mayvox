@@ -1290,7 +1290,7 @@ export default function ChatView() {
                     if (hasServerStaffRole) {
                       return (
                         <button onClick={() => { activeServerData && toggleServerSettingsPanel(activeServerData.id); setMobileLeftOpen(false); }} title="Sunucu Ayarları"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/8 transition-all duration-150">
+                          className="mv-icon-action mv-icon-action-accent mv-icon-gear-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]">
                           <Settings size={13} />
                         </button>
                       );
@@ -1501,7 +1501,7 @@ export default function ChatView() {
                   servers={sidebarServers} />
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
                   <button ref={dmToggleRef} onClick={() => { setDmPanelOpen(prev => !prev); setMobileRightOpen(false); }}
-                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+                    className={`mv-icon-action mv-icon-action-accent mv-icon-message-hover relative w-9 h-9 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${dmPanelOpen ? 'text-[var(--theme-accent)]' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)]' : 'text-[var(--theme-secondary-text)]'}`} title="Mesajlar">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       {dmUnreadCount > 0 && !dmPanelOpen && (
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" className="notif-icon-pulse" />
@@ -1517,8 +1517,8 @@ export default function ChatView() {
                       if (view === 'settings') { setView('chat'); }
                       else { setSettingsTarget('app'); setView('settings'); }
                     }}
-                    className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
-                    <Settings size={16} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+                    className={`mv-icon-action mv-icon-action-accent mv-icon-gear-hover relative w-9 h-9 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'}`} title="Ayarlar">
+                    <Settings size={16} />
                     {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
                   </button>
                   <NotificationBell
@@ -1585,7 +1585,7 @@ export default function ChatView() {
                       });
                     }}
                   />
-                  <button onClick={() => { setMobileRightOpen(false); confirmLogout(); }} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={16} /></button>
+                  <button onClick={() => { setMobileRightOpen(false); confirmLogout(); }} className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-9 h-9 flex items-center justify-center transition-colors duration-150 text-red-400/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25" title="Çıkış"><Power size={16} /></button>
                 </div>
               </motion.aside>
             </>
@@ -1773,7 +1773,7 @@ export default function ChatView() {
             servers={sidebarServers} />
           <div className="shrink-0 px-3 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
-              className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 ${dmPanelOpen ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)] hover:bg-[rgba(var(--notif-unread-rgb),0.10)]' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Mesajlar">
+              className={`mv-icon-action mv-icon-action-accent mv-icon-message-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${dmPanelOpen ? 'text-[var(--theme-accent)]' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)]' : 'text-[var(--theme-secondary-text)]'}`} title="Mesajlar">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {dmUnreadCount > 0 && !dmPanelOpen && (
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" className="notif-icon-pulse" />
@@ -1788,8 +1788,8 @@ export default function ChatView() {
                 if (view === 'settings') { setView('chat'); }
                 else { setSettingsTarget('app'); setView('settings'); }
               }}
-              className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 group/settings ${view === 'settings' ? 'text-[var(--theme-accent)] bg-[var(--theme-accent)]/8' : 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:bg-[rgba(var(--glass-tint),0.04)]'}`} title="Ayarlar">
-              <Settings size={14} className={`transition-transform duration-500 ${view === 'settings' ? 'rotate-180' : 'group-hover/settings:rotate-180'}`} />
+              className={`mv-icon-action mv-icon-action-accent mv-icon-gear-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${view === 'settings' ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]'}`} title="Ayarlar">
+              <Settings size={14} />
               {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
             </button>
             <NotificationBell
@@ -1856,7 +1856,7 @@ export default function ChatView() {
                 });
               }}
             />
-            <button onClick={confirmLogout} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-150 text-red-400/70 hover:text-red-400 hover:bg-red-500/8" title="Çıkış"><Power size={14} /></button>
+            <button onClick={confirmLogout} className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-8 h-8 flex items-center justify-center transition-colors duration-150 text-red-400/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25" title="Çıkış"><Power size={14} /></button>
           </div>
         </aside>
       </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
@@ -33,7 +33,7 @@ import ManagementUsersPanel from '../components/settings/sections/ManagementUser
 import LegalModal, { type LegalModalKind } from '../components/legal/LegalModal';
 import EmptyState from '../components/EmptyState';
 
-type MainTab = 'account' | 'app' | 'shortcuts' | 'admin';
+type MainTab = 'account' | 'app' | 'appearance' | 'shortcuts' | 'admin';
 type AdminSubTab = 'users' | 'servers';
 type SettingsSearchItem = {
   id: string;
@@ -64,7 +64,7 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     id: 'appearance',
-    tab: 'app',
+    tab: 'appearance',
     title: 'Görünüm yoğunluğu',
     description: 'Rahat ve kompakt görünüm modu.',
     keywords: ['görünüm', 'gorunum', 'kompakt', 'rahat', 'density', 'ui', 'arayüz', 'arayuz'],
@@ -72,7 +72,7 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     id: 'font-size',
-    tab: 'app',
+    tab: 'appearance',
     title: 'Yazı boyutu',
     description: 'Uygulama içindeki metinlerin okunabilirliğini ayarlar.',
     keywords: ['yazı', 'yazi', 'font', 'metin', 'büyüt', 'buyut', 'küçült', 'kucult', 'text'],
@@ -80,7 +80,7 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     id: 'dock-size',
-    tab: 'app',
+    tab: 'appearance',
     title: 'Alt kontrol çubuğu boyutu',
     description: 'Alt dock avatar, buton ve boşluk boyutunu ayarlar.',
     keywords: ['dock', 'alt bar', 'alt kontrol', 'kontrol çubuğu', 'kontrol cubugu', 'buton', 'boyut'],
@@ -88,7 +88,7 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     id: 'theme-packs',
-    tab: 'app',
+    tab: 'appearance',
     title: 'Tema paketleri',
     description: 'Renk, açık/koyu görünüm ve tema paketleri.',
     keywords: ['tema', 'renk', 'appearance', 'dark', 'light', 'açık', 'acik', 'koyu'],
@@ -96,7 +96,7 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     id: 'overlay',
-    tab: 'app',
+    tab: 'appearance',
     title: 'Oyun içi göstergeler',
     description: 'Overlay konumu, stil, boyut ve oyun içi kart ayarları.',
     keywords: ['overlay', 'oyun', 'gösterge', 'gosterge', 'konum', 'stil', 'kart', 'oyun içi', 'oyun ici'],
@@ -133,6 +133,14 @@ const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     description: 'Masaüstünde oynanan oyunu gösterme ayarları.',
     keywords: ['oyun', 'aktivite', 'game', 'activity', 'masaüstü', 'masaustu'],
     targetSectionId: 'game-activity',
+  },
+  {
+    id: 'close-behavior',
+    tab: 'app',
+    title: 'Kapatma Davranışı',
+    description: 'Çarpıya basınca gizli simgeye küçült veya uygulamayı kapat.',
+    keywords: ['kapatma', 'davranış', 'davranisi', 'çarpı', 'carpi', 'x', 'pencere', 'kapat', 'gizli simge', 'tray', 'küçült', 'kucult', 'tamamen kapat', 'çıkış', 'cikis', 'close', 'quit', 'minimize', 'system tray'],
+    targetSectionId: 'close-behavior',
   },
   {
     id: 'shortcuts',
@@ -233,7 +241,7 @@ function SettingsSectionCard({ children, className = '', commandTarget }: { chil
   return (
     <section
       data-command-target={commandTarget}
-      className={`settings-section-card min-w-0 rounded-2xl p-3 md:p-4 ${className}`}
+      className={`settings-section-card scroll-mt-5 min-w-0 rounded-2xl p-3 md:p-4 ${className}`}
     >
       {children}
     </section>
@@ -250,14 +258,14 @@ function LegalCard({ icon, title, description, onClick }: {
     <button
       type="button"
       onClick={onClick}
-      className="settings-account-card surface-card flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-[var(--surface-elevated)]"
+      className="settings-account-card settings-legal-tile surface-card flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left transition-colors"
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]/85">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]/85">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[12px] font-semibold leading-tight text-[var(--theme-text)]">{title}</p>
-        <p className="mt-0.5 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/60">{description}</p>
+        <p className="mt-0.5 text-[10px] leading-snug text-[var(--theme-secondary-text)]/56">{description}</p>
       </div>
     </button>
   );
@@ -301,8 +309,8 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
   // Responsive: picker genişliği grid kolonu tarafından yönetilir (min-width 0 ile
   // taşmaz). Aspect-ratio ile yükseklik orantılı; min/max height ara genişliklerde
   // picker'ın saçma büyümesini/küçülmesini engeller.
-  const ASPECT = '232 / 164';
-  const pad = 14;
+  const ASPECT = '232 / 150';
+  const pad = 10;
   const HIT = 24;
   const activeLabel = ANCHOR_POINTS.find(p => p.v === value)?.label ?? '';
 
@@ -315,17 +323,17 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
 
   return (
     <div
-      className="flex flex-col gap-1.5 w-full min-w-0"
+      className="flex flex-col gap-1 w-full min-w-0"
     >
       {/* KONUM başlığı — picker'ın dışında üst-orta (Stil/Boyut/Şeffaflık ile aynı stil) */}
-      <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Konum</div>
+      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/50 mb-1 px-0.5 text-center">Konum</div>
 
       <div
         className="relative rounded-xl overflow-hidden w-full"
         style={{
           aspectRatio: ASPECT,
-          minHeight: 150,
-          maxHeight: 240,
+          height: 'clamp(148px, 26vw, 172px)',
+          maxHeight: 172,
           background: bg,
           boxShadow: `inset 0 0 0 1px ${ringColor}, ${vignette}`,
           opacity: disabled ? 0.7 : 1,
@@ -345,9 +353,10 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
             backgroundImage:
               `linear-gradient(${gridColor} 1px, transparent 1px),` +
               ` linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
-            backgroundSize: '16px 16px',
-            maskImage: 'radial-gradient(ellipse at center, black 55%, transparent 95%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at center, black 55%, transparent 95%)',
+            backgroundSize: '18px 18px',
+            opacity: 0.62,
+            maskImage: 'radial-gradient(ellipse at center, black 45%, transparent 92%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 45%, transparent 92%)',
           }}
         />
         {/* Accent aura */}
@@ -355,12 +364,12 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
           aria-hidden
           style={{
             position: 'absolute', inset: 0,
-            background: 'radial-gradient(circle at 15% 25%, rgba(var(--theme-accent-rgb), 0.10), transparent 55%)',
+            background: 'radial-gradient(circle at 15% 25%, rgba(var(--theme-accent-rgb), 0.075), transparent 56%)',
           }}
         />
 
         <style>{`
-          .anchor-hit:hover .anchor-dot { transform: scale(1.6); background: var(--overlay-picker-dot-hover, rgba(var(--theme-accent-rgb), 0.55)); }
+          .anchor-hit:hover .anchor-dot { transform: scale(1.45); background: var(--overlay-picker-dot-hover, rgba(var(--theme-accent-rgb), 0.55)); }
           .anchor-hit:hover .anchor-dot.is-active { transform: none; }
         `}</style>
 
@@ -411,7 +420,7 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
                   className="anchor-dot"
                   style={{
                     display: 'block',
-                    width: 5, height: 5, borderRadius: '50%',
+                    width: 4, height: 4, borderRadius: '50%',
                     background: inactiveDotBg,
                     boxShadow: `inset 0 0 0 1px ${inactiveDotRing}`,
                     transition: 'all 140ms cubic-bezier(0.22,1,0.36,1)',
@@ -439,9 +448,9 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
             className="font-semibold truncate block"
             style={{
               // Container query — picker küçülünce yazı orantılı küçülür.
-              fontSize: 'clamp(10px, 8cqw, 13px)',
-              color: 'var(--overlay-picker-label, rgba(255,255,255,0.95))',
-              textShadow: 'var(--overlay-picker-label-shadow, 0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55))',
+              fontSize: 'clamp(9px, 5.8cqw, 11px)',
+              color: 'var(--overlay-picker-label, rgba(255,255,255,0.82))',
+              textShadow: 'var(--overlay-picker-label-shadow, 0 1px 2px rgba(0,0,0,0.72), 0 0 4px rgba(0,0,0,0.45))',
             }}
           >
             {activeLabel}
@@ -468,9 +477,9 @@ function OverlayBoardPreview({
   openLeft: boolean;
 }) {
   const cfg = {
-    small: { avatar: 16, name: 8, gap: 4 },
-    medium: { avatar: 20, name: 9, gap: 5 },
-    large: { avatar: 24, name: 10, gap: 6 },
+    small: { avatar: 14, name: 7, gap: 3 },
+    medium: { avatar: 17, name: 8, gap: 4 },
+    large: { avatar: 20, name: 9, gap: 5 },
   }[size];
   const name = displayName || 'Mayvox';
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || 'M';
@@ -518,7 +527,7 @@ function OverlayBoardPreview({
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        maxWidth: size === 'large' ? 78 : 66,
+        maxWidth: size === 'large' ? 68 : 58,
         lineHeight: 1.12,
       }}
     >
@@ -542,12 +551,12 @@ function OverlayBoardPreview({
     gap: cfg.gap,
     pointerEvents: 'none',
     zIndex: 4,
-    maxWidth: 128,
+    maxWidth: 110,
   };
 
   if (variant === 'card') {
     return (
-      <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '4px 7px', boxShadow: cardShadow }}>
+      <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 6px', boxShadow: cardShadow }}>
         {avatar}
         <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
           {nameNode}
@@ -572,7 +581,7 @@ function OverlayBoardPreview({
             background: cardBg,
             border: cardBorder,
             borderRadius: Math.round(cfg.avatar * 0.42),
-            padding: '3px 8px 3px 3px',
+             padding: '2px 7px 2px 2px',
             boxShadow: cardShadow,
             display: 'inline-flex',
             alignItems: 'center',
@@ -597,7 +606,7 @@ function OverlayBoardPreview({
     );
   }
   return (
-    <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '3px 8px 3px 3px', boxShadow: cardShadow }}>
+    <span style={{ ...common, background: cardBg, border: cardBorder, borderRadius: Math.round(cfg.avatar * 0.42), padding: '2px 7px 2px 2px', boxShadow: cardShadow }}>
       {avatar}
       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, textAlign: openLeft ? 'right' : 'left' }}>
         {nameNode}
@@ -900,13 +909,13 @@ function VoiceOverlayCard() {
         .vox-body {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 12px;
+          gap: 10px;
           align-items: stretch;
         }
         @container (min-width: 500px) {
           .vox-body {
-            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-            gap: 16px;
+            grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+            gap: 12px;
           }
         }
         .vox-right {
@@ -970,7 +979,7 @@ function VoiceOverlayCard() {
           2) Alt satır: toggles full-width (konum altından sağa uzar)
           Küçük pencerede üst satır flex-wrap ile stack'e düşer; birbirine girmez. */}
       <div
-        className="mt-4 flex flex-col gap-3"
+        className="mt-3 flex flex-col gap-2.5"
         style={{
           opacity: off ? 0.55 : 1,
           transition: 'opacity 180ms ease-out',
@@ -1089,7 +1098,7 @@ function VoiceOverlayCard() {
 function GameActivityCard() {
   const { gameActivityEnabled, setGameActivityEnabled } = useSettings();
   return (
-    <div data-command-target="game-activity" className="settings-account-card surface-card flex items-center gap-3 px-4 py-3 rounded-xl">
+    <div data-command-target="game-activity" className="settings-static-row-card settings-account-card surface-card scroll-mt-5 flex h-full min-h-[92px] items-center gap-3 px-4 py-3 rounded-xl">
       <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
         <Gamepad2 size={14} className="text-[var(--theme-accent)]/80" />
       </div>
@@ -1100,6 +1109,40 @@ function GameActivityCard() {
         </p>
       </div>
       <Toggle checked={gameActivityEnabled} onChange={() => setGameActivityEnabled(!gameActivityEnabled)} />
+    </div>
+  );
+}
+
+function CloseBehaviorCard() {
+  const { closeBehavior, setCloseBehavior } = useSettings();
+  const quitsOnClose = closeBehavior === 'quit';
+
+  return (
+    <div data-command-target="close-behavior" className="settings-static-row-card settings-account-card surface-card scroll-mt-5 flex h-full min-h-[92px] items-center gap-3 px-4 py-3 rounded-xl">
+      <div className="flex-1 min-w-0">
+        <p className="flex min-w-0 items-center gap-2 text-[12px] font-semibold text-[var(--theme-text)] leading-tight">
+          <span className="inline-flex h-[16px] w-[32px] shrink-0 items-center justify-center gap-1 rounded-[6px] bg-[rgba(var(--glass-tint),0.035)] px-1 shadow-[inset_0_0_0_1px_rgba(var(--glass-tint),0.055)]" aria-hidden="true">
+            <span className="h-[7px] w-[7px] rounded-[2px] bg-[rgba(var(--glass-tint),0.18)] shadow-[inset_0_0_0_1px_rgba(var(--glass-tint),0.11)]" />
+            <span className="h-[7px] w-[7px] rounded-[2px] bg-[rgba(var(--glass-tint),0.18)] shadow-[inset_0_0_0_1px_rgba(var(--glass-tint),0.11)]" />
+            <span className="inline-flex h-[8px] w-[8px] items-center justify-center rounded-[2px] bg-rose-500/22 text-rose-200/90 shadow-[inset_0_0_0_1px_rgba(251,113,133,0.20)]">
+              <X size={6} strokeWidth={3} />
+            </span>
+          </span>
+          <span className="truncate">Kapatma Davranışı</span>
+        </p>
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-1 leading-snug">
+          Açıkken çarpıya basınca uygulama tamamen kapanır.
+        </p>
+        <p className="text-[9.8px] font-semibold text-[var(--theme-secondary-text)]/48 mt-1 leading-snug">
+          {quitsOnClose ? 'Açık: tamamen kapatır.' : 'Kapalı: simgeye küçültür.'}
+        </p>
+      </div>
+      <div className="shrink-0">
+        <Toggle
+          checked={quitsOnClose}
+          onChange={() => setCloseBehavior(quitsOnClose ? 'tray' : 'quit')}
+        />
+      </div>
     </div>
   );
 }
@@ -1220,7 +1263,7 @@ function ShortcutsCard() {
           return (
             <div
               key={group}
-              className="rounded-xl border px-3 py-2.5"
+              className="settings-shortcut-group-card rounded-xl border px-3 py-2.5"
               style={{ borderColor: style.border, background: style.background }}
             >
               <p className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: style.text }}>{group}</p>
@@ -1286,22 +1329,57 @@ export default function SettingsView() {
   const { currentUser } = useUser();
   const { settingsTarget, setSettingsTarget } = useUI();
   const isAdmin = !!currentUser.isAdmin || !!currentUser.isPrimaryAdmin;
+  const settingsScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>('account');
   const [adminSub, setAdminSub] = useState<AdminSubTab>('users');
   const [legalModal, setLegalModal] = useState<LegalModalKind | null>(null);
   const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
   const showServersSub = !!currentUser.isPrimaryAdmin;
 
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const editable = target.closest('input, textarea, select, [contenteditable="true"]');
+      return !!editable;
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (isEditableTarget(event.target)) return;
+
+      const scroller = settingsScrollRef.current;
+      if (!scroller) return;
+
+      const smallStep = 64;
+      const pageStep = Math.max(160, scroller.clientHeight * 0.82);
+      let top: number | null = null;
+
+      if (event.key === 'ArrowDown') top = smallStep;
+      else if (event.key === 'ArrowUp') top = -smallStep;
+      else if (event.key === 'PageDown') top = pageStep;
+      else if (event.key === 'PageUp') top = -pageStep;
+      else if (event.key === 'Home') top = -scroller.scrollTop;
+      else if (event.key === 'End') top = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+
+      if (top === null) return;
+      event.preventDefault();
+      scroller.scrollBy({ top, behavior: 'auto' });
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   // Deep-link intent — bildirim tıklamasından / dock ikonundan gelen hedef
   // tab'ına otomatik geçer. 'invite_requests' AdminActionBar'da ek iş yapıyor;
-  // 'app' / 'account' sadece tab seçer, sonra temizlenir.
+  // 'app' / 'appearance' / 'account' sadece tab seçer, sonra temizlenir.
   useEffect(() => {
     if (!settingsTarget) return;
     if (settingsTarget === 'invite_requests' && isAdmin) {
       setActiveTab('admin');
       setAdminSub('users');
       // temizlik AdminActionBar'da
-    } else if (settingsTarget === 'app' || settingsTarget === 'shortcuts') {
+    } else if (settingsTarget === 'app' || settingsTarget === 'appearance' || settingsTarget === 'shortcuts') {
       setActiveTab(settingsTarget);
       setSettingsTarget(null);
     } else if (settingsTarget === 'account') {
@@ -1371,6 +1449,7 @@ export default function SettingsView() {
   const mainTabs: Array<{ key: MainTab; icon: React.ReactNode; label: string }> = [
     { key: 'account', icon: <UserIcon size={13} strokeWidth={2} />, label: 'Hesap' },
     { key: 'app', icon: <Palette size={13} strokeWidth={2} />, label: 'Uygulama' },
+    { key: 'appearance', icon: <Layers size={13} strokeWidth={2} />, label: 'Görünüm' },
     { key: 'shortcuts', icon: <Keyboard size={13} strokeWidth={2} />, label: 'Kısayollar' },
     ...(isAdmin ? [{ key: 'admin' as MainTab, icon: <ShieldCheck size={13} strokeWidth={2} />, label: 'Yönetim' }] : []),
   ];
@@ -1408,10 +1487,16 @@ export default function SettingsView() {
   };
 
   return (
-    <div className="settings-flat-light w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] px-2 md:px-4 xl:px-6">
+    <div className="settings-shell settings-flat-light flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
 
       {/* ── Header — başlık ve segmented nav dikey hizalı, central ── */}
-      <div className="flex flex-col gap-4 pt-4 pb-5 md:pt-6 md:pb-6">
+      <div
+        className="shrink-0"
+        style={{
+          background: 'var(--settings-page-bg, var(--theme-bg))',
+        }}
+      >
+      <div className="mx-auto flex w-full max-w-[1100px] min-w-0 flex-col gap-4 px-2 pt-4 pb-4 md:px-4 md:pt-5 md:pb-5 xl:px-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
             <Settings size={15} className="text-[var(--theme-accent)]" />
@@ -1446,6 +1531,13 @@ export default function SettingsView() {
           )}
         />
       </div>
+      </div>
+
+      <div
+        ref={settingsScrollRef}
+        className="settings-content-scrollbar min-h-0 flex-1 w-full min-w-0 overflow-y-auto overscroll-contain outline-none"
+      >
+      <div className="w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] pt-5 px-2 md:px-4 xl:px-6">
 
       {/* ── Content ── */}
       {normalizedSettingsSearchQuery ? (
@@ -1499,14 +1591,14 @@ export default function SettingsView() {
           transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
         >
           {effectiveTab === 'account' && (
-            <div className="flex flex-col gap-5 md:gap-6">
-              <SettingsSectionCard commandTarget="profile-photo">
+            <div className="settings-account-page flex flex-col gap-4">
+              <SettingsSectionCard commandTarget="profile-photo" className="p-3">
                 <DomainTitle icon={<UserIcon size={11} strokeWidth={2.2} />} title="Profil & Hesap" />
                 <AccountSection />
               </SettingsSectionCard>
-              <SettingsSectionCard commandTarget="legal">
+              <SettingsSectionCard commandTarget="legal" className="p-3">
                 <DomainTitle icon={<ShieldCheck size={11} strokeWidth={2.2} />} title="Hukuki" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                   <LegalCard
                     icon={<ShieldCheck size={14} strokeWidth={2} />}
                     title="KVKK Aydınlatma Metni"
@@ -1538,40 +1630,12 @@ export default function SettingsView() {
 
           {effectiveTab === 'app' && (
             <div className="flex flex-col gap-5 md:gap-6">
-              {/* Row-by-row grid: Görünüm + Oyun İçi Göstergeler aynı satırda, grid stretch ile
-                  yükseklikleri otomatik eşit. AppearanceSection (Tema Paketleri) içeriği
-                  küçük olsa da kart yan kartın yüksekliğine kadar uzar. */}
               <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
-                <SettingsSectionCard className="flex flex-col h-full" commandTarget="appearance">
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
-                  <div className="flex-1 flex flex-col">
-                    <AppearanceSection />
-                  </div>
+                <SettingsSectionCard commandTarget="performance">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  <PerformanceSection />
                 </SettingsSectionCard>
-                {isElectron() ? (
-                  <SettingsSectionCard className="flex flex-col h-full" commandTarget="voice-overlay">
-                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
-                    <div className="flex-1 flex flex-col">
-                      <VoiceOverlayCard />
-                    </div>
-                  </SettingsSectionCard>
-                ) : (
-                  <SettingsSectionCard className="flex flex-col h-full">
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                    <div className="flex-1 flex flex-col">
-                      <PerformanceSection />
-                    </div>
-                  </SettingsSectionCard>
-                )}
-
-                {isElectron() && (
-                  <SettingsSectionCard commandTarget="performance">
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                    <PerformanceSection />
-                  </SettingsSectionCard>
-                )}
-
-                <SettingsSectionCard className="self-start" commandTarget="sounds">
+                <SettingsSectionCard commandTarget="sounds">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
@@ -1581,40 +1645,29 @@ export default function SettingsView() {
                     <VoiceModeSection />
                   </SettingsSectionCard>
                 )}
-                {isElectron() && isGameActivityAvailable() && (
-                  <SettingsSectionCard commandTarget="game-activity">
-                    <DomainTitle icon={<Gamepad2 size={11} strokeWidth={2.2} />} title="Oyun" />
-                    <GameActivityCard />
-                  </SettingsSectionCard>
-                )}
               </div>
+
+              {isElectron() && (
+                <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
+                  {isGameActivityAvailable() && <GameActivityCard />}
+                  <CloseBehaviorCard />
+                </div>
+              )}
 
               {/* base–lg: tek kolon */}
               <div className="flex flex-col gap-5 xl:hidden">
-                <SettingsSectionCard commandTarget="appearance">
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
-                  <AppearanceSection />
+                <SettingsSectionCard commandTarget="performance">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
+                  <PerformanceSection />
                 </SettingsSectionCard>
                 <SettingsSectionCard commandTarget="sounds">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
-                {isElectron() && (
-                  <SettingsSectionCard commandTarget="voice-overlay">
-                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
-                    <VoiceOverlayCard />
-                  </SettingsSectionCard>
-                )}
-                <SettingsSectionCard commandTarget="performance">
-                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
-                  <PerformanceSection />
-                </SettingsSectionCard>
                 {isElectron() && isGameActivityAvailable() && (
-                  <SettingsSectionCard commandTarget="game-activity">
-                    <DomainTitle icon={<Gamepad2 size={11} strokeWidth={2.2} />} title="Oyun" />
-                    <GameActivityCard />
-                  </SettingsSectionCard>
+                  <GameActivityCard />
                 )}
+                {isElectron() && <CloseBehaviorCard />}
                 {showVoiceMode && (
                   <SettingsSectionCard>
                     <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
@@ -1625,8 +1678,42 @@ export default function SettingsView() {
             </div>
           )}
 
+          {effectiveTab === 'appearance' && (
+            <div className="flex flex-col gap-5 md:gap-6">
+              <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
+                <SettingsSectionCard className="flex flex-col h-full" commandTarget="appearance">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
+                  <div className="flex-1 flex flex-col">
+                    <AppearanceSection />
+                  </div>
+                </SettingsSectionCard>
+                {isElectron() && (
+                  <SettingsSectionCard className="flex flex-col h-full" commandTarget="voice-overlay">
+                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                    <div className="flex-1 flex flex-col">
+                      <VoiceOverlayCard />
+                    </div>
+                  </SettingsSectionCard>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-5 xl:hidden">
+                <SettingsSectionCard commandTarget="appearance">
+                  <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Görünüm" />
+                  <AppearanceSection />
+                </SettingsSectionCard>
+                {isElectron() && (
+                  <SettingsSectionCard commandTarget="voice-overlay">
+                    <DomainTitle icon={<Layers size={11} strokeWidth={2.2} />} title="Oyun İçi Göstergeler" />
+                    <VoiceOverlayCard />
+                  </SettingsSectionCard>
+                )}
+              </div>
+            </div>
+          )}
+
           {effectiveTab === 'shortcuts' && (
-            <div data-command-target="shortcuts">
+            <div data-command-target="shortcuts" className="scroll-mt-5">
               <ShortcutsCard />
             </div>
           )}
@@ -1687,6 +1774,8 @@ export default function SettingsView() {
         onClose={() => setLegalModal(null)}
       />
 
+    </div>
+    </div>
     </div>
   );
 }

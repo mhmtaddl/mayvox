@@ -181,8 +181,7 @@ export default function FriendsSidebarContent({
             <span className="mv-font-message text-[13px] font-semibold text-[var(--theme-text)] leading-[18px] truncate min-w-0 shrink">
               {publicName}
             </span>
-            <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/70 shrink-0 tabular-nums">{user.age}</span>
-            <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
+            <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
           </div>
           <div className="mv-font-meta flex items-center gap-1.5 mt-[2px] min-w-0 overflow-hidden whitespace-nowrap text-[11px] leading-[13px] font-medium text-[var(--theme-secondary-text)]/75">
             <span className="inline-flex items-center shrink-0" title={statusLabel} aria-label={statusLabel}>
@@ -228,23 +227,23 @@ export default function FriendsSidebarContent({
                 onClick={(e) => { e.stopPropagation(); handleCancelInvite?.(user.id); }}
                 title="Daveti iptal et"
                 aria-label="Daveti iptal et"
-                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-blue-400 bg-blue-500/10 hover:bg-red-500/20 hover:text-red-400 transition-colors group/cancel"
+                className="group/action shrink-0 w-6 h-6 flex items-center justify-center bg-transparent text-blue-300/70 hover:text-rose-300 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse group-hover/cancel:hidden" />
-                <X size={12} className="hidden group-hover/cancel:block" />
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse group-hover/action:hidden" />
+                <X size={12} className="hidden group-hover/action:block transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(251,113,133,0.30)]" />
               </button>
             );
           }
-          if (status === 'accepted') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-emerald-400 bg-emerald-500/10"><Check size={12} /></span>;
-          if (status === 'rejected') return <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-red-400 bg-red-500/10"><X size={12} /></span>;
+          if (status === 'accepted') return <span className="shrink-0 w-6 h-6 flex items-center justify-center text-emerald-300/75"><Check size={12} /></span>;
+          if (status === 'rejected') return <span className="shrink-0 w-6 h-6 flex items-center justify-center text-rose-300/70"><X size={12} /></span>;
           return (
             <button
               disabled={onCooldown}
               onClick={(e) => { e.stopPropagation(); handleInviteUser(user.id); }}
               title={onCooldown ? `${remaining}s sonra tekrar davet edebilirsiniz` : 'Odaya davet et'}
-              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-default"
+              className="group/action shrink-0 w-6 h-6 flex items-center justify-center bg-transparent opacity-0 group-hover:opacity-100 transition-[opacity,color] text-emerald-300/70 hover:text-emerald-300 disabled:opacity-30 disabled:cursor-default focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]"
             >
-              {onCooldown ? <span className="text-[8px] font-bold">{remaining}</span> : <PhoneCall size={13} />}
+              {onCooldown ? <span className="text-[8px] font-bold">{remaining}</span> : <PhoneCall size={13} className="transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(110,231,183,0.28)]" />}
             </button>
           );
         })()}
@@ -292,8 +291,7 @@ export default function FriendsSidebarContent({
           <span className={`mv-font-message text-[13px] font-medium text-[var(--theme-text)] ${isDesktop ? 'opacity-80' : ''} leading-[18px] truncate min-w-0 shrink`}>
             {publicName}
           </span>
-          <span className={`text-[10px] font-semibold text-[var(--theme-secondary-text)]${isDesktop ? '/60' : ''} shrink-0 tabular-nums`}>{user.age}</span>
-          <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
+          <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
           {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (

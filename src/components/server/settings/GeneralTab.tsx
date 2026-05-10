@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { type Server, type ServerMember, getMembers } from '../../../lib/serverService';
 import { uploadServerLogo } from '../../../lib/backendClient';
+import { verifyCurrentPassword } from '../../../lib/authClient';
 import AvatarCropModal from '../../AvatarCropModal';
 import AvatarContent from '../../AvatarContent';
 import { fmtDate, memberDisplayName } from './shared';
@@ -252,6 +253,8 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   const [saving, setSaving] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletePasswordError, setDeletePasswordError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [leaveModal, setLeaveModal] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -368,6 +371,13 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     setCopied(true);
     showToast('Adres kopyalandı');
     setTimeout(() => setCopied(false), 1800);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal(false);
+    setDeleteConfirm('');
+    setDeletePassword('');
+    setDeletePasswordError('');
   };
 
   return (
@@ -690,16 +700,47 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                 ' !border-red-500/25 focus:!border-red-500/55 focus:!shadow-[0_0_0_4px_rgba(239,68,68,0.10)] focus:!bg-red-500/[0.04]'
               }
             />
+            <label className="block text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/55 mt-4 mb-2">
+              Hesap parolanı gir
+            </label>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={e => {
+                setDeletePassword(e.target.value);
+                if (deletePasswordError) setDeletePasswordError('');
+              }}
+              placeholder="Parola"
+              autoComplete="current-password"
+              className={
+                INPUT_BASE +
+                ' !border-red-500/25 focus:!border-red-500/55 focus:!shadow-[0_0_0_4px_rgba(239,68,68,0.10)] focus:!bg-red-500/[0.04]'
+              }
+            />
+            {deletePasswordError && (
+              <p className="mt-2 text-[11px] font-medium text-red-400">
+                {deletePasswordError}
+              </p>
+            )}
             <div className="flex gap-2 justify-end mt-5">
-              <GhostButton onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>
+              <GhostButton onClick={closeDeleteModal}>
                 Vazgeç
               </GhostButton>
               <DangerButton
                 onClick={async () => {
                   setDeleting(true);
-                  try { await onDelete(); } finally { setDeleting(false); }
+                  setDeletePasswordError('');
+                  try {
+                    await verifyCurrentPassword(deletePassword);
+                    await onDelete();
+                    closeDeleteModal();
+                  } catch (err: any) {
+                    setDeletePasswordError(err?.message || 'Parola doğrulanamadı');
+                  } finally {
+                    setDeleting(false);
+                  }
                 }}
-                disabled={deleteConfirm !== server.name || deleting}
+                disabled={deleteConfirm !== server.name || !deletePassword || deleting}
               >
                 {deleting ? 'Siliniyor...' : 'Kalıcı Olarak Sil'}
               </DangerButton>

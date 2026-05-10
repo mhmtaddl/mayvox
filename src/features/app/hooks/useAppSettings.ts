@@ -3,7 +3,7 @@
  * Tema CSS efekti dahil. Hiçbir dış state'e bağımlılığı yok (saf settings domain).
  */
 import { useState, useEffect, useRef } from 'react';
-import { type UiDensity, type VoiceMode } from '../../../contexts/SettingsCtx';
+import { type CloseBehavior, type UiDensity, type VoiceMode } from '../../../contexts/SettingsCtx';
 import type { OverlayDisplayMode } from '../../../overlay/types';
 import {
   THEME_PACKS,
@@ -22,6 +22,11 @@ const UI_FONT_SCALE_STEPS = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15] as 
 const DEFAULT_UI_FONT_SCALE = 0.8;
 const UI_DOCK_SCALE_STEPS = [0.8, 0.9, 1, 1.1, 1.2] as const;
 const DEFAULT_UI_DOCK_SCALE = 0.8;
+const CLOSE_BEHAVIOR_STORAGE_KEY = 'mayvox-close-behavior';
+
+function sanitizeCloseBehavior(value: string | null): CloseBehavior {
+  return value === 'quit' ? 'quit' : 'tray';
+}
 
 function sanitizeUiFontScale(value: string | number | null): number {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -325,6 +330,21 @@ export function useAppSettings() {
     setGameActivityEnabledState(v);
   };
 
+  const [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior>(() => (
+    sanitizeCloseBehavior(localStorage.getItem(CLOSE_BEHAVIOR_STORAGE_KEY))
+  ));
+  const setCloseBehavior = (v: CloseBehavior) => {
+    const next = sanitizeCloseBehavior(v);
+    localStorage.setItem(CLOSE_BEHAVIOR_STORAGE_KEY, next);
+    setCloseBehaviorState(next);
+  };
+  useEffect(() => {
+    const api = (window as Window & {
+      electronApp?: { setCloseBehavior?: (behavior: CloseBehavior) => void };
+    }).electronApp;
+    api?.setCloseBehavior?.(closeBehavior);
+  }, [closeBehavior]);
+
   // ── Oyun içi ses overlay (Electron desktop, default AÇIK) ──
   // Default konum: sol kenar üst-orta hizası (left-top-mid).
   // Kullanıcı ilk açılışta hemen görebilsin, overlay sola hizalı üst bölgede.
@@ -444,6 +464,7 @@ export function useAppSettings() {
     autoLeaveMinutes, setAutoLeaveMinutes,
     showLastSeen, setShowLastSeenLocal,
     gameActivityEnabled, setGameActivityEnabled,
+    closeBehavior, setCloseBehavior,
     overlayEnabled, setOverlayEnabled,
     overlayPosition, setOverlayPosition,
     overlaySize, setOverlaySize,

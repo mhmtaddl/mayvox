@@ -136,11 +136,11 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
         </div>
 
         {/* Form */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-3.5 pb-4">
           {/* Room Mode Selection — sadece create modunda */}
           {roomModal.type === 'create' && (
-            <div className="mb-4">
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Oda Modu</label>
+            <div className="mb-3.5">
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Oda Modu</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {ROOM_MODE_LIST.map(m => {
                   const sel = roomModal.mode === m.id;
@@ -174,8 +174,8 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
           )}
 
-          <div className="mb-4">
-            <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Preset</label>
+          <div className="mb-3.5">
+            <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Preset</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {CHANNEL_SEMANTIC_PRESETS.map(preset => {
                 const Icon = channelIconComponents[preset.iconName];
@@ -199,9 +199,9 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
           </div>
 
-          <div className="mb-4 grid sm:grid-cols-2 gap-4">
+          <div className="mb-3.5 grid sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">Palette</label>
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Palette</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {CHANNEL_ICON_COLOR_OPTIONS.map(option => {
                   const selected = selectedIconColor === option.value;
@@ -231,7 +231,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-2">İkonlar</label>
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">İkonlar</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {QUICK_CHANNEL_ICON_OPTIONS.map(option => {
                   const Icon = channelIconComponents[option.id];
@@ -269,10 +269,10 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
 
           {iconPickerOpen && (
             <div
-              className="mb-4 rounded-xl border p-3"
+              className="mb-3.5 rounded-xl border p-2.5"
               style={{ background: 'var(--surface-soft)', borderColor: 'rgba(var(--glass-tint),0.10)' }}
             >
-              <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
                 <span className="text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em]">İkon Havuzu</span>
                 <button
                   type="button"
@@ -283,7 +283,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                   ×
                 </button>
               </div>
-              <div className="grid grid-cols-5 gap-2 max-h-[220px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-7 gap-1.5 max-h-[168px] overflow-y-auto pr-1">
                 {CHANNEL_ICON_POOL_OPTIONS.map(option => {
                   const Icon = channelIconComponents[option.id];
                   const selected = selectedIconName === option.id;
@@ -297,10 +297,10 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                         onUpdate({ iconName: option.id });
                         setIconPickerOpen(false);
                       }}
-                      className="h-9 rounded-lg flex items-center justify-center border transition-all duration-150 active:scale-95 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/35"
+                      className="h-7 rounded-lg flex items-center justify-center border transition-[color,border-color,background,transform] duration-150 active:scale-95 text-[var(--theme-secondary-text)] hover:text-[var(--theme-accent)] hover:border-[var(--theme-border)]/30"
                       style={getIconTileStyle(selected, selectedIconColor)}
                     >
-                      {Icon && <Icon size={17} />}
+                      {Icon && <Icon size={14} />}
                     </button>
                   );
                 })}
@@ -309,21 +309,21 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
           )}
 
           {/* Group A: Temel bilgiler */}
-          <div className="grid sm:grid-cols-[1fr_132px] gap-3">
+          <div className="grid sm:grid-cols-[1fr_124px] gap-3">
             <div>
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Oda İsmi</label>
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1">Oda İsmi</label>
               <input
                 autoFocus
                 type="text"
                 placeholder="ör: Genel Sohbet"
-                className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40"
+                className="h-10 w-full rounded-lg px-3 text-[13px] font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40 placeholder:font-medium"
                 style={{
-                  background: 'rgba(var(--shadow-base),0.15)',
-                  border: '1px solid rgba(var(--glass-tint),0.06)',
-                  boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
+                  background: 'rgba(var(--shadow-base),0.13)',
+                  border: '1px solid rgba(var(--glass-tint),0.08)',
+                  boxShadow: 'inset 0 1px 2px rgba(var(--shadow-base),0.08)',
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.2)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.06)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.15)'; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.34)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px rgba(var(--shadow-base),0.08), 0 0 0 2px rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.17)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px rgba(var(--shadow-base),0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.13)'; }}
                 value={roomModal.name}
                 onChange={(e) => onUpdate({ name: e.target.value })}
                 onKeyDown={(e) => {
@@ -334,31 +334,43 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1.5">Kişi Limiti</label>
+              <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1">Kişi Limiti</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Sınırsız"
-                className="w-full rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-10 w-full rounded-lg px-3 text-[13px] font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40 placeholder:font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 style={{
-                  background: 'rgba(var(--shadow-base),0.15)',
-                  border: '1px solid rgba(var(--glass-tint),0.06)',
-                  boxShadow: 'inset 0 1px 3px rgba(var(--shadow-base),0.1)',
+                  background: 'rgba(var(--shadow-base),0.13)',
+                  border: '1px solid rgba(var(--glass-tint),0.08)',
+                  boxShadow: 'inset 0 1px 2px rgba(var(--shadow-base),0.08)',
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.4)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1), 0 0 0 3px rgba(var(--theme-accent-rgb), 0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.2)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.06)`; e.currentTarget.style.boxShadow = `inset 0 1px 3px rgba(var(--shadow-base),0.1)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.15)'; }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = `rgba(var(--theme-accent-rgb), 0.34)`;
+                  e.currentTarget.style.boxShadow = `inset 0 1px 2px rgba(var(--shadow-base),0.08), 0 0 0 2px rgba(var(--theme-accent-rgb), 0.08)`;
+                  e.currentTarget.style.background = 'rgba(var(--shadow-base),0.17)';
+                  if (e.currentTarget.value === '0') {
+                    const input = e.currentTarget;
+                    requestAnimationFrame(() => input.select());
+                  }
+                }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = `rgba(var(--glass-tint),0.08)`; e.currentTarget.style.boxShadow = `inset 0 1px 2px rgba(var(--shadow-base),0.08)`; e.currentTarget.style.background = 'rgba(var(--shadow-base),0.13)'; }}
                 value={roomModal.maxUsers}
-                onChange={(e) => onUpdate({ maxUsers: parseInt(e.target.value) || 0 })}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '');
+                  onUpdate({ maxUsers: digits === '' ? 0 : Number(digits) });
+                }}
               />
-              <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-1.5 ml-0.5">Boş veya 0 bırakırsanız sınır olmaz.</p>
+              <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-1 ml-0.5">Boş veya 0 bırakırsanız sınır olmaz.</p>
             </div>
           </div>
 
           {/* Divider */}
-          <div className="my-5 h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.08), transparent)` }} />
+          <div className="my-4 h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(var(--theme-accent-rgb), 0.08), transparent)` }} />
 
           {/* Group B: Gizlilik + Kalıcılık ayarları */}
-          <div className="space-y-3.5">
+          <div className="space-y-2.5">
             {/* Oda Kalıcılığı — create modunda, opt-in toggle.
                 Default OFF: geçici oda (auto-delete countdown).
                 ON: kalıcı oda (kota tüketir, silinmedikçe kalır). */}
@@ -370,10 +382,10 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                 onUpdate({ isPersistent: !persistActive });
               };
               return (
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Oda Kalıcılığı</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Oda Kalıcılığı</p>
                       <InfinityIcon size={12} className={`shrink-0 ${persistActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/40'}`} />
                       <span
                         className="shrink-0 inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold tabular-nums"
@@ -386,7 +398,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                         {noQuotaPlan ? 'Plan desteklemiyor' : `${persistentInfo!.remaining} / ${persistentInfo!.quota}`}
                       </span>
                     </div>
-                    <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+                    <p className="text-[9.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
                       {noQuotaPlan
                         ? 'Bu planda kalıcı oda hakkın yok. Oda geçici, boşalınca silinir.'
                         : persistActive
@@ -402,20 +414,20 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                     aria-checked={persistActive}
                     disabled={toggleDisabled}
                     onClick={onToggle}
-                    className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${toggleDisabled ? 'opacity-40 cursor-default' : ''} ${persistActive && !toggleDisabled ? '' : 'bg-[var(--theme-border)]'}`}
-                    style={persistActive && !toggleDisabled ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
+                    className={`relative w-9 h-5 rounded-full transition-all duration-200 shrink-0 ${toggleDisabled ? 'opacity-40 cursor-default' : ''} ${persistActive && !toggleDisabled ? '' : 'bg-[var(--theme-border)]'}`}
+                    style={persistActive && !toggleDisabled ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 6px rgba(var(--theme-accent-rgb), 0.20)` } : undefined}
                     title={toggleDisabled ? (noQuotaPlan ? 'Bu planda kalıcı oda hakkı yok' : 'Hakkın doldu') : undefined}
                   >
-                    <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${persistActive && !toggleDisabled ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
+                    <span className={`absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white transition-all duration-200 ${persistActive && !toggleDisabled ? 'left-[19px] shadow-md' : 'left-[3px] shadow-sm'}`} />
                   </button>
                 </div>
               );
             })()}
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
-                <p className="text-[13px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>
-                <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Kanal listesinde görünmez, sadece davet ile ulaşılır.</p>
+                <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Gizli Oda</p>
+                <p className="text-[9.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Kanal listesinde görünmez, sadece davet ile ulaşılır.</p>
               </div>
               <button
                 type="button"
@@ -425,19 +437,19 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                   const newIsHidden = !roomModal.isHidden;
                   onUpdate({ isHidden: newIsHidden, isInviteOnly: newIsHidden ? true : roomModal.isInviteOnly });
                 }}
-                className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${
+                className={`relative w-9 h-5 rounded-full transition-all duration-200 shrink-0 ${
                   roomModal.isHidden ? '' : 'bg-[var(--theme-border)]'
                 }`}
-                style={roomModal.isHidden ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
+                style={roomModal.isHidden ? { backgroundColor: 'var(--theme-accent)', boxShadow: `0 0 6px rgba(var(--theme-accent-rgb), 0.20)` } : undefined}
               >
-                <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${roomModal.isHidden ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
+                <span className={`absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white transition-all duration-200 ${roomModal.isHidden ? 'left-[19px] shadow-md' : 'left-[3px] shadow-sm'}`} />
               </button>
             </div>
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
-                <p className={`text-[13px] font-semibold leading-tight ${roomModal.isHidden ? 'text-[var(--theme-secondary-text)]/40' : 'text-[var(--theme-text)]'}`}>Davetle Giriş</p>
-                <p className="text-[10px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Sadece davet edilen kullanıcılar katılabilir.</p>
+                <p className={`text-[12.5px] font-semibold leading-tight ${roomModal.isHidden ? 'text-[var(--theme-secondary-text)]/40' : 'text-[var(--theme-text)]'}`}>Davetle Giriş</p>
+                <p className="text-[9.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">Sadece davet edilen kullanıcılar katılabilir.</p>
               </div>
               <button
                 type="button"
@@ -445,14 +457,14 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
                 aria-checked={roomModal.isInviteOnly}
                 disabled={roomModal.isHidden}
                 onClick={() => { if (!roomModal.isHidden) onUpdate({ isInviteOnly: !roomModal.isInviteOnly }); }}
-                className={`relative w-10 h-[22px] rounded-full transition-all duration-200 shrink-0 ${
+                className={`relative w-9 h-5 rounded-full transition-all duration-200 shrink-0 ${
                   roomModal.isHidden ? 'opacity-40 cursor-default' : ''
                 } ${
                   roomModal.isInviteOnly && !roomModal.isHidden ? '' : 'bg-[var(--theme-border)]'
                 }`}
-                style={roomModal.isInviteOnly ? { backgroundColor: 'var(--theme-accent)', boxShadow: roomModal.isHidden ? 'none' : `0 0 8px rgba(var(--theme-accent-rgb), 0.25)` } : undefined}
+                style={roomModal.isInviteOnly ? { backgroundColor: 'var(--theme-accent)', boxShadow: roomModal.isHidden ? 'none' : `0 0 6px rgba(var(--theme-accent-rgb), 0.20)` } : undefined}
               >
-                <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white transition-all duration-200 ${roomModal.isInviteOnly ? 'left-[22px] shadow-md' : 'left-[3px] shadow-sm'}`} />
+                <span className={`absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white transition-all duration-200 ${roomModal.isInviteOnly ? 'left-[19px]' : 'left-[3px]'} shadow-sm`} />
               </button>
             </div>
           </div>

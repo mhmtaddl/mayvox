@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Search, X, UserPlus, UserMinus, Check, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAllProfiles } from '../lib/backendClient';
@@ -35,11 +35,12 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend, currentUser } = useUser();
+  const { getRelationship, sendRequest, acceptRequest, rejectRequest, cancelRequest, removeFriend, currentUser, allUsers } = useUser();
   const { setToastMsg } = useUI();
   const { openConfirm } = useConfirm();
 
   const isCenter = variant === 'center';
+  const presenceById = useMemo(() => new Map(allUsers.map(user => [user.id, user])), [allUsers]);
 
   const searchUsers = useCallback(async (q: string) => {
     // Normalize: trim, collapse spaces, strip leading @
@@ -143,6 +144,15 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
 
   const displayName = (r: SearchResult) => getPublicDisplayName(r);
 
+  const getAvatarStatusText = (user: SearchResult) => {
+    const presenceUser = presenceById.get(user.id);
+    if (!presenceUser) return 'Çevrimdışı';
+    if (presenceUser.status !== 'online') return 'Çevrimdışı';
+    return presenceUser.statusText && presenceUser.statusText !== 'Aktif'
+      ? presenceUser.statusText
+      : 'Online';
+  };
+
   const openUserCard = (user: SearchResult, position: { x: number; y: number }) => {
     if (!onUserClick) return;
     onUserClick(user, position);
@@ -187,16 +197,18 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
   const renderAction = (user: SearchResult) => {
     const rel = getRelationship(user.id);
     const name = displayName(user);
+    const iconActionClass = 'group/action w-8 h-8 rounded-lg flex items-center justify-center bg-transparent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.34)]';
 
     switch (rel) {
       case 'friend':
         return (
           <button
             onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'remove'); }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            className={`${iconActionClass} text-red-300/45 hover:text-rose-300`}
             title="Arkadaşı sil"
+            aria-label="Arkadaşı sil"
           >
-            <UserMinus size={13} />
+            <UserMinus size={14} className="transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(251,113,133,0.34)]" />
           </button>
         );
 
@@ -223,17 +235,19 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
           <div className="flex items-center gap-1">
             <button
               onClick={(e) => { e.stopPropagation(); handleAccept(user.id, name); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+              className={`${iconActionClass} text-emerald-300/55 hover:text-emerald-300`}
               title="Kabul et"
+              aria-label="Arkadaşlık isteğini kabul et"
             >
-              <Check size={14} strokeWidth={2.5} />
+              <Check size={14} strokeWidth={2.5} className="transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(110,231,183,0.30)]" />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReject(user.id); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className={`${iconActionClass} text-red-300/40 hover:text-rose-300`}
               title="Reddet"
+              aria-label="Arkadaşlık isteğini reddet"
             >
-              <X size={13} />
+              <X size={13} className="transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(251,113,133,0.30)]" />
             </button>
           </div>
         );
@@ -242,10 +256,11 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
         return (
           <button
             onClick={(e) => { e.stopPropagation(); triggerConfirm(user.id, name, 'send'); }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] opacity-50 hover:opacity-90 hover:bg-[rgba(var(--theme-accent-rgb),0.08)] transition-all"
-            title="Arkadaş isteği gönder"
+            className={`${iconActionClass} text-[var(--theme-accent)] opacity-50 hover:opacity-95`}
+            title="Arkadaş olarak ekle"
+            aria-label="Arkadaş olarak ekle"
           >
-            <UserPlus size={13} />
+            <UserPlus size={14} className="transition-[filter] duration-150 group-hover/action:drop-shadow-[0_0_7px_rgba(var(--theme-accent-rgb),0.34)]" />
           </button>
         );
     }
@@ -255,11 +270,6 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
     const rel = getRelationship(user.id);
     return (
       <>
-        {rel === 'friend' && (
-          <span className="rounded-full bg-emerald-500/10 px-1.5 py-[2px] text-[8px] font-bold text-emerald-400/70 uppercase tracking-wide">
-            Arkadaş
-          </span>
-        )}
         {rel === 'incoming' && (
           <span className="rounded-full px-1.5 py-[2px] text-[8px] font-bold uppercase tracking-wide" style={{ color: 'var(--theme-accent)', background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
             İstek geldi
@@ -331,47 +341,53 @@ export default function SocialSearchHub({ currentUserId, variant = 'center', onU
               </div>
             ) : results.length > 0 ? (
               <div className="py-1.5">
-                {results.map(user => (
-                  <div
-                    key={user.id}
-                    role={onUserClick ? 'button' : undefined}
-                    tabIndex={onUserClick ? 0 : undefined}
-                    className={`flex items-start gap-3 px-3 py-2 transition-all duration-100 rounded-lg mx-1 group ${onUserClick ? 'cursor-pointer' : ''}`}
-                    style={{ background: 'transparent' }}
-                    onClick={(e) => openUserCard(user, { x: e.clientX, y: e.clientY })}
-                    onKeyDown={(e) => {
-                      if ((e.key === 'Enter' || e.key === ' ') && onUserClick) {
-                        e.preventDefault();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        openUserCard(user, { x: rect.right - 20, y: rect.top + 8 });
-                      }
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover, rgba(var(--glass-tint),0.05))'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {/* Avatar */}
-                    <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
-                      <AvatarContent avatar={user.avatar} statusText={(user as any).statusText} firstName={user.displayName || user.firstName} name={displayName(user)} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
-                    </div>
-                    {/* Info */}
-                    <div className="flex-1 min-w-0 pt-[1px]">
-                      <p
-                        className="text-[12px] font-medium leading-snug whitespace-normal"
-                        style={{ color: 'var(--text-primary)', overflowWrap: 'anywhere' }}
-                        title={displayName(user)}
-                      >
-                        {displayName(user)}
-                      </p>
-                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-                        {getStatusBadges(user)}
+                {results.map(user => {
+                  const rel = getRelationship(user.id);
+                  const hasStatusBadge = rel === 'incoming' || rel === 'outgoing';
+                  return (
+                    <div
+                      key={user.id}
+                      role={onUserClick ? 'button' : undefined}
+                      tabIndex={onUserClick ? 0 : undefined}
+                      className={`flex items-center gap-3 px-3 py-2 transition-all duration-100 rounded-lg mx-1 group ${onUserClick ? 'cursor-pointer' : ''}`}
+                      style={{ background: 'transparent' }}
+                      onClick={(e) => openUserCard(user, { x: e.clientX, y: e.clientY })}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && onUserClick) {
+                          e.preventDefault();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          openUserCard(user, { x: rect.right - 20, y: rect.top + 8 });
+                        }
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover, rgba(var(--glass-tint),0.05))'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      {/* Avatar */}
+                      <div className="shrink-0 w-9 h-9 overflow-hidden avatar-squircle flex items-center justify-center" style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}>
+                        <AvatarContent avatar={user.avatar} statusText={getAvatarStatusText(user)} firstName={user.displayName || user.firstName} name={displayName(user)} letterClassName="text-[10px] font-bold text-[var(--theme-accent)] opacity-70" />
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="text-[12px] font-medium leading-snug whitespace-normal"
+                          style={{ color: 'var(--text-primary)', overflowWrap: 'anywhere' }}
+                          title={displayName(user)}
+                        >
+                          {displayName(user)}
+                        </p>
+                        {hasStatusBadge && (
+                          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                            {getStatusBadges(user)}
+                          </div>
+                        )}
+                      </div>
+                      {/* Action */}
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {renderAction(user)}
                       </div>
                     </div>
-                    {/* Action */}
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {renderAction(user)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="px-4 py-5 text-center">

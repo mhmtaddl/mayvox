@@ -82,6 +82,7 @@ function sendPtt(channel, payload) {
 // Tray & quit state
 let tray = null;
 let isQuitting = false;
+let closeBehavior = "tray";
 let authWindowMode = false;
 let preAuthBounds = null;
 
@@ -348,6 +349,12 @@ ipcMain.on("tray:set-channel", (_e, channelName) => {
   if (win) updateTrayMenu(win, channelName || null);
 });
 
+ipcMain.on("settings:set-close-behavior", (_event, behavior) => {
+  if (behavior !== "tray" && behavior !== "quit") return;
+  closeBehavior = behavior;
+  logger.info("Close behavior updated", { closeBehavior });
+});
+
 // ── Splash → Main pencere geçişi ─────────────────────────────────────────────
 // Splash: ayrı HTML, sadece logo + CSS nefes animasyonu. React yüklemez.
 // Main: React uygulaması, show=false ile arka planda yüklenir.
@@ -527,6 +534,11 @@ function createMainWindow(boundsOverride = null) {
       logger.info("Window close: quitting mode — pencere kapanacak");
       return;
     }
+    if (closeBehavior === "quit") {
+      isQuitting = true;
+      logger.info("Window close: user selected quit behavior");
+      return;
+    }
     e.preventDefault();
     win.hide();
   });
@@ -670,6 +682,11 @@ ipcMain.on("window:drag-move", moveWindowDrag);
 ipcMain.on("window:drag-end", endWindowDrag);
 ipcMain.on("window:close", (e) => withWin(e, (w) => {
   if (authWindowMode) {
+    isQuitting = true;
+    app.quit();
+    return;
+  }
+  if (closeBehavior === "quit") {
     isQuitting = true;
     app.quit();
     return;

@@ -217,13 +217,14 @@ function BrandMark({ focused }: { focused: boolean }) {
       className="relative w-[14px] h-[14px] flex items-center justify-center transition-opacity duration-160 group-hover:opacity-100"
       style={{
         opacity: focused ? 0.78 : 0.48,
+        color: 'var(--theme-accent)',
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-        <rect x="1.4" y="5.4" width="1.45" height="3.4" rx="0.72" fill="rgba(120,210,255,0.62)" />
-        <rect x="4.2" y="2.7" width="1.5" height="8.7" rx="0.75" fill="rgba(120,210,255,0.72)" />
-        <rect x="7.0" y="4.1" width="1.5" height="6.0" rx="0.75" fill="rgba(125,150,255,0.62)" />
-        <rect x="9.8" y="5.9" width="1.35" height="2.8" rx="0.68" fill="rgba(120,210,255,0.52)" />
+        <rect x="1.4" y="5.4" width="1.45" height="3.4" rx="0.72" fill="currentColor" opacity="0.62" />
+        <rect x="4.2" y="2.7" width="1.5" height="8.7" rx="0.75" fill="currentColor" opacity="0.72" />
+        <rect x="7.0" y="4.1" width="1.5" height="6.0" rx="0.75" fill="currentColor" opacity="0.58" />
+        <rect x="9.8" y="5.9" width="1.35" height="2.8" rx="0.68" fill="currentColor" opacity="0.52" />
       </svg>
     </div>
   );

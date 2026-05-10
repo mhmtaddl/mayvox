@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Hash, Search, Settings, UserRound } from 'lucide-react';
 import type { User, VoiceChannel } from '../types';
 import type { SettingsTarget } from '../contexts/UIContext';
 import { getPublicDisplayName } from '../lib/formatName';
 import { readCommandShortcut, shortcutMatchesEvent, type CommandShortcut } from '../lib/commandShortcut';
 import EmptyState from './EmptyState';
+import Modal from './Modal';
 
 type CommandKind = 'user' | 'room' | 'setting' | 'discover';
 
@@ -55,14 +56,16 @@ type Props = {
 };
 
 const SETTINGS_ITEMS: Array<{ id: string; title: string; subtitle: string; target: SettingsTarget; highlightId?: string; keywords: string }> = [
-  { id: 'settings-app', title: 'Uygulama Ayarları', subtitle: 'Tema, ses, bildirim ve oyun içi gösterge', target: 'app', keywords: 'ayar uygulama tema ses bildirim overlay oyun gösterge' },
+  { id: 'settings-app', title: 'Uygulama Ayarları', subtitle: 'Ses, performans, bildirim ve oyun davranışları', target: 'app', keywords: 'ayar uygulama ses bildirim performans oyun davranış' },
+  { id: 'settings-appearance', title: 'Görünüm Ayarları', subtitle: 'Tema, arayüz yoğunluğu ve oyun içi gösterge', target: 'appearance', highlightId: 'appearance', keywords: 'görünüm gorunum tema arayüz arayuz overlay oyun içi gösterge yazı yazi dock' },
   { id: 'settings-account', title: 'Hesap Ayarları', subtitle: 'Profil, gizlilik ve otomatik oyun algılama', target: 'account', keywords: 'hesap profil gizlilik oyun algılama otomatik' },
   { id: 'settings-profile-photo', title: 'Profil Resmini Değiştir', subtitle: 'Hesap ayarlarında profil fotoğrafı', target: 'account', highlightId: 'profile-photo', keywords: 'resim foto profil avatar pp değiştirme hesap' },
   { id: 'settings-game-activity', title: 'Otomatik Oyun Algılama', subtitle: 'Oynadığın oyunu durum olarak göster', target: 'app', highlightId: 'game-activity', keywords: 'oyun otomatik algılama durum activity game' },
-  { id: 'settings-overlay', title: 'Oyun İçi Ses Göstergesi', subtitle: 'Overlay konum, stil ve görünürlük ayarları', target: 'app', highlightId: 'voice-overlay', keywords: 'oyun içi gösterge overlay ses konuşan rozet konum masaüstü' },
-  { id: 'settings-theme', title: 'Tema Ayarları', subtitle: 'Görünüm ve tema paketleri', target: 'app', highlightId: 'appearance', keywords: 'tema görünüm renk dark light arayüz' },
+  { id: 'settings-overlay', title: 'Oyun İçi Ses Göstergesi', subtitle: 'Overlay konum, stil ve görünürlük ayarları', target: 'appearance', highlightId: 'voice-overlay', keywords: 'oyun içi gösterge overlay ses konuşan rozet konum masaüstü' },
+  { id: 'settings-theme', title: 'Tema Ayarları', subtitle: 'Görünüm ve tema paketleri', target: 'appearance', highlightId: 'appearance', keywords: 'tema görünüm renk dark light arayüz' },
   { id: 'settings-sounds', title: 'Ses Ayarları', subtitle: 'Bildirim ve uygulama sesleri', target: 'app', highlightId: 'sounds', keywords: 'ses bildirim ton mute ptt davet' },
   { id: 'settings-performance', title: 'Performans Ayarları', subtitle: 'Düşük veri ve performans tercihleri', target: 'app', highlightId: 'performance', keywords: 'performans düşük veri low data kasma fps' },
+  { id: 'settings-close-behavior', title: 'Kapatma Davranışı', subtitle: 'Çarpıya basınca simgeye küçült veya uygulamayı kapat', target: 'app', highlightId: 'close-behavior', keywords: 'kapatma davranışı carpi çarpı x pencere kapat gizli simge tray küçült kucult tamamen kapat çıkış cikis close quit minimize system tray' },
   { id: 'settings-shortcuts', title: 'Kısayollar', subtitle: 'Uygulama kısayollarını değiştir', target: 'shortcuts', highlightId: 'shortcuts', keywords: 'kısayol kısayollar kisayol kisayollar komut paleti ctrl k command shortcut tuş kombinasyonu tus kombinasyonu' },
   { id: 'settings-invites', title: 'Davet Talepleri', subtitle: 'Sunucu başvuruları ve davet yönetimi', target: 'invite_requests', keywords: 'davet talep başvuru invite request' },
 ];
@@ -119,9 +122,9 @@ function kindBadgeStyle(kind: CommandKind) {
     };
   }
   return {
-    color: '#fcd34d',
-    background: 'rgba(251, 191, 36, 0.055)',
-    border: 'rgba(251, 191, 36, 0.12)',
+    color: '#f8d68a',
+    background: 'rgba(var(--glass-tint), 0.045)',
+    border: 'rgba(251, 191, 36, 0.11)',
   };
 }
 
@@ -129,12 +132,12 @@ function KindBadge({ kind }: { kind: CommandKind }) {
   const style = kindBadgeStyle(kind);
   return (
     <span
-      className="hidden sm:inline-flex h-5 min-w-[58px] shrink-0 items-center justify-center rounded-md px-1.5 text-[8.5px] font-bold uppercase tracking-[0.07em]"
+      className="hidden sm:inline-flex h-5 min-w-[52px] shrink-0 items-center justify-center rounded-full px-2 text-[8.5px] font-bold uppercase tracking-[0.07em]"
       style={{
         color: style.color,
         background: style.background,
         border: `1px solid ${style.border}`,
-        opacity: 0.78,
+        opacity: 0.72,
       }}
     >
       {kindLabel(kind)}
@@ -182,6 +185,8 @@ export default function CommandPalette({
   const [activeIndex, setActiveIndex] = useState(0);
   const [shortcut, setShortcut] = useState<CommandShortcut>(() => readCommandShortcut());
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     const onShortcutChanged = (event: Event) => {
@@ -982,11 +987,30 @@ export default function CommandPalette({
 
   useEffect(() => {
     setActiveIndex(0);
+    if (listRef.current) listRef.current.scrollTop = 0;
   }, [query]);
 
   useEffect(() => {
     if (activeIndex > results.length - 1) setActiveIndex(Math.max(0, results.length - 1));
   }, [activeIndex, results.length]);
+
+  useLayoutEffect(() => {
+    itemRefs.current.length = results.length;
+    const container = listRef.current;
+    const selected = itemRefs.current[activeIndex];
+    if (!open || !container || !selected) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const selectedRect = selected.getBoundingClientRect();
+    const topOverflow = selectedRect.top - containerRect.top;
+    const bottomOverflow = selectedRect.bottom - containerRect.bottom;
+
+    if (topOverflow < 0) {
+      container.scrollTop += topOverflow;
+    } else if (bottomOverflow > 0) {
+      container.scrollTop += bottomOverflow;
+    }
+  }, [activeIndex, open, results.length]);
 
   const run = (item: CommandItem | undefined) => {
     if (!item) return;
@@ -997,74 +1021,101 @@ export default function CommandPalette({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center px-4 pt-[92px]"
-      style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(10px)' }}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onOpenChange(false);
-      }}
+    <Modal
+      open={open}
+      onClose={() => onOpenChange(false)}
+      width={660}
+      padded={false}
+      className="rounded-[20px]"
     >
       <div
-        className="w-full max-w-[620px] overflow-hidden rounded-2xl"
+        className="overflow-hidden rounded-[20px]"
         style={{
-          background: 'rgba(13, 18, 29, 0.96)',
-          border: '1px solid rgba(var(--glass-tint), 0.10)',
-          boxShadow: '0 28px 80px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.06)',
           color: 'var(--theme-text)',
         }}
       >
-        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.07)' }}>
-          <Search size={18} className="text-[var(--theme-accent)]" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                setActiveIndex(i => Math.min(results.length - 1, i + 1));
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                setActiveIndex(i => Math.max(0, i - 1));
-              } else if (event.key === 'Enter') {
-                event.preventDefault();
-                run(results[activeIndex]);
-              }
+        <div className="px-4 pb-3 pt-4" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.07)' }}>
+          <div
+            className="flex h-12 items-center gap-3 rounded-2xl px-3.5 transition-[border-color,box-shadow,background-color] duration-150 focus-within:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.10)]"
+            style={{
+              background: 'rgba(var(--glass-tint), 0.045)',
+              border: '1px solid rgba(var(--glass-tint), 0.085)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.035)',
             }}
-            placeholder="Kullanıcı, oda veya ayar ara..."
-            className="mv-font-title h-9 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[var(--theme-secondary-text)]/45"
-          />
-          <kbd className="rounded-md px-1.5 py-1 text-[10px] font-semibold" style={{ background: 'rgba(var(--glass-tint), 0.06)', color: 'var(--theme-secondary-text)' }}>
-            ESC
-          </kbd>
+          >
+            <Search size={18} className="shrink-0 text-[var(--theme-accent)] opacity-90" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setActiveIndex(i => Math.min(results.length - 1, i + 1));
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setActiveIndex(i => Math.max(0, i - 1));
+                } else if (event.key === 'Enter') {
+                  event.preventDefault();
+                  run(results[activeIndex]);
+                }
+              }}
+              placeholder="Kullanıcı, oda veya ayar ara..."
+              className="mv-font-title h-full min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[var(--theme-secondary-text)]/55"
+            />
+            <kbd
+              className="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-[9.5px] font-bold tracking-[0.08em]"
+              style={{
+                background: 'rgba(var(--glass-tint), 0.055)',
+                border: '1px solid rgba(var(--glass-tint), 0.09)',
+                color: 'var(--theme-secondary-text)',
+              }}
+            >
+              ESC
+            </kbd>
+          </div>
         </div>
 
-        <div className="max-h-[430px] overflow-y-auto p-2 custom-scrollbar">
+        <div
+          ref={listRef}
+          className="max-h-[430px] overflow-y-auto p-2.5 custom-scrollbar"
+          style={{
+            scrollbarColor: 'rgba(var(--glass-tint), 0.16) transparent',
+          }}
+        >
           {results.length === 0 ? (
-            <EmptyState
-              size="xs"
-              icon={<Search size={16} />}
-              title="Sonuç bulunamadı"
-              description="Komut, oda, kullanıcı veya ayar adı deneyin."
-            />
+            <div className="px-2 py-8">
+              <EmptyState
+                size="xs"
+                icon={<Search size={16} />}
+                title="Sonuç bulunamadı"
+                description="Komut, oda, kullanıcı veya ayar adı deneyin."
+              />
+            </div>
           ) : results.map((item, index) => {
             const active = index === activeIndex;
             return (
               <button
                 key={item.id}
+                ref={(element) => {
+                  itemRefs.current[index] = element;
+                }}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => run(item)}
-                className="w-full min-w-0 rounded-xl px-3 py-2.5 text-left transition-colors"
+                className="group w-full min-w-0 rounded-2xl px-3 py-2 text-left transition-[background-color,box-shadow] duration-150"
                 style={{
-                  background: active ? 'rgba(var(--theme-accent-rgb), 0.14)' : 'transparent',
+                  minHeight: 56,
+                  background: active ? 'rgba(var(--theme-accent-rgb), 0.095)' : 'transparent',
+                  boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.11)' : 'inset 0 0 0 1px transparent',
                   color: 'var(--theme-text)',
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-[background-color,color,box-shadow] duration-150"
                     style={{
-                      background: active ? 'rgba(var(--theme-accent-rgb), 0.18)' : 'rgba(var(--glass-tint), 0.055)',
+                      background: active ? 'rgba(var(--theme-accent-rgb), 0.145)' : 'rgba(var(--glass-tint), 0.055)',
+                      boxShadow: active ? 'inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.16)' : 'inset 0 0 0 1px rgba(var(--glass-tint), 0.035)',
                       color: active ? 'var(--theme-accent)' : 'var(--theme-secondary-text)',
                     }}
                   >
@@ -1081,6 +1132,6 @@ export default function CommandPalette({
           })}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
