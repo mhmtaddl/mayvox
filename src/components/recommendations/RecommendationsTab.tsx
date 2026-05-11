@@ -27,7 +27,7 @@ interface Props {
 }
 
 const RECOMMENDATIONS_ENABLED =
-  import.meta.env.DEV || import.meta.env.VITE_RECOMMENDATIONS_ENABLED === 'true';
+  import.meta.env.VITE_RECOMMENDATIONS_ENABLED !== 'false';
 
 type ConfirmState = { variant: 'hide' | 'delete'; item: RecommendationItem } | null;
 

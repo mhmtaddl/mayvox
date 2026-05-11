@@ -274,7 +274,6 @@ function ControlButton({ onClick, ariaLabel, tone, children }: {
       }}
       onMouseDown={() => setActive(true)}
       onMouseUp={() => setActive(false)}
-      title={ariaLabel}
       aria-label={ariaLabel}
       className="group w-[13px] h-[13px] rounded-[4px] flex items-center justify-center"
       style={{

@@ -65,7 +65,7 @@ const PRIORITY_BORDER: Record<AnnouncementPriority, string> = {
 };
 
 const RECOMMENDATIONS_ENABLED =
-  import.meta.env.DEV || import.meta.env.VITE_RECOMMENDATIONS_ENABLED === 'true';
+  import.meta.env.VITE_RECOMMENDATIONS_ENABLED !== 'false';
 
 // ── Shared input classes ────────────────────────────────────────────────────
 
