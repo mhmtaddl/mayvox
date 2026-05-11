@@ -5,7 +5,7 @@ type TooltipState = {
   text: string;
   x: number;
   y: number;
-  placement: 'top' | 'bottom';
+  placement: 'top' | 'bottom' | 'left' | 'right';
   visible: boolean;
 };
 
@@ -59,7 +59,23 @@ export default function GlobalTooltip() {
     const positionFor = (el: HTMLElement) => {
       const rect = el.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
-      const showBelow = rect.top < 58;
+      const centerY = rect.top + rect.height / 2;
+      if (rect.top < 56) {
+        const preferLeft = rect.left > 148;
+        if (preferLeft) {
+          return {
+            x: rect.left - OFFSET,
+            y: Math.min(Math.max(centerY, EDGE_PADDING), window.innerHeight - EDGE_PADDING),
+            placement: 'left' as const,
+          };
+        }
+        return {
+          x: rect.right + OFFSET,
+          y: Math.min(Math.max(centerY, EDGE_PADDING), window.innerHeight - EDGE_PADDING),
+          placement: 'right' as const,
+        };
+      }
+      const showBelow = rect.top < 76;
       return {
         x: Math.min(Math.max(centerX, EDGE_PADDING), window.innerWidth - EDGE_PADDING),
         y: showBelow ? rect.bottom + OFFSET : rect.top - OFFSET,

@@ -1816,6 +1816,14 @@ html[data-theme-pack="crimson"] .card:hover {
   transform: translate(-50%, 4px) scale(1);
 }
 
+.mv-global-tooltip.is-left {
+  transform: translate(-100%, -50%) translateX(-4px) scale(1);
+}
+
+.mv-global-tooltip.is-right {
+  transform: translateY(-50%) translateX(4px) scale(1);
+}
+
 .mv-global-tooltip::after {
   content: "";
   position: absolute;
@@ -1839,6 +1847,23 @@ html[data-theme-pack="crimson"] .card:hover {
   top: -5px;
   border-right: 0;
   border-bottom: 0;
+}
+
+.mv-global-tooltip.is-left::after {
+  right: -5px;
+  left: auto;
+  top: 50%;
+  border-left: 0;
+  border-bottom: 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.mv-global-tooltip.is-right::after {
+  left: -5px;
+  top: 50%;
+  border-right: 0;
+  border-top: 0;
+  transform: translateY(-50%) rotate(45deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
