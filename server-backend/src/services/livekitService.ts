@@ -2,6 +2,11 @@ import { RoomServiceClient } from 'livekit-server-sdk';
 import { config } from '../config';
 import { queryMany } from '../repositories/db';
 
+const DEBUG_BACKEND_LOGS = process.env.DEBUG_BACKEND_LOGS === '1';
+const debugLog = (...args: unknown[]): void => {
+  if (DEBUG_BACKEND_LOGS) console.log(...args);
+};
+
 /**
  * LiveKit moderation helpers.
  *
@@ -54,7 +59,8 @@ async function removeFromOneRoom(roomName: string, identity: string): Promise<bo
       return false;
     }
     // Diğer hatalar: logla ama moderator aksiyonunu patlatma
-    console.warn('[livekit] removeParticipant failed', { roomName, identity, err });
+    console.warn('[livekit] removeParticipant failed', err instanceof Error ? err.message : String(err));
+    debugLog('[livekit] removeParticipant context', { hasRoom: !!roomName, hasIdentity: !!identity });
     return false;
   }
 }
@@ -118,7 +124,8 @@ async function updatePublishInOneRoom(
     if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('404')) {
       return false;
     }
-    console.warn('[livekit] updateParticipant failed', { roomName, identity, canPublish, err });
+    console.warn('[livekit] updateParticipant failed', err instanceof Error ? err.message : String(err));
+    debugLog('[livekit] updateParticipant context', { hasRoom: !!roomName, hasIdentity: !!identity, canPublish });
     return false;
   }
 }

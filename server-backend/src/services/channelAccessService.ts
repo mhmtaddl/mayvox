@@ -24,7 +24,10 @@ export interface ChannelAccessEntry {
 export interface ChannelAccessSummary {
   canSee: boolean;
   canJoin: boolean;
-  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found' | 'server-banned' | 'timed-out';
+  canPublish: boolean;
+  voiceMuted: boolean;
+  voiceBanned: boolean;
+  reason: 'public' | 'server-admin' | 'channel-owner' | 'granted' | 'hidden' | 'invite-only' | 'not-member' | 'not-found' | 'server-banned' | 'timed-out' | 'voice-banned';
 }
 
 async function isServerBanned(serverId: string): Promise<boolean> {
@@ -50,15 +53,44 @@ async function fetchMemberRole(serverId: string, userId: string): Promise<string
   return m?.role ?? null;
 }
 
-/** Role + aktif timeout — evaluateChannelAccess için tek query. */
-async function fetchMemberState(serverId: string, userId: string): Promise<{ role: string; isTimedOut: boolean } | null> {
-  const m = await queryOne<{ role: string; timeout_until: string | null }>(
-    'SELECT role, timeout_until FROM server_members WHERE server_id = $1 AND user_id = $2',
+/** Role + aktif timeout/voice mute — evaluateChannelAccess için tek query. */
+async function fetchMemberState(serverId: string, userId: string): Promise<{ role: string; isTimedOut: boolean; isVoiceMuted: boolean } | null> {
+  const m = await queryOne<{ role: string; timeout_until: string | null; voice_muted_by: string | null; voice_mute_expires_at: string | null }>(
+    'SELECT role, timeout_until, voice_muted_by, voice_mute_expires_at FROM server_members WHERE server_id = $1 AND user_id = $2',
     [serverId, userId]
   );
   if (!m) return null;
   const isTimedOut = !!m.timeout_until && new Date(m.timeout_until).getTime() > Date.now();
-  return { role: m.role, isTimedOut };
+  const isVoiceMuted = !!m.voice_muted_by && (!m.voice_mute_expires_at || new Date(m.voice_mute_expires_at).getTime() > Date.now());
+  return { role: m.role, isTimedOut, isVoiceMuted };
+}
+
+async function isVoiceBanned(userId: string): Promise<boolean> {
+  const row = await queryOne<{ is_voice_banned: boolean; ban_expires: number | null }>(
+    'SELECT is_voice_banned, ban_expires FROM profiles WHERE id = $1',
+    [userId],
+  );
+  if (!row?.is_voice_banned) return false;
+  if (!row.ban_expires) return true;
+  return Number(row.ban_expires) > Date.now();
+}
+
+function accessSummary(
+  canSee: boolean,
+  canJoin: boolean,
+  reason: ChannelAccessSummary['reason'],
+  opts: { voiceMuted?: boolean; voiceBanned?: boolean } = {},
+): ChannelAccessSummary {
+  const voiceMuted = !!opts.voiceMuted;
+  const voiceBanned = !!opts.voiceBanned;
+  return {
+    canSee,
+    canJoin,
+    canPublish: canJoin && !voiceMuted && !voiceBanned,
+    voiceMuted,
+    voiceBanned,
+    reason,
+  };
 }
 
 async function hasGrant(channelId: string, userId: string): Promise<boolean> {
@@ -76,40 +108,44 @@ export async function evaluateChannelAccess(
   userId: string,
 ): Promise<ChannelAccessSummary> {
   const channel = await fetchChannel(serverId, channelId);
-  if (!channel) return { canSee: false, canJoin: false, reason: 'not-found' };
+  if (!channel) return accessSummary(false, false, 'not-found');
 
   const state = await fetchMemberState(serverId, userId);
-  if (!state) return { canSee: false, canJoin: false, reason: 'not-member' };
+  if (!state) return accessSummary(false, false, 'not-member');
   const role = state.role;
+
+  if (await isVoiceBanned(userId)) {
+    return accessSummary(true, false, 'voice-banned', { voiceBanned: true });
+  }
 
   // Restricted mode: sunucu banlıysa kanalı görebilir ama join edemez.
   // Sistem yönetici override'ı YOK; sistem admini de aynı kuralı uygular
   // (zaten /admin route'larını kullanır).
   if (await isServerBanned(serverId)) {
-    return { canSee: true, canJoin: false, reason: 'server-banned' };
+    return accessSummary(true, false, 'server-banned', { voiceMuted: state.isVoiceMuted });
   }
 
   // Timeout: kullanıcı kanalı görebilir ama join edemez (mesaj + voice gate).
   // Moderatör/admin/owner rolü olsa bile timeout aktifse join kapalı — hierarchy guard:
   // owner zaten timeout edilemez (managementService kontrol ediyor).
   if (state.isTimedOut) {
-    return { canSee: true, canJoin: false, reason: 'timed-out' };
+    return accessSummary(true, false, 'timed-out', { voiceMuted: state.isVoiceMuted });
   }
 
   if (MANAGE_ROLES.has(role)) {
-    return { canSee: true, canJoin: true, reason: 'server-admin' };
+    return accessSummary(true, true, 'server-admin', { voiceMuted: state.isVoiceMuted });
   }
   if (channel.owner_id && channel.owner_id === userId) {
-    return { canSee: true, canJoin: true, reason: 'channel-owner' };
+    return accessSummary(true, true, 'channel-owner', { voiceMuted: state.isVoiceMuted });
   }
 
   const granted = await hasGrant(channel.id, userId);
-  if (granted) return { canSee: true, canJoin: true, reason: 'granted' };
+  if (granted) return accessSummary(true, true, 'granted', { voiceMuted: state.isVoiceMuted });
 
-  if (channel.is_hidden) return { canSee: false, canJoin: false, reason: 'hidden' };
-  if (channel.is_invite_only) return { canSee: true, canJoin: false, reason: 'invite-only' };
+  if (channel.is_hidden) return accessSummary(false, false, 'hidden', { voiceMuted: state.isVoiceMuted });
+  if (channel.is_invite_only) return accessSummary(true, false, 'invite-only', { voiceMuted: state.isVoiceMuted });
 
-  return { canSee: true, canJoin: true, reason: 'public' };
+  return accessSummary(true, true, 'public', { voiceMuted: state.isVoiceMuted });
 }
 
 /** Liste filtresi için toplu lookup: kullanıcı için her bir channelId hangi rule'a düşer. */

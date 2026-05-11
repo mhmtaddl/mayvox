@@ -8,6 +8,10 @@ if (!process.env.ELECTRON_IS_PACKAGED) {
   require('dotenv').config();
 }
 
+const DEBUG_TOKEN_LOGS = process.env.DEBUG_TOKEN_LOGS === '1';
+function debugLog(...args) { if (DEBUG_TOKEN_LOGS) console.log(...args); }
+function debugWarn(...args) { if (DEBUG_TOKEN_LOGS) console.warn(...args); }
+
 const app = express();
 app.set('trust proxy', 1);
 
@@ -226,43 +230,51 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
 
   // Per-user rate limit — auth sonrası ikinci katman.
   if (!checkUserTokenLimit(user.id)) {
-    console.warn(`[livekit-token] rate-limited user=${user.id}`);
+    console.warn('[token] rate-limited');
+    debugWarn('[token] rate-limited context', { hasUser: !!user.id });
     return res.status(429).json({ error: 'Çok fazla istek, biraz bekleyin.' });
   }
 
   const { roomName, serverId, channelId } = req.body || {};
   if (!roomName || typeof roomName !== 'string') {
-    console.warn(`[livekit-token] malformed user=${user.id} reason=missing-roomName`);
+    console.warn('[token] malformed request', { reason: 'missing-roomName' });
+    debugWarn('[token] malformed context', { hasUser: !!user.id });
     return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
   }
 
   // Private channel enforcement — serverId + channelId zorunlu, fail closed.
   if (!serverId || typeof serverId !== 'string' || !channelId || typeof channelId !== 'string') {
-    console.warn(`[livekit-token] malformed user=${user.id} reason=missing-ids roomName=${roomName}`);
+    console.warn('[token] malformed request', { reason: 'missing-ids' });
+    debugWarn('[token] malformed context', { hasUser: !!user.id, hasRoom: !!roomName, hasServer: !!serverId, hasChannel: !!channelId });
     return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
   }
 
   // Strict consistency: roomName canonical olarak channelId olmalı.
   if (roomName !== channelId) {
-    console.warn(`[livekit-token] id-mismatch user=${user.id} server=${serverId} roomName=${roomName} channelId=${channelId}`);
+    console.warn('[token] malformed request', { reason: 'id-mismatch' });
+    debugWarn('[token] id-mismatch context', { hasUser: !!user.id, hasRoom: !!roomName, hasServer: !!serverId, hasChannel: !!channelId });
     return res.status(400).json({ error: 'Kanal bilgisi geçersiz.' });
   }
 
   const authHeader = req.headers.authorization;
   const check = await checkChannelAccess(serverId, channelId, authHeader);
   if (!check.ok) {
-    console.warn(`[livekit-token] access-check-failed user=${user.id} server=${serverId} channel=${channelId} status=${check.status || '-'} err=${check.error || '-'}`);
+    console.warn('[token] access check failed', { status: check.status || '-' });
+    debugWarn('[token] access check context', { hasUser: !!user.id, hasServer: !!serverId, hasChannel: !!channelId, err: check.error || '-' });
     return res.status(503).json({ error: 'Erişim doğrulanamadı, tekrar deneyin.' });
   }
   const summary = check.summary || {};
   if (!summary.canJoin) {
     const reason = summary.reason || 'unknown';
-    console.warn(`[livekit-token] denied user=${user.id} server=${serverId} channel=${channelId} reason=${reason}`);
+    console.warn('[token] access denied', { reason });
+    debugWarn('[token] access denied context', { hasUser: !!user.id, hasServer: !!serverId, hasChannel: !!channelId, reason });
     let msg = 'Bu kanala erişim yetkin yok.';
     if (reason === 'invite-only') msg = 'Bu özel kanal yalnızca davetlilere açık.';
     else if (reason === 'not-member') msg = 'Bu sunucunun üyesi değilsin.';
+    else if (reason === 'voice-banned') msg = 'Sesli kanallara erişimin kısıtlandı.';
     return res.status(403).json({ error: msg, reason });
   }
+  const canPublish = summary.canPublish !== false;
 
   // Tek-oda kuralı: kullanıcı başka bir odadaysa oradan çıkar
   if (roomService) try {
@@ -275,7 +287,8 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
       }
     }
   } catch (e) {
-    console.warn(`[livekit-token] cleanup-failed user=${user.id} err=${e && e.message ? e.message : e}`);
+    console.warn('[token] cleanup failed', e && e.message ? e.message : e);
+    debugWarn('[token] cleanup context', { hasUser: !!user.id, hasRoom: !!roomName });
   }
 
   const at = new AccessToken(
@@ -283,7 +296,8 @@ app.post('/livekit-token', tokenLimiter, async (req, res) => {
     process.env.LIVEKIT_API_SECRET,
     { identity: user.id }
   );
-  at.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
+  at.addGrant({ roomJoin: true, room: roomName, canPublish, canSubscribe: true });
+  debugLog('[token] grant created', { hasIdentity: !!user.id, hasRoom: !!roomName, canPublish });
 
   const token = await at.toJwt();
   res.json({ token });
@@ -321,7 +335,7 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Şifre sıfırlama talebiniz alındı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Bu parola ile giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen bizimle iletişime geçin.</p></div>`,
     });
   } catch (e) {
-    console.error('[self-reset] E-posta gönderilemedi:', e.responseText || e.message);
+    console.error('[self-reset] E-posta gönderilemedi:', { status: e.status || 'unknown' });
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
@@ -366,7 +380,7 @@ app.post('/api/admin-reset-password', async (req, res) => {
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba <strong>${target.name}</strong>,</p><p>Parolanız bir yönetici tarafından sıfırlandı.</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${tempPassword}</span></div><p style="color:#94a3b8;font-size:13px;">Giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen yöneticinizle iletişime geçin.</p></div>`,
     });
   } catch (e) {
-    console.error('[reset] E-posta gönderilemedi:', e.responseText || e.message);
+    console.error('[reset] E-posta gönderilemedi:', { status: e.status || 'unknown' });
     return res.status(500).json({ error: 'E-posta gönderilemedi, şifre değiştirilmedi.' });
   }
 
@@ -412,7 +426,7 @@ app.post('/api/send-invite-email', async (req, res) => {
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>Başvurun onaylandı — aramıza hoş geldin! 🎉</p><div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;"><p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Davet Kodu</p><span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${code}</span>${expDate ? `<p style="margin:12px 0 0;font-size:12px;color:#64748b;">Son geçerlilik: ${expDate}</p>` : ''}</div><p style="margin:0 0 16px;">Uygulamayı indir, bu kodu kullanarak üyeliğini tamamla ve aramıza katıl.</p><div style="text-align:center;margin:24px 0;"><a href="https://mayvox.com" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;">Uygulamayı İndir</a></div><p style="color:#94a3b8;font-size:13px;">Bu kodu yalnızca siz kullanabilirsiniz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
     });
   } catch (e) {
-    console.error('[invite] E-posta hatası:', e.responseText || e.message);
+    console.error('[invite] E-posta hatası:', { status: e.status || 'unknown' });
     return res.status(500).json({ error: 'E-posta gönderilemedi' });
   }
   res.json({ success: true });
@@ -438,7 +452,7 @@ app.post('/api/send-rejection-email', async (req, res) => {
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;"><h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2><p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p><p>Merhaba,</p><p>MayVox erken erişim başvurunuz için teşekkür ederiz.</p><p style="color:#cbd5e1;">Şu an için başvurunuzu kabul edemiyoruz. Erken erişim sınırlı sayıda kullanıcıya açıldığı için tüm başvuruları karşılayamıyoruz.</p>${reasonBlock}<p style="color:#cbd5e1;">İleride yeniden başvuruda bulunabilirsiniz; kontenjan açıldığında tekrar değerlendirilir.</p><p style="color:#94a3b8;font-size:13px;margin-top:24px;">Sizi MayVox'ta ağırlamayı umuyoruz.</p><hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/><p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen dikkate almayın.</p></div>`,
     });
   } catch (e) {
-    console.error('[reject] E-posta hatası:', e.responseText || e.message);
+    console.error('[reject] E-posta hatası:', { status: e.status || 'unknown' });
     return res.status(500).json({ error: 'E-posta gönderilemedi' });
   }
   res.json({ success: true });

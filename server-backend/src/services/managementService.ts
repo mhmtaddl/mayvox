@@ -15,6 +15,21 @@ import { getServerPlan, getPlanLimits, emitLimitHit } from './planService';
 import { removeParticipantFromAllServerRooms, removeParticipantFromChannel, setPublishPermissionInAllServerRooms } from './livekitService';
 import { broadcastModeration } from './moderationBroadcast';
 import { fetchProfileNameMap, fetchProfilesByIds } from './profileLookupService';
+import { recordRoomActivityForTargetRooms, type RoomActivityType } from './roomActivityService';
+
+function recordRoomActivitySafe(input: {
+  serverId: string;
+  channelId?: string | null;
+  type: RoomActivityType;
+  actorId?: string | null;
+  targetUserId?: string | null;
+  label?: string;
+  metadata?: Record<string, unknown>;
+}): void {
+  void recordRoomActivityForTargetRooms(input).catch((err: unknown) => {
+    console.warn('[room-activity] write failed', err instanceof Error ? err.message : err);
+  });
+}
 
 // ── Yetki kontrol ──
 
@@ -339,6 +354,13 @@ export async function muteMember(
     userId: targetUserId, action: 'mute', actorId: userId, serverId,
     updates: { isServerMuted: true, voiceMutedUntil: expiresAt },
   });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'voice_mute',
+    actorId: userId,
+    targetUserId,
+    metadata: { expiresAt, durationSeconds: expiresInSeconds },
+  });
 
   // Aktif voice odalarda mic'i kapat — kullanıcı odada kalır (LiveKit yoksa silent no-op)
   const lk = await setPublishPermissionInAllServerRooms(serverId, targetUserId, false);
@@ -384,6 +406,12 @@ export async function unmuteMember(serverId: string, userId: string, targetUserI
   void broadcastModeration({
     userId: targetUserId, action: 'unmute', actorId: userId, serverId,
     updates: { isServerMuted: false, voiceMutedUntil: null },
+  });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'voice_unmute',
+    actorId: userId,
+    targetUserId,
   });
 
   // Kullanıcı hâlâ odadaysa canPublish'i tekrar aç (anında mic'i geri ver).
@@ -435,6 +463,13 @@ export async function chatBanMember(
     userId: targetUserId, action: 'chat_ban', actorId: userId, serverId,
     updates: { chatBannedUntil: expiresAt },
   });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'chat_ban',
+    actorId: userId,
+    targetUserId,
+    metadata: { expiresAt, durationSeconds: expiresInSeconds },
+  });
 
   await logAction({
     serverId, actorId: userId, action: 'member.chat_ban',
@@ -471,6 +506,12 @@ export async function chatUnbanMember(serverId: string, userId: string, targetUs
   void broadcastModeration({
     userId: targetUserId, action: 'chat_unban', actorId: userId, serverId,
     updates: { chatBannedUntil: null },
+  });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'chat_unban',
+    actorId: userId,
+    targetUserId,
   });
 
   await logAction({
@@ -517,6 +558,13 @@ export async function timeoutMember(
     userId: targetUserId, action: 'timeout', actorId: userId, serverId,
     updates: { timedOutUntil: until },
   });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'timeout',
+    actorId: userId,
+    targetUserId,
+    metadata: { until, durationSeconds },
+  });
 
   // Aktif voice odalardan düşür (LiveKit yoksa silent no-op)
   const lk = await removeParticipantFromAllServerRooms(serverId, targetUserId);
@@ -559,6 +607,12 @@ export async function clearTimeoutMember(serverId: string, userId: string, targe
     userId: targetUserId, action: 'clear_timeout', actorId: userId, serverId,
     updates: { timedOutUntil: null },
   });
+  recordRoomActivitySafe({
+    serverId,
+    type: 'timeout_clear',
+    actorId: userId,
+    targetUserId,
+  });
 
   await logAction({
     serverId, actorId: userId, action: 'member.timeout_clear',
@@ -597,6 +651,13 @@ export async function kickFromRoom(
   // presence handler dedup'lı olduğu için çift toast riski yok.
   void broadcastModeration({
     userId: targetUserId, action: 'room_kick', actorId: userId, serverId,
+  });
+  recordRoomActivitySafe({
+    serverId,
+    channelId,
+    type: 'room_kick',
+    actorId: userId,
+    targetUserId,
   });
 
   const lk = channelId

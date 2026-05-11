@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { config } from '../config';
 import { logAction } from '../services/auditLogService';
+import { recordRoomActivityEventDirect } from '../services/roomActivityService';
 import { queryOne } from '../repositories/db';
 import { FLOOD_DEFAULTS, AUTOPUNISH_FLOOD_DEFAULT, type ModerationConfig } from '../services/moderationConfigService';
 import { recordEvent, isValidKind, type ModKind } from '../services/moderationStatsService';
@@ -21,7 +22,7 @@ function requireInternal(req: Request, res: Response): boolean {
     return false;
   }
   if (!isLoopback(req)) {
-    console.warn(`[internal] non-loopback reddedildi remote=${req.socket?.remoteAddress}`);
+    console.warn('[internal] non-loopback reddedildi');
     res.status(403).json({ error: 'forbidden' });
     return false;
   }
@@ -87,6 +88,46 @@ router.post('/audit', async (req: Request, res: Response) => {
  * Bilinmeyen channel veya null moderation_config → default flood + profanity disabled + serverId null.
  * Fail-safe: hata durumunda default + serverId null (chat-server built-in default kullanır).
  */
+
+router.post('/room-activity', async (req: Request, res: Response) => {
+  const secret = req.header('x-internal-secret') || '';
+  if (!config.internalNotifySecret || secret !== config.internalNotifySecret) {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const serverId = typeof body.serverId === 'string' ? body.serverId.trim() : '';
+    const channelId = typeof body.channelId === 'string' ? body.channelId.trim() : '';
+    const label = typeof body.label === 'string' ? body.label.trim() : '';
+    if (!serverId || !channelId || !body.type || !label) {
+      console.warn('[internal/room-activity] skipped invalid payload', {
+        hasServer: !!serverId,
+        hasChannel: !!channelId,
+        hasType: !!body.type,
+        hasLabel: !!label,
+      });
+      res.status(204).end();
+      return;
+    }
+
+    await recordRoomActivityEventDirect({
+      serverId,
+      channelId,
+      type: body.type,
+      actorId: typeof body.actorId === 'string' ? body.actorId : null,
+      targetUserId: typeof body.targetUserId === 'string' ? body.targetUserId : null,
+      label,
+      metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : {},
+    } as any);
+    res.json({ ok: true });
+  } catch (err) {
+    console.warn('[internal/room-activity] write failed', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'room_activity_failed' });
+  }
+});
+
 router.get('/channel-flood-config', async (req: Request, res: Response) => {
   if (!requireInternal(req, res)) return;
 
@@ -197,9 +238,9 @@ router.post('/auto-punish', async (req: Request, res: Response) => {
     // Debug log — sadece uygulandığında veya 'skipped_protected_role' durumunda.
     // skipped_already_banned sık gelebilir (cooldown race); log spam önlemek için sessiz.
     if (result.applied) {
-      console.log(`[auto-punish] APPLIED serverId=${serverId} userId=${userId} duration=${dur}dk expires=${result.expiresAt}`);
+      console.log('[auto-punish] applied', { durationMinutes: dur, hasExpiresAt: !!result.expiresAt });
     } else if (result.reason === 'skipped_protected_role') {
-      console.log(`[auto-punish] SKIP protected role=${result.role} serverId=${serverId} userId=${userId}`);
+      console.log('[auto-punish] skipped protected role', { hasRole: !!result.role });
     }
     res.json(result);
   } catch (err) {

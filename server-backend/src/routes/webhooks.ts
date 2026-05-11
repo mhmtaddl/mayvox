@@ -19,8 +19,15 @@ import { Router, type Request, type Response } from 'express';
 import { WebhookReceiver } from 'livekit-server-sdk';
 import { config } from '../config';
 import { openSession, closeSession } from '../services/voiceActivityService';
+import { recordRoomActivityEventDirect } from '../services/roomActivityService';
+import { fetchProfileNameMap } from '../services/profileLookupService';
 
 const router = Router();
+
+async function profileName(userId: string): Promise<string> {
+  const names = await fetchProfileNameMap([userId]);
+  return names.get(userId) || 'Kullanıcı';
+}
 
 let _receiver: WebhookReceiver | null = null;
 function getReceiver(): WebhookReceiver | null {
@@ -58,13 +65,31 @@ router.post('/livekit', async (req: Request, res: Response) => {
   try {
     if (eventName === 'participant_joined' && participantIdentity && roomName) {
       const r = await openSession(participantIdentity, roomName);
-      if (r.opened) {
-        console.log(`[webhook/livekit] join uid=${participantIdentity} room=${roomName}`);
+      if (r.opened && r.serverId) {
+        const name = await profileName(participantIdentity);
+        await recordRoomActivityEventDirect({
+          serverId: r.serverId,
+          channelId: roomName,
+          type: 'join',
+          targetUserId: participantIdentity,
+          label: `${name} odaya katıldı`,
+          metadata: { source: 'livekit' },
+        });
+        console.log('[livekit-webhook] participant_joined', { hasIdentity: true, hasRoom: true });
       }
     } else if (eventName === 'participant_left' && participantIdentity && roomName) {
       const r = await closeSession(participantIdentity, roomName);
-      if (r.closed) {
-        console.log(`[webhook/livekit] left uid=${participantIdentity} room=${roomName} pairs=${r.pairsUpdated}`);
+      if (r.closed && r.serverId) {
+        const name = await profileName(participantIdentity);
+        await recordRoomActivityEventDirect({
+          serverId: r.serverId,
+          channelId: roomName,
+          type: 'leave',
+          targetUserId: participantIdentity,
+          label: `${name} odadan ayrıldı`,
+          metadata: { source: 'livekit', pairsUpdated: r.pairsUpdated },
+        });
+        console.log('[livekit-webhook] participant_left', { hasIdentity: true, hasRoom: true, pairsUpdated: r.pairsUpdated });
       }
     }
     // room_started / room_finished / track_* → ignore. Gelecekte spektogram için kullanılabilir.

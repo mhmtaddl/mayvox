@@ -147,6 +147,7 @@ export async function adminDeleteServer(adminUserId: string, serverId: string, r
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('DELETE FROM channels WHERE server_id = $1', [serverId]);
     const { rowCount } = await client.query('DELETE FROM servers WHERE id = $1', [serverId]);
     if (!rowCount) throw new NotFoundError('Sunucu bulunamadı');
     await client.query('COMMIT');
