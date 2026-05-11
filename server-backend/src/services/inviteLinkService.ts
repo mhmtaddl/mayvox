@@ -86,7 +86,8 @@ function normalizeToken(raw: unknown): string {
   if (typeof raw !== 'string') throw new AppError(400, 'Geçersiz davet bağlantısı');
   const trimmed = raw.trim();
   // Accept both just the token and full URLs (extract last path segment if URL)
-  const maybeToken = trimmed.includes('/') ? trimmed.split('/').filter(Boolean).pop() ?? trimmed : trimmed;
+  const lastSegment = trimmed.includes('/') ? trimmed.split('/').filter(Boolean).pop() ?? trimmed : trimmed;
+  const maybeToken = lastSegment.split(/[?#]/, 1)[0] || lastSegment;
   if (maybeToken.length < TOKEN_BUF_BASE64URL_LEN - 4 || maybeToken.length > TOKEN_BUF_BASE64URL_LEN + 8) {
     throw new AppError(400, 'Geçersiz davet bağlantısı');
   }

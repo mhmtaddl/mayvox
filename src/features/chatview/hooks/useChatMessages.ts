@@ -100,9 +100,9 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
         onMessageReported: (messageId, meta) => {
           onMessageReportedRef.current?.(messageId, meta);
         },
-        onEdit: (messageId, text, meta) => {
+        onEdit: (messageId, text, updatedAt, meta) => {
           void decryptTextIfNeeded(text).then(result => {
-            setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: result.text } : m));
+            setChatMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: result.text, updatedAt: updatedAt ?? Date.now() } : m));
             onMessageEditedRef.current?.(messageId, meta);
           });
         },
@@ -229,7 +229,7 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
     }
     setChatMessages(prev => prev.map(m => (
       m.id === editingMsgId && String(m.senderId) === String(currentUser.id)
-        ? { ...m, text: t }
+        ? { ...m, text: t, updatedAt: Date.now() }
         : m
     )));
     const activeChannelObj = channelsRef.current.find(c => c.id === activeChannel);

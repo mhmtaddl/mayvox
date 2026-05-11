@@ -638,9 +638,10 @@ export const toggleUserModerator = async (targetUserId: string, newValue: boolea
 };
 
 // ─── Duyurular (Announcements) ──────────────────────────────────────────────
-export const getAnnouncements = async () => {
+export const getAnnouncements = async (serverId?: string) => {
   if (!SERVER_API_URL) return { data: [], error: new Error('VITE_SERVER_API_URL tanımlı değil') };
-  const res = await fetch(`${SERVER_API_URL}/auth/announcements`);
+  const qs = serverId ? `?serverId=${encodeURIComponent(serverId)}` : '';
+  const res = await fetch(`${SERVER_API_URL}/auth/announcements${qs}`, { headers: authHeader() });
   const body = await res.json().catch(() => ({}));
   return res.ok
     ? { data: Array.isArray(body.data) ? body.data : [], error: null }
@@ -652,6 +653,7 @@ export const createAnnouncement = async (announcement: {
   content: string;
   author_id: string;
   author_name: string;
+  server_id?: string | null;
   is_pinned?: boolean;
   priority?: string;
   type?: string;
@@ -682,6 +684,7 @@ export const updateAnnouncement = async (id: string, updates: {
   event_date?: string | null;
   participation_time?: string | null;
   participation_requirements?: string | null;
+  server_id?: string | null;
 }) => {
   const token = getAuthToken();
   if (!SERVER_API_URL || !token) return { data: null, error: new Error('Oturum bulunamadı') };

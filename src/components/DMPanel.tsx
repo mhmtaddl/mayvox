@@ -754,7 +754,15 @@ function MessageBubble({
             className={`flex items-center gap-1.5 text-[10px] mt-1 leading-none tabular-nums ${isOwn ? 'justify-end' : ''}`}
             style={{ color: 'currentColor' }}
           >
-            {msg.editedAt && <span style={{ opacity: 0.42 }}>düzenlendi</span>}
+            {msg.editedAt && (
+              <span
+                className="inline-flex items-center opacity-0 transition-opacity duration-150 group-hover/msg:opacity-55 group-focus-within/msg:opacity-55"
+                title="Düzenlendi"
+                aria-label="Düzenlendi"
+              >
+                <PencilLine size={9} strokeWidth={2} />
+              </span>
+            )}
             <span style={{ opacity: 0.55 }}>{time}</span>
             {isOwn && <MessageTick msg={msg} />}
           </div>

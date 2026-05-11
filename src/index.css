@@ -1773,6 +1773,80 @@ html[data-theme-pack="crimson"] .card:hover {
   -webkit-backdrop-filter: blur(2px);
 }
 
+/* ─── Global themed tooltips ─── */
+.mv-global-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 7px 10px;
+  border-radius: 9px;
+  pointer-events: none;
+  transform: translate(-50%, 4px) scale(0.97);
+  opacity: 0;
+  color: var(--theme-text);
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.080), rgba(var(--glass-tint), 0.035)),
+    var(--surface-floating-bg, rgba(18, 20, 28, 0.96));
+  border: 1px solid rgba(var(--glass-tint), 0.105);
+  box-shadow:
+    0 16px 38px rgba(var(--shadow-base), 0.42),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.055),
+    inset 0 1px 0 rgba(var(--glass-tint), 0.075);
+  backdrop-filter: blur(20px) saturate(1.18);
+  -webkit-backdrop-filter: blur(20px) saturate(1.18);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: opacity 130ms ease, transform 130ms ease;
+}
+
+.mv-global-tooltip.is-visible {
+  opacity: 1;
+}
+
+.mv-global-tooltip.is-top {
+  transform: translate(-50%, -100%) translateY(-4px) scale(1);
+}
+
+.mv-global-tooltip.is-bottom {
+  transform: translate(-50%, 4px) scale(1);
+}
+
+.mv-global-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border: inherit;
+  background:
+    linear-gradient(135deg, rgba(var(--glass-tint), 0.055), rgba(var(--glass-tint), 0.030)),
+    var(--surface-floating-bg, rgba(18, 20, 28, 0.96));
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.mv-global-tooltip.is-top::after {
+  bottom: -5px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.mv-global-tooltip.is-bottom::after {
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-global-tooltip {
+    transition: none;
+  }
+}
+
 /* ─── Squircle avatar shape ─── */
 .avatar-squircle {
   border-radius: 18%;

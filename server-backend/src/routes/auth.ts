@@ -10,6 +10,7 @@ import { postBroadcast } from '../services/channelBroadcast';
 import { evaluateChannelAccess } from '../services/channelAccessService';
 import { getServerAccessContext } from '../services/accessContextService';
 import { CAPABILITIES } from '../capabilities';
+import { logAction } from '../services/auditLogService';
 
 const router = Router();
 
@@ -57,6 +58,25 @@ async function requireProfileAdmin(userId: string, primaryOnly = false): Promise
   const isPrimary = !!row?.is_primary_admin || row?.role === 'system_admin';
   const isAdmin = isPrimary || !!row?.is_admin;
   if (primaryOnly ? !isPrimary : !isAdmin) throw new AuthError(403, 'Admin yetkisi gerekli');
+}
+
+function maxServerRolePriority(ctx: Awaited<ReturnType<typeof getServerAccessContext>>): number {
+  if (ctx.membership.isOwner) return 100;
+  return Math.max(
+    ...ctx.roles.map(role => Number(role.priority) || 0),
+    ctx.membership.baseRole === 'super_admin' ? 90 :
+    ctx.membership.baseRole === 'admin' ? 80 :
+    ctx.membership.baseRole === 'super_mod' ? 70 :
+    ctx.membership.baseRole === 'mod' || ctx.membership.baseRole === 'moderator' ? 60 :
+    ctx.membership.baseRole === 'super_member' ? 30 :
+    ctx.membership.baseRole === 'member' ? 20 : 0,
+  );
+}
+
+async function requireServerRoleAtLeast(serverId: string, userId: string, minPriority: number, message: string): Promise<void> {
+  const ctx = await getServerAccessContext(userId, serverId);
+  if (!ctx.membership.exists) throw new AuthError(403, 'Bu sunucunun üyesi değilsin');
+  if (maxServerRolePriority(ctx) < minPriority) throw new AuthError(403, message);
 }
 
 async function requireRoomMessageAccess(channelId: string, userId: string, write = false): Promise<{ serverId: string }> {
@@ -783,13 +803,20 @@ router.patch('/users/:id/server-creation-plan', authMiddleware as any, async (re
   }
 });
 
-router.get('/announcements', async (_req: Request, res: Response) => {
+router.get('/announcements', authMiddleware as any, async (req: Request, res: Response) => {
   try {
+    const serverId = typeof req.query.serverId === 'string' ? req.query.serverId : '';
+    if (serverId) {
+      const ctx = await getServerAccessContext((req as any).profileId as string, serverId);
+      if (!ctx.membership.exists) throw new AuthError(403, 'Bu sunucunun üyesi değilsin');
+    }
     const rows = await queryMany(
       `SELECT *
          FROM announcements
         WHERE is_active = true
+          AND ($1::uuid IS NULL OR server_id = $1::uuid)
         ORDER BY is_pinned DESC, created_at DESC`,
+      [serverId || null],
     );
     res.json({ data: rows, error: null });
   } catch (err) {
@@ -800,8 +827,10 @@ router.get('/announcements', async (_req: Request, res: Response) => {
 router.post('/announcements', authMiddleware as any, async (req: Request, res: Response) => {
   try {
     const actorId = (req as any).profileId as string;
-    await requireProfileAdmin(actorId);
     const input = req.body && typeof req.body === 'object' ? req.body : {};
+    const serverId = String((input as any).server_id || (input as any).serverId || '').trim();
+    if (!serverId) throw new AuthError(400, 'Sunucu gerekli');
+    await requireServerRoleAtLeast(serverId, actorId, 60, 'Duyuru veya etkinlik ekleme yetkin yok');
     const title = String(input.title || '').trim();
     const content = String(input.content || '').trim();
     if (!title || !content) throw new AuthError(400, 'Başlık ve içerik gerekli');
@@ -811,13 +840,14 @@ router.post('/announcements', authMiddleware as any, async (req: Request, res: R
     );
     const row = await queryOne(
       `INSERT INTO announcements (
-         id, title, content, author_id, author_name, is_pinned, priority, is_active,
+         id, server_id, title, content, author_id, author_name, is_pinned, priority, is_active,
          type, event_date, participation_time, participation_requirements, created_at, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, now(), now())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12, now(), now())
        RETURNING *`,
       [
         crypto.randomUUID(),
+        serverId,
         title,
         content,
         actorId,
@@ -830,7 +860,7 @@ router.post('/announcements', authMiddleware as any, async (req: Request, res: R
         input.participation_requirements == null ? null : String(input.participation_requirements),
       ],
     );
-    void postBroadcast('announcement-update', { action: 'create', id: (row as any)?.id });
+    void postBroadcast('announcement-update', { action: 'create', id: (row as any)?.id, serverId });
     res.status(201).json({ data: row, error: null });
   } catch (err) {
     handleAuthError(res, err);
@@ -840,7 +870,14 @@ router.post('/announcements', authMiddleware as any, async (req: Request, res: R
 router.patch('/announcements/:id', authMiddleware as any, async (req: Request, res: Response) => {
   try {
     const actorId = (req as any).profileId as string;
-    await requireProfileAdmin(actorId);
+    const announcementId = String(req.params.id || '');
+    const existing = await queryOne<{ server_id: string | null; type: string | null; title: string | null }>(
+      'SELECT server_id::text, type, title FROM announcements WHERE id::text = $1',
+      [announcementId],
+    );
+    if (!existing) throw new AuthError(404, 'Duyuru bulunamadı');
+    if (!existing.server_id) throw new AuthError(400, 'Duyurunun sunucusu yok');
+    await requireServerRoleAtLeast(existing.server_id, actorId, 60, 'Duyuru veya etkinlik düzenleme yetkin yok');
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const sets: string[] = [];
     const values: unknown[] = [];
@@ -863,13 +900,13 @@ router.patch('/announcements/:id', authMiddleware as any, async (req: Request, r
     if ('participation_requirements' in input) { sets.push(`participation_requirements = $${i++}`); values.push(input.participation_requirements == null ? null : String(input.participation_requirements)); }
     if (!sets.length) throw new AuthError(400, 'Güncellenecek alan yok');
     sets.push('updated_at = now()');
-    values.push(req.params.id);
+    values.push(announcementId);
     const row = await queryOne(
       `UPDATE announcements SET ${sets.join(', ')} WHERE id::text = $${i} RETURNING *`,
       values,
     );
     if (!row) throw new AuthError(404, 'Duyuru bulunamadı');
-    void postBroadcast('announcement-update', { action: 'update', id: req.params.id });
+    void postBroadcast('announcement-update', { action: 'update', id: announcementId, serverId: existing.server_id });
     res.json({ data: row, error: null });
   } catch (err) {
     handleAuthError(res, err);
@@ -879,9 +916,24 @@ router.patch('/announcements/:id', authMiddleware as any, async (req: Request, r
 router.delete('/announcements/:id', authMiddleware as any, async (req: Request, res: Response) => {
   try {
     const actorId = (req as any).profileId as string;
-    await requireProfileAdmin(actorId);
-    const deleted = await execute('DELETE FROM announcements WHERE id::text = $1', [req.params.id]);
-    void postBroadcast('announcement-update', { action: 'delete', id: req.params.id });
+    const announcementId = String(req.params.id || '');
+    const existing = await queryOne<{ server_id: string | null; type: string | null; title: string | null }>(
+      'SELECT server_id::text, type, title FROM announcements WHERE id::text = $1',
+      [announcementId],
+    );
+    if (!existing) throw new AuthError(404, 'Duyuru bulunamadı');
+    if (!existing.server_id) throw new AuthError(400, 'Duyurunun sunucusu yok');
+    await requireServerRoleAtLeast(existing.server_id, actorId, 60, 'Duyuru veya etkinlik silme yetkin yok');
+    const deleted = await execute('DELETE FROM announcements WHERE id::text = $1', [announcementId]);
+    await logAction({
+      serverId: existing.server_id,
+      actorId,
+      action: existing.type === 'event' ? 'event.delete' : 'announcement.delete',
+      resourceType: existing.type === 'event' ? 'event' : 'announcement',
+      resourceId: announcementId,
+      metadata: { title: existing.title || '', targetName: existing.title || '' },
+    });
+    void postBroadcast('announcement-update', { action: 'delete', id: announcementId, serverId: existing.server_id });
     res.json({ data: { ok: deleted > 0 }, error: null });
   } catch (err) {
     handleAuthError(res, err);
@@ -959,7 +1011,7 @@ router.patch('/room-messages/:id', authMiddleware as any, async (req: Request, r
       throw new AuthError(403, 'Mesajı düzenleme yetkin yok');
     }
     const row = await queryOne(
-      'UPDATE room_messages SET text = $1 WHERE id::text = $2 RETURNING *',
+      'UPDATE room_messages SET text = $1, updated_at = now() WHERE id::text = $2 RETURNING *',
       [text, req.params.id],
     );
     res.json({ data: row, error: null });

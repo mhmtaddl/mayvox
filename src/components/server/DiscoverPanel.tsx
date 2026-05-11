@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Hash } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, Clock3, Crown, Gem, Globe2, Hash, LockKeyhole, Search, Users } from 'lucide-react';
 import { searchServers, joinServer, createJoinRequest, type DiscoverServer } from '../../lib/serverService';
 import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
@@ -9,6 +9,13 @@ const DISCOVER_PLAN_TONE: Record<string, { rgb: string; bgA: number; bgB: number
   pro: { rgb: '234, 179, 8', bgA: 0.16, bgB: 0.055, borderA: 0.36, shadowA: 0.10 },
   ultra: { rgb: '168, 85, 247', bgA: 0.18, bgB: 0.065, borderA: 0.42, shadowA: 0.12 },
 };
+
+function formatSince(iso?: string): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return '';
+  return String(date.getFullYear());
+}
 
 interface Props {
   /** serverId — katılım sonrası veya mevcut üye olunan sunucuya geçiş için parent'a iletilir. */
@@ -165,7 +172,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
             <div className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Eşleşen sunucu bulunamadı</div>
           </div>
         ) : (
-          <div ref={gridRefCb} className={`grid gap-2.5 ${gridCols}`}>
+          <div ref={gridRefCb} className={`grid gap-3 ${gridCols}`}>
             {servers.map(s => {
               const member = isMember(s);
               const active = isActive(s);
@@ -174,72 +181,108 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
               const pv = getPlanVisual(plan);
               const planKey = plan === 'pro' || plan === 'ultra' ? plan : 'free';
               const tone = DISCOVER_PLAN_TONE[planKey];
-              const isUltra = plan === 'ultra';
               const clickable = member || active;
+              const since = formatSince(s.createdAt);
+              const PlanIcon = plan === 'ultra' ? Gem : plan === 'pro' ? Crown : Circle;
               return (
                 <div key={s.id}
                   onClick={clickable ? () => handleCardClick(s) : undefined}
-                  className={`group/c relative rounded-xl p-4 transition-all duration-200 hover:-translate-y-[2px] ${active ? 'ring-1 ring-[var(--theme-accent)]/12' : ''} ${isUltra ? 'ultra-card' : ''} ${clickable ? 'cursor-pointer' : ''}`}
+                  className={`group/c relative min-h-[150px] overflow-hidden rounded-xl p-3 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-[1px] ${active ? 'ring-1 ring-[var(--theme-accent)]/16' : ''} ${clickable ? 'cursor-pointer' : ''}`}
                   style={{
                     background: active
-                      ? `linear-gradient(135deg, rgba(var(--theme-accent-rgb), 0.08), rgba(${tone.rgb}, ${tone.bgB}))`
-                      : `linear-gradient(135deg, rgba(${tone.rgb}, ${tone.bgA}), rgba(var(--glass-tint), ${tone.bgB}))`,
-                    border: `1px solid ${active ? 'rgba(var(--theme-accent-rgb), 0.24)' : `rgba(${tone.rgb}, ${tone.borderA})`}`,
-                    boxShadow: `0 8px 22px rgba(0,0,0,0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08), 0 0 0 1px rgba(${tone.rgb}, ${tone.shadowA})`,
+                      ? 'rgba(var(--theme-accent-rgb),0.070)'
+                      : 'rgba(var(--glass-tint),0.040)',
+                    border: `1px solid ${active ? 'rgba(var(--theme-accent-rgb),0.20)' : `rgba(${tone.rgb},${Math.min(tone.borderA, 0.16)})`}`,
+                    boxShadow: `0 10px 28px rgba(0,0,0,0.105), inset 0 1px 0 rgba(var(--glass-tint),0.060)`,
                   }}>
 
 
                   {/* Hover overlay */}
-                  <div className="absolute inset-0 rounded-xl opacity-0 group-hover/c:opacity-100 transition-opacity duration-200 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(var(--glass-tint), 0.03), transparent)' }} />
+                  <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover/c:opacity-100" style={{ background: `rgba(${tone.rgb},0.035)` }} />
 
                   {/* 1. Logo + İsim + Badge */}
-                  <div className="relative flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
-                      style={{ background: s.avatarUrl ? 'none' : 'rgba(var(--theme-accent-rgb), 0.08)' }}>
-                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-10 h-10 rounded-lg object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} /> : null}
-                      <span className={`text-[11px] font-bold text-[var(--theme-accent)] opacity-70 ${s.avatarUrl ? 'hidden' : ''}`}>{s.shortName}</span>
+                  <div className="relative mb-2 flex items-start gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px]"
+                      style={{
+                        background: s.avatarUrl ? 'rgba(var(--glass-tint),0.035)' : `linear-gradient(135deg, rgba(${tone.rgb},0.18), rgba(var(--glass-tint),0.045))`,
+                        border: '1px solid rgba(var(--glass-tint),0.08)',
+                        boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.08)',
+                      }}>
+                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="h-9 w-9 rounded-[10px] object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} /> : null}
+                      <span className={`text-[10px] font-black tracking-[0.08em] text-[var(--theme-accent)]/80 ${s.avatarUrl ? 'hidden' : ''}`}>{s.shortName}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate">{s.name}</span>
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0"
-                          style={{ background: pv.badgeBg, color: pv.badgeText, boxShadow: pv.badgeShadow }}>{plan}</span>
+                      <div className="flex min-w-0 items-start justify-between gap-1.5">
+                        <span className="min-w-0 truncate text-[12.5px] font-bold leading-5 text-[var(--theme-text)]">{s.name}</span>
+                        <span
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                          style={{ background: 'rgba(var(--glass-tint),0.040)', color: pv.badgeText, border: '1px solid rgba(var(--glass-tint),0.065)' }}
+                          title={`Plan: ${plan}`}
+                        >
+                          <PlanIcon size={10.5} strokeWidth={2.3} />
+                        </span>
                       </div>
-                      {s.motto && <div className="text-[10px] text-[var(--theme-secondary-text)] opacity-75 truncate mt-0.5">"{s.motto}"</div>}
+                      {s.motto && <div className="mt-0.5 truncate text-[9.5px] font-medium text-[var(--theme-secondary-text)]/58">{s.motto}</div>}
                     </div>
                   </div>
 
                   {/* 2. Açıklama */}
-                  <div className="relative text-[11px] text-[var(--theme-secondary-text)] opacity-70 leading-relaxed line-clamp-2 mb-3 min-h-[32px]">
+                  <div className="relative mb-2 min-h-[30px] text-[10.5px] leading-[1.45] text-[var(--theme-secondary-text)]/62 line-clamp-2">
                     {s.description || 'Henüz açıklama yok.'}
                   </div>
 
                   {/* 3. Meta + Aksiyon */}
-                  <div className="relative flex items-center justify-between">
-                    <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-60">
-                      {s.memberCount} üye · Katılım: {isFrictionless(s) ? 'Açık' : 'Davetli'}
-                    </span>
+                  <div className="relative flex items-end justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      <span className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[9px] font-bold text-[var(--theme-secondary-text)]/66"
+                        style={{ background: 'rgba(var(--glass-tint),0.045)', border: '1px solid rgba(var(--glass-tint),0.065)' }}>
+                        <Users size={9.5} />
+                        <span className="tabular-nums">{s.memberCount}</span>
+                      </span>
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full"
+                        style={{
+                          background: isFrictionless(s) ? 'rgba(16,185,129,0.075)' : 'rgba(var(--theme-accent-rgb),0.075)',
+                          border: isFrictionless(s) ? '1px solid rgba(16,185,129,0.13)' : '1px solid rgba(var(--theme-accent-rgb),0.13)',
+                          color: isFrictionless(s) ? 'rgba(110,231,183,0.88)' : 'var(--theme-accent)',
+                        }}
+                        title={isFrictionless(s) ? 'Açık katılım' : 'Davetli sunucu'}>
+                        {isFrictionless(s) ? <Globe2 size={9.5} /> : <LockKeyhole size={9.5} />}
+                      </span>
+                      {since && (
+                        <span className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[8.5px] font-bold text-[var(--theme-secondary-text)]/48">
+                          <CalendarDays size={9} />
+                          {since}
+                        </span>
+                      )}
+                    </div>
                     {member ? (
-                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/35">Üyesiniz</span>
+                      <span
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-emerald-300/80"
+                        style={{ background: 'rgba(16,185,129,0.075)', border: '1px solid rgba(16,185,129,0.14)' }}
+                        title="Üyesin"
+                      >
+                        <CheckCircle2 size={12} />
+                      </span>
                     ) : s.myJoinRequestStatus === 'pending' ? (
-                      <span className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full"
-                        style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', color: 'var(--theme-accent)', border: '1px solid rgba(var(--theme-accent-rgb), 0.15)' }}>
-                        Yanıt Bekleniyor
+                      <span className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-[9px] font-bold"
+                        style={{ background: 'rgba(var(--theme-accent-rgb),0.08)', color: 'var(--theme-accent)', border: '1px solid rgba(var(--theme-accent-rgb),0.15)' }}>
+                        <Clock3 size={10} />
+                        Bekliyor
                       </span>
                     ) : isFrictionless(s) ? (
                       <button onClick={() => handleJoin(s.id)} disabled={isJoining}
-                        className="join-btn h-7 px-3.5 rounded-lg text-[11px] font-medium flex items-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
-                        style={{ background: 'rgba(var(--glass-tint), 0.06)', border: '1px solid rgba(var(--glass-tint), 0.12)', color: 'var(--theme-text)' }}>
+                        className="join-btn flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                        style={{ background: 'rgba(var(--theme-accent-rgb),0.10)', border: '1px solid rgba(var(--theme-accent-rgb),0.18)', color: 'var(--theme-accent)' }}>
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
                         {isJoining ? '...' : 'Katıl'}
                       </button>
                     ) : (
                       <button onClick={() => handleRequest(s.id)} disabled={isJoining}
-                        className="h-7 px-3.5 rounded-lg text-[11px] font-medium flex items-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
-                        style={{ background: 'rgba(var(--theme-accent-rgb), 0.08)', border: '1px solid rgba(var(--theme-accent-rgb), 0.18)', color: 'var(--theme-accent)' }}
+                        className="flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                        style={{ background: 'rgba(var(--glass-tint),0.045)', border: '1px solid rgba(var(--glass-tint),0.08)', color: 'var(--theme-text)' }}
                         title="Bu sunucuya başvuru gönder — yönetici onayı gerekir">
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
-                        {isJoining ? '...' : 'İstek Gönder'}
+                        {isJoining ? '...' : 'İstek'}
                       </button>
                     )}
                   </div>

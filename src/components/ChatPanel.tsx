@@ -16,6 +16,7 @@ export interface ChatMessage {
   avatar: string;
   text: string;
   time: number;
+  updatedAt?: number;
 }
 
 interface Props {
@@ -209,6 +210,7 @@ export default function ChatPanel({
             || nextMsg.senderId !== msg.senderId
             || new Date(nextMsg.time).toDateString() !== d.toDateString()
             || (new Date(nextMsg.time).getTime() - new Date(msg.time).getTime()) >= GROUP_GAP_MS;
+          const isEdited = typeof msg.updatedAt === 'number' && msg.updatedAt > msg.time + 1000;
           // Tail corner sadece group sonunda sert
           const radiusCls = isMe
             ? (isLastInGroup ? 'rounded-[16px] rounded-br-[6px]' : 'rounded-[16px]')
@@ -275,6 +277,17 @@ export default function ChatPanel({
                       } as React.CSSProperties}
                     >
                       <MessageText text={msg.text} isOwn={isMe} />
+                      {isEdited && (
+                        <div className={`mt-1 flex leading-none ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          <span
+                            className="inline-flex items-center opacity-0 transition-opacity duration-150 group-hover/msg:opacity-55 group-focus-within/msg:opacity-55"
+                            title="Düzenlendi"
+                            aria-label="Düzenlendi"
+                          >
+                            <PencilLine size={9} strokeWidth={2} />
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

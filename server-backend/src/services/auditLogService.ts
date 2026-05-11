@@ -109,9 +109,87 @@ export async function listAuditLog(
     params,
   );
 
-  // Actor enrichment — profiles batch lookup
-  const actorIds = Array.from(new Set(rows.map(r => r.actor_id)));
-  const nameMap = await fetchProfileNameMap(actorIds);
+  // Actor + target enrichment — profiles batch lookup.
+  const profileIds = new Set<string>();
+  for (const r of rows) {
+    if (r.actor_id) profileIds.add(r.actor_id);
+    if (r.resource_type === 'member' && r.resource_id) profileIds.add(r.resource_id);
+    const metadata = r.metadata ?? {};
+    for (const key of ['targetUserId', 'userId']) {
+      const value = metadata[key];
+      if (typeof value === 'string' && value) profileIds.add(value);
+    }
+  }
+  const nameMap = await fetchProfileNameMap(Array.from(profileIds));
+
+  const channelIds = Array.from(new Set(rows.flatMap((r) => {
+    const ids: string[] = [];
+    if (r.resource_type === 'channel' && r.resource_id) ids.push(r.resource_id);
+    const channelId = r.metadata?.channelId;
+    if (typeof channelId === 'string' && channelId) ids.push(channelId);
+    return ids;
+  })));
+  const channelRows = channelIds.length
+    ? await queryMany<{ id: string; name: string }>(
+      'SELECT id::text, name FROM channels WHERE id::text = ANY($1::text[])',
+      [channelIds],
+    )
+    : [];
+  const channelNameMap = new Map(channelRows.map(row => [row.id, row.name]));
+
+  const recommendationIds = Array.from(new Set(rows
+    .filter(r => r.resource_type === 'recommendation' && r.resource_id)
+    .map(r => r.resource_id as string)));
+  const recommendationRows = recommendationIds.length
+    ? await queryMany<{ id: string; title: string; category: string | null; creator_id: string | null; creator_name: string | null }>(
+      `SELECT ri.id::text AS id,
+              ri.title,
+              ri.category,
+              ri.created_by::text AS creator_id,
+              COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), p.email, ri.created_by::text) AS creator_name
+         FROM recommendation_items ri
+         LEFT JOIN profiles p ON p.id = ri.created_by
+        WHERE ri.id::text = ANY($1::text[])`,
+      [recommendationIds],
+    )
+    : [];
+  const recommendationMap = new Map(recommendationRows.map(row => [row.id, row]));
+
+  function enrichMetadata(row: AuditLogRow): Record<string, unknown> | null {
+    const metadata: Record<string, unknown> = { ...(row.metadata ?? {}) };
+    if (row.resource_type === 'recommendation' && row.resource_id) {
+      const item = recommendationMap.get(row.resource_id);
+      if (item) {
+        if (!metadata.title) metadata.title = item.title;
+        if (!metadata.targetName) metadata.targetName = item.title;
+        if (!metadata.category && item.category) metadata.category = item.category;
+        if (!metadata.creatorId && item.creator_id) metadata.creatorId = item.creator_id;
+        if (!metadata.creatorName && item.creator_name) metadata.creatorName = item.creator_name;
+      }
+    }
+    if (!metadata.targetUserId && row.resource_type === 'member' && row.resource_id) {
+      metadata.targetUserId = row.resource_id;
+    }
+    const targetUserId = typeof metadata.targetUserId === 'string'
+      ? metadata.targetUserId
+      : typeof metadata.userId === 'string'
+        ? metadata.userId
+        : null;
+    if (!metadata.targetName && targetUserId) {
+      const targetName = nameMap.get(targetUserId);
+      if (targetName) metadata.targetName = targetName;
+    }
+    const channelId = typeof metadata.channelId === 'string'
+      ? metadata.channelId
+      : row.resource_type === 'channel' && row.resource_id
+        ? row.resource_id
+        : null;
+    if (!metadata.channelName && channelId) {
+      const channelName = channelNameMap.get(channelId);
+      if (channelName) metadata.channelName = channelName;
+    }
+    return Object.keys(metadata).length ? metadata : null;
+  }
 
   return rows.map(r => ({
     id: r.id,
@@ -120,7 +198,7 @@ export async function listAuditLog(
     action: r.action,
     resourceType: r.resource_type,
     resourceId: r.resource_id,
-    metadata: r.metadata,
+    metadata: enrichMetadata(r),
     createdAt: r.created_at,
   }));
 }
@@ -138,6 +216,34 @@ export async function deleteOldAuditLogs(days: number): Promise<number> {
   const result = await pool.query(
     `DELETE FROM audit_log WHERE created_at < now() - ($1 || ' days')::interval`,
     [String(days)]
+  );
+  return result.rowCount ?? 0;
+}
+
+export const AUDIT_LOG_RETENTION_DAYS = {
+  free: 7,
+  pro: 14,
+  ultra: 30,
+} as const;
+
+export async function deleteExpiredAuditLogsByPlan(): Promise<number> {
+  const result = await pool.query(
+    `DELETE FROM audit_log al
+      USING servers s
+      LEFT JOIN server_plans sp ON sp.server_id = s.id
+     WHERE al.server_id = s.id
+       AND al.created_at < now() - (
+         CASE COALESCE(sp.plan, s.plan, 'free')
+           WHEN 'ultra' THEN $1::int
+           WHEN 'pro' THEN $2::int
+           ELSE $3::int
+         END || ' days'
+       )::interval`,
+    [
+      AUDIT_LOG_RETENTION_DAYS.ultra,
+      AUDIT_LOG_RETENTION_DAYS.pro,
+      AUDIT_LOG_RETENTION_DAYS.free,
+    ],
   );
   return result.rowCount ?? 0;
 }

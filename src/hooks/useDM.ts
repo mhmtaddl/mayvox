@@ -27,6 +27,10 @@ import { handleDmMessage as notifyDmMessage } from '../features/notifications/no
 import { subscribeConnectionStatus } from '../lib/chatService';
 import { decryptTextIfNeeded, encryptTextForUsers } from '../lib/e2ee';
 
+function toMessagePreview(text: string): string {
+  return text.length > 100 ? text.slice(0, 100) + '…' : text;
+}
+
 /**
  * useDM — DM state yönetimi.
  * conversations listesi + aktif sohbet + unread sayacı.
@@ -70,6 +74,14 @@ export function useDM(currentUserId: string | undefined) {
     return { ...msg, text: result.text };
   }, []);
 
+  const decryptConversationPreviews = useCallback(async (items: DmConversation[]): Promise<DmConversation[]> => {
+    return Promise.all(items.map(async convo => {
+      if (!convo.lastMessage) return convo;
+      const result = await decryptTextIfNeeded(convo.lastMessage);
+      return { ...convo, lastMessage: toMessagePreview(result.text) };
+    }));
+  }, []);
+
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
     setDmHandlers({
@@ -87,8 +99,13 @@ export function useDM(currentUserId: string | undefined) {
         const fixed = staleUnread > 0 && activeKey
           ? filtered.map(c => c.conversationKey === activeKey ? { ...c, unreadCount: 0 } : c)
           : filtered;
-        setConversations(fixed);
-        setRequests(filteredRequests);
+        void Promise.all([
+          decryptConversationPreviews(fixed),
+          decryptConversationPreviews(filteredRequests),
+        ]).then(([decryptedConvos, decryptedRequests]) => {
+          setConversations(decryptedConvos);
+          setRequests(decryptedRequests);
+        });
         if (staleUnread > 0 && activeKey) {
           markReadSafe(activeKey);
           setTotalUnread(prev => Math.max(0, prev - staleUnread));
@@ -145,7 +162,7 @@ export function useDM(currentUserId: string | undefined) {
         // Conversation listesini güncelle
         const updateList = (prev: DmConversation[]) => {
           const existing = prev.find(c => c.conversationKey === msg.conversationKey);
-          const preview = msg.text.length > 100 ? msg.text.slice(0, 100) + '…' : msg.text;
+          const preview = toMessagePreview(msg.text);
 
           if (existing) {
             const updated = prev.map(c =>
@@ -229,7 +246,7 @@ export function useDM(currentUserId: string | undefined) {
                 : m
             ));
           }
-          const preview = decrypted.text.length > 100 ? decrypted.text.slice(0, 100) + '…' : decrypted.text;
+          const preview = toMessagePreview(decrypted.text);
           if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
             setConversations(prev => prev.map(c =>
               c.conversationKey === decrypted.conversationKey
@@ -245,11 +262,14 @@ export function useDM(currentUserId: string | undefined) {
           setMessages(prev => prev.filter(m => m.id !== messageId));
         }
         if (typeof lastMessage === 'string' && typeof lastMessageAt === 'number') {
-          setConversations(prev => prev.map(c =>
-            c.conversationKey === convKey
-              ? { ...c, lastMessage, lastMessageAt }
-              : c
-          ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
+          void decryptTextIfNeeded(lastMessage).then(result => {
+            const preview = toMessagePreview(result.text);
+            setConversations(prev => prev.map(c =>
+              c.conversationKey === convKey
+                ? { ...c, lastMessage: preview, lastMessageAt }
+                : c
+            ).sort((a, b) => b.lastMessageAt - a.lastMessageAt));
+          });
         }
       },
       onReaction: (convKey, messageId, reactions) => {
@@ -304,7 +324,7 @@ export function useDM(currentUserId: string | undefined) {
         dmLoadBlocks();
       },
     });
-  }, [currentUserId, decryptDmMessage, markReadSafe]);
+  }, [currentUserId, decryptConversationPreviews, decryptDmMessage, markReadSafe]);
 
   // İlk yüklemede konuşmaları ve unread çek
   const loadInitial = useCallback(() => {

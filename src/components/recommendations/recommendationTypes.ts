@@ -1,14 +1,19 @@
 import type { RecommendationCategory } from '../../lib/serverService';
 
-export type { RecommendationCategory, RecommendationItem, RecommendationPayload, RecommendationLink, RecommendationRating, RecommendationComment } from '../../lib/serverService';
+export type {
+  RecommendationCategory,
+  RecommendationItem,
+  RecommendationPayload,
+  RecommendationLink,
+  RecommendationRating,
+  RecommendationComment,
+  RecommendationCreatorProfile,
+} from '../../lib/serverService';
 
 export const RECOMMENDATION_CATEGORIES: Array<{ id: RecommendationCategory; label: string }> = [
   { id: 'film', label: 'Film' },
   { id: 'series', label: 'Dizi' },
   { id: 'game', label: 'Oyun' },
-  { id: 'music', label: 'Müzik' },
-  { id: 'book', label: 'Kitap' },
-  { id: 'hardware', label: 'Donanım' },
 ];
 
 export const CATEGORY_LABELS: Record<RecommendationCategory, string> = RECOMMENDATION_CATEGORIES.reduce(

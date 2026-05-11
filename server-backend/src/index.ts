@@ -12,6 +12,7 @@ import authRoutes from './routes/auth';
 import e2eeRoutes from './routes/e2ee';
 import { assertCapabilitySyncOnStartup } from './services/capabilitySyncService';
 import { reconcileOrphanSessions, refreshActivityHeatmap } from './services/voiceActivityService';
+import { deleteExpiredAuditLogsByPlan } from './services/auditLogService';
 
 const app = express();
 
@@ -81,6 +82,17 @@ app.listen(config.port, config.host, () => {
         console.warn('[voice-activity] heatmap refresh hata:', err instanceof Error ? err.message : err));
     }, 60 * 60 * 1000);
   }, 5_000);
+
+  setTimeout(() => {
+    void deleteExpiredAuditLogsByPlan().then(deleted => {
+      if (deleted > 0) console.log(`[audit-log] retention cleanup: ${deleted} eski kayıt silindi`);
+    }).catch(err => console.warn('[audit-log] retention cleanup hata:', err instanceof Error ? err.message : err));
+    setInterval(() => {
+      void deleteExpiredAuditLogsByPlan().then(deleted => {
+        if (deleted > 0) console.log(`[audit-log] retention cleanup: ${deleted} eski kayıt silindi`);
+      }).catch(err => console.warn('[audit-log] retention cleanup hata:', err instanceof Error ? err.message : err));
+    }, 24 * 60 * 60 * 1000);
+  }, 30_000);
 });
 
 // Graceful shutdown

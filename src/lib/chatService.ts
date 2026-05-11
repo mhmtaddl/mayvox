@@ -19,6 +19,7 @@ export interface ChatMessage {
   avatar: string;
   text: string;
   time: number;
+  updatedAt?: number;
 }
 
 type ChatStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -43,7 +44,7 @@ type ChatEventHandler = {
   onMessage?: (msg: ChatMessage) => void;
   onDelete?: (messageId: string, meta?: ChatEventMeta) => void;
   onMessageReported?: (messageId: string, meta?: ChatEventMeta) => void;
-  onEdit?: (messageId: string, text: string, meta?: ChatEventMeta) => void;
+  onEdit?: (messageId: string, text: string, updatedAt?: number, meta?: ChatEventMeta) => void;
   onClear?: (roomId: string, meta?: ChatEventMeta) => void;
   onHistory?: (roomId: string, messages: ChatMessage[]) => void;
   onChatMute?: (roomId: string, muted: boolean, chatMuteRank: number, meta?: ChatEventMeta) => void;
@@ -548,7 +549,7 @@ export async function connectChat() {
           break;
 
         case 'edit':
-          handlers.onEdit?.(msg.messageId, msg.text, {
+          handlers.onEdit?.(msg.messageId, msg.text, typeof msg.updatedAt === 'number' ? msg.updatedAt : undefined, {
             actorId: typeof msg.actorId === 'string' ? msg.actorId : undefined,
             actorName: typeof msg.actorName === 'string' ? msg.actorName : undefined,
             targetUserId: typeof msg.targetUserId === 'string' ? msg.targetUserId : undefined,

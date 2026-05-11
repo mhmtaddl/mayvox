@@ -1,6 +1,7 @@
 import { pool, queryMany, queryOne } from '../repositories/db';
 import { getServerAccessContext } from './accessContextService';
 import { AppError } from './serverService';
+import { logAction } from './auditLogService';
 import {
   broadcastRecommendationCreated,
   broadcastRecommendationDeleted,
@@ -21,6 +22,7 @@ export interface RecommendationFilters {
   q?: string;
   includeHidden?: boolean;
   limit?: unknown;
+  userId?: string;
 }
 
 export interface RecommendationPayload {
@@ -51,8 +53,40 @@ export interface RecommendationItemDto {
   averageRating: number;
   ratingCount: number;
   commentCount: number;
+  watchedCount: number;
+  myWatched: boolean;
+  myWatchlisted: boolean;
+  myRatingScore: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RecommendationUserStateDto {
+  itemId: string;
+  serverId: string;
+  userId: string;
+  isWatched: boolean;
+  isWatchlisted: boolean;
+  watchedAt: string | null;
+  watchlistedAt: string | null;
+  updatedAt: string;
+}
+
+export interface RecommendationCreatorProfileDto {
+  userId: string;
+  userName: string | null;
+  userAvatar: string | null;
+  discoveryScore: number;
+  informationScore: number;
+  recommendationCount: number;
+  ratedRecommendationCount: number;
+  commentCount: number;
+  byCategory: Array<{
+    category: RecommendationCategory;
+    averageRating: number;
+    recommendationCount: number;
+    ratedRecommendationCount: number;
+  }>;
 }
 
 export interface RecommendationRatingDto {
@@ -96,7 +130,22 @@ interface RecommendationRow {
   average_rating: string | number;
   rating_count: number;
   comment_count: number;
+  watched_count: number;
+  my_watched: boolean;
+  my_watchlisted: boolean;
+  my_rating_score: string | number | null;
   created_at: string;
+  updated_at: string;
+}
+
+interface RecommendationUserStateRow {
+  item_id: string;
+  server_id: string;
+  user_id: string;
+  is_watched: boolean;
+  is_watchlisted: boolean;
+  watched_at: string | null;
+  watchlisted_at: string | null;
   updated_at: string;
 }
 
@@ -190,9 +239,66 @@ function mapRow(row: RecommendationRow): RecommendationItemDto {
     averageRating: Number(row.average_rating) || 0,
     ratingCount: row.rating_count,
     commentCount: row.comment_count,
+    watchedCount: row.watched_count ?? 0,
+    myWatched: row.my_watched === true,
+    myWatchlisted: row.my_watchlisted === true,
+    myRatingScore: row.my_rating_score === null || row.my_rating_score === undefined ? null : Number(row.my_rating_score),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function mapUserStateRow(row: RecommendationUserStateRow): RecommendationUserStateDto {
+  return {
+    itemId: row.item_id,
+    serverId: row.server_id,
+    userId: row.user_id,
+    isWatched: row.is_watched,
+    isWatchlisted: row.is_watchlisted,
+    watchedAt: row.watched_at,
+    watchlistedAt: row.watchlisted_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function recommendationSelect(userIdParam = 'NULL::uuid'): string {
+  return `SELECT
+        ri.id::text,
+        ri.server_id::text,
+        ri.created_by::text,
+        COALESCE(NULLIF(p.name, ''), p.email, 'Bir üye') AS created_by_name,
+        p.avatar AS created_by_avatar,
+        ri.title,
+        ri.category,
+        ri.description,
+        ri.cover_url,
+        ri.tags,
+        ri.links,
+        ri.metadata,
+        ri.status,
+        ri.average_rating,
+        ri.rating_count,
+        ri.comment_count,
+        COALESCE(ws.watched_count, 0)::int AS watched_count,
+        COALESCE(rus.is_watched, false) AS my_watched,
+        COALESCE(rus.is_watchlisted, false) AS my_watchlisted,
+        rr.score AS my_rating_score,
+        ri.created_at::text,
+        ri.updated_at::text
+       FROM recommendation_items ri
+       LEFT JOIN profiles p ON p.id = ri.created_by
+       LEFT JOIN (
+         SELECT item_id, COUNT(*)::int AS watched_count
+           FROM recommendation_user_states
+          WHERE is_watched = true
+          GROUP BY item_id
+       ) ws ON ws.item_id = ri.id
+       LEFT JOIN recommendation_user_states rus
+         ON rus.item_id = ri.id
+        AND rus.user_id = ${userIdParam}
+       LEFT JOIN recommendation_ratings rr
+         ON rr.item_id = ri.id
+        AND rr.user_id = ${userIdParam}`;
 }
 
 function mapRatingRow(row: RecommendationRatingRow): RecommendationRatingDto {
@@ -227,40 +333,35 @@ function canModerate(ctx: Awaited<ReturnType<typeof getServerAccessContext>>): b
   return ctx.membership.isOwner || ctx.flags.canManageServer || ctx.flags.canKickMembers;
 }
 
+function maxServerRolePriority(ctx: Awaited<ReturnType<typeof getServerAccessContext>>): number {
+  if (ctx.membership.isOwner) return 100;
+  return Math.max(
+    ...ctx.roles.map(role => Number(role.priority) || 0),
+    ctx.membership.baseRole === 'super_admin' ? 90 :
+    ctx.membership.baseRole === 'admin' ? 80 :
+    ctx.membership.baseRole === 'super_mod' ? 70 :
+    ctx.membership.baseRole === 'mod' || ctx.membership.baseRole === 'moderator' ? 60 :
+    ctx.membership.baseRole === 'super_member' ? 30 :
+    ctx.membership.baseRole === 'member' ? 20 : 0,
+  );
+}
+
 async function requireMember(serverId: string, userId: string): Promise<Awaited<ReturnType<typeof getServerAccessContext>>> {
   const ctx = await getServerAccessContext(userId, serverId);
   if (!ctx.membership.exists) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
   return ctx;
 }
 
-async function loadItem(serverId: string, itemId: string, includeHidden = false): Promise<RecommendationItemDto> {
+async function loadItem(serverId: string, itemId: string, includeHidden = false, userId?: string): Promise<RecommendationItemDto> {
+  const userIdSql = userId ? '$4::uuid' : 'NULL::uuid';
+  const params: unknown[] = userId ? [serverId, itemId, includeHidden, userId] : [serverId, itemId, includeHidden];
   const row = await queryOne<RecommendationRow>(
-    `SELECT
-        ri.id::text,
-        ri.server_id::text,
-        ri.created_by::text,
-        COALESCE(NULLIF(p.name, ''), p.email, 'Bir üye') AS created_by_name,
-        NULL::text AS created_by_avatar,
-        ri.title,
-        ri.category,
-        ri.description,
-        ri.cover_url,
-        ri.tags,
-        ri.links,
-        ri.metadata,
-        ri.status,
-        ri.average_rating,
-        ri.rating_count,
-        ri.comment_count,
-        ri.created_at::text,
-        ri.updated_at::text
-       FROM recommendation_items ri
-       LEFT JOIN profiles p ON p.id = ri.created_by
+    `${recommendationSelect(userIdSql)}
       WHERE ri.server_id = $1
         AND ri.id = $2
         AND ($3::boolean OR ri.status = 'active')
       LIMIT 1`,
-    [serverId, itemId, includeHidden],
+    params,
   );
   if (!row) throw new AppError(404, 'Öneri bulunamadı');
   return mapRow(row);
@@ -327,6 +428,8 @@ export async function listRecommendations(
   const clauses = ['ri.server_id = $1'];
   const params: unknown[] = [serverId];
   let index = 2;
+  const userStateParam = filters.userId ? `$${index++}::uuid` : 'NULL::uuid';
+  if (filters.userId) params.push(filters.userId);
 
   if (!filters.includeHidden) clauses.push("ri.status = 'active'");
 
@@ -348,27 +451,7 @@ export async function listRecommendations(
   params.push(clampLimit(filters.limit));
 
   const rows = await queryMany<RecommendationRow>(
-    `SELECT
-        ri.id::text,
-        ri.server_id::text,
-        ri.created_by::text,
-        COALESCE(NULLIF(p.name, ''), p.email, 'Bir üye') AS created_by_name,
-        NULL::text AS created_by_avatar,
-        ri.title,
-        ri.category,
-        ri.description,
-        ri.cover_url,
-        ri.tags,
-        ri.links,
-        ri.metadata,
-        ri.status,
-        ri.average_rating,
-        ri.rating_count,
-        ri.comment_count,
-        ri.created_at::text,
-        ri.updated_at::text
-       FROM recommendation_items ri
-       LEFT JOIN profiles p ON p.id = ri.created_by
+    `${recommendationSelect(userStateParam)}
       WHERE ${clauses.join(' AND ')}
       ORDER BY ri.created_at DESC
       LIMIT $${index}`,
@@ -383,7 +466,8 @@ export async function createRecommendation(
   userId: string,
   payload: RecommendationPayload,
 ): Promise<RecommendationItemDto> {
-  await requireMember(serverId, userId);
+  const ctx = await requireMember(serverId, userId);
+  if (maxServerRolePriority(ctx) < 30) throw new AppError(403, 'Keşif önerisi ekleme yetkin yok');
 
   const title = normalizeText(payload.title, 140);
   if (!title) throw new AppError(400, 'Başlık gerekli');
@@ -403,7 +487,7 @@ export async function createRecommendation(
     [serverId, userId, title, category, description, coverUrl, tags, JSON.stringify(links), JSON.stringify(metadata)],
   );
 
-  const item = await loadItem(serverId, result.rows[0].id, true);
+  const item = await loadItem(serverId, result.rows[0].id, true, userId);
   broadcastRecommendationCreated(serverId, item);
   return item;
 }
@@ -411,8 +495,158 @@ export async function createRecommendation(
 export async function getRecommendation(
   serverId: string,
   itemId: string,
+  userId?: string,
 ): Promise<RecommendationItemDto> {
-  return loadItem(serverId, itemId);
+  return loadItem(serverId, itemId, false, userId);
+}
+
+export async function setRecommendationUserState(
+  serverId: string,
+  itemId: string,
+  userId: string,
+  payload: { isWatched?: unknown; is_watched?: unknown; isWatchlisted?: unknown; is_watchlisted?: unknown },
+): Promise<{ item: RecommendationItemDto; state: RecommendationUserStateDto }> {
+  await requireMember(serverId, userId);
+  await requireActiveItem(serverId, itemId);
+  const watchedProvided = payload.isWatched !== undefined || payload.is_watched !== undefined;
+  const watchlistedProvided = payload.isWatchlisted !== undefined || payload.is_watchlisted !== undefined;
+  if (!watchedProvided && !watchlistedProvided) throw new AppError(400, 'Güncellenecek durum yok');
+
+  const watchedValue = payload.isWatched ?? payload.is_watched;
+  const watchlistedValue = payload.isWatchlisted ?? payload.is_watchlisted;
+  const result = await pool.query<RecommendationUserStateRow>(
+    `INSERT INTO recommendation_user_states
+       (server_id, item_id, user_id, is_watched, is_watchlisted, watched_at, watchlisted_at)
+     VALUES ($1, $2, $3, COALESCE($4::boolean, false), COALESCE($5::boolean, false),
+             CASE WHEN COALESCE($4::boolean, false) THEN now() ELSE NULL END,
+             CASE WHEN COALESCE($5::boolean, false) THEN now() ELSE NULL END)
+     ON CONFLICT (item_id, user_id)
+     DO UPDATE SET
+       is_watched = COALESCE($4::boolean, recommendation_user_states.is_watched),
+       is_watchlisted = COALESCE($5::boolean, recommendation_user_states.is_watchlisted),
+       watched_at = CASE
+         WHEN $4::boolean IS TRUE AND recommendation_user_states.watched_at IS NULL THEN now()
+         WHEN $4::boolean IS FALSE THEN NULL
+         ELSE recommendation_user_states.watched_at
+       END,
+       watchlisted_at = CASE
+         WHEN $5::boolean IS TRUE AND recommendation_user_states.watchlisted_at IS NULL THEN now()
+         WHEN $5::boolean IS FALSE THEN NULL
+         ELSE recommendation_user_states.watchlisted_at
+       END,
+       updated_at = now()
+     RETURNING item_id::text, server_id::text, user_id::text, is_watched, is_watchlisted,
+       watched_at::text, watchlisted_at::text, updated_at::text`,
+    [
+      serverId,
+      itemId,
+      userId,
+      watchedProvided ? watchedValue === true : null,
+      watchlistedProvided ? watchlistedValue === true : null,
+    ],
+  );
+  const item = await loadItem(serverId, itemId, true, userId);
+  broadcastRecommendationUpdated(serverId, item);
+  return { item, state: mapUserStateRow(result.rows[0]) };
+}
+
+export async function listRecommendationWatchlist(serverId: string, userId: string): Promise<RecommendationItemDto[]> {
+  await requireMember(serverId, userId);
+  const rows = await queryMany<RecommendationRow>(
+    `${recommendationSelect('$2::uuid')}
+      WHERE ri.server_id = $1
+        AND ri.status = 'active'
+        AND rus.is_watchlisted = true
+      ORDER BY rus.watchlisted_at DESC NULLS LAST, rus.updated_at DESC
+      LIMIT 100`,
+    [serverId, userId],
+  );
+  return rows.map(mapRow);
+}
+
+function categoryInfoKeys(category: RecommendationCategory): string[] {
+  if (category === 'film') return ['year', 'durationMinutes', 'genres', 'platform', 'externalRating'];
+  if (category === 'series') return ['year', 'status', 'seasonCount', 'episodeCount', 'episodeDurationMinutes', 'platform', 'externalRating'];
+  if (category === 'game') return ['platforms', 'genres', 'playerModes', 'idealPartySize', 'voiceChatFunScore'];
+  return [];
+}
+
+function metadataCompleteness(category: RecommendationCategory, metadata: Record<string, unknown> | null): number {
+  const keys = categoryInfoKeys(category);
+  if (keys.length === 0) return 0;
+  const filled = keys.filter(key => {
+    const value = metadata?.[key];
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'boolean') return true;
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  }).length;
+  return Math.round((filled / keys.length) * 100);
+}
+
+export async function getRecommendationCreatorProfile(
+  serverId: string,
+  viewerId: string,
+  creatorId: string,
+): Promise<RecommendationCreatorProfileDto> {
+  await requireMember(serverId, viewerId);
+  const rows = await queryMany<RecommendationRow>(
+    `${recommendationSelect('NULL::uuid')}
+      WHERE ri.server_id = $1
+        AND ri.created_by = $2
+        AND ri.status = 'active'`,
+    [serverId, creatorId],
+  );
+  const items = rows.map(mapRow);
+  const profile = await queryOne<{ user_id: string; user_name: string | null; user_avatar: string | null }>(
+    `SELECT p.id::text AS user_id,
+            COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), p.email, 'Bir üye') AS user_name,
+            p.avatar AS user_avatar
+       FROM profiles p
+      WHERE p.id = $1
+      LIMIT 1`,
+    [creatorId],
+  );
+  if (!profile) throw new AppError(404, 'Kullanıcı bulunamadı');
+
+  const rated = items.filter(item => item.ratingCount > 0);
+  const discoveryScore = rated.length
+    ? Math.round((rated.reduce((sum, item) => sum + item.averageRating, 0) / rated.length) * 10) / 10
+    : 0;
+  const informationScore = items.length
+    ? Math.round(items.reduce((sum, item) => sum + metadataCompleteness(item.category, item.metadata), 0) / items.length)
+    : 0;
+  const byCategory = (['film', 'series', 'game'] as RecommendationCategory[]).map(category => {
+    const categoryItems = items.filter(item => item.category === category);
+    const categoryRated = categoryItems.filter(item => item.ratingCount > 0);
+    return {
+      category,
+      averageRating: categoryRated.length
+        ? Math.round((categoryRated.reduce((sum, item) => sum + item.averageRating, 0) / categoryRated.length) * 10) / 10
+        : 0,
+      recommendationCount: categoryItems.length,
+      ratedRecommendationCount: categoryRated.length,
+    };
+  });
+  const commentCountRow = await queryOne<{ count: string | number }>(
+    `SELECT COUNT(*) AS count
+       FROM recommendation_comments
+      WHERE server_id = $1
+        AND user_id = $2
+        AND is_hidden = false`,
+    [serverId, creatorId],
+  );
+
+  return {
+    userId: profile.user_id,
+    userName: profile.user_name,
+    userAvatar: profile.user_avatar,
+    discoveryScore,
+    informationScore,
+    recommendationCount: items.length,
+    ratedRecommendationCount: rated.length,
+    commentCount: Number(commentCountRow?.count) || 0,
+    byCategory,
+  };
 }
 
 export async function updateRecommendation(
@@ -429,7 +663,7 @@ export async function updateRecommendation(
   const title = normalizeText(payload.title, 140);
   if (!title) throw new AppError(400, 'Başlık gerekli');
 
-  const category = current.category;
+  const category = normalizeCategory(payload.category ?? current.category);
   const description = normalizeText(payload.description, 2000);
   const coverUrl = normalizeText(payload.coverUrl ?? payload.cover_url, 600);
   const tags = normalizeTags(payload.tags);
@@ -451,7 +685,7 @@ export async function updateRecommendation(
     [title, category, description, coverUrl, tags, JSON.stringify(links), JSON.stringify(metadata), serverId, itemId],
   );
 
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, userId);
   broadcastRecommendationUpdated(serverId, item);
   return item;
 }
@@ -501,7 +735,7 @@ export async function setRecommendationRating(
     [serverId, itemId, userId, score],
   );
   await refreshRatingAggregate(serverId, itemId);
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, userId);
   const ratings = await listRecommendationRatings(serverId, itemId, userId);
   const myRating = ratings.find(r => r.userId === userId) ?? mapRatingRow(result.rows[0]);
   broadcastRecommendationRatingUpdated(serverId, itemId, item, myRating);
@@ -521,7 +755,7 @@ export async function deleteRecommendationRating(
     [serverId, itemId, userId],
   );
   await refreshRatingAggregate(serverId, itemId);
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, userId);
   broadcastRecommendationRatingUpdated(serverId, itemId, item);
   return { item };
 }
@@ -578,7 +812,7 @@ export async function upsertRecommendationComment(
     [serverId, itemId, userId, body, isSpoiler],
   );
   await refreshCommentAggregate(serverId, itemId);
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, userId);
   const comments = await listRecommendationComments(serverId, itemId, userId);
   const comment = comments.find(c => c.id === result.rows[0].id);
   if (!comment) throw new AppError(500, 'Yorum kaydedildi ama okunamadı');
@@ -613,7 +847,7 @@ export async function hideRecommendationComment(
     [serverId, itemId, commentId],
   );
   await refreshCommentAggregate(serverId, itemId);
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, actorId);
   broadcastRecommendationCommentDeleted(serverId, itemId, item, commentId);
   return { item };
 }
@@ -637,8 +871,60 @@ export async function hideRecommendation(
     [serverId, itemId],
   );
 
-  const item = await loadItem(serverId, itemId, true);
+  const item = await loadItem(serverId, itemId, true, actorId);
+  await logAction({
+    serverId,
+    actorId,
+    action: 'recommendation.hide',
+    resourceType: 'recommendation',
+    resourceId: itemId,
+    metadata: {
+      title: item.title,
+      targetName: item.title,
+      category: item.category,
+      creatorId: item.createdBy,
+      creatorName: item.createdByName,
+    },
+  });
   broadcastRecommendationHidden(serverId, item);
+  return item;
+}
+
+export async function restoreRecommendation(
+  serverId: string,
+  itemId: string,
+  actorId: string,
+): Promise<RecommendationItemDto> {
+  const ctx = await requireMember(serverId, actorId);
+  if (!canModerate(ctx)) throw new AppError(403, 'Önerinin gizliliğini kaldırmak için yetkin yok');
+  await loadItem(serverId, itemId, true);
+
+  await pool.query(
+    `UPDATE recommendation_items
+        SET status = 'active',
+            updated_at = now()
+      WHERE server_id = $1
+        AND id = $2
+        AND status = 'hidden'`,
+    [serverId, itemId],
+  );
+
+  const item = await loadItem(serverId, itemId, true, actorId);
+  await logAction({
+    serverId,
+    actorId,
+    action: 'recommendation.restore',
+    resourceType: 'recommendation',
+    resourceId: itemId,
+    metadata: {
+      title: item.title,
+      targetName: item.title,
+      category: item.category,
+      creatorId: item.createdBy,
+      creatorName: item.createdByName,
+    },
+  });
+  broadcastRecommendationUpdated(serverId, item);
   return item;
 }
 
@@ -649,7 +935,7 @@ export async function deleteRecommendation(
 ): Promise<void> {
   const ctx = await requireMember(serverId, actorId);
   const current = await loadItem(serverId, itemId, true);
-  if (current.createdBy !== actorId && !canModerate(ctx)) {
+  if (!canModerate(ctx)) {
     throw new AppError(403, 'Öneriyi silmek için yetkin yok');
   }
 
@@ -661,5 +947,19 @@ export async function deleteRecommendation(
         AND id = $2`,
     [serverId, itemId],
   );
+  await logAction({
+    serverId,
+    actorId,
+    action: 'recommendation.delete',
+    resourceType: 'recommendation',
+    resourceId: itemId,
+    metadata: {
+      title: current.title,
+      targetName: current.title,
+      category: current.category,
+      creatorId: current.createdBy,
+      creatorName: current.createdByName,
+    },
+  });
   broadcastRecommendationDeleted(serverId, itemId);
 }

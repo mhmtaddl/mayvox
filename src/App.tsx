@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AppChrome from './components/AppChrome';
+import GlobalTooltip from './components/GlobalTooltip';
 import CommandPalette from './components/CommandPalette';
 import { AppView, User, VoiceChannel } from './types';
 // Theme types + adaptive theme artık useAppSettings hook'unda
@@ -2887,6 +2888,7 @@ export default function App() {
                 >
                   {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
                   <AppChrome />
+                  <GlobalTooltip />
                   <CommandPalette
                     open={commandPaletteOpen}
                     onOpenChange={setCommandPaletteOpen}

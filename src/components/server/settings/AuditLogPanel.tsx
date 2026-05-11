@@ -62,6 +62,11 @@ const ACTION_MAP: Record<string, ActionDef> = {
   'server.moderation_config.create': { verb: 'Oto-Mod kuralları oluşturdu',   category: 'settings' },
   'server.moderation_config.reset':  { verb: 'Oto-Mod ayarlarını sıfırladı',  category: 'settings' },
   'moderation_history.reset':        { verb: 'ceza geçmişini sıfırladı',      category: 'manual' },
+  'announcement.delete':             { verb: 'duyuruyu sildi',                category: 'settings' },
+  'event.delete':                    { verb: 'etkinliği sildi',               category: 'settings' },
+  'recommendation.hide':             { verb: 'keşif önerisini gizledi',        category: 'settings' },
+  'recommendation.restore':          { verb: 'keşif önerisini görünür yaptı',  category: 'settings' },
+  'recommendation.delete':           { verb: 'keşif önerisini sildi',          category: 'settings' },
 };
 
 // ═══════════════════════════════════════════
@@ -112,12 +117,28 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 function describeTarget(log: AuditLogItem): string | null {
   const m = log.metadata as Record<string, unknown> | null;
   if (m) {
-    for (const k of ['targetName', 'targetUsername', 'username', 'name', 'channelName']) {
+    for (const k of ['targetName', 'targetUsername', 'username', 'name', 'title', 'channelName']) {
       const v = m[k];
       if (typeof v === 'string' && v.trim()) return v.trim();
     }
   }
+  if (log.resourceType === 'member' && log.resourceId) return log.resourceId;
   return null;
+}
+
+function describeContext(log: AuditLogItem): string | null {
+  const m = log.metadata as Record<string, unknown> | null;
+  if (!m) return null;
+  const channel = typeof m.channelName === 'string' ? m.channelName.trim() : '';
+  if (channel && log.resourceType === 'member') return `Oda: ${channel}`;
+  return null;
+}
+
+function describeRecommendationCreator(log: AuditLogItem): string | null {
+  const m = log.metadata as Record<string, unknown> | null;
+  if (!m || log.resourceType !== 'recommendation') return null;
+  const creator = typeof m.creatorName === 'string' ? m.creatorName.trim() : '';
+  return creator || null;
 }
 
 function extractReason(log: AuditLogItem): string | null {
@@ -187,6 +208,12 @@ function compressLogs(logs: AuditLogItem[]): CompressedRow[] {
       const inWindow = Number.isFinite(prevOldest) && Number.isFinite(curAt)
         && (prevOldest - curAt) <= COMPRESS_WINDOW_MS;
       if (sameActor && sameAction && inWindow) {
+        const sameResource = prev.log.resourceType === log.resourceType && prev.log.resourceId === log.resourceId;
+        const sameTarget = describeTarget(prev.log) === describeTarget(log);
+        if (!sameResource || !sameTarget) {
+          out.push({ id: log.id, log, count: 1, firstAt: log.createdAt });
+          continue;
+        }
         prev.count++;
         prev.firstAt = log.createdAt; // eski olaya doğru kay
         continue;
@@ -673,7 +700,9 @@ const AuditLogRow: React.FC<{ row: CompressedRow; resolveName: (id: string | nul
   const target = rawTarget && /^[0-9a-f-]{8,}$/i.test(rawTarget.replace(/^[a-z]+:/, ''))
     ? resolveName(rawTarget.replace(/^[a-z]+:/, ''))
     : rawTarget;
+  const recommendationCreator = describeRecommendationCreator(log);
   const reason = extractReason(log);
+  const context = describeContext(log);
   const time = timeAgo(log.createdAt, { withDateFallback: true });
 
   const showBadge = refined === 'flood' || refined === 'profanity' || refined === 'spam' || refined === 'auto';
@@ -731,9 +760,20 @@ const AuditLogRow: React.FC<{ row: CompressedRow; resolveName: (id: string | nul
               {def.verb}
             </span>
             {target && (
-              <span className={`${verbSize} text-[var(--theme-text)]/70 font-semibold truncate max-w-[240px]`}>
-                {target}
-              </span>
+              <>
+                <span className="text-[11px] text-[var(--theme-secondary-text)]/35">-</span>
+                <span className={`${verbSize} text-[var(--theme-text)]/70 font-semibold truncate max-w-[240px]`}>
+                  {target}
+                </span>
+              </>
+            )}
+            {recommendationCreator && (
+              <>
+                <span className="text-[11px] text-[var(--theme-secondary-text)]/35">-</span>
+                <span className={`${verbSize} text-[var(--theme-text)]/70 font-semibold truncate max-w-[160px]`}>
+                  {recommendationCreator}
+                </span>
+              </>
             )}
             {count > 1 && (
               <span
@@ -760,9 +800,9 @@ const AuditLogRow: React.FC<{ row: CompressedRow; resolveName: (id: string | nul
               </span>
             )}
           </div>
-          {reason && (
+          {(context || reason) && (
             <div className="mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/50 leading-snug truncate">
-              {reason}
+              {[context, reason].filter(Boolean).join(' · ')}
             </div>
           )}
         </div>

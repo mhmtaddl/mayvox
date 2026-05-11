@@ -15,7 +15,7 @@ import {
 import { subscribeRealtimeEvents } from '../lib/chatService';
 import { getPublicDisplayName } from '../lib/formatName';
 import { useJoinRequests } from '../hooks/useJoinRequests';
-import type { JoinRequestListItem } from '../lib/serverService';
+import { getServerRecommendations, type JoinRequestListItem, type RecommendationItem } from '../lib/serverService';
 import RecommendationsTab from './recommendations/RecommendationsTab';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -515,7 +515,7 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <motion.div
@@ -523,14 +523,33 @@ const DeleteConfirm = ({ open, onClose, onConfirm, loading }: { open: boolean; o
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 12 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="w-full max-w-sm rounded-2xl border p-5"
-        style={{ background: 'var(--theme-popover-bg, var(--popover-bg, var(--surface-elevated)))', borderColor: 'var(--popover-border)', color: 'var(--popover-text)', boxShadow: 'var(--popover-shadow)' }}
+        className="w-full max-w-[360px] rounded-2xl border border-[var(--theme-border)]/22 bg-[var(--theme-panel)] p-4 shadow-2xl shadow-black/30"
+        style={{ boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.06), 0 24px 70px rgba(0,0,0,0.34)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-sm text-[var(--theme-text)] mb-4">Bu öğeyi silmek istediğinize emin misiniz?</p>
-        <div className="flex justify-end gap-2.5">
-          <button type="button" onClick={onClose} className="px-4 py-1.5 text-xs font-semibold rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors active:scale-[0.97]">İptal</button>
-          <button type="button" disabled={loading} onClick={onConfirm} className="px-4 py-1.5 text-xs font-bold rounded-lg text-red-400 hover:bg-red-500/10 transition-colors active:scale-[0.97] disabled:opacity-40">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red-400/20 bg-red-500/12 text-red-200 hover:bg-red-500/18">
+              <Trash2 size={17} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[14px] font-semibold text-[var(--theme-text)]">Öğeyi sil</h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/55 transition-colors hover:bg-[rgba(var(--glass-tint),0.05)] hover:text-[var(--theme-text)] disabled:opacity-45"
+            title="Kapat"
+          >
+            <X size={15} />
+          </button>
+        </div>
+        <p className="mt-3 text-[12px] leading-5 text-[var(--theme-secondary-text)]/72">Bu öğeyi silmek istediğinize emin misiniz?</p>
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={loading} className="rounded-xl px-3.5 py-2 text-[12px] text-[var(--theme-secondary-text)] transition-colors hover:bg-[rgba(var(--glass-tint),0.045)] hover:text-[var(--theme-text)] disabled:opacity-45">İptal</button>
+          <button type="button" disabled={loading} onClick={onConfirm} className="rounded-xl border border-red-400/20 bg-red-500/12 px-3.5 py-2 text-[12px] font-semibold text-red-200 transition-colors hover:bg-red-500/18 disabled:opacity-50">
             {loading ? 'Siliniyor...' : 'Sil'}
           </button>
         </div>
@@ -829,25 +848,26 @@ function InviteApplicationsFeed({
   );
 }
 
-type CombinedFeedItem =
-  | { kind: 'announcement'; item: Announcement; createdAt: string }
-  | { kind: 'event'; item: Announcement; createdAt: string }
-  | { kind: 'invite'; item: JoinRequestListItem; createdAt: string };
-
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface Props {
   currentUser: User;
   serverId?: string;
+  canCreateAnnouncements?: boolean;
+  canCreateRecommendations?: boolean;
+  canModerateCommunityContent?: boolean;
   canViewInviteApplications?: boolean;
   onOpenInviteApplications?: () => void;
 }
 
-type Tab = 'all' | 'announcement' | 'event' | 'invites' | 'recommendations';
+type Tab = 'announcement' | 'event' | 'invites' | 'recommendations';
 
 export default function AnnouncementsPanel({
   currentUser,
   serverId,
+  canCreateAnnouncements = false,
+  canCreateRecommendations = false,
+  canModerateCommunityContent = false,
   canViewInviteApplications = false,
   onOpenInviteApplications,
 }: Props) {
@@ -857,12 +877,15 @@ export default function AnnouncementsPanel({
   const [editTarget, setEditTarget] = useState<Announcement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('all');
+  const [activeTab, setActiveTab] = useState<Tab>('announcement');
+  const [defaultTabApplied, setDefaultTabApplied] = useState(false);
+  const [recommendationSummaryItems, setRecommendationSummaryItems] = useState<RecommendationItem[]>([]);
+  const [recommendationSummaryLoaded, setRecommendationSummaryLoaded] = useState(false);
   const [recommendationCreateSignal, setRecommendationCreateSignal] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
-  const canManage = currentUser.isAdmin || currentUser.isModerator;
-  const isAdmin = currentUser.isAdmin;
+  const canManage = canCreateAnnouncements;
+  const canModerateContent = canModerateCommunityContent;
   const showInvitesTab = !!serverId && canViewInviteApplications;
   const showRecommendationsTab = !!serverId && RECOMMENDATIONS_ENABLED;
   const {
@@ -880,8 +903,14 @@ export default function AnnouncementsPanel({
   const pendingJoinRequestCount = pendingJoinRequests.length;
 
   useEffect(() => {
-    if (activeTab === 'invites' && !showInvitesTab) setActiveTab('all');
-    if (activeTab === 'recommendations' && !showRecommendationsTab) setActiveTab('all');
+    setDefaultTabApplied(false);
+    setRecommendationSummaryLoaded(false);
+    setActiveTab('announcement');
+  }, [serverId]);
+
+  useEffect(() => {
+    if (activeTab === 'invites' && !showInvitesTab) setActiveTab('announcement');
+    if (activeTab === 'recommendations' && !showRecommendationsTab) setActiveTab('announcement');
   }, [activeTab, showInvitesTab, showRecommendationsTab]);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
@@ -902,11 +931,28 @@ export default function AnnouncementsPanel({
 
   // ── Fetch ──
   const fetchAnnouncements = useCallback(async () => {
-    const { data } = await getAnnouncements();
+    const { data } = await getAnnouncements(serverId);
     if (data) setAnnouncements(data as Announcement[]);
-  }, []);
+  }, [serverId]);
+
+  const fetchRecommendationSummary = useCallback(async () => {
+    if (!serverId || !showRecommendationsTab) {
+      setRecommendationSummaryItems([]);
+      setRecommendationSummaryLoaded(true);
+      return;
+    }
+    try {
+      const next = await getServerRecommendations(serverId, { limit: 100, includeHidden: canManage });
+      setRecommendationSummaryItems(next);
+    } catch {
+      setRecommendationSummaryItems([]);
+    } finally {
+      setRecommendationSummaryLoaded(true);
+    }
+  }, [canManage, serverId, showRecommendationsTab]);
 
   useEffect(() => { fetchAnnouncements(); }, [fetchAnnouncements]);
+  useEffect(() => { void fetchRecommendationSummary(); }, [fetchRecommendationSummary]);
 
   // ── WebSocket realtime ──
   useEffect(() => {
@@ -918,6 +964,15 @@ export default function AnnouncementsPanel({
     });
   }, [fetchAnnouncements, serverId]);
 
+  useEffect(() => {
+    return subscribeRealtimeEvents(event => {
+      if (!event.type.startsWith('recommendation:')) return;
+      const payload = event.payload as { serverId?: string };
+      if (payload.serverId && serverId && payload.serverId !== serverId) return;
+      void fetchRecommendationSummary();
+    });
+  }, [fetchRecommendationSummary, serverId]);
+
   // ── Handlers ──
   const handleSubmit = async (data: ModalData) => {
     setLoading(true);
@@ -928,6 +983,7 @@ export default function AnnouncementsPanel({
       } else {
         const { error } = await createAnnouncement({
           ...data,
+          server_id: serverId,
           author_id: currentUser.id,
           author_name: getPublicDisplayName(currentUser),
         });
@@ -964,42 +1020,47 @@ export default function AnnouncementsPanel({
     }
   };
 
-  const canEditItem = (a: Announcement) => isAdmin || a.author_id === currentUser.id;
+  const canEditItem = (_a: Announcement) => canModerateContent;
 
   // ── Filter ──
-  const filtered = activeTab === 'all'
-    ? announcements
-    : activeTab === 'invites' || activeTab === 'recommendations'
-      ? []
+  const filtered = activeTab === 'invites' || activeTab === 'recommendations'
+    ? []
     : announcements.filter(a => a.type === activeTab);
 
   const pinned = filtered.find(a => a.is_pinned);
   const rest = filtered.filter(a => a !== pinned);
-  const combinedItems: CombinedFeedItem[] = activeTab === 'all'
-    ? [
-        ...announcements.map(a => ({
-          kind: a.type === 'event' ? 'event' as const : 'announcement' as const,
-          item: a,
-          createdAt: a.created_at,
-        })),
-        ...(showInvitesTab
-          ? pendingJoinRequests.map(it => ({
-              kind: 'invite' as const,
-              item: it,
-              createdAt: it.createdAt,
-            }))
-          : []),
-      ].sort((a, b) => {
-        const bt = new Date(b.createdAt).getTime();
-        const at = new Date(a.createdAt).getTime();
-        return (Number.isFinite(bt) ? bt : 0) - (Number.isFinite(at) ? at : 0);
-      })
-    : [];
 
   const announcementCount = announcements.filter(a => a.type === 'announcement').length;
   const eventCount = announcements.filter(a => a.type === 'event').length;
+  const recommendationCount = recommendationSummaryItems.length;
 
-  if (announcements.length === 0 && !canManage && !showInvitesTab && !showRecommendationsTab) return null;
+  useEffect(() => {
+    if (defaultTabApplied) return;
+    if (showRecommendationsTab && !recommendationSummaryLoaded) return;
+    const candidates: Array<{ tab: Tab; time: number }> = [];
+    const latestAnnouncement = announcements
+      .filter(a => a.type === 'announcement')
+      .reduce((latest, item) => Math.max(latest, new Date(item.updated_at || item.created_at).getTime() || 0), 0);
+    const latestEvent = announcements
+      .filter(a => a.type === 'event')
+      .reduce((latest, item) => Math.max(latest, new Date(item.updated_at || item.created_at).getTime() || 0), 0);
+    const latestInvite = showInvitesTab
+      ? pendingJoinRequests.reduce((latest, item) => Math.max(latest, new Date(item.createdAt).getTime() || 0), 0)
+      : 0;
+    const latestRecommendation = showRecommendationsTab
+      ? recommendationSummaryItems.reduce((latest, item) => Math.max(latest, new Date(item.updatedAt || item.createdAt).getTime() || 0), 0)
+      : 0;
+    if (latestAnnouncement > 0) candidates.push({ tab: 'announcement', time: latestAnnouncement });
+    if (latestEvent > 0) candidates.push({ tab: 'event', time: latestEvent });
+    if (latestInvite > 0) candidates.push({ tab: 'invites', time: latestInvite });
+    if (latestRecommendation > 0) candidates.push({ tab: 'recommendations', time: latestRecommendation });
+    const next = candidates.sort((a, b) => b.time - a.time)[0]?.tab || 'announcement';
+    if ((next === 'invites' && !showInvitesTab) || (next === 'recommendations' && !showRecommendationsTab)) return;
+    setActiveTab(next);
+    setDefaultTabApplied(true);
+  }, [announcements, defaultTabApplied, pendingJoinRequests, recommendationSummaryItems, recommendationSummaryLoaded, showInvitesTab, showRecommendationsTab]);
+
+  if (announcements.length === 0 && !canManage && !canCreateRecommendations && !showInvitesTab && !showRecommendationsTab) return null;
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-8 px-6 pb-8">
@@ -1008,7 +1069,6 @@ export default function AnnouncementsPanel({
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-[var(--theme-panel)]/60 rounded-lg p-0.5 border border-[var(--theme-border)]/20">
           {([
-            { id: 'all' as Tab, label: 'Tümü', count: announcements.length },
             { id: 'announcement' as Tab, label: 'Duyurular', count: announcementCount },
             { id: 'event' as Tab, label: 'Etkinlikler', count: eventCount },
             ...(showInvitesTab ? [{
@@ -1020,7 +1080,7 @@ export default function AnnouncementsPanel({
             ...(showRecommendationsTab ? [{
               id: 'recommendations' as Tab,
               label: 'Keşif',
-              count: 0,
+              count: recommendationCount,
               icon: <Compass size={11} />,
             }] : []),
           ]).map(tab => (
@@ -1049,10 +1109,10 @@ export default function AnnouncementsPanel({
           ))}
         </div>
 
-        {(canManage || showRecommendationsTab) && (
+        {(canManage || canCreateRecommendations) && (
           <AddMenu
             canManage={canManage}
-            showRecommendations={showRecommendationsTab}
+            showRecommendations={showRecommendationsTab && canCreateRecommendations}
             onSelect={(type) => { setEditTarget(null); setModalType(type); setModalOpen(true); }}
             onSelectRecommendation={() => {
               setActiveTab('recommendations');
@@ -1063,10 +1123,10 @@ export default function AnnouncementsPanel({
       </div>
 
       {/* Empty state */}
-      {activeTab !== 'invites' && activeTab !== 'recommendations' && (activeTab === 'all' ? combinedItems.length === 0 : filtered.length === 0) && (
+      {activeTab !== 'invites' && activeTab !== 'recommendations' && filtered.length === 0 && (
         <div className="text-center py-12 text-[var(--theme-secondary-text)]/40 text-xs">
           {canManage
-            ? (activeTab === 'event' ? 'Henüz etkinlik yok. İlk etkinliği siz ekleyin.' : activeTab === 'announcement' ? 'Henüz duyuru yok. İlk duyuruyu siz ekleyin.' : 'Henüz içerik yok.')
+            ? (activeTab === 'event' ? 'Henüz etkinlik yok. İlk etkinliği siz ekleyin.' : 'Henüz duyuru yok. İlk duyuruyu siz ekleyin.')
             : 'Henüz içerik yok.'
           }
         </div>
@@ -1074,8 +1134,14 @@ export default function AnnouncementsPanel({
 
       {/* Cards */}
       <div className="space-y-3">
-        {activeTab === 'recommendations' ? (
-          <RecommendationsTab serverId={serverId} currentUser={currentUser} openCreateSignal={recommendationCreateSignal} />
+      {activeTab === 'recommendations' ? (
+          <RecommendationsTab
+            serverId={serverId}
+            currentUser={currentUser}
+            openCreateSignal={recommendationCreateSignal}
+            onCreateSignalHandled={() => setRecommendationCreateSignal(0)}
+            canModerateContent={canModerateContent}
+          />
         ) : activeTab === 'invites' ? (
           <InviteApplicationsFeed
             items={joinRequestItems}
@@ -1085,116 +1151,6 @@ export default function AnnouncementsPanel({
             onReject={rejectJoinRequest}
             onManage={onOpenInviteApplications ?? (() => undefined)}
           />
-        ) : activeTab === 'all' ? (
-          <AnimatePresence mode="popLayout">
-            {combinedItems.map(entry => {
-              if (entry.kind === 'invite') {
-                const it = entry.item;
-                const hasAvatar = typeof it.userAvatar === 'string' && it.userAvatar.startsWith('http');
-                const busy = joinRequestBusyId !== null;
-                return (
-                  <motion.div
-                    key={`invite-${it.id}`}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)]/30 bg-[var(--theme-surface)]/50 hover:bg-[var(--theme-surface)]/80 p-4 transition-colors"
-                  >
-                    <div
-                      className="shrink-0 w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
-                      style={{ background: 'rgba(var(--glass-tint), 0.055)' }}
-                    >
-                      {hasAvatar
-                        ? <img src={it.userAvatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        : <span className="text-[10px] font-bold text-[var(--theme-secondary-text)]/70">{(it.userName[0] ?? '?').toUpperCase()}</span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="text-[12px] font-semibold text-[var(--theme-text)] truncate">{it.userName}</div>
-                        <span
-                          className="shrink-0 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-[0.08em]"
-                          style={{
-                            background: 'rgba(var(--glass-tint), 0.045)',
-                            color: 'rgba(var(--theme-accent-rgb), 0.72)',
-                            border: '1px solid rgba(var(--glass-tint), 0.08)',
-                          }}
-                        >
-                          Davet
-                        </span>
-                      </div>
-                      <div className="text-[9px] text-[var(--theme-secondary-text)]/55 flex items-center gap-1.5">
-                        <Clock size={9} />
-                        <span>{formatDate(it.createdAt)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => rejectJoinRequest(it.id)}
-                        disabled={busy}
-                        title="Reddet"
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-red-300/80 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
-                        style={{
-                          background: 'rgba(239, 68, 68, 0.055)',
-                          border: '1px solid rgba(248, 113, 113, 0.12)',
-                          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (busy) return;
-                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.10)';
-                          e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.20)';
-                          e.currentTarget.style.boxShadow = '0 4px 10px rgba(239, 68, 68, 0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.055)';
-                          e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.12)';
-                          e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
-                        }}
-                      >
-                        <X size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => acceptJoinRequest(it.id)}
-                        disabled={busy}
-                        title="Kabul Et"
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-300/85 disabled:opacity-35 transition-all duration-[120ms] ease-out hover:scale-[1.05] disabled:hover:scale-100"
-                        style={{
-                          background: 'rgba(16, 185, 129, 0.06)',
-                          border: '1px solid rgba(52, 211, 153, 0.13)',
-                          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (busy) return;
-                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.11)';
-                          e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.22)';
-                          e.currentTarget.style.boxShadow = '0 4px 10px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(var(--glass-tint), 0.08)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.06)';
-                          e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.13)';
-                          e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(var(--glass-tint), 0.06)';
-                        }}
-                      >
-                        <Check size={13} />
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              }
-
-              const a = entry.item;
-              return (
-                <React.Fragment key={`${entry.kind}-${a.id}`}>
-                  {entry.kind === 'event'
-                    ? <EventCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
-                    : <AnnouncementCard item={a} canEdit={canManage && canEditItem(a)} onEdit={() => { setEditTarget(a); setModalType(a.type); setModalOpen(true); }} onDelete={() => setDeleteTarget(a)} />
-                  }
-                </React.Fragment>
-              );
-            })}
-          </AnimatePresence>
         ) : (
           <AnimatePresence mode="popLayout">
             {pinned && (

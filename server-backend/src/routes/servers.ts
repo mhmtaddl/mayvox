@@ -23,6 +23,7 @@ import { getInsights, refreshActivityHeatmapOnce } from '../services/voiceActivi
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
 import * as recommendationService from '../services/recommendationService';
+import * as roomActivityService from '../services/roomActivityService';
 
 const router = Router();
 
@@ -180,8 +181,30 @@ router.get('/:id/recommendations', async (req: Request, res: Response) => {
       q: typeof req.query.q === 'string' ? req.query.q : undefined,
       limit: req.query.limit,
       includeHidden,
+      userId: (req as any).userId,
     });
     res.json(items);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/recommendations/watchlist', async (req: Request, res: Response) => {
+  try {
+    const items = await recommendationService.listRecommendationWatchlist(
+      req.params.id as string,
+      (req as any).userId,
+    );
+    res.json(items);
+  } catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/recommendations/users/:userId/profile', async (req: Request, res: Response) => {
+  try {
+    const profile = await recommendationService.getRecommendationCreatorProfile(
+      req.params.id as string,
+      (req as any).userId,
+      req.params.userId as string,
+    );
+    res.json(profile);
   } catch (err) { handleError(res, err); }
 });
 
@@ -190,7 +213,7 @@ router.get('/:id/recommendations/:itemId', async (req: Request, res: Response) =
     const serverId = req.params.id as string;
     const ctx = await getServerAccessContext((req as any).userId, serverId);
     if (!ctx.membership.exists) throw new AppError(403, 'Bu sunucunun üyesi değilsin');
-    const item = await recommendationService.getRecommendation(serverId, req.params.itemId as string);
+    const item = await recommendationService.getRecommendation(serverId, req.params.itemId as string, (req as any).userId);
     res.json(item);
   } catch (err) { handleError(res, err); }
 });
@@ -224,6 +247,18 @@ router.delete('/:id/recommendations/:itemId/rating', async (req: Request, res: R
       req.params.id as string,
       req.params.itemId as string,
       (req as any).userId,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+router.put('/:id/recommendations/:itemId/state', async (req: Request, res: Response) => {
+  try {
+    const result = await recommendationService.setRecommendationUserState(
+      req.params.id as string,
+      req.params.itemId as string,
+      (req as any).userId,
+      req.body || {},
     );
     res.json(result);
   } catch (err) { handleError(res, err); }
@@ -318,6 +353,13 @@ router.patch('/:id/recommendations/:itemId', async (req: Request, res: Response)
 router.post('/:id/recommendations/:itemId/hide', async (req: Request, res: Response) => {
   try {
     const item = await recommendationService.hideRecommendation(req.params.id as string, req.params.itemId as string, (req as any).userId);
+    res.json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/:id/recommendations/:itemId/restore', async (req: Request, res: Response) => {
+  try {
+    const item = await recommendationService.restoreRecommendation(req.params.id as string, req.params.itemId as string, (req as any).userId);
     res.json(item);
   } catch (err) { handleError(res, err); }
 });
@@ -824,6 +866,29 @@ router.get('/:id/overview', async (req: Request, res: Response) => {
 router.get('/:id/channels', async (req: Request, res: Response) => {
   try { res.json(await channelService.listChannels(req.params.id as string, (req as any).userId)); }
   catch (err) { handleError(res, err); }
+});
+
+router.get('/:id/channels/:channelId/activity-events', async (req: Request, res: Response) => {
+  try {
+    const events = await roomActivityService.listRoomActivityEvents(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+      req.query.limit,
+    );
+    res.json(events);
+  } catch (err) { handleError(res, err); }
+});
+
+router.delete('/:id/channels/:channelId/activity-events', async (req: Request, res: Response) => {
+  try {
+    const result = await roomActivityService.clearRoomActivityEvents(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+    );
+    res.json(result);
+  } catch (err) { handleError(res, err); }
 });
 
 /** POST /servers/:id/channels — kanal oluştur (admin+) */

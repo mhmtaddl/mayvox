@@ -728,6 +728,17 @@ export default function ChatView() {
     !!accessContext?.flags.canViewInsights
   );
   const activeServerRole = activeServerData?.role as string | undefined;
+  const activeServerRoleKey = (activeServerRole || '').toLocaleLowerCase('tr-TR');
+  const activeServerRolePriority =
+    activeServerRoleKey === 'owner' ? 100 :
+    activeServerRoleKey === 'super_admin' ? 90 :
+    activeServerRoleKey === 'admin' ? 80 :
+    activeServerRoleKey === 'super_mod' ? 70 :
+    activeServerRoleKey === 'mod' || activeServerRoleKey === 'moderator' ? 60 :
+    activeServerRoleKey === 'super_member' ? 30 :
+    20;
+  const activeServerCanCreateRecommendation = activeServerRolePriority >= 30;
+  const activeServerCanModerateCommunityContent = activeServerRolePriority >= 60;
   const hasRoomActivityStaffRole = [
     'owner',
     'sahip',
@@ -2003,6 +2014,9 @@ export default function ChatView() {
               <AnnouncementsPanel
                 currentUser={currentUser}
                 serverId={activeServerId}
+                canCreateAnnouncements={activeServerCanModerateCommunityContent}
+                canCreateRecommendations={activeServerCanCreateRecommendation}
+                canModerateCommunityContent={activeServerCanModerateCommunityContent}
                 canViewInviteApplications={activeServerCanManage}
                 onOpenInviteApplications={() => {
                   if (!activeServerId) return;

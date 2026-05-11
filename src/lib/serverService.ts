@@ -938,8 +938,40 @@ export interface RecommendationItem {
   averageRating: number;
   ratingCount: number;
   commentCount: number;
+  watchedCount: number;
+  myWatched: boolean;
+  myWatchlisted: boolean;
+  myRatingScore: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RecommendationUserState {
+  itemId: string;
+  serverId: string;
+  userId: string;
+  isWatched: boolean;
+  isWatchlisted: boolean;
+  watchedAt: string | null;
+  watchlistedAt: string | null;
+  updatedAt: string;
+}
+
+export interface RecommendationCreatorProfile {
+  userId: string;
+  userName: string | null;
+  userAvatar: string | null;
+  discoveryScore: number;
+  informationScore: number;
+  recommendationCount: number;
+  ratedRecommendationCount: number;
+  commentCount: number;
+  byCategory: Array<{
+    category: RecommendationCategory;
+    averageRating: number;
+    recommendationCount: number;
+    ratedRecommendationCount: number;
+  }>;
 }
 
 export interface RecommendationRating {
@@ -980,6 +1012,7 @@ export interface RecommendationFilters {
   category?: RecommendationCategory | 'all';
   q?: string;
   limit?: number;
+  includeHidden?: boolean;
 }
 
 export async function getServerRecommendations(
@@ -990,12 +1023,21 @@ export async function getServerRecommendations(
   if (filters.category && filters.category !== 'all') params.set('category', filters.category);
   if (filters.q?.trim()) params.set('q', filters.q.trim());
   if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.includeHidden) params.set('includeHidden', 'true');
   const qs = params.toString();
   return apiFetch<RecommendationItem[]>(`/servers/${serverId}/recommendations${qs ? `?${qs}` : ''}`);
 }
 
 export async function getServerRecommendation(serverId: string, itemId: string): Promise<RecommendationItem> {
   return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}`);
+}
+
+export async function getRecommendationWatchlist(serverId: string): Promise<RecommendationItem[]> {
+  return apiFetch<RecommendationItem[]>(`/servers/${serverId}/recommendations/watchlist`);
+}
+
+export async function getRecommendationCreatorProfile(serverId: string, userId: string): Promise<RecommendationCreatorProfile> {
+  return apiFetch<RecommendationCreatorProfile>(`/servers/${serverId}/recommendations/users/${userId}/profile`);
 }
 
 export async function createServerRecommendation(
@@ -1040,6 +1082,10 @@ export async function hideServerRecommendation(serverId: string, itemId: string)
   return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}/hide`, { method: 'POST' });
 }
 
+export async function restoreServerRecommendation(serverId: string, itemId: string): Promise<RecommendationItem> {
+  return apiFetch<RecommendationItem>(`/servers/${serverId}/recommendations/${itemId}/restore`, { method: 'POST' });
+}
+
 export async function deleteServerRecommendation(serverId: string, itemId: string): Promise<void> {
   await apiFetch<void>(`/servers/${serverId}/recommendations/${itemId}`, { method: 'DELETE' });
 }
@@ -1061,6 +1107,17 @@ export async function setRecommendationRating(
 
 export async function deleteRecommendationRating(serverId: string, itemId: string): Promise<{ item: RecommendationItem }> {
   return apiFetch<{ item: RecommendationItem }>(`/servers/${serverId}/recommendations/${itemId}/rating`, { method: 'DELETE' });
+}
+
+export async function setRecommendationUserState(
+  serverId: string,
+  itemId: string,
+  payload: { isWatched?: boolean; isWatchlisted?: boolean },
+): Promise<{ item: RecommendationItem; state: RecommendationUserState }> {
+  return apiFetch<{ item: RecommendationItem; state: RecommendationUserState }>(`/servers/${serverId}/recommendations/${itemId}/state`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getRecommendationComments(serverId: string, itemId: string): Promise<RecommendationComment[]> {

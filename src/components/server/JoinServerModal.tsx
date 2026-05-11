@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Hash } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Hash, Loader2, X } from 'lucide-react';
 import { joinServer, acceptInviteLink } from '../../lib/serverService';
-import { MV_PRESS, MV_SPRING } from '../../lib/signature';
+import { MV_PRESS } from '../../lib/signature';
+import Modal from '../Modal';
 
 interface Props {
   onClose: () => void;
@@ -16,7 +16,8 @@ type CodeState = 'idle' | 'checking' | 'valid' | 'invalid' | 'submitting';
 // Legacy kod: nanoid(8) alphanumeric uppercase.
 function looksLikeV2Token(raw: string): boolean {
   // URL gelirse son segmenti al
-  const last = raw.includes('/') ? raw.split('/').filter(Boolean).pop() ?? raw : raw;
+  const lastSegment = raw.includes('/') ? raw.split('/').filter(Boolean).pop() ?? raw : raw;
+  const last = lastSegment.split(/[?#]/, 1)[0] || lastSegment;
   return last.length >= 28 && /^[A-Za-z0-9_-]+$/.test(last);
 }
 
@@ -56,103 +57,157 @@ export default function JoinServerModal({ onClose, onSuccess }: Props) {
 
   const isDisabled = !code.trim() || state === 'checking' || state === 'submitting' || state === 'valid';
 
-  return createPortal(
-    <div className="fixed inset-0 z-[400] flex items-center justify-center" style={{ background: 'rgba(0, 0, 0, 0.72)' }} onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={MV_SPRING.gentle}
-        className="w-[400px] max-w-[92vw] rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--theme-surface-card, rgba(var(--theme-bg-rgb, 6,10,20), 0.97))',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
-        }}>
+  return (
+    <Modal open onClose={onClose} width={390} padded={false}>
+      <div className="flex items-start gap-3 px-[18px] pb-3 pt-4">
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            background: 'rgba(var(--theme-accent-rgb),0.10)',
+            border: '1px solid rgba(var(--theme-accent-rgb),0.14)',
+          }}
+        >
+          <Hash size={17} className="text-[var(--theme-accent)]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-bold leading-5 text-[var(--theme-text)]">Davet Kodu ile Katıl</h3>
+          <p className="mt-0.5 text-[11px] leading-4 text-[var(--theme-secondary-text)]/52">
+            Kod veya davet linkini yapıştır.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/48 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)]"
+          title="Kapat"
+        >
+          <X size={14} />
+        </button>
+      </div>
 
-        {/* Header */}
-        <div className="px-6 pt-6 pb-3 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'rgba(var(--theme-accent-rgb), 0.10)' }}>
-            <Hash size={20} className="text-[var(--theme-accent)]" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-[16px] font-bold text-[var(--theme-text)]">Davet Kodu ile Katıl</h3>
-            <p className="text-[11px] text-[var(--theme-secondary-text)] opacity-50 mt-0.5">Sana gönderilen davet kodunu girerek sunucuya katıl.</p>
-          </div>
+      <div className="px-[18px] pb-4">
+        <div
+          className={[
+            'flex h-10 items-center gap-2 rounded-xl px-3 transition-[border-color,background-color] duration-150',
+            state === 'invalid'
+              ? ''
+              : state === 'valid'
+                ? ''
+                : '',
+          ].join(' ')}
+          style={{
+            background: 'rgba(var(--glass-tint),0.035)',
+            border: state === 'invalid'
+              ? '1px solid rgba(239,68,68,0.22)'
+              : state === 'valid'
+                ? '1px solid rgba(16,185,129,0.20)'
+                : '1px solid rgba(var(--glass-tint),0.10)',
+          }}
+        >
+          <Hash size={13} className="shrink-0 text-[var(--theme-secondary-text)]/42" />
+          <input
+            value={code}
+            onChange={e => {
+              // V2 token case-sensitive; legacy 8-char kod uppercase — length'e göre normalize.
+              const v = e.target.value;
+              setCode(v.length <= 10 ? v.toUpperCase() : v);
+              if (state === 'invalid') { setState('idle'); setError(''); }
+            }}
+            onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') onClose(); }}
+            placeholder="ABCD1234 veya https://..."
+            className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 font-mono text-[12.5px] font-semibold tracking-[0.08em] text-[var(--theme-text)] shadow-none outline-none ring-0 placeholder:font-sans placeholder:font-medium placeholder:tracking-normal placeholder:text-[var(--theme-secondary-text)]/28 focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0"
+            style={{ background: 'transparent', boxShadow: 'none' }}
+            autoFocus
+          />
+          {(state === 'checking' || state === 'submitting') && (
+            <Loader2 size={14} className="shrink-0 animate-spin text-[var(--theme-accent)]/75" />
+          )}
         </div>
 
-        {/* Input */}
-        <div className="px-6 pt-2">
-          <div className={`flex items-center gap-2.5 h-12 rounded-xl px-4 transition-all duration-150 ${
-            state === 'invalid' ? 'ring-1 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.06)]' :
-            state === 'valid' ? 'ring-1 ring-emerald-500/30' :
-            'focus-within:ring-1 focus-within:ring-[var(--theme-accent)]/25'
-          }`} style={{ background: 'rgba(var(--glass-tint), 0.05)', border: state === 'invalid' ? '1px solid rgba(239,68,68,0.15)' : state === 'valid' ? '1px solid rgba(16,185,129,0.15)' : '1px solid rgba(var(--glass-tint), 0.1)' }}>
-            <Hash size={15} className="text-[var(--theme-secondary-text)] opacity-40 shrink-0" />
-            <input value={code}
-              onChange={e => {
-                // V2 token case-sensitive; legacy 8-char kod uppercase — length'e göre normalize.
-                const v = e.target.value;
-                setCode(v.length <= 10 ? v.toUpperCase() : v);
-                if (state === 'invalid') { setState('idle'); setError(''); }
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') onClose(); }}
-              placeholder="Davet kodu veya linkini yapıştır"
-              className="flex-1 bg-transparent text-[14px] font-mono tracking-widest text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/22 placeholder:tracking-normal placeholder:font-sans outline-none" autoFocus />
-            {(state === 'checking' || state === 'submitting') && <div className="w-4 h-4 border-2 border-[var(--theme-accent)]/25 border-t-[var(--theme-accent)] rounded-full animate-spin shrink-0" />}
-          </div>
-        </div>
-
-        {/* Status area */}
-        <div className="px-6 mt-2" style={{ minHeight: '56px' }}>
+        <div className="min-h-[42px] pt-2">
           {state === 'valid' && joinedName ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.12)' }}>
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/12 flex items-center justify-center shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400"><polyline points="20 6 9 17 4 12" /></svg>
-              </div>
-              <div>
-                <div className="text-[12px] font-semibold text-emerald-400">Katılım başarılı</div>
-                <div className="text-[10px] text-[var(--theme-secondary-text)] opacity-40 mt-0.5">{joinedName} sunucusuna katıldın</div>
-              </div>
-            </div>
+            <StatusLine
+              tone="success"
+              icon={<CheckCircle2 size={14} />}
+              title="Katılım başarılı"
+              text={joinedName === 'Zaten erişim var' ? joinedName : `${joinedName} sunucusuna katıldın`}
+            />
           ) : state === 'invalid' && error ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.08)' }}>
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400/70"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold text-red-400/80">{error}</div>
-              </div>
-            </div>
+            <StatusLine tone="error" icon={<AlertCircle size={14} />} title={error} />
           ) : (state === 'checking' || state === 'submitting') ? (
-            <div className="flex items-center justify-center gap-2.5 py-4">
-              <div className="w-4 h-4 border-2 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin" />
-              <span className="text-[11px] text-[var(--theme-accent)] opacity-50">Davet kodu doğrulanıyor...</span>
+            <div className="flex items-center gap-2 px-1 py-2 text-[11px] font-semibold text-[var(--theme-accent)]/68">
+              <Loader2 size={13} className="animate-spin" />
+              Davet doğrulanıyor
             </div>
           ) : (
-            <div className="py-3 px-1">
-              <span className="text-[10px] text-[var(--theme-secondary-text)] opacity-30">Örn: ABCD1234 — Büyük/küçük harf duyarlı olabilir.</span>
+            <div className="px-1 py-2 text-[10.5px] font-medium text-[var(--theme-secondary-text)]/38">
+              Davet linkleri ve klasik kodlar desteklenir.
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 pb-6 pt-1 flex items-center justify-end gap-2.5">
-          <button onClick={onClose}
-            className="h-10 px-5 rounded-xl text-[12px] font-semibold text-[var(--theme-secondary-text)] opacity-50 hover:opacity-80 transition-opacity"
-            style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
+        <div className="mt-1 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 rounded-lg px-3 text-[11.5px] font-semibold text-[var(--theme-secondary-text)]/62 transition-colors hover:bg-[rgba(var(--glass-tint),0.055)] hover:text-[var(--theme-text)]"
+          >
             İptal
           </button>
           <motion.button
+            type="button"
             {...(isDisabled ? {} : MV_PRESS)}
-            onClick={handleSubmit} disabled={isDisabled}
-            className="h-10 px-6 rounded-xl text-[13px] font-bold disabled:opacity-25 flex items-center gap-2 transition-colors duration-150 hover:brightness-110"
-            style={{ background: 'var(--theme-accent)', color: 'var(--theme-text-on-accent, #000)', boxShadow: '0 4px 16px rgba(var(--theme-accent-rgb), 0.2)' }}>
-            {state === 'submitting' ? 'Katılıyor...' : 'Doğrula ve Katıl'}
+            onClick={handleSubmit}
+            disabled={isDisabled}
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3.5 text-[11.5px] font-bold transition-[filter,opacity] hover:brightness-110 disabled:opacity-35"
+            style={{
+              background: 'var(--theme-accent)',
+              color: 'var(--theme-text-on-accent, #000)',
+              boxShadow: '0 8px 22px rgba(var(--theme-accent-rgb),0.18)',
+            }}
+          >
+            {state === 'submitting' && <Loader2 size={12} className="animate-spin" />}
+            {state === 'submitting' ? 'Katılıyor' : 'Katıl'}
           </motion.button>
         </div>
-      </motion.div>
-    </div>,
-    document.body,
+      </div>
+    </Modal>
+  );
+}
+
+function StatusLine({
+  tone,
+  icon,
+  title,
+  text,
+}: {
+  tone: 'success' | 'error';
+  icon: React.ReactNode;
+  title: string;
+  text?: string;
+}) {
+  const success = tone === 'success';
+  return (
+    <div
+      className="flex items-start gap-2 rounded-xl px-2.5 py-2"
+      style={{
+        background: success ? 'rgba(16,185,129,0.055)' : 'rgba(239,68,68,0.05)',
+        border: success ? '1px solid rgba(16,185,129,0.12)' : '1px solid rgba(239,68,68,0.12)',
+      }}
+    >
+      <span className={success ? 'mt-0.5 text-emerald-400/85' : 'mt-0.5 text-red-400/85'}>
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className={success ? 'block text-[11.5px] font-bold text-emerald-300/90' : 'block text-[11.5px] font-bold text-red-300/90'}>
+          {title}
+        </span>
+        {text && (
+          <span className="mt-0.5 block truncate text-[10.5px] font-medium text-[var(--theme-secondary-text)]/48">
+            {text}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }

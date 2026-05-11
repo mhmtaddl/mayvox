@@ -26,6 +26,7 @@ const numberInputCls = '[appearance:textfield] [&::-webkit-inner-spin-button]:ap
 const labelCls = 'block text-[10px] font-medium text-[var(--theme-secondary-text)]/72 mb-1';
 const panelCls = 'rounded-2xl border border-[rgba(var(--glass-tint),0.065)] bg-[rgba(var(--glass-tint),0.022)]';
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
+const EMPTY_LINK_URLS = ['', '', '', ''];
 
 interface MetadataField {
   key: string;
@@ -43,7 +44,6 @@ const METADATA_FIELDS: Record<RecommendationCategory, MetadataField[]> = {
     { key: 'cast', label: 'Oyuncular', placeholder: 'Ana kadro' },
     { key: 'platform', label: 'Platform', placeholder: 'Netflix, Prime...' },
     { key: 'externalRating', label: 'IMDb puanı', placeholder: '8.7' },
-    { key: 'watchLink', label: 'İzleme linki', placeholder: 'https://...' },
   ],
   series: [
     { key: 'year', label: 'Yıl', type: 'number', placeholder: '2023' },
@@ -55,7 +55,6 @@ const METADATA_FIELDS: Record<RecommendationCategory, MetadataField[]> = {
     { key: 'episodesPerSeason', label: 'Sezon başı bölüm', type: 'number', placeholder: '8' },
     { key: 'genres', label: 'Türler', placeholder: 'Dram, Gizem' },
     { key: 'externalRating', label: 'IMDb puanı', placeholder: '8.4' },
-    { key: 'watchLink', label: 'İzleme linki', placeholder: 'https://...' },
   ],
   game: [
     { key: 'platforms', label: 'Platformlar', placeholder: 'PC, PlayStation' },
@@ -144,36 +143,6 @@ const CATEGORY_OPTIONS: Array<{
     selectedTone: 'border-emerald-300/45 bg-emerald-400/[0.10] shadow-[0_0_0_1px_rgba(110,231,183,0.10),0_8px_18px_rgba(16,185,129,0.10)]',
     iconTone: 'text-emerald-200 bg-emerald-400/10',
   },
-  {
-    id: 'music',
-    label: 'Müzik',
-    description: 'Yakında',
-    icon: Music2,
-    disabled: true,
-    tone: '',
-    selectedTone: '',
-    iconTone: 'text-rose-200/45 bg-rose-400/8',
-  },
-  {
-    id: 'book',
-    label: 'Kitap',
-    description: 'Yakında',
-    icon: BookOpen,
-    disabled: true,
-    tone: '',
-    selectedTone: '',
-    iconTone: 'text-amber-200/45 bg-amber-400/8',
-  },
-  {
-    id: 'more',
-    label: 'Daha fazlası',
-    description: 'Yakında',
-    icon: MoreHorizontal,
-    disabled: true,
-    tone: '',
-    selectedTone: '',
-    iconTone: 'text-slate-200/40 bg-slate-400/8',
-  },
 ];
 
 const TAG_SUGGESTIONS: Record<RecommendationCategory, string[]> = {
@@ -186,7 +155,7 @@ const TAG_SUGGESTIONS: Record<RecommendationCategory, string[]> = {
 };
 
 const DETAIL_FIELD_KEYS: Record<RecommendationCategory, string[]> = {
-  film: ['year', 'durationMinutes', 'genres', 'platform', 'externalRating', 'watchLink'],
+  film: ['year', 'durationMinutes', 'genres', 'platform', 'externalRating'],
   series: ['year', 'status', 'seasonCount', 'episodeCount', 'episodeDurationMinutes', 'platform', 'externalRating'],
   game: ['platforms', 'genres', 'playerModes', 'idealPartySize', 'voiceChatFunScore', 'storeLink'],
   music: ['artist', 'album', 'releaseYear', 'genre'],
@@ -225,6 +194,17 @@ function isActiveCategory(value: RecommendationCategory): value is 'film' | 'ser
   return value === 'film' || value === 'series' || value === 'game';
 }
 
+function parseDecimalScore(value: string): number | null {
+  const trimmed = value.trim().replace(',', '.');
+  if (!/^(10(?:\.0)?|[1-9](?:\.\d)?)$/.test(trimmed)) return null;
+  const score = Number(trimmed);
+  return Number.isFinite(score) && score >= 1 && score <= 10 ? Math.round(score * 10) / 10 : null;
+}
+
+function isScoreDraft(value: string): boolean {
+  return value === '' || /^(10(?:\.0?)?|[1-9](?:\.\d?)?)$/.test(value.replace(',', '.'));
+}
+
 export default function RecommendationCreateModal({ open, loading, serverId, mode = 'create', initialItem, currentUser, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<RecommendationCategory>('film');
@@ -233,6 +213,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
   const [tagsRaw, setTagsRaw] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [linkUrls, setLinkUrls] = useState<string[]>(EMPTY_LINK_URLS);
   const [metadata, setMetadata] = useState<Record<string, string | boolean>>({});
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -257,7 +238,10 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
   const authorName = currentUser?.displayName || currentUser?.name || 'Sen';
   const authorAvatar = currentUser?.avatar || '';
   const authorInitial = authorName.trim().charAt(0).toLocaleUpperCase('tr-TR') || 'S';
-  const filledMetadata = fields.filter(field => hasMetadataValue(metadata[field.key])).length;
+  const usesMultiLinks = category === 'film' || category === 'series';
+  const hasAnyLink = usesMultiLinks ? linkUrls.some(url => url.trim()) : !!linkUrl.trim();
+  const isGenreSatisfied = (field: MetadataField) => field.key === 'genres' && (hasMetadataValue(metadata.genres) || tags.length > 0);
+  const filledMetadata = detailFields.filter(field => isGenreSatisfied(field) || hasMetadataValue(metadata[field.key])).length;
   const metadataPreview = fields
     .filter(field => hasMetadataValue(metadata[field.key]))
     .slice(0, 2)
@@ -266,16 +250,16 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
   const isEditMode = mode === 'edit' && !!initialItem;
 
   const qualityScore = useMemo(() => {
-    const metadataRatio = fields.length ? filledMetadata / fields.length : 0;
+    const metadataRatio = detailFields.length ? filledMetadata / detailFields.length : 0;
     const score =
       (title.trim() ? 16 : 0) +
       (description.trim() ? 16 : 0) +
       (activeCover ? 16 : 0) +
       (tags.length > 0 ? 14 : 0) +
-      (linkUrl.trim() ? 10 : 0) +
+      (hasAnyLink ? 10 : 0) +
       Math.round(metadataRatio * 28);
     return Math.min(100, score);
-  }, [activeCover, description, fields.length, filledMetadata, linkUrl, tags.length, title]);
+  }, [activeCover, description, detailFields.length, filledMetadata, hasAnyLink, tags.length, title]);
 
   const clearLocalCover = useCallback(() => {
     if (objectUrlRef.current) {
@@ -296,6 +280,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
     setTagsRaw('');
     setLinkLabel('');
     setLinkUrl('');
+    setLinkUrls([...EMPTY_LINK_URLS]);
     setMetadata({});
     setShowTags(false);
     setError(null);
@@ -336,6 +321,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
     const firstLink = initialItem.links?.[0];
     setLinkLabel(firstLink?.label || '');
     setLinkUrl(firstLink?.url || '');
+    setLinkUrls(EMPTY_LINK_URLS.map((_, index) => initialItem.links?.[index]?.url || ''));
     const nextMetadata: Record<string, string | boolean> = {};
     for (const [key, value] of Object.entries(initialItem.metadata || {})) {
       nextMetadata[key] = typeof value === 'boolean' ? value : String(value ?? '');
@@ -387,14 +373,29 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
       return;
     }
 
-    const links: RecommendationLink[] = linkUrl.trim() ? [{ label: linkLabel.trim() || 'Bağlantı', url: linkUrl.trim() }] : [];
+    const links: RecommendationLink[] = usesMultiLinks
+      ? linkUrls
+          .map(url => url.trim())
+          .filter(Boolean)
+          .slice(0, 4)
+          .map((url, index) => ({ label: `Bağlantı ${index + 1}`, url }))
+      : linkUrl.trim() ? [{ label: linkLabel.trim() || 'Bağlantı', url: linkUrl.trim() }] : [];
     const cleanMetadata: Record<string, unknown> = {};
     for (const field of fields) {
       const value = metadata[field.key];
       if (typeof value === 'boolean') {
         cleanMetadata[field.key] = value;
       } else if (typeof value === 'string' && value.trim()) {
-        cleanMetadata[field.key] = field.type === 'number' ? Number(value) || value.trim() : value.trim();
+        if (field.key === 'externalRating' || field.key === 'voiceChatFunScore') {
+          const score = parseDecimalScore(value);
+          if (score === null) {
+            setError(`${field.label} 1.0 ile 10.0 arasında olmalı`);
+            return;
+          }
+          cleanMetadata[field.key] = score;
+        } else {
+          cleanMetadata[field.key] = field.type === 'number' ? Number(value) || value.trim() : value.trim();
+        }
       }
     }
 
@@ -445,11 +446,17 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
       <label key={field.key}>
         <span className={labelCls}>{field.label}</span>
         <input
-          type={field.type === 'number' ? 'number' : 'text'}
-          min={field.type === 'number' ? 0 : undefined}
-          max={field.key === 'voiceChatFunScore' ? 10 : undefined}
+          type={field.key === 'externalRating' || field.key === 'voiceChatFunScore' ? 'text' : field.type === 'number' ? 'number' : 'text'}
+          inputMode={field.key === 'externalRating' || field.key === 'voiceChatFunScore' ? 'decimal' : undefined}
+          min={field.type === 'number' && field.key !== 'externalRating' && field.key !== 'voiceChatFunScore' ? 0 : undefined}
+          max={undefined}
           value={typeof metadata[field.key] === 'string' ? metadata[field.key] as string : ''}
           onChange={e => {
+            if (field.key === 'externalRating' || field.key === 'voiceChatFunScore') {
+              const value = e.target.value.replace(',', '.');
+              if (isScoreDraft(value)) setMeta(field.key, value);
+              return;
+            }
             if (field.type !== 'number') {
               setMeta(field.key, e.target.value);
               return;
@@ -466,6 +473,18 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
             }
             const capped = field.key === 'voiceChatFunScore' ? Math.min(10, parsed) : parsed;
             setMeta(field.key, String(Math.max(0, capped)));
+          }}
+          onBlur={() => {
+            if (field.key !== 'externalRating' && field.key !== 'voiceChatFunScore') return;
+            const value = typeof metadata[field.key] === 'string' ? metadata[field.key] as string : '';
+            if (!value.trim()) return;
+            const score = parseDecimalScore(value);
+            if (score === null) {
+              setError(`${field.label} 1.0 ile 10.0 arasında olmalı`);
+              return;
+            }
+            setError(null);
+            setMeta(field.key, score.toFixed(1));
           }}
           className={`${inputCls} ${field.type === 'number' ? numberInputCls : ''}`}
           placeholder={field.placeholder || 'İsteğe bağlı'}
@@ -514,12 +533,12 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
                 type="button"
                 disabled={disabled}
                 onClick={() => {
-                  if (isEditMode || disabled || option.id === 'more') return;
+                  if (disabled || option.id === 'more') return;
                   setCategory(option.id);
                   setMetadata({});
                 }}
                 className={`group flex h-10 min-w-[116px] items-center gap-2 rounded-2xl border px-2.5 text-left transition-all ${
-                  disabled || isEditMode
+                  disabled
                     ? 'cursor-default border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] opacity-55 hover:bg-[rgba(var(--glass-tint),0.024)]'
                     : selected
                       ? option.selectedTone
@@ -534,7 +553,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
                   <span className="block truncate text-[9px] text-[var(--theme-secondary-text)]/50">{option.description}</span>
                 </span>
                 {disabled && <span className="rounded-full bg-[rgba(var(--glass-tint),0.045)] px-1.5 py-0.5 text-[8px] font-semibold text-[var(--theme-secondary-text)]/55">Yakında</span>}
-                {isEditMode && selected && <span className="rounded-full bg-[rgba(var(--glass-tint),0.045)] px-1.5 py-0.5 text-[8px] font-semibold text-[var(--theme-secondary-text)]/55">Sabit</span>}
+                {isEditMode && selected && <span className="rounded-full bg-[rgba(var(--glass-tint),0.045)] px-1.5 py-0.5 text-[8px] font-semibold text-[var(--theme-secondary-text)]/55">Seçili</span>}
               </button>
             );
           })}
@@ -666,8 +685,22 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
                 Bağlantı ekle
               </div>
               <div className="space-y-2">
-                <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)} className={inputCls} placeholder="Steam, Netflix, İnceleme..." />
-                <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} className={inputCls} placeholder="https://..." />
+                {usesMultiLinks ? (
+                  linkUrls.map((url, index) => (
+                    <input
+                      key={index}
+                      value={url}
+                      onChange={e => setLinkUrls(prev => prev.map((current, currentIndex) => currentIndex === index ? e.target.value : current))}
+                      className={inputCls}
+                      placeholder="https://..."
+                    />
+                  ))
+                ) : (
+                  <>
+                    <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)} className={inputCls} placeholder="Steam, Netflix, İnceleme..." />
+                    <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} className={inputCls} placeholder="https://..." />
+                  </>
+                )}
               </div>
             </div>
           </section>

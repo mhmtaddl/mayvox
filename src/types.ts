@@ -122,6 +122,7 @@ export interface Announcement {
   content: string;
   author_id: string;
   author_name: string;
+  server_id?: string | null;
   is_pinned: boolean;
   priority: AnnouncementPriority;
   type: AnnouncementType;
