@@ -26,6 +26,7 @@ function getTooltipText(el: HTMLElement): string {
 
 function findTooltipTarget(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
+  if (target.closest('[data-window-control]')) return null;
   const el = target.closest(TOOLTIP_SELECTOR);
   if (!(el instanceof HTMLElement)) return null;
   const text = getTooltipText(el);
