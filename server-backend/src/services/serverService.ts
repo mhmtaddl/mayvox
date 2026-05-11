@@ -401,7 +401,19 @@ export async function deleteServer(userId: string, serverId: string): Promise<vo
     [serverId, userId]
   );
   if (!member || member.role !== 'owner') throw new AppError(403, 'Sadece sunucu sahibi silebilir');
-  await pool.query('DELETE FROM servers WHERE id = $1', [serverId]);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM channels WHERE server_id = $1', [serverId]);
+    await client.query('DELETE FROM servers WHERE id = $1', [serverId]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** Uygulama seviyesinde hata */

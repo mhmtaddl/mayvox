@@ -17,6 +17,7 @@ import { AppError } from '../services/serverService';
 import { getServerModerationConfig, updateServerModerationConfig } from '../services/moderationConfigService';
 import { getStats as getModerationStats, isValidRange, listEvents as listModerationEvents, isValidKind } from '../services/moderationStatsService';
 import { listActiveAutoPunishments } from '../services/moderationAutoPunishService';
+import { clearRoomActivityEvents, listRoomActivityEvents } from '../services/roomActivityService';
 import { getInsights, refreshActivityHeatmapOnce } from '../services/voiceActivityService';
 import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
@@ -248,6 +249,36 @@ router.get('/:id/active-auto-punishments', async (req: Request, res: Response) =
     }
     const rows = await listActiveAutoPunishments(serverId);
     res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+
+/** GET /servers/:id/channels/:channelId/activity-events?limit=75
+ *  Oda Son Olaylar geçmişi — sadece moderator+ / admin.
+ */
+router.get('/:id/channels/:channelId/activity-events', async (req: Request, res: Response) => {
+  try {
+    const rows = await listRoomActivityEvents(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+      req.query.limit,
+    );
+    res.json(rows);
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/channels/:channelId/activity-events
+ *  Oda Son Olaylar geçmişini temizle - sadece owner / super_admin.
+ */
+router.delete('/:id/channels/:channelId/activity-events', async (req: Request, res: Response) => {
+  try {
+    const result = await clearRoomActivityEvents(
+      req.params.id as string,
+      req.params.channelId as string,
+      (req as any).userId,
+    );
+    res.json(result);
   } catch (err) { handleError(res, err); }
 });
 

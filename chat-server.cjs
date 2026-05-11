@@ -18,6 +18,10 @@ const { createPresenceService, loadStore } = require('./presence');
 const { createFloodControl } = require('./flood-control.cjs');
 const spamGuard = require('./spam-guard.cjs');
 
+const DEBUG_CHAT_LOGS = process.env.DEBUG_CHAT_LOGS === '1';
+function debugLog(...args) { if (DEBUG_CHAT_LOGS) console.log(...args); }
+function debugWarn(...args) { if (DEBUG_CHAT_LOGS) console.warn(...args); }
+
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
 }
@@ -555,7 +559,7 @@ function broadcastClientEvent(event, payload, senderWs) {
 
   targets.delete(senderWs);
   const delivered = sendToSockets(targets, message);
-  console.log('[client-broadcast]', {
+  debugLog('[client-broadcast]', {
     event,
     from: senderWs?.userId || null,
     targetUserId,
@@ -611,10 +615,7 @@ function normalizePresenceState(userId, patch = {}) {
 }
 
 function sendPresenceSnapshot(ws) {
-  console.log('[presence] SNAPSHOT SEND', {
-    to: ws.userId,
-    users: userPresenceByUserId.size,
-  });
+  debugLog('[presence] snapshot sent', { count: userPresenceByUserId.size });
   send(ws, {
     type: 'presence:snapshot',
     users: Array.from(userPresenceByUserId.values()),
@@ -628,18 +629,7 @@ function broadcastPresenceUpdate(user) {
     updatedAt: user.updatedAt || new Date().toISOString(),
   };
   userPresenceByUserId.set(state.userId, state);
-  console.log('[presence] BROADCAST UPDATE', {
-    userId: state.userId,
-    online: state.online,
-    currentRoom: state.currentRoom,
-    serverId: state.serverId,
-    selfMuted: state.selfMuted,
-    selfDeafened: state.selfDeafened,
-    statusText: state.statusText,
-    autoStatus: state.autoStatus,
-    gameActivity: state.gameActivity,
-    sockets: Array.from(userConnections.values()).reduce((n, set) => n + set.size, 0),
-  });
+  debugLog('[presence] update broadcast', { online: state.online, sockets: Array.from(userConnections.values()).reduce((n, set) => n + set.size, 0) });
   broadcastToAllAuthed({
     type: 'presence:update',
     user: state,
@@ -1065,6 +1055,39 @@ async function getRoomChatRank(roomId, profileId) {
   }
 }
 
+
+async function assertRoomChatAccess(roomId, profileId) {
+  const room = String(roomId || '').trim();
+  const user = String(profileId || '').trim();
+  if (!room || !user) return { allowed: false, reason: 'missing_input' };
+
+  try {
+    const row = await queryOne(
+      `SELECT c.id::text AS channel_id,
+              c.server_id::text AS server_id,
+              sm.role AS member_role
+         FROM channels c
+         JOIN server_members sm ON sm.server_id::text = c.server_id::text AND sm.user_id::text = $2::text
+        WHERE c.id::text = $1::text
+        LIMIT 1`,
+      [room, user],
+    );
+    if (!row?.channel_id || !row?.server_id) {
+      return { allowed: false, reason: 'not_member' };
+    }
+
+    return {
+      allowed: true,
+      channelId: row.channel_id,
+      serverId: row.server_id,
+      rank: await getRoomChatRank(room, user),
+      role: String(row.member_role || ''),
+    };
+  } catch (err) {
+    console.warn('[chat] room chat access lookup failed:', err?.message);
+    return { allowed: false, reason: 'lookup_failed' };
+  }
+}
 // ── Internal notify secret (server-backend ↔ chat-server) ────────────────
 const INTERNAL_NOTIFY_SECRET = process.env.INTERNAL_NOTIFY_SECRET || '';
 const SERVER_BACKEND_URL = process.env.SERVER_BACKEND_URL || 'http://127.0.0.1:10002';
@@ -1385,7 +1408,7 @@ async function reportAutoPunish(serverId, userId, action, durationMinutes) {
       signal: AbortSignal.timeout(1500),
     });
     if (!resp.ok) {
-      console.warn(`[auto-punish] HTTP ${resp.status} serverId=${serverId} userId=${userId}`);
+      console.warn('[auto-punish] HTTP non-ok', { status: resp.status });
     }
   } catch (err) {
     // Timeout / network — sessiz swallow, sadece warn. Flow bozulmasın.
@@ -1440,7 +1463,7 @@ function maybeTriggerAutoPunish(cfg, userId) {
   // (5dk) geçmiş olmalı.
   arr.length = 0;
 
-  console.log(`[auto-punish] trigger serverId=${cfg.serverId} userId=${userId} action=${ap.action} duration=${ap.durationMinutes}dk`);
+  debugLog('[auto-punish] trigger', { action: ap.action, durationMinutes: ap.durationMinutes });
   void reportAutoPunish(cfg.serverId, userId, ap.action, ap.durationMinutes);
 }
 
@@ -1873,9 +1896,8 @@ wss.on('connection', (ws) => {
     // ── PRESENCE: detailed patch ─────────────────────────────────────────
     if (msg.type === 'presence:patch') {
       if (!ws.presenceUserId || !ws.presenceSessionKey) return;
-      console.log('[presence] PATCH RECEIVED', {
-        userId: ws.presenceUserId,
-        payload: msg.payload || {},
+      debugLog('[presence] patch received', {
+        keys: Object.keys(msg.payload || {}).length,
         wsOpen: ws.readyState === WebSocket.OPEN,
       });
       ws.presenceState = markPresenceOnline(ws.presenceUserId, msg.payload || {});
@@ -1919,6 +1941,11 @@ wss.on('connection', (ws) => {
       // Per-user join rate limit: 5 join / 15 saniye
       if (checkRateLimit(userJoinLimits, userId, 5, 15000)) {
         return send(ws, { type: 'error', message: 'Çok hızlı oda değiştiriyorsun, biraz bekle' });
+      }
+
+      const access = await assertRoomChatAccess(roomId, userId);
+      if (!access.allowed) {
+        return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
       }
 
       // Aynı odaya tekrar join
@@ -1978,7 +2005,7 @@ wss.on('connection', (ws) => {
         send(ws, { type: 'history', roomId, messages: [] });
       }
 
-      console.log(`[chat] ${userName} odaya girdi: ${roomId}`);
+      debugLog('[chat] joined room');
       return;
     }
 
@@ -1988,8 +2015,13 @@ wss.on('connection', (ws) => {
         return send(ws, { type: 'error', message: 'Odada değilsin' });
       }
 
+      const access = await assertRoomChatAccess(currentRoom, userId);
+      if (!access.allowed) {
+        return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+      }
+
       const muteState = roomChatMuteState.get(currentRoom);
-      if (muteState && (await getRoomChatRank(currentRoom, userId)) < muteState.rank) {
+      if (muteState && access.rank < muteState.rank) {
         return send(ws, {
           type: 'error',
           code: 'room_chat_muted',
@@ -2013,7 +2045,7 @@ wss.on('connection', (ws) => {
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {
-            console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+            debugLog('[chat-moderation] blocked', { kind: 'flood', offense: flood.offenseCount, retryMs: flood.retryAfterMs });
             // Stat event sadece yeni offense'ta (cooldown içi red'ler sayaç şişirmesin).
             if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood', { userId, channelId: currentRoom });
             // Auto-punishment: yeni offense'ta sayaç push; eşik + cooldown uygunsa punish.
@@ -2028,7 +2060,7 @@ wss.on('connection', (ws) => {
         }
         // Profanity: flood geçti, içerik kontrolü. Eşleşirse sessizce reddet (logla ama DB/broadcast yapma).
         if (messageHasProfanity(text, cfg?.profanity)) {
-          console.log(`[profanity] block userId=${userId} server=${cfg?.serverId || '-'} len=${text.length}`);
+          debugLog('[chat-moderation] blocked', { kind: 'profanity', len: text.length });
           if (cfg?.serverId) void reportModStat(cfg.serverId, 'profanity', { userId, channelId: currentRoom });
           return send(ws, {
             type: 'error',
@@ -2040,7 +2072,7 @@ wss.on('connection', (ws) => {
         if (cfg?.spam?.enabled) {
           const spamRes = spamGuard.checkSpam(userId, text);
           if (spamRes.spam) {
-            console.log(`[spam] block userId=${userId} server=${cfg?.serverId || '-'} reason=${spamRes.reason} len=${text.length}`);
+            debugLog('[chat-moderation] blocked', { kind: 'spam', reason: spamRes.reason, len: text.length });
             if (cfg?.serverId) void reportModStat(cfg.serverId, 'spam', { userId, channelId: currentRoom });
             return send(ws, {
               type: 'error',
@@ -2076,7 +2108,11 @@ wss.on('connection', (ws) => {
       if (!currentRoom) {
         return send(ws, { type: 'error', message: 'Odada değilsin' });
       }
-      const actorRank = await getRoomChatRank(currentRoom, userId);
+      const access = await assertRoomChatAccess(currentRoom, userId);
+      if (!access.allowed) {
+        return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+      }
+      const actorRank = access.rank;
       if (actorRank <= 0) {
         return send(ws, { type: 'error', message: 'Yetkin yok' });
       }
@@ -2101,13 +2137,37 @@ wss.on('connection', (ws) => {
       if (!currentRoom || !msg.messageId) return;
 
       try {
-        await pgPool.query('DELETE FROM room_messages WHERE id = $1', [msg.messageId]);
+        const message = await queryOne(
+          'SELECT id, channel_id, sender_id FROM room_messages WHERE id = $1',
+          [msg.messageId],
+        );
+        if (!message || String(message.channel_id) !== String(currentRoom)) {
+          return send(ws, { type: 'error', message: 'Bu mesaj silinemedi' });
+        }
+
+        const access = await assertRoomChatAccess(message.channel_id, userId);
+        if (!access.allowed) {
+          return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+        }
+
+        const isSender = String(message.sender_id) === String(userId);
+        if (!isSender && access.rank <= 0) {
+          return send(ws, { type: 'error', message: 'Yetkin yok' });
+        }
+
+        const result = await pgPool.query(
+          'DELETE FROM room_messages WHERE id = $1 AND channel_id = $2',
+          [msg.messageId, message.channel_id],
+        );
+        if (result.rowCount === 0) {
+          return send(ws, { type: 'error', message: 'Bu mesaj silinemedi' });
+        }
 
         broadcastToRoom(currentRoom, {
           type: 'delete',
           messageId: msg.messageId,
         });
-      } catch (err) { console.error('[chat] delete error:', err); }
+      } catch (err) { console.error('[chat] delete error:', err?.message || err); }
       return;
     }
 
@@ -2119,9 +2179,14 @@ wss.on('connection', (ws) => {
       if (!text || text.length > 2000) return;
 
       try {
+        const access = await assertRoomChatAccess(currentRoom, userId);
+        if (!access.allowed) {
+          return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+        }
+
         const result = await pgPool.query(
-          'UPDATE room_messages SET text = $1 WHERE id = $2 AND sender_id = $3',
-          [text, msg.messageId, userId],
+          'UPDATE room_messages SET text = $1 WHERE id = $2 AND sender_id = $3 AND channel_id = $4',
+          [text, msg.messageId, userId, currentRoom],
         );
         if (result.rowCount === 0) {
           return send(ws, { type: 'error', message: 'Bu mesaj düzenlenemedi' });
@@ -2132,7 +2197,7 @@ wss.on('connection', (ws) => {
           messageId: msg.messageId,
           text,
         });
-      } catch (err) { console.error('[chat] edit error:', err); }
+      } catch (err) { console.error('[chat] edit error:', err?.message || err); }
       return;
     }
 
@@ -2141,6 +2206,14 @@ wss.on('connection', (ws) => {
       if (!currentRoom) return;
 
       try {
+        const access = await assertRoomChatAccess(currentRoom, userId);
+        if (!access.allowed) {
+          return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+        }
+        if (access.rank <= 0) {
+          return send(ws, { type: 'error', message: 'Yetkin yok' });
+        }
+
         await pgPool.query('DELETE FROM room_messages WHERE channel_id = $1', [currentRoom]);
 
         broadcastToRoom(currentRoom, {
@@ -2148,8 +2221,8 @@ wss.on('connection', (ws) => {
           roomId: currentRoom,
         });
 
-        console.log(`[chat] ${userName} tüm mesajları sildi: ${currentRoom}`);
-      } catch (err) { console.error('[chat] clear error:', err); }
+        console.log('[chat] room messages cleared');
+      } catch (err) { console.error('[chat] clear error:', err?.message || err); }
       return;
     }
 
@@ -2319,7 +2392,7 @@ wss.on('connection', (ws) => {
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {
-            console.log(`[flood] dm block userId=${userId} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
+            debugLog('[dm-moderation] blocked', { kind: 'flood', offense: flood.offenseCount, retryMs: flood.retryAfterMs });
           }
           return send(ws, {
             type: 'dm:error',

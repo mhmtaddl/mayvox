@@ -48,11 +48,10 @@ export async function broadcastModeration(payload: ModerationBroadcastPayload): 
       signal: ctrl.signal,
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      console.warn('[moderation-broadcast] non-ok:', res.status, body.slice(0, 200), payload.action, payload.userId);
+      console.warn('[moderation-broadcast] non-ok:', { status: res.status, action: payload.action ? 'present' : 'missing' });
     }
   } catch (err) {
-    console.warn('[moderation-broadcast] failed:', err instanceof Error ? err.message : err, payload.action, payload.userId);
+    console.warn('[moderation-broadcast] failed:', err instanceof Error ? err.message : err, { action: payload.action ? 'present' : 'missing' });
   } finally {
     clearTimeout(timer);
   }

@@ -30,11 +30,10 @@ export async function postBroadcast(event: string, payload: Record<string, unkno
       signal: ctrl.signal,
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      console.warn('[channel-broadcast] non-ok:', res.status, body.slice(0, 200), event);
+      console.warn('[channel-broadcast] non-ok:', { status: res.status, event });
     }
   } catch (err) {
-    console.warn('[channel-broadcast] failed:', err instanceof Error ? err.message : err, event);
+    console.warn('[channel-broadcast] failed:', err instanceof Error ? err.message : err, { event });
   } finally {
     clearTimeout(timer);
   }

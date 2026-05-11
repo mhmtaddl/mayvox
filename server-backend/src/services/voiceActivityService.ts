@@ -72,7 +72,11 @@ async function resolveServerIdForRoom(roomId: string): Promise<string | null> {
   if (cached && now - cached.ts < CACHE_TTL_MS) return cached.serverId;
 
   const row = await queryOne<{ server_id: string }>(
-    `SELECT server_id FROM channels WHERE id = $1 AND type = 'voice'`,
+    `SELECT c.server_id::text AS server_id
+       FROM channels c
+       JOIN servers s ON s.id = c.server_id
+      WHERE c.id = $1
+        AND c.type = 'voice'`,
     [roomId],
   );
   if (!row) return null;
@@ -83,7 +87,7 @@ async function resolveServerIdForRoom(roomId: string): Promise<string | null> {
 // ════════════════════════════════════════════════════════════════════════════
 // Session açma — LiveKit participant_joined webhook'undan
 // ════════════════════════════════════════════════════════════════════════════
-export async function openSession(userId: string, roomId: string): Promise<{ opened: boolean; reason?: string }> {
+export async function openSession(userId: string, roomId: string): Promise<{ opened: boolean; serverId?: string; reason?: string }> {
   const serverId = await resolveServerIdForRoom(roomId);
   if (!serverId) return { opened: false, reason: 'room_not_voice_channel' };
 
@@ -102,13 +106,13 @@ export async function openSession(userId: string, roomId: string): Promise<{ ope
      VALUES ($1, $2, $3, now())`,
     [userId, serverId, roomId],
   );
-  return { opened: true };
+  return { opened: true, serverId };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // Session kapama + co-presence aggregation — LiveKit participant_left'ten
 // ════════════════════════════════════════════════════════════════════════════
-export async function closeSession(userId: string, roomId: string): Promise<{ closed: boolean; pairsUpdated: number }> {
+export async function closeSession(userId: string, roomId: string): Promise<{ closed: boolean; pairsUpdated: number; serverId?: string }> {
   // Transaction: session'ı kapat + overlap'leri aynı anda oku
   const client = await pool.connect();
   try {
@@ -163,7 +167,7 @@ export async function closeSession(userId: string, roomId: string): Promise<{ cl
     }
 
     await client.query('COMMIT');
-    return { closed: true, pairsUpdated };
+    return { closed: true, pairsUpdated, serverId: my.server_id };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
