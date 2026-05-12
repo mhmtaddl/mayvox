@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "music:worker:test": "tsx src/workers/roomMusicWorker.ts",
+    "music:provider:jamendo:dry-run": "tsx src/workers/jamendoProviderDryRun.ts",
     "test": "vitest run"
   },
   "dependencies": {
