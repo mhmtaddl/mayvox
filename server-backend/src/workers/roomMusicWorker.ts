@@ -66,19 +66,47 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function readHoldMs(): number {
+type RunDurationMs = number | null;
+
+function readHoldMs(): RunDurationMs {
   const raw = process.env.MUSIC_WORKER_HOLD_MS?.trim();
   if (!raw) {
     return 30_000;
   }
 
+  if (raw === '0' || raw.toLowerCase() === 'forever' || raw.toLowerCase() === 'infinite') {
+    return null;
+  }
+
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 1_000) {
-    log(`MUSIC_WORKER_HOLD_MS invalid; using 30000`);
+    log(`MUSIC_WORKER_HOLD_MS invalid; using 30000. Use 0 for continuous mode.`);
     return 30_000;
   }
 
   return Math.min(parsed, 300_000);
+}
+
+function formatRunDuration(durationMs: RunDurationMs): string {
+  return durationMs === null ? 'continuous mode' : `${durationMs}ms`;
+}
+
+function createShutdownSignal(): { isStopped: () => boolean; dispose: () => void } {
+  let stopped = false;
+  const stop = (): void => {
+    stopped = true;
+  };
+
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+
+  return {
+    isStopped: () => stopped,
+    dispose: () => {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+    },
+  };
 }
 
 function readConnectTimeoutMs(): number {
@@ -288,6 +316,7 @@ async function connectAndDisconnect(params: {
   const identity = `system-music:${serverId}:${channelId}`;
   const holdMs = readHoldMs();
   const connectTimeoutMs = readConnectTimeoutMs();
+  const shutdown = createShutdownSignal();
 
   if (!livekitUrl || !apiKey || !apiSecret) {
     log('connect skipped; LiveKit env is incomplete');
@@ -309,15 +338,26 @@ async function connectAndDisconnect(params: {
 
   log(`connecting to room ${maskValue(roomName)} as system-music:${maskValue(serverId)}:${maskValue(channelId)}`);
   await withTimeout(room.connect(livekitUrl, jwt), connectTimeoutMs, 'LiveKit connect');
-  log(`connected; holding for ${holdMs}ms`);
+  log(`connected; holding for ${formatRunDuration(holdMs)}`);
 
   try {
     if (publishRequested) {
-      await publishTestTone(room, holdMs);
+      if (holdMs === null) {
+        await publishTestToneUntil(room, () => !shutdown.isStopped());
+      } else {
+        await publishTestTone(room, holdMs);
+      }
     } else {
-      await sleep(holdMs);
+      while (!shutdown.isStopped()) {
+        if (holdMs !== null) {
+          await sleep(holdMs);
+          break;
+        }
+        await sleep(1_000);
+      }
     }
   } finally {
+    shutdown.dispose();
     room.disconnect();
     log('disconnected');
   }
@@ -407,8 +447,9 @@ async function runSessionPolling(params: {
   const holdMs = readHoldMs();
   const pollMs = readPollMs();
   const startedAt = Date.now();
-  const endsAt = startedAt + holdMs;
+  const endsAt = holdMs === null ? null : startedAt + holdMs;
   const pool = createRoomMusicPool();
+  const shutdown = createShutdownSignal();
   let room: rtcNode.Room | null = null;
   let publishing = false;
   let publishTask: Promise<void> | null = null;
@@ -453,8 +494,8 @@ async function runSessionPolling(params: {
   };
 
   try {
-    log(`session polling started for ${holdMs}ms`);
-    while (Date.now() < endsAt) {
+    log(`session polling started for ${formatRunDuration(holdMs)}`);
+    while (!shutdown.isStopped() && (endsAt === null || Date.now() < endsAt)) {
       const session = await readSession(pool, serverId, channelId);
       const status = session?.status ?? 'none';
       if (status !== lastStatus) {
@@ -466,7 +507,7 @@ async function runSessionPolling(params: {
         if (publishRequested && !publishTask) {
           const activeRoom = await connectRoom();
           publishing = true;
-          publishTask = publishTestToneUntil(activeRoom, () => publishing);
+          publishTask = publishTestToneUntil(activeRoom, () => publishing && !shutdown.isStopped());
         }
       } else {
         await stopPublishing();
@@ -476,6 +517,7 @@ async function runSessionPolling(params: {
     }
     await stopPublishing();
   } finally {
+    shutdown.dispose();
     await pool.end();
     const connectedRoom = room as rtcNode.Room | null;
     if (connectedRoom) {
