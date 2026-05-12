@@ -41,8 +41,8 @@ const checks: EnvCheck[] = [
   { name: 'MUSIC_TEST_SERVER_ID', requiredForDryRun: true },
   { name: 'MUSIC_TEST_CHANNEL_ID', requiredForDryRun: true },
   { name: 'DATABASE_URL', requiredForSessionPoll: true },
-  { name: 'MUSIC_TEST_AUDIO_URL', requiredForPublish: true },
-  { name: 'MUSIC_TEST_AUDIO_FILE', requiredForPublish: true },
+  { name: 'MUSIC_TEST_AUDIO_URL' },
+  { name: 'MUSIC_TEST_AUDIO_FILE' },
 ];
 
 function hasEnv(name: string): boolean {
@@ -231,9 +231,8 @@ function reportEnv(connectRequested: boolean, publishRequested: boolean): void {
   const missingPoll = checks
     .filter((check) => check.requiredForSessionPoll && !hasEnv(check.name))
     .map((check) => check.name);
-  const hasAudioSource = hasEnv('MUSIC_TEST_AUDIO_URL') || hasEnv('MUSIC_TEST_AUDIO_FILE');
 
-  if (missingDryRun.length > 0) {
+  if (!connectRequested && missingDryRun.length > 0) {
     log(`dry-run missing env: ${missingDryRun.join(', ')}`);
   }
 
@@ -245,8 +244,8 @@ function reportEnv(connectRequested: boolean, publishRequested: boolean): void {
     log(`session poll missing env: ${missingPoll.join(', ')}`);
   }
 
-  if (publishRequested && !hasAudioSource) {
-    log('publish missing env: MUSIC_TEST_AUDIO_URL or MUSIC_TEST_AUDIO_FILE');
+  if (publishRequested) {
+    log('publish mode: generated test tone');
   }
 }
 
