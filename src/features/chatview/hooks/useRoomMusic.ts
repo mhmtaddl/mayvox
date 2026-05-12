@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MusicSource, RoomMusicPermissions, RoomMusicSession, RoomMusicStatus } from '../../../types';
 import { getRoomMusicPermissions } from '../../../lib/musicPermissions';
 import {
@@ -9,6 +9,7 @@ import {
   resumeRoomMusicSession,
   startRoomMusicSession,
   stopRoomMusicSession,
+  updateRoomMusicVolume,
 } from '../../../lib/serverService';
 
 interface UseRoomMusicInput {
@@ -37,6 +38,7 @@ export function useRoomMusic({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<RoomMusicStatus | null>(null);
+  const volumeCommitTimerRef = useRef<number | null>(null);
 
   const basePermissions = useMemo(
     () => getRoomMusicPermissions({ serverPlan, userLevel, serverRole }),
@@ -173,6 +175,13 @@ export function useRoomMusic({
     return sources[0] ?? null;
   }, [session, sources]);
 
+  useEffect(() => () => {
+    if (volumeCommitTimerRef.current !== null) {
+      window.clearTimeout(volumeCommitTimerRef.current);
+      volumeCommitTimerRef.current = null;
+    }
+  }, []);
+
   const commitActionSession = useCallback((nextSession: RoomMusicSession, nextStatus: RoomMusicStatus) => {
     setSession({ ...nextSession, status: nextStatus });
     setOptimisticStatus(null);
@@ -247,6 +256,31 @@ export function useRoomMusic({
     }
   }, [actionLoading, channelId, commitActionSession, enabled, handleActionError, permissions.canStop, serverId, session]);
 
+  const setVolume = useCallback((nextVolume: number) => {
+    if (!enabled || !serverId || !channelId || !permissions.canControl) return;
+    const volume = Math.max(0, Math.min(100, Math.round(nextVolume)));
+    setActionError(null);
+    setSession((current) => {
+      if (!current) return current;
+      return { ...current, volume };
+    });
+
+    if (volumeCommitTimerRef.current !== null) {
+      window.clearTimeout(volumeCommitTimerRef.current);
+    }
+    volumeCommitTimerRef.current = window.setTimeout(async () => {
+      volumeCommitTimerRef.current = null;
+      try {
+        const nextSession = await updateRoomMusicVolume(serverId, channelId, volume);
+        setSession({ ...nextSession, volume });
+        setError(null);
+        setErrorCode(null);
+      } catch (err) {
+        handleActionError(err);
+      }
+    }, 250);
+  }, [channelId, enabled, handleActionError, permissions.canControl, serverId]);
+
   const togglePlayPause = useCallback(() => {
     const currentStatus = optimisticStatus ?? session?.status;
     if (currentStatus === 'playing') {
@@ -297,6 +331,7 @@ export function useRoomMusic({
     pause,
     resume,
     stop,
+    setVolume,
     togglePlayPause,
     shouldRender: errorCode !== 'MUSIC_CHANNEL_NOT_VOICE',
   };

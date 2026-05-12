@@ -11,7 +11,8 @@ export type RoomMusicErrorCode =
   | 'MUSIC_SOURCE_NOT_FOUND'
   | 'MUSIC_SESSION_NOT_FOUND'
   | 'MUSIC_CHANNEL_NOT_FOUND'
-  | 'MUSIC_CHANNEL_NOT_VOICE';
+  | 'MUSIC_CHANNEL_NOT_VOICE'
+  | 'MUSIC_INVALID_VOLUME';
 
 export class RoomMusicError extends Error {
   constructor(public status: number, public code: RoomMusicErrorCode, message: string) {
@@ -381,6 +382,28 @@ export async function changeSource(userId: string, serverId: string, channelId: 
      ${sessionSelectSql()}
      JOIN updated u ON u.id = s.id`,
     [serverId, channelId, sourceId],
+  );
+  if (!row) throw new RoomMusicError(404, 'MUSIC_SESSION_NOT_FOUND', 'Müzik oturumu bulunamadı');
+  return toSessionDto(row);
+}
+
+export async function updateVolume(userId: string, serverId: string, channelId: string, volume: number): Promise<RoomMusicSessionDto> {
+  await assertControlAccess(userId, serverId, channelId);
+  if (!Number.isInteger(volume) || volume < 0 || volume > 100) {
+    throw new RoomMusicError(400, 'MUSIC_INVALID_VOLUME', 'Ses seviyesi 0-100 arasında olmalı');
+  }
+  const existing = await getExistingSession(serverId, channelId);
+  if (!existing) throw new RoomMusicError(404, 'MUSIC_SESSION_NOT_FOUND', 'Müzik oturumu bulunamadı');
+  const row = await queryOne<MusicSessionRow>(
+    `WITH updated AS (
+       UPDATE room_music_sessions
+       SET volume = $3, updated_at = now()
+       WHERE server_id = $1 AND channel_id = $2
+       RETURNING id
+     )
+     ${sessionSelectSql()}
+     JOIN updated u ON u.id = s.id`,
+    [serverId, channelId, volume],
   );
   if (!row) throw new RoomMusicError(404, 'MUSIC_SESSION_NOT_FOUND', 'Müzik oturumu bulunamadı');
   return toSessionDto(row);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Lock, Music2, Pause, Play, Radio, Square, Volume2 } from 'lucide-react';
 import type { MusicSource, RoomMusicPermissions, RoomMusicSession } from '../../types';
 import { getRoomMusicPermissions } from '../../lib/musicPermissions';
@@ -20,6 +20,8 @@ export interface RoomMusicPanelProps {
   compact?: boolean;
   onPlayPause?: () => void;
   onStop?: () => void;
+  onVolumeChange?: (volume: number) => void;
+  variant?: 'bar' | 'card';
 }
 
 export default function RoomMusicPanel({
@@ -39,8 +41,14 @@ export default function RoomMusicPanel({
   compact = true,
   onPlayPause,
   onStop,
+  onVolumeChange,
+  variant = 'bar',
 }: RoomMusicPanelProps) {
-  const [localVolume, setLocalVolume] = useState(70);
+  const [localVolume, setLocalVolume] = useState(session?.volume ?? 70);
+  const [volumeOpen, setVolumeOpen] = useState(false);
+  const [showVolumeValue, setShowVolumeValue] = useState(false);
+  const volumeRef = useRef<HTMLDivElement>(null);
+  const volumeValueTimerRef = useRef<number | null>(null);
   const computedPermissions = useMemo(
     () => getRoomMusicPermissions({ serverPlan, userLevel, serverRole }),
     [serverPlan, userLevel, serverRole],
@@ -60,8 +68,68 @@ export default function RoomMusicPanel({
   const iconSize = compact ? 'h-7 w-7' : 'h-9 w-9';
   const controlSize = compact ? 'h-7 w-7' : 'h-8 w-8';
   const volumeWidth = compact ? 'w-20 sm:w-24' : 'w-32';
+  const playDisabled = controlsDisabled || actionLoading || !permissions.canControl || !onPlayPause;
+  const stopDisabled = controlsDisabled || actionLoading || !canStopCurrentSession || !permissions.canStop || !onStop;
+  const volumeDisabled = controlsDisabled || actionLoading || !permissions.canControl || !onVolumeChange;
+
+  const clearVolumeValueTimer = () => {
+    if (volumeValueTimerRef.current === null) return;
+    window.clearTimeout(volumeValueTimerRef.current);
+    volumeValueTimerRef.current = null;
+  };
+
+  const closeVolumeControl = () => {
+    setVolumeOpen(false);
+    setShowVolumeValue(true);
+    clearVolumeValueTimer();
+    volumeValueTimerRef.current = window.setTimeout(() => setShowVolumeValue(false), 1800);
+  };
+
+  useEffect(() => {
+    if (!volumeOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (volumeRef.current?.contains(event.target as Node)) return;
+      closeVolumeControl();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeVolumeControl();
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [volumeOpen]);
+
+  useEffect(() => () => clearVolumeValueTimer(), []);
+
+  useEffect(() => {
+    if (typeof session?.volume !== 'number') return;
+    setLocalVolume(session.volume);
+  }, [session?.volume]);
+
+  const handleVolumeChange = (volume: number) => {
+    const nextVolume = Math.max(0, Math.min(100, Math.round(volume)));
+    setLocalVolume(nextVolume);
+    onVolumeChange?.(nextVolume);
+  };
 
   if (permissions.locked) {
+    if (variant === 'card') {
+      return (
+        <section className={`relative flex h-[86px] w-[156px] items-center gap-2 rounded-[18px] border border-[var(--theme-border)] bg-[var(--theme-panel)]/88 px-2.5 py-2 shadow-sm ${className}`}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[24%] border border-[var(--theme-border)] bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]">
+            <Lock size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[10.5px] font-semibold leading-tight text-[var(--theme-text)]">MAYVox Music</p>
+            <p className="mt-0.5 truncate text-[9px] leading-tight text-[var(--theme-secondary-text)]/65">Ultra gerekli</p>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className={`shrink-0 max-w-xl rounded-lg border border-[var(--theme-border)] bg-[var(--theme-panel)]/88 ${panelPadding} ${className}`}>
         <div className="flex items-center gap-2.5">
@@ -77,6 +145,79 @@ export default function RoomMusicPanel({
           <span className="rounded-md border border-[var(--theme-border)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--theme-secondary-text)]">
             Ultra
           </span>
+        </div>
+      </section>
+    );
+  }
+
+  if (variant === 'card') {
+    return (
+      <section className={`relative flex h-[86px] ${volumeOpen ? 'w-[238px]' : 'w-[156px]'} items-center gap-2 rounded-[18px] border border-[var(--theme-border)] bg-[var(--theme-panel)]/88 px-2.5 py-2 shadow-sm transition-[width] duration-200 ${className}`}>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[24%] border border-[var(--theme-border)] bg-[var(--theme-accent)]/12 text-[var(--theme-accent)]">
+          <Music2 size={17} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[10.5px] font-semibold leading-tight text-[var(--theme-text)]">MAYVox Music</p>
+          <p className="mt-0.5 truncate text-[9px] leading-tight text-[var(--theme-secondary-text)]/70">{title}</p>
+          <div className="mt-2 flex items-center gap-1">
+            <button
+              type="button"
+              disabled={playDisabled}
+              onClick={onPlayPause}
+              className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--theme-secondary-text)] transition-colors hover:text-[var(--theme-accent)] focus:outline-none focus-visible:outline-none active:text-[var(--theme-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-[var(--theme-secondary-text)]"
+              aria-label={status === 'playing' ? 'Pause' : 'Play'}
+            >
+              {status === 'playing' ? <Pause size={11} /> : <Play size={11} />}
+            </button>
+            <button
+              type="button"
+              disabled={stopDisabled}
+              onClick={onStop}
+              className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--theme-secondary-text)] transition-colors hover:text-[var(--theme-accent)] focus:outline-none focus-visible:outline-none active:text-[var(--theme-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-[var(--theme-secondary-text)]"
+              aria-label="Stop"
+            >
+              <Square size={10} />
+            </button>
+            <div ref={volumeRef} className="flex min-w-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (volumeOpen) {
+                    closeVolumeControl();
+                    return;
+                  }
+                  clearVolumeValueTimer();
+                  setShowVolumeValue(true);
+                  setVolumeOpen(true);
+                }}
+                className="flex h-5 min-w-5 items-center justify-center rounded-md text-[var(--theme-secondary-text)] transition-colors hover:text-[var(--theme-accent)] focus:outline-none focus-visible:outline-none active:text-[var(--theme-accent)]"
+                aria-label="Music volume"
+              >
+                {volumeOpen || showVolumeValue ? (
+                  <span className="text-[9px] font-semibold tabular-nums">{localVolume}</span>
+                ) : (
+                  <Volume2 size={11} />
+                )}
+              </button>
+              {volumeOpen && (
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={localVolume}
+                  onChange={event => {
+                    clearVolumeValueTimer();
+                    setShowVolumeValue(true);
+                    handleVolumeChange(Number(event.target.value));
+                  }}
+                  disabled={volumeDisabled}
+                  className="h-1 w-20 accent-[var(--theme-accent)]"
+                  aria-label="Music volume"
+                />
+              )}
+            </div>
+          </div>
         </div>
       </section>
     );
@@ -114,7 +255,8 @@ export default function RoomMusicPanel({
             min={0}
             max={100}
             value={localVolume}
-            onChange={event => setLocalVolume(Number(event.target.value))}
+            onChange={event => handleVolumeChange(Number(event.target.value))}
+            disabled={volumeDisabled}
             className="relative z-[1] h-4 w-full cursor-pointer opacity-0"
             aria-label="Music volume"
           />
@@ -123,7 +265,7 @@ export default function RoomMusicPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={controlsDisabled || actionLoading || !permissions.canControl || !onPlayPause}
+            disabled={playDisabled}
             onClick={onPlayPause}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label={status === 'playing' ? 'Pause' : 'Play'}
@@ -132,7 +274,7 @@ export default function RoomMusicPanel({
           </button>
           <button
             type="button"
-            disabled={controlsDisabled || actionLoading || !canStopCurrentSession || !permissions.canStop || !onStop}
+            disabled={stopDisabled}
             onClick={onStop}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label="Stop"
@@ -148,7 +290,8 @@ export default function RoomMusicPanel({
             min={0}
             max={100}
             value={localVolume}
-            onChange={event => setLocalVolume(Number(event.target.value))}
+            onChange={event => handleVolumeChange(Number(event.target.value))}
+            disabled={volumeDisabled}
             className="h-1 w-14 accent-[var(--theme-accent)] md:hidden"
             aria-label="Music volume"
           />

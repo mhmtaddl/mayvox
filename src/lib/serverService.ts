@@ -226,6 +226,13 @@ export async function changeRoomMusicSource(serverId: string, channelId: string,
   });
 }
 
+export async function updateRoomMusicVolume(serverId: string, channelId: string, volume: number): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/volume`, {
+    method: 'POST',
+    body: JSON.stringify({ volume }),
+  });
+}
+
 // ── Temel CRUD ──
 
 export async function listMyServers(): Promise<Server[]> {

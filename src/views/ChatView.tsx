@@ -1959,26 +1959,6 @@ export default function ChatView() {
                 </div>
               </div>
               <div ref={roomActivitySplitRef} className="relative z-[1] flex flex-col flex-1 min-h-0 overflow-hidden">
-                {showRoomMusicPanel && roomMusic.shouldRender && (
-                  <RoomMusicPanel
-                    serverPlan={activeServerData?.plan}
-                    userLevel={currentUser.userLevel}
-                    serverRole={activeServerRole}
-                    session={roomMusic.session}
-                    source={roomMusic.activeSource}
-                    permissions={roomMusic.permissions}
-                    loading={roomMusic.loading}
-                    actionLoading={roomMusic.actionLoading}
-                    error={roomMusic.error}
-                    actionError={roomMusic.actionError}
-                    errorCode={roomMusic.errorCode}
-                    controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
-                    onPlayPause={roomMusic.togglePlayPause}
-                    onStop={roomMusic.stop}
-                    compact
-                    className="mb-2"
-                  />
-                )}
                 <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
@@ -1998,6 +1978,27 @@ export default function ChatView() {
                   isFloodCooling={isFloodCooling}
                   canModerateMessages={canViewRoomActivityLog}
                   highlightedMessageId={highlightedRoomMessageId}
+                  musicAccessory={showRoomMusicPanel && roomMusic.shouldRender ? (
+                    <RoomMusicPanel
+                      serverPlan={activeServerData?.plan}
+                      userLevel={currentUser.userLevel}
+                      serverRole={activeServerRole}
+                      session={roomMusic.session}
+                      source={roomMusic.activeSource}
+                      permissions={roomMusic.permissions}
+                      loading={roomMusic.loading}
+                      actionLoading={roomMusic.actionLoading}
+                      error={roomMusic.error}
+                      actionError={roomMusic.actionError}
+                      errorCode={roomMusic.errorCode}
+                      controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
+                      onPlayPause={roomMusic.togglePlayPause}
+                      onStop={roomMusic.stop}
+                      onVolumeChange={roomMusic.setVolume}
+                      compact
+                      variant="card"
+                    />
+                  ) : null}
                   activityPanel={canViewRoomActivityLog ? (
                     <RoomActivityLogPanel
                       activities={roomActivities}

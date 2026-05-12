@@ -29,6 +29,7 @@ type MusicSessionSnapshot = {
 
 type ActivePublisher = {
   session: MusicSessionSnapshot;
+  volume: number;
   room: rtcNode.Room;
   stop: () => void;
   done: Promise<void>;
@@ -405,7 +406,7 @@ async function connectAndDisconnect(params: {
   try {
     if (publishRequested) {
       if (holdMs === null) {
-        await publishTestToneUntil(room, () => !shutdown.isStopped());
+        await publishTestToneUntil(room, () => !shutdown.isStopped(), () => 70);
       } else {
         await publishTestTone(room, holdMs);
       }
@@ -431,7 +432,7 @@ async function publishTestTone(room: rtcNode.Room, durationMs: number): Promise<
   const frameMs = 10;
   const samplesPerFrame = Math.floor(sampleRate / (1000 / frameMs));
   const toneHz = readToneHz();
-  const amplitude = 0.18 * 32767;
+  const amplitude = volumeToAmplitude(70);
   const source = new rtcNode.AudioSource(sampleRate, channels);
   const track = rtcNode.LocalAudioTrack.createAudioTrack('mayvox-music-test-tone', source);
   const options = new rtcNode.TrackPublishOptions();
@@ -464,13 +465,17 @@ async function publishTestTone(room: rtcNode.Room, durationMs: number): Promise<
   }
 }
 
-async function publishTestToneUntil(room: rtcNode.Room, shouldContinue: () => boolean): Promise<void> {
+function volumeToAmplitude(volume: number): number {
+  const normalized = Math.max(0, Math.min(100, volume)) / 100;
+  return 0.18 * normalized * 32767;
+}
+
+async function publishTestToneUntil(room: rtcNode.Room, shouldContinue: () => boolean, getVolume: () => number): Promise<void> {
   const sampleRate = 48_000;
   const channels = 1;
   const frameMs = 10;
   const samplesPerFrame = Math.floor(sampleRate / (1000 / frameMs));
   const toneHz = readToneHz();
-  const amplitude = 0.18 * 32767;
   const source = new rtcNode.AudioSource(sampleRate, channels);
   const track = rtcNode.LocalAudioTrack.createAudioTrack('mayvox-music-test-tone', source);
   const options = new rtcNode.TrackPublishOptions();
@@ -482,6 +487,7 @@ async function publishTestToneUntil(room: rtcNode.Room, shouldContinue: () => bo
   let sampleCursor = 0;
   try {
     while (shouldContinue()) {
+      const amplitude = volumeToAmplitude(getVolume());
       const frame = rtcNode.AudioFrame.create(sampleRate, channels, samplesPerFrame);
       for (let sampleIndex = 0; sampleIndex < samplesPerFrame; sampleIndex++) {
         const value = Math.round(
@@ -554,20 +560,27 @@ async function runSessionPolling(params: {
   const startPublisher = async (session: MusicSessionSnapshot): Promise<void> => {
     const key = `${session.serverId}:${session.channelId}`;
     if (publishers.has(key)) {
+      const publisher = publishers.get(key);
+      if (publisher) {
+        publisher.session = session;
+        publisher.volume = session.volume;
+      }
       return;
     }
 
     const room = await connectRoom(session);
     let active = true;
-    const done = publishTestToneUntil(room, () => active && !shutdown.isStopped());
-    publishers.set(key, {
+    const publisher: ActivePublisher = {
       session,
+      volume: session.volume,
       room,
       stop: () => {
         active = false;
       },
-      done,
-    });
+      done: Promise.resolve(),
+    };
+    publisher.done = publishTestToneUntil(room, () => active && !shutdown.isStopped(), () => publisher.volume);
+    publishers.set(key, publisher);
     log(`session audio active: ${maskValue(session.channelId)}${session.sourceTitle ? ` (${session.sourceTitle})` : ''}`);
   };
 

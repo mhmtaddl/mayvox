@@ -248,6 +248,21 @@ router.post('/:id/channels/:channelId/music/session/source', async (req: Request
   } catch (err) { handleMusicError(res, err); }
 });
 
+/** POST /servers/:id/channels/:channelId/music/session/volume */
+router.post('/:id/channels/:channelId/music/session/volume', async (req: Request, res: Response) => {
+  try {
+    const rawVolume = typeof req.body?.volume === 'number' ? req.body.volume : Number.NaN;
+    const volume = Number.isFinite(rawVolume) ? Math.round(rawVolume) : Number.NaN;
+    const session = await roomMusicService.updateVolume(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+      volume,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
 /** GET /servers/:id/moderation-config — auto-mod ayarları (capability: server.moderation.update) */
 router.get('/:id/moderation-config', async (req: Request, res: Response) => {
   try {
