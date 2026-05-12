@@ -308,6 +308,7 @@ export default function ChatView() {
   const [roomActivityPanelOpen, setRoomActivityPanelOpen] = useState(true);
   const [roomActivityPanelRatio, setRoomActivityPanelRatio] = useState(25);
   const [roomActivityClearing, setRoomActivityClearing] = useState(false);
+  const [roomMusicPanelOpen, setRoomMusicPanelOpen] = useState(false);
   const roomActivitySplitRef = useRef<HTMLDivElement>(null);
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
   const [profilePopup, setProfilePopup] = useState<{
@@ -970,6 +971,9 @@ export default function ChatView() {
     userLevel: currentUser.userLevel,
     serverRole: activeServerRole,
   });
+  useEffect(() => {
+    setRoomMusicPanelOpen(false);
+  }, [activeChannel, activeServerId]);
   useEffect(() => {
     // Yeni kanal seçilince (veya tamamen çıkılınca) override'ı sıfırla —
     // böylece kanal değiştirince eski override kalmaz.
@@ -1978,7 +1982,7 @@ export default function ChatView() {
                   isFloodCooling={isFloodCooling}
                   canModerateMessages={canViewRoomActivityLog}
                   highlightedMessageId={highlightedRoomMessageId}
-                  musicAccessory={showRoomMusicPanel && roomMusic.shouldRender ? (
+                  musicAccessory={showRoomMusicPanel && roomMusic.shouldRender && roomMusicPanelOpen ? (
                     <RoomMusicPanel
                       serverPlan={activeServerData?.plan}
                       userLevel={currentUser.userLevel}
@@ -1999,6 +2003,9 @@ export default function ChatView() {
                       variant="card"
                     />
                   ) : null}
+                  musicPanelAvailable={showRoomMusicPanel && roomMusic.shouldRender}
+                  musicPanelOpen={roomMusicPanelOpen}
+                  onToggleMusicPanel={showRoomMusicPanel && roomMusic.shouldRender ? () => setRoomMusicPanelOpen(prev => !prev) : undefined}
                   activityPanel={canViewRoomActivityLog ? (
                     <RoomActivityLogPanel
                       activities={roomActivities}

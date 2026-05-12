@@ -62,11 +62,15 @@ interface Props {
   isFloodCooling?: boolean;
   canModerateMessages?: boolean;
   highlightedMessageId?: string | null;
+  musicAccessory?: React.ReactNode;
   activityPanel?: React.ReactNode;
   activityPanelRatio?: number;
   activityPanelOpen?: boolean;
   onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onToggleActivityPanel?: () => void;
+  musicPanelAvailable?: boolean;
+  musicPanelOpen?: boolean;
+  onToggleMusicPanel?: () => void;
 }
 
 function VoiceParticipants({
@@ -119,11 +123,15 @@ function VoiceParticipants({
   isFloodCooling,
   canModerateMessages,
   highlightedMessageId,
+  musicAccessory,
   activityPanel,
   activityPanelRatio,
   activityPanelOpen,
   onActivityResizeStart,
   onToggleActivityPanel,
+  musicPanelAvailable,
+  musicPanelOpen,
+  onToggleMusicPanel,
 }: Props) {
   const cardsRef = useRef<HTMLDivElement>(null);
   const [cardsHeight, setCardsHeight] = useState(0);
@@ -256,6 +264,7 @@ function VoiceParticipants({
           <RoomNetworkVisualization
             cardStyle={cardStyle}
             participants={networkParticipants}
+            leadingAccessory={musicAccessory}
           />
         </div>
 
@@ -298,6 +307,9 @@ function VoiceParticipants({
           activityPanelOpen={activityPanelOpen}
           onActivityResizeStart={onActivityResizeStart}
           onToggleActivityPanel={onToggleActivityPanel}
+          musicPanelAvailable={musicPanelAvailable}
+          musicPanelOpen={musicPanelOpen}
+          onToggleMusicPanel={onToggleMusicPanel}
         />
       </div>
 

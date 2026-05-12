@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Flag, History, PencilLine, Trash2, VolumeX } from 'lucide-react';
+import { Flag, History, Music2, PencilLine, Trash2, VolumeX } from 'lucide-react';
 import AvatarContent from './AvatarContent';
 import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import { useSettings } from '../contexts/SettingsCtx';
@@ -58,6 +58,9 @@ interface Props {
   activityPanelOpen?: boolean;
   onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onToggleActivityPanel?: () => void;
+  musicPanelAvailable?: boolean;
+  musicPanelOpen?: boolean;
+  onToggleMusicPanel?: () => void;
 }
 
 const EMOJI_LIST = ['😀','😂','😍','🥺','😎','🤔','👍','👎','❤️','🔥','🎉','👋','😅','🙄','💪','🤝','😢','😡','🥳','🫡','✅','❌','⭐','💯','🎵','🎮','☕','💤'];
@@ -108,6 +111,9 @@ export default function ChatPanel({
   activityPanelOpen = false,
   onActivityResizeStart,
   onToggleActivityPanel,
+  musicPanelAvailable = false,
+  musicPanelOpen = false,
+  onToggleMusicPanel,
 }: Props) {
   const { avatarBorderColor } = useSettings();
   const { currentUser, allUsers } = useUser();
@@ -166,6 +172,7 @@ export default function ChatPanel({
   const hasActivityPanel = !!activityPanel;
   const isActivityPanelVisible = hasActivityPanel && activityPanelOpen;
   const showCollapsedActivityButton = !!onToggleActivityPanel && hasActivityPanel && !isActivityPanelVisible;
+  const showMusicToggleButton = musicPanelAvailable && !!onToggleMusicPanel;
 
   return (
     <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
@@ -383,6 +390,17 @@ export default function ChatPanel({
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
             </button>
           </>
+        )}
+        {showMusicToggleButton && (
+          <button
+            type="button"
+            onClick={onToggleMusicPanel}
+            className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)] ${musicPanelOpen ? 'text-[var(--theme-accent)] opacity-90' : 'text-[var(--theme-secondary-text)]/34 hover:text-[var(--theme-accent)] hover:opacity-90'}`}
+            aria-label={musicPanelOpen ? 'MAYVox Music panelini kapat' : 'MAYVox Music panelini aç'}
+            title="MAYVox Music"
+          >
+            <Music2 size={13} strokeWidth={2.1} />
+          </button>
         )}
         {showCollapsedActivityButton && (
           <button
