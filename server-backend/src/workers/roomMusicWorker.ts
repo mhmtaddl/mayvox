@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import { spawnSync } from 'node:child_process';
 import * as rtcNode from '@livekit/rtc-node';
+import { AccessToken } from 'livekit-server-sdk';
 
 import { isSystemMusicIdentity } from '../utils/systemIdentity';
 
@@ -44,6 +45,59 @@ function maskValue(value?: string): string {
 
 function log(message: string): void {
   console.log(`[room-music-worker] ${message}`);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function readHoldMs(): number {
+  const raw = process.env.MUSIC_WORKER_HOLD_MS?.trim();
+  if (!raw) {
+    return 30_000;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1_000) {
+    log(`MUSIC_WORKER_HOLD_MS invalid; using 30000`);
+    return 30_000;
+  }
+
+  return Math.min(parsed, 300_000);
+}
+
+function readConnectTimeoutMs(): number {
+  const raw = process.env.MUSIC_WORKER_CONNECT_TIMEOUT_MS?.trim();
+  if (!raw) {
+    return 10_000;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1_000) {
+    log(`MUSIC_WORKER_CONNECT_TIMEOUT_MS invalid; using 10000`);
+    return 10_000;
+  }
+
+  return Math.min(parsed, 60_000);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 function checkFfmpeg(): void {
@@ -109,15 +163,63 @@ function reportEnv(connectRequested: boolean, publishRequested: boolean): void {
   }
 }
 
+function getMissingConnectEnv(): string[] {
+  return checks
+    .filter((check) => (check.requiredForDryRun || check.requiredForConnect) && !hasEnv(check.name))
+    .map((check) => check.name);
+}
+
+async function connectAndDisconnect(params: {
+  serverId: string;
+  channelId: string;
+}): Promise<void> {
+  const { serverId, channelId } = params;
+  const livekitUrl = process.env.LIVEKIT_URL?.trim();
+  const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+  const roomName = channelId;
+  const identity = `system-music:${serverId}:${channelId}`;
+  const holdMs = readHoldMs();
+  const connectTimeoutMs = readConnectTimeoutMs();
+
+  if (!livekitUrl || !apiKey || !apiSecret) {
+    log('connect skipped; LiveKit env is incomplete');
+    return;
+  }
+
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity,
+  });
+  token.addGrant({
+    room: roomName,
+    roomJoin: true,
+    canPublish: true,
+    canSubscribe: true,
+  });
+
+  const jwt = await token.toJwt();
+  const room = new rtcNode.Room();
+
+  log(`connecting to room ${maskValue(roomName)} as system-music:${maskValue(serverId)}:${maskValue(channelId)}`);
+  await withTimeout(room.connect(livekitUrl, jwt), connectTimeoutMs, 'LiveKit connect');
+  log(`connected; holding for ${holdMs}ms`);
+
+  try {
+    await sleep(holdMs);
+  } finally {
+    room.disconnect();
+    log('disconnected');
+  }
+}
+
 async function main(): Promise<void> {
   const serverId = process.env.MUSIC_TEST_SERVER_ID?.trim();
   const channelId = process.env.MUSIC_TEST_CHANNEL_ID?.trim();
   const connectRequested = flagEnabled('MUSIC_WORKER_CONNECT');
   const publishRequested = flagEnabled('MUSIC_WORKER_PUBLISH');
 
-  log('dry-run starting');
+  log(`${connectRequested ? 'connect test' : 'dry-run'} starting`);
   reportEnv(connectRequested, publishRequested);
-  checkFfmpeg();
   checkRtcNodeApi();
 
   if (serverId && channelId) {
@@ -128,18 +230,31 @@ async function main(): Promise<void> {
   }
 
   if (connectRequested) {
-    log('MUSIC_WORKER_CONNECT=1 was set, but Patch 5.1 dry-run does not connect to LiveKit.');
+    const missingConnectEnv = getMissingConnectEnv();
+    if (missingConnectEnv.length > 0 || !serverId || !channelId) {
+      log(`connect skipped; missing env: ${missingConnectEnv.join(', ') || 'MUSIC_TEST_SERVER_ID, MUSIC_TEST_CHANNEL_ID'}`);
+      return;
+    }
+
+    await connectAndDisconnect({ serverId, channelId });
+    log('connect test complete; no audio publish performed');
+    return;
   }
 
   if (publishRequested) {
-    log('MUSIC_WORKER_PUBLISH=1 was set, but Patch 5.1 dry-run does not publish audio.');
+    log('MUSIC_WORKER_PUBLISH=1 was set, but this worker does not publish audio yet.');
   }
 
+  checkFfmpeg();
   log('dry-run complete; no LiveKit connection and no audio publish performed');
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[room-music-worker] fatal: ${message}`);
-  process.exitCode = 1;
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[room-music-worker] fatal: ${message}`);
+    process.exit(1);
+  });
