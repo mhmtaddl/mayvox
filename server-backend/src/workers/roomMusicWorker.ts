@@ -276,7 +276,7 @@ function reportEnv(connectRequested: boolean, publishRequested: boolean): void {
   }
 
   if (publishRequested) {
-    log('publish mode: generated test tone');
+    log(`publish mode: ${getTestAudioInput() ? 'direct audio input' : 'generated test tone'}`);
   }
 }
 
