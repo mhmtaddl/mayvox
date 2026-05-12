@@ -962,7 +962,8 @@ export default function ChatView() {
   // view'e geçer. activeChannel DEĞİŞMEZ, voice bağlantısı DEĞİŞMEZ, dock alt bar
   // aynen kalır. Sadece orta panel render'ı override edilir. Kanal değişince auto-reset.
   const [isServerHomeView, setIsServerHomeView] = useState(false);
-  const showRoomMusicPanel = !!currentChannel && !isServerHomeView && ((currentChannel as { type?: string }).type ?? 'voice') === 'voice';
+  const canSeeRoomMusic = ['owner', 'sahip'].includes((activeServerRole || '').toLocaleLowerCase('tr-TR'));
+  const showRoomMusicPanel = canSeeRoomMusic && !!currentChannel && !isServerHomeView && ((currentChannel as { type?: string }).type ?? 'voice') === 'voice';
   const roomMusic = useRoomMusic({
     serverId: activeServerId,
     channelId: showRoomMusicPanel ? activeChannel : null,
