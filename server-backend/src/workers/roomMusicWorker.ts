@@ -18,11 +18,20 @@ type EnvCheck = {
 type MusicSessionStatus = 'playing' | 'paused' | 'stopped';
 
 type MusicSessionSnapshot = {
+  serverId: string;
+  channelId: string;
   status: MusicSessionStatus;
   currentSourceId: string | null;
   sourceTitle: string | null;
   volume: number;
   updatedAt: string | null;
+};
+
+type ActivePublisher = {
+  session: MusicSessionSnapshot;
+  room: rtcNode.Room;
+  stop: () => void;
+  done: Promise<void>;
 };
 
 const checks: EnvCheck[] = [
@@ -249,7 +258,7 @@ function getMissingConnectEnv(): string[] {
 
 function getMissingPollEnv(): string[] {
   return checks
-    .filter((check) => (check.requiredForDryRun || check.requiredForConnect || check.requiredForSessionPoll) && !hasEnv(check.name))
+    .filter((check) => (check.requiredForConnect || check.requiredForSessionPoll) && !hasEnv(check.name))
     .map((check) => check.name);
 }
 
@@ -279,7 +288,9 @@ async function readSession(
     volume: number;
     updated_at: string | null;
   }>(
-    `SELECT s.status,
+    `SELECT s.server_id::text AS server_id,
+            s.channel_id AS channel_id,
+            s.status,
             s.current_source_id::text AS current_source_id,
             ms.title AS source_title,
             s.volume,
@@ -295,12 +306,64 @@ async function readSession(
     return null;
   }
   return {
+    serverId,
+    channelId,
     status: row.status,
     currentSourceId: row.current_source_id,
     sourceTitle: row.source_title,
     volume: row.volume,
     updatedAt: row.updated_at,
   };
+}
+
+async function readPlayingSessions(
+  pool: Pool,
+  serverId?: string,
+  channelId?: string,
+): Promise<MusicSessionSnapshot[]> {
+  const params: string[] = [];
+  const filters = [`s.status = 'playing'`];
+  if (serverId) {
+    params.push(serverId);
+    filters.push(`s.server_id = $${params.length}`);
+  }
+  if (channelId) {
+    params.push(channelId);
+    filters.push(`s.channel_id = $${params.length}`);
+  }
+
+  const { rows } = await pool.query<{
+    server_id: string;
+    channel_id: string;
+    status: MusicSessionStatus;
+    current_source_id: string | null;
+    source_title: string | null;
+    volume: number;
+    updated_at: string | null;
+  }>(
+    `SELECT s.server_id::text AS server_id,
+            s.channel_id AS channel_id,
+            s.status,
+            s.current_source_id::text AS current_source_id,
+            ms.title AS source_title,
+            s.volume,
+            s.updated_at::text AS updated_at
+       FROM room_music_sessions s
+       LEFT JOIN music_sources ms ON ms.id = s.current_source_id
+      WHERE ${filters.join(' AND ')}
+      ORDER BY s.updated_at DESC`,
+    params,
+  );
+
+  return rows.map((row) => ({
+    serverId: row.server_id,
+    channelId: row.channel_id,
+    status: row.status,
+    currentSourceId: row.current_source_id,
+    sourceTitle: row.source_title,
+    volume: row.volume,
+    updatedAt: row.updated_at,
+  }));
 }
 
 async function connectAndDisconnect(params: {
@@ -439,8 +502,8 @@ async function publishTestToneUntil(room: rtcNode.Room, shouldContinue: () => bo
 }
 
 async function runSessionPolling(params: {
-  serverId: string;
-  channelId: string;
+  serverId?: string;
+  channelId?: string;
   publishRequested: boolean;
 }): Promise<void> {
   const { serverId, channelId, publishRequested } = params;
@@ -450,15 +513,9 @@ async function runSessionPolling(params: {
   const endsAt = holdMs === null ? null : startedAt + holdMs;
   const pool = createRoomMusicPool();
   const shutdown = createShutdownSignal();
-  let room: rtcNode.Room | null = null;
-  let publishing = false;
-  let publishTask: Promise<void> | null = null;
-  let lastStatus: string | null = null;
+  const publishers = new Map<string, ActivePublisher>();
 
-  const connectRoom = async (): Promise<rtcNode.Room> => {
-    if (room) {
-      return room;
-    }
+  const connectRoom = async (session: MusicSessionSnapshot): Promise<rtcNode.Room> => {
     const livekitUrl = process.env.LIVEKIT_URL?.trim();
     const apiKey = process.env.LIVEKIT_API_KEY?.trim();
     const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
@@ -466,8 +523,8 @@ async function runSessionPolling(params: {
       throw new Error('LiveKit env is incomplete');
     }
 
-    const roomName = channelId;
-    const identity = `system-music:${serverId}:${channelId}`;
+    const roomName = session.channelId;
+    const identity = `system-music:${session.serverId}:${session.channelId}`;
     const token = new AccessToken(apiKey, apiSecret, { identity });
     token.addGrant({
       room: roomName,
@@ -477,53 +534,73 @@ async function runSessionPolling(params: {
     });
     const jwt = await token.toJwt();
     const nextRoom = new rtcNode.Room();
-    log(`poll connecting to room ${maskValue(roomName)} as system-music:${maskValue(serverId)}:${maskValue(channelId)}`);
+    log(`poll connecting to room ${maskValue(roomName)} as system-music:${maskValue(session.serverId)}:${maskValue(session.channelId)}`);
     await withTimeout(nextRoom.connect(livekitUrl, jwt), readConnectTimeoutMs(), 'LiveKit connect');
-    room = nextRoom;
-    log('poll connected');
+    log(`poll connected: ${maskValue(roomName)}`);
     return nextRoom;
   };
 
-  const stopPublishing = async (): Promise<void> => {
-    if (!publishing && !publishTask) {
+  const stopPublisher = async (key: string): Promise<void> => {
+    const publisher = publishers.get(key);
+    if (!publisher) {
       return;
     }
-    publishing = false;
-    await publishTask;
-    publishTask = null;
+    publishers.delete(key);
+    publisher.stop();
+    await publisher.done;
+    publisher.room.disconnect();
+    log(`poll disconnected: ${maskValue(publisher.session.channelId)}`);
+  };
+
+  const startPublisher = async (session: MusicSessionSnapshot): Promise<void> => {
+    const key = `${session.serverId}:${session.channelId}`;
+    if (publishers.has(key)) {
+      return;
+    }
+
+    const room = await connectRoom(session);
+    let active = true;
+    const done = publishTestToneUntil(room, () => active && !shutdown.isStopped());
+    publishers.set(key, {
+      session,
+      room,
+      stop: () => {
+        active = false;
+      },
+      done,
+    });
+    log(`session audio active: ${maskValue(session.channelId)}${session.sourceTitle ? ` (${session.sourceTitle})` : ''}`);
   };
 
   try {
-    log(`session polling started for ${formatRunDuration(holdMs)}`);
+    const scope = serverId && channelId ? `${maskValue(serverId)}:${maskValue(channelId)}` : 'all playing sessions';
+    log(`session polling started for ${formatRunDuration(holdMs)}; scope=${scope}`);
     while (!shutdown.isStopped() && (endsAt === null || Date.now() < endsAt)) {
-      const session = await readSession(pool, serverId, channelId);
-      const status = session?.status ?? 'none';
-      if (status !== lastStatus) {
-        log(`session status: ${status}${session?.sourceTitle ? ` (${session.sourceTitle})` : ''}`);
-        lastStatus = status;
+      const sessions = await readPlayingSessions(pool, serverId, channelId);
+      const activeKeys = new Set(sessions.map((session) => `${session.serverId}:${session.channelId}`));
+
+      for (const [key] of publishers) {
+        if (!activeKeys.has(key)) {
+          await stopPublisher(key);
+        }
       }
 
-      if (session?.status === 'playing') {
-        if (publishRequested && !publishTask) {
-          const activeRoom = await connectRoom();
-          publishing = true;
-          publishTask = publishTestToneUntil(activeRoom, () => publishing && !shutdown.isStopped());
+      if (publishRequested) {
+        for (const session of sessions) {
+          await startPublisher(session);
         }
-      } else {
-        await stopPublishing();
+      } else if (sessions.length > 0) {
+        log(`session poll saw ${sessions.length} playing session(s); publish disabled`);
       }
 
       await sleep(pollMs);
     }
-    await stopPublishing();
   } finally {
     shutdown.dispose();
-    await pool.end();
-    const connectedRoom = room as rtcNode.Room | null;
-    if (connectedRoom) {
-      connectedRoom.disconnect();
-      log('poll disconnected');
+    for (const key of [...publishers.keys()]) {
+      await stopPublisher(key);
     }
+    await pool.end();
   }
 }
 
@@ -547,7 +624,8 @@ async function main(): Promise<void> {
 
   if (connectRequested) {
     const missingConnectEnv = sessionPollRequested ? getMissingPollEnv() : getMissingConnectEnv();
-    if (missingConnectEnv.length > 0 || !serverId || !channelId) {
+    const missingRoomEnv = !sessionPollRequested && (!serverId || !channelId);
+    if (missingConnectEnv.length > 0 || missingRoomEnv) {
       log(`connect skipped; missing env: ${missingConnectEnv.join(', ') || 'MUSIC_TEST_SERVER_ID, MUSIC_TEST_CHANNEL_ID'}`);
       return;
     }
@@ -558,7 +636,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    await connectAndDisconnect({ serverId, channelId, publishRequested });
+    await connectAndDisconnect({ serverId: serverId!, channelId: channelId!, publishRequested });
     log(publishRequested ? 'publish test complete' : 'connect test complete; no audio publish performed');
     return;
   }
