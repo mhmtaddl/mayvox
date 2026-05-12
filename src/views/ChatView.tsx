@@ -1989,6 +1989,7 @@ export default function ChatView() {
                       serverRole={activeServerRole}
                       session={roomMusic.session}
                       source={roomMusic.activeSource}
+                      sources={roomMusic.sources}
                       permissions={roomMusic.permissions}
                       loading={roomMusic.loading}
                       actionLoading={roomMusic.actionLoading}
@@ -1998,6 +1999,8 @@ export default function ChatView() {
                       controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
                       onPlayPause={roomMusic.togglePlayPause}
                       onStop={roomMusic.stop}
+                      onPreviousSource={roomMusic.selectPreviousSource}
+                      onNextSource={roomMusic.selectNextSource}
                       onVolumeChange={roomMusic.setVolume}
                       compact
                       variant="card"

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Lock, Music2, Pause, Play, Radio, Square, Volume2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Music2, Pause, Play, Radio, Square, Volume2 } from 'lucide-react';
 import type { MusicSource, RoomMusicPermissions, RoomMusicSession } from '../../types';
 import { getRoomMusicPermissions } from '../../lib/musicPermissions';
 
@@ -9,6 +9,7 @@ export interface RoomMusicPanelProps {
   serverRole?: string | null;
   session?: RoomMusicSession | null;
   source?: MusicSource | null;
+  sources?: MusicSource[];
   permissions?: RoomMusicPermissions;
   loading?: boolean;
   actionLoading?: boolean;
@@ -20,6 +21,8 @@ export interface RoomMusicPanelProps {
   compact?: boolean;
   onPlayPause?: () => void;
   onStop?: () => void;
+  onPreviousSource?: () => void;
+  onNextSource?: () => void;
   onVolumeChange?: (volume: number) => void;
   variant?: 'bar' | 'card';
 }
@@ -30,6 +33,7 @@ export default function RoomMusicPanel({
   serverRole,
   session,
   source,
+  sources = [],
   permissions: permissionsOverride,
   loading = false,
   actionLoading = false,
@@ -41,6 +45,8 @@ export default function RoomMusicPanel({
   compact = true,
   onPlayPause,
   onStop,
+  onPreviousSource,
+  onNextSource,
   onVolumeChange,
   variant = 'bar',
 }: RoomMusicPanelProps) {
@@ -70,6 +76,7 @@ export default function RoomMusicPanel({
   const volumeWidth = compact ? 'w-20 sm:w-24' : 'w-32';
   const playDisabled = controlsDisabled || actionLoading || !permissions.canControl || !onPlayPause;
   const stopDisabled = controlsDisabled || actionLoading || !canStopCurrentSession || !permissions.canStop || !onStop;
+  const sourceSwitchDisabled = controlsDisabled || actionLoading || !permissions.canChangeSource || sources.filter(item => item.isEnabled).length <= 1;
   const volumeDisabled = controlsDisabled || actionLoading || !permissions.canControl || !onVolumeChange;
 
   const clearVolumeValueTimer = () => {
@@ -159,7 +166,27 @@ export default function RoomMusicPanel({
 
         <div className="min-w-0 flex-1">
           <p className="truncate text-[10.5px] font-semibold leading-tight text-[var(--theme-text)]">MAYVox Music</p>
-          <p className="mt-0.5 truncate text-[9px] leading-tight text-[var(--theme-secondary-text)]/70">{title}</p>
+          <div className="mt-0.5 flex min-w-0 items-center gap-0.5">
+            <button
+              type="button"
+              disabled={sourceSwitchDisabled || !onPreviousSource}
+              onClick={onPreviousSource}
+              className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-accent)] focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:text-[var(--theme-secondary-text)]/60"
+              aria-label="Previous music source"
+            >
+              <ChevronLeft size={10} />
+            </button>
+            <p className="min-w-0 flex-1 truncate text-[9px] leading-tight text-[var(--theme-secondary-text)]/70">{title}</p>
+            <button
+              type="button"
+              disabled={sourceSwitchDisabled || !onNextSource}
+              onClick={onNextSource}
+              className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-accent)] focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:text-[var(--theme-secondary-text)]/60"
+              aria-label="Next music source"
+            >
+              <ChevronRight size={10} />
+            </button>
+          </div>
           <div className="mt-2 flex items-center gap-1">
             <button
               type="button"

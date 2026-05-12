@@ -3,6 +3,7 @@ import type { MusicSource, RoomMusicPermissions, RoomMusicSession, RoomMusicStat
 import { getRoomMusicPermissions } from '../../../lib/musicPermissions';
 import {
   ApiError,
+  changeRoomMusicSource,
   getRoomMusicSession,
   getRoomMusicSources,
   pauseRoomMusicSession,
@@ -38,6 +39,7 @@ export function useRoomMusic({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<RoomMusicStatus | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const volumeCommitTimerRef = useRef<number | null>(null);
 
   const basePermissions = useMemo(
@@ -83,6 +85,7 @@ export function useRoomMusic({
       setError(null);
       setErrorCode(null);
       setOptimisticStatus(null);
+      setSelectedSourceId(null);
       return;
     }
 
@@ -98,6 +101,7 @@ export function useRoomMusic({
       ]);
       setSources(nextSources);
       setSession(nextSession);
+      setSelectedSourceId(current => current ?? nextSession?.currentSourceId ?? nextSources.find(source => source.isEnabled)?.id ?? nextSources[0]?.id ?? null);
       setOptimisticStatus(null);
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
@@ -130,6 +134,7 @@ export function useRoomMusic({
       setErrorCode(null);
       setLoading(false);
       setOptimisticStatus(null);
+      setSelectedSourceId(null);
       return;
     }
 
@@ -147,6 +152,7 @@ export function useRoomMusic({
         if (cancelled) return;
         setSources(nextSources);
         setSession(nextSession);
+        setSelectedSourceId(current => current ?? nextSession?.currentSourceId ?? nextSources.find(source => source.isEnabled)?.id ?? nextSources[0]?.id ?? null);
         setOptimisticStatus(null);
       })
       .catch((err) => {
@@ -168,12 +174,19 @@ export function useRoomMusic({
   }, [channelId, enabled, serverId]);
 
   const activeSource = useMemo(() => {
+    const currentStatus = optimisticStatus ?? session?.status;
+    if (selectedSourceId && (!session || currentStatus === 'stopped')) {
+      return sources.find(source => source.id === selectedSourceId) ?? null;
+    }
     if (session?.source) return session.source;
     if (session?.currentSourceId) {
       return sources.find(source => source.id === session.currentSourceId) ?? null;
     }
-    return sources[0] ?? null;
-  }, [session, sources]);
+    if (selectedSourceId) {
+      return sources.find(source => source.id === selectedSourceId) ?? null;
+    }
+    return sources.find(source => source.isEnabled) ?? sources[0] ?? null;
+  }, [optimisticStatus, selectedSourceId, session, sources]);
 
   useEffect(() => () => {
     if (volumeCommitTimerRef.current !== null) {
@@ -184,6 +197,7 @@ export function useRoomMusic({
 
   const commitActionSession = useCallback((nextSession: RoomMusicSession, nextStatus: RoomMusicStatus) => {
     setSession({ ...nextSession, status: nextStatus });
+    setSelectedSourceId(nextSession.currentSourceId ?? nextSession.source?.id ?? null);
     setOptimisticStatus(null);
     setError(null);
     setErrorCode(null);
@@ -209,6 +223,45 @@ export function useRoomMusic({
       setActionLoading(false);
     }
   }, [actionLoading, activeSource?.id, channelId, commitActionSession, enabled, handleActionError, permissions.canControl, serverId, sources]);
+
+  const changeSource = useCallback(async (sourceId: string) => {
+    if (!enabled || !serverId || !channelId || actionLoading || !permissions.canChangeSource) return;
+    const nextSource = sources.find(source => source.id === sourceId && source.isEnabled);
+    if (!nextSource) return;
+
+    const currentStatus = optimisticStatus ?? session?.status;
+    setSelectedSourceId(sourceId);
+    setActionError(null);
+
+    if (!session || currentStatus === 'stopped') {
+      setSession(current => current ? { ...current, currentSourceId: sourceId, source: nextSource } : current);
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      setSession(current => current ? { ...current, currentSourceId: sourceId, source: nextSource } : current);
+      const nextSession = await changeRoomMusicSource(serverId, channelId, sourceId);
+      setSession(nextSession);
+      setSelectedSourceId(nextSession.currentSourceId ?? nextSession.source?.id ?? sourceId);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [actionLoading, channelId, enabled, handleActionError, optimisticStatus, permissions.canChangeSource, serverId, session, sources]);
+
+  const selectRelativeSource = useCallback((direction: 1 | -1) => {
+    const enabledSources = sources.filter(source => source.isEnabled);
+    if (enabledSources.length <= 1) return;
+    const currentId = activeSource?.id ?? selectedSourceId ?? enabledSources[0]?.id;
+    const currentIndex = Math.max(0, enabledSources.findIndex(source => source.id === currentId));
+    const nextIndex = (currentIndex + direction + enabledSources.length) % enabledSources.length;
+    const nextSource = enabledSources[nextIndex];
+    if (nextSource) void changeSource(nextSource.id);
+  }, [activeSource?.id, changeSource, selectedSourceId, sources]);
 
   const pause = useCallback(async () => {
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
@@ -331,6 +384,9 @@ export function useRoomMusic({
     pause,
     resume,
     stop,
+    changeSource,
+    selectNextSource: () => selectRelativeSource(1),
+    selectPreviousSource: () => selectRelativeSource(-1),
     setVolume,
     togglePlayPause,
     shouldRender: errorCode !== 'MUSIC_CHANNEL_NOT_VOICE',
