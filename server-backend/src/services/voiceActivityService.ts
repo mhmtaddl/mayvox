@@ -15,6 +15,7 @@
  */
 import { pool, queryOne, queryMany } from '../repositories/db';
 import { buildNarratives, type InsightNarrative } from './insightsNarrativeService';
+import { isSystemMusicIdentity } from '../utils/systemIdentity';
 
 const CO_PRESENCE_MIN_SEC = 30; // Altı gürültü — social pair olarak sayma
 const INSIGHTS_TOP_USERS = 20;
@@ -88,6 +89,8 @@ async function resolveServerIdForRoom(roomId: string): Promise<string | null> {
 // Session açma — LiveKit participant_joined webhook'undan
 // ════════════════════════════════════════════════════════════════════════════
 export async function openSession(userId: string, roomId: string): Promise<{ opened: boolean; serverId?: string; reason?: string }> {
+  if (isSystemMusicIdentity(userId)) return { opened: false, reason: 'system_music_identity' };
+
   const serverId = await resolveServerIdForRoom(roomId);
   if (!serverId) return { opened: false, reason: 'room_not_voice_channel' };
 
@@ -113,6 +116,8 @@ export async function openSession(userId: string, roomId: string): Promise<{ ope
 // Session kapama + co-presence aggregation — LiveKit participant_left'ten
 // ════════════════════════════════════════════════════════════════════════════
 export async function closeSession(userId: string, roomId: string): Promise<{ closed: boolean; pairsUpdated: number; serverId?: string }> {
+  if (isSystemMusicIdentity(userId)) return { closed: false, pairsUpdated: 0 };
+
   // Transaction: session'ı kapat + overlap'leri aynı anda oku
   const client = await pool.connect();
   try {

@@ -21,6 +21,7 @@ import { config } from '../config';
 import { openSession, closeSession } from '../services/voiceActivityService';
 import { recordRoomActivityEventDirect } from '../services/roomActivityService';
 import { fetchProfileNameMap } from '../services/profileLookupService';
+import { isSystemMusicIdentity } from '../utils/systemIdentity';
 
 const router = Router();
 
@@ -63,6 +64,10 @@ router.post('/livekit', async (req: Request, res: Response) => {
   const roomName = event.room?.name;
 
   try {
+    if (isSystemMusicIdentity(participantIdentity)) {
+      return res.status(200).end();
+    }
+
     if (eventName === 'participant_joined' && participantIdentity && roomName) {
       const r = await openSession(participantIdentity, roomName);
       if (r.opened && r.serverId) {

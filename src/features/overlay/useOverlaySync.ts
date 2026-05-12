@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import type { User } from '../../types';
 import type { OverlaySnapshot, OverlayParticipant, OverlaySettings } from '../../overlay/types';
 import { getPublicDisplayName } from '../../lib/formatName';
+import { isSystemMusicIdentity } from '../../lib/systemIdentity';
 
 interface OverlayHostAPI {
   applySettings: (s: Partial<OverlaySettings>) => void;
@@ -126,6 +127,7 @@ export function useOverlaySync({
       // Diğer üyeler
       for (const u of roomMembers) {
         if (u.id === currentUserId) continue;
+        if (isSystemMusicIdentity(u.id) || isSystemMusicIdentity(u.name) || isSystemMusicIdentity(u.displayName)) continue;
         const audioLevel = getAudioLevelForUser(speakingLevels, u);
         const isSpeaking = (!!u.isSpeaking || audioLevel >= AUDIO_LEVEL_SPEAKING_THRESHOLD) && !u.selfMuted && !u.isMuted;
         if (settings.showOnlySpeaking && !isSpeaking) continue;

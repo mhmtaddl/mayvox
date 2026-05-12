@@ -22,6 +22,7 @@ import { formatRemainingFromIso, getRemainingMs, formatRemaining } from '../lib/
 import { getMyModerationState } from '../lib/serverService';
 import { safePublicName } from '../lib/formatName';
 import { logVoiceJoinTrace, type VoiceJoinTrace } from '../lib/voiceJoinTrace';
+import { isSystemMusicIdentity } from '../lib/systemIdentity';
 
 type PresenceChannelLike = {
   send: (payload: unknown) => Promise<unknown> | unknown;
@@ -369,7 +370,7 @@ export function useLiveKitConnection({
         const identities = [
           localIdentity,
           ...Array.from(room.remoteParticipants.values()).map(p => p.identity),
-        ].filter((identity): identity is string => Boolean(identity));
+        ].filter((identity): identity is string => Boolean(identity) && !isSystemMusicIdentity(identity));
         const participants: string[] = [];
         identities.forEach(identity => {
           const resolved = identity === currentUserRef.current.name || identity === currentUserRef.current.id
@@ -402,7 +403,7 @@ export function useLiveKitConnection({
       const syncUsers = () => {
         const remoteIdentities = Array.from(
           room.remoteParticipants.values(),
-        ).map(p => p.identity);
+        ).map(p => p.identity).filter(identity => !isSystemMusicIdentity(identity));
         remoteIdentities.forEach(identity => {
           setAllUsers(prev => {
             if (prev.find(u => u.id === identity)) return prev;
@@ -525,12 +526,12 @@ export function useLiveKitConnection({
         // Duplicate-notification fix: self-join için ayrı bir playSound ('join')
         // zaten başarılı connect sonrasında tetiklenir (aşağıda). isLocal participant
         // için burada tekrar ses çalmaz.
-        if (!participant?.isLocal) playSound('join');
+        if (!participant?.isLocal && !isSystemMusicIdentity(participant.identity)) playSound('join');
       });
       room.on(RoomEvent.ParticipantDisconnected, (participant) => {
         updateMembers();
         syncUsers();
-        if (!participant?.isLocal) playSound('leave');
+        if (!participant?.isLocal && !isSystemMusicIdentity(participant.identity)) playSound('leave');
       });
 
       // ─── Throttled speaker levels (~8fps UI update) ───────────────────
@@ -550,7 +551,7 @@ export function useLiveKitConnection({
         let localLevel = 0;
         speakers.forEach(p => {
           if (p.isLocal) localLevel = p.audioLevel;
-          else levels[p.identity] = p.audioLevel;
+          else if (!isSystemMusicIdentity(p.identity)) levels[p.identity] = p.audioLevel;
         });
         localAudioLevelRef.current = localLevel;
         pendingLevels = levels;
