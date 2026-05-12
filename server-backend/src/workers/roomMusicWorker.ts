@@ -142,13 +142,13 @@ function readToneHz(): number {
 function readPollMs(): number {
   const raw = process.env.MUSIC_WORKER_POLL_MS?.trim();
   if (!raw) {
-    return 1_500;
+    return 750;
   }
 
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 500) {
-    log(`MUSIC_WORKER_POLL_MS invalid; using 1500`);
-    return 1_500;
+    log(`MUSIC_WORKER_POLL_MS invalid; using 750`);
+    return 750;
   }
 
   return Math.min(parsed, 30_000);
