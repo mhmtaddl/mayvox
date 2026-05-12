@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { MusicSource, RoomMusicPermissions, RoomMusicSession } from '../../../types';
 import { getRoomMusicPermissions } from '../../../lib/musicPermissions';
-import { ApiError, getRoomMusicSession, getRoomMusicSources } from '../../../lib/serverService';
+import {
+  ApiError,
+  getRoomMusicSession,
+  getRoomMusicSources,
+  pauseRoomMusicSession,
+  resumeRoomMusicSession,
+  startRoomMusicSession,
+  stopRoomMusicSession,
+} from '../../../lib/serverService';
 
 interface UseRoomMusicInput {
   serverId?: string | null;
@@ -24,8 +32,10 @@ export function useRoomMusic({
   const [sources, setSources] = useState<MusicSource[]>([]);
   const [session, setSession] = useState<RoomMusicSession | null>(null);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const basePermissions = useMemo(
     () => getRoomMusicPermissions({ serverPlan, userLevel, serverRole }),
@@ -72,9 +82,10 @@ export function useRoomMusic({
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setErrorCode(null);
+      setLoading(true);
+      setError(null);
+      setErrorCode(null);
+      setActionError(null);
     try {
       const [nextSources, nextSession] = await Promise.all([
         getRoomMusicSources(serverId),
@@ -93,6 +104,15 @@ export function useRoomMusic({
     }
   }, [channelId, enabled, serverId]);
 
+  const handleActionError = useCallback((err: unknown) => {
+    const apiError = err instanceof ApiError ? err : null;
+    setActionError(apiError?.message || 'MAYVox Music işlemi tamamlanamadı');
+    if (apiError?.code) setErrorCode(apiError.code);
+    if (apiError?.code === 'MUSIC_ULTRA_REQUIRED' || apiError?.code === 'MUSIC_CONTROL_FORBIDDEN' || apiError?.code === 'MUSIC_CHANNEL_NOT_VOICE') {
+      setError(apiError.message);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     if (!enabled || !serverId || !channelId) {
@@ -107,6 +127,7 @@ export function useRoomMusic({
     setLoading(true);
     setError(null);
     setErrorCode(null);
+    setActionError(null);
 
     Promise.all([
       getRoomMusicSources(serverId),
@@ -142,15 +163,105 @@ export function useRoomMusic({
     return sources[0] ?? null;
   }, [session, sources]);
 
+  const start = useCallback(async (sourceId?: string) => {
+    if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
+    const nextSourceId = sourceId || (activeSource?.isEnabled ? activeSource.id : undefined) || sources.find(source => source.isEnabled)?.id;
+    if (!nextSourceId) {
+      setActionError('MAYVox Music kaynağı bulunamadı');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const nextSession = await startRoomMusicSession(serverId, channelId, nextSourceId);
+      setSession(nextSession);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [actionLoading, activeSource?.id, channelId, enabled, handleActionError, permissions.canControl, serverId, sources]);
+
+  const pause = useCallback(async () => {
+    if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const nextSession = await pauseRoomMusicSession(serverId, channelId);
+      setSession(nextSession);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [actionLoading, channelId, enabled, handleActionError, permissions.canControl, serverId]);
+
+  const resume = useCallback(async () => {
+    if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const nextSession = await resumeRoomMusicSession(serverId, channelId);
+      setSession(nextSession);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [actionLoading, channelId, enabled, handleActionError, permissions.canControl, serverId]);
+
+  const stop = useCallback(async () => {
+    if (!enabled || !serverId || !channelId || actionLoading || !permissions.canStop) return;
+    if (!session || session.status === 'stopped') return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const nextSession = await stopRoomMusicSession(serverId, channelId);
+      setSession(nextSession);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [actionLoading, channelId, enabled, handleActionError, permissions.canStop, serverId, session]);
+
+  const togglePlayPause = useCallback(() => {
+    if (session?.status === 'playing') {
+      void pause();
+      return;
+    }
+    if (session?.status === 'paused') {
+      void resume();
+      return;
+    }
+    void start();
+  }, [pause, resume, session?.status, start]);
+
   return {
     sources,
     session,
     activeSource,
     loading,
+    actionLoading,
     error,
     errorCode,
+    actionError,
     permissions,
     refresh,
+    start,
+    pause,
+    resume,
+    stop,
+    togglePlayPause,
     shouldRender: errorCode !== 'MUSIC_CHANNEL_NOT_VOICE',
   };
 }

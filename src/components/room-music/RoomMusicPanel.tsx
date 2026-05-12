@@ -11,7 +11,9 @@ export interface RoomMusicPanelProps {
   source?: MusicSource | null;
   permissions?: RoomMusicPermissions;
   loading?: boolean;
+  actionLoading?: boolean;
   error?: string | null;
+  actionError?: string | null;
   errorCode?: string | null;
   controlsDisabled?: boolean;
   className?: string;
@@ -28,7 +30,9 @@ export default function RoomMusicPanel({
   source,
   permissions: permissionsOverride,
   loading = false,
+  actionLoading = false,
   error,
+  actionError,
   errorCode,
   controlsDisabled = false,
   className = '',
@@ -43,8 +47,15 @@ export default function RoomMusicPanel({
   );
   const permissions = permissionsOverride ?? computedPermissions;
   const status = session?.status ?? 'stopped';
+  const canStopCurrentSession = !!session && status !== 'stopped';
   const title = source?.title?.replace(/\s*Preview$/i, '') || 'MAYVox Mood';
-  const mood = loading ? 'Yukleniyor' : errorCode === 'MUSIC_ULTRA_REQUIRED' ? 'Ultra gerekli' : error ? 'Baglanti bekleniyor' : source?.category || source?.mood || 'Mood kanali';
+  const mood = loading
+    ? 'Yukleniyor'
+    : actionLoading
+      ? 'Durum guncelleniyor'
+      : errorCode === 'MUSIC_ULTRA_REQUIRED'
+        ? 'Ultra gerekli'
+        : actionError || error || source?.category || source?.mood || 'Mood kanali';
   const panelPadding = compact ? 'px-2.5 py-2' : 'p-3';
   const iconSize = compact ? 'h-7 w-7' : 'h-9 w-9';
   const controlSize = compact ? 'h-7 w-7' : 'h-8 w-8';
@@ -94,19 +105,25 @@ export default function RoomMusicPanel({
           </div>
         </div>
 
-        <div className={`hidden items-center gap-2 md:flex ${volumeWidth}`}>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--theme-border)]/35">
-            <div
-              className="h-full rounded-full bg-[var(--theme-accent)]/65"
-              style={{ width: `${localVolume}%` }}
-            />
+        <div className={`relative hidden items-center gap-2 md:flex ${volumeWidth}`}>
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-[var(--theme-border)]/35">
+            <div className="h-full rounded-full bg-[var(--theme-accent)]/65" style={{ width: `${localVolume}%` }} />
           </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={localVolume}
+            onChange={event => setLocalVolume(Number(event.target.value))}
+            className="relative z-[1] h-4 w-full cursor-pointer opacity-0"
+            aria-label="Music volume"
+          />
         </div>
 
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={controlsDisabled || !permissions.canControl || !onPlayPause}
+            disabled={controlsDisabled || actionLoading || !permissions.canControl || !onPlayPause}
             onClick={onPlayPause}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label={status === 'playing' ? 'Pause' : 'Play'}
@@ -115,7 +132,7 @@ export default function RoomMusicPanel({
           </button>
           <button
             type="button"
-            disabled={controlsDisabled || !permissions.canStop || !onStop}
+            disabled={controlsDisabled || actionLoading || !canStopCurrentSession || !permissions.canStop || !onStop}
             onClick={onStop}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label="Stop"

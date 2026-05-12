@@ -1968,9 +1968,13 @@ export default function ChatView() {
                     source={roomMusic.activeSource}
                     permissions={roomMusic.permissions}
                     loading={roomMusic.loading}
+                    actionLoading={roomMusic.actionLoading}
                     error={roomMusic.error}
+                    actionError={roomMusic.actionError}
                     errorCode={roomMusic.errorCode}
-                    controlsDisabled
+                    controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
+                    onPlayPause={roomMusic.togglePlayPause}
+                    onStop={roomMusic.stop}
                     compact
                     className="mb-2"
                   />

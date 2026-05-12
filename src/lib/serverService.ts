@@ -200,6 +200,32 @@ export async function getRoomMusicSession(serverId: string, channelId: string): 
   return apiFetch<RoomMusicSession | null>(`/servers/${serverId}/channels/${channelId}/music/session`);
 }
 
+export async function startRoomMusicSession(serverId: string, channelId: string, sourceId: string): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/start`, {
+    method: 'POST',
+    body: JSON.stringify({ sourceId }),
+  });
+}
+
+export async function pauseRoomMusicSession(serverId: string, channelId: string): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/pause`, { method: 'POST' });
+}
+
+export async function resumeRoomMusicSession(serverId: string, channelId: string): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/resume`, { method: 'POST' });
+}
+
+export async function stopRoomMusicSession(serverId: string, channelId: string): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/stop`, { method: 'POST' });
+}
+
+export async function changeRoomMusicSource(serverId: string, channelId: string, sourceId: string): Promise<RoomMusicSession> {
+  return apiFetch<RoomMusicSession>(`/servers/${serverId}/channels/${channelId}/music/session/source`, {
+    method: 'POST',
+    body: JSON.stringify({ sourceId }),
+  });
+}
+
 // ── Temel CRUD ──
 
 export async function listMyServers(): Promise<Server[]> {
