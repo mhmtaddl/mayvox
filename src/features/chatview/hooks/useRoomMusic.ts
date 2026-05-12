@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { MusicSource, RoomMusicPermissions, RoomMusicSession } from '../../../types';
+import type { MusicSource, RoomMusicPermissions, RoomMusicSession, RoomMusicStatus } from '../../../types';
 import { getRoomMusicPermissions } from '../../../lib/musicPermissions';
 import {
   ApiError,
@@ -36,6 +36,7 @@ export function useRoomMusic({
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [optimisticStatus, setOptimisticStatus] = useState<RoomMusicStatus | null>(null);
 
   const basePermissions = useMemo(
     () => getRoomMusicPermissions({ serverPlan, userLevel, serverRole }),
@@ -79,6 +80,7 @@ export function useRoomMusic({
       setSession(null);
       setError(null);
       setErrorCode(null);
+      setOptimisticStatus(null);
       return;
     }
 
@@ -86,6 +88,7 @@ export function useRoomMusic({
       setError(null);
       setErrorCode(null);
       setActionError(null);
+      setOptimisticStatus(null);
     try {
       const [nextSources, nextSession] = await Promise.all([
         getRoomMusicSources(serverId),
@@ -93,10 +96,12 @@ export function useRoomMusic({
       ]);
       setSources(nextSources);
       setSession(nextSession);
+      setOptimisticStatus(null);
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       setSources([]);
       setSession(null);
+      setOptimisticStatus(null);
       setError(apiError?.message || 'MAYVox Music bilgisi alınamadı');
       setErrorCode(apiError?.code || null);
     } finally {
@@ -106,6 +111,7 @@ export function useRoomMusic({
 
   const handleActionError = useCallback((err: unknown) => {
     const apiError = err instanceof ApiError ? err : null;
+    setOptimisticStatus(null);
     setActionError(apiError?.message || 'MAYVox Music işlemi tamamlanamadı');
     if (apiError?.code) setErrorCode(apiError.code);
     if (apiError?.code === 'MUSIC_ULTRA_REQUIRED' || apiError?.code === 'MUSIC_CONTROL_FORBIDDEN' || apiError?.code === 'MUSIC_CHANNEL_NOT_VOICE') {
@@ -121,6 +127,7 @@ export function useRoomMusic({
       setError(null);
       setErrorCode(null);
       setLoading(false);
+      setOptimisticStatus(null);
       return;
     }
 
@@ -128,6 +135,7 @@ export function useRoomMusic({
     setError(null);
     setErrorCode(null);
     setActionError(null);
+    setOptimisticStatus(null);
 
     Promise.all([
       getRoomMusicSources(serverId),
@@ -137,12 +145,14 @@ export function useRoomMusic({
         if (cancelled) return;
         setSources(nextSources);
         setSession(nextSession);
+        setOptimisticStatus(null);
       })
       .catch((err) => {
         if (cancelled) return;
         const apiError = err instanceof ApiError ? err : null;
         setSources([]);
         setSession(null);
+        setOptimisticStatus(null);
         setError(apiError?.message || 'MAYVox Music bilgisi alınamadı');
         setErrorCode(apiError?.code || null);
       })
@@ -173,9 +183,11 @@ export function useRoomMusic({
 
     setActionLoading(true);
     setActionError(null);
+    setOptimisticStatus('playing');
     try {
       const nextSession = await startRoomMusicSession(serverId, channelId, nextSourceId);
       setSession(nextSession);
+      setOptimisticStatus(null);
       setError(null);
       setErrorCode(null);
     } catch (err) {
@@ -189,9 +201,11 @@ export function useRoomMusic({
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
     setActionLoading(true);
     setActionError(null);
+    setOptimisticStatus('paused');
     try {
       const nextSession = await pauseRoomMusicSession(serverId, channelId);
       setSession(nextSession);
+      setOptimisticStatus(null);
       setError(null);
       setErrorCode(null);
     } catch (err) {
@@ -205,9 +219,11 @@ export function useRoomMusic({
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
     setActionLoading(true);
     setActionError(null);
+    setOptimisticStatus('playing');
     try {
       const nextSession = await resumeRoomMusicSession(serverId, channelId);
       setSession(nextSession);
+      setOptimisticStatus(null);
       setError(null);
       setErrorCode(null);
     } catch (err) {
@@ -222,9 +238,11 @@ export function useRoomMusic({
     if (!session || session.status === 'stopped') return;
     setActionLoading(true);
     setActionError(null);
+    setOptimisticStatus('stopped');
     try {
       const nextSession = await stopRoomMusicSession(serverId, channelId);
       setSession(nextSession);
+      setOptimisticStatus(null);
       setError(null);
       setErrorCode(null);
     } catch (err) {
@@ -235,20 +253,43 @@ export function useRoomMusic({
   }, [actionLoading, channelId, enabled, handleActionError, permissions.canStop, serverId, session]);
 
   const togglePlayPause = useCallback(() => {
-    if (session?.status === 'playing') {
+    const currentStatus = optimisticStatus ?? session?.status;
+    if (currentStatus === 'playing') {
       void pause();
       return;
     }
-    if (session?.status === 'paused') {
+    if (currentStatus === 'paused') {
       void resume();
       return;
     }
     void start();
-  }, [pause, resume, session?.status, start]);
+  }, [optimisticStatus, pause, resume, session?.status, start]);
+
+  const visibleSession = useMemo<RoomMusicSession | null>(() => {
+    if (!optimisticStatus) return session;
+    if (session) {
+      return { ...session, status: optimisticStatus };
+    }
+    if (!serverId || !channelId) return null;
+    const fallbackSource = activeSource ?? sources.find(source => source.isEnabled) ?? sources[0] ?? null;
+    return {
+      id: 'optimistic-room-music-session',
+      serverId,
+      channelId,
+      status: optimisticStatus,
+      currentSourceId: fallbackSource?.id ?? null,
+      source: fallbackSource,
+      startedBy: null,
+      startedAt: null,
+      pausedAt: null,
+      positionMs: 0,
+      volume: 70,
+    };
+  }, [activeSource, channelId, optimisticStatus, serverId, session, sources]);
 
   return {
     sources,
-    session,
+    session: visibleSession,
     activeSource,
     loading,
     actionLoading,
