@@ -63,6 +63,7 @@ import RestrictedServerScreen from '../components/RestrictedServerScreen';
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
 import { useRoomActivityLog } from '../features/chatview/hooks/useRoomActivityLog';
 import { useDominantSpeaker } from '../features/chatview/hooks/useDominantSpeaker';
+import { useRoomMusicMock } from '../features/chatview/hooks/useRoomMusicMock';
 import InvitationModal from '../features/chatview/components/InvitationModal';
 import ChatViewContextMenu from '../features/chatview/components/ChatViewContextMenu';
 import ChatViewUserActionMenu from '../features/chatview/components/ChatViewUserActionMenu';
@@ -73,6 +74,7 @@ import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import RoomStatusBadges from '../features/chatview/components/RoomStatusBadges';
 import RoomActivityLogPanel from '../features/chatview/components/RoomActivityLogPanel';
+import { RoomMusicPanel } from '../components/room-music';
 import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
@@ -959,6 +961,14 @@ export default function ChatView() {
   // view'e geçer. activeChannel DEĞİŞMEZ, voice bağlantısı DEĞİŞMEZ, dock alt bar
   // aynen kalır. Sadece orta panel render'ı override edilir. Kanal değişince auto-reset.
   const [isServerHomeView, setIsServerHomeView] = useState(false);
+  const showRoomMusicPanel = !!currentChannel && !isServerHomeView && ((currentChannel as { type?: string }).type ?? 'voice') === 'voice';
+  const roomMusicMock = useRoomMusicMock({
+    serverId: activeServerId,
+    channelId: showRoomMusicPanel ? activeChannel : null,
+    serverPlan: activeServerData?.plan,
+    userLevel: currentUser.userLevel,
+    serverRole: activeServerRole,
+  });
   useEffect(() => {
     // Yeni kanal seçilince (veya tamamen çıkılınca) override'ı sıfırla —
     // böylece kanal değiştirince eski override kalmaz.
@@ -1947,7 +1957,20 @@ export default function ChatView() {
                   <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="p-2.5 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all" title="Odadan Ayrıl"><PhoneOff size={18} /></button>
                 </div>
               </div>
-              <div ref={roomActivitySplitRef} className="relative z-[1] flex-1 min-h-0 overflow-hidden">
+              <div ref={roomActivitySplitRef} className="relative z-[1] flex flex-col flex-1 min-h-0 overflow-hidden">
+                {showRoomMusicPanel && (
+                  <RoomMusicPanel
+                    serverPlan={activeServerData?.plan}
+                    userLevel={currentUser.userLevel}
+                    serverRole={activeServerRole}
+                    session={roomMusicMock.session}
+                    source={roomMusicMock.source}
+                    onPlayPause={roomMusicMock.togglePlayPause}
+                    onStop={roomMusicMock.stop}
+                    compact
+                    className="mb-2"
+                  />
+                )}
                 <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}

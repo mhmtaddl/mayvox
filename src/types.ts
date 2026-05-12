@@ -68,6 +68,61 @@ export type DmPrivacyMode = 'everyone' | 'mutual_servers' | 'friends_only' | 'cl
 
 export type ServerCreationPlan = 'none' | 'free' | 'pro' | 'ultra';
 
+export type RoomMusicStatus = 'playing' | 'paused' | 'stopped';
+
+export type MusicCapability =
+  | 'music.listen'
+  | 'music.control'
+  | 'music.skip'
+  | 'music.stop'
+  | 'music.volume'
+  | 'music.manage_sources'
+  | 'music.queue.add'
+  | 'music.queue.priority';
+
+export interface MusicSource {
+  id: string;
+  title: string;
+  mood?: string | null;
+  category?: string | null;
+  sourceType: 'mayvox_mood' | 'mayvox_radio' | 'royalty_free_url' | 'licensed_provider';
+  sourceUrl?: string | null;
+  artworkUrl?: string | null;
+  durationMs?: number | null;
+  isEnabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RoomMusicSession {
+  id: string;
+  serverId: string;
+  channelId: string;
+  status: RoomMusicStatus;
+  currentSourceId?: string | null;
+  startedBy?: string | null;
+  startedAt?: string | null;
+  pausedAt?: string | null;
+  positionMs: number;
+  volume: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RoomMusicPermissions {
+  isUltra: boolean;
+  locked: boolean;
+  canListen: boolean;
+  canControl: boolean;
+  canSkip: boolean;
+  canStop: boolean;
+  canChangeSource: boolean;
+  canManageSources: boolean;
+  canUseLocalVolume: boolean;
+  readOnly: boolean;
+  capabilities: MusicCapability[];
+}
+
 // VoiceChannel.position eklendi — drag reorder için sıralama anahtarı.
 
 export interface VoiceChannel {

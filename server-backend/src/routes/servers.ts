@@ -24,6 +24,7 @@ import ExcelJS from 'exceljs';
 import { queryOne } from '../repositories/db';
 import * as recommendationService from '../services/recommendationService';
 import * as roomActivityService from '../services/roomActivityService';
+import * as roomMusicService from '../services/roomMusicService';
 
 const router = Router();
 
@@ -159,6 +160,92 @@ router.get('/:id/access-context', async (req: Request, res: Response) => {
     const ctx = await getServerAccessContext((req as any).userId, req.params.id as string);
     res.json(ctx);
   } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/music/sources — Ultra room music source catalog (source_url hidden) */
+router.get('/:id/music/sources', async (req: Request, res: Response) => {
+  try {
+    const items = await roomMusicService.listSources((req as any).userId, req.params.id as string);
+    res.json(items);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** GET /servers/:id/channels/:channelId/music/session — current room music state */
+router.get('/:id/channels/:channelId/music/session', async (req: Request, res: Response) => {
+  try {
+    const session = await roomMusicService.getSession(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/music/session/start */
+router.post('/:id/channels/:channelId/music/session/start', async (req: Request, res: Response) => {
+  try {
+    const sourceId = typeof req.body?.sourceId === 'string' ? req.body.sourceId : '';
+    if (!sourceId) throw new roomMusicService.RoomMusicError(404, 'MUSIC_SOURCE_NOT_FOUND', 'Müzik kaynağı bulunamadı');
+    const session = await roomMusicService.startSession(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+      sourceId,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/music/session/pause */
+router.post('/:id/channels/:channelId/music/session/pause', async (req: Request, res: Response) => {
+  try {
+    const session = await roomMusicService.pauseSession(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/music/session/resume */
+router.post('/:id/channels/:channelId/music/session/resume', async (req: Request, res: Response) => {
+  try {
+    const session = await roomMusicService.resumeSession(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/music/session/stop */
+router.post('/:id/channels/:channelId/music/session/stop', async (req: Request, res: Response) => {
+  try {
+    const session = await roomMusicService.stopSession(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
+});
+
+/** POST /servers/:id/channels/:channelId/music/session/source */
+router.post('/:id/channels/:channelId/music/session/source', async (req: Request, res: Response) => {
+  try {
+    const sourceId = typeof req.body?.sourceId === 'string' ? req.body.sourceId : '';
+    if (!sourceId) throw new roomMusicService.RoomMusicError(404, 'MUSIC_SOURCE_NOT_FOUND', 'Müzik kaynağı bulunamadı');
+    const session = await roomMusicService.changeSource(
+      (req as any).userId,
+      req.params.id as string,
+      req.params.channelId as string,
+      sourceId,
+    );
+    res.json(session);
+  } catch (err) { handleMusicError(res, err); }
 });
 
 /** GET /servers/:id/moderation-config — auto-mod ayarları (capability: server.moderation.update) */
@@ -1266,6 +1353,14 @@ function handleError(res: Response, err: unknown) {
   }
   console.error('[server-route]', err);
   res.status(500).json({ error: 'Sunucu hatası' });
+}
+
+function handleMusicError(res: Response, err: unknown) {
+  if (err instanceof roomMusicService.RoomMusicError) {
+    res.status(err.status).json({ error: err.message, code: err.code });
+    return;
+  }
+  handleError(res, err);
 }
 
 export default router;
