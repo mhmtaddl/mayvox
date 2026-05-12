@@ -4,6 +4,7 @@
  */
 
 import { getAuthToken } from './authClient';
+import type { MusicSource, RoomMusicSession } from '../types';
 
 export interface Server {
   id: string;
@@ -170,7 +171,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -183,9 +184,20 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 204) return undefined as T;
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.error || `İstek başarısız (${res.status})`);
+    const code = typeof body.code === 'string' ? body.code : undefined;
+    throw new ApiError(res.status, body.error || `İstek başarısız (${res.status})`, code);
   }
   return res.json();
+}
+
+// ── MAYVox Music metadata MVP (GET only in Patch 4) ──
+
+export async function getRoomMusicSources(serverId: string): Promise<MusicSource[]> {
+  return apiFetch<MusicSource[]>(`/servers/${serverId}/music/sources`);
+}
+
+export async function getRoomMusicSession(serverId: string, channelId: string): Promise<RoomMusicSession | null> {
+  return apiFetch<RoomMusicSession | null>(`/servers/${serverId}/channels/${channelId}/music/session`);
 }
 
 // ── Temel CRUD ──

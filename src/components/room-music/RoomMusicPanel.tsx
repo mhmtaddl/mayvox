@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Lock, Music2, Pause, Play, Radio, Square, Volume2 } from 'lucide-react';
-import type { MusicSource, RoomMusicSession } from '../../types';
+import type { MusicSource, RoomMusicPermissions, RoomMusicSession } from '../../types';
 import { getRoomMusicPermissions } from '../../lib/musicPermissions';
 
 export interface RoomMusicPanelProps {
@@ -9,6 +9,11 @@ export interface RoomMusicPanelProps {
   serverRole?: string | null;
   session?: RoomMusicSession | null;
   source?: MusicSource | null;
+  permissions?: RoomMusicPermissions;
+  loading?: boolean;
+  error?: string | null;
+  errorCode?: string | null;
+  controlsDisabled?: boolean;
   className?: string;
   compact?: boolean;
   onPlayPause?: () => void;
@@ -21,19 +26,25 @@ export default function RoomMusicPanel({
   serverRole,
   session,
   source,
+  permissions: permissionsOverride,
+  loading = false,
+  error,
+  errorCode,
+  controlsDisabled = false,
   className = '',
   compact = true,
   onPlayPause,
   onStop,
 }: RoomMusicPanelProps) {
   const [localVolume, setLocalVolume] = useState(70);
-  const permissions = useMemo(
+  const computedPermissions = useMemo(
     () => getRoomMusicPermissions({ serverPlan, userLevel, serverRole }),
     [serverPlan, userLevel, serverRole],
   );
+  const permissions = permissionsOverride ?? computedPermissions;
   const status = session?.status ?? 'stopped';
   const title = source?.title?.replace(/\s*Preview$/i, '') || 'MAYVox Mood';
-  const mood = source?.category || source?.mood || 'Mood kanali';
+  const mood = loading ? 'Yukleniyor' : errorCode === 'MUSIC_ULTRA_REQUIRED' ? 'Ultra gerekli' : error ? 'Baglanti bekleniyor' : source?.category || source?.mood || 'Mood kanali';
   const panelPadding = compact ? 'px-2.5 py-2' : 'p-3';
   const iconSize = compact ? 'h-7 w-7' : 'h-9 w-9';
   const controlSize = compact ? 'h-7 w-7' : 'h-8 w-8';
@@ -95,7 +106,7 @@ export default function RoomMusicPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={!permissions.canControl}
+            disabled={controlsDisabled || !permissions.canControl || !onPlayPause}
             onClick={onPlayPause}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label={status === 'playing' ? 'Pause' : 'Play'}
@@ -104,7 +115,7 @@ export default function RoomMusicPanel({
           </button>
           <button
             type="button"
-            disabled={!permissions.canStop}
+            disabled={controlsDisabled || !permissions.canStop || !onStop}
             onClick={onStop}
             className={`flex ${controlSize} items-center justify-center rounded-md border border-[var(--theme-border)] text-[var(--theme-text)] disabled:cursor-not-allowed disabled:opacity-40`}
             aria-label="Stop"

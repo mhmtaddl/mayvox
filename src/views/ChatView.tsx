@@ -63,7 +63,7 @@ import RestrictedServerScreen from '../components/RestrictedServerScreen';
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
 import { useRoomActivityLog } from '../features/chatview/hooks/useRoomActivityLog';
 import { useDominantSpeaker } from '../features/chatview/hooks/useDominantSpeaker';
-import { useRoomMusicMock } from '../features/chatview/hooks/useRoomMusicMock';
+import { useRoomMusic } from '../features/chatview/hooks/useRoomMusic';
 import InvitationModal from '../features/chatview/components/InvitationModal';
 import ChatViewContextMenu from '../features/chatview/components/ChatViewContextMenu';
 import ChatViewUserActionMenu from '../features/chatview/components/ChatViewUserActionMenu';
@@ -962,9 +962,10 @@ export default function ChatView() {
   // aynen kalır. Sadece orta panel render'ı override edilir. Kanal değişince auto-reset.
   const [isServerHomeView, setIsServerHomeView] = useState(false);
   const showRoomMusicPanel = !!currentChannel && !isServerHomeView && ((currentChannel as { type?: string }).type ?? 'voice') === 'voice';
-  const roomMusicMock = useRoomMusicMock({
+  const roomMusic = useRoomMusic({
     serverId: activeServerId,
     channelId: showRoomMusicPanel ? activeChannel : null,
+    enabled: showRoomMusicPanel,
     serverPlan: activeServerData?.plan,
     userLevel: currentUser.userLevel,
     serverRole: activeServerRole,
@@ -1958,15 +1959,18 @@ export default function ChatView() {
                 </div>
               </div>
               <div ref={roomActivitySplitRef} className="relative z-[1] flex flex-col flex-1 min-h-0 overflow-hidden">
-                {showRoomMusicPanel && (
+                {showRoomMusicPanel && roomMusic.shouldRender && (
                   <RoomMusicPanel
                     serverPlan={activeServerData?.plan}
                     userLevel={currentUser.userLevel}
                     serverRole={activeServerRole}
-                    session={roomMusicMock.session}
-                    source={roomMusicMock.source}
-                    onPlayPause={roomMusicMock.togglePlayPause}
-                    onStop={roomMusicMock.stop}
+                    session={roomMusic.session}
+                    source={roomMusic.activeSource}
+                    permissions={roomMusic.permissions}
+                    loading={roomMusic.loading}
+                    error={roomMusic.error}
+                    errorCode={roomMusic.errorCode}
+                    controlsDisabled
                     compact
                     className="mb-2"
                   />

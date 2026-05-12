@@ -100,6 +100,7 @@ export interface RoomMusicSession {
   channelId: string;
   status: RoomMusicStatus;
   currentSourceId?: string | null;
+  source?: MusicSource | null;
   startedBy?: string | null;
   startedAt?: string | null;
   pausedAt?: string | null;
