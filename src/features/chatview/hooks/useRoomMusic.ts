@@ -173,6 +173,13 @@ export function useRoomMusic({
     return sources[0] ?? null;
   }, [session, sources]);
 
+  const commitActionSession = useCallback((nextSession: RoomMusicSession, nextStatus: RoomMusicStatus) => {
+    setSession({ ...nextSession, status: nextStatus });
+    setOptimisticStatus(null);
+    setError(null);
+    setErrorCode(null);
+  }, []);
+
   const start = useCallback(async (sourceId?: string) => {
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
     const nextSourceId = sourceId || (activeSource?.isEnabled ? activeSource.id : undefined) || sources.find(source => source.isEnabled)?.id;
@@ -186,16 +193,13 @@ export function useRoomMusic({
     setOptimisticStatus('playing');
     try {
       const nextSession = await startRoomMusicSession(serverId, channelId, nextSourceId);
-      setSession(nextSession);
-      setOptimisticStatus(null);
-      setError(null);
-      setErrorCode(null);
+      commitActionSession(nextSession, 'playing');
     } catch (err) {
       handleActionError(err);
     } finally {
       setActionLoading(false);
     }
-  }, [actionLoading, activeSource?.id, channelId, enabled, handleActionError, permissions.canControl, serverId, sources]);
+  }, [actionLoading, activeSource?.id, channelId, commitActionSession, enabled, handleActionError, permissions.canControl, serverId, sources]);
 
   const pause = useCallback(async () => {
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
@@ -204,16 +208,13 @@ export function useRoomMusic({
     setOptimisticStatus('paused');
     try {
       const nextSession = await pauseRoomMusicSession(serverId, channelId);
-      setSession(nextSession);
-      setOptimisticStatus(null);
-      setError(null);
-      setErrorCode(null);
+      commitActionSession(nextSession, 'paused');
     } catch (err) {
       handleActionError(err);
     } finally {
       setActionLoading(false);
     }
-  }, [actionLoading, channelId, enabled, handleActionError, permissions.canControl, serverId]);
+  }, [actionLoading, channelId, commitActionSession, enabled, handleActionError, permissions.canControl, serverId]);
 
   const resume = useCallback(async () => {
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canControl) return;
@@ -222,16 +223,13 @@ export function useRoomMusic({
     setOptimisticStatus('playing');
     try {
       const nextSession = await resumeRoomMusicSession(serverId, channelId);
-      setSession(nextSession);
-      setOptimisticStatus(null);
-      setError(null);
-      setErrorCode(null);
+      commitActionSession(nextSession, 'playing');
     } catch (err) {
       handleActionError(err);
     } finally {
       setActionLoading(false);
     }
-  }, [actionLoading, channelId, enabled, handleActionError, permissions.canControl, serverId]);
+  }, [actionLoading, channelId, commitActionSession, enabled, handleActionError, permissions.canControl, serverId]);
 
   const stop = useCallback(async () => {
     if (!enabled || !serverId || !channelId || actionLoading || !permissions.canStop) return;
@@ -241,16 +239,13 @@ export function useRoomMusic({
     setOptimisticStatus('stopped');
     try {
       const nextSession = await stopRoomMusicSession(serverId, channelId);
-      setSession(nextSession);
-      setOptimisticStatus(null);
-      setError(null);
-      setErrorCode(null);
+      commitActionSession(nextSession, 'stopped');
     } catch (err) {
       handleActionError(err);
     } finally {
       setActionLoading(false);
     }
-  }, [actionLoading, channelId, enabled, handleActionError, permissions.canStop, serverId, session]);
+  }, [actionLoading, channelId, commitActionSession, enabled, handleActionError, permissions.canStop, serverId, session]);
 
   const togglePlayPause = useCallback(() => {
     const currentStatus = optimisticStatus ?? session?.status;
