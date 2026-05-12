@@ -83,6 +83,21 @@ function readConnectTimeoutMs(): number {
   return Math.min(parsed, 60_000);
 }
 
+function readToneHz(): number {
+  const raw = process.env.MUSIC_WORKER_TONE_HZ?.trim();
+  if (!raw) {
+    return 440;
+  }
+
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 20 || parsed > 20_000) {
+    log(`MUSIC_WORKER_TONE_HZ invalid; using 440`);
+    return 440;
+  }
+
+  return parsed;
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -172,8 +187,9 @@ function getMissingConnectEnv(): string[] {
 async function connectAndDisconnect(params: {
   serverId: string;
   channelId: string;
+  publishRequested: boolean;
 }): Promise<void> {
-  const { serverId, channelId } = params;
+  const { serverId, channelId, publishRequested } = params;
   const livekitUrl = process.env.LIVEKIT_URL?.trim();
   const apiKey = process.env.LIVEKIT_API_KEY?.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
@@ -205,10 +221,53 @@ async function connectAndDisconnect(params: {
   log(`connected; holding for ${holdMs}ms`);
 
   try {
-    await sleep(holdMs);
+    if (publishRequested) {
+      await publishTestTone(room, holdMs);
+    } else {
+      await sleep(holdMs);
+    }
   } finally {
     room.disconnect();
     log('disconnected');
+  }
+}
+
+async function publishTestTone(room: rtcNode.Room, durationMs: number): Promise<void> {
+  const sampleRate = 48_000;
+  const channels = 1;
+  const frameMs = 10;
+  const samplesPerFrame = Math.floor(sampleRate / (1000 / frameMs));
+  const toneHz = readToneHz();
+  const amplitude = 0.18 * 32767;
+  const source = new rtcNode.AudioSource(sampleRate, channels);
+  const track = rtcNode.LocalAudioTrack.createAudioTrack('mayvox-music-test-tone', source);
+  const options = new rtcNode.TrackPublishOptions();
+  options.source = rtcNode.TrackSource.SOURCE_MICROPHONE;
+
+  log(`publishing generated test tone for ${durationMs}ms`);
+  await room.localParticipant!.publishTrack(track, options);
+  log('test audio track published');
+
+  let sampleCursor = 0;
+  const frames = Math.ceil(durationMs / frameMs);
+  try {
+    for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
+      const frame = rtcNode.AudioFrame.create(sampleRate, channels, samplesPerFrame);
+      for (let sampleIndex = 0; sampleIndex < samplesPerFrame; sampleIndex++) {
+        const value = Math.round(
+          amplitude * Math.sin((2 * Math.PI * toneHz * sampleCursor) / sampleRate),
+        );
+        sampleCursor++;
+        frame.data[sampleIndex] = value;
+      }
+      await source.captureFrame(frame);
+      await sleep(frameMs);
+    }
+    await source.waitForPlayout();
+    log('test tone playout complete');
+  } finally {
+    await track.close();
+    log('test audio track closed');
   }
 }
 
@@ -236,8 +295,8 @@ async function main(): Promise<void> {
       return;
     }
 
-    await connectAndDisconnect({ serverId, channelId });
-    log('connect test complete; no audio publish performed');
+    await connectAndDisconnect({ serverId, channelId, publishRequested });
+    log(publishRequested ? 'publish test complete' : 'connect test complete; no audio publish performed');
     return;
   }
 
