@@ -23,12 +23,16 @@ type MusicSessionSnapshot = {
   status: MusicSessionStatus;
   currentSourceId: string | null;
   sourceTitle: string | null;
+  sourceUrl: string | null;
+  sourceMood: string | null;
+  sourceType: string | null;
   volume: number;
   updatedAt: string | null;
 };
 
 type ActivePublisher = {
   session: MusicSessionSnapshot;
+  audioInput: string | null;
   volume: number;
   room: rtcNode.Room;
   stop: () => void;
@@ -50,6 +54,12 @@ const checks: EnvCheck[] = [
   { name: 'DATABASE_URL', requiredForSessionPoll: true },
   { name: 'MUSIC_TEST_AUDIO_URL' },
   { name: 'MUSIC_TEST_AUDIO_FILE' },
+  { name: 'MUSIC_SOURCE_CHILL_URL' },
+  { name: 'MUSIC_SOURCE_CHILL_FILE' },
+  { name: 'MUSIC_SOURCE_FOCUS_URL' },
+  { name: 'MUSIC_SOURCE_FOCUS_FILE' },
+  { name: 'MUSIC_SOURCE_NIGHT_URL' },
+  { name: 'MUSIC_SOURCE_NIGHT_FILE' },
 ];
 
 function hasEnv(name: string): boolean {
@@ -211,6 +221,30 @@ function getTestAudioInput(): string | null {
   return process.env.MUSIC_TEST_AUDIO_FILE?.trim() || process.env.MUSIC_TEST_AUDIO_URL?.trim() || null;
 }
 
+function getEnvAudioInput(prefix: string): string | null {
+  const normalized = prefix.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  return process.env[`MUSIC_SOURCE_${normalized}_FILE`]?.trim() || process.env[`MUSIC_SOURCE_${normalized}_URL`]?.trim() || null;
+}
+
+function resolveAudioInputForSource(source: Pick<MusicSessionSnapshot, 'sourceUrl' | 'sourceMood'>): string | null {
+  if (source.sourceUrl?.trim()) {
+    return source.sourceUrl.trim();
+  }
+
+  const mood = source.sourceMood?.trim().toLowerCase();
+  if (mood === 'chill' || mood === 'focus' || mood === 'night') {
+    const moodInput = getEnvAudioInput(mood);
+    if (moodInput) {
+      return moodInput;
+    }
+  }
+
+  return getTestAudioInput();
+}
+
 function buildFfmpegArgs(input: string): string[] {
   return [
     '-hide_banner',
@@ -276,7 +310,13 @@ function reportEnv(connectRequested: boolean, publishRequested: boolean): void {
   }
 
   if (publishRequested) {
-    log(`publish mode: ${getTestAudioInput() ? 'direct audio input' : 'generated test tone'}`);
+    const hasMappedInput = Boolean(
+      getTestAudioInput() ||
+        getEnvAudioInput('chill') ||
+        getEnvAudioInput('focus') ||
+        getEnvAudioInput('night'),
+    );
+    log(`publish mode: ${hasMappedInput ? 'direct audio input' : 'generated test tone'}`);
   }
 }
 
@@ -315,6 +355,9 @@ async function readSession(
     status: MusicSessionStatus;
     current_source_id: string | null;
     source_title: string | null;
+    source_url: string | null;
+    source_mood: string | null;
+    source_type: string | null;
     volume: number;
     updated_at: string | null;
   }>(
@@ -323,6 +366,9 @@ async function readSession(
             s.status,
             s.current_source_id::text AS current_source_id,
             ms.title AS source_title,
+            ms.source_url AS source_url,
+            ms.mood AS source_mood,
+            ms.source_type AS source_type,
             s.volume,
             s.updated_at::text AS updated_at
        FROM room_music_sessions s
@@ -341,6 +387,9 @@ async function readSession(
     status: row.status,
     currentSourceId: row.current_source_id,
     sourceTitle: row.source_title,
+    sourceUrl: row.source_url,
+    sourceMood: row.source_mood,
+    sourceType: row.source_type,
     volume: row.volume,
     updatedAt: row.updated_at,
   };
@@ -368,6 +417,9 @@ async function readPlayingSessions(
     status: MusicSessionStatus;
     current_source_id: string | null;
     source_title: string | null;
+    source_url: string | null;
+    source_mood: string | null;
+    source_type: string | null;
     volume: number;
     updated_at: string | null;
   }>(
@@ -376,6 +428,9 @@ async function readPlayingSessions(
             s.status,
             s.current_source_id::text AS current_source_id,
             ms.title AS source_title,
+            ms.source_url AS source_url,
+            ms.mood AS source_mood,
+            ms.source_type AS source_type,
             s.volume,
             s.updated_at::text AS updated_at
        FROM room_music_sessions s
@@ -391,6 +446,9 @@ async function readPlayingSessions(
     status: row.status,
     currentSourceId: row.current_source_id,
     sourceTitle: row.source_title,
+    sourceUrl: row.source_url,
+    sourceMood: row.source_mood,
+    sourceType: row.source_type,
     volume: row.volume,
     updatedAt: row.updated_at,
   }));
@@ -666,17 +724,23 @@ async function runSessionPolling(params: {
     if (publishers.has(key)) {
       const publisher = publishers.get(key);
       if (publisher) {
-        publisher.session = session;
-        publisher.volume = session.volume;
+        const nextAudioInput = resolveAudioInputForSource(session);
+        if (publisher.session.currentSourceId !== session.currentSourceId || publisher.audioInput !== nextAudioInput) {
+          await stopPublisher(key);
+        } else {
+          publisher.session = session;
+          publisher.volume = session.volume;
+          return;
+        }
       }
-      return;
     }
 
     const room = await connectRoom(session);
     let active = true;
-    const audioInput = getTestAudioInput();
+    const audioInput = resolveAudioInputForSource(session);
     const publisher: ActivePublisher = {
       session,
+      audioInput,
       volume: session.volume,
       room,
       stop: () => {
