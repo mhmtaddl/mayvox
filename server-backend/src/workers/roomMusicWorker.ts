@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import * as rtcNode from '@livekit/rtc-node';
 import { AccessToken } from 'livekit-server-sdk';
 import { Pool } from 'pg';
@@ -33,6 +33,12 @@ type ActivePublisher = {
   room: rtcNode.Room;
   stop: () => void;
   done: Promise<void>;
+};
+
+type AudioFrameWriter = {
+  source: rtcNode.AudioSource;
+  getVolume: () => number;
+  shouldContinue: () => boolean;
 };
 
 const checks: EnvCheck[] = [
@@ -199,6 +205,30 @@ function checkFfmpeg(): void {
 
   const firstLine = result.stdout.split(/\r?\n/).find(Boolean);
   log(`ffmpeg: ${firstLine ?? 'available'}`);
+}
+
+function getTestAudioInput(): string | null {
+  return process.env.MUSIC_TEST_AUDIO_FILE?.trim() || process.env.MUSIC_TEST_AUDIO_URL?.trim() || null;
+}
+
+function buildFfmpegArgs(input: string): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-stream_loop',
+    '-1',
+    '-i',
+    input,
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '48000',
+    '-f',
+    's16le',
+    'pipe:1',
+  ];
 }
 
 function checkRtcNodeApi(): void {
@@ -470,6 +500,80 @@ function volumeToAmplitude(volume: number): number {
   return 0.18 * normalized * 32767;
 }
 
+function applyVolumeToSample(sample: number, volume: number): number {
+  const normalized = Math.max(0, Math.min(100, volume)) / 100;
+  return Math.max(-32768, Math.min(32767, Math.round(sample * normalized)));
+}
+
+async function publishPcmBuffer(buffer: Buffer, writer: AudioFrameWriter): Promise<void> {
+  const sampleRate = 48_000;
+  const channels = 1;
+  const frameMs = 10;
+  const samplesPerFrame = Math.floor(sampleRate / (1000 / frameMs));
+  const bytesPerFrame = samplesPerFrame * 2;
+
+  for (let offset = 0; offset + bytesPerFrame <= buffer.length && writer.shouldContinue(); offset += bytesPerFrame) {
+    const frame = rtcNode.AudioFrame.create(sampleRate, channels, samplesPerFrame);
+    const volume = writer.getVolume();
+    for (let sampleIndex = 0; sampleIndex < samplesPerFrame; sampleIndex++) {
+      const sample = buffer.readInt16LE(offset + sampleIndex * 2);
+      frame.data[sampleIndex] = applyVolumeToSample(sample, volume);
+    }
+    await writer.source.captureFrame(frame);
+  }
+}
+
+async function publishDirectAudioUntil(room: rtcNode.Room, input: string, shouldContinue: () => boolean, getVolume: () => number): Promise<void> {
+  const sampleRate = 48_000;
+  const channels = 1;
+  const source = new rtcNode.AudioSource(sampleRate, channels);
+  const track = rtcNode.LocalAudioTrack.createAudioTrack('mayvox-music-direct-audio', source);
+  const options = new rtcNode.TrackPublishOptions();
+  options.source = rtcNode.TrackSource.SOURCE_MICROPHONE;
+  let ffmpeg: ChildProcess | null = null;
+
+  await room.localParticipant!.publishTrack(track, options);
+  log('session direct audio track published');
+
+  try {
+    ffmpeg = spawn('ffmpeg', buildFfmpegArgs(input), {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let pending = Buffer.alloc(0);
+    let ffmpegError = '';
+    ffmpeg.stderr?.setEncoding('utf8');
+    ffmpeg.stderr?.on('data', (chunk: string) => {
+      ffmpegError += chunk;
+    });
+
+    if (!ffmpeg.stdout) {
+      throw new Error('ffmpeg stdout unavailable');
+    }
+
+    for await (const chunk of ffmpeg.stdout) {
+      if (!shouldContinue()) break;
+      pending = Buffer.concat([pending, chunk as Buffer]);
+      const completeBytes = pending.length - (pending.length % 960);
+      if (completeBytes <= 0) continue;
+      await publishPcmBuffer(pending.subarray(0, completeBytes), { source, getVolume, shouldContinue });
+      pending = pending.subarray(completeBytes);
+    }
+
+    if (ffmpegError.trim()) {
+      log(`ffmpeg reported: ${ffmpegError.trim().slice(0, 240)}`);
+    }
+    source.clearQueue();
+  } finally {
+    if (ffmpeg && !ffmpeg.killed) {
+      ffmpeg.kill('SIGTERM');
+    }
+    await track.close();
+    log('session direct audio track closed');
+  }
+}
+
 async function publishTestToneUntil(room: rtcNode.Room, shouldContinue: () => boolean, getVolume: () => number): Promise<void> {
   const sampleRate = 48_000;
   const channels = 1;
@@ -570,6 +674,7 @@ async function runSessionPolling(params: {
 
     const room = await connectRoom(session);
     let active = true;
+    const audioInput = getTestAudioInput();
     const publisher: ActivePublisher = {
       session,
       volume: session.volume,
@@ -579,9 +684,11 @@ async function runSessionPolling(params: {
       },
       done: Promise.resolve(),
     };
-    publisher.done = publishTestToneUntil(room, () => active && !shutdown.isStopped(), () => publisher.volume);
+    publisher.done = audioInput
+      ? publishDirectAudioUntil(room, audioInput, () => active && !shutdown.isStopped(), () => publisher.volume)
+      : publishTestToneUntil(room, () => active && !shutdown.isStopped(), () => publisher.volume);
     publishers.set(key, publisher);
-    log(`session audio active: ${maskValue(session.channelId)}${session.sourceTitle ? ` (${session.sourceTitle})` : ''}`);
+    log(`session audio active: ${maskValue(session.channelId)}${session.sourceTitle ? ` (${session.sourceTitle})` : ''}; source=${audioInput ? 'direct audio' : 'generated tone'}`);
   };
 
   try {
