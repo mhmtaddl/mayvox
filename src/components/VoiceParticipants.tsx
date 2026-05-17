@@ -152,10 +152,18 @@ function VoiceParticipants({
     onProfileClick(userId, e.clientX, e.clientY);
   }, [onProfileClick]);
 
+  const getRemoteSpeakingLevel = useCallback((user: User) => Math.max(
+    speakingLevels[user.name] ?? 0,
+    speakingLevels[user.id] ?? 0,
+  ), [speakingLevels]);
+
   const isSpeakingForUser = useCallback((user: User) => {
     const isMe = user.id === currentUser.id;
-    return (isMe && isPttPressed && !isMuted && !isVoiceBanned) || (!isMe && !!user.isSpeaking);
-  }, [currentUser.id, isPttPressed, isMuted, isVoiceBanned]);
+    if (isMe) return isPttPressed && !isMuted && !isVoiceBanned;
+
+    const remoteMuted = !!user.selfMuted || !!user.isMuted;
+    return !remoteMuted && (!!user.isSpeaking || getRemoteSpeakingLevel(user) > 0.02);
+  }, [currentUser.id, getRemoteSpeakingLevel, isPttPressed, isMuted, isVoiceBanned]);
 
   const isBroadcastSpeaker = useCallback((userId: string) => {
     if (currentChannel?.mode !== 'broadcast') return false;
@@ -180,7 +188,7 @@ function VoiceParticipants({
       isDeafened: isMe ? isDeafened : false,
       isVoiceBanned: isMe ? isVoiceBanned : false,
       volumeLevel,
-      speakingLevel: speakingLevels[user.name] ?? 0,
+      speakingLevel: isMe ? Math.min(1, volumeLevel / 100) : getRemoteSpeakingLevel(user),
       effectiveStatus: getEffectiveStatus(),
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
@@ -203,6 +211,7 @@ function VoiceParticipants({
     isVoiceBanned,
     volumeLevel,
     speakingLevels,
+    getRemoteSpeakingLevel,
     getEffectiveStatus,
     makeClickHandler,
     isAdmin,
@@ -324,7 +333,7 @@ function VoiceParticipants({
         }`}>
           {members.map(user => {
             const props = renderCardProps(user);
-            const isSpeaking = !!(props as { isSpeaking?: boolean }).isSpeaking;
+            const isSpeaking = !!props.isSpeakingActive;
             return (
               <div key={user.id} className={`relative ${isSpeaking ? 'mv-speaker-pulse rounded-xl' : ''}`}>
                 {isSpeaking && (

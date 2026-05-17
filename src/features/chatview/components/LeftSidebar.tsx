@@ -527,7 +527,7 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
                                     : <Headphones size={9} className="shrink-0 text-[var(--theme-secondary-text)] opacity-40" />
                                   )}
                                   <VolumeLabel value={userVolumes[user.id]} />
-                                  <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle />
+                                  <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
                                 </span>
                               </>
                             )}

@@ -24,6 +24,8 @@ interface ElectronWindowAPI {
   isFocused: () => Promise<boolean>;
   onState: (cb: (data: { maximized: boolean; focused: boolean; authMode?: boolean }) => void) => void;
   offState: () => void;
+  onResizePercent?: (cb: (data: { percent: number; width: number; height: number }) => void) => void;
+  offResizePercent?: () => void;
 }
 
 declare global {
@@ -72,7 +74,9 @@ export default function AppChrome() {
   const [maximized, setMaximized] = useState(false);
   const [focused, setFocused] = useState(true);
   const [authMode, setAuthMode] = useState(false);
+  const [resizePercent, setResizePercent] = useState<number | null>(null);
   const dragStateRef = useRef<WindowDragState | null>(null);
+  const resizePercentTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!api) return;
@@ -84,6 +88,25 @@ export default function AppChrome() {
       setAuthMode(!!a);
     });
     return () => { api.offState(); };
+  }, [api]);
+
+  useEffect(() => {
+    if (!api?.onResizePercent) return;
+    api.onResizePercent(({ percent }) => {
+      setResizePercent(percent);
+      if (resizePercentTimerRef.current) window.clearTimeout(resizePercentTimerRef.current);
+      resizePercentTimerRef.current = window.setTimeout(() => {
+        setResizePercent(null);
+        resizePercentTimerRef.current = null;
+      }, 900);
+    });
+    return () => {
+      api.offResizePercent?.();
+      if (resizePercentTimerRef.current) {
+        window.clearTimeout(resizePercentTimerRef.current);
+        resizePercentTimerRef.current = null;
+      }
+    };
   }, [api]);
 
   useEffect(() => {
@@ -184,6 +207,20 @@ export default function AppChrome() {
 
         {/* CENTER — drag area, ambient only */}
         <div className="flex-1 h-full" aria-hidden />
+
+        {resizePercent !== null && !authMode && (
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 z-40 -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-[11px] font-bold tabular-nums tracking-[0.02em] text-[var(--theme-text)] shadow-[0_10px_30px_rgba(0,0,0,0.24)]"
+            style={{
+              background: 'rgba(var(--theme-bg-rgb),0.72)',
+              borderColor: 'rgba(var(--glass-tint),0.10)',
+              backdropFilter: 'blur(14px)',
+            }}
+            aria-live="polite"
+          >
+            {resizePercent}%
+          </div>
+        )}
 
         {/* RIGHT — frameless window controls */}
         <div

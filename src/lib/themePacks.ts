@@ -6,9 +6,6 @@
  * Admin/Mod ek olarak mevcut "Advanced Customization" (palette + background) görür.
  */
 
-import bgEmerald from '../assets/bg-emerald.png';
-import bgCrimson from '../assets/bg-crimson.png';
-
 export type ThemePackId =
   | 'default-dark'
   | 'dual-tone'
@@ -203,7 +200,7 @@ export const THEME_PACKS: ThemePack[] = [
   {
     id: 'emerald',
     name: 'Zümrüt',
-    bg: `url("${bgEmerald}") center/cover no-repeat, radial-gradient(circle at 18% 0%, rgba(52, 211, 153, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(16, 185, 129, 0.08), transparent 30%), linear-gradient(180deg, #062016 0%, #03140f 100%)`,
+    bg: 'radial-gradient(circle at 18% 0%, rgba(52, 211, 153, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(16, 185, 129, 0.08), transparent 30%), linear-gradient(180deg, #062016 0%, #03140f 100%)',
     bgSoft: '#062016',
     surface: 'rgba(6, 32, 22, 0.74)',
     surfaceHover: 'rgba(8, 42, 29, 0.86)',
@@ -229,7 +226,7 @@ export const THEME_PACKS: ThemePack[] = [
   {
     id: 'crimson',
     name: 'Kızıl',
-    bg: `url("${bgCrimson}") center/cover no-repeat, radial-gradient(circle at 18% 0%, rgba(248, 113, 113, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(190, 18, 60, 0.09), transparent 30%), linear-gradient(180deg, #26070c 0%, #180407 100%)`,
+    bg: 'radial-gradient(circle at 18% 0%, rgba(248, 113, 113, 0.13), transparent 34%), radial-gradient(circle at 82% 12%, rgba(190, 18, 60, 0.09), transparent 30%), linear-gradient(180deg, #26070c 0%, #180407 100%)',
     bgSoft: '#26070C',
     surface: 'rgba(45, 9, 14, 0.74)',
     surfaceHover: 'rgba(60, 12, 20, 0.86)',

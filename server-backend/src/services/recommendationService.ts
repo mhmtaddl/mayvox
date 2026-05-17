@@ -41,6 +41,8 @@ export interface RecommendationItemDto {
   serverId: string;
   createdBy: string;
   createdByName: string | null;
+  createdByDisplayName: string | null;
+  createdByUsername: string | null;
   createdByAvatar: string | null;
   title: string;
   category: RecommendationCategory;
@@ -118,6 +120,8 @@ interface RecommendationRow {
   server_id: string;
   created_by: string;
   created_by_name: string | null;
+  created_by_display_name: string | null;
+  created_by_username: string | null;
   created_by_avatar: string | null;
   title: string;
   category: RecommendationCategory;
@@ -227,11 +231,13 @@ function mapRow(row: RecommendationRow): RecommendationItemDto {
     serverId: row.server_id,
     createdBy: row.created_by,
     createdByName: row.created_by_name,
+    createdByDisplayName: row.created_by_display_name,
+    createdByUsername: row.created_by_username,
     createdByAvatar: row.created_by_avatar,
     title: row.title,
     category: row.category,
     description: row.description,
-    coverUrl: row.cover_url,
+    coverUrl: normalizeText(row.cover_url, 600),
     tags: row.tags ?? [],
     links,
     metadata: row.metadata ?? {},
@@ -266,7 +272,9 @@ function recommendationSelect(userIdParam = 'NULL::uuid'): string {
         ri.id::text,
         ri.server_id::text,
         ri.created_by::text,
-        COALESCE(NULLIF(p.name, ''), p.email, 'Bir üye') AS created_by_name,
+        COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), NULLIF(au.username, ''), NULLIF(p.username, ''), p.email, 'Kullanıcı') AS created_by_name,
+        COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), NULLIF(au.username, ''), NULLIF(p.username, ''), p.email, 'Kullanıcı') AS created_by_display_name,
+        COALESCE(NULLIF(au.username, ''), NULLIF(p.username, ''), p.email, NULLIF(p.name, '')) AS created_by_username,
         p.avatar AS created_by_avatar,
         ri.title,
         ri.category,
@@ -287,6 +295,7 @@ function recommendationSelect(userIdParam = 'NULL::uuid'): string {
         ri.updated_at::text
        FROM recommendation_items ri
        LEFT JOIN profiles p ON p.id = ri.created_by
+       LEFT JOIN app_users au ON au.id = ri.created_by
        LEFT JOIN (
          SELECT item_id, COUNT(*)::int AS watched_count
            FROM recommendation_user_states
@@ -665,7 +674,10 @@ export async function updateRecommendation(
 
   const category = normalizeCategory(payload.category ?? current.category);
   const description = normalizeText(payload.description, 2000);
-  const coverUrl = normalizeText(payload.coverUrl ?? payload.cover_url, 600);
+  const rawCoverUrl = payload.coverUrl ?? payload.cover_url;
+  const coverUrl = rawCoverUrl === undefined
+    ? current.coverUrl
+    : normalizeText(rawCoverUrl, 600) ?? current.coverUrl;
   const tags = normalizeTags(payload.tags);
   const links = normalizeLinks(payload.links);
   const metadata = normalizeJsonObject(payload.metadata);

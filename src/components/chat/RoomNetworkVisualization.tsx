@@ -9,6 +9,7 @@ import type { CardStyle } from './cardStyles';
 interface Props {
   participants: RoomNodeData[];
   cardStyle?: CardStyle;
+  leadingAccessory?: React.ReactNode;
 }
 
 function calcVisibleCount(containerW: number): number {
@@ -20,7 +21,7 @@ function calcVisibleCount(containerW: number): number {
   return Math.max(3, row1 + row2);
 }
 
-export default function RoomNetworkVisualization({ participants, cardStyle = 'current' }: Props) {
+export default function RoomNetworkVisualization({ participants, cardStyle = 'current', leadingAccessory }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   const [maxVisible, setMaxVisible] = useState(12);
@@ -48,11 +49,6 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
   const { self, sortedRemotes } = useMemo(() => {
     const selfNode = participants.find(p => p.isSelf);
     const remotes = participants.filter(p => !p.isSelf);
-    remotes.sort((a, b) => {
-      if (a.isSpeaking !== b.isSpeaking) return a.isSpeaking ? -1 : 1;
-      if (a.isMuted !== b.isMuted) return a.isMuted ? 1 : -1;
-      return a.name.localeCompare(b.name, 'tr');
-    });
     return { self: selfNode, sortedRemotes: remotes };
   }, [participants]);
 
@@ -69,6 +65,11 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
 
   return (
     <div ref={containerRef} className="voice-participant-strip flex flex-wrap justify-center items-start content-center gap-x-2 gap-y-2 pt-1.5 pb-1 overflow-hidden">
+      {leadingAccessory && (
+        <div className="shrink-0">
+          {leadingAccessory}
+        </div>
+      )}
       <AnimatePresence>
         {ordered.map(node => (
           <motion.div

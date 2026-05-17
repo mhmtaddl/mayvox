@@ -21,6 +21,15 @@
     animation: fadeIn 150ms ease-out both;
   }
 
+  .splash-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: breathe 1400ms ease-in-out infinite;
+    transform-origin: center center;
+  }
+
   .mark {
     position: relative;
     width: 120px;
@@ -28,7 +37,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: breathe 1400ms ease-in-out infinite;
   }
 
   .mark::before {
@@ -54,43 +62,83 @@
   .frame.active { opacity: 1; }
   .frame:first-child:not(.active) { opacity: 1; }
 
-  /* ── Update bar — logo altında, küçük, sakin ──
-   * Width 100px (logo 120px'ten 20px dar), height 5px, margin 8px.
-   * Premium / Apple-vari — zıplama yok, bar .mark dışında (breathe scale'inden bağımsız).
-   * Renk mode'a göre CSS değişkenleri ile geçer; transition yumuşak. */
-  .update-bar {
-    margin-top: 8px;
-    width: 96px;
-    max-width: 96px;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.07);
-    border-radius: 3px;
-    overflow: hidden;
+  .update-row {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     opacity: 0;
     transition: opacity 260ms ease-out;
+    pointer-events: none;
+  }
+  body.updating .update-row {
+    opacity: 1;
+  }
+
+  /* Update bar — logo altında, metin barın içinde, ikon yok. */
+  .update-bar {
+    position: relative;
+    width: 106px;
+    max-width: 106px;
+    height: 17px;
+    background: rgba(255, 255, 255, 0.075);
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: background 180ms ease-out;
     pointer-events: none;
     --bar-c1: rgba(180, 195, 220, 0.55);
     --bar-c2: rgba(230, 236, 245, 0.92);
   }
-  body.updating .update-bar {
-    opacity: 1;
-  }
-
   .update-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
     height: 100%;
     width: 0%;
     background: linear-gradient(90deg, var(--bar-c1), var(--bar-c2));
-    border-radius: 3px;
+    border-radius: inherit;
     /* width: progress güncellemesi; background: mode rengi geçişi — ikisi de ease-out */
     transition: width 220ms ease-out, background 180ms ease-out;
     will-change: width;
+  }
+  .update-bar-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 7px;
+    color: rgba(246, 249, 255, 0.92);
+    font: 700 7.5px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: 0;
+    text-align: center;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   }
 
   /* Mode renkleri — soft, doygunluğu düşük, premium */
   body.mode-checking    .update-bar { --bar-c1: rgba(140, 200, 230, 0.55); --bar-c2: rgba(180, 225, 242, 0.92); }
   body.mode-downloading .update-bar { --bar-c1: rgba(150, 165, 225, 0.55); --bar-c2: rgba(195, 175, 240, 0.92); }
   body.mode-installing  .update-bar { --bar-c1: rgba(225, 185, 130, 0.60); --bar-c2: rgba(245, 215, 160, 0.95); }
+  body.mode-approval    .update-bar { --bar-c1: rgba(120, 210, 170, 0.55); --bar-c2: rgba(190, 245, 215, 0.92); }
   body.mode-error       .update-bar { --bar-c1: rgba(225, 155, 130, 0.55); --bar-c2: rgba(240, 180, 155, 0.90); }
+
+  body.mode-checking .update-row {
+    margin-top: 7px;
+  }
+
+  body.mode-checking .update-bar {
+    width: 74px;
+    max-width: 74px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.052);
+    border-color: rgba(255, 255, 255, 0.052);
+  }
+
+  body.mode-checking .update-bar-label {
+    display: none;
+  }
 
   /* Indeterminate — checking veya error kısa anlarında */
   body.updating.indeterminate .update-bar-fill {
@@ -112,6 +160,11 @@
     animation: installShimmer 1920ms linear infinite;
     /* Width transition'ı kapatma; background 180ms ease-out mode geçişinde çalışsın */
     transition: background 180ms ease-out;
+  }
+
+  body.mode-approval .update-bar-fill {
+    width: 100%;
+    animation: approvalGlow 1200ms ease-in-out infinite;
   }
 
   @keyframes fadeIn {
@@ -138,17 +191,29 @@
     0%   { background-position: 100% 0; }
     100% { background-position: -120% 0; }
   }
+
+  @keyframes approvalGlow {
+    0%, 100% { filter: brightness(0.9); }
+    50%      { filter: brightness(1.18); }
+  }
 </style>
 </head>
 <body>
-  <div class="mark" id="mark">
-    <img class="frame active" src="splash-frame-0.png" alt="" draggable="false">
-    <img class="frame"        src="splash-frame-1.png" alt="" draggable="false">
-    <img class="frame"        src="splash-frame-2.png" alt="" draggable="false">
-    <img class="frame"        src="splash-frame-3.png" alt="" draggable="false">
-    <img class="frame"        src="splash-frame-4.png" alt="" draggable="false">
+  <div class="splash-stack">
+    <div class="mark" id="mark">
+      <img class="frame active" src="splash-frame-0.png" alt="" draggable="false">
+      <img class="frame"        src="splash-frame-1.png" alt="" draggable="false">
+      <img class="frame"        src="splash-frame-2.png" alt="" draggable="false">
+      <img class="frame"        src="splash-frame-3.png" alt="" draggable="false">
+      <img class="frame"        src="splash-frame-4.png" alt="" draggable="false">
+    </div>
+    <div class="update-row" id="updateRow">
+      <div class="update-bar" id="updateBar">
+        <div class="update-bar-fill" id="updateBarFill"></div>
+        <div class="update-bar-label" id="updateBarLabel"></div>
+      </div>
+    </div>
   </div>
-  <div class="update-bar" id="updateBar"><div class="update-bar-fill" id="updateBarFill"></div></div>
   <script>
     (function () {
       var frames = document.querySelectorAll('.frame');
@@ -176,17 +241,28 @@
       if (!api) return;
       var body = document.body;
       var fill = document.getElementById('updateBarFill');
-      var MODES = ['mode-checking', 'mode-downloading', 'mode-installing', 'mode-error'];
+      var label = document.getElementById('updateBarLabel');
+      var MODES = ['mode-checking', 'mode-downloading', 'mode-installing', 'mode-approval', 'mode-error'];
+      var LABELS = {
+        checking: '',
+        downloading: 'İndiriliyor',
+        installing: 'Kuruluyor',
+        approval: 'Onay bekleniyor',
+        error: 'Tekrar deneniyor'
+      };
 
       function setMode(next) {
         MODES.forEach(function (m) { body.classList.remove(m); });
         body.classList.remove('updating', 'indeterminate');
         if (!next) return;
+        if (label) label.textContent = Object.prototype.hasOwnProperty.call(LABELS, next) ? LABELS[next] : 'Hazırlanıyor';
         body.classList.add('updating');
         if (next === 'checking' || next === 'error') {
+          if (fill) fill.style.width = '';
           body.classList.add('indeterminate', 'mode-' + next);
-        } else if (next === 'installing') {
-          body.classList.add('mode-installing'); // shimmer CSS'te kendi animasyonu
+        } else if (next === 'installing' || next === 'approval') {
+          if (fill) fill.style.width = '100%';
+          body.classList.add('mode-' + next); // shimmer/glow CSS'te kendi animasyonu
         } else if (next === 'downloading') {
           body.classList.add('mode-downloading');
           if (fill) fill.style.width = '0%';
@@ -203,6 +279,7 @@
         var p = Math.max(0, Math.min(100, Math.round(percent || 0)));
         body.classList.remove('indeterminate');
         fill.style.width = p + '%';
+        if (label) label.textContent = 'İndiriliyor ' + p + '%';
       });
     })();
   </script>

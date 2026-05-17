@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel, Plus } from 'lucide-react';
 import {
   type ModerationConfigResponse, type FloodConfig,
   type ModerationStats, type ModStatRange,
@@ -78,7 +78,7 @@ interface Props {
   actionsRef?: React.MutableRefObject<AutoModActions | null>;
 }
 
-const FLOOD_DEFAULT: FloodConfig = { enabled: true, cooldownMs: 3000, limit: 5, windowMs: 5000 };
+const FLOOD_DEFAULT: FloodConfig = { enabled: true, cooldownMs: 3000, limit: 5, windowMs: 6000 };
 const AUTOPUNISH_FLOOD_DEFAULT: AutoPunishmentFloodConfig = {
   enabled: false,
   threshold: 3,
@@ -94,6 +94,15 @@ const BOUNDS = {
   // windowMs min 6s — çok dar pencere normal konuşmayı yanlış pozitif flood sayar.
   windowMs:   { min: 6000, max: 60_000, step: 500 },
 };
+
+function normalizeFloodConfig(flood: FloodConfig): FloodConfig {
+  return {
+    ...flood,
+    cooldownMs: Math.min(BOUNDS.cooldownMs.max, Math.max(BOUNDS.cooldownMs.min, flood.cooldownMs)),
+    limit: Math.min(BOUNDS.limit.max, Math.max(BOUNDS.limit.min, flood.limit)),
+    windowMs: Math.min(BOUNDS.windowMs.max, Math.max(BOUNDS.windowMs.min, flood.windowMs)),
+  };
+}
 
 
 export default function AutoModerationTab({ serverId, showToast, onStateChange, actionsRef }: Props) {
@@ -118,6 +127,8 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   const [profanityEnabled, setProfanityEnabled] = useState(false);
   // Textarea'da her satır bir kelime — state string olarak tutulur, save'de split edilir.
   const [profanityText, setProfanityText] = useState('');
+  const [profanityDraftWord, setProfanityDraftWord] = useState('');
+  const [profanityListView, setProfanityListView] = useState<'custom' | 'system'>('custom');
   const [spamEnabled, setSpamEnabled] = useState(false);
   const [autoPunishFlood, setAutoPunishFlood] = useState<AutoPunishmentFloodConfig>(AUTOPUNISH_FLOOD_DEFAULT);
   const [loading, setLoading] = useState(true);
@@ -127,8 +138,9 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
     try {
       setLoading(true);
       const cfg = await getModerationConfig(serverId);
-      setInitial(cfg);
-      setFlood(cfg.flood);
+      const normalizedFlood = normalizeFloodConfig(cfg.flood);
+      setInitial({ ...cfg, flood: normalizedFlood });
+      setFlood(normalizedFlood);
       setProfanityEnabled(cfg.profanity.enabled);
       setProfanityText((cfg.profanity.words || []).join('\n'));
       setSpamEnabled(cfg.spam.enabled);
@@ -158,7 +170,32 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   }, [profanityText]);
 
   const currentWords = parseProfanityWords();
+  const currentWordsStr = currentWords.join('\n');
   const initialWordsStr = initial ? (initial.profanity.words || []).join('\n') : '';
+
+  const addProfanityWord = useCallback(() => {
+    const word = profanityDraftWord.trim();
+    if (!word) return;
+    const normalizedKey = word.toLocaleLowerCase('tr-TR');
+    const exists = currentWords.some(existing => existing.toLocaleLowerCase('tr-TR') === normalizedKey);
+    if (exists) {
+      showToast('Bu kelime zaten ekli');
+      setProfanityDraftWord('');
+      return;
+    }
+    setProfanityText([...currentWords, word].join('\n'));
+    setProfanityDraftWord('');
+    setProfanityListView('custom');
+  }, [currentWords, profanityDraftWord, showToast]);
+
+  const removeProfanityWord = useCallback((word: string) => {
+    const normalizedKey = word.toLocaleLowerCase('tr-TR');
+    setProfanityText(
+      currentWords
+        .filter(existing => existing.toLocaleLowerCase('tr-TR') !== normalizedKey)
+        .join('\n')
+    );
+  }, [currentWords]);
 
   const dirty = initial != null && (
     flood.enabled    !== initial.flood.enabled ||
@@ -166,7 +203,8 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
     flood.limit      !== initial.flood.limit ||
     flood.windowMs   !== initial.flood.windowMs ||
     profanityEnabled !== initial.profanity.enabled ||
-    profanityText    !== initialWordsStr ||
+    currentWordsStr  !== initialWordsStr ||
+    profanityDraftWord.trim() !== '' ||
     spamEnabled      !== initial.spam.enabled ||
     autoPunishFlood.enabled         !== initial.autoPunishment.flood.enabled ||
     autoPunishFlood.threshold       !== initial.autoPunishment.flood.threshold ||
@@ -178,21 +216,27 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   const handleSave = async () => {
     try {
       setSaving(true);
+      const draftWord = profanityDraftWord.trim();
+      const draftKey = draftWord.toLocaleLowerCase('tr-TR');
+      const wordsToSave = draftWord && !currentWords.some(word => word.toLocaleLowerCase('tr-TR') === draftKey)
+        ? [...currentWords, draftWord]
+        : currentWords;
       await updateModerationConfig(serverId, {
         flood,
-        profanity: { enabled: profanityEnabled, words: currentWords },
+        profanity: { enabled: profanityEnabled, words: wordsToSave },
         spam: { enabled: spamEnabled },
         autoPunishment: { flood: autoPunishFlood },
       });
       setInitial(prev => prev ? {
         ...prev,
         flood,
-        profanity: { enabled: profanityEnabled, words: currentWords },
+        profanity: { enabled: profanityEnabled, words: wordsToSave },
         spam: { enabled: spamEnabled },
         autoPunishment: { flood: autoPunishFlood },
       } : prev);
       // UI'yi normalize sonuç ile hizala (dedup/trim eksik satır varsa).
-      setProfanityText(currentWords.join('\n'));
+      setProfanityText(wordsToSave.join('\n'));
+      setProfanityDraftWord('');
       showToast('Oto-Mod ayarları kaydedildi');
     } catch (err: any) {
       showToast(err?.message || 'Kaydedilemedi');
@@ -206,6 +250,8 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
     setFlood(initial.flood);
     setProfanityEnabled(initial.profanity.enabled);
     setProfanityText((initial.profanity.words || []).join('\n'));
+    setProfanityDraftWord('');
+    setProfanityListView('custom');
     setSpamEnabled(initial.spam.enabled);
     setAutoPunishFlood(initial.autoPunishment?.flood ?? AUTOPUNISH_FLOOD_DEFAULT);
   };
@@ -500,25 +546,103 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             </p>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
               <label className="text-[11px] font-semibold text-[var(--theme-text)]">
-                Kelime listesi
+                Eklenen Kelimeler
                 <span className="ml-1.5 text-[10px] font-normal text-[var(--theme-secondary-text)]/55 tabular-nums">
                   ({currentWords.length})
                 </span>
               </label>
               <button
                 type="button"
-                onClick={() => setShowBlacklist(true)}
+                onClick={() => {
+                  setProfanityListView('system');
+                  setShowBlacklist(true);
+                }}
                 title="Küfür filtresi aktifken her sunucuda çalışan sistem listesi"
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold shrink-0 transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold shrink-0 text-[var(--theme-secondary-text)] transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.10)] hover:text-[var(--theme-text)]"
                 style={{
-                  background: 'rgba(var(--glass-tint),0.06)',
-                  border: '1px solid rgba(var(--glass-tint),0.12)',
-                  color: 'var(--theme-secondary-text)',
+                  background: profanityListView === 'system' ? 'rgba(var(--theme-accent-rgb),0.10)' : 'rgba(var(--glass-tint),0.06)',
+                  border: profanityListView === 'system' ? '1px solid rgba(var(--theme-accent-rgb),0.18)' : '1px solid rgba(var(--glass-tint),0.12)',
                 }}
               >
                 <BookLock size={10} /> Sistem listesi
               </button>
             </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={profanityDraftWord}
+                  onChange={e => setProfanityDraftWord(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addProfanityWord();
+                    }
+                  }}
+                  disabled={!profanityEnabled}
+                  placeholder="Kelime veya ifadeyi yaz..."
+                  className="min-h-10 flex-1 min-w-0 rounded-lg px-3 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 outline-none transition-colors disabled:opacity-50 disabled:cursor-default"
+                  style={{
+                    background: 'rgba(var(--glass-tint), 0.05)',
+                    border: '1px solid rgba(var(--glass-tint), 0.10)',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={addProfanityWord}
+                  disabled={!profanityEnabled || !profanityDraftWord.trim()}
+                  className="flex min-h-10 shrink-0 items-center justify-center rounded-lg px-3 text-[11px] font-semibold text-[var(--theme-text)] transition-colors disabled:opacity-45 disabled:cursor-default hover:bg-[rgba(var(--theme-accent-rgb),0.16)]"
+                  style={{
+                    background: 'rgba(var(--theme-accent-rgb),0.12)',
+                    border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
+                  }}
+                >
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <Plus size={13} /> Ekle
+                  </span>
+                </button>
+              </div>
+              <div
+                className="min-h-[92px] rounded-xl p-2"
+                style={{
+                  background: 'rgba(var(--glass-tint), 0.035)',
+                  border: '1px solid rgba(var(--glass-tint), 0.08)',
+                }}
+              >
+                {currentWords.length === 0 ? (
+                  <div className="flex h-20 items-center justify-center rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/55">
+                    Eklenen sunucu kelimesi yok. Her kelimeyi tek tek ekle.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentWords.map(word => (
+                      <span
+                        key={word}
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium text-[var(--theme-text)]"
+                        style={{
+                          background: 'rgba(var(--glass-tint),0.055)',
+                          border: '1px solid rgba(var(--glass-tint),0.10)',
+                        }}
+                      >
+                        {word}
+                        <button
+                          type="button"
+                          onClick={() => removeProfanityWord(word)}
+                          disabled={!profanityEnabled}
+                          className="rounded-md p-0.5 text-[var(--theme-secondary-text)]/55 transition-colors hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.08)] disabled:cursor-default disabled:opacity-40"
+                          title="Kelimeyi kaldır"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
+              Her ekleme ayrı kayıt olur. Birden fazla kelime ekleyeceksen her biri için "Kelimeyi ekle" butonunu kullan.
+            </p>
+            <div className="hidden">
             <textarea
               value={profanityText}
               onChange={e => setProfanityText(e.target.value)}
@@ -534,6 +658,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
               Büyük/küçük harf farkı yok · Türkçe ekler otomatik uyumlu
             </p>
+            </div>
           </div>
         )}
 

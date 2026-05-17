@@ -137,8 +137,23 @@ export default function MobileFooter({
   const [vadSliderOpen, setVadSliderOpen] = useState(false);
 
   return (
-    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} shrink-0 pb-[env(safe-area-inset-bottom)] mx-2 mb-2 rounded-2xl`}
+    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} mv-mobile-footer shrink-0 pb-[calc(env(safe-area-inset-bottom)+4px)] mx-2 mb-2 rounded-2xl`}
       style={{ background: 'var(--dock-bg, var(--surface-elevated))', border: '1px solid var(--dock-border, var(--border-subtle))', boxShadow: 'var(--dock-shadow, 0 4px 20px rgba(0,0,0,0.2))', backdropFilter: 'var(--dock-blur, blur(12px))', WebkitBackdropFilter: 'var(--dock-blur, blur(12px))' }}>
+      <style>{`
+        .mv-mobile-footer .mv-dock-square-btn,
+        .mv-mobile-footer .mv-dock-small-square-btn,
+        .mv-mobile-footer .mv-server-dock-button {
+          min-width: 40px;
+          min-height: 40px;
+        }
+        .mv-mobile-footer .group\\/mic > .absolute.-top-1.-right-1,
+        .mv-mobile-footer .group\\/hp > .absolute.-top-1.-right-1,
+        .mv-mobile-footer .group\\/vmode > .absolute.-top-1.-right-1 {
+          opacity: 1;
+          min-width: 20px;
+          min-height: 20px;
+        }
+      `}</style>
       {/* PTT / VAD buton alanı */}
       {activeChannel && view !== 'settings' && (() => {
         // pttDisabled: dokunma/konuşma tamamen bloklu. Server bloğu (mute/timeout/kick/ban)
@@ -166,7 +181,7 @@ export default function MobileFooter({
               <div className="flex items-center gap-2 w-full max-w-[260px]">
               <div
                 onClick={() => { if (!pttDisabled) setVadSliderOpen(p => !p); }}
-                className={`relative flex-1 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
+                className={`relative flex-1 min-h-[56px] rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
               >
                 <div className={`absolute inset-0 rounded-2xl transition-all duration-200 ${
                   pttDisabled
@@ -211,7 +226,7 @@ export default function MobileFooter({
               {changeBtnVisible && !pttDisabled && (
                 <button
                   onClick={onChangeModeClick}
-                  className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
+                  className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
                   style={{ background: 'rgba(var(--glass-tint), 0.08)', borderColor: 'rgba(var(--glass-tint), 0.15)', color: 'var(--theme-accent)' }}
                   title="Konuşma moduna geç"
                 >
@@ -228,7 +243,7 @@ export default function MobileFooter({
                     max={50}
                     value={noiseThreshold}
                     onChange={(e) => setNoiseThreshold(parseInt(e.target.value))}
-                    className="premium-range flex-1"
+                    className="premium-range flex-1 min-h-[32px]"
                     style={rangeVisualStyle(noiseThreshold, 5, 50, { height: '4px' })}
                   />
                   <span className="text-[10px] text-emerald-400 font-bold w-5 text-right shrink-0">{noiseThreshold}</span>
@@ -255,7 +270,7 @@ export default function MobileFooter({
               }}
               onPointerCancel={() => { if (!pttDisabled) setIsPttPressed(false); }}
               onContextMenu={(e) => e.preventDefault()}
-              className={`relative w-full max-w-[220px] select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
+              className={`relative w-full max-w-[220px] min-h-[64px] select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
                 pttDisabled ? 'opacity-50' : isPttPressed ? 'scale-[0.97]' : 'scale-100'
               }`}
             >
@@ -297,7 +312,7 @@ export default function MobileFooter({
             {changeBtnVisible && !pttDisabled && (
               <button
                 onClick={onChangeModeClick}
-                className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
+                className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center border active:scale-[0.95] transition-all btn-haptic"
                 style={{ background: 'rgba(var(--glass-tint), 0.08)', borderColor: 'rgba(var(--glass-tint), 0.15)', color: 'var(--theme-accent)' }}
                 title="Konuşma moduna geç"
               >
@@ -309,7 +324,7 @@ export default function MobileFooter({
       })()}
 
       {/* Desktop dock ile aynı — user card + server + mic + hp + audio lines + voice mode + room controls */}
-      <div style={{ borderTop: '1px solid var(--dock-divider, var(--dock-item-border, rgba(var(--glass-tint), 0.08)))' }}>
+      <div className="overflow-x-auto custom-scrollbar" style={{ borderTop: '1px solid var(--dock-divider, var(--dock-item-border, rgba(var(--glass-tint), 0.08)))' }}>
         <DesktopDock
           layout="inline"
           dockToastHoveredRef={dockToastHoveredRef}

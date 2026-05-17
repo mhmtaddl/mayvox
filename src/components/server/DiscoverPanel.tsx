@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { CalendarDays, CheckCircle2, Circle, Clock3, Crown, Gem, Globe2, Hash, LockKeyhole, Search, Users } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Circle, Clock3, Crown, Gem, Globe2, Hash, LockKeyhole, Search, Users } from 'lucide-react';
 import { searchServers, joinServer, createJoinRequest, type DiscoverServer } from '../../lib/serverService';
 import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
@@ -15,6 +15,14 @@ function formatSince(iso?: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return '';
   return String(date.getFullYear());
+}
+
+function parseServerRules(value?: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(/\r?\n/)
+    .map(line => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
 }
 
 interface Props {
@@ -33,6 +41,8 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [ruleConfirm, setRuleConfirm] = useState<{ server: DiscoverServer; action: 'join' | 'request' } | null>(null);
+  const [ruleConfirmAccepted, setRuleConfirmAccepted] = useState(false);
   const seqRef = useRef(0);
 
   // Responsive breakpoints:
@@ -112,6 +122,25 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Başvuru gönderilemedi');
     } finally { setJoining(null); }
+  };
+
+  const handleJoinIntent = (server: DiscoverServer, action: 'join' | 'request') => {
+    if (parseServerRules(server.serverRules).length > 0) {
+      setRuleConfirm({ server, action });
+      setRuleConfirmAccepted(false);
+      return;
+    }
+    if (action === 'join') void handleJoin(server.id);
+    else void handleRequest(server.id);
+  };
+
+  const handleConfirmRules = async () => {
+    if (!ruleConfirm || !ruleConfirmAccepted) return;
+    const { server, action } = ruleConfirm;
+    setRuleConfirm(null);
+    setRuleConfirmAccepted(false);
+    if (action === 'join') await handleJoin(server.id);
+    else await handleRequest(server.id);
   };
 
   const isFrictionless = (s: DiscoverServer) =>
@@ -270,14 +299,24 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                         Bekliyor
                       </span>
                     ) : isFrictionless(s) ? (
-                      <button onClick={() => handleJoin(s.id)} disabled={isJoining}
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleJoinIntent(s, 'join');
+                        }}
+                        disabled={isJoining}
                         className="join-btn flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
                         style={{ background: 'rgba(var(--theme-accent-rgb),0.10)', border: '1px solid rgba(var(--theme-accent-rgb),0.18)', color: 'var(--theme-accent)' }}>
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
                         {isJoining ? '...' : 'Katıl'}
                       </button>
                     ) : (
-                      <button onClick={() => handleRequest(s.id)} disabled={isJoining}
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleJoinIntent(s, 'request');
+                        }}
+                        disabled={isJoining}
                         className="flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
                         style={{ background: 'rgba(var(--glass-tint),0.045)', border: '1px solid rgba(var(--glass-tint),0.08)', color: 'var(--theme-text)' }}
                         title="Bu sunucuya başvuru gönder — yönetici onayı gerekir">
@@ -314,6 +353,123 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
           </div>
         )}
       </div>
+
+      {ruleConfirm && (() => {
+        const rules = parseServerRules(ruleConfirm.server.serverRules);
+        const server = ruleConfirm.server;
+        const confirming = joining === server.id;
+        return (
+          <div
+            className="fixed inset-0 z-[520] flex items-center justify-center bg-black/50 px-4 py-5 backdrop-blur-[2px]"
+            onClick={() => {
+              if (confirming) return;
+              setRuleConfirm(null);
+              setRuleConfirmAccepted(false);
+            }}
+          >
+            <div
+              className="w-full max-w-[520px] overflow-hidden rounded-[24px] border border-[rgba(var(--glass-tint),0.085)] shadow-[0_24px_70px_rgba(0,0,0,0.42)]"
+              style={{
+                background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.030), rgba(var(--glass-tint),0.012)), var(--theme-bg)',
+              }}
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 border-b border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--glass-tint),0.014)] px-4 py-3.5">
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px]"
+                  style={{
+                    background: server.avatarUrl ? 'rgba(var(--glass-tint),0.035)' : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.18), rgba(var(--glass-tint),0.045))',
+                    border: '1px solid rgba(var(--glass-tint),0.08)',
+                  }}
+                >
+                  {server.avatarUrl ? (
+                    <img
+                      src={server.avatarUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={event => {
+                        (event.currentTarget as HTMLImageElement).style.display = 'none';
+                        (event.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <span className={`text-[12px] font-black tracking-[0.08em] text-[var(--theme-accent)]/82 ${server.avatarUrl ? 'hidden' : ''}`}>{server.shortName}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-[14px] font-bold text-[var(--theme-text)]">{server.name}</h3>
+                  <p className="mt-0.5 line-clamp-1 text-[10.5px] text-[var(--theme-secondary-text)]/58">
+                    {server.motto || server.description || 'Sunucuya katılmadan önce kuralları onayla.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-4 py-4">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/62">
+                  Sunucu kuralları
+                </div>
+                <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                  {rules.map((rule, index) => (
+                    <div
+                      key={`${server.id}-modal-rule-${index}`}
+                      className="rounded-xl border border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--glass-tint),0.020)] px-3 py-2 text-[11px] leading-5 text-[var(--theme-text)]/82"
+                    >
+                      <span className="font-semibold text-[var(--theme-accent)]/78">{index + 1}.</span> {rule}
+                    </div>
+                  ))}
+                </div>
+
+                <label className="mt-4 flex cursor-pointer select-none items-start gap-2.5 rounded-xl border border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--glass-tint),0.018)] px-3 py-2.5 text-[11px] leading-5 text-[var(--theme-secondary-text)]/76">
+                  <input
+                    type="checkbox"
+                    checked={ruleConfirmAccepted}
+                    onChange={event => setRuleConfirmAccepted(event.target.checked)}
+                    className="sr-only"
+                  />
+                  <span
+                    className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded border transition-colors"
+                    style={{
+                      width: 18,
+                      height: 18,
+                      background: ruleConfirmAccepted ? 'rgba(var(--theme-accent-rgb),0.16)' : 'rgba(var(--glass-tint),0.035)',
+                      borderColor: ruleConfirmAccepted ? 'rgba(var(--theme-accent-rgb),0.42)' : 'rgba(var(--glass-tint),0.12)',
+                      color: ruleConfirmAccepted ? 'var(--theme-accent)' : 'transparent',
+                    }}
+                  >
+                    <Check size={12} strokeWidth={3} />
+                  </span>
+                  <span>Kuralları okudum ve bu sunucuya katılmak için kabul ediyorum.</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--glass-tint),0.010)] px-4 py-3">
+                <button
+                  type="button"
+                  disabled={confirming}
+                  onClick={() => {
+                    setRuleConfirm(null);
+                    setRuleConfirmAccepted(false);
+                  }}
+                  className="h-8 rounded-xl px-3 text-[11px] font-semibold text-[var(--theme-secondary-text)]/70 transition-colors hover:bg-[rgba(var(--glass-tint),0.045)] hover:text-[var(--theme-text)] disabled:opacity-45"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  disabled={!ruleConfirmAccepted || confirming}
+                  onClick={() => void handleConfirmRules()}
+                  className="h-8 rounded-xl px-4 text-[11px] font-bold text-[var(--theme-accent)] transition-colors hover:brightness-110 disabled:cursor-default disabled:opacity-40"
+                  style={{
+                    background: 'rgba(var(--theme-accent-rgb),0.10)',
+                    border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
+                  }}
+                >
+                  {confirming ? 'İşleniyor' : 'Onayla'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[500] pointer-events-none">

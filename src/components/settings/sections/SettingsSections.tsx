@@ -746,7 +746,13 @@ export function PerformanceSection() {
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Boşta Ayrılma</p>
-              <p className="text-[9px] text-[var(--theme-secondary-text)]/50 mt-0.5">Kaynak yönetimi için zorunlu. 5–60 dakika arası seç.</p>
+              <p className="text-[9px] text-[var(--theme-secondary-text)]/55 mt-0.5 leading-snug">
+                Sohbet odasında{' '}
+                <span className="font-semibold text-violet-300">{autoLeaveMinutes} dakika</span>
+                {' '}boyunca hareketsiz kalırsan otomatik olarak{' '}
+                <span className="font-semibold text-violet-300">AFK</span>
+                {' '}durumuna alınır ve odadan ayrılırsın.
+              </p>
             </div>
           </div>
           <div className="settings-idle-minute-grid flex flex-wrap gap-1.5 mt-2.5">

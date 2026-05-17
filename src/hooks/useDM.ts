@@ -31,6 +31,15 @@ function toMessagePreview(text: string): string {
   return text.length > 100 ? text.slice(0, 100) + '…' : text;
 }
 
+const UNDECRYPTABLE_DM_TEXTS = new Set([
+  'Bu şifreli mesaj bu cihazda açılamıyor.',
+  'Bu şifreli mesaj çözülemedi.',
+]);
+
+function isUndecryptableDmText(text: string): boolean {
+  return UNDECRYPTABLE_DM_TEXTS.has(text);
+}
+
 /**
  * useDM — DM state yönetimi.
  * conversations listesi + aktif sohbet + unread sayacı.
@@ -56,6 +65,32 @@ export function useDM(currentUserId: string | undefined) {
 
   // Optimistic hide — server confirm gelene kadar client-side filtre
   const hiddenKeysRef = useRef<Set<string>>(new Set());
+  const previewCacheRef = useRef<Map<string, { preview: string; at: number }>>(new Map());
+
+  const getCachedPreview = useCallback((conversationKey: string) => {
+    return previewCacheRef.current.get(conversationKey) ?? null;
+  }, []);
+
+  const rememberPreview = useCallback((conversationKey: string, text: string, at: number) => {
+    if (!conversationKey || !text || isUndecryptableDmText(text)) return;
+    const preview = toMessagePreview(text);
+    const existing = previewCacheRef.current.get(conversationKey);
+    if (existing && existing.at > at) return;
+    previewCacheRef.current.set(conversationKey, { preview, at });
+  }, []);
+
+  const updatePreviewFromMessage = useCallback((msg: DmMessage) => {
+    if (!msg?.conversationKey || !msg.text || isUndecryptableDmText(msg.text)) return;
+    rememberPreview(msg.conversationKey, msg.text, msg.createdAt);
+    const preview = toMessagePreview(msg.text);
+    const applyPreview = (prev: DmConversation[]) => prev.map(c =>
+      c.conversationKey === msg.conversationKey
+        ? { ...c, lastMessage: preview, lastMessageAt: msg.createdAt }
+        : c
+    ).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    setConversations(applyPreview);
+    setRequests(applyPreview);
+  }, [rememberPreview]);
 
   // Mark-read throttle — openConversation + onNewMessage + onConversations'tan
   // peş peşe tetiklenen WS spam'ini idempotent tutar (2sn cooldown per convKey).
@@ -71,16 +106,27 @@ export function useDM(currentUserId: string | undefined) {
 
   const decryptDmMessage = useCallback(async (msg: DmMessage): Promise<DmMessage> => {
     const result = await decryptTextIfNeeded(msg.text);
+    if (result.decryptable) {
+      rememberPreview(msg.conversationKey, result.text, msg.createdAt);
+    }
     return { ...msg, text: result.text };
-  }, []);
+  }, [rememberPreview]);
 
   const decryptConversationPreviews = useCallback(async (items: DmConversation[]): Promise<DmConversation[]> => {
     return Promise.all(items.map(async convo => {
       if (!convo.lastMessage) return convo;
       const result = await decryptTextIfNeeded(convo.lastMessage);
+      if (result.decryptable) {
+        rememberPreview(convo.conversationKey, result.text, convo.lastMessageAt);
+        return { ...convo, lastMessage: toMessagePreview(result.text) };
+      }
+      const cached = getCachedPreview(convo.conversationKey);
+      if (cached && cached.at >= convo.lastMessageAt) {
+        return { ...convo, lastMessage: cached.preview };
+      }
       return { ...convo, lastMessage: toMessagePreview(result.text) };
     }));
-  }, []);
+  }, [getCachedPreview, rememberPreview]);
 
   // ── Event handlers ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -121,6 +167,8 @@ export function useDM(currentUserId: string | undefined) {
             if (convKey !== activeConvKeyRef.current) return;
             setLastError(null);
             setMessages(decrypted);
+            const latest = decrypted[decrypted.length - 1];
+            if (latest) updatePreviewFromMessage(latest);
             setLoadingHistory(false);
           });
         }
@@ -324,7 +372,7 @@ export function useDM(currentUserId: string | undefined) {
         dmLoadBlocks();
       },
     });
-  }, [currentUserId, decryptConversationPreviews, decryptDmMessage, markReadSafe]);
+  }, [currentUserId, decryptConversationPreviews, decryptDmMessage, markReadSafe, updatePreviewFromMessage]);
 
   // İlk yüklemede konuşmaları ve unread çek
   const loadInitial = useCallback(() => {

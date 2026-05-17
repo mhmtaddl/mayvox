@@ -18,13 +18,14 @@ import {
   X,
 } from 'lucide-react';
 import type { RecommendationCategory, RecommendationItem, RecommendationLink, RecommendationPayload } from './recommendationTypes';
+import { resolveRecommendationCoverUrl } from './recommendationTypes';
 import type { User } from '../../types';
 import { uploadRecommendationCover } from '../../lib/serverService';
 
 const inputCls = 'w-full h-8 rounded-xl px-3 text-[12px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/35 focus:outline-none transition-all border border-[rgba(var(--glass-tint),0.07)] bg-[rgba(var(--shadow-base),0.13)] focus:border-[rgba(var(--theme-accent-rgb),0.34)] focus:shadow-[0_0_0_3px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(var(--glass-tint),0.045)]';
 const numberInputCls = '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 const labelCls = 'block text-[10px] font-medium text-[var(--theme-secondary-text)]/72 mb-1';
-const panelCls = 'rounded-2xl border border-[rgba(var(--glass-tint),0.065)] bg-[rgba(var(--glass-tint),0.022)]';
+const panelCls = 'rounded-2xl border border-[rgba(var(--glass-tint),0.065)] bg-[var(--theme-panel)]';
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const EMPTY_LINK_URLS = ['', '', '', ''];
 
@@ -122,7 +123,7 @@ const CATEGORY_OPTIONS: Array<{
     description: 'Yapım',
     icon: Clapperboard,
     tone: 'hover:border-cyan-300/25 hover:bg-cyan-400/[0.045]',
-    selectedTone: 'border-cyan-300/45 bg-cyan-400/[0.10] shadow-[0_0_0_1px_rgba(103,232,249,0.10),0_8px_18px_rgba(8,145,178,0.10)]',
+    selectedTone: 'border-cyan-300/45 bg-cyan-400/[0.10]',
     iconTone: 'text-cyan-200 bg-cyan-400/10',
   },
   {
@@ -131,7 +132,7 @@ const CATEGORY_OPTIONS: Array<{
     description: 'Sezon',
     icon: Tv,
     tone: 'hover:border-violet-300/25 hover:bg-violet-400/[0.045]',
-    selectedTone: 'border-violet-300/45 bg-violet-400/[0.10] shadow-[0_0_0_1px_rgba(196,181,253,0.10),0_8px_18px_rgba(124,58,237,0.10)]',
+    selectedTone: 'border-violet-300/45 bg-violet-400/[0.10]',
     iconTone: 'text-violet-200 bg-violet-400/10',
   },
   {
@@ -140,7 +141,7 @@ const CATEGORY_OPTIONS: Array<{
     description: 'Parti',
     icon: Gamepad2,
     tone: 'hover:border-emerald-300/25 hover:bg-emerald-400/[0.045]',
-    selectedTone: 'border-emerald-300/45 bg-emerald-400/[0.10] shadow-[0_0_0_1px_rgba(110,231,183,0.10),0_8px_18px_rgba(16,185,129,0.10)]',
+    selectedTone: 'border-emerald-300/45 bg-emerald-400/[0.10]',
     iconTone: 'text-emerald-200 bg-emerald-400/10',
   },
 ];
@@ -233,7 +234,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
   }, [category, fields]);
   const categoryMeta = CATEGORY_META[category];
   const CategoryIcon = categoryMeta.icon;
-  const activeCover = coverPreviewUrl || coverUrl.trim();
+  const activeCover = coverPreviewUrl || resolveRecommendationCoverUrl(coverUrl);
   const isPosterPreview = category === 'film' || category === 'series';
   const authorName = currentUser?.displayName || currentUser?.name || 'Sen';
   const authorAvatar = currentUser?.avatar || '';
@@ -407,6 +408,9 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
         setSubmitStage('uploading');
         finalCoverUrl = await uploadRecommendationCover(serverId, coverFile);
       }
+      if (!finalCoverUrl && isEditMode && initialItem) {
+        finalCoverUrl = (initialItem.coverUrl ?? initialItem.cover_url ?? '').trim() || undefined;
+      }
       setSubmitStage('creating');
       await onSubmit({
         title: cleanTitle,
@@ -503,10 +507,12 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
       <form
         onSubmit={handleSubmit}
         onMouseDown={event => event.stopPropagation()}
-        className="w-full max-w-[1080px] max-h-[92vh] overflow-y-auto xl:overflow-hidden rounded-[24px] border border-[var(--theme-border)]/18 p-3 shadow-sm shadow-black/10"
+        className="w-full max-w-[1080px] max-h-[92vh] overflow-y-auto xl:overflow-hidden rounded-[24px] border border-[var(--theme-border)]/18 p-3"
         style={{
           background:
-            'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), color-mix(in srgb, color-mix(in srgb, rgb(var(--theme-bg-rgb)) 88%, rgb(var(--theme-sidebar-rgb)) 12%) 96%, var(--theme-accent) 4%)',
+            'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.018), rgba(var(--glass-tint),0.006)), var(--theme-bg)',
+          color: 'var(--theme-text)',
+          boxShadow: 'none',
         }}
       >
         <div className="mb-3 flex min-h-9 items-center justify-between gap-3">

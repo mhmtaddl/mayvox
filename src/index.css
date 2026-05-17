@@ -129,7 +129,7 @@ html.lowperf [style*="brand-shimmer"] {
   --mv-font-body: calc(12px * var(--mv-font-scale, 1));
   --mv-font-message: calc(13px * var(--mv-font-scale, 1));
   --mv-font-title: calc(14px * var(--mv-font-scale, 1));
-  --panel-shadow: 0 4px 30px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(var(--glass-tint), 0.02) inset;
+  --panel-shadow: none;
   --app-neutral-bg: #151515;
   --app-neutral-surface: #151515;
   --sidebar-tint-bg: #171d2b;
@@ -1322,10 +1322,7 @@ html {
     linear-gradient(180deg, rgba(var(--glass-tint), 0.07) 0%, rgba(var(--glass-tint), 0.03) 100%),
     var(--surface-floating-bg, var(--surface-elevated, var(--theme-panel)));
   border: var(--surface-card-border, 1px solid var(--theme-border));
-  box-shadow:
-    0 40px 80px -20px rgba(var(--shadow-base), 0.65),
-    0 10px 24px -6px rgba(var(--shadow-base), 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  box-shadow: none;
   backdrop-filter: blur(14px) saturate(125%);
   -webkit-backdrop-filter: blur(14px) saturate(125%);
 }
@@ -1549,7 +1546,7 @@ html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-corner {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border-soft, var(--theme-border));
-  box-shadow: var(--surface-floating-shadow, 0 18px 40px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.04));
+  box-shadow: none;
 }
 html[data-theme-pack="default-dark"] .surface-input,
 html[data-theme-pack="default-dark"] input:not([type="range"]),
@@ -1764,7 +1761,15 @@ html[data-theme-pack="crimson"] .card:hover {
   -webkit-backdrop-filter: blur(24px);
   border: var(--surface-card-border);
   border-radius: 16px;
-  box-shadow: var(--surface-floating-shadow);
+  box-shadow: none;
+}
+
+.fixed.inset-0 > :is([class*="shadow-"], [style*="box-shadow"]),
+.fixed.inset-x-0 > :is([class*="shadow-"], [style*="box-shadow"]),
+.mv-shell-panel[class*="fixed"],
+[role="dialog"],
+[aria-modal="true"] {
+  box-shadow: none !important;
 }
 
 .popup-overlay {

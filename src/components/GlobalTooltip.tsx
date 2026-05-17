@@ -9,7 +9,7 @@ type TooltipState = {
   visible: boolean;
 };
 
-const TOOLTIP_SELECTOR = '[data-tooltip], [title], button[aria-label], [role="button"][aria-label], [aria-label][tabindex]';
+const TOOLTIP_SELECTOR = '[data-tooltip]';
 const SHOW_DELAY_MS = 260;
 const EDGE_PADDING = 12;
 const OFFSET = 12;
@@ -17,10 +17,6 @@ const OFFSET = 12;
 function getTooltipText(el: HTMLElement): string {
   const explicit = el.getAttribute('data-tooltip');
   if (explicit?.trim()) return explicit.trim();
-  const title = el.getAttribute('title');
-  if (title?.trim()) return title.trim();
-  const aria = el.getAttribute('aria-label');
-  if (aria?.trim()) return aria.trim();
   return '';
 }
 
@@ -38,6 +34,8 @@ export default function GlobalTooltip() {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const activeElRef = useRef<HTMLElement | null>(null);
   const originalTitleRef = useRef<string | null>(null);
+  const suppressedTitleElRef = useRef<HTMLElement | null>(null);
+  const suppressedTitleRef = useRef<string | null>(null);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -55,6 +53,32 @@ export default function GlobalTooltip() {
       }
       activeElRef.current = null;
       originalTitleRef.current = null;
+    };
+
+    const restoreSuppressedTitle = () => {
+      const el = suppressedTitleElRef.current;
+      if (el && suppressedTitleRef.current !== null) {
+        el.setAttribute('title', suppressedTitleRef.current);
+      }
+      suppressedTitleElRef.current = null;
+      suppressedTitleRef.current = null;
+    };
+
+    const suppressNativeTitle = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return;
+      const el = target.closest('[title]');
+      if (!(el instanceof HTMLElement)) {
+        restoreSuppressedTitle();
+        return;
+      }
+      if (el === activeElRef.current || el === suppressedTitleElRef.current) return;
+      restoreSuppressedTitle();
+      if (el.matches(TOOLTIP_SELECTOR)) return;
+      const title = el.getAttribute('title');
+      if (!title) return;
+      suppressedTitleElRef.current = el;
+      suppressedTitleRef.current = title;
+      el.removeAttribute('title');
     };
 
     const positionFor = (el: HTMLElement) => {
@@ -112,6 +136,7 @@ export default function GlobalTooltip() {
 
     const onPointerOver = (event: PointerEvent) => {
       if (event.pointerType === 'touch') return;
+      suppressNativeTitle(event.target);
       const el = findTooltipTarget(event.target);
       if (!el || el === activeElRef.current) return;
       showFor(el);
@@ -119,8 +144,12 @@ export default function GlobalTooltip() {
 
     const onPointerOut = (event: PointerEvent) => {
       const active = activeElRef.current;
-      if (!active) return;
+      const suppressed = suppressedTitleElRef.current;
       const next = event.relatedTarget;
+      if (suppressed && !(next instanceof Node && suppressed.contains(next))) {
+        restoreSuppressedTitle();
+      }
+      if (!active) return;
       if (next instanceof Node && active.contains(next)) return;
       hide();
     };
@@ -131,7 +160,10 @@ export default function GlobalTooltip() {
     };
 
     const onFocusOut = () => hide();
-    const onDismiss = () => hide();
+    const onDismiss = () => {
+      hide();
+      restoreSuppressedTitle();
+    };
 
     document.addEventListener('pointerover', onPointerOver, true);
     document.addEventListener('pointerout', onPointerOut, true);
@@ -144,6 +176,7 @@ export default function GlobalTooltip() {
     return () => {
       clearTimer();
       restoreTitle();
+      restoreSuppressedTitle();
       document.removeEventListener('pointerover', onPointerOver, true);
       document.removeEventListener('pointerout', onPointerOut, true);
       document.removeEventListener('focusin', onFocusIn, true);

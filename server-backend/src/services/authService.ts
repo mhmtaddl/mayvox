@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { pool, queryOne } from '../repositories/db';
 import { config } from '../config';
@@ -20,6 +21,8 @@ interface AuthUserRow {
   email: string | null;
   username: string | null;
   password_hash: string;
+  temp_password_hash: string | null;
+  temp_password_expires_at: string | null;
   profile_role: string | null;
   name: string | null;
   display_name: string | null;
@@ -61,6 +64,8 @@ const USER_SELECT = `
     au.email,
     au.username,
     au.password_hash,
+    au.temp_password_hash,
+    au.temp_password_expires_at,
     p.role AS profile_role,
     p.name,
     p.display_name,
@@ -189,10 +194,22 @@ export async function login(identifierRaw: string, password: string) {
   if (!row) throw new AuthError(401, 'Kullanıcı adı/e-posta veya parola hatalı');
 
   const ok = await bcrypt.compare(password, row.password_hash);
-  if (!ok) throw new AuthError(401, 'Kullanıcı adı/e-posta veya parola hatalı');
+  const tempPasswordActive = !!row.temp_password_hash && (
+    !row.temp_password_expires_at || new Date(row.temp_password_expires_at).getTime() > Date.now()
+  );
+  const tempOk = !ok && tempPasswordActive
+    ? await bcrypt.compare(password, row.temp_password_hash as string)
+    : false;
+  if (!ok && !tempOk) throw new AuthError(401, 'Kullanıcı adı/e-posta veya parola hatalı');
 
   const token = signToken(row);
-  return { token, user: toPublicUser(row) };
+  return {
+    token,
+    user: toPublicUser({
+      ...row,
+      must_change_password: tempOk,
+    }),
+  };
 }
 
 export async function me(payload: JwtUserPayload) {
@@ -212,6 +229,123 @@ export async function changePassword(payload: JwtUserPayload, password: string):
     [passwordHash, payload.appUserId, payload.profileId],
   );
   if (!result.rowCount) throw new AuthError(404, 'Kullanıcı bulunamadı');
+  await pool.query(
+    'UPDATE app_users SET temp_password_hash = NULL, temp_password_expires_at = NULL WHERE id = $1 AND profile_id = $2',
+    [payload.appUserId, payload.profileId],
+  );
+  await pool.query(
+    'UPDATE profiles SET must_change_password = false, updated_at = now() WHERE id = $1',
+    [payload.profileId],
+  );
+}
+
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function sendTemporaryPasswordEmail(to: string, displayName: string, temporaryPassword: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY || '';
+  if (!apiKey) throw new AuthError(500, 'E-posta servisi yapılandırılmamış');
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL || 'MAYVOX <noreply@mayvox.com>',
+      reply_to: process.env.RESEND_REPLY_TO || 'support@mayvox.com',
+      to: [to],
+      subject: 'MayVox - Geçici Parolanız',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1a1a2e;color:#e2e8f0;border-radius:12px;">
+        <h2 style="color:#7c3aed;margin-bottom:4px;">MayVox</h2>
+        <p style="color:#94a3b8;font-size:13px;margin-top:0;">mayvox.com</p>
+        <p>Merhaba <strong>${htmlEscape(displayName)}</strong>,</p>
+        <p>Parolanız bir yönetici tarafından sıfırlandı.</p>
+        <div style="background:#2d2d44;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
+          <p style="margin:0 0 6px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;">Geçici Parola</p>
+          <span style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#a78bfa;">${htmlEscape(temporaryPassword)}</span>
+        </div>
+        <p style="color:#94a3b8;font-size:13px;">Bu parola ile giriş yaptıktan sonra yeni bir parola belirlemeniz istenecektir.</p>
+        <hr style="border:none;border-top:1px solid #2d2d44;margin:24px 0;"/>
+        <p style="color:#64748b;font-size:11px;margin:0;">Bu e-postayı siz talep etmediyseniz lütfen yöneticinizle iletişime geçin.</p>
+      </div>`,
+      headers: {
+        'List-Unsubscribe': `<mailto:${process.env.RESEND_REPLY_TO || 'support@mayvox.com'}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    }),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => '');
+    console.error('[admin-reset-password] email failed', { status: resp.status, detail: detail.slice(0, 240) });
+    throw new AuthError(502, 'E-posta gönderilemedi, şifre değiştirilmedi');
+  }
+}
+
+export async function adminResetUserPassword(targetProfileIdRaw: string): Promise<{ email: string }> {
+  const targetProfileId = String(targetProfileIdRaw || '').trim();
+  if (!targetProfileId) throw new AuthError(400, 'Kullanıcı gerekli');
+
+  const temporaryPassword = `MVX-${crypto.randomBytes(6).toString('base64url')}`;
+  const temporaryPasswordHash = await bcrypt.hash(temporaryPassword, 12);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const target = await client.query<{
+      id: string;
+      email: string | null;
+      name: string | null;
+      display_name: string | null;
+      is_primary_admin: boolean | null;
+      role: string | null;
+      app_user_id: string | null;
+    }>(
+      `SELECT p.id, p.email, p.name, p.display_name, p.is_primary_admin, p.role, au.id AS app_user_id
+         FROM profiles p
+         LEFT JOIN app_users au ON au.profile_id = p.id
+        WHERE p.id = $1
+        FOR UPDATE OF p`,
+      [targetProfileId],
+    );
+    const row = target.rows[0];
+    if (!row) throw new AuthError(404, 'Kullanıcı bulunamadı');
+    if (!row.email) throw new AuthError(404, 'Kullanıcının e-posta adresi yok');
+    if (!row.app_user_id) throw new AuthError(404, 'Kullanıcı giriş kaydı bulunamadı');
+    if (row.is_primary_admin || row.role === 'system_admin') {
+      throw new AuthError(403, 'Primary admin parolası buradan sıfırlanamaz');
+    }
+
+    await sendTemporaryPasswordEmail(row.email, row.display_name || row.name || row.email, temporaryPassword);
+    await client.query(
+      `UPDATE app_users
+          SET temp_password_hash = $1,
+              temp_password_expires_at = now() + interval '24 hours'
+        WHERE id = $2`,
+      [temporaryPasswordHash, row.app_user_id],
+    );
+    await client.query(
+      `UPDATE profiles
+          SET must_change_password = false,
+              password_reset_requested = false,
+              updated_at = now()
+        WHERE id = $1`,
+      [targetProfileId],
+    );
+    await client.query('COMMIT');
+    return { email: row.email };
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* no-op */ }
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function verifyCurrentPassword(payload: JwtUserPayload, password: string): Promise<void> {

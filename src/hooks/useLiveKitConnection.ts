@@ -363,6 +363,39 @@ export function useLiveKitConnection({
         });
       };
 
+      const resolveLiveKitUserId = (identity: string): string => {
+        const resolved = identity === currentUserRef.current.name || identity === currentUserRef.current.id
+          ? currentUserRef.current
+          : resolveUserByMemberKey(identity, allUsersRef.current);
+        return resolved?.id ?? identity;
+      };
+
+      const patchRemoteVoiceState = (
+        identity: string,
+        patch: Pick<Partial<User>, 'selfMuted' | 'selfDeafened' | 'isMuted'>,
+      ) => {
+        if (!identity || isSystemMusicIdentity(identity)) return;
+        const userId = resolveLiveKitUserId(identity);
+        if (userId === currentUserRef.current.id || identity === currentUserRef.current.name) return;
+        setAllUsers(prev => {
+          let changed = false;
+          const next = prev.map(user => {
+            if (user.id !== userId && user.name !== identity) return user;
+            const nextUser = { ...user, ...patch };
+            if (
+              nextUser.selfMuted === user.selfMuted &&
+              nextUser.selfDeafened === user.selfDeafened &&
+              nextUser.isMuted === user.isMuted
+            ) {
+              return user;
+            }
+            changed = true;
+            return nextUser;
+          });
+          return changed ? next : prev;
+        });
+      };
+
       let membersUpdatedLogged = false;
       const updateMembers = () => {
         const localIdentity =
@@ -483,6 +516,21 @@ export function useLiveKitConnection({
         }
       });
 
+      const isAudioPublication = (publication: unknown): boolean => {
+        const pub = publication as { source?: unknown; kind?: unknown; track?: { kind?: unknown } } | null;
+        return pub?.source === Track.Source.Microphone || pub?.kind === Track.Kind.Audio || pub?.track?.kind === Track.Kind.Audio;
+      };
+
+      room.on(RoomEvent.TrackMuted, (publication, participant) => {
+        if (!participant?.identity || !isAudioPublication(publication)) return;
+        patchRemoteVoiceState(participant.identity, { selfMuted: true });
+      });
+
+      room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        if (!participant?.identity || !isAudioPublication(publication)) return;
+        patchRemoteVoiceState(participant.identity, { selfMuted: false, isMuted: false });
+      });
+
       // ── AudioPlaybackStatusChanged — autoplay blocked recovery ──
       // Prod Electron'da autoplay-policy flag'i ile default olarak sorunsuz,
       // ama güvenlik ağı: eğer bir sebepten remote audio elementler play()
@@ -551,7 +599,12 @@ export function useLiveKitConnection({
         let localLevel = 0;
         speakers.forEach(p => {
           if (p.isLocal) localLevel = p.audioLevel;
-          else if (!isSystemMusicIdentity(p.identity)) levels[p.identity] = p.audioLevel;
+          else if (!isSystemMusicIdentity(p.identity)) {
+            levels[p.identity] = p.audioLevel;
+            if (p.audioLevel > 0.02) {
+              patchRemoteVoiceState(p.identity, { selfMuted: false, isMuted: false });
+            }
+          }
         });
         localAudioLevelRef.current = localLevel;
         pendingLevels = levels;

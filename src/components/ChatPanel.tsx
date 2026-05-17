@@ -175,7 +175,53 @@ export default function ChatPanel({
   const showMusicToggleButton = musicPanelAvailable && !!onToggleMusicPanel;
 
   return (
-    <div className="absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
+    <div className="mv-chat-panel absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
+      <style>{`
+        @media (max-width: 1023px), (hover: none) and (pointer: coarse) {
+          .mv-chat-panel {
+            bottom: calc(var(--mv-room-chat-bottom-gap) + env(safe-area-inset-bottom));
+          }
+          .mv-chat-panel [data-mv-chat-area="room"] {
+            padding-bottom: 1rem !important;
+          }
+          .mv-chat-panel .mv-chat-composer {
+            min-height: 60px;
+            gap: 0.375rem;
+            padding: 0.625rem;
+          }
+          .mv-chat-panel .mv-chat-touch-button {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            min-height: 40px;
+          }
+          .mv-chat-panel .mv-chat-composer-field {
+            min-height: 40px !important;
+            min-width: 0;
+            padding-top: 10px;
+            padding-bottom: 10px;
+          }
+          .mv-chat-panel .mv-chat-emoji-picker {
+            width: min(280px, calc(100vw - 48px));
+            max-width: calc(100vw - 48px);
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+          }
+          .mv-chat-panel .mv-chat-emoji-button {
+            width: 34px;
+            height: 34px;
+          }
+          .mv-chat-panel .mv-chat-message-actions {
+            opacity: 0.68;
+          }
+          .mv-chat-panel .mv-chat-message-action-button {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+      `}</style>
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Yazi boyutu ayari */}
         <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
@@ -300,19 +346,19 @@ export default function ChatPanel({
                 </div>
                 {/* Message actions */}
                 {!isEd && (
-                  <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1">
+                  <div className="mv-chat-message-actions shrink-0 flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1">
                     {isMe && (
-                      <button onClick={() => onStartEdit(msg)} className="p-1 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle" aria-label="Mesajı düzenle">
+                      <button onClick={() => onStartEdit(msg)} className="mv-chat-message-action-button p-1 rounded hover:bg-[var(--theme-accent)]/10 transition-colors" title="Düzenle" aria-label="Mesajı düzenle">
                         <PencilLine size={10} strokeWidth={2.1} className="text-[rgba(var(--theme-accent-rgb),0.62)]" />
                       </button>
                     )}
                     {!isMe && onReportMessage && !reportedMessageIds?.has(msg.id) && (
-                      <button onClick={() => onReportMessage(msg)} className="p-1 rounded hover:bg-amber-500/10 transition-colors" title="Bildir" aria-label="Mesajı bildir">
+                      <button onClick={() => onReportMessage(msg)} className="mv-chat-message-action-button p-1 rounded hover:bg-amber-500/10 transition-colors" title="Bildir" aria-label="Mesajı bildir">
                         <Flag size={10} strokeWidth={2.1} className="text-amber-300/70" />
                       </button>
                     )}
                     {(isMe || canModerateRoomMessages) && (
-                      <button onClick={() => onDeleteMessage(msg.id)} className="p-1 rounded hover:bg-red-500/10 transition-colors" title="Sil" aria-label="Mesajı sil">
+                      <button onClick={() => onDeleteMessage(msg.id)} className="mv-chat-message-action-button p-1 rounded hover:bg-red-500/10 transition-colors" title="Sil" aria-label="Mesajı sil">
                         <Trash2 size={10} strokeWidth={2.1} className="text-red-400/70" />
                       </button>
                     )}
@@ -332,16 +378,16 @@ export default function ChatPanel({
         )}
 
         {/* Input */}
-        <div className="shrink-0 flex min-h-[53px] items-end gap-1.5 px-3 py-2 relative transition-[border-color,background] duration-150" style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}>
+        <div className="mv-chat-composer shrink-0 flex min-h-[53px] items-end gap-1.5 px-3 py-2 relative transition-[border-color,background] duration-150" style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}>
         {/* Emoji */}
         <div ref={emojiRef} className="relative shrink-0">
-          <button onClick={() => setShowEmojiPicker(p => !p)} className="w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)] opacity-42 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-80 active:scale-[0.96]" title="Emoji">
+          <button onClick={() => setShowEmojiPicker(p => !p)} className="mv-chat-touch-button w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)] opacity-42 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-80 active:scale-[0.96]" title="Emoji">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 mb-1 z-50 p-2 grid grid-cols-8 gap-1 w-[280px] popup-surface">
+            <div className="mv-chat-emoji-picker absolute bottom-full left-0 mb-1 z-50 p-2 grid grid-cols-8 gap-1 w-[280px] popup-surface">
               {EMOJI_LIST.map(e => (
-                <button key={e} onClick={() => { onChatInputChange(chatInput + e); setShowEmojiPicker(false); }} className="w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
+                <button key={e} onClick={() => { onChatInputChange(chatInput + e); setShowEmojiPicker(false); }} className="mv-chat-emoji-button w-8 h-8 flex items-center justify-center rounded hover:bg-[rgba(var(--glass-tint),0.06)] text-[16px] transition-colors">{e}</button>
               ))}
             </div>
           )}
@@ -371,7 +417,7 @@ export default function ChatPanel({
           onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }}
         />
         {/* Gonder */}
-        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 ${chatInput.trim() ? 'text-[var(--theme-accent)] opacity-82 hover:opacity-100 active:scale-[0.96]' : 'text-[var(--theme-secondary-text)] opacity-28'} disabled:cursor-default`}>
+        <button onClick={onSendMessage} disabled={isChatDisabled || !chatInput.trim()} className={`mv-chat-touch-button shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 ${chatInput.trim() ? 'text-[var(--theme-accent)] opacity-82 hover:opacity-100 active:scale-[0.96]' : 'text-[var(--theme-secondary-text)] opacity-28'} disabled:cursor-default`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
         {/* Admin/Mod butonlari */}
@@ -380,13 +426,13 @@ export default function ChatPanel({
             <button
               type="button"
               onClick={onClearAll}
-              className="shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-text)]/54 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+              className="mv-chat-touch-button shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-text)]/54 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
               title="Tüm mesajları sil"
               aria-label="Tüm mesajları sil"
             >
               <Trash2 size={13} strokeWidth={2.1} />
             </button>
-            <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 opacity-90' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:opacity-90 active:scale-[0.96]'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
+            <button onClick={canToggleChatMute ? onToggleChatMuted : undefined} disabled={!canToggleChatMute} className={`mv-chat-touch-button shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 disabled:opacity-40 disabled:cursor-default ${chatMuted ? 'text-orange-400 opacity-90' : 'text-[var(--theme-secondary-text)]/30 hover:text-orange-400 hover:opacity-90 active:scale-[0.96]'}`} title={chatMuted ? 'Sohbeti aç' : 'Sohbeti engelle'}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{chatMuted ? <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m4.93 4.93 14.14 14.14"/></> : <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12h6"/></>}</svg>
             </button>
           </>
@@ -395,7 +441,7 @@ export default function ChatPanel({
           <button
             type="button"
             onClick={onToggleMusicPanel}
-            className={`shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)] ${musicPanelOpen ? 'text-[var(--theme-accent)] opacity-90' : 'text-[var(--theme-secondary-text)]/34 hover:text-[var(--theme-accent)] hover:opacity-90'}`}
+            className={`mv-chat-touch-button shrink-0 w-8 h-8 flex items-center justify-center transition-[color,opacity,transform] duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)] ${musicPanelOpen ? 'text-[var(--theme-accent)] opacity-90' : 'text-[var(--theme-secondary-text)]/34 hover:text-[var(--theme-accent)] hover:opacity-90'}`}
             aria-label={musicPanelOpen ? 'MAYVox Music panelini kapat' : 'MAYVox Music panelini aç'}
             title="MAYVox Music"
           >
@@ -406,7 +452,7 @@ export default function ChatPanel({
           <button
             type="button"
             onClick={onToggleActivityPanel}
-            className="shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)]/34 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-90 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+            className="mv-chat-touch-button shrink-0 w-8 h-8 flex items-center justify-center text-[var(--theme-secondary-text)]/34 transition-[color,opacity,transform] duration-150 hover:text-[var(--theme-accent)] hover:opacity-90 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
             aria-label="Son olayları aç"
           >
             <History size={13} strokeWidth={2.1} />

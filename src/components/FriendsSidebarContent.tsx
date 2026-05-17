@@ -14,6 +14,7 @@ import { useSharedFavorites } from '../contexts/FavoriteFriendsContext';
 import DeviceBadge from './chat/DeviceBadge';
 import RoleBadge, { getUserRoleBadge } from './RoleBadge';
 import type { User, VoiceChannel } from '../types';
+import type { ServerMember } from '../lib/serverService';
 
 function lastSeenSortValue(user: User): number {
   if (!user.lastSeenAt) return 0;
@@ -27,9 +28,20 @@ function compareByDisplayNameTr(a: User, b: User): number {
   return aName.localeCompare(bName, 'tr', { sensitivity: 'base' });
 }
 
+function getMayvoxStatusDotColor(statusLabel: string): string {
+  if (statusLabel === 'Online' || statusLabel === 'Aktif') return '#34d399';
+  if (statusLabel === 'AFK') return '#a78bfa';
+  if (statusLabel === 'Pasif') return '#eab308';
+  if (statusLabel === 'Dinliyor') return '#f97316';
+  if (statusLabel === 'Sessiz') return 'rgba(var(--theme-secondary-text-rgb, 148, 163, 184), 0.72)';
+  if (statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor') return '#f87171';
+  if (statusLabel === 'Çevrimdışı') return 'rgba(var(--theme-secondary-text-rgb, 148, 163, 184), 0.55)';
+  return 'rgba(var(--theme-secondary-text-rgb, 148, 163, 184), 0.55)';
+}
+
 interface Props {
   variant: 'desktop' | 'mobile';
-  onUserClick: (userId: string, x: number, y: number) => void;
+  onUserClick: (userId: string, x: number, y: number, fallbackUser?: User) => void;
   onDM?: (userId: string) => void;
   // Desktop-specific props
   channels?: VoiceChannel[];
@@ -42,6 +54,9 @@ interface Props {
   isDeafened?: boolean;
   /** Map id→name for "şu anda X sunucusunda" indicator under online friends */
   servers?: { id: string; name: string }[];
+  activeServerName?: string;
+  activeServerMemberCount?: number;
+  serverMembers?: ServerMember[];
 }
 
 export default function FriendsSidebarContent({
@@ -49,6 +64,9 @@ export default function FriendsSidebarContent({
   inviteStatuses = {}, inviteCooldowns = {}, handleInviteUser, handleCancelInvite,
   isMuted: selfMuted, isDeafened: selfDeafened,
   servers = [],
+  activeServerName,
+  activeServerMemberCount,
+  serverMembers = [],
 }: Props) {
   const {
     currentUser, allUsers, friendIds, friendsLoading,
@@ -97,6 +115,21 @@ export default function FriendsSidebarContent({
       }),
     [friendUsers, favoriteIds]
   );
+  const favoriteOnlineUsers = useMemo(
+    () => favoriteUsers.filter(isEffectivelyOnline),
+    [favoriteUsers],
+  );
+  const favoriteOfflineUsers = useMemo(
+    () => favoriteUsers
+      .filter(u => !isEffectivelyOnline(u))
+      .sort((a, b) => {
+        const aLastSeen = lastSeenSortValue(a);
+        const bLastSeen = lastSeenSortValue(b);
+        if (aLastSeen !== bLastSeen) return bLastSeen - aLastSeen;
+        return compareByDisplayNameTr(a, b);
+      }),
+    [favoriteUsers],
+  );
   const onlineRest = useMemo(
     () => onlineUsers.filter(u => !favoriteIds.has(u.id)),
     [onlineUsers, favoriteIds]
@@ -112,12 +145,43 @@ export default function FriendsSidebarContent({
       }),
     [offlineUsers, favoriteIds]
   );
+  const serverMemberUsers = useMemo(() => {
+    return serverMembers
+      .map(member => {
+        const known = allUsers.find(u => u.id === member.userId);
+        if (known) return known;
+        return {
+          id: member.userId,
+          name: member.displayName || member.username || 'Üye',
+          displayName: member.displayName || member.username || 'Üye',
+          firstName: member.firstName || member.displayName || member.username || 'Üye',
+          lastName: member.lastName || '',
+          avatar: member.avatar || '',
+          status: 'offline',
+          statusText: 'Çevrimdışı',
+        } as User;
+      })
+      .sort((a, b) => {
+        const aOnline = isEffectivelyOnline(a);
+        const bOnline = isEffectivelyOnline(b);
+        if (aOnline !== bOnline) return aOnline ? -1 : 1;
+        if (!aOnline && !bOnline) {
+          const aLastSeen = lastSeenSortValue(a);
+          const bLastSeen = lastSeenSortValue(b);
+          if (aLastSeen !== bLastSeen) return bLastSeen - aLastSeen;
+        }
+        return compareByDisplayNameTr(a, b);
+      });
+  }, [allUsers, serverMembers]);
+  const serverOnlineUsers = useMemo(() => serverMemberUsers.filter(isEffectivelyOnline), [serverMemberUsers]);
+  const serverOfflineUsers = useMemo(() => serverMemberUsers.filter(u => !isEffectivelyOnline(u)), [serverMemberUsers]);
 
-  // ── Offline collapse ───────────────────────────────────────────────────
-  const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
-    const saved = localStorage.getItem('offlineUsersExpanded');
-    return saved !== null ? saved === 'true' : false;
+  // ── Collapsible favorites ──────────────────────────────────────────────
+  const [favoritesExpanded, setFavoritesExpanded] = useState<boolean>(() => {
+    const saved = localStorage.getItem('favoriteUsersExpanded');
+    return saved !== null ? saved === 'true' : true;
   });
+  const [activePanel, setActivePanel] = useState<'friends' | 'server'>('friends');
 
   // ── Friend context menu (favorite + DM) ────────────────────────────────
   const [friendMenu, setFriendMenu] = useState<{ userId: string; userName: string; x: number; y: number } | null>(null);
@@ -132,27 +196,27 @@ export default function FriendsSidebarContent({
   const isDesktop = variant === 'desktop';
 
   // ── Render user item ───────────────────────────────────────────────────
-  const renderOnlineUser = (user: User) => {
+  const renderOnlineUser = (user: User, options?: { serverPanel?: boolean }) => {
+    const isServerPanel = options?.serverPanel === true;
     const isMe = user.id === currentUser.id;
     const publicName = getPublicDisplayName(user);
-    const userServerName = !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
+    const userServerName = !isServerPanel && !isMe && user.serverId ? serverNameMap.get(user.serverId) : null;
     const voicePresent = isVoicePresent(user);
     const displayStatusText = voicePresent && user.statusText === 'Çevrimdışı' ? 'Online' : user.statusText;
     const statusLabel = displayStatusText && displayStatusText !== 'Aktif' ? displayStatusText : 'Online';
     const isDefaultOnline = statusLabel === 'Online';
-    const statusLineText = isDefaultOnline ? userServerName : statusLabel;
-    const statusDotColor =
-      statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor' ? '#ef4444'
-      : statusLabel === 'AFK' || statusLabel === 'Pasif' ? '#f59e0b'
-      : '#22c55e';
+    const statusLineText = isServerPanel
+      ? (user.gameActivity || statusLabel)
+      : (isDefaultOnline ? userServerName : statusLabel);
+    const statusDotColor = getMayvoxStatusDotColor(statusLabel);
 
     return (
       <div
         key={user.id}
         className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-2.5 px-2.5 py-2 rounded-lg'} transition-colors duration-150 group hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
-        onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
+        onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY, user); }}
         onContextMenu={(e) => {
-          if (isMe) return;
+          if (isMe || !friendIds.has(user.id)) return;
           e.preventDefault();
           setFriendMenu({ userId: user.id, userName: publicName, x: e.clientX, y: e.clientY });
         }}
@@ -173,7 +237,6 @@ export default function FriendsSidebarContent({
           >
             <AvatarContent avatar={user.avatar} statusText={displayStatusText} firstName={user.displayName || user.firstName} name={publicName} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
           </div>
-          <DeviceBadge platform={user.platform} size={isDesktop ? 11 : 13} className="absolute -top-0.5 -right-0.5" />
         </div>
           ); })()}
         <div className="flex flex-col flex-1 min-w-0">
@@ -184,6 +247,7 @@ export default function FriendsSidebarContent({
             <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
           </div>
           <div className="mv-font-meta flex items-center gap-1.5 mt-[2px] min-w-0 overflow-hidden whitespace-nowrap text-[11px] leading-[13px] font-medium text-[var(--theme-secondary-text)]/75">
+            <DeviceBadge platform={user.platform} size={isDesktop ? 10 : 12} className="shrink-0 opacity-85" />
             <span className="inline-flex items-center shrink-0" title={statusLabel} aria-label={statusLabel}>
               <span
                 className="h-1.5 w-1.5 rounded-full shrink-0"
@@ -198,13 +262,13 @@ export default function FriendsSidebarContent({
               </span>
             )}
           </div>
-          {user.gameActivity && (
+          {!isServerPanel && user.gameActivity && (
             <div className="mv-font-caption mt-[1px] min-w-0 overflow-hidden whitespace-nowrap text-[10.5px] leading-[13px] font-medium text-[var(--theme-text)]/62 flex items-center gap-1">
               <Gamepad2 size={10} className="shrink-0 text-[var(--theme-accent)]/75" strokeWidth={2.2} />
               <span className="block truncate min-w-0">{user.gameActivity}</span>
             </div>
           )}
-          {!user.gameActivity && <div className="h-[1px]" />}
+          {(isServerPanel || !user.gameActivity) && <div className="h-[1px]" />}
         </div>
         {/* Desktop invite button */}
         {isDesktop && handleInviteUser && (() => {
@@ -252,16 +316,15 @@ export default function FriendsSidebarContent({
   };
 
   const renderOfflineUser = (user: User) => {
-    const fav = isFavorite(user.id);
     const isMe = user.id === currentUser.id;
     const publicName = getPublicDisplayName(user);
     return (
     <div
       key={user.id}
       className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
-      onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY); }}
+      onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY, user); }}
       onContextMenu={(e) => {
-        if (isMe) return;
+        if (isMe || !friendIds.has(user.id)) return;
         e.preventDefault();
         setFriendMenu({ userId: user.id, userName: publicName, x: e.clientX, y: e.clientY });
       }}
@@ -283,7 +346,6 @@ export default function FriendsSidebarContent({
         >
           <AvatarContent avatar={user.avatar} statusText="Çevrimdışı" firstName={user.displayName || user.firstName} name={publicName} imgClassName={`w-full h-full object-cover ${isDesktop ? '' : 'grayscale'}`} letterClassName="text-[10px] font-bold text-[var(--theme-accent)]" />
         </div>
-        {isDesktop && <DeviceBadge platform={user.platform} size={12} className="absolute -bottom-0.5 -right-0.5" />}
       </div>
         ); })()}
       <div className="min-w-0 flex-1">
@@ -292,10 +354,11 @@ export default function FriendsSidebarContent({
             {publicName}
           </span>
           <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
-          {fav && <Star size={8} className="shrink-0 text-amber-400/50 fill-amber-400/50" />}
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-          <span className="text-[9px] text-[var(--theme-secondary-text)]/35 leading-[14px] mt-[3px] block truncate">
+          <span className="mt-[3px] flex min-w-0 items-center gap-1.5 text-[9px] leading-[14px] text-[var(--theme-secondary-text)]/35">
+            <DeviceBadge platform={user.platform} size={isDesktop ? 10 : 12} className="shrink-0 opacity-70" />
+            <span className="truncate">
             {(() => {
               const d = new Date(user.lastSeenAt);
               const now = new Date();
@@ -306,6 +369,7 @@ export default function FriendsSidebarContent({
               if (d.toDateString() === yesterday.toDateString()) return `Dün ${time}`;
               return `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'short' })} ${time}`;
             })()}
+            </span>
           </span>
         )}
       </div>
@@ -316,16 +380,51 @@ export default function FriendsSidebarContent({
   // ── Group section header ───────────────────────────────────────────────
   // Not: Bekleyen arkadaşlık istekleri artık SADECE bildirim çanında görünür
   // (NotificationBell'de inline Kabul/Reddet). Sağ panelde duplicate gösterim yok.
-  const hasContent = friendUsers.length > 0;
+  const hasContent = activePanel === 'server' ? serverMemberUsers.length > 0 : friendUsers.length > 0;
 
   return (
     <>
       <div className={`mv-density-sidebar-content flex-1 overflow-y-auto ${isDesktop ? 'px-3 py-4' : 'p-4'} space-y-4 custom-scrollbar`}>
+        {isDesktop && activeServerName && (
+          <div className="mb-1 flex gap-3 border-b border-[rgba(var(--glass-tint),0.055)]">
+            <button
+              type="button"
+              onClick={() => setActivePanel('friends')}
+              className={`relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'friends' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
+            >
+              Arkadaşlar <span className="ml-1 text-[9px] text-[var(--theme-accent)]/52">{friendUsers.length}</span>
+              {activePanel === 'friends' && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--theme-accent)]/75" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePanel('server')}
+              className={`relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'server' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
+            >
+              {activeServerName} <span className="ml-1 text-[9px] text-[var(--theme-accent)]/52">{activeServerMemberCount ?? serverMemberUsers.length}</span>
+              {activePanel === 'server' && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--theme-accent)]/75" />}
+            </button>
+          </div>
+        )}
         {friendsLoading ? (
           <div className="flex flex-col items-center justify-center py-12 px-4">
             <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin mb-3" />
             <p className="text-[11px] text-[var(--theme-secondary-text)]/40">Yükleniyor...</p>
           </div>
+        ) : activePanel === 'server' ? (
+          serverMemberUsers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <UserPlus size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
+              <p className="text-[11px] font-medium text-[var(--theme-secondary-text)] opacity-50 mb-1">Sunucu üyesi bulunamadı.</p>
+            </div>
+          ) : (
+            <>
+              {serverOnlineUsers.length > 0 && <div className="space-y-1">{serverOnlineUsers.map(user => renderOnlineUser(user, { serverPanel: true }))}</div>}
+              {serverOnlineUsers.length > 0 && serverOfflineUsers.length > 0 && (
+                <div className="mx-2 my-2 h-px bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.10)] to-transparent" />
+              )}
+              {serverOfflineUsers.length > 0 && <div className="space-y-1">{serverOfflineUsers.map(renderOfflineUser)}</div>}
+            </>
+          )
         ) : !hasContent ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
             <UserPlus size={28} className="text-[var(--theme-secondary-text)] opacity-15 mb-3" />
@@ -336,48 +435,57 @@ export default function FriendsSidebarContent({
           {/* Favorites — online + offline (favorite olan herkes burada) */}
           {favoriteUsers.length > 0 && (
             <div>
-              <div className="flex items-center gap-2 mb-2 px-2">
-                <Star size={9} className="text-amber-400/45 fill-amber-400/45" />
-                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/60 uppercase tracking-[0.10em]">Favoriler</span>
-                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-amber-400/8 text-[10px] leading-none font-semibold text-amber-300/55 tabular-nums">{favoriteUsers.length}</span>
-              </div>
-              <div className="space-y-1">
-                {favoriteUsers.map(u => isEffectivelyOnline(u) ? renderOnlineUser(u) : renderOfflineUser(u))}
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !favoritesExpanded;
+                  setFavoritesExpanded(next);
+                  localStorage.setItem('favoriteUsersExpanded', String(next));
+                }}
+                className="flex w-full items-center gap-2 mb-1.5 px-2 hover:opacity-85 transition-opacity cursor-pointer"
+              >
+                <span className="text-[9.5px] font-semibold text-amber-300/56 tracking-[0.035em]">
+                  Favoriler <span className="text-amber-300/40 tabular-nums">· {favoriteUsers.length}</span>
+                </span>
+                <span className="flex-1" />
+                <ChevronDown size={10} className={`text-amber-300/28 transition-transform duration-200 ${favoritesExpanded ? '' : '-rotate-90'}`} />
+              </button>
+              {favoritesExpanded && (
+                <>
+                  <div className="space-y-1">
+                    {favoriteOnlineUsers.map(renderOnlineUser)}
+                  </div>
+                  {favoriteOfflineUsers.length > 0 && (
+                    <div className="mt-2">
+                      {favoriteOnlineUsers.length > 0 && (
+                        <div className="mx-2 mb-2 h-px bg-gradient-to-r from-transparent via-amber-300/12 to-transparent" />
+                      )}
+                      <div className="space-y-1">
+                        {favoriteOfflineUsers.map(renderOfflineUser)}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           {/* 3. Online friends (non-favorites) */}
           {onlineRest.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2 px-2">
-                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/62 uppercase tracking-[0.10em]">Çevrimiçi</span>
-                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-emerald-500/8 text-[10px] leading-none font-semibold text-emerald-300/58 tabular-nums">{onlineRest.length}</span>
-              </div>
-              <div className="space-y-1">
-                {onlineRest.map(renderOnlineUser)}
-              </div>
+            <div className="space-y-1">
+              {onlineRest.map(renderOnlineUser)}
             </div>
           )}
 
           {/* 4. Offline — favori olmayan offline üyeler */}
           {offlineRest.length > 0 && (
             <div>
-              <button
-                type="button"
-                onClick={() => { const next = !offlineExpanded; setOfflineExpanded(next); localStorage.setItem('offlineUsersExpanded', String(next)); }}
-                className="flex items-center gap-2 w-full mb-2 px-2 hover:opacity-85 transition-opacity cursor-pointer"
-              >
-                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/56 uppercase tracking-[0.10em]">Çevrimdışı</span>
-                <span className="h-4 min-w-4 px-[5px] inline-flex items-center justify-center rounded-full bg-[rgba(var(--glass-tint),0.035)] text-[10px] leading-none font-semibold text-[var(--theme-secondary-text)]/48 tabular-nums">{offlineRest.length}</span>
-                <span className="flex-1" />
-                <ChevronDown size={11} className={`text-[var(--theme-secondary-text)]/32 transition-transform duration-200 ${offlineExpanded ? '' : '-rotate-90'}`} />
-              </button>
-              {offlineExpanded && (
-                <div className="space-y-1">
-                  {offlineRest.map(renderOfflineUser)}
-                </div>
+              {onlineRest.length > 0 && (
+                <div className="mx-2 mb-2 h-px bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.10)] to-transparent" />
               )}
+              <div className="space-y-1">
+                {offlineRest.map(renderOfflineUser)}
+              </div>
             </div>
           )}
 

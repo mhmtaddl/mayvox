@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, ShieldCheck, Save, RotateCcw, BarChart3 } from 'lucide-react';
+import { X, Settings, Users, Mail, ShieldOff, Crown, Shield, ScrollText, Gauge, ShieldCheck, Save, RotateCcw, BarChart3, Radio } from 'lucide-react';
 import type { AutoModActions } from './settings/AutoModerationTab';
 import type { GeneralActions } from './settings/GeneralTab';
 import {
@@ -16,9 +16,10 @@ import MembersTab from './settings/MembersTab';
 import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
 import AutoModerationTab from './settings/AutoModerationTab';
 import InsightsTab from './settings/InsightsTab';
+import StreamsTab from './settings/StreamsTab';
 import { displaySlug } from './settings/shared';
 
-type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'audit' | 'insights';
+type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'streams' | 'audit' | 'insights';
 // Legacy initialTab input:
 //   'bans'     → 'members' tab (banlı kullanıcılar MembersTab altında)
 //   'requests' → 'invites' tab + Başvurular sub-section
@@ -196,6 +197,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
       badge: (canManageServer && pendingRequestCount > 0) ? pendingRequestCount : undefined,
     }] : []),
     ...(canKickMembers ? [{ id: 'automod' as Tab, label: 'Oto-Mod', icon: <ShieldCheck size={13} /> }] : []),
+    ...(canKickMembers ? [{ id: 'streams' as Tab, label: 'Yayınlar', icon: <Radio size={13} /> }] : []),
     ...(canManageServer ? [{ id: 'audit' as Tab, label: 'Denetim', icon: <ScrollText size={13} /> }] : []),
     ...(canViewInsights ? [{ id: 'insights' as Tab, label: 'İçgörüler', icon: <BarChart3 size={13} /> }] : []),
   ];
@@ -347,6 +349,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               onStateChange={setAutomodState}
               actionsRef={automodActionsRef}
             />
+          )}
+          {tab === 'streams' && canKickMembers && (
+            <StreamsTab serverId={serverId} showToast={showToast} />
           )}
           {tab === 'audit' && canManageServer && (
             <DenetimTab serverId={serverId} onOpenAutomod={() => setTab('automod')} />

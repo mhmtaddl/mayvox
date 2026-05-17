@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { AppError } from './serverService';
 import { notifyClient } from './realtimeNotify';
 import { assignSystemRoleToMember, type SystemRoleName } from './roleSeedService';
-import { getServerAccessContext, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
+import { getServerAccessContext, assertServerMember, assertCapability, invalidateAccessContext, invalidateAccessContextForServer } from './accessContextService';
 import { CAPABILITIES, type Capability } from '../capabilities';
 import {
   ROLE_PRIORITY, canManageRole, canAssignRole, isKnownRole, normalizeRole,
@@ -54,7 +54,7 @@ async function requireRole(serverId: string, userId: string, minRole: SystemRole
 export async function updateServer(
   serverId: string,
   userId: string,
-  updates: { name?: string; description?: string; slug?: string; isPublic?: boolean; joinPolicy?: string; capacity?: number; motto?: string; avatarUrl?: string }
+  updates: { name?: string; description?: string; serverRules?: string; server_rules?: string; slug?: string; isPublic?: boolean; joinPolicy?: string; capacity?: number; motto?: string; avatarUrl?: string }
 ): Promise<void> {
   const ctx = await getServerAccessContext(userId, serverId);
   assertCapability(ctx, CAPABILITIES.SERVER_MANAGE, 'Sunucu ayarlarını değiştirmek için yetkin yok');
@@ -71,6 +71,8 @@ export async function updateServer(
     sets.push(`name = $${idx++}`); vals.push(n);
   }
   if (updates.description !== undefined) { sets.push(`description = $${idx++}`); vals.push(updates.description); }
+  const serverRules = updates.serverRules ?? updates.server_rules;
+  if (serverRules !== undefined) { sets.push(`server_rules = $${idx++}`); vals.push(String(serverRules).trim().slice(0, 2000)); }
   if (updates.slug !== undefined) {
     const existing = await queryOne<{ id: string }>('SELECT id FROM servers WHERE slug = $1 AND id != $2', [updates.slug, serverId]);
     if (existing) throw new AppError(409, 'Bu adres zaten kullanılıyor');
@@ -100,7 +102,12 @@ export async function updateServer(
 // ── Üyeler ──
 
 export async function listMembers(serverId: string, userId: string): Promise<MemberResponse[]> {
-  await requireRole(serverId, userId, 'mod');
+  const ctx = await getServerAccessContext(userId, serverId);
+  assertServerMember(ctx);
+  const canViewModerationState =
+    ctx.capabilities.includes(CAPABILITIES.MEMBER_MUTE)
+    || ctx.capabilities.includes(CAPABILITIES.MEMBER_TIMEOUT)
+    || ctx.capabilities.includes(CAPABILITIES.MEMBER_CHAT_BAN);
   const rows = await queryMany<ServerMember>(
     'SELECT * FROM server_members WHERE server_id = $1 ORDER BY joined_at ASC',
     [serverId]
@@ -142,13 +149,13 @@ export async function listMembers(serverId: string, userId: string): Promise<Mem
       avatar: p?.avatar ?? null,
       role: r.role,
       joinedAt: r.joined_at,
-      isMuted: r.is_muted,
-      voiceMutedUntil: voiceMuteActive ? r.voice_mute_expires_at : null,
-      voiceMutedBy: voiceMuteActive ? r.voice_muted_by : null,
-      timeoutUntil: timeoutActive ? r.timeout_until : null,
-      timeoutSetBy: timeoutActive ? r.timeout_set_by : null,
-      chatBannedUntil: chatBanActive ? r.chat_ban_expires_at : null,
-      chatBannedBy: chatBanActive ? r.chat_banned_by : null,
+      isMuted: canViewModerationState ? r.is_muted : false,
+      voiceMutedUntil: canViewModerationState && voiceMuteActive ? r.voice_mute_expires_at : null,
+      voiceMutedBy: canViewModerationState && voiceMuteActive ? r.voice_muted_by : null,
+      timeoutUntil: canViewModerationState && timeoutActive ? r.timeout_until : null,
+      timeoutSetBy: canViewModerationState && timeoutActive ? r.timeout_set_by : null,
+      chatBannedUntil: canViewModerationState && chatBanActive ? r.chat_ban_expires_at : null,
+      chatBannedBy: canViewModerationState && chatBanActive ? r.chat_banned_by : null,
     };
   });
 }

@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electronApp', {
 // process listesi bu köprü üzerinden ASLA geçmez.
 contextBridge.exposeInMainWorld('electronGame', {
   setEnabled: (enabled) => ipcRenderer.send('game:set-enabled', !!enabled),
+  getCurrent: () => ipcRenderer.invoke('game:get-current'),
+  listProcesses: () => ipcRenderer.invoke('game:list-processes'),
+  getCustomGames: () => ipcRenderer.invoke('game:get-custom-games'),
+  addCustomGame: (entry) => ipcRenderer.invoke('game:add-custom-game', entry),
+  removeCustomGame: (processName) => ipcRenderer.invoke('game:remove-custom-game', processName),
   onActivity: (cb) => {
     ipcRenderer.removeAllListeners('game:activity-changed');
     ipcRenderer.on('game:activity-changed', (_e, info) => cb(info || { name: null }));
@@ -108,6 +113,11 @@ contextBridge.exposeInMainWorld('electronWindow', {
     ipcRenderer.on('window:state', (_e, data) => cb(data));
   },
   offState: () => ipcRenderer.removeAllListeners('window:state'),
+  onResizePercent: (cb) => {
+    ipcRenderer.removeAllListeners('window:resize-percent');
+    ipcRenderer.on('window:resize-percent', (_e, data) => cb(data));
+  },
+  offResizePercent: () => ipcRenderer.removeAllListeners('window:resize-percent'),
 });
 
 // Global PTT (bas-konuş) API — main process uiohook-napi kullanır,

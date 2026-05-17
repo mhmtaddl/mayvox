@@ -300,6 +300,32 @@ export const deleteUser = async (userId: string) => {
     : { data: null, error: new Error(body.error || 'Kullanıcı silinemedi') };
 };
 
+export const adminResetUserPassword = async (userId: string) => {
+  const token = getAuthToken();
+  if (!SERVER_API_URL || !token) return { data: null, error: new Error('Oturum bulunamadı') };
+  const res = await fetch(`${SERVER_API_URL}/auth/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: 'POST',
+    headers: authHeader(),
+  });
+  const body = await res.json().catch(() => ({}));
+  return res.ok
+    ? { data: body.data as { email: string }, error: null }
+    : { data: null, error: new Error(body.error || 'Şifre sıfırlanamadı') };
+};
+
+export const dismissUserPasswordResetRequest = async (userId: string) => {
+  const token = getAuthToken();
+  if (!SERVER_API_URL || !token) return { data: null, error: new Error('Oturum bulunamadı') };
+  const res = await fetch(`${SERVER_API_URL}/auth/users/${encodeURIComponent(userId)}/password-reset-request`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  });
+  const body = await res.json().catch(() => ({}));
+  return res.ok
+    ? { data: body.data ?? null, error: null }
+    : { data: null, error: new Error(body.error || 'Şifre sıfırlama isteği kapatılamadı') };
+};
+
 // VERIFY CHANNEL PASSWORD (server-side bcrypt karşılaştırma)
 export const verifyChannelPassword = async (channelId: string, password: string) => {
   const token = getAuthToken();

@@ -13,6 +13,7 @@ export interface Server {
   slug: string;
   avatarUrl?: string;
   description: string;
+  serverRules?: string | null;
   memberCount: number;
   activeCount: number;
   capacity: number;
@@ -41,6 +42,7 @@ export interface DiscoverServer {
   slug?: string;
   avatarUrl?: string;
   description: string;
+  serverRules?: string | null;
   motto?: string;
   memberCount: number;
   activeCount?: number;
@@ -693,7 +695,7 @@ export async function getServerDetails(serverId: string): Promise<Server> {
   return apiFetch<Server>(`/servers/${serverId}`);
 }
 
-export async function updateServer(serverId: string, updates: Partial<{ name: string; description: string; slug: string; isPublic: boolean; joinPolicy: string; capacity: number }>): Promise<void> {
+export async function updateServer(serverId: string, updates: Partial<{ name: string; description: string; serverRules: string; slug: string; isPublic: boolean; joinPolicy: string; capacity: number }>): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/servers/${serverId}`, { method: 'PATCH', body: JSON.stringify(updates) });
 }
 
@@ -908,6 +910,109 @@ export async function updateModerationConfig(
   });
 }
 
+export type StreamPlatform = 'twitch' | 'youtube' | 'kick';
+
+export interface ServerStreamLink {
+  id: string;
+  serverId: string;
+  userId: string;
+  platform: StreamPlatform;
+  channelUrl: string;
+  channelName: string;
+  enabled: boolean;
+  liveStatus: boolean;
+  liveTitle: string | null;
+  viewerCount: number | null;
+  thumbnailUrl: string | null;
+  liveStartedAt: string | null;
+  lastLiveTitle: string | null;
+  lastLiveStartedAt: string | null;
+  lastLiveEndedAt: string | null;
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  displayName: string | null;
+  username: string | null;
+  avatar: string | null;
+}
+
+export interface ServerStreamLinkPayload {
+  platform: StreamPlatform;
+  channelUrl: string;
+  channelName?: string;
+  enabled?: boolean;
+}
+
+export interface TwitchStreamIntegration {
+  platform: 'twitch';
+  enabled: boolean;
+  clientId: string;
+  hasClientSecret: boolean;
+  updatedAt: string | null;
+}
+
+export interface YoutubeStreamIntegration {
+  platform: 'youtube';
+  enabled: boolean;
+  apiKey: string;
+  hasApiKey: boolean;
+  updatedAt: string | null;
+}
+
+export async function listServerStreamLinks(serverId: string): Promise<ServerStreamLink[]> {
+  return apiFetch<ServerStreamLink[]>(`/servers/${serverId}/streams`);
+}
+
+export async function createServerStreamLink(serverId: string, payload: ServerStreamLinkPayload): Promise<ServerStreamLink> {
+  return apiFetch<ServerStreamLink>(`/servers/${serverId}/streams`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateServerStreamLink(
+  serverId: string,
+  streamId: string,
+  payload: Partial<Pick<ServerStreamLinkPayload, 'channelUrl' | 'channelName' | 'enabled'>>,
+): Promise<ServerStreamLink> {
+  return apiFetch<ServerStreamLink>(`/servers/${serverId}/streams/${streamId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteServerStreamLink(serverId: string, streamId: string): Promise<void> {
+  await apiFetch<void>(`/servers/${serverId}/streams/${streamId}`, { method: 'DELETE' });
+}
+
+export async function getTwitchStreamIntegration(serverId: string): Promise<TwitchStreamIntegration> {
+  return apiFetch<TwitchStreamIntegration>(`/servers/${serverId}/streams/twitch-integration`);
+}
+
+export async function updateTwitchStreamIntegration(
+  serverId: string,
+  payload: { clientId: string; clientSecret: string; enabled?: boolean },
+): Promise<TwitchStreamIntegration> {
+  return apiFetch<TwitchStreamIntegration>(`/servers/${serverId}/streams/twitch-integration`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getYoutubeStreamIntegration(serverId: string): Promise<YoutubeStreamIntegration> {
+  return apiFetch<YoutubeStreamIntegration>(`/servers/${serverId}/streams/youtube-integration`);
+}
+
+export async function updateYoutubeStreamIntegration(
+  serverId: string,
+  payload: { apiKey: string; enabled?: boolean },
+): Promise<YoutubeStreamIntegration> {
+  return apiFetch<YoutubeStreamIntegration>(`/servers/${serverId}/streams/youtube-integration`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Moderation stats (Faz 4 telemetry) ──
 export type ModStatRange = '5m' | '1h' | '24h';
 export interface ModerationStats {
@@ -972,10 +1077,21 @@ export interface RecommendationItem {
   createdBy: string;
   createdByName: string | null;
   createdByAvatar: string | null;
+  createdByDisplayName?: string | null;
+  createdByUsername?: string | null;
+  authorDisplayName?: string | null;
+  authorName?: string | null;
+  authorUsername?: string | null;
+  displayName?: string | null;
+  nickname?: string | null;
+  fullName?: string | null;
+  name?: string | null;
+  username?: string | null;
   title: string;
   category: RecommendationCategory;
   description: string | null;
   coverUrl: string | null;
+  cover_url?: string | null;
   tags: string[];
   links: RecommendationLink[];
   metadata: Record<string, unknown>;

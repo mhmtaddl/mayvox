@@ -10,7 +10,6 @@ import {
   PhoneOff,
   AudioLines,
   Home,
-  Undo2,
   Download,
   AlertCircle,
   Info,
@@ -30,7 +29,9 @@ import { useUI } from '../../../contexts/UIContext';
 import { useAppState } from '../../../contexts/AppStateContext';
 import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
-import { FORCE_MOBILE } from '../constants';
+import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../constants';
+import { getDefaultChannelIconName } from '../../../lib/channelIcon';
+import { getChannelIconColor, getDefaultChannelIconColor } from '../../../lib/channelIconColor';
 import { searchServers, type Server, type DiscoverServer } from '../../../lib/serverService';
 import { formatRemainingFromIso } from '../../../lib/formatTimeout';
 
@@ -748,13 +749,32 @@ export default function DesktopDock({
             {!activeChannel && <div className="w-px h-6 bg-[rgba(var(--glass-tint),0.08)] mx-0.5" />}
             {/* Return (Undo2) daima Home'un solunda — "geri" aksiyonu sol, "ileri" sağ. */}
             {showReturn && onReturnToRoom && (
-              <button
-                onClick={onReturnToRoom}
-                className="mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic bg-[rgba(var(--glass-tint),0.07)] text-[var(--theme-secondary-text)] border border-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.12)] transition-colors duration-150"
-                title="Sohbet odasına dön"
-              >
-                <Undo2 size={16} />
-              </button>
+              (() => {
+                const activeRoom = channels.find(channel => channel.id === activeChannel);
+                const mode = getRoomModeConfig(activeRoom?.mode).id;
+                const iconName = activeRoom?.iconName ?? getDefaultChannelIconName(mode);
+                const RoomIcon = channelIconComponents[iconName] || roomModeIcons[mode] || Gamepad2;
+                const iconColor = activeRoom?.id
+                  ? (activeRoom.iconColor ?? getChannelIconColor(activeRoom.id, activeRoom.mode || mode))
+                  : getDefaultChannelIconColor(mode);
+                const roomName = activeRoom?.name || 'Sohbet odası';
+                return (
+                  <button
+                    onClick={onReturnToRoom}
+                    className="mv-dock-square-btn w-10 h-10 rounded-xl flex items-center justify-center btn-haptic border transition-colors duration-150"
+                    style={{
+                      '--channel-icon-color': iconColor,
+                      color: 'var(--channel-icon-color)',
+                      background: `${iconColor}14`,
+                      borderColor: `${iconColor}38`,
+                    } as React.CSSProperties}
+                    title={`${roomName} odasına dön`}
+                    aria-label={`${roomName} odasına dön`}
+                  >
+                    <RoomIcon size={16} style={{ color: 'var(--channel-icon-color)' }} />
+                  </button>
+                );
+              })()
             )}
             {showHome && onGoHome && (
               <button

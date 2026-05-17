@@ -27,6 +27,7 @@ import TimeoutPicker from './TimeoutPicker';
 import PunishmentHistoryModal from './PunishmentHistoryModal';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
 import BannedUsersSection from './BannedUsersSection';
+import { sendRealtimeBroadcast } from '../../../lib/chatService';
 
 interface Props {
   serverId: string;
@@ -188,7 +189,15 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
     if (member.role === nextRole) return;
     const dn = memberDisplayName(member);
     void act(
-      () => changeRole(serverId, member.userId, nextRole),
+      async () => {
+        await changeRole(serverId, member.userId, nextRole);
+        sendRealtimeBroadcast('server-member-role', {
+          action: 'role_changed',
+          serverId,
+          userId: member.userId,
+          role: nextRole,
+        });
+      },
       `${dn} → ${ROLE_LABEL[nextRole]}`,
       member.userId,
     );

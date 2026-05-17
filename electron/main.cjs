@@ -11,7 +11,14 @@ const { autoUpdater } = require("electron-updater");
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const path = require("path");
 const fs = require("fs");
-const { setupGameDetection, getDetector } = require("./game-detection.cjs");
+const {
+  setupGameDetection,
+  getDetector,
+  listOpenGameProcesses,
+  getCustomGames,
+  addCustomGame,
+  removeCustomGame,
+} = require("./game-detection.cjs");
 const { setupOverlayWindow, getOverlayManager } = require("./overlay-window.cjs");
 
 // ── Global PTT Hook (uiohook-napi) ────────────────────────────────────────────
@@ -269,9 +276,17 @@ app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256");
 app.commandLine.appendSwitch("enable-features", "EnableBFCache");
 
 // Pencere boyutu ve konumunu localStorage'a benzer şekilde kaydet
+const DEFAULT_MAIN_WINDOW_BOUNDS = { width: 1492, height: 900, x: undefined, y: undefined };
+
+function getWindowSizePercent(bounds) {
+  const widthRatio = bounds.width / DEFAULT_MAIN_WINDOW_BOUNDS.width;
+  const heightRatio = bounds.height / DEFAULT_MAIN_WINDOW_BOUNDS.height;
+  return Math.max(50, Math.min(200, Math.round(((widthRatio + heightRatio) / 2) * 100)));
+}
+
 const Store = (() => {
   const storeFile = path.join(app.getPath("userData"), "window-state.json");
-  const defaults = { width: 1400, height: 900, x: undefined, y: undefined };
+  const defaults = DEFAULT_MAIN_WINDOW_BOUNDS;
   let data = defaults;
   try { data = { ...defaults, ...JSON.parse(fs.readFileSync(storeFile, "utf8")) }; } catch {}
   return {
@@ -305,6 +320,11 @@ function getTrayIcon() {
 }
 
 function setupTray(win) {
+  if (tray) {
+    try { tray.destroy(); } catch {}
+    tray = null;
+  }
+
   tray = new Tray(getTrayIcon());
   tray.setToolTip("MAYVOX");
 
@@ -443,9 +463,12 @@ function fadeSplashOut(splash) {
 /** Main window fade-in */
 function fadeMainIn(win) {
   if (!win || win.isDestroyed()) return Promise.resolve();
-  try { win.setOpacity(0); } catch {}
+  // Büyük, transparent frameless pencereye opacity animasyonu uygulamak Windows'ta
+  // ilk açılışta compositor takılmasına neden olabiliyor. Ana pencere zaten
+  // ready-to-show sonrası açıldığı için direkt göstermek daha stabil.
+  try { win.setOpacity(1); } catch {}
   win.show();
-  return animateOpacity(win, 0, 1, 10, 16);
+  return Promise.resolve();
 }
 
 function createMainWindow(boundsOverride = null) {
@@ -518,6 +541,18 @@ function createMainWindow(boundsOverride = null) {
   win.on("blur", sendWinState);
   win.webContents.on("did-finish-load", sendWinState);
 
+  const sendResizePercent = () => {
+    try {
+      if (authWindowMode || win.isMaximized() || win.isMinimized()) return;
+      const bounds = win.getBounds();
+      win.webContents.send("window:resize-percent", {
+        percent: getWindowSizePercent(bounds),
+        width: bounds.width,
+        height: bounds.height,
+      });
+    } catch { /* no-op */ }
+  };
+
   const saveState = () => {
     if (authWindowMode) return;
     if (win.isMaximized() || win.isMinimized()) return;
@@ -525,7 +560,10 @@ function createMainWindow(boundsOverride = null) {
     const [x, y] = win.getPosition();
     Store.set({ width, height, x, y });
   };
-  win.on("resize", saveState);
+  win.on("resize", () => {
+    saveState();
+    sendResizePercent();
+  });
   win.on("move", saveState);
 
   win.on("close", (e) => {
@@ -784,6 +822,13 @@ function initAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
+  const prereleaseChannel = app.getVersion().match(/^\d+\.\d+\.\d+-([0-9A-Za-z-]+)(?:\.\d+)?$/)?.[1];
+  if (prereleaseChannel === "test") {
+    autoUpdater.channel = "test";
+    autoUpdater.allowPrerelease = true;
+    logger.info("[updater] test channel enabled");
+  }
+
   // Busy flag'i her terminal event'te sıfırla — hangi listener önce gelirse
   // gelsin, sonraki check/download guard'ı tutarlı davransın.
   autoUpdater.on("update-available",     () => { isUpdaterBusy = false; });
@@ -889,9 +934,57 @@ ipcMain.on("game:set-enabled", (_event, enabled) => {
   }
 });
 
+ipcMain.handle("game:get-current", async () => {
+  try {
+    const det = getDetector();
+    if (!det) return { name: null };
+    const name = await det.requestCurrent();
+    return { name: name || null };
+  } catch (err) {
+    logger.warn?.("[game] get-current hatası: " + (err?.message || err));
+    return { name: null };
+  }
+});
+
 // ── Ses Overlay — renderer IPC ──────────────────────────────────────────────
 // applySettings: toggle / position / size / clickThrough değişimlerinde.
 // update: participant snapshot'ı (throttled renderer tarafında).
+ipcMain.handle("game:list-processes", async () => {
+  try {
+    return { processes: await listOpenGameProcesses() };
+  } catch (err) {
+    logger.warn?.("[game] list-processes hatası: " + (err?.message || err));
+    return { processes: [] };
+  }
+});
+
+ipcMain.handle("game:get-custom-games", async () => {
+  try {
+    return { games: getCustomGames() };
+  } catch (err) {
+    logger.warn?.("[game] get-custom-games hatası: " + (err?.message || err));
+    return { games: [] };
+  }
+});
+
+ipcMain.handle("game:add-custom-game", async (_event, entry) => {
+  try {
+    return { games: addCustomGame(entry) };
+  } catch (err) {
+    logger.warn?.("[game] add-custom-game hatası: " + (err?.message || err));
+    return { games: getCustomGames(), error: err?.message || "Oyun eklenemedi" };
+  }
+});
+
+ipcMain.handle("game:remove-custom-game", async (_event, processName) => {
+  try {
+    return { games: removeCustomGame(processName) };
+  } catch (err) {
+    logger.warn?.("[game] remove-custom-game hatası: " + (err?.message || err));
+    return { games: getCustomGames(), error: err?.message || "Oyun kaldırılamadı" };
+  }
+});
+
 ipcMain.on("overlay:apply-settings", (_event, settings) => {
   try {
     const mgr = getOverlayManager();
@@ -926,7 +1019,7 @@ function runStartupUpdateGate(splash, mainWin, onResolve, onDownloadingChange) {
 
   initAutoUpdater();
 
-  const TIMEOUT_MS = 7000;
+  const TIMEOUT_MS = 3500;
   let resolved = false;
   let downloading = false;
 
@@ -978,6 +1071,12 @@ function runStartupUpdateGate(splash, mainWin, onResolve, onDownloadingChange) {
       const diagPath = path.join(process.env.TEMP || app.getPath('temp'), 'MAYVOX-update-debug.log');
       fs.appendFileSync(diagPath, `[${new Date().toISOString()}] startup-gate quitAndInstall\n`, 'utf8');
     } catch {}
+    // quitAndInstall öncesi UAC/onay aşamasını kullanıcıya kısa ve net göster.
+    setTimeout(() => {
+      if (isQuitting) return;
+      splashSend('splash:update-mode', 'approval');
+      splashSend('splash:update-progress', 100);
+    }, 700);
     // quitAndInstall garantili çağrı — setTimeout içinde çift quit guard'ı.
     setTimeout(() => {
       if (isQuitting) return;
@@ -990,7 +1089,7 @@ function runStartupUpdateGate(splash, mainWin, onResolve, onDownloadingChange) {
         setDownloading(false);
         onResolve('error');
       }
-    }, 300); // Splash'ın installing animasyonunu gösterebilmesi için küçük delay.
+    }, 1500); // Installing + approval ikonlarının anlaşılması için kısa delay.
   };
   const onError         = (err)  => {
     logger.warn("[startup-gate] error → normal açılışa düşülüyor", { message: err?.message });

@@ -90,3 +90,37 @@ export function resolveRecommendationCoverUrl(url: string | null | undefined): s
   if (value.startsWith('/')) return apiBase ? `${apiBase}${value}` : value;
   return value;
 }
+
+export function recommendationCoverUrlFromItem(item: { coverUrl?: string | null; cover_url?: string | null }): string {
+  return resolveRecommendationCoverUrl(item.coverUrl ?? item.cover_url);
+}
+
+export function getRecommendationAuthorDisplayName(item: {
+  displayName?: string | null;
+  createdByDisplayName?: string | null;
+  authorDisplayName?: string | null;
+  nickname?: string | null;
+  fullName?: string | null;
+  name?: string | null;
+  createdByName?: string | null;
+  authorName?: string | null;
+  username?: string | null;
+  createdByUsername?: string | null;
+  authorUsername?: string | null;
+}): string {
+  const value = [
+    item.displayName,
+    item.createdByDisplayName,
+    item.authorDisplayName,
+    item.nickname,
+    item.fullName,
+    item.name,
+    item.authorName,
+    item.createdByName,
+    item.username,
+    item.createdByUsername,
+    item.authorUsername,
+  ].find(candidate => typeof candidate === 'string' && candidate.trim());
+
+  return value?.trim() || 'Kullanıcı';
+}

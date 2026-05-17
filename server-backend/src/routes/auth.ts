@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { changeEmail, changePassword, login, me, register, updateProfile, verifyCurrentPassword, AuthError } from '../services/authService';
+import { adminResetUserPassword, changeEmail, changePassword, login, me, register, updateProfile, verifyCurrentPassword, AuthError } from '../services/authService';
 import { authMiddleware } from '../middleware/auth';
 import { execute, pool, queryMany, queryOne } from '../repositories/db';
 import * as channelService from '../services/channelService';
@@ -376,8 +376,12 @@ router.delete('/users/:id', authMiddleware as any, async (req: Request, res: Res
     if (actorId === targetId) throw new AuthError(400, 'Kendi hesabını buradan silemezsin');
 
     await client.query('BEGIN');
-    const target = await client.query<{ id: string; is_primary_admin: boolean | null; role: string | null }>(
-      'SELECT id, is_primary_admin, role FROM profiles WHERE id = $1 FOR UPDATE',
+    const target = await client.query<{ id: string; is_primary_admin: boolean | null; role: string | null; auth_user_id: string | null }>(
+      `SELECT p.id, p.is_primary_admin, p.role, au.auth_user_id
+         FROM profiles p
+         LEFT JOIN app_users au ON au.profile_id = p.id
+        WHERE p.id = $1
+        FOR UPDATE OF p`,
       [targetId],
     );
     if (!target.rows[0]) throw new AuthError(404, 'Kullanıcı bulunamadı');
@@ -422,7 +426,10 @@ router.delete('/users/:id', authMiddleware as any, async (req: Request, res: Res
     await client.query('DELETE FROM voice_sessions WHERE user_id = $1', [targetId]);
 
     const deleted = await client.query('DELETE FROM profiles WHERE id = $1', [targetId]);
-    await client.query('DELETE FROM auth.users WHERE id = $1', [targetId]);
+    const authUsersTable = await client.query<{ table_name: string | null }>("SELECT to_regclass('auth.users')::text AS table_name");
+    if (authUsersTable.rows[0]?.table_name) {
+      await client.query('DELETE FROM auth.users WHERE id::text = $1 OR id::text = $2', [target.rows[0].auth_user_id || '', targetId]);
+    }
     await client.query('COMMIT');
     res.json({ data: { ok: (deleted.rowCount || 0) > 0 }, error: null });
   } catch (err) {
@@ -430,6 +437,36 @@ router.delete('/users/:id', authMiddleware as any, async (req: Request, res: Res
     handleAuthError(res, err);
   } finally {
     client.release();
+  }
+});
+
+router.post('/users/:id/reset-password', authMiddleware as any, async (req: Request, res: Response) => {
+  try {
+    const actorId = (req as any).profileId as string;
+    const targetId = req.params.id as string;
+    await requireProfileAdmin(actorId, true);
+    if (actorId === targetId) throw new AuthError(400, 'Kendi parolanı buradan sıfırlayamazsın');
+    const data = await adminResetUserPassword(targetId);
+    res.json({ data, error: null });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+router.delete('/users/:id/password-reset-request', authMiddleware as any, async (req: Request, res: Response) => {
+  try {
+    await requireProfileAdmin((req as any).profileId as string);
+    const updated = await execute(
+      `UPDATE profiles
+          SET password_reset_requested = false,
+              updated_at = now()
+        WHERE id = $1`,
+      [req.params.id],
+    );
+    if (!updated) throw new AuthError(404, 'Kullanıcı bulunamadı');
+    res.json({ data: { ok: true }, error: null });
+  } catch (err) {
+    handleAuthError(res, err);
   }
 });
 
@@ -573,7 +610,12 @@ router.patch('/friends/requests/:id', authMiddleware as any, async (req: Request
     const request = await client.query<{ id: string; sender_id: string; receiver_id: string; status: string; created_at: string }>(
       `UPDATE friend_requests
           SET status = $2, updated_at = now()
-        WHERE id::text = $1 AND receiver_id = $3 AND status = 'pending'
+        WHERE id::text = $1
+          AND status = 'pending'
+          AND (
+            receiver_id = $3
+            OR ($2 = 'rejected' AND sender_id = $3)
+          )
         RETURNING id, sender_id, receiver_id, status, created_at`,
       [req.params.id, status, userId],
     );

@@ -25,6 +25,7 @@ import { queryOne } from '../repositories/db';
 import * as recommendationService from '../services/recommendationService';
 import * as roomActivityService from '../services/roomActivityService';
 import * as roomMusicService from '../services/roomMusicService';
+import * as streamLinkService from '../services/streamLinkService';
 
 const router = Router();
 
@@ -268,6 +269,100 @@ router.get('/:id/moderation-config', async (req: Request, res: Response) => {
   try {
     const cfg = await getServerModerationConfig(req.params.id as string, (req as any).userId);
     res.json(cfg);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/streams — sunucu ana sayfası yayın bağlantıları */
+router.get('/:id/streams', async (req: Request, res: Response) => {
+  try {
+    const items = await streamLinkService.listServerStreamLinks(
+      req.params.id as string,
+      (req as any).userId as string,
+    );
+    res.json(items);
+  } catch (err) { handleError(res, err); }
+});
+
+/** POST /servers/:id/streams — moderator+ yayın bağlantısı ekler/günceller */
+router.post('/:id/streams', async (req: Request, res: Response) => {
+  try {
+    const item = await streamLinkService.createServerStreamLink(
+      req.params.id as string,
+      (req as any).userId as string,
+      req.body || {},
+    );
+    res.status(201).json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/streams/twitch-integration — moderator+ Twitch API ayarı */
+router.get('/:id/streams/twitch-integration', async (req: Request, res: Response) => {
+  try {
+    const integration = await streamLinkService.getTwitchIntegration(
+      req.params.id as string,
+      (req as any).userId as string,
+    );
+    res.json(integration);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PUT /servers/:id/streams/twitch-integration — moderator+ Twitch API ayarı kaydeder */
+router.put('/:id/streams/twitch-integration', async (req: Request, res: Response) => {
+  try {
+    const integration = await streamLinkService.updateTwitchIntegration(
+      req.params.id as string,
+      (req as any).userId as string,
+      req.body || {},
+    );
+    res.json(integration);
+  } catch (err) { handleError(res, err); }
+});
+
+/** GET /servers/:id/streams/youtube-integration — moderator+ YouTube API ayarı */
+router.get('/:id/streams/youtube-integration', async (req: Request, res: Response) => {
+  try {
+    const integration = await streamLinkService.getYoutubeIntegration(
+      req.params.id as string,
+      (req as any).userId as string,
+    );
+    res.json(integration);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PUT /servers/:id/streams/youtube-integration — moderator+ YouTube API ayarı kaydeder */
+router.put('/:id/streams/youtube-integration', async (req: Request, res: Response) => {
+  try {
+    const integration = await streamLinkService.updateYoutubeIntegration(
+      req.params.id as string,
+      (req as any).userId as string,
+      req.body || {},
+    );
+    res.json(integration);
+  } catch (err) { handleError(res, err); }
+});
+
+/** PATCH /servers/:id/streams/:streamId — moderator+ yayın bağlantısı düzenler */
+router.patch('/:id/streams/:streamId', async (req: Request, res: Response) => {
+  try {
+    const item = await streamLinkService.updateServerStreamLink(
+      req.params.id as string,
+      (req as any).userId as string,
+      req.params.streamId as string,
+      req.body || {},
+    );
+    res.json(item);
+  } catch (err) { handleError(res, err); }
+});
+
+/** DELETE /servers/:id/streams/:streamId — moderator+ yayın bağlantısı siler */
+router.delete('/:id/streams/:streamId', async (req: Request, res: Response) => {
+  try {
+    await streamLinkService.deleteServerStreamLink(
+      req.params.id as string,
+      (req as any).userId as string,
+      req.params.streamId as string,
+    );
+    res.status(204).end();
   } catch (err) { handleError(res, err); }
 });
 

@@ -65,6 +65,7 @@ function toResponse(server: Server, activity?: ServerActivity | null, role?: str
     slug: server.slug,
     avatarUrl: server.avatar_url,
     description: server.description,
+    serverRules: server.server_rules ?? '',
     memberCount: activity?.member_count ?? 0,
     activeCount: activity?.active_count ?? 0,
     capacity: server.capacity,

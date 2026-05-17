@@ -247,6 +247,7 @@ function GhostButton({
 export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete, onLeave, showToast, onStateChange, actionsRef }: Props) {
   const [name, setName] = useState(server.name);
   const [desc, setDesc] = useState(server.description);
+  const [serverRules, setServerRules] = useState(server.serverRules ?? '');
   const [motto, setMotto] = useState(server.motto ?? '');
   const [isPublic, setIsPublic] = useState(server.isPublic ?? true);
   const [joinPolicy, setJoinPolicy] = useState(server.joinPolicy ?? 'invite_only');
@@ -313,6 +314,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
 
   const dirty = name !== server.name
     || desc !== server.description
+    || serverRules !== (server.serverRules ?? '')
     || motto !== (server.motto ?? '')
     || isPublic !== (server.isPublic ?? true)
     || joinPolicy !== (server.joinPolicy ?? 'invite_only');
@@ -324,13 +326,14 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     if (dirty) return;
     setName(server.name);
     setDesc(server.description);
+    setServerRules(server.serverRules ?? '');
     setMotto(server.motto ?? '');
     setIsPublic(server.isPublic ?? true);
     setJoinPolicy(server.joinPolicy ?? 'invite_only');
     // `dirty` comparison sırasında mevcut state okunur — effect zamanlama güvenli:
     // eğer dirty true ise hiçbir setState çağrılmaz, infinite loop riski yok.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server.name, server.description, server.motto, server.isPublic, server.joinPolicy]);
+  }, [server.name, server.description, server.serverRules, server.motto, server.isPublic, server.joinPolicy]);
 
   const save = async () => {
     if (!dirty || saving) return;
@@ -340,6 +343,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     const u: Record<string, unknown> = {};
     if (trimmedName !== server.name) u.name = trimmedName;
     if (desc !== server.description) u.description = desc.trim();
+    if (serverRules !== (server.serverRules ?? '')) u.serverRules = serverRules.trim();
     if (motto !== (server.motto ?? '')) u.motto = motto.trim();
     if (isPublic !== (server.isPublic ?? true)) u.isPublic = isPublic;
     if (joinPolicy !== (server.joinPolicy ?? 'invite_only')) u.joinPolicy = joinPolicy;
@@ -349,6 +353,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   const handleReset = () => {
     setName(server.name);
     setDesc(server.description);
+    setServerRules(server.serverRules ?? '');
     setMotto(server.motto ?? '');
     setIsPublic(server.isPublic ?? true);
     setJoinPolicy(server.joinPolicy ?? 'invite_only');
@@ -515,6 +520,23 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                 placeholder="Kısa açıklama"
                 className={INPUT_BASE}
               />
+            </Field>
+          </div>
+          <div className="md:col-span-12">
+            <Field label="Sunucu Kuralları" locked={!canEdit}>
+              <div>
+                <textarea
+                  value={serverRules}
+                  onChange={e => setServerRules(e.target.value.slice(0, 2000))}
+                  maxLength={2000}
+                  disabled={!canEdit}
+                  placeholder="Örn: Saygılı ol, spam yapma, ses odalarında rahatsızlık verme..."
+                  className={`${INPUT_BASE} min-h-[86px] resize-y py-2 leading-5`}
+                />
+                <p className="mt-1.5 text-[10px] leading-snug text-[var(--theme-secondary-text)]/48">
+                  Ana sayfadaki Kurallar kartında gösterilir. Her satırı ayrı bir kural olarak yazabilirsin.
+                </p>
+              </div>
             </Field>
           </div>
         </div>

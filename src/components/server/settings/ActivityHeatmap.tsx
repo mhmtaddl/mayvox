@@ -32,10 +32,14 @@ function ActivityHeatmapInner({ peakHours }: Props) {
     let max = 0;
     let total = 0;
     for (const c of peakHours) {
-      m.set(`${c.dow}:${c.hour}`, c);
-      if (c.totalSec > max) max = c.totalSec;
-      daily.set(c.dow, (daily.get(c.dow) || 0) + c.totalSec);
-      total += c.totalSec;
+      const dow = Number(c.dow);
+      const hour = Number(c.hour);
+      const totalSec = Number(c.totalSec) || 0;
+      const normalized = { ...c, dow, hour, totalSec };
+      m.set(`${dow}:${hour}`, normalized);
+      if (totalSec > max) max = totalSec;
+      daily.set(dow, (daily.get(dow) || 0) + totalSec);
+      total += totalSec;
     }
     return { cellMap: m, maxSec: max, dailyTotals: daily, totalTracked: total };
   }, [peakHours]);

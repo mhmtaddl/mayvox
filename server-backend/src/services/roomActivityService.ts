@@ -54,20 +54,17 @@ async function displayName(userId?: string | null): Promise<string> {
   if (!userId) return 'Bir yetkili';
   const row = await queryOne<{
     display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
     name: string | null;
     email: string | null;
   }>(
-    `SELECT display_name, first_name, last_name, name, email
+    `SELECT display_name, name, email
        FROM profiles
       WHERE id::text = $1`,
     [userId],
   );
 
   if (!row) return 'Kullanıcı';
-  const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
-  return row.display_name || fullName || row.name || row.email || 'Kullanıcı';
+  return row.display_name || row.name || 'Kullanıcı';
 }
 
 function labelFor(type: RoomActivityType, actor: string, target: string): string {

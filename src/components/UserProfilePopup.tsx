@@ -516,37 +516,6 @@ export default function UserProfilePopup({
                   {formatLastSeen(user.lastSeenAt)}
                 </span>
               )}
-              {!isMe && !rel && (
-                <button
-                  onClick={() => triggerConfirm('send')}
-                  className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/12 transition-colors"
-                  style={{ background: 'rgba(var(--theme-accent-rgb), 0.06)' }}
-                  title="Arkadaş isteği gönder"
-                >
-                  <UserPlus size={11} strokeWidth={2.2} />
-                </button>
-              )}
-              {!isMe && rel === 'outgoing' && (
-                <button
-                  onClick={() => triggerConfirm('cancel')}
-                  className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full text-blue-400 hover:bg-blue-500/15 transition-colors"
-                  style={{ background: 'rgba(59, 130, 246, 0.08)' }}
-                  title="İsteği iptal et"
-                >
-                  <Clock size={11} strokeWidth={2.2} />
-                </button>
-              )}
-              {!isMe && rel === 'incoming' && (
-                <button
-                  onClick={handleAccept}
-                  disabled={actionLoading}
-                  className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full text-emerald-400 hover:bg-emerald-500/15 transition-colors disabled:opacity-30"
-                  style={{ background: 'rgba(16, 185, 129, 0.08)' }}
-                  title="Kabul et"
-                >
-                  <Check size={11} strokeWidth={2.6} />
-                </button>
-              )}
             </div>
 
             {/* Hairline separator — action satırı'ndan önce */}
@@ -557,48 +526,79 @@ export default function UserProfilePopup({
             {/* Quick actions — ikon satırı */}
             {!isMe && (
               <div className="flex items-center justify-center gap-0.5">
+                {!rel && (
+                  <button
+                    onClick={() => triggerConfirm('send')}
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-[var(--theme-accent)]/75 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
+                    title="Arkadaş isteği gönder"
+                  >
+                    <UserPlus size={13} strokeWidth={2} />
+                  </button>
+                )}
+
+                {rel === 'outgoing' && (
+                  <button
+                    onClick={() => triggerConfirm('cancel')}
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-blue-400/75 hover:text-blue-400 hover:bg-blue-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
+                    title="İsteği iptal et"
+                  >
+                    <Clock size={13} strokeWidth={2} />
+                  </button>
+                )}
+
+                {rel === 'incoming' && (
+                  <button
+                    onClick={handleAccept}
+                    disabled={actionLoading}
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-emerald-400/80 hover:text-emerald-400 hover:bg-emerald-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-30"
+                    title="Kabul et"
+                  >
+                    <Check size={13} strokeWidth={2.4} />
+                  </button>
+                )}
+
                 {rel === 'friend' && (
                   <button
                     onClick={async () => {
                       const ok = await toggleFavorite(user.id);
                       if (ok) setToastMsg(userIsFav ? `${userName} favorilerden çıkarıldı` : `${userName} favorilere eklendi`);
                     }}
-                    className={`w-9 h-9 rounded-[10px] flex items-center justify-center transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] ${
+                    className={`w-8 h-8 rounded-[9px] flex items-center justify-center transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] ${
                       userIsFav
                         ? 'text-amber-400 hover:bg-amber-400/10'
                         : 'text-[var(--theme-secondary-text)]/60 hover:text-amber-400 hover:bg-amber-400/8'
                     }`}
                     title={userIsFav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
                   >
-                    <Star size={15} strokeWidth={2} className={userIsFav ? 'fill-current' : ''} />
+                    <Star size={13} strokeWidth={2} className={userIsFav ? 'fill-current' : ''} />
                   </button>
                 )}
 
                 {canDirectMessage && (
                   <button
                     onClick={() => { onDM?.(user.id); onClose(); }}
-                    className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-[var(--theme-accent)]/70 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
                     title="Mesaj gönder"
                   >
-                    <MessageSquare size={15} strokeWidth={2} />
+                    <MessageSquare size={13} strokeWidth={2} />
                   </button>
                 )}
 
                 {canInvite && (
                   inviteStatus === 'pending' ? (
-                    <span className="w-9 h-9 rounded-[10px] flex items-center justify-center text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" /></span>
+                    <span className="w-8 h-8 rounded-[9px] flex items-center justify-center text-blue-400"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /></span>
                   ) : inviteStatus === 'accepted' ? (
-                    <span className="w-9 h-9 rounded-[10px] flex items-center justify-center text-emerald-400"><Check size={15} strokeWidth={2.4} /></span>
+                    <span className="w-8 h-8 rounded-[9px] flex items-center justify-center text-emerald-400"><Check size={13} strokeWidth={2.4} /></span>
                   ) : inviteStatus === 'rejected' ? (
-                    <span className="w-9 h-9 rounded-[10px] flex items-center justify-center text-red-400"><X size={15} strokeWidth={2.4} /></span>
+                    <span className="w-8 h-8 rounded-[9px] flex items-center justify-center text-red-400"><X size={13} strokeWidth={2.4} /></span>
                   ) : (
                     <button
                       disabled={onCooldown}
                       onClick={() => onInvite?.()}
-                      className="w-9 h-9 rounded-[10px] flex items-center justify-center text-emerald-400/75 hover:text-emerald-400 hover:bg-emerald-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-25 disabled:cursor-default"
+                      className="w-8 h-8 rounded-[9px] flex items-center justify-center text-emerald-400/75 hover:text-emerald-400 hover:bg-emerald-500/10 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-25 disabled:cursor-default"
                       title={onCooldown ? `${cooldownRemaining}s` : 'Odaya davet et'}
                     >
-                      <PhoneCall size={15} strokeWidth={2} />
+                      <PhoneCall size={13} strokeWidth={2} />
                     </button>
                   )
                 )}
@@ -606,20 +606,20 @@ export default function UserProfilePopup({
                 {rel === 'friend' && (
                   <button
                     onClick={() => triggerConfirm('remove')}
-                    className="w-9 h-9 rounded-[10px] flex items-center justify-center text-red-400/60 hover:text-red-400 hover:bg-red-500/8 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-red-400/60 hover:text-red-400 hover:bg-red-500/8 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98]"
                     title="Arkadaşı sil"
                   >
-                    <UserMinus size={15} strokeWidth={2} />
+                    <UserMinus size={13} strokeWidth={2} />
                   </button>
                 )}
                 {rel === 'incoming' && (
                   <button
                     onClick={handleReject}
                     disabled={actionLoading}
-                    className="w-9 h-9 rounded-[10px] flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/8 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-30"
+                    className="w-8 h-8 rounded-[9px] flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/8 transition-[color,background-color,transform] duration-150 ease-out hover:scale-[1.04] active:scale-[0.98] disabled:opacity-30"
                     title="Reddet"
                   >
-                    <X size={15} strokeWidth={2.2} />
+                    <X size={13} strokeWidth={2.2} />
                   </button>
                 )}
               </div>

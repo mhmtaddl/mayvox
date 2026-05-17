@@ -47,7 +47,7 @@ export const FLOOD_DEFAULTS: FloodConfig = {
   enabled: true,
   cooldownMs: 3000,
   limit: 5,
-  windowMs: 5000,
+  windowMs: 6000,
 };
 
 // Strict range — UI slider/input limit'leri ile aynı.

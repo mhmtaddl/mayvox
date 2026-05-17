@@ -25,6 +25,13 @@ export const config = {
   livekitUrl:       process.env.LIVEKIT_URL || '',
   livekitApiKey:    process.env.LIVEKIT_API_KEY || '',
   livekitApiSecret: process.env.LIVEKIT_API_SECRET || '',
+  // Twitch Helix stream status integration. Empty means stream links are stored
+  // but live status refresh is skipped.
+  twitchClientId: process.env.TWITCH_CLIENT_ID || '',
+  twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || '',
+  // YouTube Data API v3 key. Empty means YouTube links are stored but live
+  // status refresh is skipped unless a server-specific key is configured.
+  youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
 };
 
 if (!config.databaseUrl) throw new Error('DATABASE_URL is required');

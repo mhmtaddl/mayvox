@@ -11,6 +11,7 @@ export interface Server {
   short_name: string;
   slug: string;
   description: string;
+  server_rules: string | null;
   avatar_url: string | null;
   invite_code: string;
   level: number;
@@ -127,6 +128,7 @@ export interface ServerResponse {
   slug: string;
   avatarUrl: string | null;
   description: string;
+  serverRules?: string | null;
   memberCount: number;
   activeCount: number;
   capacity: number;

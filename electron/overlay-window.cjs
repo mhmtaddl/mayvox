@@ -24,6 +24,7 @@ const SIZE_PRESETS = {
 };
 // Ekran kenarından boşluk — overlay "HUD öğesi" gibi dursun, çerçeveye yapışmasın
 const EDGE_MARGIN = 24;
+const TOPMOST_REASSERT_INTERVAL_MS = 1_500;
 
 // Anchor → (0..1 fraction, sol-üst kökenli) — types.ts ile simetrik.
 const ANCHOR_FRAC = {
@@ -71,6 +72,8 @@ class OverlayWindowManager {
     this.ready = false;
     this.lastSnapshot = null;
     this.destroyTimer = null;
+    this.topmostTimer = null;
+    this.displayHandlers = null;
     this.currentSettings = {
       enabled: false,
       position: 'top-right',
@@ -104,15 +107,70 @@ class OverlayWindowManager {
         this.destroyTimer = null;
       }
       if (!this.win.isVisible()) {
-        try { this.win.show(); } catch {}
-        try { this.win.setAlwaysOnTop(true, 'screen-saver'); } catch {}
+        try {
+          if (typeof this.win.showInactive === 'function') this.win.showInactive();
+          else this.win.show();
+        } catch {}
       }
+      this._refreshTopmost();
+      this._startTopmostKeeper();
     } else {
       if (this.win.isVisible()) {
         try { this.win.hide(); } catch {}
       }
+      this._stopTopmostKeeper();
       this._scheduleDestroyIfIdle();
     }
+  }
+
+  _refreshTopmost() {
+    if (!this.win || this.win.isDestroyed()) return;
+    if (!this.win.isVisible()) return;
+    try { this.win.setAlwaysOnTop(true, 'screen-saver'); } catch {}
+    try { this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
+    try { this.win.moveTop(); } catch {}
+  }
+
+  _startTopmostKeeper() {
+    if (this.topmostTimer) return;
+    this.topmostTimer = setInterval(() => this._refreshTopmost(), TOPMOST_REASSERT_INTERVAL_MS);
+    try { this.topmostTimer.unref?.(); } catch {}
+  }
+
+  _stopTopmostKeeper() {
+    if (!this.topmostTimer) return;
+    clearInterval(this.topmostTimer);
+    this.topmostTimer = null;
+  }
+
+  _bindDisplayHandlers() {
+    if (this.displayHandlers) return;
+    const syncBounds = () => {
+      if (!this.win || this.win.isDestroyed()) return;
+      const bounds = computeBounds(this.currentSettings.position, this.currentSettings.size);
+      try { this.win.setBounds(bounds); } catch {}
+      this._refreshTopmost();
+    };
+    this.displayHandlers = {
+      'display-metrics-changed': syncBounds,
+      'display-added': syncBounds,
+      'display-removed': syncBounds,
+    };
+    try {
+      for (const [eventName, handler] of Object.entries(this.displayHandlers)) {
+        screen.on(eventName, handler);
+      }
+    } catch {}
+  }
+
+  _unbindDisplayHandlers() {
+    if (!this.displayHandlers) return;
+    try {
+      for (const [eventName, handler] of Object.entries(this.displayHandlers)) {
+        screen.removeListener(eventName, handler);
+      }
+    } catch {}
+    this.displayHandlers = null;
   }
 
   _ensureWindow() {
@@ -150,6 +208,7 @@ class OverlayWindowManager {
     // Always-on-top seviyesi: 'screen-saver' pek çok fullscreen windowed oyunda kalır.
     try { win.setAlwaysOnTop(true, 'screen-saver'); } catch {}
     try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
+    this._bindDisplayHandlers();
 
     const target = this.isDev
       ? 'http://127.0.0.1:3000/overlay.html'
@@ -166,7 +225,11 @@ class OverlayWindowManager {
       this.logger.info?.('[overlay] did-finish-load, snapshot flush');
     });
 
-    win.on('closed', () => { this.win = null; this.ready = false; });
+    win.on('closed', () => {
+      this._stopTopmostKeeper();
+      this.win = null;
+      this.ready = false;
+    });
     this.win = win;
     return win;
   }
@@ -181,6 +244,7 @@ class OverlayWindowManager {
         return;
       }
       if (!this.win || this.win.isDestroyed()) return;
+      this._stopTopmostKeeper();
       try { this.win.destroy(); } catch {}
       this.win = null;
       this.ready = false;
@@ -223,6 +287,7 @@ class OverlayWindowManager {
     const win = this._ensureWindow();
     try { win.setBounds(bounds); } catch {}
     try { win.setIgnoreMouseEvents(!!this.currentSettings.clickThrough, { forward: true }); } catch {}
+    this._refreshTopmost();
     this._syncVisibility();
     this._flushSnapshot();
   }
@@ -270,10 +335,13 @@ class OverlayWindowManager {
   }
 
   hide() {
+    this._stopTopmostKeeper();
     if (this.win && !this.win.isDestroyed()) this.win.hide();
   }
 
   dispose() {
+    this._stopTopmostKeeper();
+    this._unbindDisplayHandlers();
     if (this.destroyTimer) {
       clearTimeout(this.destroyTimer);
       this.destroyTimer = null;

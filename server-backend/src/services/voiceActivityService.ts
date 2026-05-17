@@ -284,6 +284,9 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
   }));
 
   // 3) Peak Hours (heatmap)
+  // Range filtresi UI'daki 7/30/90 gün seçimleriyle aynı davranmalı.
+  // Materialized view 90 günlük agregedir; range değişince aynı görünmesin diye
+  // bu bölümde doğrudan voice_sessions üzerinden seçilen aralığı agreg ediyoruz.
   const peakRes = await queryMany<{
     dow: number;
     hour: number;
@@ -291,9 +294,17 @@ export async function getInsights(serverId: string, rangeDays: 7 | 30 | 90): Pro
     session_count: number;
     unique_users: number;
   }>(
-    `SELECT dow, hour, total_sec::BIGINT, session_count, unique_users
-     FROM activity_heatmap
+    `SELECT
+       EXTRACT(DOW  FROM joined_at AT TIME ZONE 'Europe/Istanbul')::INT AS dow,
+       EXTRACT(HOUR FROM joined_at AT TIME ZONE 'Europe/Istanbul')::INT AS hour,
+       SUM(duration_sec)::BIGINT AS total_sec,
+       COUNT(*)::INT AS session_count,
+       COUNT(DISTINCT user_id)::INT AS unique_users
+     FROM voice_sessions
      WHERE server_id = $1
+       AND left_at IS NOT NULL
+       AND joined_at > ${startClause}
+     GROUP BY dow, hour
      ORDER BY dow, hour`,
     [serverId],
   );

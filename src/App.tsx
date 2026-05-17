@@ -743,6 +743,17 @@ export default function App() {
 
   // Capability foundation: aktif sunucudaki kullanıcı context'i.
   const [accessContext, setAccessContext] = useState<ServerAccessContext | null>(null);
+  const [accessContextRefreshSeq, setAccessContextRefreshSeq] = useState(0);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ serverId?: string }>).detail;
+      if (detail?.serverId && detail.serverId !== activeServerIdRef.current) return;
+      setAccessContextRefreshSeq(seq => seq + 1);
+    };
+    window.addEventListener('mayvox:refresh-server-access', handler);
+    return () => window.removeEventListener('mayvox:refresh-server-access', handler);
+  }, []);
+
   useEffect(() => {
     if (!activeServerId || !currentUser.id) { setAccessContext(null); return; }
     let cancelled = false;
@@ -755,7 +766,7 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
-  }, [activeServerId, currentUser.id]);
+  }, [activeServerId, currentUser.id, accessContextRefreshSeq]);
   const isLowDataModeRef = useRef(isLowDataMode);
   useEffect(() => { isLowDataModeRef.current = isLowDataMode; }, [isLowDataMode]);
   const allUsersRef = useRef(allUsers);
@@ -1149,9 +1160,11 @@ export default function App() {
     const conn = (navigator as any).connection;
     if (conn) conn.addEventListener('change', onConnectionChange);
 
-    // Fallback ping — sadece oda dışında
+    // Network metric ping — oda dışında connectionLevel fallback'i de besler.
+    // Oda içindeyken LiveKit kalite seviyesini yönetir; bu ölçüm yalnızca
+    // ping/dalgalanma metnini stabil tutmak için latency/jitter'ı günceller.
     const pingInterval = setInterval(async () => {
-      if (isInRoom() || !navigator.onLine) return;
+      if (!navigator.onLine) return;
       const healthUrl = getBackendHealthUrl();
       if (!healthUrl) return;
       const start = Date.now();
@@ -1159,8 +1172,7 @@ export default function App() {
         const response = await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
         if (!response.ok) throw new Error(`Backend health failed: ${response.status}`);
         const rtt = Date.now() - start;
-        // Ref'i tekrar kontrol — fetch sırasında odaya girilmiş olabilir
-        if (isInRoom()) return;
+        const inRoom = isInRoom();
         consecutiveFailures = 0;
         pingSamples.push(rtt);
         if (pingSamples.length > 5) pingSamples.shift();
@@ -1170,7 +1182,7 @@ export default function App() {
         setConnectionLatencyMs(Math.round(medianRtt));
         setConnectionJitterMs(jitter);
         logger.info('Fallback ping', { rtt, medianRtt, jitter, level });
-        setFallbackLevel(level);
+        if (!inRoom) setFallbackLevel(level);
         if (connectionLostRef.current) {
           connectionLostRef.current = false;
           setToastMsg(null);
@@ -1224,6 +1236,9 @@ export default function App() {
 
       setAllUsers((prev) => [...prev.filter((u) => u.id !== user.profileId), restoredUser]);
       setCurrentUser(restoredUser);
+      if (restoredUser.mustChangePassword) {
+        setShowForcePasswordChange(true);
+      }
       // DB'deki son görülme tercihini localStorage'a sync et
       if (restoredUser.showLastSeen === false) localStorage.setItem('showLastSeen', 'false');
       else localStorage.setItem('showLastSeen', 'true');
@@ -3012,9 +3027,12 @@ export default function App() {
                   )}
 
                   {/* Geçici parola ile giriş — parola değiştirme modalı */}
-                  {showForcePasswordChange && (
+                  {(showForcePasswordChange || currentUser.mustChangePassword) && (
                     <ForcePasswordChangeModal
-                      onDone={() => setShowForcePasswordChange(false)}
+                      onDone={() => {
+                        setCurrentUser(prev => ({ ...prev, mustChangePassword: false }));
+                        setShowForcePasswordChange(false);
+                      }}
                     />
                   )}
 

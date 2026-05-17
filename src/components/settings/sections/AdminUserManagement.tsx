@@ -145,7 +145,6 @@ export default function AdminUserManagement() {
           break;
         case 'resetPassword':
           await handleAdminManualReset(confirmAction.userId, confirmAction.userName, confirmAction.email);
-          toast(`${n} şifresi sıfırlandı`);
           break;
       }
     } finally {

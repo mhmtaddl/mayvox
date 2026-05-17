@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscribeRealtimeEvents } from '../../../lib/chatService';
-import { getPublicDisplayName } from '../../../lib/formatName';
+import { getPublicNickname } from '../../../lib/formatName';
 import { listRoomActivityEvents, type RoomActivityEvent } from '../../../lib/serverService';
 import type { User } from '../../../types';
 
@@ -86,6 +86,7 @@ interface UseRoomActivityLogOptions {
 
 const MAX_ITEMS = 75;
 const DEDUPE_MS = 2_000;
+const REPORT_SOUND_COOLDOWN_MS = 2_500;
 const ROOM_ACTIVITY_TYPES: ReadonlySet<string> = new Set([
   'join',
   'leave',
@@ -113,10 +114,11 @@ function makeId(): string {
 function userLabel(userId: string | undefined, allUsers: User[]): string {
   if (!userId) return 'Kullanıcı';
   const user = allUsers.find(u => u.id === userId || u.name === userId);
-  return user ? getPublicDisplayName(user) : 'Kullanıcı';
+  return user ? getPublicNickname(user) : 'Kullanıcı';
 }
 
 function moderationType(action: unknown): RoomActivityType | null {
+  if (action === 'automod') return 'automod';
   if (action === 'mute') return 'voice_mute';
   if (action === 'unmute') return 'voice_unmute';
   if (action === 'timeout') return 'timeout';
@@ -213,6 +215,7 @@ export function useRoomActivityLog({
   const handledAutomodEventRef = useRef(0);
   const handledMessageDeleteEventRef = useRef(0);
   const handledMessageReportEventRef = useRef(0);
+  const lastReportSoundAtRef = useRef(0);
 
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
@@ -273,6 +276,17 @@ export function useRoomActivityLog({
     return 'Bir yetkili';
   }, []);
 
+  const playReportNotificationSound = useCallback(() => {
+    const now = Date.now();
+    if (now - lastReportSoundAtRef.current < REPORT_SOUND_COOLDOWN_MS) return;
+    lastReportSoundAtRef.current = now;
+    import('../../../lib/audio/SoundManager')
+      .then(({ playNotification }) => {
+        playNotification({ bypassRoomSuppression: true });
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!enabled) {
       prevRoomRef.current = null;
@@ -310,7 +324,7 @@ export function useRoomActivityLog({
           type: 'join',
           roomId,
           userId: user.id,
-          label: `${getPublicDisplayName(user)} odaya katıldı`,
+          label: `${getPublicNickname(user)} odaya katıldı`,
         });
       }
     }
@@ -433,7 +447,8 @@ export function useRoomActivityLog({
       label: moderationLabel('message_report', actor, target),
       dedupeKey: `${roomId}:message_report:${messageReportEvent.actorId ?? 'actor'}:${messageReportEvent.targetUserId ?? 'target'}:${messageReportEvent.seq}`,
     });
-  }, [activeChannel, messageReportEvent, enabled, actorLabel, addActivity]);
+    playReportNotificationSound();
+  }, [activeChannel, messageReportEvent, enabled, actorLabel, addActivity, playReportNotificationSound]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -459,6 +474,26 @@ export function useRoomActivityLog({
         typeof payload.userName === 'string' ? payload.userName :
         typeof payload.targetName === 'string' ? payload.targetName :
         userLabel(userId, allUsersRef.current);
+      if (type === 'automod') {
+        const label = typeof payload.label === 'string'
+          ? payload.label
+          : automodLabel(
+            typeof payload.code === 'string'
+              ? payload.code
+              : typeof payload.kind === 'string'
+                ? payload.kind
+                : undefined,
+            targetName,
+          );
+        addActivity({
+          type,
+          roomId,
+          userId,
+          label,
+          dedupeKey: `${roomId}:automod:${typeof payload.code === 'string' ? payload.code : typeof payload.kind === 'string' ? payload.kind : 'generic'}:${userId}`,
+        });
+        return;
+      }
       const actor = actorLabel(actorId, actorName);
       addActivity({
         type,

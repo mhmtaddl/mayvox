@@ -26,13 +26,24 @@ interface Props {
   clearing?: boolean;
 }
 
-function formatRelativeTime(createdAt: number): string {
+function formatActivityTimestamp(createdAt: number): string {
+  const date = new Date(createdAt);
+  if (!Number.isFinite(date.getTime())) return '';
+  const day = date.toLocaleDateString('tr-TR', { day: '2-digit' });
+  const month = date.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', '');
+  const time = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const diff = Math.max(0, Date.now() - createdAt);
-  if (diff < 45_000) return 'şimdi';
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${minutes} dk önce`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours} sa önce`;
+  let relative = 'şimdi';
+  if (diff >= 45_000) {
+    const minutes = Math.floor(diff / 60_000);
+    if (minutes < 60) {
+      relative = `${minutes} dk önce`;
+    } else {
+      const hours = Math.floor(minutes / 60);
+      relative = `${hours} sa önce`;
+    }
+  }
+  return `${day} ${month} ${time} - ${relative}`;
 }
 
 function ActivityIcon({ type }: { type: RoomActivityType }) {
@@ -135,7 +146,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[11px] font-semibold text-[var(--theme-text)]/88">{item.label}</span>
-                    <span className="block text-[9px] text-[var(--theme-secondary-text)]/50">{formatRelativeTime(item.createdAt)}</span>
+                    <span className="block text-[9px] text-[var(--theme-secondary-text)]/50">{formatActivityTimestamp(item.createdAt)}</span>
                   </span>
                   {item.type === 'message_report' && (item.reportCount ?? 1) > 1 && (
                     <span className="shrink-0 rounded-full bg-amber-300/18 px-1.5 py-0.5 text-[9px] font-bold text-amber-200 ring-1 ring-amber-300/25">

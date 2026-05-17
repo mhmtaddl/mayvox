@@ -100,3 +100,14 @@ export function normalizeNameInput(raw: string): string {
     })
     .join(' ');
 }
+
+export function getPublicNickname(user: {
+  displayName?: string | null;
+  name?: string | null;
+} | null | undefined): string {
+  if (!user) return 'KullanÄ±cÄ±';
+  const displayName = safePublicName(user.displayName);
+  if (displayName) return displayName;
+  const username = safePublicName(user.name);
+  return username || 'KullanÄ±cÄ±';
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw, Search, X } from 'lucide-react';
+import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw, Search, X, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -7,7 +7,7 @@ import { useSettings } from '../contexts/SettingsCtx';
 import { isCapacitor, isMobile, isElectron } from '../lib/platform';
 import { getPublicDisplayName } from '../lib/formatName';
 import { Toggle } from '../components/settings/shared';
-import { isGameActivityAvailable } from '../features/game-activity/useGameActivity';
+import { addCustomGame, getCurrentGameActivity, getCustomGames, isGameActivityAvailable, listGameProcesses, removeCustomGame, type CustomGameEntry, type GameProcessInfo } from '../features/game-activity/useGameActivity';
 import { rangeVisualStyle } from '../lib/rangeStyle';
 import {
   formatCommandShortcut,
@@ -886,6 +886,28 @@ function VoiceOverlayCard() {
   const previewName = getPublicDisplayName(currentUser) || 'Mayvox';
   const overlayDisabledReason = 'Önce oyun overlay özelliğini açın';
   const showOverlayDisabledFeedback = () => setToastMsg('Bu ayar şu anda değiştirilemez');
+  const [detectedOverlayGame, setDetectedOverlayGame] = useState<string | null>(null);
+  const overlayWaitsForGame = overlayEnabled && overlayDisplayMode === 'game-only';
+
+  useEffect(() => {
+    if (!overlayWaitsForGame || !isGameActivityAvailable()) {
+      setDetectedOverlayGame(null);
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      getCurrentGameActivity()
+        .then(name => { if (!cancelled) setDetectedOverlayGame(name); })
+        .catch(() => { if (!cancelled) setDetectedOverlayGame(null); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [overlayWaitsForGame]);
+
   return (
     <div
       className="surface-card settings-content-card rounded-xl px-4 py-4 w-full"
@@ -954,16 +976,6 @@ function VoiceOverlayCard() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
-            <span
-              className="settings-overlay-platform-badge text-[8.5px] font-bold uppercase tracking-[0.14em] px-1.5 py-[2px] rounded leading-none"
-              style={{
-                color: 'var(--theme-secondary-text)',
-                background: 'rgba(var(--glass-tint), 0.06)',
-                boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.08)',
-              }}
-            >
-              Masaüstü
-            </span>
           </div>
           <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-1 leading-snug">
             Ses odasındaki üyeleri oyun üstünde küçük bir panelde göster.
@@ -972,6 +984,27 @@ function VoiceOverlayCard() {
         <div className="pt-0.5">
           <Toggle checked={overlayEnabled} onChange={() => setOverlayEnabled(!overlayEnabled)} />
         </div>
+      </div>
+
+      <div
+        className="mt-3 rounded-xl px-3 py-2 text-[10.5px] leading-snug"
+        style={{
+          color: 'rgba(var(--theme-secondary-text-rgb, 207, 214, 229), 0.78)',
+          background: 'rgba(var(--glass-tint), 0.035)',
+          boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.055)',
+        }}
+      >
+        <span className="font-semibold text-[var(--theme-text)]/82">Not: </span>
+        Gerçek tam ekran özel mod bazı oyunlarda Windows overlay pencerelerini engelleyebilir. En stabil kullanım için oyunu
+        {' '}<span className="font-semibold text-[var(--theme-accent)]/82">Kenarsız Pencere</span> veya
+        {' '}<span className="font-semibold text-[var(--theme-accent)]/82">Pencereli</span> modda aç.
+        {overlayWaitsForGame && (
+          <span className="mt-1 block text-[var(--theme-secondary-text)]/68">
+            {detectedOverlayGame
+              ? `${detectedOverlayGame} algılandı; overlay görünmüyorsa oyun görüntü modunu kenarsız pencereye al.`
+              : 'Oyun modu açık; desteklenen oyun algılanınca overlay otomatik görünür.'}
+          </span>
+        )}
       </div>
 
       {/* Body — iki satır:
@@ -1110,6 +1143,152 @@ function GameActivityCard() {
       </div>
       <Toggle checked={gameActivityEnabled} onChange={() => setGameActivityEnabled(!gameActivityEnabled)} />
     </div>
+  );
+}
+
+function GameActivityManager() {
+  const { gameActivityEnabled, setGameActivityEnabled } = useSettings();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [processes, setProcesses] = useState<GameProcessInfo[]>([]);
+  const [customGames, setCustomGames] = useState<CustomGameEntry[]>([]);
+  const [selectedProcess, setSelectedProcess] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const openModal = async () => {
+    setModalOpen(true);
+    setError('');
+    setLoading(true);
+    try {
+      const [nextProcesses, nextGames] = await Promise.all([listGameProcesses(), getCustomGames()]);
+      setProcesses(nextProcesses);
+      setCustomGames(nextGames);
+    } catch (err) {
+      setError('Oyun listesi okunamadı. Uygulamayı yeniden başlatıp tekrar dene.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProcesses = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return processes
+      .filter(proc => !q || proc.name.toLowerCase().includes(q) || (proc.displayName || '').toLowerCase().includes(q))
+      .slice(0, 120);
+  }, [processes, query]);
+
+  const handleSelectProcess = (proc: GameProcessInfo) => {
+    setSelectedProcess(proc.name);
+    setDisplayName(proc.displayName || proc.name.replace(/\.exe$/i, '').replace(/[-_]+/g, ' ').trim());
+  };
+
+  const handleAdd = async () => {
+    if (!selectedProcess || !displayName.trim()) {
+      setError('Exe seçip görünen oyun adını yaz.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const next = await addCustomGame({ displayName: displayName.trim(), processes: [selectedProcess] });
+      setCustomGames(next);
+      setSelectedProcess('');
+      setDisplayName('');
+      setProcesses(await listGameProcesses());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Oyun eklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div data-command-target="game-activity" className="settings-static-row-card settings-account-card surface-card scroll-mt-5 flex h-full min-h-[92px] items-center gap-3 px-4 py-3 rounded-xl">
+        <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
+          <Gamepad2 size={14} className="text-[var(--theme-accent)]/80" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Otomatik Oyun Algılama</p>
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+            Açık oyunları durum olarak gösterir. Liste dışı oyunları bu cihazda manuel ekleyebilirsin.
+          </p>
+        </div>
+        <button type="button" onClick={openModal} className="h-8 shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-[var(--theme-accent)]/78 transition hover:bg-[rgba(var(--theme-accent-rgb),0.08)] hover:text-[var(--theme-accent)] active:scale-[0.98]">
+          <Plus size={13} className="opacity-80" />
+          Ekle
+        </button>
+        <Toggle checked={gameActivityEnabled} onChange={() => setGameActivityEnabled(!gameActivityEnabled)} />
+      </div>
+
+      <AnimatePresence>
+        {modalOpen && (
+          <motion.div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={() => setModalOpen(false)}>
+            <motion.div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-[rgba(var(--theme-bg-rgb),0.94)] shadow-2xl shadow-black/40 ring-1 ring-[rgba(var(--glass-tint),0.12)]" initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} onMouseDown={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-[rgba(var(--glass-tint),0.08)] px-4 py-3">
+                <div>
+                  <h3 className="text-[13px] font-semibold text-[var(--theme-text)]">Oyun ekle</h3>
+                  <p className="mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/62">Açık oyun listesinden seç, görünen adını yaz ve kaydet.</p>
+                </div>
+                <button type="button" onClick={() => setModalOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--theme-secondary-text)]/70 hover:bg-[rgba(var(--glass-tint),0.06)]">
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
+                <div className="min-w-0">
+                  <div className="mb-3 flex h-9 items-center gap-2 rounded-xl bg-[rgba(var(--glass-tint),0.035)] px-3 ring-1 ring-[rgba(var(--glass-tint),0.07)]">
+                    <Search size={14} className="text-[var(--theme-secondary-text)]/55" />
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Oyun ara..." className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--theme-text)] outline-none placeholder:text-[var(--theme-secondary-text)]/45" />
+                  </div>
+                  <div className="max-h-[320px] space-y-1 overflow-y-auto pr-1 custom-scrollbar">
+                    {loading && <p className="px-2 py-8 text-center text-[11px] text-[var(--theme-secondary-text)]/60">Taranıyor...</p>}
+                    {!loading && filteredProcesses.map(proc => (
+                      <button key={proc.name} type="button" onClick={() => handleSelectProcess(proc)} className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${selectedProcess === proc.name ? 'bg-[rgba(var(--theme-accent-rgb),0.10)] text-[var(--theme-text)] ring-1 ring-[rgba(var(--theme-accent-rgb),0.22)]' : 'text-[var(--theme-secondary-text)]/82 hover:bg-[rgba(var(--glass-tint),0.045)]'}`}>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-semibold">{proc.name}</span>
+                          {proc.displayName && <span className="block truncate text-[10px] text-[var(--theme-accent)]/70">{proc.displayName}</span>}
+                        </span>
+                        {proc.known && <span className="shrink-0 text-[10px] font-semibold text-[var(--theme-accent)]/70">Kayıtlı</span>}
+                      </button>
+                    ))}
+                    {!loading && filteredProcesses.length === 0 && <p className="px-2 py-8 text-center text-[11px] text-[var(--theme-secondary-text)]/60">Oyun bulunamadı.</p>}
+                  </div>
+                </div>
+                <div className="min-w-0 space-y-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/55">Görünen ad</span>
+                    <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Örn. World of Tanks" className="h-9 w-full rounded-xl bg-[rgba(var(--glass-tint),0.035)] px-3 text-[12px] text-[var(--theme-text)] outline-none ring-1 ring-[rgba(var(--glass-tint),0.075)] placeholder:text-[var(--theme-secondary-text)]/42" />
+                  </label>
+                  <button type="button" onClick={handleAdd} disabled={loading || !selectedProcess || !displayName.trim()} className="h-9 w-full rounded-xl bg-[rgba(var(--theme-accent-rgb),0.12)] text-[12px] font-semibold text-[var(--theme-accent)] ring-1 ring-[rgba(var(--theme-accent-rgb),0.18)] transition enabled:hover:bg-[rgba(var(--theme-accent-rgb),0.16)] disabled:opacity-45">
+                    Ekle
+                  </button>
+                  {error && <p className="text-[10.5px] text-rose-300/85">{error}</p>}
+                  <div className="pt-2">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/55">Eklenenler</p>
+                    <div className="max-h-[150px] space-y-1 overflow-y-auto custom-scrollbar">
+                      {customGames.length === 0 && <p className="text-[10.5px] text-[var(--theme-secondary-text)]/55">Henüz manuel oyun yok.</p>}
+                      {customGames.map(game => (
+                        <div key={`${game.displayName}:${game.processes[0]}`} className="flex items-center justify-between gap-2 rounded-lg bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] font-semibold text-[var(--theme-text)]">{game.displayName}</p>
+                            <p className="truncate text-[9.5px] text-[var(--theme-secondary-text)]/55">{game.processes.join(', ')}</p>
+                          </div>
+                          <button type="button" onClick={async () => game.processes[0] && setCustomGames(await removeCustomGame(game.processes[0]))} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-rose-300/70 hover:bg-rose-500/10 hover:text-rose-200" title="Kaldır">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -1649,7 +1828,7 @@ export default function SettingsView() {
 
               {isElectron() && (
                 <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
-                  {isGameActivityAvailable() && <GameActivityCard />}
+                  {isGameActivityAvailable() && <GameActivityManager />}
                   <CloseBehaviorCard />
                 </div>
               )}
@@ -1665,7 +1844,7 @@ export default function SettingsView() {
                   <SoundsSection />
                 </SettingsSectionCard>
                 {isElectron() && isGameActivityAvailable() && (
-                  <GameActivityCard />
+                  <GameActivityManager />
                 )}
                 {isElectron() && <CloseBehaviorCard />}
                 {showVoiceMode && (

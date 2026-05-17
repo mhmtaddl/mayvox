@@ -5,6 +5,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getPendingPasswordResets,
+  adminResetUserPassword,
+  dismissUserPasswordResetRequest,
   getAdminInviteRequests,
   adminSendInviteCode,
   adminDeleteInviteRequest,
@@ -12,7 +14,6 @@ import {
   adminRejectInvite,
   sendRejectionEmail,
 } from '../../../lib/backendClient';
-import { getAuthToken } from '../../../lib/authClient';
 import type { ResetRequest } from '../../../components/PasswordResetPanel';
 import type { InviteRequest } from '../../../types';
 
@@ -76,8 +77,6 @@ export function useAdminPanel({
   const lastPasswordResetsFetchAtRef = useRef(0);
   const lastInviteRequestsFetchAtRef = useRef(0);
 
-  const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
-
   const loadPasswordResetRequests = useCallback(async (opts: { force?: boolean } = {}) => {
     const now = Date.now();
     if (passwordResetsInFlightRef.current) return;
@@ -138,34 +137,21 @@ export function useAdminPanel({
 
   // ── Handlers ──
   const handleApproveReset = async (req: ResetRequest) => {
-    const token = getAuthToken();
-    if (!token) return;
-
-    const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ targetUserId: req.userId }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setToastMsg(data.error ?? 'Şifre sıfırlanamadı');
+    const result = await adminResetUserPassword(req.userId);
+    if (result.error) {
+      setToastMsg(result.error.message || 'Şifre sıfırlanamadı');
       return;
     }
 
+    if (result.data?.email) {
+      setToastMsg(`${result.data.email} adresine geçici parola gönderildi`);
+    }
     setPasswordResetRequests(prev => prev.filter(r => r.userId !== req.userId));
     presenceChannelRef.current?.send({ type: 'broadcast', event: 'password-reset-update', payload: { userId: req.userId } });
   };
 
   const handleDismissReset = async (userId: string) => {
-    const token = getAuthToken();
-    if (!token) return;
-
-    await fetch(`${SERVER_URL}/api/dismiss-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ targetUserId: userId }),
-    });
+    await dismissUserPasswordResetRequest(userId);
 
     setPasswordResetRequests(prev => prev.filter(r => r.userId !== userId));
     presenceChannelRef.current?.send({ type: 'broadcast', event: 'password-reset-update', payload: { userId } });

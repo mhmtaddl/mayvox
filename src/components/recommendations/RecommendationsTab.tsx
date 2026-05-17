@@ -30,6 +30,7 @@ const RECOMMENDATIONS_ENABLED =
   import.meta.env.VITE_RECOMMENDATIONS_ENABLED !== 'false';
 
 type ConfirmState = { variant: 'hide' | 'delete'; item: RecommendationItem } | null;
+const ITEMS_PER_PAGE = 5;
 
 function recommendationErrorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : '';
@@ -65,6 +66,7 @@ export default function RecommendationsTab({ serverId, currentUser, openCreateSi
   const [profileLoading, setProfileLoading] = useState(false);
   const [creatorProfile, setCreatorProfile] = useState<RecommendationCreatorProfile | null>(null);
   const [profilePosition, setProfilePosition] = useState({ x: 0, y: 0 });
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const canModerate = canModerateContent;
@@ -164,6 +166,19 @@ export default function RecommendationsTab({ serverId, currentUser, openCreateSi
   }, [items]);
   const totalCount = items.length;
   const visibleItems = listMode === 'watchlist' ? watchlistItems : items;
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / ITEMS_PER_PAGE));
+  const pageItems = useMemo(
+    () => visibleItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE),
+    [page, visibleItems],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, listMode, query, serverId]);
+
+  useEffect(() => {
+    setPage(current => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const handleCreate = async (payload: RecommendationPayload) => {
     if (!serverId) return;
@@ -326,7 +341,7 @@ export default function RecommendationsTab({ serverId, currentUser, openCreateSi
         </div>
       ) : (
         <div className="mx-auto w-full max-w-[900px] space-y-3">
-            {visibleItems.map(item => (
+            {pageItems.map(item => (
               <RecommendationCard
                 key={item.id}
                 serverId={serverId}
@@ -358,6 +373,24 @@ export default function RecommendationsTab({ serverId, currentUser, openCreateSi
                 }}
               />
             ))}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map(pageNumber => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  onClick={() => setPage(pageNumber)}
+                  className={`h-7 min-w-7 rounded-lg px-2 text-[11px] font-semibold transition-colors ${
+                    pageNumber === page
+                      ? 'border border-[rgba(var(--theme-accent-rgb),0.26)] bg-[rgba(var(--theme-accent-rgb),0.13)] text-[var(--theme-accent)]'
+                      : 'border border-[var(--theme-border)]/10 text-[var(--theme-secondary-text)]/58 hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.06)] hover:text-[var(--theme-text)]'
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

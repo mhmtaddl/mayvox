@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bookmark, ExternalLink, Star, X } from 'lucide-react';
 import type { RecommendationItem } from './recommendationTypes';
-import { CATEGORY_LABELS, formatRecommendationDate, resolveRecommendationCoverUrl, stringFromMetadata } from './recommendationTypes';
+import { CATEGORY_LABELS, formatRecommendationDate, getRecommendationAuthorDisplayName, resolveRecommendationCoverUrl, stringFromMetadata } from './recommendationTypes';
 
 const METADATA_LABELS: Record<string, string> = {
   year: 'Yıl',
@@ -61,6 +61,7 @@ export default function RecommendationDetailPanel({ item, onClose, onHide, onDel
   const coverSrc = resolveRecommendationCoverUrl(item.coverUrl);
   const showCover = !!coverSrc && !coverFailed;
   const isPoster = item.category === 'film' || item.category === 'series';
+  const authorDisplayName = getRecommendationAuthorDisplayName(item);
   return (
     <div className="rounded-2xl border border-[var(--theme-border)]/25 bg-[var(--theme-panel)]/90 p-4 shadow-2xl shadow-black/20">
       <div className="flex items-start justify-between gap-3">
@@ -70,7 +71,7 @@ export default function RecommendationDetailPanel({ item, onClose, onHide, onDel
           </div>
           <h2 className="text-base font-semibold text-[var(--theme-text)] break-words">{item.title}</h2>
           <div className="mt-1 text-[10px] text-[var(--theme-secondary-text)]/55">
-            {item.createdByName || 'Bir üye'} · {formatRecommendationDate(item.createdAt)}
+            {authorDisplayName} · {formatRecommendationDate(item.createdAt)}
           </div>
         </div>
         <button

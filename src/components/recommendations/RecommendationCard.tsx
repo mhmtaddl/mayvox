@@ -11,12 +11,14 @@ import {
 } from '../../lib/serverService';
 import { openExternalUrl } from '../../lib/openExternalUrl';
 import type { User } from '../../types';
+import AvatarContent from '../AvatarContent';
 import type { RecommendationComment, RecommendationItem, RecommendationRating } from './recommendationTypes';
 import {
   CATEGORY_LABELS,
   formatRecommendationDate,
+  getRecommendationAuthorDisplayName,
   RECOMMENDATION_METADATA_LABELS,
-  resolveRecommendationCoverUrl,
+  recommendationCoverUrlFromItem,
   stringFromMetadata,
 } from './recommendationTypes';
 
@@ -88,10 +90,11 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
   const previousCommentCountRef = useRef(item.commentCount);
   const ratingSaveTimerRef = useRef<number | null>(null);
 
-  const coverSrc = resolveRecommendationCoverUrl(item.coverUrl);
+  const coverSrc = recommendationCoverUrlFromItem(item);
   const showCover = !!coverSrc && !coverFailed;
   const isPoster = item.category === 'film' || item.category === 'series';
   const description = item.description?.trim() || 'Açıklama eklenmemiş.';
+  const authorDisplayName = getRecommendationAuthorDisplayName(item);
   const myRating = ratings.find(r => r.userId === currentUser.id);
   const ownRatingScore = myRating?.score ?? item.myRatingScore ?? null;
   const myComment = comments.find(c => c.createdBy === currentUser.id);
@@ -109,7 +112,6 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
     return (keysByCategory[item.category] || [])
       .map(key => {
         const value = stringFromMetadata(item.metadata?.[key]);
-        const externalScore = key === 'externalRating' ? numericMetadata(item.metadata?.[key]) : null;
         const labelOverrides: Record<string, string> = {
           seasonCount: 'Sezon',
           episodeCount: 'Bölüm',
@@ -120,7 +122,7 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
           key,
           label: labelOverrides[key] || RECOMMENDATION_METADATA_LABELS[key] || key,
           value,
-          tone: externalScore !== null ? externalRatingClass(externalScore) : '',
+          tone: '',
         };
       })
       .filter(row => !!row.value)
@@ -154,6 +156,10 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
   useEffect(() => {
     setRatingInput(ownRatingScore !== null ? ownRatingScore.toFixed(1) : '');
   }, [ownRatingScore]);
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverSrc, item.id]);
 
   useEffect(() => () => {
     if (ratingSaveTimerRef.current !== null) window.clearTimeout(ratingSaveTimerRef.current);
@@ -316,7 +322,16 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
         <div className={`${isPoster ? 'w-[86px]' : 'w-[126px]'} shrink-0`}>
           <div className={`${isPoster ? 'h-[118px] w-[86px]' : 'h-[98px] w-[126px]'} overflow-hidden rounded-xl border border-[var(--theme-border)]/20 bg-[rgba(var(--glass-tint),0.045)] flex items-center justify-center`}>
             {showCover ? (
-              <img src={coverSrc} alt="" className="h-full w-full object-cover object-center" referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} />
+              <img
+                src={coverSrc}
+                alt=""
+                className="h-full w-full object-cover object-center"
+                referrerPolicy="no-referrer"
+                onError={() => {
+                  if (import.meta.env.DEV) console.warn('recommendation cover failed', { id: item.id, title: item.title, url: coverSrc });
+                  setCoverFailed(true);
+                }}
+              />
             ) : (
               <div className="flex flex-col items-center gap-1.5 text-[var(--theme-secondary-text)]/42">
                 <Bookmark size={20} />
@@ -365,9 +380,9 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                   {item.createdByAvatar ? (
                     <img src={item.createdByAvatar} alt="" className="h-4 w-4 shrink-0 rounded-[5px] object-cover ring-1 ring-[rgba(var(--theme-accent-rgb),0.16)]" />
                   ) : (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] bg-[rgba(var(--glass-tint),0.06)] text-[8px] font-semibold ring-1 ring-[rgba(var(--theme-accent-rgb),0.12)]">{avatarInitial(item.createdByName)}</span>
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] bg-[rgba(var(--glass-tint),0.06)] text-[8px] font-semibold ring-1 ring-[rgba(var(--theme-accent-rgb),0.12)]">{avatarInitial(authorDisplayName)}</span>
                   )}
-                  <span className="max-w-[120px] truncate font-medium underline-offset-2 group-hover:underline">{item.createdByName || 'Bir üye'}</span>
+                  <span className="max-w-[120px] truncate font-medium underline-offset-2 group-hover:underline">{authorDisplayName}</span>
                   <span className="shrink-0 text-[var(--theme-secondary-text)]/38">{formatRecommendationDate(item.createdAt)}</span>
                 </button>
                 {item.status !== 'active' && (
@@ -487,7 +502,16 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
         <div className="mt-2 grid max-h-32 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl bg-[rgba(var(--glass-tint),0.025)] p-2 sm:grid-cols-2 lg:grid-cols-3">
           {ratings.length === 0 ? <div className="col-span-full text-[11px] text-[var(--theme-secondary-text)]/50">Henüz puan yok.</div> : ratings.map(r => (
             <div key={r.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-[var(--theme-border)]/10 bg-[rgba(var(--shadow-base),0.07)] px-2 py-1.5 text-[11px]">
-              {r.userAvatar ? <img src={r.userAvatar} alt="" className="h-6 w-6 shrink-0 rounded-lg object-cover" /> : <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[10px] font-semibold text-[var(--theme-text)]/76">{avatarInitial(r.userName)}</span>}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[10px] font-semibold text-[var(--theme-text)]/76">
+                <AvatarContent
+                  avatar={r.userAvatar}
+                  statusText="Çevrimdışı"
+                  firstName={r.userName}
+                  name={r.userName}
+                  letterClassName="text-[10px] font-semibold text-[var(--theme-accent)]"
+                  alt=""
+                />
+              </span>
               <span className="min-w-0 flex-1 truncate text-[var(--theme-secondary-text)]/76">{r.userName || 'Bir üye'}</span>
               <span className="shrink-0 font-semibold text-[var(--theme-text)]">{r.score.toFixed(1)}</span>
             </div>
@@ -509,7 +533,16 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                 <div key={comment.id} className="rounded-lg bg-[rgba(var(--shadow-base),0.08)] px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      {comment.createdByAvatar ? <img src={comment.createdByAvatar} alt="" className="h-6 w-6 rounded-lg object-cover" /> : <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[10px] font-semibold">{avatarInitial(comment.createdByName)}</span>}
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[rgba(var(--glass-tint),0.06)] text-[10px] font-semibold">
+                        <AvatarContent
+                          avatar={comment.createdByAvatar}
+                          statusText="Çevrimdışı"
+                          firstName={comment.createdByName}
+                          name={comment.createdByName}
+                          letterClassName="text-[10px] font-semibold text-[var(--theme-accent)]"
+                          alt=""
+                        />
+                      </span>
                       <span className="min-w-0">
                         <span className="block truncate text-[11px] font-medium text-[var(--theme-text)]">{comment.createdByName || 'Bir üye'}</span>
                         <span className="block text-[9px] text-[var(--theme-secondary-text)]/45">{formatRecommendationDate(comment.createdAt)}</span>

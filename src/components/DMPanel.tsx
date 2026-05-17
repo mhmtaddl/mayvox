@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info, LockKeyhole, Pin } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info, Pin } from 'lucide-react';
 import {
   isToastEnabled, setToastEnabled,
   isGroupingEnabled, setGroupingEnabled,
@@ -1689,14 +1689,6 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               {/* Header */}
               <div className="px-4 py-3.5 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
                 <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-emerald-200/80 ring-1 ring-emerald-300/12"
-                    style={{ background: 'rgba(16,185,129,0.07)' }}
-                    title="DM mesajları uçtan uca şifrelenmektedir"
-                    aria-label="DM mesajları uçtan uca şifrelenmektedir"
-                  >
-                    <LockKeyhole size={13} strokeWidth={2.2} />
-                  </span>
                   <span className="mv-font-title truncate text-[14px] font-bold text-[var(--theme-text)]">Mesajlar</span>
                 </div>
                 <div className="flex items-center gap-1">

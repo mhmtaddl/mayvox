@@ -89,6 +89,7 @@ export type ClientRealtimeEvent =
   | 'invite-accepted'
   | 'invite-rejected'
   | 'channel-update'
+  | 'server-member-role'
   | 'moderation-event';
 
 // ── Invite event bus ──
@@ -252,6 +253,7 @@ export type AppRealtimeEventType =
   | 'invite-cancelled'
   | 'invite-accepted'
   | 'invite-rejected'
+  | 'server-member-role'
   | 'moderation-event'
   | 'announcement-update'
   | 'friend-update'
@@ -285,6 +287,7 @@ function isAppRealtimeType(type: unknown): type is AppRealtimeEventType {
     type === 'invite-cancelled' ||
     type === 'invite-accepted' ||
     type === 'invite-rejected' ||
+    type === 'server-member-role' ||
     type === 'moderation-event' ||
     type === 'announcement-update' ||
     type === 'friend-update' ||

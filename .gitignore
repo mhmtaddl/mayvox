@@ -8,6 +8,7 @@ coverage/
 .env.*
 *.env
 !.env.example
+!.env.production
 
 # Secrets — asla commit'lenmesin
 github-recovery-codes.txt

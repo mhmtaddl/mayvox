@@ -14,7 +14,7 @@ import ConfirmModal from '../../ConfirmModal';
 import { useUI } from '../../../contexts/UIContext';
 import { useUser } from '../../../contexts/UserContext';
 import { useAppState } from '../../../contexts/AppStateContext';
-import { getAuthToken } from '../../../lib/authClient';
+import { adminResetUserPassword } from '../../../lib/backendClient';
 import {
   listAdminUsers,
   listUserOwnedServers,
@@ -211,7 +211,7 @@ export default function ManagementUsersPanel() {
       case 'unban':
         return { title: 'Yasağı Kaldır', description: `${n} sesli yasağı kaldırılacak.`, confirmText: 'Kaldır', danger: false };
       case 'resetPassword':
-        return { title: 'Şifre Sıfırla', description: `${rowConfirm.user.email || 'Email yok'} adresine geçici parola gönderilecek. Kullanıcı bu parolayla giriş yapınca yeni parola belirlemesi istenecek.`, confirmText: 'Sıfırla', danger: false };
+        return { title: 'Şifre Sıfırla', description: `${rowConfirm.user.email || 'Email yok'} için geçici parola oluşturulacak. Kullanıcı bu parolayla giriş yapınca yeni parola belirlemesi istenecek.`, confirmText: 'Sıfırla', danger: false };
     }
   }, [rowConfirm]);
 
@@ -261,25 +261,14 @@ export default function ManagementUsersPanel() {
           break;
         case 'resetPassword': {
           if (!u.email) {
-            setToastMsg('Email yok, şifre sıfırlama maili gönderilemedi');
+            setToastMsg('Email yok, şifre sıfırlanamadı');
             break;
           }
-          const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
-          const token = getAuthToken();
-          if (!token) {
-            setToastMsg('Oturum bulunamadı');
-            break;
-          }
-          const res = await fetch(`${SERVER_URL}/api/admin-reset-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ targetUserId: u.id }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setToastMsg(data.error ?? 'Şifre sıfırlama maili gönderilemedi');
+          const result = await adminResetUserPassword(u.id);
+          if (result.error || !result.data) {
+            setToastMsg(result.error?.message ?? 'Şifre sıfırlanamadı');
           } else {
-            setToastMsg(`${u.email} adresine geçici parola gönderildi`);
+            setToastMsg(`${result.data.email} adresine geçici parola gönderildi`);
           }
           break;
         }
@@ -1388,7 +1377,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
               <DetailButton
                 icon={<KeyRound size={13} />}
                 label="Şifre Sıfırla"
-                description={`${user.email} adresine geçici parola gönderilir`}
+                description="Geçici parola oluşturur ve ilk girişte parola değiştirmeyi zorunlu kılar"
                 tone="warning"
                 onClick={() => onAction({ type: 'resetPassword', user })}
               />

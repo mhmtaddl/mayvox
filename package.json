@@ -1,12 +1,12 @@
 {
   "name": "mayvox",
   "private": true,
-  "version": "2.2.3",
+  "version": "2.2.8",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "node scripts/validate-vite-env.cjs && vite build",
     "preview": "vite preview",
     "clean": "node --eval \"require('fs').rmSync('./dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
