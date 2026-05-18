@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getPublicDisplayName, getPublicNickname } from '../lib/formatName';
-import { sendRealtimeBroadcast, subscribeRealtimeEvents } from '../lib/chatService';
+import { sendRealtimeBroadcast, setRoomChatMuted, subscribeRealtimeEvents } from '../lib/chatService';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from '../lib/memberIdentity';
 import { useAppState } from '../contexts/AppStateContext';
 import { useAudio } from '../contexts/AudioContext';
@@ -1245,7 +1245,7 @@ export default function ChatView() {
         const serverName = isOnline && user.serverId
           ? serverList.find(server => server.id === user.serverId)?.name ?? null
           : null;
-        const status = isOnline
+        const status: 'online' | 'offline' | 'idle' | 'dnd' = isOnline
           ? user.status === 'away'
             ? 'idle'
             : user.status === 'busy'
@@ -1321,7 +1321,7 @@ export default function ChatView() {
       actorName: getPublicNickname(currentUser),
       at: Date.now(),
     };
-    import('../lib/chatService').then(({ setRoomChatMuted }) => setRoomChatMuted(next));
+    setRoomChatMuted(next);
   }, [chatMuted, currentUser]);
 
   useEffect(() => {
@@ -1645,7 +1645,7 @@ export default function ChatView() {
       .map(member => {
         const user = allUsers.find(u => u.id === member.userId);
         const isOnline = user ? mobileIsFriendOnline(user) : false;
-        const status = isOnline
+        const status: 'online' | 'offline' | 'idle' | 'dnd' = isOnline
           ? user?.status === 'away'
             ? 'idle'
             : user?.status === 'busy'
@@ -1811,7 +1811,7 @@ export default function ChatView() {
                 dmCount={dmUnreadCount}
               friendCount={friendUsers.length}
               onlineCount={mobileOnlineFriendCount}
-              requestCount={notifications.friendRequestsCount}
+              requestCount={notifications.friendRequestCount}
               serverName={activeServerData?.name}
               serverMemberCount={mobileServerMembers.length}
               friendItems={mobileFriendItems}
@@ -1822,9 +1822,9 @@ export default function ChatView() {
               />
             ) : mobileShellView === 'notifications' ? (
               <MobileNotificationsScreen
-                unreadCount={dmUnreadCount + notifications.friendRequestsCount}
+                unreadCount={dmUnreadCount + notifications.friendRequestCount}
                 dmCount={dmUnreadCount}
-                requestCount={notifications.friendRequestsCount}
+                requestCount={notifications.friendRequestCount}
                 serverCount={0}
                 systemCount={0}
               />
@@ -1917,7 +1917,7 @@ export default function ChatView() {
               dmCount={dmUnreadCount}
               friendCount={friendUsers.length}
               onlineCount={mobileOnlineFriendCount}
-              requestCount={notifications.friendRequestsCount}
+              requestCount={notifications.friendRequestCount}
               serverName={activeServerData?.name}
               serverMemberCount={mobileServerMembers.length}
               friendItems={mobileFriendItems}

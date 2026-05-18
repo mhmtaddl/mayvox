@@ -7,6 +7,9 @@ interface MobileSocialSheetProps {
   onClose?: () => void;
   pinned?: boolean;
   onTogglePinned?: () => void;
+  friendCount?: number;
+  serverName?: string;
+  serverMemberCount?: number;
   children?: React.ReactNode;
 }
 

@@ -1,4 +1,5 @@
 import { createManagedAudioContext, unregisterAudioContext } from './audio/audioOutputRegistry';
+import { playCallRingtone, stopCallRingtone } from './audio/SoundManager';
 import { shouldSuppressSettingsSoundInChatRoom } from './soundRoomPreference';
 
 export type SoundCategory = 'JoinLeave' | 'MuteDeafen' | 'Ptt';
@@ -169,12 +170,8 @@ export function startInviteRingtone(variant: InviteRingtoneVariant = 1): void {
   try {
     // dynamic require pattern — modül resolve edilemezse catch'e düşer
     // (Vite ESM build'inde bu zaten import map'te vardır).
-    import('./audio/SoundManager')
-      .then(m => {
-        const ok = m.playCallRingtone({ maxMs: INVITE_RING_DURATION_MS + 1000 });
-        if (!ok) startOscillatorRingtone(variant);
-      })
-      .catch(() => startOscillatorRingtone(variant));
+    const ok = playCallRingtone({ maxMs: INVITE_RING_DURATION_MS + 1000 });
+    if (!ok) startOscillatorRingtone(variant);
   } catch {
     startOscillatorRingtone(variant);
   }
@@ -193,7 +190,7 @@ function startOscillatorRingtone(variant: InviteRingtoneVariant): void {
 export function stopInviteRingtone(): void {
   // mp3 katmanını da durdur (paralel iki path)
   try {
-    import('./audio/SoundManager').then(m => m.stopCallRingtone()).catch(() => {});
+    stopCallRingtone();
   } catch { /* no-op */ }
   if (ringtoneAutoStop) { clearTimeout(ringtoneAutoStop); ringtoneAutoStop = null; }
   if (ringtoneGain) {

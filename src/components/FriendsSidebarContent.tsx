@@ -15,6 +15,7 @@ import DeviceBadge from './chat/DeviceBadge';
 import RoleBadge, { getUserRoleBadge } from './RoleBadge';
 import type { User, VoiceChannel } from '../types';
 import type { ServerMember } from '../lib/serverService';
+import type { ThemePackId } from '../lib/themePacks';
 
 function lastSeenSortValue(user: User): number {
   if (!user.lastSeenAt) return 0;
@@ -37,6 +38,47 @@ function getMayvoxStatusDotColor(statusLabel: string): string {
   if (statusLabel === 'Rahatsız Etmeyin' || statusLabel === 'Duymuyor') return '#f87171';
   if (statusLabel === 'Çevrimdışı') return 'rgba(var(--theme-secondary-text-rgb, 148, 163, 184), 0.55)';
   return 'rgba(var(--theme-secondary-text-rgb, 148, 163, 184), 0.55)';
+}
+
+const ONLINE_CONTRAST_BY_THEME: Record<ThemePackId, string> = {
+  'default-dark': '#FBBF24',
+  'dual-tone': '#FBBF24',
+  'ocean-blue': '#FBBF24',
+  emerald: '#FBBF24',
+  crimson: '#FBBF24',
+  'amber-night': '#EF4444',
+  'frost-light': '#EF4444',
+  'graphite-pro': '#FBBF24',
+  aurora: '#FBBF24',
+};
+
+function getOnlineContrastColor(themePackId: ThemePackId) {
+  return ONLINE_CONTRAST_BY_THEME[themePackId] ?? ONLINE_CONTRAST_BY_THEME['default-dark'];
+}
+
+function HeaderOnlineFraction({ active, online, total, color }: { active: boolean; online: number; total: number; color: string }) {
+  const countClassName = active
+    ? 'text-[var(--theme-text)]/88'
+    : 'text-[var(--theme-secondary-text)]/46 group-hover/tab:text-[var(--theme-text)]/78';
+  return (
+    <span className="ml-1 inline-flex items-baseline gap-0.5 text-[9px] font-black tabular-nums">
+      <span className={countClassName} style={active && online > 0 ? { color } : undefined}>{online}</span>
+      <span className={countClassName}>/</span>
+      <span className={countClassName}>{total}</span>
+    </span>
+  );
+}
+
+function HeaderOnlineProgress({ online, total, color }: { online: number; total: number; color: string }) {
+  const ratio = total > 0 ? Math.max(0, Math.min(1, online / total)) : 0;
+  return (
+    <span className="absolute inset-x-0 -bottom-px h-0.5 overflow-hidden rounded-full bg-[var(--theme-accent)]/75">
+      <span
+        className="block h-full rounded-full transition-[width] duration-200"
+        style={{ width: `${ratio * 100}%`, background: color }}
+      />
+    </span>
+  );
 }
 
 interface Props {
@@ -72,7 +114,8 @@ export default function FriendsSidebarContent({
     currentUser, allUsers, friendIds, friendsLoading,
   } = useUser();
   const { setToastMsg } = useUI();
-  const { avatarBorderColor, showLastSeen } = useSettings();
+  const { avatarBorderColor, showLastSeen, themePackId } = useSettings();
+  const onlineContrastColor = getOnlineContrastColor(themePackId);
 
   const { favoriteIds, isFavorite, toggleFavorite } = useSharedFavorites();
 
@@ -175,6 +218,7 @@ export default function FriendsSidebarContent({
   }, [allUsers, serverMembers]);
   const serverOnlineUsers = useMemo(() => serverMemberUsers.filter(isEffectivelyOnline), [serverMemberUsers]);
   const serverOfflineUsers = useMemo(() => serverMemberUsers.filter(u => !isEffectivelyOnline(u)), [serverMemberUsers]);
+  const serverPanelTotalCount = activeServerMemberCount ?? serverMemberUsers.length;
 
   // ── Collapsible favorites ──────────────────────────────────────────────
   const [favoritesExpanded, setFavoritesExpanded] = useState<boolean>(() => {
@@ -321,7 +365,7 @@ export default function FriendsSidebarContent({
     return (
     <div
       key={user.id}
-      className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-45 transition-colors duration-150 group hover:opacity-65 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
+      className={`mv-density-friend-item flex items-center ${isDesktop ? 'gap-2 px-2.5 py-2 rounded-lg' : 'gap-3 px-2.5 py-2 rounded-lg'} opacity-58 transition-colors duration-150 group hover:opacity-78 hover:bg-[rgba(var(--glass-tint),0.045)] cursor-pointer`}
       onClick={(e) => { e.stopPropagation(); onUserClick(user.id, e.clientX, e.clientY, user); }}
       onContextMenu={(e) => {
         if (isMe || !friendIds.has(user.id)) return;
@@ -356,8 +400,8 @@ export default function FriendsSidebarContent({
           <RoleBadge role={getUserRoleBadge(user)} size="xs" subtle variant="inlineIcon" />
         </div>
         {showLastSeen && user.showLastSeen !== false && user.lastSeenAt && (
-          <span className="mt-[3px] flex min-w-0 items-center gap-1.5 text-[9px] leading-[14px] text-[var(--theme-secondary-text)]/35">
-            <DeviceBadge platform={user.platform} size={isDesktop ? 10 : 12} className="shrink-0 opacity-70" />
+          <span className="mt-[3px] flex min-w-0 items-center gap-1.5 text-[9px] font-medium leading-[14px] text-[var(--theme-secondary-text)]/58 group-hover:text-[var(--theme-secondary-text)]/72">
+            <DeviceBadge platform={user.platform} size={isDesktop ? 10 : 12} className="shrink-0 opacity-85" />
             <span className="truncate">
             {(() => {
               const d = new Date(user.lastSeenAt);
@@ -390,18 +434,18 @@ export default function FriendsSidebarContent({
             <button
               type="button"
               onClick={() => setActivePanel('friends')}
-              className={`relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'friends' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
+              className={`group/tab relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'friends' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
             >
-              Arkadaşlar <span className="ml-1 text-[9px] text-[var(--theme-accent)]/52">{friendUsers.length}</span>
-              {activePanel === 'friends' && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--theme-accent)]/75" />}
+              Arkadaşlar <HeaderOnlineFraction active={activePanel === 'friends'} online={onlineUsers.length} total={friendUsers.length} color={onlineContrastColor} />
+              {activePanel === 'friends' && <HeaderOnlineProgress online={onlineUsers.length} total={friendUsers.length} color={onlineContrastColor} />}
             </button>
             <button
               type="button"
               onClick={() => setActivePanel('server')}
-              className={`relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'server' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
+              className={`group/tab relative h-8 min-w-0 flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.08em] transition-colors ${activePanel === 'server' ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-text)]/78'}`}
             >
-              {activeServerName} <span className="ml-1 text-[9px] text-[var(--theme-accent)]/52">{activeServerMemberCount ?? serverMemberUsers.length}</span>
-              {activePanel === 'server' && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--theme-accent)]/75" />}
+              {activeServerName} <HeaderOnlineFraction active={activePanel === 'server'} online={serverOnlineUsers.length} total={serverPanelTotalCount} color={onlineContrastColor} />
+              {activePanel === 'server' && <HeaderOnlineProgress online={serverOnlineUsers.length} total={serverPanelTotalCount} color={onlineContrastColor} />}
             </button>
           </div>
         )}

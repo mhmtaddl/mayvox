@@ -361,20 +361,20 @@ const ServerRow: React.FC<RowProps> = ({ srv, canDelete, onDelete, onBanToggle, 
         </div>
 
         {/* Server meta line */}
-        <div className="flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/75">
+        <div className="flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/82">
           <span>{srv.member_count} üye</span>
           <span>{new Date(srv.created_at).toLocaleDateString('tr-TR')}</span>
         </div>
 
         {/* Owner block */}
         <div className="mt-1.5 pl-2 border-l-2 border-[var(--theme-border)]/60 space-y-0.5">
-          <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--theme-secondary-text)]">
-            <UserIcon size={10} className="opacity-60" />
+          <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--theme-secondary-text)]/82">
+            <UserIcon size={10} className="opacity-75" />
             <span className="font-semibold text-[var(--theme-text)]/90 truncate" title={ownerName}>{ownerName}</span>
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-[var(--theme-secondary-text)]/75">
+          <div className="flex items-center gap-3 text-[10px] text-[var(--theme-secondary-text)]/82">
             <span className="inline-flex items-center gap-1 min-w-0 truncate" title={ownerEmail}>
-              <Mail size={9} className="opacity-60 shrink-0" />
+              <Mail size={9} className="opacity-75 shrink-0" />
               <span className="truncate">{ownerEmail}</span>
             </span>
           </div>

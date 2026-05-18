@@ -6,6 +6,7 @@ import DeviceBadge from '../../components/chat/DeviceBadge';
 export type MobileUserStatus = 'online' | 'offline' | 'idle' | 'dnd';
 
 interface MobileUserListItemProps {
+  key?: unknown;
   id: string;
   name: string;
   avatarUrl?: string;

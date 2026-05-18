@@ -426,7 +426,7 @@ function AccountInfoCard() {
             onChange={e => setSettingsPublicDisplayName(e.target.value.replace(/[\p{C}]/gu, '').slice(0, 24))}
             className={compactInputCls}
           />
-          <p className="text-[8.8px] text-[var(--theme-secondary-text)]/42 leading-snug">
+          <p className="text-[8.8px] font-medium text-[var(--theme-secondary-text)]/68 leading-snug">
             Diğer kullanıcılar seni bu isimle görür.
           </p>
         </div>
@@ -507,7 +507,7 @@ function SecurityCard() {
           />
         </div>
       </div>
-      <p className={`text-[9.5px] mt-2.5 leading-snug ${!isPasswordValid ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/40'}`}>
+      <p className={`text-[9.5px] mt-2.5 font-medium leading-snug ${!isPasswordValid ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/68'}`}>
         En az 6 karakter, büyük+küçük harf ve rakam
       </p>
       <div className="flex justify-end mt-2.5">

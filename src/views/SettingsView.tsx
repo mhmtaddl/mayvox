@@ -265,7 +265,7 @@ function LegalCard({ icon, title, description, onClick }: {
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[12px] font-semibold leading-tight text-[var(--theme-text)]">{title}</p>
-        <p className="mt-0.5 text-[10px] leading-snug text-[var(--theme-secondary-text)]/56">{description}</p>
+        <p className="mt-0.5 text-[10px] font-medium leading-snug text-[var(--theme-secondary-text)]/70">{description}</p>
       </div>
     </button>
   );
@@ -326,7 +326,7 @@ function OverlayPositionPicker({ value, onChange, disabled, disabledReason, onDi
       className="flex flex-col gap-1 w-full min-w-0"
     >
       {/* KONUM başlığı — picker'ın dışında üst-orta (Stil/Boyut/Şeffaflık ile aynı stil) */}
-      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/50 mb-1 px-0.5 text-center">Konum</div>
+      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/72 mb-1 px-0.5 text-center">Konum</div>
 
       <div
         className="relative rounded-xl overflow-hidden w-full"
@@ -977,7 +977,7 @@ function VoiceOverlayCard() {
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-[12.5px] font-semibold text-[var(--theme-text)] leading-tight">Oyun İçi Ses Göstergesi</p>
           </div>
-          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-1 leading-snug">
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/72 mt-1 leading-snug">
             Ses odasındaki üyeleri oyun üstünde küçük bir panelde göster.
           </p>
         </div>
@@ -989,17 +989,17 @@ function VoiceOverlayCard() {
       <div
         className="mt-3 rounded-xl px-3 py-2 text-[10.5px] leading-snug"
         style={{
-          color: 'rgba(var(--theme-secondary-text-rgb, 207, 214, 229), 0.78)',
-          background: 'rgba(var(--glass-tint), 0.035)',
-          boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint), 0.055)',
+          color: 'color-mix(in srgb, var(--theme-text) 72%, var(--theme-secondary-text))',
+          background: 'color-mix(in srgb, var(--theme-bg) 78%, var(--theme-surface) 22%)',
+          boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--theme-text) 12%, transparent)',
         }}
       >
-        <span className="font-semibold text-[var(--theme-text)]/82">Not: </span>
+        <span className="font-black text-[var(--theme-text)]">Not: </span>
         Gerçek tam ekran özel mod bazı oyunlarda Windows overlay pencerelerini engelleyebilir. En stabil kullanım için oyunu
-        {' '}<span className="font-semibold text-[var(--theme-accent)]/82">Kenarsız Pencere</span> veya
-        {' '}<span className="font-semibold text-[var(--theme-accent)]/82">Pencereli</span> modda aç.
+        {' '}<span className="font-black text-[var(--theme-accent)]">Kenarsız Pencere</span> veya
+        {' '}<span className="font-black text-[var(--theme-accent)]">Pencereli</span> modda aç.
         {overlayWaitsForGame && (
-          <span className="mt-1 block text-[var(--theme-secondary-text)]/68">
+          <span className="mt-1 block text-[var(--theme-secondary-text)]/82">
             {detectedOverlayGame
               ? `${detectedOverlayGame} algılandı; overlay görünmüyorsa oyun görüntü modunu kenarsız pencereye al.`
               : 'Oyun modu açık; desteklenen oyun algılanınca overlay otomatik görünür.'}
@@ -1033,12 +1033,12 @@ function VoiceOverlayCard() {
           />
           <div className="vox-right w-full min-w-0 flex flex-col gap-3">
             <div>
-              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Stil</div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/72 mb-1.5 px-0.5 text-center">Stil</div>
               <OverlayVariantSegmented value={overlayVariant} onChange={setOverlayVariant} disabled={off} disabledReason={overlayDisabledReason} onDisabledClick={showOverlayDisabledFeedback} />
             </div>
 
             <div>
-              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55 mb-1.5 px-0.5 text-center">Boyut</div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/72 mb-1.5 px-0.5 text-center">Boyut</div>
               <OverlaySizeSegmented value={overlaySize} onChange={setOverlaySize} disabled={off} disabledReason={overlayDisabledReason} onDisabledClick={showOverlayDisabledFeedback} />
             </div>
 
@@ -1046,7 +1046,7 @@ function VoiceOverlayCard() {
                 arkasındaki kartın + avatar/isim görünürlüğünün ortak ayarı. */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between px-0.5">
-                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/55">
+                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/74">
                   <Droplet size={10} /> Kart Şeffaflığı
                 </span>
                 <span className="text-[10px] font-semibold tabular-nums text-[var(--theme-text)]/75">%{overlayCardOpacity}</span>
@@ -1137,7 +1137,7 @@ function GameActivityCard() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Otomatik Oyun Algılama</p>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/72 mt-0.5 leading-snug">
           Açık oyunları algılayıp durum olarak gösterebilir. Sadece desteklenen oyunlar için; veriler cihazında kalır.
         </p>
       </div>
@@ -1212,7 +1212,7 @@ function GameActivityManager() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[12px] font-semibold text-[var(--theme-text)] leading-tight">Otomatik Oyun Algılama</p>
-          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-0.5 leading-snug">
+          <p className="text-[10.5px] text-[var(--theme-secondary-text)]/72 mt-0.5 leading-snug">
             Açık oyunları durum olarak gösterir. Liste dışı oyunları bu cihazda manuel ekleyebilirsin.
           </p>
         </div>
@@ -1309,10 +1309,10 @@ function CloseBehaviorCard() {
           </span>
           <span className="truncate">Kapatma Davranışı</span>
         </p>
-        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/60 mt-1 leading-snug">
+        <p className="text-[10.5px] text-[var(--theme-secondary-text)]/72 mt-1 leading-snug">
           Açıkken çarpıya basınca uygulama tamamen kapanır.
         </p>
-        <p className="text-[9.8px] font-semibold text-[var(--theme-secondary-text)]/48 mt-1 leading-snug">
+        <p className="text-[9.8px] font-semibold text-[var(--theme-secondary-text)]/68 mt-1 leading-snug">
           {quitsOnClose ? 'Açık: tamamen kapatır.' : 'Kapalı: simgeye küçültür.'}
         </p>
       </div>
@@ -1455,8 +1455,8 @@ function ShortcutsCard() {
                     <div key={row.id} className="relative flex items-center gap-3 py-2.5">
                       <div className="flex-1 min-w-0">
                         <p className="text-[11.5px] font-semibold text-[var(--theme-text)] leading-tight">{row.title}</p>
-                        <p className="text-[10px] text-[var(--theme-secondary-text)]/58 mt-0.5 leading-snug">{row.description}</p>
-                        {warning && <p className="mt-1 text-[9.5px] font-semibold text-amber-300/70">{warning}</p>}
+                        <p className="text-[10px] text-[var(--theme-secondary-text)]/70 mt-0.5 leading-snug">{row.description}</p>
+                        {warning && <p className="mt-1 text-[9.5px] font-semibold text-amber-300/85">{warning}</p>}
                       </div>
                       <button
                         type="button"
@@ -1467,7 +1467,7 @@ function ShortcutsCard() {
                           setError('');
                           setErrorTarget(null);
                         }}
-                        className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/55 bg-transparent"
+                        className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/68 bg-transparent"
                         title="Varsayılana dön"
                         aria-label={`${row.title} varsayılana dön`}
                       >
@@ -1481,7 +1481,7 @@ function ShortcutsCard() {
                             ? 'border-[rgba(var(--theme-accent-rgb),0.42)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
                             : hasShortcut
                               ? 'border-[rgba(var(--theme-accent-rgb),0.32)] bg-[rgba(var(--theme-accent-rgb),0.075)] text-[var(--theme-text)]/90'
-                              : 'border-dashed border-[var(--theme-border)]/55 bg-transparent text-[var(--theme-secondary-text)]/42'
+                              : 'border-dashed border-[var(--theme-border)]/55 bg-transparent text-[var(--theme-secondary-text)]/62'
                         }`}
                         title="Kısayolu değiştirmek için tıkla"
                       >

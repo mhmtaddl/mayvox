@@ -1,6 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { getRoomModeConfig } from '../../../lib/roomModeConfig';
-import type { ChatEventMeta, ChatMessage } from '../../../lib/chatService';
+import {
+  clearAllMessages as clearRoomMessages,
+  connectChat,
+  deleteMessage,
+  editMessage,
+  joinRoom,
+  leaveRoom,
+  reportMessage,
+  sendMessage,
+  setChatHandlers,
+  type ChatEventMeta,
+  type ChatMessage,
+} from '../../../lib/chatService';
+import { playMessageReceive } from '../../../lib/audio/SoundManager';
 import { isRoomMessageSoundEnabled } from '../../../features/notifications/notificationSound';
 import { decryptTextIfNeeded, encryptTextForUsers } from '../../../lib/e2ee';
 
@@ -70,8 +83,7 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
 
   // WebSocket chat bağlantısı
   useEffect(() => {
-    import('../../../lib/chatService').then(({ connectChat, setChatHandlers }) => {
-      setChatHandlers({
+    setChatHandlers({
         onHistory: (_roomId, messages) => {
           void Promise.all(messages.map(decryptChatMessage)).then(setChatMessages);
           setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current?.scrollHeight ?? 0 }), 100);
@@ -87,9 +99,9 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
           }
           // Oda içi yazılı mesaj tonu — kullanıcı mesaj ayarlarından sessize alabilir.
           if (msg.senderId !== currentUserIdRef.current && isRoomMessageSoundEnabled()) {
-            import('../../../lib/audio/SoundManager').then(({ playMessageReceive }) => {
+            try {
               playMessageReceive();
-            });
+            } catch { /* sound not critical */ }
           }
           });
         },
@@ -126,14 +138,11 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
           // Her rejected send için toast (flood + profanity + generic).
           onSendRejectedRef.current?.(err.message, err.code);
         },
-      });
-      connectChat();
     });
+    connectChat();
     return () => {
-      import('../../../lib/chatService').then(({ leaveRoom, setChatHandlers }) => {
-        leaveRoom();
-        setChatHandlers({});
-      });
+      leaveRoom();
+      setChatHandlers({});
       if (floodTimerRef.current) { clearTimeout(floodTimerRef.current); floodTimerRef.current = null; }
     };
   }, [decryptChatMessage]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -142,13 +151,11 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
   useEffect(() => {
     if (!activeChannel) {
       setChatMessages([]);
-      import('../../../lib/chatService').then(({ leaveRoom }) => leaveRoom());
+      leaveRoom();
       return;
     }
-    import('../../../lib/chatService').then(({ joinRoom, connectChat }) => {
-      connectChat();
-      joinRoom(activeChannel);
-    });
+    connectChat();
+    joinRoom(activeChannel);
   }, [activeChannel]);
 
   const handleChatScroll = useCallback(() => {
@@ -190,25 +197,25 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
     if (encryptForHiddenRoom) {
       const recipients = [...new Set([currentUser.id, ...roomRecipientIdsRef.current])];
       void encryptTextForUsers(text, recipients)
-        .then(encrypted => import('../../../lib/chatService').then(({ sendMessage }) => sendMessage(encrypted)))
+        .then(encrypted => sendMessage(encrypted))
         .catch(err => onSendRejectedRef.current?.(err instanceof Error ? err.message : 'Mesaj şifrelenemedi.', 'e2ee_encrypt_failed'));
     } else {
-      import('../../../lib/chatService').then(({ sendMessage }) => sendMessage(text));
+      sendMessage(text);
     }
     setTimeout(scrollToBottom, 100);
   }, [activeChannel, channels, chatMuted, chatMuteRank, isChatBanned, onChatBannedBlocked, floodCooldownUntil, currentUser.isAdmin, currentUser.isPrimaryAdmin, currentUser.isModerator, chatInput, scrollToBottom]);
 
   const deleteChatMessage = useCallback((id: string) => {
-    import('../../../lib/chatService').then(({ deleteMessage }) => deleteMessage(id));
+    deleteMessage(id);
   }, []);
 
   const reportChatMessage = useCallback((id: string) => {
-    import('../../../lib/chatService').then(({ reportMessage }) => reportMessage(id));
+    reportMessage(id);
   }, []);
 
   const clearAllMessages = useCallback(() => {
     setChatMessages([]);
-    import('../../../lib/chatService').then(({ clearAllMessages: clearAll }) => clearAll());
+    clearRoomMessages();
   }, []);
 
   const startEditMessage = useCallback((msg: { id: string; text: string; senderId?: string }) => {
@@ -236,10 +243,10 @@ export function useChatMessages({ activeChannel, channels, roomRecipientIds = []
     if (activeChannelObj?.isHidden) {
       const recipients = [...new Set([currentUser.id, ...roomRecipientIdsRef.current])];
       void encryptTextForUsers(t, recipients)
-        .then(encrypted => import('../../../lib/chatService').then(({ editMessage }) => editMessage(editingMsgId!, encrypted)))
+        .then(encrypted => editMessage(editingMsgId!, encrypted))
         .catch(err => onSendRejectedRef.current?.(err instanceof Error ? err.message : 'Mesaj şifrelenemedi.', 'e2ee_encrypt_failed'));
     } else {
-      import('../../../lib/chatService').then(({ editMessage }) => editMessage(editingMsgId!, t));
+      editMessage(editingMsgId!, t);
     }
     setEditingMsgId(null); setEditingText('');
   }, [activeChannel, chatMessages, currentUser.id, editingMsgId, editingText, deleteChatMessage]);

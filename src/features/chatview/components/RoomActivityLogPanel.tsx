@@ -87,8 +87,8 @@ function activityTone(type: RoomActivityType): { color: string; border: string }
     };
   }
   return {
-    color: 'rgba(var(--glass-tint), 0.62)',
-    border: 'rgba(var(--glass-tint), 0.10)',
+    color: 'color-mix(in srgb, var(--theme-text) 62%, var(--theme-secondary-text))',
+    border: 'rgba(var(--glass-tint), 0.16)',
   };
 }
 
@@ -134,7 +134,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
                   disabled={!item.messageId}
                   className={`flex w-full min-w-0 items-center gap-2 rounded-lg border-l px-2.5 py-1.5 text-left transition-[background,opacity] duration-150 ${item.messageId ? 'hover:bg-[rgba(var(--glass-tint),0.045)]' : 'cursor-default'}`}
                   style={{
-                    background: item.type === 'message_report' ? 'rgba(251,191,36,0.035)' : 'rgba(var(--glass-tint),0.016)',
+                    background: item.type === 'message_report' ? 'rgba(251,191,36,0.055)' : 'rgba(var(--glass-tint),0.032)',
                     borderLeftColor: item.type === 'message_report' ? 'rgba(251,191,36,0.48)' : tone.border,
                   }}
                 >
@@ -145,8 +145,8 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
                     <ActivityIcon type={item.type} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] font-semibold text-[var(--theme-text)]/88">{item.label}</span>
-                    <span className="block text-[9px] text-[var(--theme-secondary-text)]/50">{formatActivityTimestamp(item.createdAt)}</span>
+                    <span className="block truncate text-[11px] font-semibold text-[var(--theme-text)]/96">{item.label}</span>
+                    <span className="block text-[9px] font-medium text-[var(--theme-secondary-text)]/72">{formatActivityTimestamp(item.createdAt)}</span>
                   </span>
                   {item.type === 'message_report' && (item.reportCount ?? 1) > 1 && (
                     <span className="shrink-0 rounded-full bg-amber-300/18 px-1.5 py-0.5 text-[9px] font-bold text-amber-200 ring-1 ring-amber-300/25">
@@ -161,7 +161,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
       </div>
       <div
         className="flex h-[53px] shrink-0 items-center gap-2 px-3 py-2"
-        style={{ background: 'rgba(var(--glass-tint), 0.028)', borderTop: '1px solid rgba(var(--glass-tint), 0.045)', boxShadow: 'none', backgroundImage: 'none' }}
+        style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.075)', boxShadow: 'none', backgroundImage: 'none' }}
       >
         <button
           type="button"
@@ -171,7 +171,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
         >
           <History size={13} strokeWidth={2.1} />
         </button>
-        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-text)]/82">
+        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-text)]/92">
           SON OLAYLAR
         </span>
         {canClear && (
@@ -179,7 +179,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
             type="button"
             onClick={onClear}
             disabled={clearing || activities.length === 0}
-            className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-text)]/54 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-28 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-text)]/68 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-32 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
             aria-label="Son olayları temizle"
             title="Son olayları temizle"
           >

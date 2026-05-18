@@ -1,5 +1,5 @@
 {
-  "exclude": ["supabase/functions", "server-backend"],
+  "exclude": ["supabase/functions", "server-backend", "*.remote.ts", "*.livekit.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,

@@ -69,7 +69,7 @@ export function SettingsCard({ title, hint, children }: { title: string; hint?: 
     >
       <div className="flex items-baseline justify-between mb-3.5">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--theme-secondary-text)]/85">{title}</h3>
-        {hint && <span className="text-[10px] text-[var(--theme-secondary-text)]/55 truncate ml-3">{hint}</span>}
+        {hint && <span className="text-[10px] text-[var(--theme-secondary-text)]/70 truncate ml-3">{hint}</span>}
       </div>
       {children}
     </section>
@@ -91,7 +91,7 @@ export function DangerSection({ children }: { children: React.ReactNode }) {
 export function Fld({ label, children, off }: { label: string; children: React.ReactNode; off?: boolean }) {
   return (
     <div className={off ? 'opacity-40 pointer-events-none' : ''}>
-      <label className="block text-[11px] font-semibold text-[var(--theme-secondary-text)]/45 mb-1.5">{label}</label>
+      <label className="block text-[11px] font-semibold text-[var(--theme-secondary-text)]/70 mb-1.5">{label}</label>
       {children}
     </div>
   );
@@ -104,7 +104,7 @@ export function Pill({ a, o, children }: { a: boolean; o: () => void; children: 
       className={`px-3.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
         a
           ? 'bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] border border-[var(--theme-accent)]/15'
-          : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/30 border border-transparent hover:bg-[rgba(var(--glass-tint),0.06)]'
+          : 'bg-[rgba(var(--glass-tint),0.03)] text-[var(--theme-secondary-text)]/62 border border-transparent hover:bg-[rgba(var(--glass-tint),0.06)]'
       }`}
     >
       {children}
@@ -119,7 +119,7 @@ export function IC2({ label, value, accent, small }: { label: string; value: str
       style={{ background: 'rgba(var(--glass-tint), 0.03)', border: '1px solid rgba(var(--glass-tint), 0.04)' }}
     >
       <div className={`${small ? 'text-[12px]' : 'text-[16px]'} font-bold ${accent ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>{value}</div>
-      <div className="text-[9px] text-[var(--theme-secondary-text)]/30 mt-1 uppercase tracking-wider">{label}</div>
+      <div className="text-[9px] text-[var(--theme-secondary-text)]/62 mt-1 uppercase tracking-wider">{label}</div>
     </div>
   );
 }
@@ -127,8 +127,8 @@ export function IC2({ label, value, accent, small }: { label: string; value: str
 export function Empty({ text, sub }: { text: string; sub?: string }) {
   return (
     <div className="text-center py-8">
-      <div className="text-[12px] text-[var(--theme-secondary-text)]/30">{text}</div>
-      {sub && <div className="text-[10px] text-[var(--theme-secondary-text)]/20 mt-1.5">{sub}</div>}
+      <div className="text-[12px] font-medium text-[var(--theme-secondary-text)]/68">{text}</div>
+      {sub && <div className="text-[10px] font-medium text-[var(--theme-secondary-text)]/58 mt-1.5">{sub}</div>}
     </div>
   );
 }

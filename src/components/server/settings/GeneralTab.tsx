@@ -533,7 +533,7 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
                   placeholder="Örn: Saygılı ol, spam yapma, ses odalarında rahatsızlık verme..."
                   className={`${INPUT_BASE} min-h-[86px] resize-y py-2 leading-5`}
                 />
-                <p className="mt-1.5 text-[10px] leading-snug text-[var(--theme-secondary-text)]/48">
+                <p className="mt-1.5 text-[10px] leading-snug text-[var(--theme-secondary-text)]/68">
                   Ana sayfadaki Kurallar kartında gösterilir. Her satırı ayrı bir kural olarak yazabilirsin.
                 </p>
               </div>

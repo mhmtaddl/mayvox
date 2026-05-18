@@ -17,6 +17,7 @@ import {
   type ThemeCustomizationOverrides,
   type ThemePackId,
 } from '../../../lib/themePacks';
+import { updateProfileFields } from '../../../lib/backendClient';
 
 const UI_FONT_SCALE_STEPS = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15] as const;
 const DEFAULT_UI_FONT_SCALE = 0.8;
@@ -281,9 +282,7 @@ export function useAppSettings() {
     localStorage.setItem('avatarBorderColor', v);
     setAvatarBorderColorState(v);
     // Profile DB'ye de kaydet — diğer kullanıcılar görsün
-    import('../../../lib/backendClient')
-      .then(({ updateProfileFields }) => updateProfileFields({ avatar_border_color: v }))
-      .catch(() => {});
+    updateProfileFields({ avatar_border_color: v }).catch(() => {});
   };
 
   // ── Auto-leave — ZORUNLU (v4 policy) ──

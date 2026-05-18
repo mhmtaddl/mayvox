@@ -762,11 +762,11 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
             <StatusBadge status={user.plan_status} />
             {user.plan_source === 'paid' && <PaidBadge />}
           </div>
-          <div className="flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/75 truncate">
+          <div className="flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/82 truncate">
             {user.username && <span className="truncate">@{user.username}</span>}
             {user.email && <span className="truncate">{user.email}</span>}
             {user.owned_server_count > 0 && (
-              <span className="inline-flex items-center gap-1 text-[var(--theme-accent)]/75">
+              <span className="inline-flex items-center gap-1 text-[var(--theme-accent)]/85">
                 <ServerIcon size={10} /> {user.owned_server_count} sunucu
               </span>
             )}

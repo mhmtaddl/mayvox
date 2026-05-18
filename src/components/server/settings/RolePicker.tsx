@@ -32,8 +32,8 @@ const ROLE_ICON: Record<ServerRole, React.ReactNode> = {
   admin:        <Shield size={14} className="text-blue-400" />,
   super_mod:    <ShieldAlert size={14} className="text-purple-300" />,
   mod:          <ShieldCheck size={14} className="text-purple-400" />,
-  super_member: <UserCheck size={14} className="text-slate-300" />,
-  member:       <UserIcon size={14} className="text-[#7b8ba8]" />,
+  super_member: <UserCheck size={14} className="text-[var(--theme-secondary-text)]" />,
+  member:       <UserIcon size={14} className="text-[var(--theme-secondary-text)]" />,
 };
 
 export default function RolePicker({ currentRole, actorRole, anchorRect, onSelect, onClose, busy }: Props) {
@@ -107,11 +107,11 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
     >
       <div className="flex items-center gap-2 px-2 pb-2 mb-1 border-b" style={{ borderColor: 'rgba(var(--glass-tint),0.08)' }}>
         <Crown size={12} className="text-amber-400" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]">Rol Ata</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-text)]/88">Rol Ata</span>
       </div>
 
       {options.length === 0 ? (
-        <div className="px-3 py-4 text-[11.5px] text-[#7b8ba8]/70 leading-snug text-center">
+        <div className="px-3 py-4 text-[11.5px] text-[var(--theme-secondary-text)]/78 leading-snug text-center">
           Rol atamaya yetkiniz yok.
         </div>
       ) : options.map(opt => {
@@ -130,20 +130,20 @@ export default function RolePicker({ currentRole, actorRole, anchorRect, onSelec
                 ? 'bg-[rgba(59,130,246,0.10)]'
                 : canAssign && !busy
                 ? 'hover:bg-[rgba(255,255,255,0.06)]'
-                : 'cursor-default opacity-50'
+                : 'cursor-default opacity-78'
             }`}
           >
             <span className="shrink-0 mt-0.5">{opt.icon}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className={`text-[12.5px] font-semibold ${isSelected ? 'text-[#e8ecf4]' : 'text-[#e8ecf4]/85'}`}>
+                <span className={`text-[12.5px] font-semibold ${isSelected ? 'text-[var(--theme-text)]' : 'text-[var(--theme-text)]/88'}`}>
                   {opt.label}
                 </span>
                 {isSelected && (
-                  <Check size={12} strokeWidth={3} className="text-[#60a5fa]" aria-label="Mevcut rol" />
+                  <Check size={12} strokeWidth={3} className="text-[var(--theme-accent)]" aria-label="Mevcut rol" />
                 )}
               </div>
-              <div className="text-[10.5px] text-[#7b8ba8]/75 mt-0.5 leading-snug">{opt.hint}</div>
+              <div className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/76 mt-0.5 leading-snug">{opt.hint}</div>
             </div>
           </button>
         );

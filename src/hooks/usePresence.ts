@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import type React from 'react';
 import { getCachedPresenceStates, subscribePresenceEvents, subscribeRealtimeEvents } from '../lib/chatService';
 import { updateUserAppVersion } from '../lib/backendClient';
+import { playSound } from '../lib/sounds';
+import { formatRemainingFromIso } from '../lib/formatTimeout';
 import { logMemberIdentityDebug, normalizeMemberKeysToUserIds } from '../lib/memberIdentity';
 import { applyLocalChannelOrder } from '../lib/channelOrder';
 import { applyLocalChannelIcons } from '../lib/channelIcon';
@@ -352,8 +354,7 @@ export function usePresence({
 
       const playMod = async () => {
         try {
-          const mod = await import('../lib/sounds');
-          mod.playSound('moderation');
+          playSound('moderation');
         } catch { /* sound not critical */ }
       };
 
@@ -376,7 +377,6 @@ export function usePresence({
       } else if (action === 'timeout' && updates.timedOutUntil) {
         setTimedOutUntil(updates.timedOutUntil);
         setVoiceDisabledReason(prev => (prev === 'banned' ? prev : 'timeout'));
-        const { formatRemainingFromIso } = await import('../lib/formatTimeout');
         const remStr = formatRemainingFromIso(updates.timedOutUntil);
         setToastMsg(remStr
           ? `Zamanaşımı cezası aldınız — ${remStr} boyunca konuşamaz ve sohbet odalarına giremezsiniz.`

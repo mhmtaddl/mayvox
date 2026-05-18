@@ -109,7 +109,7 @@ function getRows(activeTab: NotificationTab, counts: { dmCount: number; requestC
   return activeTab === 'all' ? rows : rows.filter(row => row.type === activeTab);
 }
 
-function NotificationRow({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+function NotificationRow({ icon, title, text }: { key?: unknown; icon: React.ReactNode; title: string; text: string }) {
   return (
     <button
       type="button"

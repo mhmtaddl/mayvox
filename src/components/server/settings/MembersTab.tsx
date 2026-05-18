@@ -717,12 +717,12 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
         </div>
         <div className="flex items-center gap-2 mt-1 leading-relaxed">
           {member.username && member.username !== dn && (
-            <span className="text-[10.5px] text-[var(--theme-secondary-text)] truncate">@{member.username}</span>
+            <span className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/82 truncate">@{member.username}</span>
           )}
           {member.username && member.username !== dn && (
-            <span className="text-[var(--theme-secondary-text)]/40 shrink-0">·</span>
+            <span className="text-[var(--theme-secondary-text)]/62 shrink-0">·</span>
           )}
-          <span className="text-[10.5px] text-[var(--theme-secondary-text)]/75 shrink-0">
+          <span className="text-[10.5px] font-medium text-[var(--theme-secondary-text)]/80 shrink-0">
             {fmtDate(member.joinedAt)}
           </span>
         </div>
@@ -791,7 +791,7 @@ function MemberRow({ member, myRole, isSelf, statusText, busy, onOpenKebab, onOp
           className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
             canAnyAction && !busy
               ? 'text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)]'
-              : 'text-[var(--theme-secondary-text)]/35 cursor-default'
+              : 'text-[var(--theme-secondary-text)]/62 cursor-default'
           }`}
           aria-label="Daha fazla aksiyon"
         >

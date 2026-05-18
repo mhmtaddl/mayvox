@@ -74,6 +74,7 @@ export default function MobileSocialScreen({
   mode = 'full',
   dmCount,
   friendCount,
+  onlineCount,
   requestCount,
   serverName,
   serverMemberCount,
@@ -101,6 +102,10 @@ export default function MobileSocialScreen({
   const visibleServerMemberItems = hasRealServerMembers ? serverMemberItems : [];
   const visibleRequestItems = hasRealRequests ? requestItems : PREVIEW_REQUESTS;
   const onlineItems = useMemo(() => visibleFriendItems.filter(item => item.status === 'online'), [visibleFriendItems]);
+  const friendOnlineCount = onlineCount ?? visibleFriendItems.filter(isVisibleOnline).length;
+  const friendTotalCount = friendCount ?? friendItems.length;
+  const serverOnlineCount = visibleServerMemberItems.filter(isVisibleOnline).length;
+  const serverTotalCount = serverMemberCount ?? serverMemberItems.length;
   const selectedItemsTitle =
     selectedTab === 'dm' ? 'Gelen mesajlar' :
     selectedTab === 'friends' ? 'Arkadaslar' :
@@ -188,8 +193,8 @@ export default function MobileSocialScreen({
 
         {compactFriendsMode && (
           <div className="mb-1.5 flex gap-3 border-b border-[rgba(var(--glass-tint),0.055)]">
-            <TabButton active={selectedTab === 'friends'} label="Arkadaslar" count={friendCount ?? friendItems.length} onClick={() => handleTabChange('friends')} />
-            <TabButton active={selectedTab === 'serverMembers'} label={serverName || 'Sunucu'} count={serverMemberCount ?? serverMemberItems.length} onClick={() => handleTabChange('serverMembers')} />
+            <TabButton active={selectedTab === 'friends'} label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} onClick={() => handleTabChange('friends')} />
+            <TabButton active={selectedTab === 'serverMembers'} label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverOnlineCount} total={serverTotalCount} />} onClick={() => handleTabChange('serverMembers')} />
           </div>
         )}
 
@@ -409,7 +414,22 @@ function MetricPill({ label, value }: { label: string; value: number }) {
   );
 }
 
-function TabButton({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
+function isVisibleOnline(item: MobileFriendItem) {
+  return item.status === 'online' || item.status === 'idle' || item.status === 'dnd';
+}
+
+function OnlineFraction({ online, total }: { online: number; total: number }) {
+  const onlineClassName = online > 0 ? 'text-emerald-400' : 'text-[var(--theme-secondary-text)]/58';
+  return (
+    <span className="ml-1 inline-flex items-baseline gap-0.5 text-[10px] font-black tabular-nums">
+      <span className={onlineClassName}>{online}</span>
+      <span className="text-[var(--theme-secondary-text)]/46">/</span>
+      <span className="text-[var(--theme-secondary-text)]/58">{total}</span>
+    </span>
+  );
+}
+
+function TabButton({ active, label, count, countNode, onClick }: { active: boolean; label: string; count?: number; countNode?: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -418,6 +438,7 @@ function TabButton({ active, label, count, onClick }: { active: boolean; label: 
       aria-pressed={active}
     >
       {label}
+      {countNode}
       {typeof count === 'number' && (
         <span
           className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black"
@@ -531,6 +552,7 @@ function CompactRequestRow({
   onAcceptRequest,
   onDeclineRequest,
 }: {
+  key?: unknown;
   item: MobileRequestItem;
   onAcceptRequest?: (id: string) => void;
   onDeclineRequest?: (id: string) => void;

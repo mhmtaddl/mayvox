@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscribeRealtimeEvents } from '../../../lib/chatService';
+import { playNotification } from '../../../lib/audio/SoundManager';
 import { getPublicNickname } from '../../../lib/formatName';
 import { listRoomActivityEvents, type RoomActivityEvent } from '../../../lib/serverService';
 import type { User } from '../../../types';
@@ -80,6 +81,7 @@ interface UseRoomActivityLogOptions {
     targetUserId?: string;
     targetName?: string;
     messageId?: string;
+    reportCount?: number;
   } | null;
   enabled?: boolean;
 }
@@ -280,11 +282,9 @@ export function useRoomActivityLog({
     const now = Date.now();
     if (now - lastReportSoundAtRef.current < REPORT_SOUND_COOLDOWN_MS) return;
     lastReportSoundAtRef.current = now;
-    import('../../../lib/audio/SoundManager')
-      .then(({ playNotification }) => {
-        playNotification({ bypassRoomSuppression: true });
-      })
-      .catch(() => {});
+    try {
+      playNotification({ bypassRoomSuppression: true });
+    } catch { /* sound not critical */ }
   }, []);
 
   useEffect(() => {

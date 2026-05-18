@@ -22,7 +22,7 @@ interface ElectronWindowAPI {
   setAuthMode?: (enabled: boolean, kind?: string) => void;
   isMaximized: () => Promise<boolean>;
   isFocused: () => Promise<boolean>;
-  onState: (cb: (data: { maximized: boolean; focused: boolean; authMode?: boolean }) => void) => void;
+  onState: (cb: (data: { maximized: boolean; focused: boolean; authMode?: boolean; edgeFit?: boolean }) => void) => void;
   offState: () => void;
   onResizePercent?: (cb: (data: { percent: number; width: number; height: number }) => void) => void;
   offResizePercent?: () => void;
@@ -36,6 +36,7 @@ declare global {
 
 const TITLEBAR_HEIGHT = 36;
 const WINDOW_DRAG_THRESHOLD = 2;
+const WINDOW_TOP_SNAP_THRESHOLD = 2;
 
 type WindowDragPayload = {
   screenX: number;
@@ -49,13 +50,20 @@ type WindowDragState = {
   startScreenX: number;
   startScreenY: number;
   dragging: boolean;
+  snapTop: boolean;
 };
+
+function isWindowControlTarget(target: HTMLElement | null) {
+  if (!target) return false;
+  if (target.closest('[data-window-control]')) return true;
+  if (target.closest('button, input, textarea, select, a, [role="button"]')) return true;
+  return false;
+}
 
 function isInteractiveWindowTarget(target: HTMLElement | null) {
   if (!target) return true;
-  if (target.closest('[data-window-control]')) return true;
+  if (isWindowControlTarget(target)) return true;
   if (target.closest('[data-no-window-drag], [data-no-drag], .no-drag')) return true;
-  if (target.closest('button, input, textarea, select, a, [role="button"]')) return true;
   if (target.closest('[contenteditable="true"]')) return true;
   return false;
 }
@@ -72,6 +80,7 @@ function toWindowDragPayload(event: React.PointerEvent<HTMLElement>): WindowDrag
 export default function AppChrome() {
   const api = typeof window !== 'undefined' ? window.electronWindow : undefined;
   const [maximized, setMaximized] = useState(false);
+  const [edgeFit, setEdgeFit] = useState(false);
   const [focused, setFocused] = useState(true);
   const [authMode, setAuthMode] = useState(false);
   const [resizePercent, setResizePercent] = useState<number | null>(null);
@@ -82,8 +91,9 @@ export default function AppChrome() {
     if (!api) return;
     void api.isMaximized().then(setMaximized).catch(() => {});
     void api.isFocused().then(setFocused).catch(() => {});
-    api.onState(({ maximized: m, focused: f, authMode: a }) => {
+    api.onState(({ maximized: m, focused: f, authMode: a, edgeFit: e }) => {
       setMaximized(m);
+      setEdgeFit(!!e);
       setFocused(f);
       setAuthMode(!!a);
     });
@@ -115,6 +125,11 @@ export default function AppChrome() {
   }, [maximized]);
 
   useEffect(() => {
+    document.documentElement.classList.toggle('mv-window-edge-fit', edgeFit);
+    return () => document.documentElement.classList.remove('mv-window-edge-fit');
+  }, [edgeFit]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle('mv-auth-window', authMode);
     return () => document.documentElement.classList.remove('mv-auth-window');
   }, [authMode]);
@@ -127,22 +142,28 @@ export default function AppChrome() {
   const onClose = useCallback(() => api.close(), [api]);
   const onTitlebarDoubleClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (authMode) return;
-    const target = event.target as HTMLElement | null;
-    if (isInteractiveWindowTarget(target)) return;
+    if (isWindowControlTarget(event.target as HTMLElement | null)) return;
     event.preventDefault();
     event.stopPropagation();
     void (api.toggleMaximize?.() ?? api.maximizeRestore());
   }, [api, authMode]);
-
   const onTitlebarPointerDown = useCallback((event: React.PointerEvent<HTMLElement>) => {
     if (authMode || event.button !== 0) return;
     if (isInteractiveWindowTarget(event.target as HTMLElement | null)) return;
+    if (event.detail >= 2) {
+      event.preventDefault();
+      event.stopPropagation();
+      dragStateRef.current = null;
+      void (api.toggleMaximize?.() ?? api.maximizeRestore());
+      return;
+    }
 
     dragStateRef.current = {
       pointerId: event.pointerId,
       startScreenX: event.screenX,
       startScreenY: event.screenY,
       dragging: false,
+      snapTop: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [authMode]);
@@ -159,6 +180,7 @@ export default function AppChrome() {
       api.dragStart?.(toWindowDragPayload(event));
     }
 
+    state.snapTop = event.screenY <= WINDOW_TOP_SNAP_THRESHOLD;
     event.preventDefault();
     api.dragMove?.(toWindowDragPayload(event));
   }, [api]);
@@ -170,9 +192,14 @@ export default function AppChrome() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (state.dragging) api.dragEnd?.();
+    if (state.dragging) {
+      api.dragEnd?.();
+      if (state.snapTop && !maximized) {
+        void (api.toggleMaximize?.() ?? api.maximizeRestore());
+      }
+    }
     dragStateRef.current = null;
-  }, [api]);
+  }, [api, maximized]);
 
   return (
     <header
@@ -188,7 +215,6 @@ export default function AppChrome() {
       } as React.CSSProperties}
     >
       <div className="relative h-full flex items-center justify-between px-3">
-        {/* Header stays no-drag so renderer can implement reliable drag + double-click behavior. */}
         <div
           className="group relative z-30 flex items-center gap-[7px] shrink-0 pr-3 transition-opacity duration-160"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

@@ -152,7 +152,7 @@ function IconAction({ label, icon, onClick, active = false }: { label: string; i
   );
 }
 
-function MessagePreviewRow({ name, message, time }: { name: string; message: string; time: string }) {
+function MessagePreviewRow({ name, message, time }: { key?: unknown; name: string; message: string; time: string }) {
   const initial = name.trim().charAt(0).toLocaleUpperCase('tr-TR') || '?';
 
   return (
@@ -213,7 +213,7 @@ function RoomMembersCard({ count, participants }: { serverName?: string; channel
   );
 }
 
-function RoomMemberCard({ participant }: { participant: MobileVoiceParticipant }) {
+function RoomMemberCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const avatar = participant.avatarUrl && !avatarFailed ? participant.avatarUrl : '';
 

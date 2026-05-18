@@ -639,7 +639,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                 )}
               </div>
             </div>
-            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
+            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/68 leading-snug">
               Her ekleme ayrı kayıt olur. Birden fazla kelime ekleyeceksen her biri için "Kelimeyi ekle" butonunu kullan.
             </p>
             <div className="hidden">
@@ -655,7 +655,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
                 border: '1px solid rgba(var(--glass-tint), 0.10)',
               }}
             />
-            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/50 leading-snug">
+            <p className="mt-1.5 text-[10px] text-[var(--theme-secondary-text)]/68 leading-snug">
               Büyük/küçük harf farkı yok · Türkçe ekler otomatik uyumlu
             </p>
             </div>
@@ -718,11 +718,11 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             </div>
             <div className="flex items-center gap-2">
               {events && events.length > 0 && (
-                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/55">
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/72">
                   {filteredEvents.length === events.length
                     ? `${events.length} olay`
                     : `${filteredEvents.length} / ${events.length} olay`}
-                  {eventTotalPages > 1 && <span className="text-[var(--theme-secondary-text)]/35"> · sayfa {eventCurrentPage}/{eventTotalPages}</span>}
+                  {eventTotalPages > 1 && <span className="text-[var(--theme-secondary-text)]/62"> · sayfa {eventCurrentPage}/{eventTotalPages}</span>}
                 </span>
               )}
               {events && events.length > 0 && (
@@ -749,19 +749,19 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
               <div
                 className="server-settings-input-shell flex-1 min-w-[180px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
               >
-                <Search size={11} className="text-[var(--theme-secondary-text)]/40 shrink-0" />
+                <Search size={11} className="text-[var(--theme-secondary-text)]/62 shrink-0" />
                 <input
                   type="text"
                   value={eventSearch}
                   onChange={e => setEventSearch(e.target.value)}
                   placeholder="Kullanıcı veya kanal ara..."
-                  className="server-settings-input-field flex-1 text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 min-w-0"
+                  className="server-settings-input-field flex-1 text-[11.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/58 min-w-0"
                 />
                 {eventSearch && (
                   <button
                     type="button"
                     onClick={() => setEventSearch('')}
-                    className="text-[var(--theme-secondary-text)]/45 hover:text-[var(--theme-text)] transition-colors shrink-0"
+                    className="text-[var(--theme-secondary-text)]/62 hover:text-[var(--theme-text)] transition-colors shrink-0"
                     title="Temizle"
                   >
                     <X size={11} />
@@ -821,14 +821,14 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
             </div>
           ) : !events || events.length === 0 ? (
             <div
-              className="px-3 py-8 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+              className="px-3 py-8 rounded-lg text-center text-[11px] font-medium text-[var(--theme-secondary-text)]/68"
               style={{ background: 'rgba(var(--glass-tint),0.03)' }}
             >
               Henüz moderasyon olayı yok
             </div>
           ) : filteredEvents.length === 0 ? (
             <div
-              className="px-3 py-8 rounded-lg text-center text-[11px] text-[var(--theme-secondary-text)]/50"
+              className="px-3 py-8 rounded-lg text-center text-[11px] font-medium text-[var(--theme-secondary-text)]/68"
               style={{ background: 'rgba(var(--glass-tint),0.03)' }}
             >
               Bu filtrelerle eşleşen moderasyon olayı yok

@@ -228,7 +228,7 @@ export function AppearanceSection() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-[var(--theme-text)]">Görünüm yoğunluğu</p>
-            <p className="mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+            <p className="mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
               Kompakt mod küçük ekranlarda daha fazla içeriği gösterir.
             </p>
           </div>
@@ -261,7 +261,7 @@ export function AppearanceSection() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Yazı boyutu</p>
-            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
               Uygulama içindeki metinlerin okunabilirliğini ayarlar.
             </p>
           </div>
@@ -294,7 +294,7 @@ export function AppearanceSection() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Alt kontrol çubuğu boyutu</p>
-            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/62">
+            <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
               Alt hızlı kontrol çubuğunun avatar, buton ve boşluk boyutunu ayarlar.
             </p>
           </div>
@@ -540,7 +540,7 @@ export function SoundsSection() {
 
   return (
     <CardSection icon={<Volume2 size={12} />} title="">
-      <p className="text-[10px] text-[var(--theme-secondary-text)]/55 mb-3">Bildirim ve UI sesleri</p>
+      <p className="text-[10px] text-[var(--theme-secondary-text)]/72 mb-3">Bildirim ve UI sesleri</p>
       <div className="divide-y divide-[var(--theme-border)]/50">
 
         {/* 1-3: Giriş/Çıkış · Mikrofon/Hoparlör · Bas-Konuş (oscillator — circle picker) */}
@@ -746,7 +746,7 @@ export function PerformanceSection() {
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Boşta Ayrılma</p>
-              <p className="text-[9px] text-[var(--theme-secondary-text)]/55 mt-0.5 leading-snug">
+              <p className="text-[9px] text-[var(--theme-secondary-text)]/72 mt-0.5 leading-snug">
                 Sohbet odasında{' '}
                 <span className="font-semibold text-violet-300">{autoLeaveMinutes} dakika</span>
                 {' '}boyunca hareketsiz kalırsan otomatik olarak{' '}

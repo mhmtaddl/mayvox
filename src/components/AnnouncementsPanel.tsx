@@ -213,7 +213,7 @@ function RecommendationPreviewCover({ item }: { item: RecommendationItem }) {
   );
 }
 
-function RecommendationPreviewItem({ item, onOpen, compact = false }: { item: RecommendationItem; onOpen: () => void; compact?: boolean }) {
+function RecommendationPreviewItem({ item, onOpen, compact = false }: { key?: unknown; item: RecommendationItem; onOpen: () => void; compact?: boolean }) {
   const authorName = getRecommendationAuthorDisplayName(item);
 
   return (
@@ -1738,22 +1738,14 @@ export default function AnnouncementsPanel({
       onAction: openStreamAdd,
     }] : []),
   ];
-  const summaryTileCount = summaryMetrics.length + 1;
-  const summaryColumnCount = useCompactServerHome
-    ? (summaryTileCount <= 4 ? 2 : 3)
-    : summaryTileCount;
+  const summaryGridTemplate = `repeat(${Math.max(summaryMetrics.length, 1)}, minmax(0, 1fr))`;
   const visibleRulePreviewItems = rulePreviewItems;
 
   return (
     <div ref={panelRef} className="w-full max-w-5xl mx-auto mt-4 mb-[calc(var(--mv-content-bottom-reserve)+0.75rem)] px-4 sm:px-5 pb-8">
-      <section className="mb-3 overflow-hidden rounded-[20px] border border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--glass-tint),0.026)] p-3.5 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.04)] sm:p-4">
-        <div
-          className="grid min-w-0 gap-2"
-          style={{
-            gridTemplateColumns: `repeat(${summaryColumnCount}, minmax(0, 1fr))`,
-          }}
-        >
-          <div className="min-w-0 self-center p-1">
+      <section className="mb-3 overflow-hidden rounded-[18px] border border-[rgba(var(--glass-tint),0.052)] bg-[rgba(var(--glass-tint),0.022)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.035)] sm:p-3.5">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className={`min-w-0 shrink-0 self-center p-1 text-left ${useCompactServerHome ? 'w-[132px]' : 'w-[156px]'}`}>
             <span className="block text-[13px] font-semibold leading-tight text-[var(--theme-text)]">
               {welcomeServerName} sunucusuna hoş geldin
             </span>
@@ -1761,15 +1753,20 @@ export default function AnnouncementsPanel({
               {welcomeDescription || 'Sunucu ana sayfası'}
             </span>
           </div>
+          <div
+            className="grid min-w-0 flex-1 gap-2"
+            style={{ gridTemplateColumns: summaryGridTemplate }}
+          >
               {summaryMetrics.map(metric => {
                 const Icon = metric.icon;
-                const ActionIcon = metric.actionIcon;
                 const isActive = metric.tab ? activeTab === metric.tab : false;
                 return (
                   <div
                     key={metric.label}
-                    style={{ '--section-accent': metric.accentRgb } as React.CSSProperties}
-                    className={`group min-w-0 rounded-2xl border p-2.5 transition-all duration-200 ${
+                    style={{
+                      '--section-accent': metric.accentRgb,
+                    } as React.CSSProperties}
+                    className={`group min-w-0 border transition-all duration-200 ${useCompactServerHome ? 'rounded-[12px] px-1.5 py-1.5' : 'rounded-[14px] px-2 py-2'} ${
                       isActive
                         ? 'border-[rgba(var(--section-accent),0.30)] bg-[rgba(var(--section-accent),0.072)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.055)]'
                         : 'border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] hover:border-[rgba(var(--section-accent),0.24)] hover:bg-[rgba(var(--section-accent),0.042)]'
@@ -1783,10 +1780,9 @@ export default function AnnouncementsPanel({
                       className={`flex w-full items-start justify-between gap-2 text-left ${metric.tab ? '' : 'cursor-default'}`}
                     >
                       <span className="min-w-0">
-                        <span className={`block text-[18px] font-semibold leading-none transition-colors ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>{metric.value}</span>
-                        <span className={`mt-1 block truncate text-[10px] font-medium transition-colors ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>{metric.label}</span>
+                        <span className={`block font-semibold leading-none transition-colors ${useCompactServerHome ? 'text-[14px]' : 'text-[16px]'} ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>{metric.value}</span>
+                        <span className={`mt-0.5 block truncate font-medium transition-colors ${useCompactServerHome ? 'text-[8.5px]' : 'text-[9.5px]'} ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>{metric.label}</span>
                       </span>
-                      <Icon size={14} className={`mt-0.5 shrink-0 transition-colors ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[rgb(var(--section-accent))]/60 group-hover:text-[rgb(var(--section-accent))]'}`} />
                     </button>
                     {metric.action && (
                       <button
@@ -1795,15 +1791,16 @@ export default function AnnouncementsPanel({
                           event.stopPropagation();
                           metric.onAction();
                         }}
-                        className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-xl border border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.012)] px-2 text-[10px] font-semibold text-[var(--theme-secondary-text)]/62 transition-colors hover:border-[rgba(var(--section-accent),0.22)] hover:bg-[rgba(var(--section-accent),0.075)] hover:text-[rgb(var(--section-accent))]"
+                        className={`inline-flex max-w-full items-center justify-center gap-1 border border-[rgba(var(--glass-tint),0.04)] bg-[rgba(var(--glass-tint),0.01)] font-semibold text-[var(--theme-secondary-text)]/62 transition-colors hover:border-[rgba(var(--section-accent),0.20)] hover:bg-[rgba(var(--section-accent),0.065)] hover:text-[rgb(var(--section-accent))] ${useCompactServerHome ? 'mt-1 h-5 rounded-lg px-1.5 text-[8px]' : 'mt-1.5 h-6 rounded-[10px] px-2 text-[9px]'}`}
                       >
-                        <ActionIcon size={11} />
+                        <Icon size={useCompactServerHome ? 8 : 10} className="shrink-0 text-[rgb(var(--section-accent))]/78" />
                         <span className="truncate">{metric.action}</span>
                       </button>
                     )}
                   </div>
                 );
               })}
+          </div>
         </div>
       </section>
 

@@ -493,7 +493,7 @@ function createMainWindow(boundsOverride = null) {
     transparent: true,
     backgroundColor: "#00000000",
     hasShadow: false,
-    thickFrame: false,
+    thickFrame: true,
     roundedCorners: true,
     icon: path.join(__dirname, "../build/icon.ico"),
     webPreferences: mainWebPrefs,
@@ -526,10 +526,29 @@ function createMainWindow(boundsOverride = null) {
   });
 
   // ── Window state changes → renderer'a duyur (maximize ikon güncellemesi) ──
+  const isEdgeFitWindow = () => {
+    try {
+      const bounds = win.getBounds();
+      const display = screen.getDisplayMatching(bounds);
+      const area = display.workArea;
+      const tolerance = 6;
+      return (
+        Math.abs(bounds.x - area.x) <= tolerance &&
+        Math.abs(bounds.y - area.y) <= tolerance &&
+        Math.abs(bounds.width - area.width) <= tolerance &&
+        Math.abs(bounds.height - area.height) <= tolerance
+      );
+    } catch {
+      return false;
+    }
+  };
+
   const sendWinState = () => {
     try {
+      const maximized = win.isMaximized();
       win.webContents.send("window:state", {
-        maximized: win.isMaximized(),
+        maximized,
+        edgeFit: maximized || isEdgeFitWindow(),
         focused: win.isFocused(),
         authMode: authWindowMode,
       });
@@ -539,6 +558,7 @@ function createMainWindow(boundsOverride = null) {
   win.on("unmaximize", sendWinState);
   win.on("focus", sendWinState);
   win.on("blur", sendWinState);
+  win.on("move", sendWinState);
   win.webContents.on("did-finish-load", sendWinState);
 
   const sendResizePercent = () => {
@@ -563,6 +583,7 @@ function createMainWindow(boundsOverride = null) {
   win.on("resize", () => {
     saveState();
     sendResizePercent();
+    sendWinState();
   });
   win.on("move", saveState);
 

@@ -23,6 +23,7 @@ import {
 } from './recommendationTypes';
 
 interface Props {
+  key?: unknown;
   serverId: string;
   item: RecommendationItem;
   currentUser: User;

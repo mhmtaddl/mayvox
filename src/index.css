@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
 
 /* ────────────────────────────────────────────────────────────────────────
    Low-perf mode — Capacitor (Android 9+ eski WebView) için
@@ -389,11 +389,14 @@ html.mv-electron-window .mv-app-shell {
   border-radius: 20px !important;
   overflow: hidden !important;
 }
-html.mv-electron-window.mv-window-maximized .mv-app-shell {
+html.mv-electron-window.mv-window-maximized .mv-app-shell,
+html.mv-electron-window.mv-window-edge-fit .mv-app-shell {
   inset: 0;
   width: 100vw;
   height: 100vh;
   border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 .mv-app-shell {
   position: fixed;
@@ -656,10 +659,11 @@ html[data-theme-pack="crimson"] .mv-app-shell {
     inset 0 -1px 0 rgba(0, 0, 0, 0.30);
 }
 
-html.mv-window-maximized .mv-app-shell {
+html.mv-window-maximized .mv-app-shell,
+html.mv-window-edge-fit .mv-app-shell {
   border-radius: 0;
-  border-color: transparent;
-  box-shadow: none;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 .mv-app-shell.mv-auth-shell {

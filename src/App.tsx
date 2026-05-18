@@ -1962,12 +1962,36 @@ export default function App() {
     lastJoinRef.current = Date.now();
     const joinTrace = createVoiceJoinTrace(channelId);
     logVoiceJoinTrace(joinTrace, 'click', { t: 0 });
-    logger.info('Room join', { channelId, channelName, userId: currentUser.id });
-    // AFK veya manuel Çevrimdışı durumundaysa kanala girince Online'a dön
-    if (currentUser.statusText === 'AFK' || currentUser.statusText === 'Çevrimdışı') {
-      const activeUser = { ...currentUser, statusText: 'Online' };
+    const joiningUser = currentUserRef.current;
+    logger.info('Room join', { channelId, channelName, userId: joiningUser.id });
+
+    // AFK/boşta ayrılma sonrası tekrar oda girişinde kullanıcıyı join başlamadan
+    // senkron olarak Online'a çek. Sadece setState yeterli değil; token/connect
+    // akışı aynı tick içinde currentUserRef okuduğu için ref'i de hemen güncelliyoruz.
+    if (
+      joiningUser.statusText === 'AFK'
+      || joiningUser.statusText === 'Çevrimdışı'
+      || joiningUser.statusText === 'Pasif'
+    ) {
+      const activeUser = { ...joiningUser, statusText: 'Online' };
+      currentUserRef.current = activeUser;
+      autoStatusRef.current = 'active';
+      setAutoStatus('active');
+      recordActivityImmediate();
       setCurrentUser(activeUser);
       setAllUsers(prev => prev.map(u => u.id === activeUser.id ? activeUser : u));
+      sendPresencePatch({
+        appVersion,
+        selfMuted: isMuted,
+        selfDeafened: isDeafened,
+        currentRoom: channelId,
+        serverId: activeServerIdRef.current || undefined,
+        autoStatus: 'active',
+        onlineSince: onlineSinceRef.current,
+        platform: platformRef.current,
+        statusText: 'Online',
+        gameActivity: settings.gameActivityEnabled ? (activeUser.gameActivity || null) : null,
+      });
       presenceChannelRef.current?.send({
         type: 'broadcast',
         event: 'moderation',

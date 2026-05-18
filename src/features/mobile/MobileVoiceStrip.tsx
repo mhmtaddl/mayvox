@@ -47,7 +47,7 @@ export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStrip
   );
 }
 
-function VoiceParticipantCard({ participant }: { participant: MobileVoiceParticipant }) {
+function VoiceParticipantCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const showAvatar = !!participant.avatarUrl && !avatarFailed;
 

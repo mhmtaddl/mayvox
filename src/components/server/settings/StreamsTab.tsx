@@ -247,7 +247,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
                 )}
                 Bağlantıyı değiştir
               </h3>
-              <p className="mt-1.5 text-[11px] leading-5 text-[var(--theme-secondary-text)]/62">
+              <p className="mt-1.5 text-[11px] leading-5 text-[var(--theme-secondary-text)]/72">
                 {replaceConfirm === 'twitch' ? 'Twitch' : 'YouTube'} bağlantısı zaten aktif. Yeni API bilgileri kaydedilirse mevcut bağlantı değiştirilecek.
               </p>
             </div>
@@ -284,7 +284,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[14px] font-semibold text-[var(--theme-text)]">Twitch API ve kanal adresi nasıl bağlanır?</h3>
-                <p className="mt-1 text-[11px] leading-5 text-[var(--theme-secondary-text)]/58">
+                <p className="mt-1 text-[11px] leading-5 text-[var(--theme-secondary-text)]/70">
                   Canlı durumu için Twitch API bilgileri, yayın kartı için de normal Twitch kanal adresi gerekir.
                 </p>
               </div>
@@ -331,7 +331,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[14px] font-semibold text-[var(--theme-text)]">YouTube kanal adresi nasıl eklenir?</h3>
-                <p className="mt-1 text-[11px] leading-5 text-[var(--theme-secondary-text)]/58">
+                <p className="mt-1 text-[11px] leading-5 text-[var(--theme-secondary-text)]/70">
                   Canlı durumu için YouTube API anahtarı, yayın kartı için de normal YouTube kanal adresi gerekir.
                 </p>
               </div>
@@ -376,14 +376,14 @@ export default function StreamsTab({ serverId, showToast }: Props) {
                 <Info size={13} />
               </button>
             </h3>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--theme-secondary-text)]/50">
+            <p className="mt-1 text-[10px] leading-4 text-[var(--theme-secondary-text)]/68">
               Canlı durumunu otomatik almak için Twitch uygulama bilgilerini buraya kaydet.
             </p>
           </div>
           <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${
             twitchIntegration?.hasClientSecret
               ? 'bg-emerald-500/10 text-emerald-300'
-              : 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)]/48'
+              : 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)]/68'
           }`}>
             {twitchIntegration?.hasClientSecret ? 'Bağlı' : 'Bağlı değil'}
           </span>
@@ -391,7 +391,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
 
         {twitchIntegration?.hasClientSecret && !editingTwitchIntegration ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/10 bg-emerald-500/[0.035] px-3 py-2.5">
-            <span className="min-w-0 text-[11px] leading-5 text-[var(--theme-secondary-text)]/62">
+            <span className="min-w-0 text-[11px] leading-5 text-[var(--theme-secondary-text)]/72">
               Twitch API bağlantısı aktif. Kanal eklemek için aşağıdaki kanal alanlarını kullanabilirsin.
             </span>
             <button
@@ -445,7 +445,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
               <Twitch size={13} className="text-[#9146ff]" />
               Twitch kanalı
             </h4>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--theme-secondary-text)]/50">
+            <p className="mt-1 text-[10px] leading-4 text-[var(--theme-secondary-text)]/68">
               Twitch uygulaması zaten sunucuya bağlıysa sadece kendi kanal adını ve adresini ekle.
             </p>
           </div>
@@ -520,7 +520,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
           <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${
             youtubeIntegration?.hasApiKey
               ? 'bg-emerald-500/10 text-emerald-300'
-              : 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)]/48'
+              : 'bg-[rgba(var(--glass-tint),0.04)] text-[var(--theme-secondary-text)]/68'
           }`}>
             {youtubeIntegration?.hasApiKey ? 'Bağlı' : 'Bağlı değil'}
           </span>
@@ -528,7 +528,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
 
         {youtubeIntegration?.hasApiKey && !editingYoutubeIntegration ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/10 bg-emerald-500/[0.035] px-3 py-2.5">
-            <span className="min-w-0 text-[11px] leading-5 text-[var(--theme-secondary-text)]/62">
+            <span className="min-w-0 text-[11px] leading-5 text-[var(--theme-secondary-text)]/72">
               YouTube API bağlantısı aktif. Kanal eklemek için aşağıdaki kanal alanlarını kullanabilirsin.
             </span>
             <button
@@ -617,14 +617,14 @@ export default function StreamsTab({ serverId, showToast }: Props) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="text-[12px] font-semibold text-[var(--theme-text)]">Eklenen yayın önizlemesi</h4>
-            <p className="mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/45">Sunucu ana sayfasında gösterilecek yayıncılar.</p>
+            <p className="mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/68">Sunucu ana sayfasında gösterilecek yayıncılar.</p>
           </div>
         </div>
         <div className="mt-3 space-y-2">
           {loading ? (
-            <div className="text-[11px] font-medium text-[var(--theme-secondary-text)]/42">Yayın bağlantıları yükleniyor...</div>
+            <div className="text-[11px] font-medium text-[var(--theme-secondary-text)]/66">Yayın bağlantıları yükleniyor...</div>
           ) : items.length === 0 ? (
-            <div className="text-[11px] font-medium text-[var(--theme-secondary-text)]/42">Henüz yayın bağlantısı yok.</div>
+            <div className="text-[11px] font-medium text-[var(--theme-secondary-text)]/66">Henüz yayın bağlantısı yok.</div>
           ) : (
             items.map(item => {
               const editing = editingStreamId === item.id;
@@ -686,7 +686,7 @@ export default function StreamsTab({ serverId, showToast }: Props) {
                       <span className="block truncate text-[12px] font-semibold text-[var(--theme-text)]">
                         {item.channelName || platformLabel[item.platform]}
                       </span>
-                      <span className="block truncate text-[10px] text-[var(--theme-secondary-text)]/45">
+                      <span className="block truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/68">
                         {item.liveStatus
                           ? `Canlı${typeof item.viewerCount === 'number' ? ` · ${item.viewerCount.toLocaleString('tr-TR')} izleyici` : ''}`
                           : item.lastLiveEndedAt
@@ -694,12 +694,12 @@ export default function StreamsTab({ serverId, showToast }: Props) {
                             : 'Canlı yayın yok'}
                       </span>
                       {item.liveTitle && (
-                        <span className="mt-0.5 block truncate text-[10px] text-[var(--theme-secondary-text)]/36">
+                        <span className="mt-0.5 block truncate text-[10px] text-[var(--theme-secondary-text)]/62">
                           {item.liveTitle}
                         </span>
                       )}
                       {!item.liveTitle && item.lastLiveTitle && (
-                        <span className="mt-0.5 block truncate text-[10px] text-[var(--theme-secondary-text)]/36">
+                        <span className="mt-0.5 block truncate text-[10px] text-[var(--theme-secondary-text)]/62">
                           {item.lastLiveTitle}
                         </span>
                       )}
