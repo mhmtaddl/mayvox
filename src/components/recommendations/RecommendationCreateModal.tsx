@@ -507,7 +507,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
       <form
         onSubmit={handleSubmit}
         onMouseDown={event => event.stopPropagation()}
-        className="w-full max-w-[1080px] max-h-[92vh] overflow-y-auto xl:overflow-hidden rounded-[24px] border border-[var(--theme-border)]/18 p-3"
+        className="w-full max-w-[760px] max-h-[92vh] overflow-y-auto rounded-[24px] border border-[var(--theme-border)]/18 p-3 custom-scrollbar"
         style={{
           background:
             'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.018), rgba(var(--glass-tint),0.006)), var(--theme-bg)',
@@ -565,7 +565,7 @@ export default function RecommendationCreateModal({ open, loading, serverId, mod
           })}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.1fr)_250px_330px]">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_230px]">
           <section className={`${panelCls} p-2.5 space-y-2.5`}>
             <label>
               <span className={labelCls}>Ne öneriyorsun?</span>

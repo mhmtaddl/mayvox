@@ -18,6 +18,8 @@ import AutoModerationTab from './settings/AutoModerationTab';
 import InsightsTab from './settings/InsightsTab';
 import StreamsTab from './settings/StreamsTab';
 import { displaySlug } from './settings/shared';
+import { isCapacitor } from '../../lib/platform';
+import { resolveAvatarUrls } from '../../lib/statusAvatar';
 
 type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'streams' | 'audit' | 'insights';
 // Legacy initialTab input:
@@ -71,6 +73,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const [server, setServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+  const [serverAvatarFailed, setServerAvatarFailed] = useState(false);
+  const [serverAvatarIndex, setServerAvatarIndex] = useState(0);
   const { accessContext } = useChannel();
   // Aynı serverId ise accessContext'in flag'lerini kullan; farklı server settings açıldıysa
   // capability fallback server.role üzerinden (legacy baseRole).
@@ -103,6 +107,11 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   }, [serverId, showToast]);
 
   useEffect(() => { loadServer(); }, [loadServer]);
+
+  useEffect(() => {
+    setServerAvatarFailed(false);
+    setServerAvatarIndex(0);
+  }, [server?.avatarUrl]);
 
   useEffect(() => {
     const onHighlight = (event: Event) => {
@@ -182,6 +191,10 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const canKickMembers = sameServerCtx?.flags.canKickMembers ?? (server.role === 'owner' || server.role === 'admin' || server.role === 'mod');
   // insights.view — owner/super_admin/admin/super_mod. Legacy fallback: canManageServer eşdeğeri.
   const canViewInsights = sameServerCtx?.flags.canViewInsights ?? (server.role === 'owner' || server.role === 'admin');
+  const compactTabletLayout = isCapacitor();
+  const serverAvatarUrls = resolveAvatarUrls(server.avatarUrl);
+  const activeServerAvatarSrc = serverAvatarUrls[serverAvatarIndex] || '';
+  const showServerAvatar = !!activeServerAvatarSrc && !serverAvatarFailed;
 
   // Tabs dinamik — capability'ye göre görünür
   const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -202,29 +215,87 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     ...(canViewInsights ? [{ id: 'insights' as Tab, label: 'İçgörüler', icon: <BarChart3 size={13} /> }] : []),
   ];
 
+  const renderTabButton = (t: { id: Tab; label: string; icon: React.ReactNode; badge?: number }, tabletMode: boolean) => {
+    const active = tab === t.id;
+    return (
+      <button
+        key={t.id}
+        onClick={() => setTab(t.id)}
+        className={`relative ${tabletMode ? 'h-10 min-w-[92px] flex-1 snap-start rounded-[13px] px-2 text-[10px]' : 'flex-1 min-w-0 rounded-lg px-1.5 py-2 text-[10px] sm:px-3.5 sm:text-[12px]'} flex items-center justify-center gap-1 font-semibold transition-all ${
+          active
+            ? tabletMode
+              ? 'border border-[rgba(var(--theme-accent-rgb),0.30)] bg-[rgba(var(--theme-accent-rgb),0.072)] text-[var(--theme-accent)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.055)]'
+              : 'text-[var(--theme-text)]'
+            : tabletMode
+              ? 'border border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] text-[var(--theme-secondary-text)]/70 hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.035)]'
+              : 'text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)]'
+        }`}
+      >
+        <span className={`shrink-0 transition-colors ${active ? 'text-[var(--theme-accent)]' : ''}`}>{t.icon}</span>
+        <span className="truncate">{t.label}</span>
+        {!!t.badge && t.badge > 0 && (
+          <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-[var(--theme-text-on-accent,#000)] shadow-[0_0_6px_rgba(var(--theme-accent-rgb),0.45)]">
+            {t.badge > 99 ? '99+' : t.badge}
+          </span>
+        )}
+        {active && !tabletMode && (
+          <span className="absolute left-3 right-3 -bottom-[9px] h-[2px] bg-[var(--theme-accent)] rounded-full shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.45)]" />
+        )}
+      </button>
+    );
+  };
+
   return (
-    <div className="relative flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+    <div
+      className="relative flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden touch-pan-y"
+      style={compactTabletLayout ? { background: 'rgba(var(--glass-tint), 0.006)' } : undefined}
+    >
       <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         {/* ── Identity Strip — compact premium header ── */}
         <div
-          className="relative px-6 md:px-8 py-4 border-b border-[rgba(var(--glass-tint),0.06)]"
-          style={{ background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.04), transparent 80%)' }}
+          className={compactTabletLayout
+            ? 'relative z-10 shrink-0 px-3 pt-0.5 pb-1'
+            : 'relative px-6 md:px-8 py-4 border-b border-[rgba(var(--glass-tint),0.06)]'
+          }
+          style={compactTabletLayout ? { background: 'transparent' } : { background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.04), transparent 80%)' }}
         >
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className={compactTabletLayout ? 'flex min-h-[42px] items-center gap-2.5' : 'flex items-center gap-3 md:gap-4'}>
             {/* Avatar */}
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
-              style={{ background: server.avatarUrl ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.10)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
-              {server.avatarUrl ? <img src={server.avatarUrl} alt="" className="w-11 h-11 object-cover" /> : <span className="text-[15px] font-bold text-[var(--theme-accent)]">{server.shortName}</span>}
+            <div className={`${compactTabletLayout ? 'h-10 w-10 rounded-[13px]' : 'w-11 h-11 rounded-xl'} flex items-center justify-center shrink-0 overflow-hidden`}
+              style={{ background: showServerAvatar ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.10)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
+              {showServerAvatar ? (
+                <img
+                  src={activeServerAvatarSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
+                      setServerAvatarIndex(index => index + 1);
+                      return;
+                    }
+                    setServerAvatarFailed(true);
+                  }}
+                />
+              ) : (
+                <span className={`${compactTabletLayout ? 'text-[13px]' : 'text-[15px]'} font-bold text-[var(--theme-accent)]`}>{server.shortName}</span>
+              )}
             </div>
 
             {/* Name + slug */}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-[15px] md:text-[16px] font-bold text-[var(--theme-text)] truncate tracking-tight leading-none">{server.name}</h2>
-              <span className="text-[11px] font-mono text-[var(--theme-secondary-text)]/55 tracking-wide block mt-1 truncate">{displaySlug(server.slug)}</span>
+            <div className={compactTabletLayout ? 'min-w-[128px] max-w-[172px] shrink-0' : 'flex-1 min-w-0'}>
+              <h2 className={`${compactTabletLayout ? 'text-[13px]' : 'text-[15px] md:text-[16px]'} font-bold text-[var(--theme-text)] truncate tracking-tight leading-none`}>{server.name}</h2>
+              <span className={`${compactTabletLayout ? 'text-[9px]' : 'text-[11px]'} font-mono text-[var(--theme-secondary-text)]/55 tracking-wide block mt-1 truncate`}>{displaySlug(server.slug)}</span>
             </div>
 
+            {compactTabletLayout && !server.isBanned && (
+              <div className="flex min-w-0 flex-1 touch-pan-y snap-x gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                {tabs.map(t => renderTabButton(t, true))}
+              </div>
+            )}
+
             {/* Inline pill stats */}
-            <div className="hidden md:flex items-center gap-1.5 shrink-0">
+            <div className={`${compactTabletLayout ? 'flex' : 'hidden md:flex'} items-center gap-1.5 shrink-0`}>
               {(() => {
                 const p = server.plan === 'pro' || server.plan === 'ultra' ? server.plan : 'free';
                 const cls = p === 'pro'
@@ -247,14 +318,14 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             </div>
 
             <button onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors shrink-0"
+              className={`${compactTabletLayout ? 'h-7 w-7' : 'w-8 h-8'} rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/40 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.06)] transition-colors shrink-0`}
               aria-label="Kapat"
-            ><X size={17} /></button>
+            ><X size={compactTabletLayout ? 15 : 17} /></button>
           </div>
 
           {/* Mobile pills (under header) */}
-          {overview && (
-            <div className="md:hidden flex items-center gap-1.5 mt-3">
+          {!compactTabletLayout && overview && (
+            <div className={`${compactTabletLayout ? 'mt-2' : 'mt-3'} md:hidden flex items-center gap-1.5`}>
               {(() => {
                 const p = server.plan === 'pro' || server.plan === 'ultra' ? server.plan : 'free';
                 const cls = p === 'pro' ? 'bg-sky-500/15 text-sky-400' : p === 'ultra' ? 'bg-violet-500/15 text-violet-400' : 'bg-emerald-500/15 text-emerald-400';
@@ -267,35 +338,11 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
         </div>
 
         {/* Restricted modunda tab navigasyonu render edilmez — settings tek kilitli panel olur. */}
-        {!server.isBanned && (
+        {!compactTabletLayout && !server.isBanned && (
           <div className="flex items-center gap-0.5 px-2 md:px-6 py-2 border-b border-[rgba(var(--glass-tint),0.04)] overflow-hidden"
             style={{ background: 'rgba(var(--glass-tint), 0.015)' }}
           >
-            {tabs.map(t => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`relative flex-1 min-w-0 flex items-center justify-center gap-1 px-1.5 sm:px-3.5 py-2 rounded-lg text-[10px] sm:text-[12px] font-semibold transition-all ${
-                    active
-                      ? 'text-[var(--theme-text)]'
-                      : 'text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)]'
-                  }`}
-                >
-                  <span className={`transition-colors ${active ? 'text-[var(--theme-accent)]' : ''}`}>{t.icon}</span>
-                  <span className="truncate">{t.label}</span>
-                  {!!t.badge && t.badge > 0 && (
-                    <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-[var(--theme-text-on-accent,#000)] shadow-[0_0_6px_rgba(var(--theme-accent-rgb),0.45)]">
-                      {t.badge > 99 ? '99+' : t.badge}
-                    </span>
-                  )}
-                  {active && (
-                    <span className="absolute left-3 right-3 -bottom-[9px] h-[2px] bg-[var(--theme-accent)] rounded-full shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.45)]" />
-                  )}
-                </button>
-              );
-            })}
+            {tabs.map(t => renderTabButton(t, false))}
             {/* Tab-bar sağı: aktif tab'a özgü action pill'leri */}
             {tab === 'automod' && canKickMembers && (
               <TabActionPills
@@ -318,7 +365,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           </div>
         )}
         {/* Content */}
-        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 lg:px-8 py-6">
+        <div className={`${compactTabletLayout ? 'mobile-server-home-scrollbar touch-pan-y px-3 pt-2 pb-3' : 'px-4 sm:px-6 lg:px-8 py-6'} flex-1 min-w-0 overflow-y-auto overflow-x-hidden`}>
           {server.isBanned ? (
             <RestrictedSettingsPanel server={server} />
           ) : (<>
@@ -329,7 +376,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             showToast={showToast}
             onStateChange={setGeneralState}
             actionsRef={generalActionsRef} />}
-          {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={(t) => setTab(t)} />}
+          {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={(t) => setTab(t)} compactTabletLayout={compactTabletLayout} />}
           {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
           {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
           {tab === 'invites' && (canCreateInvite || canRevokeInvite) && (

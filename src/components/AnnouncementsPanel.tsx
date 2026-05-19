@@ -900,6 +900,7 @@ function InviteApplicationsFeed({
   onAccept,
   onReject,
   onManage,
+  showManageButton = true,
 }: {
   items: JoinRequestListItem[] | null;
   error: string;
@@ -907,6 +908,7 @@ function InviteApplicationsFeed({
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
   onManage: () => void;
+  showManageButton?: boolean;
 }) {
   const pendingItems = (items ?? []).filter(it => it.status === 'pending');
   const hasPendingItems = pendingItems.length > 0;
@@ -927,20 +929,22 @@ function InviteApplicationsFeed({
             <span className="mt-0.5 block truncate text-[10px] text-[var(--theme-secondary-text)]/50">Sunucuya katılma başvuruları</span>
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onManage}
-          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[10px] font-semibold text-[var(--theme-accent)] transition-colors sm:self-auto"
-          style={{
-            background: 'rgba(var(--theme-accent-rgb), 0.085)',
-            border: '1px solid rgba(var(--theme-accent-rgb), 0.16)',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.15)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.085)'; }}
-        >
-          <Users size={12} />
-          Davetleri Yönet
-        </button>
+        {showManageButton && (
+          <button
+            type="button"
+            onClick={onManage}
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[10px] font-semibold text-[var(--theme-accent)] transition-colors sm:self-auto"
+            style={{
+              background: 'rgba(var(--theme-accent-rgb), 0.085)',
+              border: '1px solid rgba(var(--theme-accent-rgb), 0.16)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.15)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(var(--theme-accent-rgb), 0.085)'; }}
+          >
+            <Users size={12} />
+            Davetleri Yönet
+          </button>
+        )}
       </div>
 
       {error && (
@@ -1069,9 +1073,10 @@ interface Props {
   canViewRoomActivity?: boolean;
   canViewInviteApplications?: boolean;
   onOpenInviteApplications?: () => void;
+  mobileTabletLayout?: boolean;
 }
 
-type Tab = 'announcement' | 'event' | 'invites' | 'recommendations';
+type Tab = 'announcement' | 'event' | 'invites' | 'recommendations' | 'streams';
 type ActiveSection = Tab | null;
 type ServerHomeRoomSession = {
   key: string;
@@ -1167,6 +1172,7 @@ export default function AnnouncementsPanel({
   canViewRoomActivity = false,
   canViewInviteApplications = false,
   onOpenInviteApplications,
+  mobileTabletLayout = false,
 }: Props) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1191,6 +1197,7 @@ export default function AnnouncementsPanel({
   const [quickYoutubeName, setQuickYoutubeName] = useState('');
   const [quickYoutubeUrl, setQuickYoutubeUrl] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [mobileTouchStart, setMobileTouchStart] = useState<{ x: number; y: number } | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(0);
   const showToast = useCallback((msg: string) => {
@@ -1295,6 +1302,35 @@ export default function AnnouncementsPanel({
   useEffect(() => {
     setActiveTab(null);
   }, [serverId]);
+
+  useEffect(() => {
+    if (!mobileTabletLayout || typeof window === 'undefined') return;
+    const resetHome = () => setActiveTab(null);
+    window.addEventListener('mayvox:mobile-server-home-reset', resetHome);
+    return () => window.removeEventListener('mayvox:mobile-server-home-reset', resetHome);
+  }, [mobileTabletLayout]);
+
+  useEffect(() => {
+    if (!mobileTabletLayout || typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('mayvox:mobile-server-home-detail', { detail: { open: !!activeTab } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('mayvox:mobile-server-home-detail', { detail: { open: false } }));
+    };
+  }, [activeTab, mobileTabletLayout]);
+
+  useEffect(() => {
+    if (!mobileTabletLayout || !activeTab || typeof window === 'undefined') return;
+    const handleTabletHomeBack = (event: Event) => {
+      const profileMenuOpen = (window as typeof window & { __mayvoxProfileMenuOpen?: boolean }).__mayvoxProfileMenuOpen;
+      const dmPanelOpen = (window as typeof window & { __mayvoxDmPanelOpen?: boolean }).__mayvoxDmPanelOpen;
+      if (profileMenuOpen || dmPanelOpen) return;
+      event.stopImmediatePropagation();
+      (window as typeof window & { __mayvoxServerHomeBackHandledAt?: number }).__mayvoxServerHomeBackHandledAt = Date.now();
+      setActiveTab(null);
+    };
+    window.addEventListener('mayvox:android-back', handleTabletHomeBack, { capture: true });
+    return () => window.removeEventListener('mayvox:android-back', handleTabletHomeBack, { capture: true });
+  }, [activeTab, mobileTabletLayout]);
 
   useEffect(() => {
     if (activeTab === 'invites' && !showInvitesTab) setActiveTab(null);
@@ -1707,16 +1743,6 @@ export default function AnnouncementsPanel({
       actionIcon: Calendar,
       onAction: () => { setEditTarget(null); setModalType('event'); setModalOpen(true); },
     },
-    ...(showInvitesTab ? [{
-      label: 'Başvuru',
-      value: pendingJoinRequestCount,
-      tab: 'invites' as Tab,
-      icon: UserCheck,
-      accentRgb: '56, 189, 248',
-      action: 'Davetleri incele',
-      actionIcon: Users,
-      onAction: () => setActiveTab('invites'),
-    }] : []),
     ...(showRecommendationsTab ? [{
       label: 'Keşif',
       value: recommendationPreviewCount,
@@ -1730,22 +1756,60 @@ export default function AnnouncementsPanel({
     ...(canModerateCommunityContent || streamPreviewItems.length > 0 ? [{
       label: 'Yayın',
       value: liveStreamCount,
-      tab: null,
+      tab: 'streams' as Tab,
       icon: Radio,
       accentRgb: '248, 113, 113',
       action: canModerateCommunityContent ? (streamModalChecking ? 'Kontrol ediliyor' : 'Yayın ekle') : '',
       actionIcon: PlusCircle,
       onAction: openStreamAdd,
     }] : []),
+    ...(showInvitesTab ? [{
+      label: 'Başvuru',
+      value: pendingJoinRequestCount,
+      tab: 'invites' as Tab,
+      icon: UserCheck,
+      accentRgb: '56, 189, 248',
+      action: mobileTabletLayout ? 'Davetleri Yönet' : '',
+      actionIcon: Users,
+      onAction: onOpenInviteApplications ?? (() => setActiveTab('invites')),
+    }] : []),
   ];
   const summaryGridTemplate = `repeat(${Math.max(summaryMetrics.length, 1)}, minmax(0, 1fr))`;
   const visibleRulePreviewItems = rulePreviewItems;
+  const mobileSummaryTabs = summaryMetrics
+    .map(metric => metric.tab)
+    .filter((tab): tab is Tab => Boolean(tab));
+
+  const selectMobileTab = (tab: Tab) => {
+    setActiveTab(current => current === tab ? null : tab);
+  };
+
+  const handleMobileSummaryTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!mobileTabletLayout || !mobileTouchStart || mobileSummaryTabs.length < 2) return;
+    const touch = event.changedTouches[0];
+    setMobileTouchStart(null);
+    if (!touch) return;
+    const deltaX = touch.clientX - mobileTouchStart.x;
+    const deltaY = touch.clientY - mobileTouchStart.y;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.12) return;
+    const currentIndex = activeTab ? Math.max(0, mobileSummaryTabs.findIndex(tab => tab === activeTab)) : 0;
+    const nextIndex = deltaX < 0
+      ? Math.min(mobileSummaryTabs.length - 1, currentIndex + 1)
+      : Math.max(0, currentIndex - 1);
+    setActiveTab(mobileSummaryTabs[nextIndex]);
+  };
 
   return (
-    <div ref={panelRef} className="w-full max-w-5xl mx-auto mt-4 mb-[calc(var(--mv-content-bottom-reserve)+0.75rem)] px-4 sm:px-5 pb-8">
-      <section className="mb-3 overflow-hidden rounded-[18px] border border-[rgba(var(--glass-tint),0.052)] bg-[rgba(var(--glass-tint),0.022)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.035)] sm:p-3.5">
-        <div className="flex min-w-0 items-start gap-2">
-          <div className={`min-w-0 shrink-0 self-center p-1 text-left ${useCompactServerHome ? 'w-[132px]' : 'w-[156px]'}`}>
+    <div
+      ref={panelRef}
+      className={mobileTabletLayout ? 'flex h-full min-h-0 w-full touch-pan-y flex-col overflow-hidden px-3 pt-0.5' : 'w-full max-w-5xl mx-auto mt-4 mb-[calc(var(--mv-content-bottom-reserve)+0.75rem)] px-4 sm:px-5 pb-8'}
+      onTouchStart={mobileTabletLayout ? event => setMobileTouchStart({ x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 }) : undefined}
+      onTouchEnd={mobileTabletLayout ? handleMobileSummaryTouchEnd : undefined}
+      onTouchCancel={mobileTabletLayout ? () => setMobileTouchStart(null) : undefined}
+    >
+      <section className={mobileTabletLayout ? 'z-10 mb-2 shrink-0 px-0 py-0.5' : 'mb-3 overflow-hidden rounded-[18px] border border-[rgba(var(--glass-tint),0.052)] bg-[rgba(var(--glass-tint),0.022)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.035)] sm:p-3.5'}>
+        <div className={mobileTabletLayout ? 'flex min-w-0 flex-col items-center gap-1.5' : 'flex min-w-0 items-start gap-2'}>
+          <div className={mobileTabletLayout ? 'hidden' : `min-w-0 shrink-0 self-center p-1 text-left ${useCompactServerHome ? 'w-[132px]' : 'w-[156px]'}`}>
             <span className="block text-[13px] font-semibold leading-tight text-[var(--theme-text)]">
               {welcomeServerName} sunucusuna hoş geldin
             </span>
@@ -1754,8 +1818,8 @@ export default function AnnouncementsPanel({
             </span>
           </div>
           <div
-            className="grid min-w-0 flex-1 gap-2"
-            style={{ gridTemplateColumns: summaryGridTemplate }}
+            className={mobileTabletLayout ? 'flex w-full min-w-0 touch-pan-y snap-x gap-2 overflow-x-auto pb-1 custom-scrollbar' : 'grid min-w-0 flex-1 gap-2'}
+            style={mobileTabletLayout ? undefined : { gridTemplateColumns: summaryGridTemplate }}
           >
               {summaryMetrics.map(metric => {
                 const Icon = metric.icon;
@@ -1766,7 +1830,7 @@ export default function AnnouncementsPanel({
                     style={{
                       '--section-accent': metric.accentRgb,
                     } as React.CSSProperties}
-                    className={`group min-w-0 border transition-all duration-200 ${useCompactServerHome ? 'rounded-[12px] px-1.5 py-1.5' : 'rounded-[14px] px-2 py-2'} ${
+                    className={`group min-w-0 border transition-all duration-200 ${mobileTabletLayout ? 'flex h-10 min-w-[108px] flex-1 snap-start items-center rounded-[13px] px-2 py-0.5' : useCompactServerHome ? 'rounded-[12px] px-1.5 py-1.5' : 'rounded-[14px] px-2 py-2'} ${
                       isActive
                         ? 'border-[rgba(var(--section-accent),0.30)] bg-[rgba(var(--section-accent),0.072)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.055)]'
                         : 'border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] hover:border-[rgba(var(--section-accent),0.24)] hover:bg-[rgba(var(--section-accent),0.042)]'
@@ -1775,16 +1839,35 @@ export default function AnnouncementsPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        if (metric.tab) toggleSection(metric.tab);
+                        if (metric.tab) {
+                          if (mobileTabletLayout) selectMobileTab(metric.tab);
+                          else toggleSection(metric.tab);
+                        }
                       }}
-                      className={`flex w-full items-start justify-between gap-2 text-left ${metric.tab ? '' : 'cursor-default'}`}
+                      className={`flex h-full w-full items-center justify-between gap-1.5 text-left ${metric.tab ? '' : 'cursor-default'}`}
                     >
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className={`block font-semibold leading-none transition-colors ${useCompactServerHome ? 'text-[14px]' : 'text-[16px]'} ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>{metric.value}</span>
-                        <span className={`mt-0.5 block truncate font-medium transition-colors ${useCompactServerHome ? 'text-[8.5px]' : 'text-[9.5px]'} ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>{metric.label}</span>
+                        <span className={`mt-0.5 flex min-w-0 items-center gap-1 truncate font-medium transition-colors ${useCompactServerHome ? 'text-[8.5px]' : 'text-[9.5px]'} ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>
+                          {mobileTabletLayout && <Icon size={9.5} className="shrink-0 text-[rgb(var(--section-accent))]/78" />}
+                          <span className="truncate">{metric.label}</span>
+                        </span>
                       </span>
+                      {mobileTabletLayout && metric.action && (
+                        <span
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            metric.onAction();
+                          }}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[9px] border border-[rgba(var(--section-accent),0.16)] bg-[rgba(var(--section-accent),0.045)] text-[rgb(var(--section-accent))]"
+                          aria-label={metric.action}
+                          title={metric.action}
+                        >
+                          <PlusCircle size={11} strokeWidth={2.35} className="shrink-0 opacity-82" />
+                        </span>
+                      )}
                     </button>
-                    {metric.action && (
+                    {!mobileTabletLayout && metric.action && (
                       <button
                         type="button"
                         onClick={(event) => {
@@ -1804,7 +1887,9 @@ export default function AnnouncementsPanel({
         </div>
       </section>
 
-      <section
+      <div className={mobileTabletLayout ? 'mobile-server-home-scrollbar min-h-0 flex-1 overflow-y-auto pb-3' : 'contents'}>
+
+      {!mobileTabletLayout && <section
         className="mb-3 grid gap-3"
         style={{
           gridTemplateColumns: useCompactServerHome
@@ -1944,9 +2029,9 @@ export default function AnnouncementsPanel({
             <div className={`${useCompactServerHome ? 'py-2 text-[10px]' : 'py-3 text-[12px]'} text-[var(--theme-secondary-text)]/45`}>Henüz canlı yayın yok.</div>
           )}
         </div>
-      </section>
+      </section>}
 
-      <section
+      {(!mobileTabletLayout || !activeTab) && <section
         className="mb-4 grid gap-3"
         style={{
           gridTemplateColumns: useCompactServerHome
@@ -2139,7 +2224,7 @@ export default function AnnouncementsPanel({
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
       {streamAddModalOpen && createPortal(
         <AnimatePresence>
@@ -2289,7 +2374,7 @@ export default function AnnouncementsPanel({
       )}
 
       {/* Empty state */}
-      {activeTab && activeTab !== 'invites' && activeTab !== 'recommendations' && filtered.length === 0 && (
+      {activeTab && activeTab !== 'invites' && activeTab !== 'recommendations' && activeTab !== 'streams' && filtered.length === 0 && (
         <div className="rounded-[18px] border border-transparent bg-transparent px-4 py-4">
           <div className="flex flex-col items-center justify-center text-center">
             <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-[rgba(var(--theme-accent-rgb),0.045)] text-[var(--theme-accent)]/70">
@@ -2324,6 +2409,51 @@ export default function AnnouncementsPanel({
             canModerateContent={canModerateContent}
           />
         </React.Suspense>
+        ) : activeTab === 'streams' ? (
+          <div className="space-y-2 rounded-[18px] border border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.012)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-[13px] font-semibold text-[var(--theme-text)]">Yayınlar</h3>
+                <p className="mt-0.5 text-[10px] text-[var(--theme-secondary-text)]/48">Sunucudaki canlı ve kayıtlı yayın bağlantıları</p>
+              </div>
+              {canModerateCommunityContent && !mobileTabletLayout && (
+                <button
+                  type="button"
+                  onClick={openStreamAdd}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[11px] border border-red-300/18 bg-red-500/[0.055] px-3 text-[10px] font-semibold text-red-300 transition-colors hover:bg-red-500/[0.08]"
+                >
+                  <PlusCircle size={12} />
+                  Yayın ekle
+                </button>
+              )}
+            </div>
+            {streamPreviewItems.length > 0 ? (
+              streamPreviewItems.map(item => (
+                <a
+                  key={item.id}
+                  href={item.channelUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 items-center gap-2.5 rounded-xl border border-red-400/12 bg-red-500/[0.02] px-3 py-2.5 transition-colors hover:border-red-300/22 hover:bg-red-500/[0.04]"
+                >
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${item.platform === 'youtube' ? 'text-[#ff0033]' : item.platform === 'twitch' ? 'text-[#9146ff]' : 'text-red-300'}`}>
+                    {item.platform === 'youtube' ? <Youtube size={20} /> : item.platform === 'twitch' ? <Twitch size={20} /> : <Radio size={18} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[12px] font-semibold text-[var(--theme-text)]">{item.channelName || item.displayName || 'Yayıncı'}</span>
+                      {item.liveStatus && <span className="shrink-0 rounded-full bg-red-500/10 px-1.5 py-[2px] text-[8px] font-black uppercase tracking-[0.04em] text-red-300 ring-1 ring-red-400/15">Canlı</span>}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10.5px] text-[var(--theme-secondary-text)]/52">{item.liveTitle || item.lastLiveTitle || item.channelUrl}</span>
+                  </span>
+                </a>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-[rgba(var(--glass-tint),0.05)] px-3 py-4 text-center text-[11px] text-[var(--theme-secondary-text)]/45">
+                Henüz yayın bağlantısı yok.
+              </div>
+            )}
+          </div>
         ) : activeTab === 'invites' ? (
           <InviteApplicationsFeed
             items={joinRequestItems}
@@ -2332,6 +2462,7 @@ export default function AnnouncementsPanel({
             onAccept={acceptJoinRequest}
             onReject={rejectJoinRequest}
             onManage={onOpenInviteApplications ?? (() => undefined)}
+            showManageButton={!mobileTabletLayout}
           />
         ) : (
           <AnimatePresence mode="popLayout">
@@ -2390,6 +2521,7 @@ export default function AnnouncementsPanel({
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

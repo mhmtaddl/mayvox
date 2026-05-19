@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MobileBottomBar from './MobileBottomBar';
 import MobileContextTabs, { type MobileContextTab } from './MobileContextTabs';
 import MobileTopBar from './MobileTopBar';
+import type { SearchResult } from '../../components/SocialSearchHub';
 
 export type MobileShellView = 'home' | 'room' | 'discover' | 'social' | 'notifications' | 'settings' | 'profile';
 
@@ -11,6 +12,12 @@ interface MobileAppShellProps {
   activeServerShortName?: string;
   activeServerMotto?: string;
   activeChannelName?: string;
+  hasActiveChannel?: boolean;
+  activeChannelMode?: string;
+  activeChannelIconName?: string;
+  activeChannelIconColor?: string;
+  cardStyle?: string;
+  forceShowHomeButton?: boolean;
   userAvatarUrl?: string;
   userLabel?: string;
   userStatusText?: string;
@@ -24,11 +31,15 @@ interface MobileAppShellProps {
   onOpenNotifications?: () => void;
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
+  onOpenServerSettings?: () => void;
   onOpenProfile?: () => void;
   onOpenAccountSettings?: () => void;
+  currentUserId?: string;
+  onSearchUserClick?: (user: SearchResult, position: { x: number; y: number }) => void;
   onChangeStatus?: (status: string) => void;
   onOpenQuickActions?: () => void;
   onGoHome?: () => void;
+  onReturnToRoom?: () => void;
   onLeaveRoom?: () => void;
   onTabChange?: (key: string) => void;
   onLogout?: () => void;
@@ -41,16 +52,9 @@ interface MobileAppShellProps {
   onToggleDeafen?: () => void;
   onPttChange?: (pressed: boolean) => void;
   onToggleNoiseSuppression?: () => void;
+  onCycleCardStyle?: () => void;
   children?: React.ReactNode;
 }
-
-const DISCOVER_TABS: MobileContextTab[] = [
-  { key: 'featured', label: 'One cikan' },
-  { key: 'popular', label: 'Populer' },
-  { key: 'games', label: 'Oyun' },
-  { key: 'community', label: 'Topluluk' },
-  { key: 'new', label: 'Yeni' },
-];
 
 export default function MobileAppShell({
   activeServerName,
@@ -58,6 +62,12 @@ export default function MobileAppShell({
   activeServerShortName,
   activeServerMotto,
   activeChannelName,
+  hasActiveChannel,
+  activeChannelMode,
+  activeChannelIconName,
+  activeChannelIconColor,
+  cardStyle,
+  forceShowHomeButton,
   userAvatarUrl,
   userLabel,
   userStatusText,
@@ -71,11 +81,15 @@ export default function MobileAppShell({
   onOpenNotifications,
   onOpenFriends,
   onOpenSettings,
+  onOpenServerSettings,
   onOpenProfile,
   onOpenAccountSettings,
+  currentUserId,
+  onSearchUserClick,
   onChangeStatus,
   onOpenQuickActions,
   onGoHome,
+  onReturnToRoom,
   onLeaveRoom,
   onTabChange,
   onLogout,
@@ -88,13 +102,13 @@ export default function MobileAppShell({
   onToggleDeafen,
   onPttChange,
   onToggleNoiseSuppression,
+  onCycleCardStyle,
   children,
 }: MobileAppShellProps) {
   const shellTabs = useMemo(() => {
     if (tabs && tabs.length > 0) return tabs;
-    if (currentView === 'discover') return DISCOVER_TABS;
     return undefined;
-  }, [currentView, tabs]);
+  }, [tabs]);
   const [localActiveTabKey, setLocalActiveTabKey] = useState(shellTabs?.[0]?.key ?? '');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const selectedTabKey = activeTabKey ?? localActiveTabKey;
@@ -139,7 +153,9 @@ export default function MobileAppShell({
         activeChannelName={activeChannelName}
         currentView={currentView}
         onOpenChannels={onOpenChannels}
-        onOpenSettings={onOpenSettings}
+        onOpenSettings={onOpenServerSettings ?? onOpenSettings}
+        currentUserId={currentUserId}
+        onSearchUserClick={onSearchUserClick}
       />
 
       {showTabs && <MobileContextTabs tabs={shellTabs} activeKey={selectedTabKey} onChange={handleTabChange} />}
@@ -160,11 +176,18 @@ export default function MobileAppShell({
         activeServerAvatarUrl={activeServerAvatarUrl}
         activeServerShortName={activeServerShortName}
         activeChannelName={activeChannelName}
+        hasActiveChannel={hasActiveChannel}
+        activeChannelMode={activeChannelMode}
+        activeChannelIconName={activeChannelIconName}
+        activeChannelIconColor={activeChannelIconColor}
+        cardStyle={cardStyle}
+        forceShowHomeButton={forceShowHomeButton}
         userAvatarUrl={userAvatarUrl}
         userLabel={userLabel}
         userStatusText={userStatusText}
         currentView={currentView}
         onGoHome={onGoHome}
+        onReturnToRoom={onReturnToRoom}
         onOpenChannels={onOpenChannels}
         onOpenRoom={onOpenRoom}
         onOpenProfile={onOpenProfile}
@@ -179,6 +202,7 @@ export default function MobileAppShell({
         onToggleDeafen={onToggleDeafen}
         onPttChange={onPttChange}
         onToggleNoiseSuppression={onToggleNoiseSuppression}
+        onCycleCardStyle={onCycleCardStyle}
       />
     </div>
   );

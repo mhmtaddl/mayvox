@@ -76,12 +76,12 @@ export default function RoleBadge({
         title={label}
         aria-label={label}
         className={[
-          'inline-flex h-4 w-4 shrink-0 items-center justify-center leading-none transition-colors duration-150',
+          compact ? 'inline-flex h-3 w-3 shrink-0 items-center justify-center leading-none transition-colors duration-150' : 'inline-flex h-4 w-4 shrink-0 items-center justify-center leading-none transition-colors duration-150',
           subtle ? 'opacity-80 hover:opacity-100' : '',
           meta.inlineClassName,
         ].join(' ')}
       >
-        <Icon size={compact ? 12 : 13} strokeWidth={2.25} />
+        <Icon size={compact ? 9 : 13} strokeWidth={2.25} />
         {showLabel && <span className="sr-only">{compact ? meta.short : label}</span>}
       </span>
     );

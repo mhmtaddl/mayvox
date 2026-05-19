@@ -10,6 +10,7 @@ import AvatarCropModal from '../../AvatarCropModal';
 import AvatarContent from '../../AvatarContent';
 import { fmtDate, memberDisplayName } from './shared';
 import { useUser } from '../../../contexts/UserContext';
+import { resolveAvatarUrls } from '../../../lib/statusAvatar';
 
 export interface GeneralActions {
   onSave: () => void;
@@ -263,6 +264,8 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [logoLoading, setLogoLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarIndex, setAvatarIndex] = useState(0);
 
   // Owner bilgisi — read-only, hafif fetch (getMembers mevcut endpoint)
   const [ownerMember, setOwnerMember] = useState<ServerMember | null>(null);
@@ -276,6 +279,11 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [server.id]);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+    setAvatarIndex(0);
+  }, [server.avatarUrl]);
 
   // AI Insight — contextual, single sentence, null ise hiç render edilmez
   // Dev preview: import.meta.env.DEV ise eşikler düşürülür ki geliştirme sırasında örnek görünür.
@@ -294,6 +302,9 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
     if (cur <= 2 && cap >= 10) return 'Sunucu aktivitesi düşük görünüyor.';
     return null;
   })();
+  const avatarUrls = resolveAvatarUrls(server.avatarUrl);
+  const activeAvatarUrl = avatarUrls[avatarIndex] || '';
+  const showAvatar = !!activeAvatarUrl && !avatarFailed;
 
   // Last updated — Server.updatedAt varsa kullan (backend camelize), yoksa createdAt'a düş.
   const lastUpdatedIso = server.updatedAt ?? server.createdAt;
@@ -400,16 +411,30 @@ export default function GeneralTab({ server, canEdit, isOwner, onSave, onDelete,
             disabled={!canEdit}
             className="gtAvatar group relative w-[76px] h-[76px] rounded-2xl overflow-hidden shrink-0 disabled:cursor-default"
             style={{
-              background: server.avatarUrl
+              background: showAvatar
                 ? 'transparent'
                 : 'linear-gradient(160deg, rgba(var(--theme-accent-rgb),0.10), rgba(var(--theme-accent-rgb),0.03))',
-              boxShadow: server.avatarUrl
+              boxShadow: showAvatar
                 ? 'inset 0 0 0 1px rgba(var(--glass-tint),0.08), 0 4px 14px rgba(0,0,0,0.16)'
                 : 'inset 0 0 0 1px rgba(var(--theme-accent-rgb),0.20), 0 2px 10px rgba(var(--theme-accent-rgb),0.08)',
             }}
           >
-            {server.avatarUrl
-              ? <img src={server.avatarUrl} alt="" className="w-full h-full object-cover" />
+            {showAvatar
+              ? (
+                <img
+                  src={activeAvatarUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (avatarIndex + 1 < avatarUrls.length) {
+                      setAvatarIndex(index => index + 1);
+                      return;
+                    }
+                    setAvatarFailed(true);
+                  }}
+                />
+              )
               : <span className="flex items-center justify-center w-full h-full text-[22px] font-semibold text-[var(--theme-accent)] tracking-tight">{server.shortName}</span>
             }
             {canEdit && (

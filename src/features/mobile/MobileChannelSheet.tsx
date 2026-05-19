@@ -21,10 +21,10 @@ function MobileRoleIcon({ role }: { role: VisualRole }) {
   const { Icon } = meta;
   return (
     <Icon
-      size={12}
+      size={9.5}
       strokeWidth={2.25}
       aria-label={meta.label}
-      className={`${meta.className} shrink-0 opacity-85`}
+      className={`${meta.className} shrink-0 opacity-78`}
     />
   );
 }

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Ban, Bell, Check, Flag, Info, Inbox, Layers, MessageCircle, Plus, Search, Send, ShieldOff, SlidersHorizontal, UserPlus, UsersRound, Volume2, X } from 'lucide-react';
 import MobileUserListItem, { type MobileUserStatus } from './MobileUserListItem';
+import type { VisualRole } from '../../components/RoleBadge';
 
 type MobileSocialTab = 'dm' | 'friends' | 'serverMembers' | 'requests' | 'online' | 'blocked' | 'messageSettings';
 type MobileSocialMode = 'full' | 'friends';
@@ -25,6 +26,7 @@ interface MobileFriendItem {
   gameActivity?: string;
   lastSeenText?: string;
   platform?: 'mobile' | 'desktop';
+  role?: VisualRole;
 }
 
 interface MobileRequestItem {
@@ -244,8 +246,8 @@ export default function MobileSocialScreen({
 
         {compactFriendsMode && (
           <div className="mb-1.5 flex gap-3 border-b border-[rgba(var(--glass-tint),0.055)]">
-            <TabButton active={selectedTab === 'friends'} label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} onClick={() => handleTabChange('friends')} />
-            <TabButton active={selectedTab === 'serverMembers'} label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverOnlineCount} total={serverTotalCount} />} onClick={() => handleTabChange('serverMembers')} />
+            <TabButton active={selectedTab === 'friends'} label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} fillRatio={ratio(friendOnlineCount, friendTotalCount)} onClick={() => handleTabChange('friends')} />
+            <TabButton active={selectedTab === 'serverMembers'} label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverOnlineCount} total={serverTotalCount} />} fillRatio={ratio(serverOnlineCount, serverTotalCount)} onClick={() => handleTabChange('serverMembers')} />
           </div>
         )}
 
@@ -362,22 +364,7 @@ function renderActiveList({
   if (selectedTab === 'friends') {
     return (
       <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Arkadas listesi bos" emptyText="Arkadaslar sonraki fazda bu listeye baglanacak.">
-        {friendItems.map(item => (
-          <MobileUserListItem
-            key={item.id}
-            id={item.id}
-            name={item.name}
-            avatarUrl={item.avatarUrl}
-            subtitle={item.subtitle || statusLabel(item.status)}
-            statusText={item.statusText}
-            serverName={item.serverName}
-            gameActivity={item.gameActivity}
-            lastSeenText={item.lastSeenText}
-            platform={item.platform}
-            status={item.status ?? 'offline'}
-            onClick={onOpenProfile}
-          />
-        ))}
+        {renderUserItemsWithDivider(friendItems, onOpenProfile, 'friend')}
       </ListSection>
     );
   }
@@ -385,22 +372,7 @@ function renderActiveList({
   if (selectedTab === 'serverMembers') {
     return (
       <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Sunucu uyesi bulunamadi" emptyText="Bu sunucudaki uyeler burada gorunecek.">
-        {serverMemberItems.map(item => (
-          <MobileUserListItem
-            key={item.id}
-            id={item.id}
-            name={item.name}
-            avatarUrl={item.avatarUrl}
-            subtitle={item.subtitle || statusLabel(item.status)}
-            statusText={item.statusText}
-            serverName={item.serverName}
-            gameActivity={item.gameActivity}
-            lastSeenText={item.lastSeenText}
-            platform={item.platform}
-            status={item.status ?? 'offline'}
-            onClick={onOpenProfile}
-          />
-        ))}
+        {renderUserItemsWithDivider(serverMemberItems, onOpenProfile, 'server')}
       </ListSection>
     );
   }
@@ -450,6 +422,7 @@ function renderActiveList({
           lastSeenText={item.lastSeenText}
           platform={item.platform}
           status="online"
+          presenceLayout="friend"
           onClick={onOpenProfile}
         />
       ))}
@@ -470,6 +443,11 @@ function isVisibleOnline(item: MobileFriendItem) {
   return item.status === 'online' || item.status === 'idle' || item.status === 'dnd';
 }
 
+function ratio(online: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(1, online / total));
+}
+
 function OnlineFraction({ online, total }: { online: number; total: number }) {
   const onlineClassName = online > 0 ? 'text-emerald-400' : 'text-[var(--theme-secondary-text)]/58';
   return (
@@ -481,7 +459,8 @@ function OnlineFraction({ online, total }: { online: number; total: number }) {
   );
 }
 
-function TabButton({ active, label, count, countNode, onClick }: { active: boolean; label: string; count?: number; countNode?: React.ReactNode; onClick: () => void }) {
+function TabButton({ active, label, count, countNode, fillRatio, onClick }: { active: boolean; label: string; count?: number; countNode?: React.ReactNode; fillRatio?: number; onClick: () => void }) {
+  const fillPercent = `${Math.round((fillRatio ?? 1) * 100)}%`;
   return (
     <button
       type="button"
@@ -502,8 +481,52 @@ function TabButton({ active, label, count, countNode, onClick }: { active: boole
           {count}
         </span>
       )}
-      {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full" style={{ background: 'rgba(var(--theme-accent-rgb),0.82)' }} />}
+      {active && (
+        <span className="absolute inset-x-0 -bottom-px h-0.5 overflow-hidden rounded-full bg-[rgba(var(--glass-tint),0.10)]">
+          <span className="block h-full rounded-full bg-[rgba(var(--theme-accent-rgb),0.82)]" style={{ width: fillPercent }} />
+        </span>
+      )}
     </button>
+  );
+}
+
+function renderUserItemsWithDivider(items: MobileFriendItem[], onOpenProfile?: (id: string, x: number, y: number) => void, presenceLayout: 'friend' | 'server' = 'server') {
+  const onlineItems = items.filter(isVisibleOnline);
+  const offlineItems = items.filter(item => !isVisibleOnline(item));
+  const rows: React.ReactNode[] = [];
+
+  onlineItems.forEach(item => rows.push(renderUserItem(item, onOpenProfile, presenceLayout)));
+  if (onlineItems.length > 0 && offlineItems.length > 0) {
+    rows.push(
+      <div key="online-offline-divider" className="flex items-center gap-2 py-1.5">
+        <span className="h-px flex-1 bg-[rgba(var(--glass-tint),0.075)]" />
+        <span className="text-[8.5px] font-black uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/38">Cevrimdisi</span>
+        <span className="h-px flex-1 bg-[rgba(var(--glass-tint),0.075)]" />
+      </div>
+    );
+  }
+  offlineItems.forEach(item => rows.push(renderUserItem(item, onOpenProfile, presenceLayout)));
+  return rows;
+}
+
+function renderUserItem(item: MobileFriendItem, onOpenProfile?: (id: string, x: number, y: number) => void, presenceLayout: 'friend' | 'server' = 'server') {
+  return (
+    <MobileUserListItem
+      key={item.id}
+      id={item.id}
+      name={item.name}
+      avatarUrl={item.avatarUrl}
+      subtitle={item.subtitle || statusLabel(item.status)}
+      statusText={item.statusText}
+      serverName={item.serverName}
+      gameActivity={item.gameActivity}
+      lastSeenText={item.lastSeenText}
+      platform={item.platform}
+      role={item.role}
+      presenceLayout={presenceLayout}
+      status={item.status ?? 'offline'}
+      onClick={onOpenProfile}
+    />
   );
 }
 

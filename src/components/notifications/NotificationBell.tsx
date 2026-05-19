@@ -8,6 +8,7 @@ import { markAllInformationalRead, clearReadInformational } from '../../features
 
 interface Props {
   summary: NotificationSummary;
+  quietButton?: boolean;
   onOpenFriendRequests?: () => void;
   onOpenDM?: () => void;
   onOpenUpdate?: () => void;
@@ -92,12 +93,13 @@ function getNotificationCategory(item: NotifItem): NotificationCategory {
   return 'system';
 }
 
-export default function NotificationBell({ summary, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite }: Props) {
+export default function NotificationBell({ summary, quietButton = false, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite }: Props) {
   const [open, setOpen] = useState(false);
   const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
   const [activeCategory, setActiveCategory] = useState<NotificationCategory>('all');
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Panel'i body'e portal et + button bounds'unu fixed positioning için ölç.
   // Stacking context sorununu bypass eder (video player z'sinin altında kalmaz).
@@ -193,6 +195,36 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
     clearReadInformational();
     setPage(0);
   }, []);
+
+  const moveCategoryBySwipe = useCallback((deltaX: number, deltaY: number) => {
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.15) return;
+    const currentIndex = CATEGORY_TABS.findIndex(tab => tab.key === activeCategory);
+    if (currentIndex < 0) return;
+    const nextIndex = deltaX < 0
+      ? Math.min(CATEGORY_TABS.length - 1, currentIndex + 1)
+      : Math.max(0, currentIndex - 1);
+    const nextCategory = CATEGORY_TABS[nextIndex]?.key;
+    if (!nextCategory || nextCategory === activeCategory) return;
+    setActiveCategory(nextCategory);
+    setPage(0);
+  }, [activeCategory]);
+
+  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }, []);
+
+  const handleTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    moveCategoryBySwipe(touch.clientX - start.x, touch.clientY - start.y);
+  }, [moveCategoryBySwipe]);
+
+  const handleTouchCancel = useCallback(() => {
+    touchStartRef.current = null;
+  }, []);
   // Buton sadece okunmuş informational items varsa aktif — items.some ile tespit.
   const hasClearableRead = useMemo(
     () => items.some(it => it.key.startsWith('info:') && it.readAt != null),
@@ -247,7 +279,9 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
         ref={btnRef}
         onClick={() => setOpen(prev => !prev)}
         className={`mv-icon-action mv-icon-bell-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 group/bell focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${
-          hasBellNotifications
+          quietButton
+            ? 'text-[var(--theme-secondary-text)]/66'
+            : hasBellNotifications
             ? 'mv-notification-bell-has'
             : 'mv-notification-bell-idle'
         }`}
@@ -296,6 +330,9 @@ export default function NotificationBell({ summary, onOpenFriendRequests, onOpen
               exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.1 } }}
               transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
               className="fixed w-[300px] rounded-2xl z-[120] overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchCancel}
               style={{
                 // btnRect ölçülmüşse button'a anchor'la; yoksa sağ-üst fallback — panel ASLA kaybolmasın.
                 ...(btnRect

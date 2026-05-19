@@ -3025,22 +3025,24 @@ export default function App() {
 
                   <style>{`
                     .custom-scrollbar::-webkit-scrollbar {
-                      width: 7px;
-                      height: 7px;
+                      width: 3px;
+                      height: 3px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-track {
                       background: var(--scrollbar-track, transparent);
                     }
                     .custom-scrollbar::-webkit-scrollbar-thumb {
-                      background: var(--scrollbar-thumb, rgba(255,255,255,0.20));
+                      min-height: 24px;
+                      background: var(--scrollbar-thumb, rgba(var(--glass-tint),0.22));
+                      border: 0;
                       border-radius: 999px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                      background: var(--scrollbar-thumb-hover, rgba(255,255,255,0.32));
+                      background: var(--scrollbar-thumb-hover, rgba(var(--glass-tint),0.36));
                     }
                     .custom-scrollbar {
                       scrollbar-width: thin;
-                      scrollbar-color: var(--scrollbar-thumb, rgba(255,255,255,0.20)) var(--scrollbar-track, transparent);
+                      scrollbar-color: var(--scrollbar-thumb, rgba(var(--glass-tint),0.22)) var(--scrollbar-track, transparent);
                     }
                   `}</style>
 

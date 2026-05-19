@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Settings, ShieldCheck, Users, Server, User as UserIcon, Palette, Gamepad2, Layers, Mic, MousePointer2, Droplet, FileText, Database, Keyboard, RotateCcw, Search, X, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '../contexts/UserContext';
@@ -183,24 +183,35 @@ function normalizeSettingsSearch(value: string) {
 }
 
 // Premium segmented control — motion layoutId ile active pill smooth kayar
-function SegmentedTabs({ tabs, value, onChange, rightSlot }: {
+function SegmentedTabs({ tabs, value, onChange, rightSlot, tabletLayout = false }: {
   tabs: Array<{ key: MainTab; icon: React.ReactNode; label: string }>;
   value: MainTab;
   onChange: (v: MainTab) => void;
   rightSlot?: React.ReactNode;
+  tabletLayout?: boolean;
 }) {
   return (
-    <div className="settings-tabs surface-card flex w-full flex-col gap-2 p-1 rounded-xl md:flex-row md:items-center md:justify-between">
-      <div className="inline-flex min-w-0 flex-wrap">
+    <div className={tabletLayout
+      ? 'flex w-full min-w-0 flex-col gap-1'
+      : 'settings-tabs surface-card flex w-full flex-col gap-2 p-1 rounded-xl md:flex-row md:items-center md:justify-between'
+    }>
+      <div className={tabletLayout ? 'flex min-w-0 gap-1.5 overflow-x-auto pb-1 custom-scrollbar' : 'inline-flex min-w-0 flex-wrap'}>
         {tabs.map(tab => {
           const active = value === tab.key;
           return (
             <button
               key={tab.key}
               onClick={() => onChange(tab.key)}
-              className={`settings-tab ${active ? 'active' : ''} relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap`}
+              className={tabletLayout
+                ? `relative flex h-8 min-w-[92px] flex-1 items-center justify-center gap-1 rounded-[11px] border px-1.5 text-[10px] font-semibold tracking-[-0.005em] transition-colors duration-150 ${
+                    active
+                      ? 'border-[rgba(var(--theme-accent-rgb),0.30)] bg-[rgba(var(--theme-accent-rgb),0.072)] text-[var(--theme-accent)]'
+                      : 'border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] text-[var(--theme-secondary-text)]/70'
+                  }`
+                : `settings-tab ${active ? 'active' : ''} relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold tracking-[-0.005em] transition-colors duration-150 z-10 whitespace-nowrap`
+              }
             >
-              {active && (
+              {active && !tabletLayout && (
                 <motion.span
                   layoutId="settings-tab-active"
                   className="absolute inset-0 rounded-lg -z-10"
@@ -215,14 +226,14 @@ function SegmentedTabs({ tabs, value, onChange, rightSlot }: {
               <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/70'}>
                 {tab.icon}
               </span>
-              <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/80'}>
+              <span className={`truncate ${active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/80'}`}>
                 {tab.label}
               </span>
             </button>
           );
         })}
       </div>
-      {rightSlot}
+      {!tabletLayout && rightSlot}
     </div>
   );
 }
@@ -1624,6 +1635,7 @@ export default function SettingsView() {
   // Platform-conditional sections — empty render engelleme
   const showPermissions = isCapacitor();
   const showVoiceMode = isMobile();
+  const tabletSettingsLayout = isCapacitor();
 
   const mainTabs: Array<{ key: MainTab; icon: React.ReactNode; label: string }> = [
     { key: 'account', icon: <UserIcon size={13} strokeWidth={2} />, label: 'Hesap' },
@@ -1670,13 +1682,16 @@ export default function SettingsView() {
 
       {/* ── Header — başlık ve segmented nav dikey hizalı, central ── */}
       <div
-        className="shrink-0"
+        className={tabletSettingsLayout ? 'z-10 shrink-0 px-3 pt-0.5' : 'shrink-0'}
         style={{
-          background: 'var(--settings-page-bg, var(--theme-bg))',
+          background: tabletSettingsLayout ? 'transparent' : 'var(--settings-page-bg, var(--theme-bg))',
         }}
       >
-      <div className="mx-auto flex w-full max-w-[1100px] min-w-0 flex-col gap-4 px-2 pt-4 pb-4 md:px-4 md:pt-5 md:pb-5 xl:px-6">
-        <div className="flex items-center gap-3">
+      <div className={tabletSettingsLayout
+        ? 'mx-auto flex w-full max-w-[1100px] min-w-0 flex-col gap-1 px-0 py-0.5'
+        : 'mx-auto flex w-full max-w-[1100px] min-w-0 flex-col gap-4 px-2 pt-4 pb-4 md:px-4 md:pt-5 md:pb-5 xl:px-6'
+      }>
+        <div className={tabletSettingsLayout ? 'hidden' : 'flex items-center gap-3'}>
           <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
             <Settings size={15} className="text-[var(--theme-accent)]" />
           </div>
@@ -1686,6 +1701,7 @@ export default function SettingsView() {
           tabs={mainTabs}
           value={effectiveTab}
           onChange={setActiveTab}
+          tabletLayout={tabletSettingsLayout}
           rightSlot={(
           <div className="relative w-full md:w-[220px]">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]/45" />
@@ -1716,7 +1732,10 @@ export default function SettingsView() {
         ref={settingsScrollRef}
         className="settings-content-scrollbar min-h-0 flex-1 w-full min-w-0 overflow-y-auto overscroll-contain outline-none"
       >
-      <div className="w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] pt-5 px-2 md:px-4 xl:px-6">
+      <div className={tabletSettingsLayout
+        ? 'w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] pt-3 px-3'
+        : 'w-full min-w-0 max-w-[1100px] mx-auto overflow-x-hidden pb-[var(--mv-dock-edge-gap)] pt-5 px-2 md:px-4 xl:px-6'
+      }>
 
       {/* ── Content ── */}
       {normalizedSettingsSearchQuery ? (
@@ -1810,6 +1829,12 @@ export default function SettingsView() {
           {effectiveTab === 'app' && (
             <div className="flex flex-col gap-5 md:gap-6">
               <div className="hidden xl:grid xl:grid-cols-2 gap-4 xl:gap-5">
+                {showVoiceMode && (
+                  <SettingsSectionCard commandTarget="performance">
+                    <DomainTitle icon={<Mic size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
+                    <VoiceModeSection />
+                  </SettingsSectionCard>
+                )}
                 <SettingsSectionCard commandTarget="performance">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
                   <PerformanceSection />
@@ -1818,12 +1843,6 @@ export default function SettingsView() {
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Sesler" />
                   <SoundsSection />
                 </SettingsSectionCard>
-                {showVoiceMode && (
-                  <SettingsSectionCard commandTarget="performance">
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
-                    <VoiceModeSection />
-                  </SettingsSectionCard>
-                )}
               </div>
 
               {isElectron() && (
@@ -1835,6 +1854,12 @@ export default function SettingsView() {
 
               {/* base–lg: tek kolon */}
               <div className="flex flex-col gap-5 xl:hidden">
+                {showVoiceMode && (
+                  <SettingsSectionCard>
+                    <DomainTitle icon={<Mic size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
+                    <VoiceModeSection />
+                  </SettingsSectionCard>
+                )}
                 <SettingsSectionCard commandTarget="performance">
                   <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Performans" />
                   <PerformanceSection />
@@ -1847,12 +1872,6 @@ export default function SettingsView() {
                   <GameActivityManager />
                 )}
                 {isElectron() && <CloseBehaviorCard />}
-                {showVoiceMode && (
-                  <SettingsSectionCard>
-                    <DomainTitle icon={<Palette size={11} strokeWidth={2.2} />} title="Konuşma Modu" />
-                    <VoiceModeSection />
-                  </SettingsSectionCard>
-                )}
               </div>
             </div>
           )}

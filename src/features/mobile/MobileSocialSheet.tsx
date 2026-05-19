@@ -15,12 +15,13 @@ interface MobileSocialSheetProps {
   dmOpen?: boolean;
   onOpenSocial?: () => void;
   onOpenNotifications?: () => void;
+  notificationSlot?: React.ReactNode;
   onOpenSettings?: () => void;
   onLogout?: () => void;
   children?: React.ReactNode;
 }
 
-export default function MobileSocialSheet({ open = false, variant = 'overlay', onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
+export default function MobileSocialSheet({ open = false, variant = 'overlay', onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, notificationSlot, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
   const header = onTogglePinned ? (
     <div className="mb-1.5 flex min-h-9 items-center justify-end border-b border-[rgba(var(--glass-tint),0.045)] pb-1.5">
       <button
@@ -56,7 +57,7 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
           <div className="mt-2 shrink-0 border-t border-[rgba(var(--glass-tint),0.055)] pt-2">
             <div className="flex items-center justify-between gap-1">
               <UtilityButton label="DM" active={dmOpen} onClick={onOpenSocial} icon={<MessageCircle size={15} />} />
-              <UtilityButton label="Bildirim" active={currentView === 'notifications'} onClick={onOpenNotifications} icon={<Bell size={15} />} />
+              {notificationSlot ?? <UtilityButton label="Bildirim" active={currentView === 'notifications'} onClick={onOpenNotifications} icon={<Bell size={15} />} />}
               <UtilityButton label="Ayarlar" active={currentView === 'settings'} onClick={onOpenSettings} icon={<Settings size={15} />} />
               <UtilityButton label="Kapat" tone="danger" onClick={onLogout} icon={<Power size={15} />} />
             </div>

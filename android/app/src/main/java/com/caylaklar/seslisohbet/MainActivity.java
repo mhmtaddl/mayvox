@@ -5,6 +5,7 @@ import android.os.PowerManager;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -34,6 +35,26 @@ public class MainActivity extends BridgeActivity {
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MayVox::VoiceChat");
             wakeLock.acquire();
         }
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                dispatchMayvoxBack();
+            }
+        });
+    }
+
+    private void dispatchMayvoxBack() {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        getBridge().getWebView().evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('mayvox:android-back'))",
+            null
+        );
+    }
+
+    @Override
+    public void onBackPressed() {
+        dispatchMayvoxBack();
     }
 
     @Override

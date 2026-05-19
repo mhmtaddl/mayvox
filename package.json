@@ -18,7 +18,7 @@
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
     "cap:run": "npx cap run android",
-    "android:preview:sync": "npm run clean && cross-env VITE_ENABLE_MOBILE_SHELL_PREVIEW=true VITE_ALLOW_MOBILE_SHELL_PREVIEW_IN_BUILD=true npm run build && npx cap sync android",
+    "android:preview:sync": "npm run clean && npm run build && npx cap sync android",
     "android:preview:clean": "npm run android:preview:sync && node -e \"require('child_process').execSync(process.platform==='win32'?'android\\\\gradlew.bat -p android clean':'./android/gradlew -p android clean',{stdio:'inherit'})\"",
     "android:preview:debug": "npm run android:preview:sync && node -e \"require('child_process').execSync(process.platform==='win32'?'android\\\\gradlew.bat -p android assembleDebug':'./android/gradlew -p android assembleDebug',{stdio:'inherit'})\"",
     "android:build": "npm run build && npx cap sync android && node -e \"require('child_process').execSync(process.platform==='win32'?'android\\\\gradlew.bat -p android assembleRelease':'./android/gradlew -p android assembleRelease',{stdio:'inherit'})\""

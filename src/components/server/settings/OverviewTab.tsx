@@ -10,6 +10,7 @@ import {
   type ModerationConfigResponse, type ModerationStats, type InsightsResponse,
 } from '../../../lib/serverService';
 import { PLAN_LIMITS, PLAN_NAME, PLAN_TAGLINE, type PlanKey } from '../../../lib/planLimits';
+import { resolveAvatarUrls } from '../../../lib/statusAvatar';
 
 interface Props {
   serverId: string;
@@ -17,6 +18,7 @@ interface Props {
   isOwner: boolean;
   initialOverview?: ServerOverview | null;
   onSwitchTab?: (tab: 'general' | 'invites' | 'automod' | 'insights') => void;
+  compactTabletLayout?: boolean;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -140,7 +142,7 @@ function formatActivity(sec: number): string {
 // Main
 // ══════════════════════════════════════════════════════════
 
-export default function OverviewTab({ serverId, server, isOwner, initialOverview, onSwitchTab }: Props) {
+export default function OverviewTab({ serverId, server, isOwner, initialOverview, onSwitchTab, compactTabletLayout = false }: Props) {
   const [data, setData] = useState<ServerOverview | null>(initialOverview ?? null);
   const [error, setError] = useState('');
   const autoModSummary = useAutoModSummary(serverId);
@@ -183,9 +185,9 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
   const hasActiveInvite = data.counts.activeInviteLinks > 0;
 
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div className={`${compactTabletLayout ? 'gap-3 pb-3' : 'gap-5 pb-4'} flex flex-col`}>
       {/* ── HERO ── */}
-      <Hero server={server} data={data} status={status} />
+      {!compactTabletLayout && <Hero server={server} data={data} status={status} />}
 
       {/* ── AKILLI KARTLAR (2x2 + featured İçgörüler) ── */}
       <Section title="Akıllı Kartlar" icon={<Sparkles size={11} />}>
@@ -255,6 +257,8 @@ export default function OverviewTab({ serverId, server, isOwner, initialOverview
 // ══════════════════════════════════════════════════════════
 
 function Hero({ server, data, status }: { server: Server; data: ServerOverview; status: StatusInfo }) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarIndex, setAvatarIndex] = useState(0);
   const planKey = ((): PlanKey => {
     if (data.plan === 'pro' || data.plan === 'ultra') return data.plan;
     return 'free';
@@ -269,6 +273,14 @@ function Hero({ server, data, status }: { server: Server; data: ServerOverview; 
     : status.tone === 'near' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
     : status.tone === 'growing' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
     : 'bg-[rgba(var(--glass-tint),0.06)] text-[var(--theme-secondary-text)]/85 border-[rgba(var(--glass-tint),0.10)]';
+  const avatarUrls = resolveAvatarUrls(server.avatarUrl);
+  const activeAvatarUrl = avatarUrls[avatarIndex] || '';
+  const showAvatar = !!activeAvatarUrl && !avatarFailed;
+
+  useEffect(() => {
+    setAvatarFailed(false);
+    setAvatarIndex(0);
+  }, [server.avatarUrl]);
 
   return (
     <div
@@ -282,9 +294,23 @@ function Hero({ server, data, status }: { server: Server; data: ServerOverview; 
       <div className="flex items-start gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
-            style={{ background: server.avatarUrl ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
-            {server.avatarUrl
-              ? <img src={server.avatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            style={{ background: showAvatar ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.12)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
+            {showAvatar
+              ? (
+                <img
+                  src={activeAvatarUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (avatarIndex + 1 < avatarUrls.length) {
+                      setAvatarIndex(index => index + 1);
+                      return;
+                    }
+                    setAvatarFailed(true);
+                  }}
+                />
+              )
               : <span className="text-[18px] font-bold text-[var(--theme-accent)]">{server.shortName}</span>}
           </div>
           <div className="min-w-0">

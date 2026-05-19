@@ -825,36 +825,38 @@ export function VoiceModeSection() {
   const { voiceMode, setVoiceMode } = useSettings();
 
   const modes = [
-    { id: 'ptt' as const, icon: <Mic size={18} />, label: 'Bas-Konuş', desc: 'Butona basılı tutarak konuş.' },
-    { id: 'vad' as const, icon: <AudioLines size={18} />, label: 'Ses Algılama', desc: 'Konuşmayı otomatik algılar.' },
+    { id: 'ptt' as const, icon: <Mic size={13} />, label: 'Bas-Konuş', desc: 'Basılı tut' },
+    { id: 'vad' as const, icon: <AudioLines size={13} />, label: 'Ses Algılama', desc: 'Otomatik' },
   ];
 
   return (
     <CardSection icon={<Mic size={12} />} title="Mikrofon Modu">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-2.5">
+      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-[rgba(var(--glass-tint),0.075)] bg-[rgba(var(--glass-tint),0.022)] p-1">
         {modes.map(m => (
           <button
             key={m.id}
             onClick={() => setVoiceMode(m.id)}
-            className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-center ${
+            className={`flex min-h-[42px] items-center gap-2 rounded-lg border px-2 py-1.5 transition-all text-left active:scale-[0.985] ${
               voiceMode === m.id
-                ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/8'
-                : 'border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-border)]/80'
+                ? 'border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--theme-accent-rgb),0.10)]'
+                : 'border-transparent bg-transparent hover:bg-[rgba(var(--glass-tint),0.045)]'
             }`}
           >
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-              voiceMode === m.id ? 'bg-[var(--theme-accent)]/15 text-[var(--theme-accent)]' : 'bg-[var(--theme-border)]/50 text-[var(--theme-secondary-text)]'
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+              voiceMode === m.id ? 'bg-[var(--theme-accent)]/14 text-[var(--theme-accent)]' : 'bg-[rgba(var(--glass-tint),0.045)] text-[var(--theme-secondary-text)]/70'
             }`}>
               {m.icon}
-            </div>
-            <span className={`text-[12px] font-bold ${voiceMode === m.id ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]'}`}>
-              {m.label}
             </span>
-            <span className="text-[9px] text-[var(--theme-secondary-text)] leading-snug">{m.desc}</span>
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate text-[11px] font-bold ${voiceMode === m.id ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/88'}`}>
+                {m.label}
+              </span>
+              <span className="mt-0.5 block truncate text-[9px] font-medium text-[var(--theme-secondary-text)]/52">{m.desc}</span>
+            </span>
             {voiceMode === m.id && (
-              <div className="w-4 h-4 rounded-full bg-[var(--theme-accent)] flex items-center justify-center">
-                <Check size={10} className="text-[var(--theme-btn-primary-text)]" strokeWidth={3} />
-              </div>
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--theme-accent)]">
+                <Check size={9} className="text-[var(--theme-btn-primary-text)]" strokeWidth={3} />
+              </span>
             )}
           </button>
         ))}
