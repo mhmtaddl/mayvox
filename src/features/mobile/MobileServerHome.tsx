@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CalendarDays, Compass, Megaphone, ScrollText, ShieldCheck } from 'lucide-react';
 
 type MobileServerSection = 'announcements' | 'events' | 'discoveries' | 'rules' | 'activity';
@@ -46,6 +46,7 @@ export default function MobileServerHome({
 }: MobileServerHomeProps) {
   const name = serverName || 'MAYVox';
   const description = serverDescription || 'Sunucu ozeti ve topluluk hareketleri';
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const activePreview = getActivePreview({
     activeSection,
     featuredAnnouncementTitle,
@@ -53,21 +54,81 @@ export default function MobileServerHome({
     discoveryItems,
     activityItems,
   });
+  const memberTotal = typeof memberCount === 'number' ? memberCount : 0;
+  const onlineTotal = typeof onlineCount === 'number' ? onlineCount : 0;
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStart) return;
+    const touch = event.changedTouches[0];
+    setTouchStart(null);
+    if (!touch) return;
+
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = touch.clientY - touchStart.y;
+    if (Math.abs(deltaX) < 56 || Math.abs(deltaX) < Math.abs(deltaY) * 1.15) return;
+
+    const currentIndex = SERVER_SECTIONS.findIndex(section => section.key === activeSection);
+    if (currentIndex < 0) return;
+    const nextIndex = deltaX < 0
+      ? Math.min(SERVER_SECTIONS.length - 1, currentIndex + 1)
+      : Math.max(0, currentIndex - 1);
+    if (nextIndex !== currentIndex) onOpenSection?.(SERVER_SECTIONS[nextIndex].key);
+  };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar">
+    <div
+      className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar"
+      onTouchStart={event => setTouchStart({ x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 })}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => setTouchStart(null)}
+    >
       <div className="w-full">
       <section className="mb-2 flex flex-col gap-2 border-b border-[rgba(var(--glass-tint),0.045)] px-1 pb-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/48">Sunucu</p>
-          <h2 className="mt-0.5 truncate text-[20px] font-black text-[var(--theme-text)]">{name}</h2>
+          <h2 className="mt-0.5 text-[20px] font-black leading-tight text-[var(--theme-text)]">{name} sunucusuna hoş geldiniz</h2>
           <p className="mt-0.5 line-clamp-1 text-[11.5px] leading-5 text-[var(--theme-secondary-text)]/68">{description}</p>
         </div>
 
         <div className="flex flex-wrap gap-1.5 sm:justify-end">
-          <MetricPill label="Online" value={onlineCount} />
-          <MetricPill label="Uye" value={memberCount} />
-          <MetricPill label="Oda" value={roomCount} />
+          <MemberMetricPill online={onlineTotal} total={memberTotal} />
+        </div>
+      </section>
+
+      <section className="mb-2">
+        <div
+          className="grid grid-cols-5 overflow-hidden rounded-[14px]"
+          style={{
+            background: 'rgba(var(--glass-tint),0.018)',
+            boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.04)',
+          }}
+          aria-label="Sunucu ana sayfa bölümleri"
+        >
+          {SERVER_SECTIONS.map(section => {
+            const active = activeSection === section.key;
+            return (
+              <button
+                key={section.key}
+                type="button"
+                onClick={() => onOpenSection?.(section.key)}
+                className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 px-1 text-center transition-colors active:scale-[0.98] ${
+                  active ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/64 hover:text-[var(--theme-text)]/82'
+                }`}
+                aria-pressed={active}
+              >
+                <span className={active ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/60'} aria-hidden="true">
+                  {section.icon}
+                </span>
+                <span className="max-w-full truncate text-[10.5px] font-black leading-none">{section.label}</span>
+                {active && (
+                  <span
+                    className="absolute inset-x-3 bottom-0 h-0.5 rounded-full"
+                    style={{ background: 'rgba(var(--theme-accent-rgb),0.78)' }}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -124,14 +185,24 @@ export default function MobileServerHome({
   );
 }
 
-function MetricPill({ label, value }: { label: string; value?: number }) {
+const SERVER_SECTIONS: Array<{ key: MobileServerSection; label: string; icon: React.ReactNode }> = [
+  { key: 'announcements', label: 'Duyurular', icon: <Megaphone size={15} /> },
+  { key: 'events', label: 'Etkinlikler', icon: <CalendarDays size={15} /> },
+  { key: 'discoveries', label: 'Kesif', icon: <Compass size={15} /> },
+  { key: 'rules', label: 'Kurallar', icon: <ShieldCheck size={15} /> },
+  { key: 'activity', label: 'Hareketler', icon: <ScrollText size={15} /> },
+];
+
+function MemberMetricPill({ online, total }: { online: number; total: number }) {
   return (
     <span
       className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold text-[var(--theme-secondary-text)]/72"
       style={{ background: 'rgba(var(--glass-tint),0.045)' }}
     >
-      <span className="text-[var(--theme-text)]/90">{typeof value === 'number' ? value : '-'}</span>
-      {label}
+      <span className="text-[var(--theme-accent)]">{online}</span>
+      <span className="text-[var(--theme-secondary-text)]/50">/</span>
+      <span className="text-[var(--theme-text)]/88">{total}</span>
+      <span>online</span>
     </span>
   );
 }

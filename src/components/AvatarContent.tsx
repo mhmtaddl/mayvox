@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { hasCustomAvatar, getStatusAvatar } from '../lib/statusAvatar';
+import { hasCustomAvatar, getStatusAvatar, resolveAvatarUrls } from '../lib/statusAvatar';
 import { safePublicName } from '../lib/formatName';
 
 /**
@@ -34,13 +34,31 @@ export default function AvatarContent({
   alt = '',
 }: Props) {
   const [customAvatarFailed, setCustomAvatarFailed] = useState(false);
+  const [avatarUrlIndex, setAvatarUrlIndex] = useState(0);
+  const avatarUrls = resolveAvatarUrls(avatar);
+  const activeAvatarUrl = avatarUrls[avatarUrlIndex] || '';
 
   useEffect(() => {
     setCustomAvatarFailed(false);
+    setAvatarUrlIndex(0);
   }, [avatar]);
 
-  if (hasCustomAvatar(avatar) && !customAvatarFailed) {
-    return <img src={avatar!} alt={alt} className={imgClassName} referrerPolicy="no-referrer" onError={() => setCustomAvatarFailed(true)} />;
+  if (hasCustomAvatar(avatar) && activeAvatarUrl && !customAvatarFailed) {
+    return (
+      <img
+        src={activeAvatarUrl}
+        alt={alt}
+        className={imgClassName}
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (avatarUrlIndex + 1 < avatarUrls.length) {
+            setAvatarUrlIndex(index => index + 1);
+            return;
+          }
+          setCustomAvatarFailed(true);
+        }}
+      />
+    );
   }
   const statusSrc = getStatusAvatar(statusText);
   if (statusSrc) {

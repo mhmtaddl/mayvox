@@ -13,6 +13,7 @@ interface MobileAppShellProps {
   activeChannelName?: string;
   userAvatarUrl?: string;
   userLabel?: string;
+  userStatusText?: string;
   currentView?: MobileShellView;
   tabs?: MobileContextTab[];
   activeTabKey?: string;
@@ -24,8 +25,11 @@ interface MobileAppShellProps {
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onOpenProfile?: () => void;
+  onOpenAccountSettings?: () => void;
+  onChangeStatus?: (status: string) => void;
   onOpenQuickActions?: () => void;
   onGoHome?: () => void;
+  onLeaveRoom?: () => void;
   onTabChange?: (key: string) => void;
   onLogout?: () => void;
   disableContentSwipe?: boolean;
@@ -39,14 +43,6 @@ interface MobileAppShellProps {
   onToggleNoiseSuppression?: () => void;
   children?: React.ReactNode;
 }
-
-const HOME_TABS: MobileContextTab[] = [
-  { key: 'announcements', label: 'Duyurular' },
-  { key: 'events', label: 'Etkinlikler' },
-  { key: 'discoveries', label: 'Kesif' },
-  { key: 'rules', label: 'Kurallar' },
-  { key: 'activity', label: 'Hareketler' },
-];
 
 const DISCOVER_TABS: MobileContextTab[] = [
   { key: 'featured', label: 'One cikan' },
@@ -64,6 +60,7 @@ export default function MobileAppShell({
   activeChannelName,
   userAvatarUrl,
   userLabel,
+  userStatusText,
   currentView = 'home',
   tabs,
   activeTabKey,
@@ -75,8 +72,11 @@ export default function MobileAppShell({
   onOpenFriends,
   onOpenSettings,
   onOpenProfile,
+  onOpenAccountSettings,
+  onChangeStatus,
   onOpenQuickActions,
   onGoHome,
+  onLeaveRoom,
   onTabChange,
   onLogout,
   disableContentSwipe = false,
@@ -92,7 +92,6 @@ export default function MobileAppShell({
 }: MobileAppShellProps) {
   const shellTabs = useMemo(() => {
     if (tabs && tabs.length > 0) return tabs;
-    if (currentView === 'home') return HOME_TABS;
     if (currentView === 'discover') return DISCOVER_TABS;
     return undefined;
   }, [currentView, tabs]);
@@ -129,7 +128,7 @@ export default function MobileAppShell({
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none bg-[var(--theme-bg)] text-[var(--theme-text)]"
+      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none bg-[var(--theme-bg)] text-[var(--theme-text)]"
       style={{ borderRadius: 0, margin: 0, boxShadow: 'none' }}
     >
       <MobileTopBar
@@ -138,19 +137,14 @@ export default function MobileAppShell({
         activeServerShortName={activeServerShortName}
         activeServerMotto={activeServerMotto}
         activeChannelName={activeChannelName}
-        userAvatarUrl={userAvatarUrl}
-        userLabel={userLabel}
         currentView={currentView}
         onOpenChannels={onOpenChannels}
-        onOpenSocial={onOpenFriends ?? onOpenSocial}
         onOpenSettings={onOpenSettings}
-        onOpenProfile={onOpenProfile}
-        onOpenQuickActions={onOpenQuickActions}
       />
 
       {showTabs && <MobileContextTabs tabs={shellTabs} activeKey={selectedTabKey} onChange={handleTabChange} />}
 
-      <main className="min-h-0 flex-1 overflow-hidden pb-2">
+      <main className="min-h-0 flex-1 overflow-hidden">
         <div
           className="relative mx-auto h-full min-h-0 w-full max-w-[1180px] overflow-hidden px-3 sm:px-5"
           onTouchStart={event => setTouchStartX(disableContentSwipe ? null : (event.touches[0]?.clientX ?? null))}
@@ -163,17 +157,20 @@ export default function MobileAppShell({
 
       <MobileBottomBar
         activeServerName={activeServerName}
+        activeServerAvatarUrl={activeServerAvatarUrl}
+        activeServerShortName={activeServerShortName}
         activeChannelName={activeChannelName}
+        userAvatarUrl={userAvatarUrl}
+        userLabel={userLabel}
+        userStatusText={userStatusText}
         currentView={currentView}
         onGoHome={onGoHome}
         onOpenChannels={onOpenChannels}
         onOpenRoom={onOpenRoom}
-        onOpenDiscover={onOpenDiscover}
-        onOpenSocial={onOpenSocial}
-        onOpenNotifications={onOpenNotifications}
-        onOpenSettings={onOpenSettings}
         onOpenProfile={onOpenProfile}
-        onLogout={onLogout}
+        onOpenAccountSettings={onOpenAccountSettings}
+        onChangeStatus={onChangeStatus}
+        onLeaveRoom={onLeaveRoom}
         isMuted={isMuted}
         isDeafened={isDeafened}
         isPttPressed={isPttPressed}

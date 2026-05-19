@@ -150,13 +150,64 @@ export default function MobileSocialScreen({
   }
 
   return (
-    <div
-      className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar"
-      onTouchStart={event => setTouchStartX(event.touches[0]?.clientX ?? null)}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={() => setTouchStartX(null)}
-    >
-      <div className="w-full">
+    <>
+      {compactFriendsMode && (
+        <style>{`
+          .mobile-social-panel-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(var(--theme-accent-rgb), 0.42) transparent;
+            scrollbar-gutter: stable;
+          }
+          .mobile-social-panel-scrollbar::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+          }
+          .mobile-social-panel-scrollbar::-webkit-scrollbar-track,
+          .mobile-social-panel-scrollbar::-webkit-scrollbar-track-piece {
+            background: transparent;
+          }
+          .mobile-social-panel-scrollbar::-webkit-scrollbar-thumb {
+            min-height: 18px;
+            border-radius: 999px;
+            border: 28px solid transparent;
+            border-left-width: 1.5px;
+            border-right-width: 1.5px;
+            background:
+              linear-gradient(
+                180deg,
+                transparent 0%,
+                rgba(var(--theme-accent-rgb), 0.2) 14%,
+                rgba(var(--theme-accent-rgb), 0.62) 50%,
+                rgba(var(--theme-accent-rgb), 0.2) 86%,
+                transparent 100%
+              );
+            background-clip: padding-box;
+            box-shadow: none;
+          }
+          .mobile-social-panel-scrollbar:hover::-webkit-scrollbar-thumb {
+            background:
+              linear-gradient(
+                180deg,
+                transparent 0%,
+                rgba(var(--theme-accent-rgb), 0.28) 14%,
+                rgba(var(--theme-accent-rgb), 0.74) 50%,
+                rgba(var(--theme-accent-rgb), 0.28) 86%,
+                transparent 100%
+              );
+            background-clip: padding-box;
+          }
+          .mobile-social-panel-scrollbar::-webkit-scrollbar-corner {
+            background: transparent;
+          }
+        `}</style>
+        )}
+      <div
+        className={`h-full min-h-0 pb-3 pt-0.5 ${compactFriendsMode ? 'flex flex-col overflow-hidden' : 'overflow-y-auto custom-scrollbar'}`}
+        onTouchStart={event => setTouchStartX(event.touches[0]?.clientX ?? null)}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => setTouchStartX(null)}
+      >
+      <div className={`${compactFriendsMode ? 'flex h-full min-h-0 flex-col' : ''} w-full`}>
         {!compactFriendsMode && <section className="mb-2 flex flex-col gap-2 border-b border-[rgba(var(--glass-tint),0.045)] px-1 pb-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/48">{compactFriendsMode ? 'Sosyal panel' : 'Mesajlar'}</p>
@@ -198,7 +249,7 @@ export default function MobileSocialScreen({
           </div>
         )}
 
-        <div className={compactFriendsMode ? 'grid gap-1.5' : 'grid gap-1.5 md:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]'}>
+        <div className={compactFriendsMode ? 'min-h-0 flex-1 overflow-y-auto pr-0.5 mobile-social-panel-scrollbar' : 'grid gap-1.5 md:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]'}>
           <section className={listSectionClassName} style={{ background: 'transparent', boxShadow: 'none' }}>
             {!compactFriendsMode && <div className="mb-1.5 flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -261,7 +312,8 @@ export default function MobileSocialScreen({
           </aside>}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

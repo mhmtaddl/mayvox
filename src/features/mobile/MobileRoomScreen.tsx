@@ -214,9 +214,6 @@ function RoomMembersCard({ count, participants }: { serverName?: string; channel
 }
 
 function RoomMemberCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const avatar = participant.avatarUrl && !avatarFailed ? participant.avatarUrl : '';
-
   return (
     <div
       className="relative flex min-h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-[13px] px-2 py-2 text-center"
@@ -230,27 +227,19 @@ function RoomMemberCard({ participant }: { key?: unknown; participant: MobileVoi
       <span
         className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden avatar-squircle text-[12px] font-black"
         style={{
-          background: avatar
+          background: participant.avatarUrl
             ? 'rgba(0,0,0,0.14)'
             : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)',
           color: 'var(--theme-accent)',
         }}
       >
         <AvatarContent
-          avatar={avatar}
+          avatar={participant.avatarUrl || ''}
+          statusText="Online"
           firstName={participant.name}
           name={participant.name}
           letterClassName="text-[12px] font-black"
         />
-        {participant.avatarUrl && !avatarFailed && (
-          <img
-            src={participant.avatarUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            draggable={false}
-            onError={() => setAvatarFailed(true)}
-          />
-        )}
       </span>
       <span className="block w-full truncate text-[10.5px] font-semibold text-[var(--theme-text)]/82">{participant.name}</span>
       <span className="mt-0.5 flex items-center justify-center gap-1.5 text-[var(--theme-secondary-text)]/52">

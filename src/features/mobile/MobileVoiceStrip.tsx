@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { MicOff, Volume2 } from 'lucide-react';
+import AvatarContent from '../../components/AvatarContent';
 
 export interface MobileVoiceParticipant {
   id: string;
@@ -48,9 +48,6 @@ export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStrip
 }
 
 function VoiceParticipantCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const showAvatar = !!participant.avatarUrl && !avatarFailed;
-
   return (
     <div
             className="flex min-w-[76px] max-w-[92px] flex-col items-center gap-1.5 rounded-[13px] px-2 py-1.5 md:min-w-0 md:max-w-none md:flex-row md:text-left"
@@ -66,11 +63,14 @@ function VoiceParticipantCard({ participant }: { key?: unknown; participant: Mob
           className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px] text-[12px] font-black text-[var(--theme-text)]"
           style={{ background: 'rgba(var(--theme-accent-rgb),0.08)' }}
         >
-          {showAvatar ? (
-            <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" draggable={false} onError={() => setAvatarFailed(true)} />
-          ) : (
-            participant.name.trim().charAt(0).toLocaleUpperCase('tr-TR') || '?'
-          )}
+          <AvatarContent
+            avatar={participant.avatarUrl || ''}
+            statusText="Online"
+            firstName={participant.name}
+            name={participant.name}
+            imgClassName="h-full w-full object-cover"
+            letterClassName="text-[12px] font-black text-[var(--theme-accent)]"
+          />
         </span>
         {participant.muted ? (
           <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/90 text-white">

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pin } from 'lucide-react';
+import { Bell, MessageCircle, Pin, Power, Settings } from 'lucide-react';
+import type { MobileShellView } from './MobileAppShell';
 
 interface MobileSocialSheetProps {
   open?: boolean;
@@ -10,10 +11,16 @@ interface MobileSocialSheetProps {
   friendCount?: number;
   serverName?: string;
   serverMemberCount?: number;
+  currentView?: MobileShellView;
+  dmOpen?: boolean;
+  onOpenSocial?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenSettings?: () => void;
+  onLogout?: () => void;
   children?: React.ReactNode;
 }
 
-export default function MobileSocialSheet({ open = false, variant = 'overlay', onClose, pinned = false, onTogglePinned, children }: MobileSocialSheetProps) {
+export default function MobileSocialSheet({ open = false, variant = 'overlay', onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
   const header = onTogglePinned ? (
     <div className="mb-1.5 flex min-h-9 items-center justify-end border-b border-[rgba(var(--glass-tint),0.045)] pb-1.5">
       <button
@@ -41,9 +48,19 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
           boxShadow: 'inset 1px 0 0 rgba(var(--glass-tint),0.045)',
         }}
       >
-        <div className="h-full min-h-0 overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {header}
-          {children}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {children}
+          </div>
+          <div className="mt-2 shrink-0 border-t border-[rgba(var(--glass-tint),0.055)] pt-2">
+            <div className="flex items-center justify-between gap-1">
+              <UtilityButton label="DM" active={dmOpen} onClick={onOpenSocial} icon={<MessageCircle size={15} />} />
+              <UtilityButton label="Bildirim" active={currentView === 'notifications'} onClick={onOpenNotifications} icon={<Bell size={15} />} />
+              <UtilityButton label="Ayarlar" active={currentView === 'settings'} onClick={onOpenSettings} icon={<Settings size={15} />} />
+              <UtilityButton label="Kapat" tone="danger" onClick={onLogout} icon={<Power size={15} />} />
+            </div>
+          </div>
         </div>
       </aside>
     );
@@ -77,5 +94,38 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
         </div>
       </aside>
     </div>
+  );
+}
+
+function UtilityButton({
+  icon,
+  label,
+  active,
+  tone,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  tone?: 'danger';
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-9 w-9 items-center justify-center rounded-[10px] transition-colors active:scale-[0.98] ${
+        tone === 'danger'
+          ? 'text-red-300/78'
+          : active
+            ? 'text-[var(--theme-accent)]'
+            : 'text-[var(--theme-secondary-text)]/66'
+      }`}
+      style={{ background: active ? 'rgba(var(--theme-accent-rgb),0.075)' : 'transparent' }}
+      aria-label={label}
+      title={label}
+    >
+      {icon}
+    </button>
   );
 }

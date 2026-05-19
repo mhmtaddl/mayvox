@@ -74,10 +74,10 @@ import MobileFooter from '../features/chatview/components/MobileFooter';
 import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import RoomStatusBadges from '../features/chatview/components/RoomStatusBadges';
 import RoomActivityLogPanel from '../features/chatview/components/RoomActivityLogPanel';
-import { MobileAppShell, MobileChannelSheet, MobileDiscoverScreen, MobileNotificationsScreen, MobileProfileScreen, MobileRoomScreen, MobileServerHome, MobileSettingsScreen, MobileSocialScreen, MobileSocialSheet, type MobileContextTab, type MobileShellView } from '../features/mobile';
+import { MobileAppShell, MobileChannelSheet, MobileDiscoverScreen, MobileNotificationsScreen, MobileProfileScreen, MobileRoomScreen, MobileServerHome, MobileSettingsScreen, MobileSocialScreen, MobileSocialSheet, type MobileShellView } from '../features/mobile';
 import { RoomMusicPanel } from '../components/room-music';
 import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
-import { Activity, CalendarDays, Coffee, Megaphone, ShieldCheck } from 'lucide-react';
+import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
 import { registerE2eeDeviceKey } from '../lib/e2ee';
 import AvatarContent from '../components/AvatarContent';
@@ -108,7 +108,7 @@ const ENABLE_MOBILE_SHELL_V1 =
   (import.meta.env.DEV || ALLOW_MOBILE_SHELL_PREVIEW_IN_BUILD);
 
 export default function ChatView() {
-  const { currentUser, allUsers, getEffectiveStatus, friendIds, acceptRequest, rejectRequest } = useUser();
+  const { currentUser, setCurrentUser, allUsers, setAllUsers, getEffectiveStatus, friendIds, acceptRequest, rejectRequest } = useUser();
   const { channels, setChannels, activeChannel, setActiveChannel, activeServerId, setActiveServerId, channelOrderTokenRef, accessContext, isConnecting, currentChannel, channelMembers } = useChannel();
   const {
     toastMsg, setToastMsg, invitationModal, setInvitationModal,
@@ -127,6 +127,7 @@ export default function ChatView() {
     presenceChannelRef, view, setView, appVersion, showReleaseNotes, setShowReleaseNotes,
     inviteCooldowns, inviteStatuses,
     isChatBanned: isChatBannedFromCtx,
+    broadcastModeration,
   } = useAppState();
   const { volumeLevel, isPttPressed, setIsPttPressed, speakingLevels, connectionLevel, connectionLatencyMs, connectionJitterMs } = useAudio();
 
@@ -1548,20 +1549,12 @@ export default function ChatView() {
   const mobileDefaultShellView: MobileShellView = currentChannel && !isServerHomeView ? 'room' : 'home';
   const [mobileShellViewState, setMobileShellViewState] = useState<MobileShellView>(mobileDefaultShellView);
   const [mobilePreviousShellView, setMobilePreviousShellView] = useState<MobileShellView>('home');
-  const [mobileChannelSheetOpen, setMobileChannelSheetOpen] = useState(false);
-  const [mobileSocialSheetOpen, setMobileSocialSheetOpen] = useState(false);
-  const [mobileChannelSheetPinned, setMobileChannelSheetPinned] = useState(false);
-  const [mobileSocialSheetPinned, setMobileSocialSheetPinned] = useState(false);
+  const [mobileChannelSheetOpen, setMobileChannelSheetOpen] = useState(true);
+  const [mobileSocialSheetOpen, setMobileSocialSheetOpen] = useState(true);
+  const mobileChannelSheetPinned = true;
+  const mobileSocialSheetPinned = true;
   const [mobileServerMembers, setMobileServerMembers] = useState<ServerMember[]>([]);
   const [mobileHomeSection, setMobileHomeSection] = useState<'announcements' | 'events' | 'discoveries' | 'rules' | 'activity'>('announcements');
-  const mobileHomeTabs = useMemo<MobileContextTab[]>(() => [
-    { key: 'announcements', label: 'Duyurular', icon: <Megaphone size={15} /> },
-    { key: 'events', label: 'Etkinlikler', icon: <CalendarDays size={15} /> },
-    { key: 'discoveries', label: 'Kesif', icon: <Compass size={15} /> },
-    { key: 'rules', label: 'Kurallar', icon: <ShieldCheck size={15} /> },
-    { key: 'activity', label: 'Hareketler', icon: <Activity size={15} /> },
-  ], []);
-
   const setMobileShellView = useCallback((nextView: MobileShellView) => {
     setMobileShellViewState(prev => {
       if (prev === nextView) return prev;
@@ -1571,40 +1564,63 @@ export default function ChatView() {
   }, []);
 
   const handleMobileGoHome = useCallback(() => {
-    if (!mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
-    if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
     setMobileShellView('home');
-  }, [mobileChannelSheetPinned, mobileSocialSheetPinned, setMobileShellView]);
+  }, [setMobileShellView]);
 
   const handleMobileOpenRoom = useCallback(() => {
     if (currentChannel && !isServerHomeView) {
-      if (!mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
-      if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+      setMobileChannelSheetOpen(true);
+      setMobileSocialSheetOpen(true);
       setMobileShellView('room');
       return;
     }
     setMobileChannelSheetOpen(true);
-  }, [currentChannel, isServerHomeView, mobileChannelSheetPinned, mobileSocialSheetPinned, setMobileShellView]);
+    setMobileSocialSheetOpen(true);
+  }, [currentChannel, isServerHomeView, setMobileShellView]);
 
   const handleMobileOpenChannels = useCallback(() => {
-    if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
-    setMobileChannelSheetOpen(open => !open);
-  }, [mobileSocialSheetPinned]);
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
+  }, []);
 
   const handleMobileOpenFriends = useCallback(() => {
-    if (!mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
-    setMobileSocialSheetOpen(open => !open);
-  }, [mobileChannelSheetPinned]);
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
+  }, []);
 
   const handleMobileOpenSettings = useCallback(() => {
-    if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
     setMobileShellView('settings');
-  }, [mobileSocialSheetPinned, setMobileShellView]);
+  }, [setMobileShellView]);
+
+  const handleMobileOpenAccountSettings = useCallback(() => {
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
+    setSettingsTarget('account');
+    setMobileShellView('settings');
+  }, [setMobileShellView, setSettingsTarget]);
 
   const handleMobileOpenProfile = useCallback(() => {
-    if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(true);
     setMobileShellView('profile');
-  }, [mobileSocialSheetPinned, setMobileShellView]);
+  }, [setMobileShellView]);
+
+  const handleMobileStatusChange = useCallback((nextStatus: string) => {
+    if (!currentUser.id) return;
+    if (activeChannel && nextStatus === 'Çevrimdışı') {
+      setToastMsg('Oda içindeyken Çevrimdışı seçilemez');
+      return;
+    }
+
+    const updatedUser = { ...currentUser, statusText: nextStatus };
+    setCurrentUser(updatedUser);
+    setAllUsers(prev => prev.map(user => user.id === currentUser.id ? updatedUser : user));
+    broadcastModeration(currentUser.id, { statusText: nextStatus });
+  }, [activeChannel, broadcastModeration, currentUser, setAllUsers, setCurrentUser, setToastMsg]);
 
   const handleMobileSettingsBack = useCallback(() => {
     setMobileShellView(mobilePreviousShellView === 'settings' || mobilePreviousShellView === 'profile' ? 'home' : mobilePreviousShellView);
@@ -1675,6 +1691,8 @@ export default function ChatView() {
         if (aOnline !== bOnline) return aOnline ? -1 : 1;
         return a.name.localeCompare(b.name, 'tr');
       });
+    const mobileServerOnlineCount = mobileServerMemberItems.filter(member => member.status !== 'offline').length;
+    const mobileServerMemberCount = mobileServerMembers.length || activeServerData?.memberCount || mobileServerMemberItems.length;
 
     return (
       <>
@@ -1686,32 +1704,36 @@ export default function ChatView() {
         activeChannelName={currentChannel?.name}
         userAvatarUrl={hasCustomAvatar(currentUser.avatar) ? currentUser.avatar : undefined}
         userLabel={getPublicDisplayName(currentUser)}
+        userStatusText={currentUser.statusText || (currentUser.status === 'online' ? 'Online' : 'Çevrimdışı')}
         currentView={mobileShellView}
-        tabs={mobileShellView === 'home' ? mobileHomeTabs : undefined}
-        activeTabKey={mobileShellView === 'home' ? mobileHomeSection : undefined}
+        tabs={undefined}
+        activeTabKey={undefined}
         onOpenChannels={handleMobileOpenChannels}
         onOpenRoom={handleMobileOpenRoom}
         onOpenDiscover={() => setMobileShellView('discover')}
         onOpenSocial={() => {
-          if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+          setMobileChannelSheetOpen(true);
+          setMobileSocialSheetOpen(true);
           setMobileShellView('social');
         }}
         onOpenNotifications={() => {
-          if (!mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
-          if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+          setMobileChannelSheetOpen(true);
+          setMobileSocialSheetOpen(true);
           setMobileShellView('notifications');
         }}
         onOpenFriends={handleMobileOpenFriends}
         onOpenSettings={handleMobileOpenSettings}
         onOpenProfile={handleMobileOpenProfile}
+        onOpenAccountSettings={handleMobileOpenAccountSettings}
+        onChangeStatus={handleMobileStatusChange}
         onOpenQuickActions={handleMobileOpenProfile}
         onGoHome={handleMobileGoHome}
-        onTabChange={(key) => {
-          if (mobileShellView !== 'home') return;
-          if (key === 'announcements' || key === 'events' || key === 'discoveries' || key === 'rules' || key === 'activity') {
-            setMobileHomeSection(key);
-          }
+        onLeaveRoom={async () => {
+          await disconnectFromLiveKit();
+          setActiveChannel(null);
+          setMobileShellView('home');
         }}
+        onTabChange={undefined}
         onLogout={confirmLogout}
         disableContentSwipe={mobileChannelSheetOpen || mobileSocialSheetOpen}
         isMuted={isMuted}
@@ -1742,19 +1764,17 @@ export default function ChatView() {
                 .map(memberKey => allUsers.find(user => user.id === memberKey || user.name === memberKey))
                 .filter((user): user is typeof allUsers[number] => Boolean(user)),
             }))}
-            onClose={() => setMobileChannelSheetOpen(false)}
+            onClose={() => setMobileChannelSheetOpen(true)}
             onSelectChannel={(channelId) => {
               handleSidebarChannelClick(channelId);
-              if (!mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
+              setMobileChannelSheetOpen(true);
+              setMobileSocialSheetOpen(true);
               setMobileShellView('room');
             }}
             pinned={mobileChannelSheetPinned}
-            onTogglePinned={() => {
-              setMobileChannelSheetPinned(pinned => !pinned);
-              setMobileChannelSheetOpen(true);
-            }}
             createTitle={mobileAtRoomLimit ? roomLimitMessage(mobileActivePlan) : undefined}
             createDisabled={mobileAtRoomLimit}
+            onOpenDiscover={() => setMobileShellView('discover')}
             onCreateChannel={() => {
               if (mobileAtRoomLimit) {
                 setToastMsg(roomLimitMessage(mobileActivePlan));
@@ -1771,15 +1791,15 @@ export default function ChatView() {
                 iconColor: getDefaultChannelIconColor('social'),
                 iconName: getDefaultChannelIconName('social'),
               });
-              setMobileChannelSheetOpen(false);
+              setMobileChannelSheetOpen(true);
             }}
           />
 
           <div
-            className="min-w-0 flex-1 overflow-hidden px-3 sm:px-4"
+            className="min-w-0 flex-1 overflow-hidden px-3 pb-20 sm:px-4"
             onClick={() => {
-              if (mobileChannelSheetOpen && !mobileChannelSheetPinned) setMobileChannelSheetOpen(false);
-              if (mobileSocialSheetOpen && !mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+              setMobileChannelSheetOpen(true);
+              setMobileSocialSheetOpen(true);
             }}
           >
             {mobileShellView === 'settings' ? (
@@ -1883,9 +1903,8 @@ export default function ChatView() {
               <MobileServerHome
                 serverName={activeServerData?.name}
                 serverDescription={activeServerData?.description}
-                memberCount={allUsers.length}
-                onlineCount={allUsers.filter(user => user.status === 'online').length}
-                roomCount={visibleChannels.length}
+                memberCount={mobileServerMemberCount}
+                onlineCount={mobileServerOnlineCount}
                 announcementCount={0}
                 eventCount={0}
                 discoveryCount={0}
@@ -1893,7 +1912,6 @@ export default function ChatView() {
                 activeSection={mobileHomeSection}
                 onOpenSection={(section) => {
                   setMobileHomeSection(section);
-                  if (section === 'discoveries') setMobileShellView('discover');
                 }}
               />
             )}
@@ -1902,15 +1920,20 @@ export default function ChatView() {
           <MobileSocialSheet
             variant="inline"
             open={mobileSocialSheetOpen}
-            onClose={() => setMobileSocialSheetOpen(false)}
+            onClose={() => setMobileSocialSheetOpen(true)}
             pinned={mobileSocialSheetPinned}
-            onTogglePinned={() => {
-              setMobileSocialSheetPinned(pinned => !pinned);
-              setMobileSocialSheetOpen(true);
-            }}
             friendCount={friendUsers.length}
             serverName={activeServerData?.name}
             serverMemberCount={mobileServerMembers.length}
+            currentView={mobileShellView}
+            dmOpen={dmPanelOpen}
+            onOpenSocial={() => {
+              setDmTargetUserId(null);
+              setDmPanelOpen(true);
+            }}
+            onOpenNotifications={() => setMobileShellView('notifications')}
+            onOpenSettings={handleMobileOpenSettings}
+            onLogout={confirmLogout}
           >
             <MobileSocialScreen
               mode="friends"
@@ -1923,7 +1946,8 @@ export default function ChatView() {
               friendItems={mobileFriendItems}
               serverMemberItems={mobileServerMemberItems}
               onOpenDm={(id) => {
-                if (!mobileSocialSheetPinned) setMobileSocialSheetOpen(false);
+                setMobileChannelSheetOpen(true);
+                setMobileSocialSheetOpen(true);
                 setDmTargetUserId(id);
                 setDmPanelOpen(true);
               }}
@@ -1953,6 +1977,17 @@ export default function ChatView() {
           );
         })()}
       </AnimatePresence>
+      <DMPanel
+        isOpen={dmPanelOpen}
+        onClose={() => setDmPanelOpen(false)}
+        openUserId={dmTargetUserId}
+        onOpenHandled={() => setDmTargetUserId(null)}
+        onUnreadChange={setDmUnreadCount}
+        onRequestCountChange={setDmRequestCount}
+        onActiveConvKeyChange={setActiveDmConvKey}
+        onNearBottomChange={setDmAtBottom}
+        mobileDenseSurface
+      />
       {roomModal.isOpen && (
         <ChatViewRoomModal
           roomModal={roomModal}

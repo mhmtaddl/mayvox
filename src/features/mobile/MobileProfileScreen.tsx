@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Bell, LogOut, MessageCircle, PenLine, Settings, UserPlus } from 'lucide-react';
 import MobileSettingsRow from './MobileSettingsRow';
 import type { MobileUserStatus } from './MobileUserListItem';
+import AvatarContent from '../../components/AvatarContent';
 
 interface MobileProfileBadge {
   id: string;
@@ -38,6 +39,13 @@ const STATUS_COLOR: Record<MobileUserStatus, string> = {
   offline: 'rgba(var(--glass-tint),0.34)',
 };
 
+const AVATAR_STATUS: Record<MobileUserStatus, string> = {
+  online: 'Online',
+  idle: 'AFK',
+  dnd: 'Rahatsız Etmeyin',
+  offline: 'Çevrimdışı',
+};
+
 export default function MobileProfileScreen({
   displayName,
   username,
@@ -55,25 +63,20 @@ export default function MobileProfileScreen({
 }: MobileProfileScreenProps) {
   const name = displayName || username || 'MAYVox kullanicisi';
   const handle = username ? `@${username}` : '@mayvox';
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const showAvatar = !!avatarUrl && !avatarFailed;
 
   return (
     <div className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar">
       <div className="mx-auto w-full max-w-[860px]">
       <section className="mb-1.5 rounded-[16px] px-4 py-2.5 text-center" style={{ background: 'rgba(var(--glass-tint),0.026)' }}>
         <div className="mx-auto mb-1.5 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[15px] text-[20px] font-black text-[var(--theme-text)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.08)' }}>
-          {showAvatar ? (
-            <img
-              src={avatarUrl}
-              alt=""
-              className="h-full w-full object-cover"
-              draggable={false}
-              onError={() => setAvatarFailed(true)}
-            />
-          ) : (
-            name.trim().charAt(0).toLocaleUpperCase('tr-TR')
-          )}
+          <AvatarContent
+            avatar={avatarUrl || ''}
+            statusText={AVATAR_STATUS[status]}
+            firstName={name}
+            name={name}
+            imgClassName="h-full w-full object-cover"
+            letterClassName="text-[20px] font-black text-[var(--theme-accent)]"
+          />
         </div>
         <h2 className="truncate text-[18px] font-black text-[var(--theme-text)]">{name}</h2>
         <p className="mt-0.5 truncate text-[11.5px] font-medium text-[var(--theme-secondary-text)]/58">{handle}</p>

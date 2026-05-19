@@ -907,6 +907,7 @@ function ChatArea({
   onSend, onEditMessage, onDeleteMessage, onPinMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
   friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser, detailsOpen = false, onToggleDetails, onCloseDetails,
+  suppressInitialFocus = false,
 }: {
   messages: DmMessage[];
   currentUserId: string;
@@ -936,6 +937,7 @@ function ChatArea({
   detailsOpen?: boolean;
   onToggleDetails?: () => void;
   onCloseDetails?: () => void;
+  suppressInitialFocus?: boolean;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -1036,7 +1038,10 @@ function ChatArea({
     prevMsgLenRef.current = curr;
   }, [messages, currentUserId, nearBottom, scrollToBottom]);
 
-  useEffect(() => { inputRef.current?.focus(); }, [recipientId]);
+  useEffect(() => {
+    if (suppressInitialFocus) return;
+    inputRef.current?.focus();
+  }, [recipientId, suppressInitialFocus]);
 
   useEffect(() => {
     const onJump = (event: Event) => {
@@ -1481,9 +1486,10 @@ interface DMPanelProps {
   onActiveConvKeyChange?: (key: string | null) => void;
   onNearBottomChange?: (near: boolean) => void;
   toggleRef?: React.RefObject<HTMLButtonElement | null>;
+  mobileDenseSurface?: boolean;
 }
 
-export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onRequestCountChange, onActiveConvKeyChange, onNearBottomChange, toggleRef }: DMPanelProps) {
+export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, onUnreadChange, onRequestCountChange, onActiveConvKeyChange, onNearBottomChange, toggleRef, mobileDenseSurface = false }: DMPanelProps) {
   const { currentUser, setCurrentUser, allUsers, setAllUsers } = useUser();
   const dm = useDM(currentUser.id || undefined);
   const friends = useFriends(currentUser.id || undefined);
@@ -1623,7 +1629,14 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               : 'w-[360px] h-[500px]'
           }`}
           style={{
-            boxShadow: 'none',
+            background: mobileDenseSurface
+              ? 'linear-gradient(180deg, rgba(var(--glass-tint),0.05), rgba(var(--glass-tint),0.018)), rgba(var(--theme-bg-rgb),0.97)'
+              : undefined,
+            backdropFilter: mobileDenseSurface ? 'blur(10px) saturate(112%)' : undefined,
+            WebkitBackdropFilter: mobileDenseSurface ? 'blur(10px) saturate(112%)' : undefined,
+            boxShadow: mobileDenseSurface
+              ? '0 22px 56px rgba(0,0,0,0.42), inset 0 1px 0 rgba(var(--glass-tint),0.075)'
+              : 'none',
             border: '1px solid rgba(var(--glass-tint), 0.055)',
           }}
         >
@@ -1653,6 +1666,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 detailsOpen={detailsOpen}
                 onToggleDetails={() => setDetailsOpen(open => !open)}
                 onCloseDetails={() => setDetailsOpen(false)}
+                suppressInitialFocus={mobileDenseSurface}
                 onReportUser={() => dm.activeRecipientId && openConfirm({
                   title: 'Kullanıcıyı bildir',
                   description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
