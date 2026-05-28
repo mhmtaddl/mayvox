@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import {
   Mic, Headphones, ChevronDown, Check, X,
   UserPlus, Star, MessageSquare, PhoneCall, Gamepad2,
@@ -16,6 +16,10 @@ import RoleBadge, { getUserRoleBadge } from './RoleBadge';
 import type { User, VoiceChannel } from '../types';
 import type { ServerMember } from '../lib/serverService';
 import type { ThemePackId } from '../lib/themePacks';
+import { isCapacitor } from '../lib/platform';
+
+const FRIENDS_RENDER_STEP = 72;
+const SERVER_RENDER_STEP = 84;
 
 function lastSeenSortValue(user: User): number {
   if (!user.lastSeenAt) return 0;
@@ -69,6 +73,18 @@ function HeaderOnlineFraction({ active, online, total, color }: { active: boolea
   );
 }
 
+function MoreListButton({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mx-2 mt-2 flex h-8 w-[calc(100%-1rem)] items-center justify-center rounded-md border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] text-[10px] font-semibold text-[var(--theme-secondary-text)]/62 transition-colors hover:border-[rgba(var(--glass-tint),0.12)] hover:bg-[rgba(var(--glass-tint),0.045)] hover:text-[var(--theme-text)]/78"
+    >
+      +{count} kişi daha
+    </button>
+  );
+}
+
 function HeaderOnlineProgress({ online, total, color }: { online: number; total: number; color: string }) {
   const ratio = total > 0 ? Math.max(0, Math.min(1, online / total)) : 0;
   return (
@@ -118,12 +134,18 @@ export default function FriendsSidebarContent({
   const onlineContrastColor = getOnlineContrastColor(themePackId);
 
   const { favoriteIds, isFavorite, toggleFavorite } = useSharedFavorites();
+  const tabletRuntime = isCapacitor();
 
   const serverNameMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of servers) m.set(s.id, s.name);
     return m;
   }, [servers]);
+  const allUsersById = useMemo(() => {
+    const map = new Map<string, User>();
+    for (const user of allUsers) map.set(user.id, user);
+    return map;
+  }, [allUsers]);
 
   // ── Derived lists ──────────────────────────────────────────────────────
   // Manuel "Çevrimdışı" (premium/staff) — presence'ta hala online ama UI'da
@@ -191,7 +213,7 @@ export default function FriendsSidebarContent({
   const serverMemberUsers = useMemo(() => {
     return serverMembers
       .map(member => {
-        const known = allUsers.find(u => u.id === member.userId);
+        const known = allUsersById.get(member.userId);
         if (known) return known;
         return {
           id: member.userId,
@@ -215,7 +237,7 @@ export default function FriendsSidebarContent({
         }
         return compareByDisplayNameTr(a, b);
       });
-  }, [allUsers, serverMembers]);
+  }, [allUsersById, serverMembers]);
   const serverOnlineUsers = useMemo(() => serverMemberUsers.filter(isEffectivelyOnline), [serverMemberUsers]);
   const serverOfflineUsers = useMemo(() => serverMemberUsers.filter(u => !isEffectivelyOnline(u)), [serverMemberUsers]);
   const serverPanelTotalCount = activeServerMemberCount ?? serverMemberUsers.length;
@@ -226,6 +248,8 @@ export default function FriendsSidebarContent({
     return saved !== null ? saved === 'true' : true;
   });
   const [activePanel, setActivePanel] = useState<'friends' | 'server'>('friends');
+  const [friendsRenderLimit, setFriendsRenderLimit] = useState(FRIENDS_RENDER_STEP);
+  const [serverRenderLimit, setServerRenderLimit] = useState(SERVER_RENDER_STEP);
 
   // ── Friend context menu (favorite + DM) ────────────────────────────────
   const [friendMenu, setFriendMenu] = useState<{ userId: string; userName: string; x: number; y: number } | null>(null);
@@ -238,6 +262,55 @@ export default function FriendsSidebarContent({
   }, [friendMenu]);
 
   const isDesktop = variant === 'desktop';
+
+  useEffect(() => {
+    setFriendsRenderLimit(FRIENDS_RENDER_STEP);
+  }, [friendUsers.length, favoriteUsers.length, onlineRest.length, offlineRest.length]);
+
+  useEffect(() => {
+    setServerRenderLimit(SERVER_RENDER_STEP);
+  }, [serverMemberUsers.length]);
+
+  const deferredFavoriteOnlineUsers = useDeferredValue(favoriteOnlineUsers);
+  const deferredFavoriteOfflineUsers = useDeferredValue(favoriteOfflineUsers);
+  const deferredOnlineRest = useDeferredValue(onlineRest);
+  const deferredOfflineRest = useDeferredValue(offlineRest);
+  const deferredServerOnlineUsers = useDeferredValue(serverOnlineUsers);
+  const deferredServerOfflineUsers = useDeferredValue(serverOfflineUsers);
+
+  const visibleFriendSections = useMemo(() => {
+    let budget = tabletRuntime ? friendsRenderLimit : Number.MAX_SAFE_INTEGER;
+    const take = <T,>(items: T[]) => {
+      const visible = items.slice(0, budget);
+      budget -= visible.length;
+      return visible;
+    };
+    const favoriteOnline = take(deferredFavoriteOnlineUsers);
+    const favoriteOffline = take(deferredFavoriteOfflineUsers);
+    const online = take(deferredOnlineRest);
+    const offline = take(deferredOfflineRest);
+    const totalVisible = favoriteOnline.length + favoriteOffline.length + online.length + offline.length;
+    return {
+      favoriteOnline,
+      favoriteOffline,
+      online,
+      offline,
+      hiddenCount: Math.max(0, friendUsers.length - totalVisible),
+    };
+  }, [deferredFavoriteOfflineUsers, deferredFavoriteOnlineUsers, deferredOfflineRest, deferredOnlineRest, friendUsers.length, friendsRenderLimit, tabletRuntime]);
+
+  const visibleServerSections = useMemo(() => {
+    let budget = tabletRuntime ? serverRenderLimit : Number.MAX_SAFE_INTEGER;
+    const online = deferredServerOnlineUsers.slice(0, budget);
+    budget -= online.length;
+    const offline = deferredServerOfflineUsers.slice(0, budget);
+    const totalVisible = online.length + offline.length;
+    return {
+      online,
+      offline,
+      hiddenCount: Math.max(0, serverMemberUsers.length - totalVisible),
+    };
+  }, [deferredServerOfflineUsers, deferredServerOnlineUsers, serverMemberUsers.length, serverRenderLimit, tabletRuntime]);
 
   // ── Render user item ───────────────────────────────────────────────────
   const renderOnlineUser = (user: User, options?: { serverPanel?: boolean }) => {
@@ -425,6 +498,13 @@ export default function FriendsSidebarContent({
   // Not: Bekleyen arkadaşlık istekleri artık SADECE bildirim çanında görünür
   // (NotificationBell'de inline Kabul/Reddet). Sağ panelde duplicate gösterim yok.
   const hasContent = activePanel === 'server' ? serverMemberUsers.length > 0 : friendUsers.length > 0;
+  const renderOfflineDivider = (key?: string) => (
+    <div key={key} className="flex items-center gap-2 px-2 py-1.5">
+      <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.10)] to-[rgba(var(--glass-tint),0.04)]" />
+      <span className="text-[8.5px] font-black uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/38">Çevrimdışı</span>
+      <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[rgba(var(--glass-tint),0.10)] to-[rgba(var(--glass-tint),0.04)]" />
+    </div>
+  );
 
   return (
     <>
@@ -462,11 +542,17 @@ export default function FriendsSidebarContent({
             </div>
           ) : (
             <>
-              {serverOnlineUsers.length > 0 && <div className="space-y-1">{serverOnlineUsers.map(user => renderOnlineUser(user, { serverPanel: true }))}</div>}
-              {serverOnlineUsers.length > 0 && serverOfflineUsers.length > 0 && (
-                <div className="mx-2 my-2 h-px bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.10)] to-transparent" />
+              {visibleServerSections.online.length > 0 && <div className="space-y-1">{visibleServerSections.online.map(user => renderOnlineUser(user, { serverPanel: true }))}</div>}
+              {visibleServerSections.online.length > 0 && visibleServerSections.offline.length > 0 && (
+                renderOfflineDivider('server-offline-divider')
               )}
-              {serverOfflineUsers.length > 0 && <div className="space-y-1">{serverOfflineUsers.map(renderOfflineUser)}</div>}
+              {visibleServerSections.offline.length > 0 && <div className="space-y-1">{visibleServerSections.offline.map(renderOfflineUser)}</div>}
+              {visibleServerSections.hiddenCount > 0 && (
+                <MoreListButton
+                  count={visibleServerSections.hiddenCount}
+                  onClick={() => setServerRenderLimit(limit => limit + SERVER_RENDER_STEP)}
+                />
+              )}
             </>
           )
         ) : !hasContent ? (
@@ -497,15 +583,19 @@ export default function FriendsSidebarContent({
               {favoritesExpanded && (
                 <>
                   <div className="space-y-1">
-                    {favoriteOnlineUsers.map(renderOnlineUser)}
+                    {visibleFriendSections.favoriteOnline.map(renderOnlineUser)}
                   </div>
-                  {favoriteOfflineUsers.length > 0 && (
+                  {visibleFriendSections.favoriteOffline.length > 0 && (
                     <div className="mt-2">
-                      {favoriteOnlineUsers.length > 0 && (
-                        <div className="mx-2 mb-2 h-px bg-gradient-to-r from-transparent via-amber-300/12 to-transparent" />
+                      {visibleFriendSections.favoriteOnline.length > 0 && (
+                        <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-300/12 to-amber-300/5" />
+                          <span className="text-[8.5px] font-black uppercase tracking-[0.12em] text-amber-300/36">Çevrimdışı</span>
+                          <span className="h-px flex-1 bg-gradient-to-l from-transparent via-amber-300/12 to-amber-300/5" />
+                        </div>
                       )}
                       <div className="space-y-1">
-                        {favoriteOfflineUsers.map(renderOfflineUser)}
+                        {visibleFriendSections.favoriteOffline.map(renderOfflineUser)}
                       </div>
                     </div>
                   )}
@@ -517,20 +607,27 @@ export default function FriendsSidebarContent({
           {/* 3. Online friends (non-favorites) */}
           {onlineRest.length > 0 && (
             <div className="space-y-1">
-              {onlineRest.map(renderOnlineUser)}
+              {visibleFriendSections.online.map(renderOnlineUser)}
             </div>
           )}
 
           {/* 4. Offline — favori olmayan offline üyeler */}
-          {offlineRest.length > 0 && (
+          {visibleFriendSections.offline.length > 0 && (
             <div>
-              {onlineRest.length > 0 && (
-                <div className="mx-2 mb-2 h-px bg-gradient-to-r from-transparent via-[rgba(var(--glass-tint),0.10)] to-transparent" />
+              {visibleFriendSections.online.length > 0 && (
+                renderOfflineDivider('friends-offline-divider')
               )}
               <div className="space-y-1">
-                {offlineRest.map(renderOfflineUser)}
+                {visibleFriendSections.offline.map(renderOfflineUser)}
               </div>
             </div>
+          )}
+
+          {visibleFriendSections.hiddenCount > 0 && (
+            <MoreListButton
+              count={visibleFriendSections.hiddenCount}
+              onClick={() => setFriendsRenderLimit(limit => limit + FRIENDS_RENDER_STEP)}
+            />
           )}
 
         </>}

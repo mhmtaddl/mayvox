@@ -4,10 +4,11 @@ import type { CardScale } from './chat';
 import type { CardStyle } from './chat/cardStyles';
 import type { User } from '../types';
 import type { ChatMessage } from './ChatPanel';
-import ChatPanel from './ChatPanel';
 import { getRoomModeConfig } from '../lib/roomModeConfig';
 import { BloomHighlight } from '../lib/signature';
 import { getPublicDisplayName } from '../lib/formatName';
+
+const ChatPanel = React.lazy(() => import('./ChatPanel'));
 
 interface Props {
   forceMobile: boolean;
@@ -138,7 +139,10 @@ function VoiceParticipants({
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setCardsHeight(e.contentRect.height + 18));
+    const ro = new ResizeObserver(([e]) => {
+      const nextHeight = Math.round(e.contentRect.height + 18);
+      setCardsHeight(prev => prev === nextHeight ? prev : nextHeight);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -260,7 +264,10 @@ function VoiceParticipants({
     onRequestMemberMenu,
   ]);
 
-  const chatEnabled = getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).chatEnabled;
+  const chatEnabled = useMemo(
+    () => getRoomModeConfig(channels.find(c => c.id === activeChannel)?.mode).chatEnabled,
+    [activeChannel, channels]
+  );
 
   // Simple grid fallback — sadece küçük tarayıcı penceresi için (non-forceMobile + non-lg)
   const showGridFallback = !forceMobile;
@@ -278,48 +285,50 @@ function VoiceParticipants({
         </div>
 
         {/* ChatPanel — desktop ile aynı; network viz altına absolute yerleşir */}
-        <ChatPanel
-          chatEnabled={chatEnabled}
-          cardsHeight={cardsHeight}
-          messages={chatMessages}
-          currentUserId={currentUser.id}
-          isAdmin={isAdmin}
-          isPrimaryAdmin={isPrimaryAdmin}
-          isModerator={isModerator}
-          chatMuted={chatMuted}
-          chatMuteRank={chatMuteRank}
-          onToggleChatMuted={onToggleChatMuted}
-          editingMsgId={editingMsgId}
-          editingText={editingText}
-          onEditingTextChange={onEditingTextChange}
-          onStartEdit={onStartEdit}
-          onSaveEdit={onSaveEdit}
-          onCancelEdit={onCancelEdit}
-          onDeleteMessage={onDeleteMessage}
-          onReportMessage={onReportMessage}
-          onMessageContextMenu={onMessageContextMenu}
-          reportedMessageIds={reportedMessageIds}
-          onClearAll={onClearAll}
-          onSendMessage={onSendMessage}
-          chatInput={chatInput}
-          onChatInputChange={onChatInputChange}
-          chatScrollRef={chatScrollRef}
-          onScroll={onChatScroll}
-          isAtBottom={isAtBottom}
-          newMsgCount={newMsgCount}
-          onScrollToBottom={onScrollToBottom}
-          isFloodCooling={isFloodCooling}
-          canModerateMessages={canModerateMessages}
-          highlightedMessageId={highlightedMessageId}
-          activityPanel={activityPanel}
-          activityPanelRatio={activityPanelRatio}
-          activityPanelOpen={activityPanelOpen}
-          onActivityResizeStart={onActivityResizeStart}
-          onToggleActivityPanel={onToggleActivityPanel}
-          musicPanelAvailable={musicPanelAvailable}
-          musicPanelOpen={musicPanelOpen}
-          onToggleMusicPanel={onToggleMusicPanel}
-        />
+        <React.Suspense fallback={null}>
+          <ChatPanel
+            chatEnabled={chatEnabled}
+            cardsHeight={cardsHeight}
+            messages={chatMessages}
+            currentUserId={currentUser.id}
+            isAdmin={isAdmin}
+            isPrimaryAdmin={isPrimaryAdmin}
+            isModerator={isModerator}
+            chatMuted={chatMuted}
+            chatMuteRank={chatMuteRank}
+            onToggleChatMuted={onToggleChatMuted}
+            editingMsgId={editingMsgId}
+            editingText={editingText}
+            onEditingTextChange={onEditingTextChange}
+            onStartEdit={onStartEdit}
+            onSaveEdit={onSaveEdit}
+            onCancelEdit={onCancelEdit}
+            onDeleteMessage={onDeleteMessage}
+            onReportMessage={onReportMessage}
+            onMessageContextMenu={onMessageContextMenu}
+            reportedMessageIds={reportedMessageIds}
+            onClearAll={onClearAll}
+            onSendMessage={onSendMessage}
+            chatInput={chatInput}
+            onChatInputChange={onChatInputChange}
+            chatScrollRef={chatScrollRef}
+            onScroll={onChatScroll}
+            isAtBottom={isAtBottom}
+            newMsgCount={newMsgCount}
+            onScrollToBottom={onScrollToBottom}
+            isFloodCooling={isFloodCooling}
+            canModerateMessages={canModerateMessages}
+            highlightedMessageId={highlightedMessageId}
+            activityPanel={activityPanel}
+            activityPanelRatio={activityPanelRatio}
+            activityPanelOpen={activityPanelOpen}
+            onActivityResizeStart={onActivityResizeStart}
+            onToggleActivityPanel={onToggleActivityPanel}
+            musicPanelAvailable={musicPanelAvailable}
+            musicPanelOpen={musicPanelOpen}
+            onToggleMusicPanel={onToggleMusicPanel}
+          />
+        </React.Suspense>
       </div>
 
       {/* Grid fallback — sadece küçük tarayıcı penceresinde (Android'de render edilmez) */}

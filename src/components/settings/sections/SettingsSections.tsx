@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, ChevronDown, Crown, Lock, Palette, Recycle, RotateCcw, Volume2, Zap, Mic, AudioLines } from 'lucide-react';
+import { Check, ChevronDown, Crown, Lock, Palette, Recycle, RotateCcw, Volume2, Zap, Mic, AudioLines, SlidersHorizontal, Type, PanelBottom } from 'lucide-react';
 import { CardSection, Toggle } from '../shared';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useUser } from '../../../contexts/UserContext';
@@ -224,15 +224,17 @@ export function AppearanceSection() {
 
   return (
     <CardSection icon={<Recycle size={12} />} title="" className="xl:h-full xl:flex xl:flex-col">
-      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+      <div className="settings-appearance-controls mb-4 grid gap-3">
+      <div className="settings-appearance-control-card rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="settings-appearance-control-copy min-w-0">
+            <span className="settings-appearance-control-icon"><SlidersHorizontal size={12} strokeWidth={2.2} /></span>
             <p className="text-[11px] font-bold text-[var(--theme-text)]">Görünüm yoğunluğu</p>
             <p className="mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
-              Kompakt mod küçük ekranlarda daha fazla içeriği gösterir.
+              Ekrana sığan içerik yoğunluğunu ayarlar.
             </p>
           </div>
-          <div className="inline-flex shrink-0 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+          <div className="settings-appearance-segment inline-flex shrink-0 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
             {[
               { id: 'comfortable' as const, label: 'Rahat' },
               { id: 'compact' as const, label: 'Kompakt' },
@@ -257,15 +259,16 @@ export function AppearanceSection() {
           </div>
         </div>
       </div>
-      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+      <div className="settings-appearance-control-card rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="settings-appearance-control-copy min-w-0">
+            <span className="settings-appearance-control-icon"><Type size={12} strokeWidth={2.2} /></span>
             <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Yazı boyutu</p>
             <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
-              Uygulama içindeki metinlerin okunabilirliğini ayarlar.
+              Metin ölçeğini küçük adımlarla değiştirir.
             </p>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+          <div className="settings-appearance-stepper inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
             <button
               type="button"
               onClick={() => setUiFontScale(fontScaleSteps[Math.max(0, currentFontScaleIndex - 1)])}
@@ -290,15 +293,16 @@ export function AppearanceSection() {
           </div>
         </div>
       </div>
-      <div className="mb-4 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
+      <div className="settings-appearance-control-card rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] p-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="settings-appearance-control-copy min-w-0">
+            <span className="settings-appearance-control-icon"><PanelBottom size={12} strokeWidth={2.2} /></span>
             <p className="mv-font-meta text-[11px] font-bold text-[var(--theme-text)]">Alt kontrol çubuğu boyutu</p>
             <p className="mv-font-caption mt-1 text-[10.5px] leading-snug text-[var(--theme-secondary-text)]/72">
-              Alt hızlı kontrol çubuğunun avatar, buton ve boşluk boyutunu ayarlar.
+              Dock avatar, ikon ve boşluk ölçeğini ayarlar.
             </p>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
+          <div className="settings-appearance-stepper inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--theme-border)]/60 bg-[rgba(var(--glass-tint),0.035)] p-0.5">
             <button
               type="button"
               onClick={() => setUiDockScale(dockScaleSteps[Math.max(0, currentDockScaleIndex - 1)])}
@@ -323,6 +327,7 @@ export function AppearanceSection() {
           </div>
         </div>
       </div>
+      </div>
 
       {/* ═══ THEME PACKS ═══ */}
       <div className="mb-1">
@@ -331,7 +336,7 @@ export function AppearanceSection() {
           <span className="settings-active-theme-pack-name text-[10px] font-medium text-[var(--theme-accent)] opacity-70 shrink-0">{activePack.name}</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <div className="settings-theme-pack-grid grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {visibleThemePacks.map(pack => {
             const isSelected = themePackId === pack.id;
             return (
@@ -373,7 +378,7 @@ export function AppearanceSection() {
           })}
         </div>
 
-        <div className="mt-3 grid gap-2.5">
+        <div className="settings-premium-theme-grid mt-3 grid gap-2.5">
           <PremiumCustomizationCard
             tier="pro"
             title="Pro Özelleştirme"
@@ -541,91 +546,95 @@ export function SoundsSection() {
   return (
     <CardSection icon={<Volume2 size={12} />} title="">
       <p className="text-[10px] text-[var(--theme-secondary-text)]/72 mb-3">Bildirim ve UI sesleri</p>
-      <div className="divide-y divide-[var(--theme-border)]/50">
+      <div className="settings-app-sounds-grid grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(180px,0.82fr)]">
 
         {/* 1-3: Giriş/Çıkış · Mikrofon/Hoparlör · Bas-Konuş (oscillator — circle picker) */}
-        {oscillatorRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
-          <div key={category} className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3 first:pt-0">
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">{label}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-              <div className="flex flex-wrap items-center gap-0.5">
-                {variants.map((_, i) => {
-                  const v = (i + 1) as SoundVariant;
-                  const active = variant === v;
-                  return (
-                    <button
-                      key={v}
-                      disabled={!enabled}
-                      onClick={() => { stopAllSamples(); setVariant(v); previewSound(category, v); }}
-                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-default"
-                      aria-label={`Ses ${v}`}
-                    >
-                      <RadioDot active={active && enabled} dim={!enabled} />
-                    </button>
-                  );
-                })}
+        <div className="settings-app-sounds-group rounded-xl border border-[var(--theme-border)]/45 bg-[var(--surface-soft)]/55 px-2.5">
+          {oscillatorRows.map(({ label, tooltip, category, variant, setVariant, enabled, setEnabled, variants }) => (
+            <div key={category} className="settings-app-sound-row flex items-center gap-2 border-b border-[var(--theme-border)]/40 py-2.5 last:border-b-0">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">{label}</p>
               </div>
-              <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} tooltip={tooltip} />
+              <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex items-center gap-0.5">
+                  {variants.map((_, i) => {
+                    const v = (i + 1) as SoundVariant;
+                    const active = variant === v;
+                    return (
+                      <button
+                        key={v}
+                        disabled={!enabled}
+                        onClick={() => { stopAllSamples(); setVariant(v); previewSound(category, v); }}
+                        className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-default"
+                        aria-label={`Ses ${v}`}
+                      >
+                        <RadioDot active={active && enabled} dim={!enabled} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <Toggle checked={enabled} onChange={() => setEnabled(!enabled)} tooltip={tooltip} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="settings-app-sounds-group rounded-xl border border-[var(--theme-border)]/45 bg-[var(--surface-soft)]/55 px-2.5">
+          {/* 4: Arama (mp3 — gelen arama zil sesi, soundInvite toggle ile gated) */}
+          <div className="settings-app-sound-row flex items-center gap-2 border-b border-[var(--theme-border)]/40 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Arama</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <CirclePicker<CallVariant>
+                current={callV}
+                options={mp3Variants as ReadonlyArray<CallVariant>}
+                enabled={soundInvite}
+                onPick={v => { setCallV(v); SoundManager.setCallVariant(v); }}
+                onPreview={v => SoundManager.preview.call(v)}
+              />
+              <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} tooltip="Gelen aramada çalacak zil sesi" />
             </div>
           </div>
-        ))}
 
-        {/* 4: Arama (mp3 — gelen arama zil sesi, soundInvite toggle ile gated) */}
-        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Arama</p>
+          {/* 5: Bildirim (mp3 — davet/sistem bildirimi) */}
+          <div className="settings-app-sound-row flex items-center gap-2 border-b border-[var(--theme-border)]/40 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Bildirim</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <CirclePicker<NotificationVariant>
+                current={notifV}
+                options={mp3Variants as ReadonlyArray<NotificationVariant>}
+                enabled={notifOn}
+                onPick={v => { setNotifV(v); SoundManager.setNotificationVariant(v); }}
+                onPreview={v => SoundManager.preview.notification(v)}
+              />
+              <Toggle checked={notifOn} onChange={() => { const next = !notifOn; setNotifOn(next); SoundManager.setNotificationEnabled(next); }} tooltip="Davet ve sistem bildirim sesi" />
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-            <CirclePicker<CallVariant>
-              current={callV}
-              options={mp3Variants as ReadonlyArray<CallVariant>}
-              enabled={soundInvite}
-              onPick={v => { setCallV(v); SoundManager.setCallVariant(v); }}
-              onPreview={v => SoundManager.preview.call(v)}
-            />
-            <Toggle checked={soundInvite} onChange={() => setSoundInvite(!soundInvite)} tooltip="Gelen aramada çalacak zil sesi" />
-          </div>
-        </div>
 
-        {/* 5: Bildirim (mp3 — davet/sistem bildirimi) */}
-        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Bildirim</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-            <CirclePicker<NotificationVariant>
-              current={notifV}
-              options={mp3Variants as ReadonlyArray<NotificationVariant>}
-              enabled={notifOn}
-              onPick={v => { setNotifV(v); SoundManager.setNotificationVariant(v); }}
-              onPreview={v => SoundManager.preview.notification(v)}
-            />
-            <Toggle checked={notifOn} onChange={() => { const next = !notifOn; setNotifOn(next); SoundManager.setNotificationEnabled(next); }} tooltip="Davet ve sistem bildirim sesi" />
-          </div>
-        </div>
-
-        {/* 6: Sohbet odasi sesleri */}
-        <div className="flex flex-col xl:flex-row xl:items-center gap-1.5 xl:gap-3 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Sesleri sohbet odasında çal</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Toggle
-              checked={soundsInRoomOn}
-              onChange={() => {
-                const next = !soundsInRoomOn;
-                setSoundsInRoomOn(next);
-                setSoundsInChatRoomEnabled(next);
-              }}
-              tooltip="Sohbet odasındayken bu bölümdeki sesler çalsın"
-            />
+          {/* 6: Sohbet odasi sesleri */}
+          <div className="settings-app-sound-row flex items-center gap-2 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Sohbet odasında çal</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Toggle
+                checked={soundsInRoomOn}
+                onChange={() => {
+                  const next = !soundsInRoomOn;
+                  setSoundsInRoomOn(next);
+                  setSoundsInChatRoomEnabled(next);
+                }}
+                tooltip="Sohbet odasındayken bu bölümdeki sesler çalsın"
+              />
+            </div>
           </div>
         </div>
 
         {/* 7: Genel Ses Seviyesi (master vol slider + mute toggle, en altta) */}
-        <div className="flex flex-col gap-2 py-3 last:pb-0">
+        <div className="settings-app-master-volume xl:col-span-2 flex flex-col gap-2 rounded-xl border border-[var(--theme-border)]/45 bg-[var(--surface-soft)]/55 px-2.5 py-2.5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Genel Ses Seviyesi</p>
             <div className="flex items-center gap-2">
@@ -723,10 +732,10 @@ export function PerformanceSection() {
 
   return (
     <CardSection icon={<Zap size={12} />} title="">
-      <div className="space-y-3 md:space-y-0 md:divide-y md:divide-[var(--theme-border)]/50">
+      <div className="settings-app-performance-grid space-y-3 md:space-y-0 md:divide-y md:divide-[var(--theme-border)]/50">
 
         {/* Düşük Veri Modu */}
-        <div className="flex items-center gap-3 md:pb-3">
+        <div className="settings-app-perf-item settings-app-perf-low-data flex items-center gap-3 md:pb-3">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Düşük Veri Modu</p>
           </div>
@@ -734,7 +743,7 @@ export function PerformanceSection() {
         </div>
 
         {/* Gürültü Susturma */}
-        <div className="flex items-center gap-3 md:py-3">
+        <div className="settings-app-perf-item settings-app-perf-noise flex items-center gap-3 md:py-3">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Susturma</p>
           </div>
@@ -742,7 +751,7 @@ export function PerformanceSection() {
         </div>
 
         {/* Boşta Ayrılma — zorunlu, sadece süre seçilir (5-60 dk) */}
-        <div className="md:py-3">
+        <div className="settings-app-perf-item settings-app-perf-idle md:py-3">
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Boşta Ayrılma</p>
@@ -774,7 +783,7 @@ export function PerformanceSection() {
         </div>
 
         {/* Gürültü Temizleme Gücü — RNNoise strength 0-100 */}
-        <div className={`md:py-3 transition-opacity ${isNoiseSuppressionEnabled ? '' : 'opacity-40 pointer-events-none'}`}>
+        <div className={`settings-app-perf-item settings-app-perf-noise-strength md:py-3 transition-opacity ${isNoiseSuppressionEnabled ? '' : 'opacity-40 pointer-events-none'}`}>
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">Gürültü Temizleme Gücü</p>
             <span className="settings-range-value text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">%{noiseSuppressionStrength}</span>
@@ -792,7 +801,7 @@ export function PerformanceSection() {
         </div>
 
         {/* PTT Bırakma Gecikmesi */}
-        <div className="md:pt-3">
+        <div className="settings-app-perf-item settings-app-perf-ptt-delay md:pt-3">
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between mb-2">
             <p className="text-[11px] md:text-[12px] font-semibold text-[var(--theme-text)]">PTT Bırakma Gecikmesi</p>
             <span className="settings-range-value text-[11px] font-bold text-[var(--theme-accent)] tabular-nums">

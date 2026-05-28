@@ -1,5 +1,6 @@
 import React from 'react';
-import DiscoverPanel from '../../components/server/DiscoverPanel';
+
+const DiscoverPanel = React.lazy(() => import('../../components/server/DiscoverPanel'));
 
 interface MobileDiscoverScreenProps {
   activeServerId?: string;
@@ -18,13 +19,21 @@ export default function MobileDiscoverScreen({
 }: MobileDiscoverScreenProps) {
   return (
     <div className="h-full min-h-0 overflow-hidden">
-      <DiscoverPanel
-        activeServerId={activeServerId}
-        canCreate={canCreate}
-        onCreateServer={onCreateServer}
-        onJoinModal={onJoinModal}
-        onJoinSuccess={onJoinSuccess}
-      />
+      <React.Suspense
+        fallback={
+          <div className="flex h-full min-h-[180px] items-center justify-center rounded-2xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/55">
+            Keşfet yükleniyor...
+          </div>
+        }
+      >
+        <DiscoverPanel
+          activeServerId={activeServerId}
+          canCreate={canCreate}
+          onCreateServer={onCreateServer}
+          onJoinModal={onJoinModal}
+          onJoinSuccess={onJoinSuccess}
+        />
+      </React.Suspense>
     </div>
   );
 }

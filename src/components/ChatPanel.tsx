@@ -185,21 +185,52 @@ export default function ChatPanel({
             padding-bottom: 1rem !important;
           }
           .mv-chat-panel .mv-chat-composer {
-            min-height: 60px;
-            gap: 0.375rem;
-            padding: 0.625rem;
+            min-height: 54px;
+            gap: 0.3125rem;
+            padding: 0.5rem 0.625rem;
+            align-items: center;
+            background: linear-gradient(180deg, rgba(var(--glass-tint), 0.030), rgba(var(--shadow-base), 0.085)) !important;
+            border-top-color: rgba(var(--glass-tint), 0.052) !important;
           }
           .mv-chat-panel .mv-chat-touch-button {
-            width: 40px;
-            height: 40px;
-            min-width: 40px;
-            min-height: 40px;
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            min-height: 34px;
+            border-radius: 11px;
+            background: rgba(var(--glass-tint), 0.026);
+            border: 1px solid rgba(var(--glass-tint), 0.050);
+            box-shadow: inset 0 1px 0 rgba(var(--glass-tint), 0.040), 0 8px 18px rgba(var(--shadow-base), 0.10);
           }
           .mv-chat-panel .mv-chat-composer-field {
-            min-height: 40px !important;
+            min-height: 36px !important;
+            height: 36px !important;
             min-width: 0;
-            padding-top: 10px;
-            padding-bottom: 10px;
+            padding-top: 7px;
+            padding-bottom: 7px;
+            border-radius: 11px;
+            background: rgba(var(--glass-tint), 0.026) !important;
+            border: 1px solid rgba(var(--glass-tint), 0.050) !important;
+            box-shadow: inset 0 1px 0 rgba(var(--glass-tint), 0.040), 0 8px 18px rgba(var(--shadow-base), 0.08) !important;
+          }
+          .mv-chat-panel .mv-room-activity-footer {
+            height: 54px;
+            min-height: 54px;
+            padding: 0.5rem 0.625rem;
+            background: linear-gradient(180deg, rgba(var(--glass-tint), 0.030), rgba(var(--shadow-base), 0.085)) !important;
+            border-top-color: rgba(var(--glass-tint), 0.052) !important;
+          }
+          .mv-chat-panel .mv-room-activity-footer-button {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            background: rgba(var(--glass-tint), 0.026);
+            border: 1px solid rgba(var(--glass-tint), 0.050);
+            box-shadow: inset 0 1px 0 rgba(var(--glass-tint), 0.040), 0 8px 18px rgba(var(--shadow-base), 0.10);
+          }
+          .mv-chat-panel .mv-room-activity-footer-title {
+            font-size: 9.5px;
+            letter-spacing: 0.10em;
           }
           .mv-chat-panel .mv-chat-emoji-picker {
             width: min(280px, calc(100vw - 48px));

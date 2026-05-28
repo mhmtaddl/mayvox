@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Search, X, ScrollText, AlertTriangle, EyeOff, Eye,
   Download, ChevronLeft, ChevronRight,
@@ -6,8 +6,10 @@ import {
 import { getAuditLog, getServerDetails, type AuditLogItem } from '../../../lib/serverService';
 import { timeAgo } from './shared';
 import { useUser } from '../../../contexts/UserContext';
-import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
-import { downloadXlsx } from '../../../lib/exportXlsx';
+import type { ExportMode, DateRange } from './ExportDialog';
+import { isCapacitor } from '../../../lib/platform';
+
+const ExportDialog = React.lazy(() => import('./ExportDialog'));
 
 interface Props { serverId: string; }
 
@@ -262,12 +264,33 @@ function bucketOf(iso: string, nowMs: number): Bucket {
 const PAGE_SIZE = 15;
 type DateBucketFilter = 'all' | Bucket; // Bucket = today | yesterday | older
 
+function runAfterAuditPanelIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1600 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
+}
+
 export default function AuditLogPanel({ serverId }: Props) {
   const [items, setItems] = useState<AuditLogItem[] | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
   const [hideLow, setHideLow] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateBucketFilter>('all');
   const [page, setPage] = useState(1);
@@ -276,7 +299,10 @@ export default function AuditLogPanel({ serverId }: Props) {
 
   // Sunucu adını 1 kez çek (export meta'sı için)
   useEffect(() => {
-    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    const cancelIdle = runAfterAuditPanelIdle(() => {
+      getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    }, 750);
+    return cancelIdle;
   }, [serverId]);
 
   // Username resolver — actorName boşsa/UUID ise UserContext.allUsers'tan çöz
@@ -310,11 +336,16 @@ export default function AuditLogPanel({ serverId }: Props) {
     }
   }, [serverId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const cancelIdle = runAfterAuditPanelIdle(() => {
+      void load();
+    }, 550);
+    return cancelIdle;
+  }, [load]);
 
   const filtered = useMemo(() => {
     if (!items) return [];
-    const q = query.trim().toLocaleLowerCase('tr-TR');
+    const q = deferredQuery.trim().toLocaleLowerCase('tr-TR');
     const nowMs = Date.now();
     return items.filter(log => {
       const def = resolveAction(log);
@@ -330,10 +361,10 @@ export default function AuditLogPanel({ serverId }: Props) {
       }
       return true;
     });
-  }, [items, filter, query, hideLow, dateFilter, resolveName]);
+  }, [items, filter, deferredQuery, hideLow, dateFilter, resolveName]);
 
   // Filter değişince sayfa 1'e dön
-  useEffect(() => { setPage(1); }, [filter, query, hideLow, dateFilter]);
+  useEffect(() => { setPage(1); }, [filter, deferredQuery, hideLow, dateFilter]);
 
   // Compress globally (pagination sıkıştırılmış satır sayısı üzerinden), sonra bucket'la + slice
   const allRows = useMemo(() => compressLogs(filtered), [filtered]);
@@ -552,14 +583,16 @@ export default function AuditLogPanel({ serverId }: Props) {
 
       {/* ── Export modal ── */}
       {exportOpen && items && (
-        <ExportDialog
-          title="Log indir"
-          totalCount={items.length}
-          countInRange={(range: DateRange) => countInRangeAudit(items, range)}
-          onClose={() => setExportOpen(false)}
-          onDownload={(mode: ExportMode, range: DateRange) => handleAuditExport(mode, range, items, serverName, resolveName)}
-          allHint="Maksimum 200 kayıt — daha fazlası için takvimden aralık seçebilirsin."
-        />
+        <React.Suspense fallback={null}>
+          <ExportDialog
+            title="Log indir"
+            totalCount={items.length}
+            countInRange={(range: DateRange) => countInRangeAudit(items, range)}
+            onClose={() => setExportOpen(false)}
+            onDownload={(mode: ExportMode, range: DateRange) => handleAuditExport(mode, range, items, serverName, resolveName)}
+            allHint="Maksimum 200 kayıt — daha fazlası için takvimden aralık seçebilirsin."
+          />
+        </React.Suspense>
       )}
     </div>
   );
@@ -626,6 +659,7 @@ async function handleAuditExport(
     };
   });
 
+  const { downloadXlsx } = await import('../../../lib/exportXlsx');
   await downloadXlsx({
     title: 'Denetim Kayıtları Raporu',
     sheetName: 'Denetim Kayıtları',

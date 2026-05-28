@@ -14,15 +14,22 @@ export interface DmSharedMedia extends DmSharedLink {
 }
 
 const MAX_LINKS = 8;
+const DEFAULT_SCAN_LIMIT = 320;
 const MEDIA_EXT_RE = /\.(png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v)(?:[?#].*)?$/i;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif)(?:[?#].*)?$/i;
 const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v)(?:[?#].*)?$/i;
 
-export function extractLinksFromMessages(messages: DmMessage[], maxLinks: number = MAX_LINKS): DmSharedLink[] {
+export function extractLinksFromMessages(
+  messages: DmMessage[],
+  maxLinks: number = MAX_LINKS,
+  scanLimit: number = DEFAULT_SCAN_LIMIT,
+): DmSharedLink[] {
   const seen = new Set<string>();
   const links: DmSharedLink[] = [];
+  const start = Math.max(0, messages.length - Math.max(1, scanLimit));
 
-  for (const msg of [...messages].reverse()) {
+  for (let index = messages.length - 1; index >= start; index -= 1) {
+    const msg = messages[index];
     for (const token of tokenize(msg.text || '')) {
       if (token.type !== 'url') continue;
       const normalized = normalizeUrl(token.value);
@@ -44,11 +51,17 @@ export function extractLinksFromMessages(messages: DmMessage[], maxLinks: number
   return links;
 }
 
-export function extractMediaFromMessages(messages: DmMessage[], maxMedia: number = MAX_LINKS): DmSharedMedia[] {
+export function extractMediaFromMessages(
+  messages: DmMessage[],
+  maxMedia: number = MAX_LINKS,
+  scanLimit: number = DEFAULT_SCAN_LIMIT,
+): DmSharedMedia[] {
   const seen = new Set<string>();
   const media: DmSharedMedia[] = [];
+  const start = Math.max(0, messages.length - Math.max(1, scanLimit));
 
-  for (const msg of [...messages].reverse()) {
+  for (let index = messages.length - 1; index >= start; index -= 1) {
+    const msg = messages[index];
     for (const token of tokenize(msg.text || '')) {
       if (token.type !== 'url') continue;
       const normalized = normalizeUrl(token.value);

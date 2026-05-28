@@ -30,7 +30,10 @@ export default function RoomNetworkVisualization({ participants, cardStyle = 'cu
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const measure = () => setMaxVisible(calcVisibleCount(el.getBoundingClientRect().width));
+    const measure = () => {
+      const nextVisible = calcVisibleCount(el.getBoundingClientRect().width);
+      setMaxVisible(prev => prev === nextVisible ? prev : nextVisible);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);

@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
 import InactivityCountdownBanner from './InactivityCountdownBanner';
-import InvitationModal from './InvitationModal';
 import { getPublicDisplayName } from '../../../lib/formatName';
 import AvatarContent from '../../../components/AvatarContent';
 import { type CardStyle, CARD_STYLES } from '../../../components/chat/cardStyles';
@@ -34,6 +33,8 @@ import { getDefaultChannelIconName } from '../../../lib/channelIcon';
 import { getChannelIconColor, getDefaultChannelIconColor } from '../../../lib/channelIconColor';
 import { searchServers, type Server, type DiscoverServer } from '../../../lib/serverService';
 import { formatRemainingFromIso } from '../../../lib/formatTimeout';
+
+const InvitationModal = React.lazy(() => import('./InvitationModal'));
 
 interface Props {
   dockToastHoveredRef: React.MutableRefObject<boolean>;
@@ -460,14 +461,16 @@ export default function DesktopDock({
         );
       })()}
       {invitationData && onInvitationAccept && onInvitationDecline && onInvitationMute ? (
-        <InvitationModal
-          inline
-          data={invitationData}
-          onAccept={onInvitationAccept}
-          onDecline={onInvitationDecline}
-          onMute={onInvitationMute}
-          isMuted={invitationMuted}
-        />
+        <React.Suspense fallback={null}>
+          <InvitationModal
+            inline
+            data={invitationData}
+            onAccept={onInvitationAccept}
+            onDecline={onInvitationDecline}
+            onMute={onInvitationMute}
+            isMuted={invitationMuted}
+          />
+        </React.Suspense>
       ) : (
       <>
       {/* ── Sunucu alanı — kompakt default ── */}

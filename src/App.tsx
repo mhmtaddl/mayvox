@@ -10,7 +10,6 @@ import { CloudOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AppChrome from './components/AppChrome';
 import GlobalTooltip from './components/GlobalTooltip';
-import CommandPalette from './components/CommandPalette';
 import { AppView, User, VoiceChannel } from './types';
 // Theme types + adaptive theme artık useAppSettings hook'unda
 import {
@@ -73,17 +72,9 @@ import { useDucking } from './hooks/useDucking';
 import { useAutoPresence, type AutoStatus } from './hooks/useAutoPresence';
 import { useFriends } from './hooks/useFriends';
 
-import LoginCodeView from './views/LoginCodeView';
-import LoginPasswordView from './views/LoginPasswordView';
-import RegisterDetailsView from './views/RegisterDetailsView';
-import ChatView from './views/ChatView';
-import BanScreen from './components/BanScreen';
-import ForgotPasswordModal from './components/ForgotPasswordModal';
-import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
-import LegalModal, { type LegalModalKind } from './components/legal/LegalModal';
+import type { LegalModalKind } from './components/legal/LegalModal';
 // getReleaseNotes artık App.tsx'te kullanılmıyor (auto-popup kaldırıldı).
 // Settings içindeki ReleaseNotesModal hala ./lib/releaseNotes'ten çağırıyor.
-import PermissionOnboarding from './components/PermissionOnboarding';
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
 import { toTitleCaseTr } from './lib/formatName';
@@ -111,6 +102,18 @@ import { shouldSuppressSettingsSoundInChatRoom } from './lib/soundRoomPreference
 import { requestElectronFlash } from './features/notifications/electronAttention';
 import { getDefaultChannelIconColor } from './lib/channelIconColor';
 import { getDefaultChannelIconName } from './lib/channelIcon';
+
+const CommandPalette = React.lazy(() => import('./components/CommandPalette'));
+const ForgotPasswordModal = React.lazy(() => import('./components/ForgotPasswordModal'));
+const ForcePasswordChangeModal = React.lazy(() => import('./components/ForcePasswordChangeModal'));
+const LegalModal = React.lazy(() => import('./components/legal/LegalModal'));
+const PermissionOnboarding = React.lazy(() => import('./components/PermissionOnboarding'));
+const loadChatView = () => import('./views/ChatView');
+const LoginCodeView = React.lazy(() => import('./views/LoginCodeView'));
+const LoginPasswordView = React.lazy(() => import('./views/LoginPasswordView'));
+const RegisterDetailsView = React.lazy(() => import('./views/RegisterDetailsView'));
+const ChatView = React.lazy(loadChatView);
+const BanScreen = React.lazy(() => import('./components/BanScreen'));
 
 const isUuidUser = (userId: string) => userId.includes('-');
 
@@ -328,6 +331,14 @@ function StartupMaintenanceNotice({ message }: { message: string }) {
       </div>
     </motion.div>
   );
+}
+
+function AppRouteFallback() {
+  return <div className="min-h-screen bg-[var(--theme-bg)]" />;
+}
+
+function warmChatRoute() {
+  void loadChatView().then(mod => mod.preloadMobileHomeChunks?.()).catch(() => {});
 }
 
 export default function App() {
@@ -956,6 +967,36 @@ export default function App() {
 
   const presenceDeps = { startPresence, resyncPresence, resyncPresenceRef };
 
+  const hydrateOfflineUsersInBackground = useCallback((user: User, excludeId?: string) => {
+    const run = () => {
+      loadOfflineUsers(excludeId, knownVersionsRef.current)
+        .then(offlineUsers => {
+          setAllUsers(prev => {
+            const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
+            const merged = new Map<string, User>(prevMap);
+            const previousSelf = prevMap.get(user.id);
+            merged.set(user.id, {
+              ...user,
+              appVersion: previousSelf?.appVersion ?? user.appVersion,
+            });
+            offlineUsers.forEach(u => {
+              if (u.id === user.id) return;
+              const previous = prevMap.get(u.id);
+              merged.set(u.id, {
+                ...u,
+                appVersion: previous?.appVersion ?? u.appVersion,
+              });
+            });
+            return Array.from(merged.values());
+          });
+        })
+        .catch(err => {
+          logger.warn('Offline users background hydration failed', { error: err instanceof Error ? err.message : String(err) });
+        });
+    };
+    window.setTimeout(run, isCapacitor() ? 250 : 0);
+  }, [knownVersionsRef]);
+
   // ── Backend-driven presence (online + last_seen) ────────────────────────
   // Realtime presence oda/audio state'i için kalıyor; global online
   // ve last_seen kaynağı artık custom chat-server (Hetzner).
@@ -1163,10 +1204,18 @@ export default function App() {
     // Network metric ping — oda dışında connectionLevel fallback'i de besler.
     // Oda içindeyken LiveKit kalite seviyesini yönetir; bu ölçüm yalnızca
     // ping/dalgalanma metnini stabil tutmak için latency/jitter'ı günceller.
-    const pingInterval = setInterval(async () => {
-      if (!navigator.onLine) return;
+    let pingTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const schedulePing = () => {
+      if (stopped) return;
+      const hiddenDelay = isCapacitor() ? 90_000 : 45_000;
+      const visibleDelay = isLowDataModeRef.current ? 45_000 : 15_000;
+      pingTimer = setTimeout(runPing, document.visibilityState === 'hidden' ? hiddenDelay : visibleDelay);
+    };
+    const runPing = async () => {
+      if (!navigator.onLine) { schedulePing(); return; }
       const healthUrl = getBackendHealthUrl();
-      if (!healthUrl) return;
+      if (!healthUrl) { schedulePing(); return; }
       const start = Date.now();
       try {
         const response = await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
@@ -1197,8 +1246,11 @@ export default function App() {
         } else if (consecutiveFailures >= 2) {
           setFallbackLevel(1);
         }
+      } finally {
+        schedulePing();
       }
-    }, 15000);
+    };
+    pingTimer = setTimeout(runPing, isCapacitor() ? 8_000 : 5_000);
 
     fallbackLevel = getNetworkType();
     setConnectionLevel(fallbackLevel);
@@ -1207,7 +1259,8 @@ export default function App() {
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
       if (conn) conn.removeEventListener('change', onConnectionChange);
-      clearInterval(pingInterval);
+      stopped = true;
+      if (pingTimer) clearTimeout(pingTimer);
     };
   }, []);
 
@@ -1215,6 +1268,7 @@ export default function App() {
   useEffect(() => {
     // Render cold start — sunucu uyuyorsa şimdiden uyandır
     warmUpTokenServer();
+    warmChatRoute();
 
     withTimeout(getMe(), 8000, 'Oturum kontrolü').then(async ({ user }) => {
       if (!user?.profileId) {
@@ -1228,6 +1282,7 @@ export default function App() {
 
       const email = user.email || '';
       const profile = user.profile as DbProfile;
+      warmChatRoute();
 
       const restoredUser = buildOnlineUser(user.profileId, email, profile);
       if (!restoredUser.avatar) {
@@ -1247,16 +1302,10 @@ export default function App() {
       // ── 1. Channels — sunucu seçilince ChatView'dan yüklenecek (server-scoped)
       // Eski global kanal yükleme devre dışı — sunucu izolasyonu için
 
-      // ── 2. Users yükle
-      const offlineUsers = await withTimeout(loadOfflineUsers(undefined, knownVersionsRef.current), 8000, 'Kullanıcı listesi yükleme');
-      if (offlineUsers.length > 0) {
-        setAllUsers((prev) => {
-          const prevMap = new Map(prev.map((u) => [u.id, u]));
-          return [...prev, ...offlineUsers.filter(u => !prevMap.has(u.id))];
-        });
-      }
+      // ── 2. Kullanıcı listesini arka planda tamamla; ana ekran bunu beklemesin.
+      hydrateOfflineUsersInBackground(restoredUser);
 
-      // ── 3. Channels + users hazır — presence'ı ŞİMDİ başlat
+      // ── 3. Presence'ı self user hazır olur olmaz başlat
       activatePresence(restoredUser, appVersion, presenceDeps);
 
       setStartupMaintenanceMessage(null);
@@ -1372,11 +1421,20 @@ export default function App() {
     }
   }, [timeLeft, generatedCode]);
 
+  const hasRoomDeletionWork = useMemo(() => channels.some(channel => {
+    if (channel.isSystemChannel || channel.isPersistent) return false;
+    const systemRoomNames = new Set(['Genel', 'Sohbet Muhabbet', 'Oyun', 'Oyun Takımı', 'Yayın', 'Yayın Sahnesi', 'Sessiz', 'Sessiz Alan']);
+    if (systemRoomNames.has(channel.name)) return false;
+    return !!channel.deletionTimer || !channel.members || channel.members.length === 0;
+  }), [channels]);
+
   // ── TEK 1000ms INTERVAL — code timer + room deletion ──────────────────────
   useEffect(() => {
+    if (!generatedCode && !hasRoomDeletionWork) return;
     const interval = setInterval(() => {
-      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+      if (generatedCode) setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
 
+      if (!hasRoomDeletionWork) return;
       setChannels(prevChannels => {
         let hasChanges = false;
         const channelsToDelete: string[] = [];
@@ -1429,7 +1487,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [generatedCode, hasRoomDeletionWork]);
 
   // ── PTT speaking broadcast + audio state sync ─────────────────────────────
   // selfMuted / selfDeafened: kullanıcının kendi toggle'ı. Admin mute'tan ayrı.
@@ -1880,12 +1938,30 @@ export default function App() {
     const user = currentUserRef.current;
     const selfKeys = new Set([user.id, user.name].filter(Boolean));
     if (selfKeys.size === 0) return;
+    setCurrentUser(prev => prev.joinedAt === undefined ? prev : { ...prev, joinedAt: undefined });
+    setAllUsers(prev => prev.map(u => (
+      selfKeys.has(u.id) || selfKeys.has(u.name)
+        ? (u.joinedAt === undefined ? u : { ...u, joinedAt: undefined })
+        : u
+    )));
     setChannels(prev => prev.map(c => {
       const currentMembers = c.members || [];
       const members = currentMembers.filter(m => m && !selfKeys.has(m));
       if (members.length === currentMembers.length) return c;
-      return { ...c, members, userCount: members.length };
+      const next = { ...c, members, userCount: members.length };
+      presenceChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'channel-update',
+        payload: {
+          action: 'update',
+          serverId: activeServerIdRef.current || undefined,
+          channelId: c.id,
+          updates: { members, userCount: members.length },
+        },
+      });
+      return next;
     }));
+    resyncPresenceRef.current();
   }, [activeChannel]);
 
   // ── Helper functions ──────────────────────────────────────────────────────
@@ -2432,6 +2508,7 @@ export default function App() {
 
     sessionStartedAtRef.current = Date.now();
     setCurrentUser(loggedInUser);
+    setAllUsers(prev => [...prev.filter(u => u.id !== loggedInUser.id), loggedInUser]);
     setIsMuted(loggedInUser.isMuted ?? false); // DB'deki susturma durumunu UI state'e yansıt
     // Avatar çerçeve rengini DB'den localStorage'a sync et
     if (loggedInUser.avatarBorderColor !== undefined) {
@@ -2439,7 +2516,7 @@ export default function App() {
       settings.setAvatarBorderColor?.(loggedInUser.avatarBorderColor || '');
     }
 
-    await initPostAuth(loggedInUser);
+    initPostAuth(loggedInUser);
     logger.info('Login success', { userId: loggedInUser.id, name: loggedInUser.name, isAdmin: loggedInUser.isAdmin });
     setView('chat');
     setLoginNick('');
@@ -2459,21 +2536,9 @@ export default function App() {
 
   // last_seen_at heartbeat — crash/force-close'a karşı periyodik DB güncellemesi
   // Ortak post-auth setup: channels + users yükle, presence başlat
-  const initPostAuth = async (user: User) => {
+  const initPostAuth = (user: User) => {
     // Channels sunucu seçilince ChatView'dan yüklenir (server-scoped)
-
-    const offlineUsers = await loadOfflineUsers(user.id, knownVersionsRef.current);
-    setAllUsers(prev => {
-      const prevMap = new Map<string, User>(prev.map(u => [u.id, u]));
-      return [
-        user,
-        ...offlineUsers.map(u => ({
-          ...u,
-          appVersion: prevMap.get(u.id)?.appVersion ?? u.appVersion,
-        })),
-      ];
-    });
-
+    hydrateOfflineUsersInBackground(user, user.id);
     activatePresence(user, appVersion, presenceDeps);
   };
 
@@ -2928,48 +2993,54 @@ export default function App() {
                   {/* MayVox custom desktop chrome (frameless Electron) — web modunda render etmez */}
                   <AppChrome />
                   <GlobalTooltip />
-                  <CommandPalette
-                    open={commandPaletteOpen}
-                    onOpenChange={setCommandPaletteOpen}
-                    currentUserId={currentUser.id}
-                    users={allUsers}
-                    friendIds={friendIds}
-                    channels={channels}
-                    activeChannelId={activeChannel}
-                    hasActiveServer={!!activeServerId}
-                    canManageServer={!!accessContext?.flags.canManageServer}
-                    canCreateRoom={!!accessContext?.flags.canCreateChannel}
-                    canManageAnnouncements={!!currentUser.isAdmin || !!currentUser.isModerator}
-                    canKickMembers={!!accessContext?.flags.canKickMembers}
-                    canCreateInvite={!!accessContext?.flags.canCreateInvite}
-                    canRevokeInvite={!!accessContext?.flags.canRevokeInvite}
-                    canViewInsights={!!accessContext?.flags.canViewInsights}
-                    isAdmin={!!currentUser.isAdmin || !!currentUser.isPrimaryAdmin}
-                    isPrimaryAdmin={!!currentUser.isPrimaryAdmin}
-                    onJoinChannel={(channelId) => {
-                      setView('chat');
-                      return handleJoinChannel(channelId);
-                    }}
-                    onOpenSettings={openCommandSettings}
-                    onOpenServerSettings={openCommandServerSettings}
-                    onOpenDm={openCommandDm}
-                    onOpenUserProfile={openCommandUserProfile}
-                    onInviteUserToRoom={inviteCommandUserToRoom}
-                    onOpenUserSearch={openCommandUserSearch}
-                    onOpenMessages={openCommandMessages}
-                    onOpenLegal={openCommandLegal}
-                    onOpenAdmin={openCommandAdmin}
-                    onOpenDiscover={openCommandDiscover}
-                    onCreateAnnouncement={createCommandAnnouncement}
-                    onCreateRoom={createCommandRoom}
-                    onOpenInputSettings={openCommandInputSettings}
-                    onOpenOutputSettings={openCommandOutputSettings}
-                    onToggleMute={toggleCommandMute}
-                    onToggleDeafen={toggleCommandDeafen}
-                  />
+                  {commandPaletteOpen && (
+                    <React.Suspense fallback={null}>
+                      <CommandPalette
+                        open={commandPaletteOpen}
+                        onOpenChange={setCommandPaletteOpen}
+                        currentUserId={currentUser.id}
+                        users={allUsers}
+                        friendIds={friendIds}
+                        channels={channels}
+                        activeChannelId={activeChannel}
+                        hasActiveServer={!!activeServerId}
+                        canManageServer={!!accessContext?.flags.canManageServer}
+                        canCreateRoom={!!accessContext?.flags.canCreateChannel}
+                        canManageAnnouncements={!!currentUser.isAdmin || !!currentUser.isModerator}
+                        canKickMembers={!!accessContext?.flags.canKickMembers}
+                        canCreateInvite={!!accessContext?.flags.canCreateInvite}
+                        canRevokeInvite={!!accessContext?.flags.canRevokeInvite}
+                        canViewInsights={!!accessContext?.flags.canViewInsights}
+                        isAdmin={!!currentUser.isAdmin || !!currentUser.isPrimaryAdmin}
+                        isPrimaryAdmin={!!currentUser.isPrimaryAdmin}
+                        onJoinChannel={(channelId) => {
+                          setView('chat');
+                          return handleJoinChannel(channelId);
+                        }}
+                        onOpenSettings={openCommandSettings}
+                        onOpenServerSettings={openCommandServerSettings}
+                        onOpenDm={openCommandDm}
+                        onOpenUserProfile={openCommandUserProfile}
+                        onInviteUserToRoom={inviteCommandUserToRoom}
+                        onOpenUserSearch={openCommandUserSearch}
+                        onOpenMessages={openCommandMessages}
+                        onOpenLegal={openCommandLegal}
+                        onOpenAdmin={openCommandAdmin}
+                        onOpenDiscover={openCommandDiscover}
+                        onCreateAnnouncement={createCommandAnnouncement}
+                        onCreateRoom={createCommandRoom}
+                        onOpenInputSettings={openCommandInputSettings}
+                        onOpenOutputSettings={openCommandOutputSettings}
+                        onToggleMute={toggleCommandMute}
+                        onToggleDeafen={toggleCommandDeafen}
+                      />
+                    </React.Suspense>
+                  )}
                   {/* Mobil izin onboarding — izinler verilmeden uygulamaya geçme */}
                   {!permissionsGranted ? (
-                    <PermissionOnboarding onComplete={handlePermissionsComplete} />
+                    <React.Suspense fallback={null}>
+                      <PermissionOnboarding onComplete={handlePermissionsComplete} />
+                    </React.Suspense>
                   ) : <>
                   <div className="mv-app-main" style={{ position: 'relative', zIndex: 1 }}>
                     <AnimatePresence mode="wait">
@@ -2982,42 +3053,50 @@ export default function App() {
                       )}
                       {view === 'login-password' && (
                         <motion.div key="login-password" initial={{ opacity: 0.96, scale: 0.995 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.14, ease: 'easeOut' }}>
-                          <LoginPasswordView
-                            handleLogin={handleLogin}
-                            onForgotPassword={() => setShowForgotPassword(true)}
-                            onGoToRegister={() => setView('login-code')}
-                          />
+                          <React.Suspense fallback={<AppRouteFallback />}>
+                            <LoginPasswordView
+                              handleLogin={handleLogin}
+                              onForgotPassword={() => setShowForgotPassword(true)}
+                              onGoToRegister={() => setView('login-code')}
+                            />
+                          </React.Suspense>
                         </motion.div>
                       )}
                       {view === 'login-code' && (
-                        <LoginCodeView
-                          handleRegister={handleRegister}
-                          handleLogout={() => setView('login-password')}
-                          onGoBack={() => setView('login-password')}
-                        />
+                        <React.Suspense key="login-code" fallback={<AppRouteFallback />}>
+                          <LoginCodeView
+                            handleRegister={handleRegister}
+                            handleLogout={() => setView('login-password')}
+                            onGoBack={() => setView('login-password')}
+                          />
+                        </React.Suspense>
                       )}
                       {view === 'register-details' && (
-                        <RegisterDetailsView
-                          displayName={displayName}
-                          setDisplayName={setDisplayName}
-                          publicDisplayName={publicDisplayName}
-                          setPublicDisplayName={setPublicDisplayName}
-                          firstName={firstName}
-                          setFirstName={setFirstName}
-                          lastName={lastName}
-                          setLastName={setLastName}
-                          age={age}
-                          setAge={setAge}
-                          loginError={loginError}
-                          isSubmitting={isCompletingRegistration}
-                          handleCompleteRegistration={handleCompleteRegistration}
-                          onGoBack={() => setView('login-password')}
-                          onOpenKvkk={() => setLegalModal('kvkk')}
-                        />
+                        <React.Suspense key="register-details" fallback={<AppRouteFallback />}>
+                          <RegisterDetailsView
+                            displayName={displayName}
+                            setDisplayName={setDisplayName}
+                            publicDisplayName={publicDisplayName}
+                            setPublicDisplayName={setPublicDisplayName}
+                            firstName={firstName}
+                            setFirstName={setFirstName}
+                            lastName={lastName}
+                            setLastName={setLastName}
+                            age={age}
+                            setAge={setAge}
+                            loginError={loginError}
+                            isSubmitting={isCompletingRegistration}
+                            handleCompleteRegistration={handleCompleteRegistration}
+                            onGoBack={() => setView('login-password')}
+                            onOpenKvkk={() => setLegalModal('kvkk')}
+                          />
+                        </React.Suspense>
                       )}
                       {(view === 'chat' || view === 'settings') && (
                         <motion.div key="chat" initial={{ opacity: 0.96, scale: 0.995 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.14, ease: 'easeOut' }}>
-                          <ChatView />
+                          <React.Suspense fallback={<AppRouteFallback />}>
+                            <ChatView />
+                          </React.Suspense>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -3025,56 +3104,113 @@ export default function App() {
 
                   <style>{`
                     .custom-scrollbar::-webkit-scrollbar {
-                      width: 3px;
-                      height: 3px;
+                      width: 2px;
+                      height: 2px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-track {
                       background: var(--scrollbar-track, transparent);
                     }
+                    .custom-scrollbar::-webkit-scrollbar-track-piece {
+                      background: transparent;
+                    }
                     .custom-scrollbar::-webkit-scrollbar-thumb {
-                      min-height: 24px;
-                      background: var(--scrollbar-thumb, rgba(var(--glass-tint),0.22));
+                      min-height: 12px;
+                      background-color: transparent !important;
+                      background-image:
+                        linear-gradient(
+                          to bottom,
+                          transparent 0%,
+                          transparent 30%,
+                          rgba(var(--glass-tint), 0.05) 38%,
+                          rgba(var(--glass-tint), 0.22) 48%,
+                          rgba(var(--glass-tint), 0.22) 52%,
+                          rgba(var(--glass-tint), 0.05) 62%,
+                          transparent 70%,
+                          transparent 100%
+                        );
                       border: 0;
+                      background-clip: padding-box;
                       border-radius: 999px;
                     }
                     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                      background: var(--scrollbar-thumb-hover, rgba(var(--glass-tint),0.36));
+                      background-color: transparent !important;
+                      background-image:
+                        linear-gradient(
+                          to bottom,
+                          transparent 0%,
+                          transparent 28%,
+                          rgba(var(--glass-tint), 0.08) 38%,
+                          rgba(var(--glass-tint), 0.32) 48%,
+                          rgba(var(--glass-tint), 0.32) 52%,
+                          rgba(var(--glass-tint), 0.08) 62%,
+                          transparent 72%,
+                          transparent 100%
+                        );
+                      background-clip: padding-box;
+                    }
+                    .custom-scrollbar::-webkit-scrollbar-button,
+                    .custom-scrollbar::-webkit-scrollbar-button:single-button,
+                    .custom-scrollbar::-webkit-scrollbar-button:double-button,
+                    .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement,
+                    .custom-scrollbar::-webkit-scrollbar-button:vertical:increment,
+                    .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement,
+                    .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment {
+                      display: none !important;
+                      width: 0 !important;
+                      height: 0 !important;
+                      min-width: 0 !important;
+                      min-height: 0 !important;
+                      background: transparent !important;
+                      background-image: none !important;
+                      border: 0 !important;
+                      box-shadow: none !important;
+                      -webkit-appearance: none !important;
                     }
                     .custom-scrollbar {
                       scrollbar-width: thin;
-                      scrollbar-color: var(--scrollbar-thumb, rgba(var(--glass-tint),0.22)) var(--scrollbar-track, transparent);
+                      scrollbar-color: rgba(var(--glass-tint),0.18) transparent;
                     }
                   `}</style>
 
 
                   {/* Ban ekranı — chat/settings görünümündeyken erişimi engeller */}
                   {(view === 'chat' || view === 'settings') && currentUser.isVoiceBanned && (
-                    <BanScreen banExpires={currentUser.banExpires} />
+                    <React.Suspense fallback={null}>
+                      <BanScreen banExpires={currentUser.banExpires} />
+                    </React.Suspense>
                   )}
 
                   {/* Geçici parola ile giriş — parola değiştirme modalı */}
                   {(showForcePasswordChange || currentUser.mustChangePassword) && (
-                    <ForcePasswordChangeModal
-                      onDone={() => {
-                        setCurrentUser(prev => ({ ...prev, mustChangePassword: false }));
-                        setShowForcePasswordChange(false);
-                      }}
-                    />
+                    <React.Suspense fallback={null}>
+                      <ForcePasswordChangeModal
+                        onDone={() => {
+                          setCurrentUser(prev => ({ ...prev, mustChangePassword: false }));
+                          setShowForcePasswordChange(false);
+                        }}
+                      />
+                    </React.Suspense>
                   )}
 
 
                   {/* Şifremi unuttum modalı */}
                   <AnimatePresence>
                     {showForgotPassword && (
-                      <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+                      <React.Suspense fallback={null}>
+                        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+                      </React.Suspense>
                     )}
                   </AnimatePresence>
 
-                  <LegalModal
-                    kind={legalModal ?? 'kvkk'}
-                    open={legalModal !== null}
-                    onClose={() => setLegalModal(null)}
-                  />
+                  {legalModal !== null && (
+                    <React.Suspense fallback={null}>
+                      <LegalModal
+                        kind={legalModal}
+                        open
+                        onClose={() => setLegalModal(null)}
+                      />
+                    </React.Suspense>
+                  )}
 
                   {/* Toast bildirimi — dock içinde gösterilir, ayrı popup yok */}
 

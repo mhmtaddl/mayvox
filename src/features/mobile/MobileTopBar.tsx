@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Search, Settings, X } from 'lucide-react';
 import type { MobileShellView } from './MobileAppShell';
 import { resolveAvatarUrls } from '../../lib/statusAvatar';
@@ -8,6 +8,7 @@ import type { SearchResult } from '../../components/SocialSearchHub';
 import AvatarContent from '../../components/AvatarContent';
 
 interface MobileTopBarProps {
+  phoneLayout?: boolean;
   activeServerName?: string;
   activeServerAvatarUrl?: string | null;
   activeServerShortName?: string;
@@ -21,6 +22,61 @@ interface MobileTopBarProps {
 }
 
 const MOBILE_SEARCH_EVENT = 'mayvox:mobile-search-change';
+const PROFILE_SEARCH_CACHE_TTL_MS = 60_000;
+let mobileProfileSearchCache: { at: number; entries: ProfileSearchEntry[] } | null = null;
+let mobileProfileSearchPromise: Promise<ProfileSearchEntry[]> | null = null;
+
+type ProfileSearchEntry = SearchResult & {
+  firstNameLower: string;
+  lastNameLower: string;
+  displayNameLower: string;
+  usernameLower: string;
+  fullNameLower: string;
+  searchableText: string;
+};
+
+function normalizeProfileSearchEntry(profile: any): ProfileSearchEntry {
+  const firstNameLower = (profile.first_name || '').toLocaleLowerCase('tr-TR');
+  const lastNameLower = (profile.last_name || '').toLocaleLowerCase('tr-TR');
+  const displayNameLower = (profile.display_name || '').toLocaleLowerCase('tr-TR');
+  const usernameLower = (profile.name || '').toLocaleLowerCase('tr-TR');
+  const fullNameLower = `${firstNameLower} ${lastNameLower}`.trim();
+  return {
+    id: profile.id,
+    name: profile.name || '',
+    displayName: profile.display_name || undefined,
+    firstName: profile.first_name || '',
+    lastName: profile.last_name || '',
+    avatar: profile.avatar || '',
+    dmPrivacyMode: profile.dm_privacy_mode || (profile.allow_non_friend_dms === false ? 'friends_only' : 'everyone'),
+    allowNonFriendDms: profile.dm_privacy_mode === 'everyone' || profile.dm_privacy_mode === 'mutual_servers' || (!profile.dm_privacy_mode && profile.allow_non_friend_dms !== false),
+    firstNameLower,
+    lastNameLower,
+    displayNameLower,
+    usernameLower,
+    fullNameLower,
+    searchableText: `${displayNameLower} ${firstNameLower} ${lastNameLower} ${usernameLower}`,
+  };
+}
+
+async function getProfileSearchEntries(): Promise<ProfileSearchEntry[]> {
+  const now = Date.now();
+  if (mobileProfileSearchCache && now - mobileProfileSearchCache.at < PROFILE_SEARCH_CACHE_TTL_MS) {
+    return mobileProfileSearchCache.entries;
+  }
+  if (!mobileProfileSearchPromise) {
+    mobileProfileSearchPromise = getAllProfiles()
+      .then(({ data }) => {
+        const entries = (data ?? []).map(normalizeProfileSearchEntry);
+        mobileProfileSearchCache = { at: Date.now(), entries };
+        return entries;
+      })
+      .finally(() => {
+        mobileProfileSearchPromise = null;
+      });
+  }
+  return mobileProfileSearchPromise;
+}
 
 const SEARCH_PLACEHOLDER: Record<MobileShellView, string> = {
   home: 'Arkadas ara',
@@ -33,6 +89,7 @@ const SEARCH_PLACEHOLDER: Record<MobileShellView, string> = {
 };
 
 export default function MobileTopBar({
+  phoneLayout = false,
   activeServerName,
   activeServerAvatarUrl,
   activeServerShortName,
@@ -50,9 +107,13 @@ export default function MobileTopBar({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [, startSearchTransition] = useTransition();
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const serverAvatarUrls = resolveAvatarUrls(activeServerAvatarUrl);
+  const lastOpenedSearchUserRef = useRef<{ id: string; at: number } | null>(null);
+  const searchRequestIdRef = useRef(0);
+  const serverAvatarUrls = useMemo(() => resolveAvatarUrls(activeServerAvatarUrl), [activeServerAvatarUrl]);
   const activeServerAvatarSrc = serverAvatarUrls[serverAvatarIndex] || '';
   const showServerAvatar = !!activeServerAvatarSrc && !serverAvatarFailed;
   const serverInitial = (activeServerShortName || activeServerName || 'M').trim().charAt(0).toLocaleUpperCase('tr-TR') || 'M';
@@ -85,6 +146,8 @@ export default function MobileTopBar({
   }, [currentView]);
 
   const searchUsers = useCallback(async (value: string) => {
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
     const raw = value.trim().replace(/\s+/g, ' ').replace(/^@/, '');
     if (!currentUserId || raw.length < 2) {
       setSearchResults([]);
@@ -101,64 +164,54 @@ export default function MobileTopBar({
 
     setIsSearching(true);
     try {
-      const { data } = await getAllProfiles();
+      const entries = await getProfileSearchEntries();
+      if (requestId !== searchRequestIdRef.current) return;
       const queryLower = raw.toLocaleLowerCase('tr-TR');
-      const scored: (SearchResult & { score: number })[] = [];
+      const scored: (ProfileSearchEntry & { score: number })[] = [];
 
-      for (const profile of (data ?? []).filter((item: any) => item.id !== currentUserId).slice(0, 120)) {
-        const firstName = (profile.first_name || '').toLocaleLowerCase('tr-TR');
-        const lastName = (profile.last_name || '').toLocaleLowerCase('tr-TR');
-        const displayName = (profile.display_name || '').toLocaleLowerCase('tr-TR');
-        const username = (profile.name || '').toLocaleLowerCase('tr-TR');
-        const fullName = `${firstName} ${lastName}`.trim();
-        const combined = `${displayName} ${firstName} ${lastName} ${username}`;
-        if (!tokens.every(token => combined.includes(token))) continue;
+      for (const profile of entries) {
+        if (profile.id === currentUserId) continue;
+        if (!tokens.every(token => profile.searchableText.includes(token))) continue;
 
         let score = 0;
-        if (username === queryLower) score += 100;
-        if (displayName === queryLower) score += 95;
-        if (fullName === queryLower) score += 90;
-        if (displayName.startsWith(queryLower)) score += 70;
-        if (username.startsWith(queryLower)) score += 60;
-        if (fullName.startsWith(queryLower)) score += 50;
-        if (firstName.startsWith(tokens[0])) score += 30;
-        if (tokens.some(token => lastName.startsWith(token))) score += 20;
-        if (username.includes(queryLower)) score += 10;
+        if (profile.usernameLower === queryLower) score += 100;
+        if (profile.displayNameLower === queryLower) score += 95;
+        if (profile.fullNameLower === queryLower) score += 90;
+        if (profile.displayNameLower.startsWith(queryLower)) score += 70;
+        if (profile.usernameLower.startsWith(queryLower)) score += 60;
+        if (profile.fullNameLower.startsWith(queryLower)) score += 50;
+        if (profile.firstNameLower.startsWith(tokens[0])) score += 30;
+        if (tokens.some(token => profile.lastNameLower.startsWith(token))) score += 20;
+        if (profile.usernameLower.includes(queryLower)) score += 10;
 
-        scored.push({
-          id: profile.id,
-          name: profile.name || '',
-          displayName: profile.display_name || undefined,
-          firstName: profile.first_name || '',
-          lastName: profile.last_name || '',
-          avatar: profile.avatar || '',
-          dmPrivacyMode: profile.dm_privacy_mode || (profile.allow_non_friend_dms === false ? 'friends_only' : 'everyone'),
-          allowNonFriendDms: profile.dm_privacy_mode === 'everyone' || profile.dm_privacy_mode === 'mutual_servers' || (!profile.dm_privacy_mode && profile.allow_non_friend_dms !== false),
-          score,
-        });
+        scored.push({ ...profile, score });
       }
 
       scored.sort((a, b) => b.score - a.score || getPublicDisplayName(a).localeCompare(getPublicDisplayName(b), 'tr'));
-      setSearchResults(scored.slice(0, 7));
+      if (requestId === searchRequestIdRef.current) {
+        startSearchTransition(() => setSearchResults(scored.slice(0, 7)));
+      }
     } catch {
-      setSearchResults([]);
+      if (requestId === searchRequestIdRef.current) {
+        startSearchTransition(() => setSearchResults([]));
+      }
     } finally {
-      setIsSearching(false);
+      if (requestId === searchRequestIdRef.current) setIsSearching(false);
     }
   }, [currentUserId]);
 
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (searchQuery.trim().length < 2) {
+    if (deferredSearchQuery.trim().length < 2) {
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
-    searchDebounceRef.current = setTimeout(() => searchUsers(searchQuery), 250);
+    searchDebounceRef.current = setTimeout(() => searchUsers(deferredSearchQuery), 250);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [searchQuery, searchUsers]);
+  }, [deferredSearchQuery, searchUsers]);
 
   useEffect(() => {
     if (!searchQuery && !searchOpen) return;
@@ -182,19 +235,31 @@ export default function MobileTopBar({
   }, [clearSearch, searchOpen, searchQuery]);
 
   const openSearchUser = (user: SearchResult) => {
+    const now = Date.now();
+    const lastOpened = lastOpenedSearchUserRef.current;
+    if (lastOpened?.id === user.id && now - lastOpened.at < 350) return;
+    lastOpenedSearchUserRef.current = { id: user.id, at: now };
     const rect = searchWrapRef.current?.getBoundingClientRect();
     onSearchUserClick?.(user, {
       x: rect ? rect.left + rect.width - 18 : window.innerWidth - 300,
       y: rect ? rect.bottom + 8 : 74,
     });
+    setSearchQuery('');
+    setSearchResults([]);
     setSearchOpen(false);
+    window.dispatchEvent(new CustomEvent(MOBILE_SEARCH_EVENT, { detail: { view: currentView, query: '' } }));
   };
 
   return (
-    <header className="shrink-0 px-3 pt-[calc(env(safe-area-inset-top)+6px)] pb-1">
-      <div className="mx-auto grid min-h-11 w-full max-w-[1180px] grid-cols-[clamp(168px,15vw,190px)_minmax(0,1fr)_clamp(168px,15vw,190px)] items-center gap-3 sm:px-2">
-        <div className="flex h-11 min-w-0 items-center gap-1.5 rounded-[13px] px-0">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[11px] font-black text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+    <header className={`shrink-0 ${phoneLayout ? 'px-2 pt-[calc(env(safe-area-inset-top)+5px)] pb-1' : 'px-3 pt-[calc(env(safe-area-inset-top)+6px)] pb-1'}`}>
+      <div className={`mx-auto grid min-h-11 w-full max-w-[1180px] items-center ${phoneLayout ? 'grid-cols-[minmax(0,1fr)_minmax(128px,0.78fr)] gap-2' : 'grid-cols-[clamp(168px,15vw,190px)_minmax(0,1fr)_clamp(168px,15vw,190px)] gap-3 sm:px-2'}`}>
+        <button
+          type="button"
+          onClick={onOpenChannels}
+          className={`flex h-11 min-w-0 items-center gap-1.5 rounded-[13px] px-0 text-left transition-colors active:scale-[0.99] ${phoneLayout ? 'pr-1' : ''}`}
+          aria-label="Kanal panelini aç"
+        >
+          <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] font-black text-[var(--theme-accent)] ${phoneLayout ? 'h-9 w-9 text-[12px]' : 'h-8 w-8 text-[11px]'}`} style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
             {showServerAvatar ? (
               <img
                 src={activeServerAvatarSrc}
@@ -215,9 +280,11 @@ export default function MobileTopBar({
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] font-black text-[var(--theme-text)]/90">{activeServerName || 'MAYVox'}</span>
-            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/42">{activeServerMotto || activeChannelName || 'voice & chat'}</span>
+            <span className={`block truncate font-black text-[var(--theme-text)]/90 ${phoneLayout ? 'text-[12.5px]' : 'text-[12px]'}`}>{activeServerName || 'MAYVox'}</span>
+            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/42">{activeChannelName || activeServerMotto || 'voice & chat'}</span>
           </span>
+        </button>
+        {!phoneLayout && (
           <button
             type="button"
             onClick={onOpenSettings}
@@ -226,13 +293,13 @@ export default function MobileTopBar({
           >
             <Settings size={14} />
           </button>
-        </div>
+        )}
 
-        <div aria-hidden="true" />
+        {!phoneLayout && <div aria-hidden="true" />}
 
         <div
           ref={searchWrapRef}
-          className="relative flex h-8 w-full min-w-0 items-center gap-1.5 rounded-[10px] px-2.5 text-left active:scale-[0.995]"
+          className={`relative flex w-full min-w-0 items-center gap-1.5 rounded-[10px] text-left active:scale-[0.995] ${phoneLayout ? 'h-9 px-2' : 'h-8 px-2.5'}`}
           style={{
             background: 'rgba(var(--theme-bg-rgb),0.44)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.045)',
@@ -286,6 +353,15 @@ export default function MobileTopBar({
                   <button
                     key={user.id}
                     type="button"
+                    onPointerDown={event => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onPointerUp={event => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openSearchUser(user);
+                    }}
                     onClick={() => openSearchUser(user)}
                     className="flex w-full min-w-0 items-center gap-2 bg-transparent px-2.5 py-1.5 text-left transition-colors hover:bg-[rgba(var(--glass-tint),0.035)]"
                   >

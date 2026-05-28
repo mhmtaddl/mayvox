@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList } from 'lucide-react';
+import { User as UserIcon, Eye, EyeOff, Camera, Shield, ClipboardList, X } from 'lucide-react';
 import { CardSection, Toggle, inputCls, labelCls } from '../shared';
 import { toTitleCaseTr, normalizeNameInput, NAME_INPUT_MAX_LENGTH, getPublicDisplayName } from '../../../lib/formatName';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
@@ -9,6 +9,7 @@ import { useUser } from '../../../contexts/UserContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useAppState } from '../../../contexts/AppStateContext';
 import AvatarCropModal from '../../AvatarCropModal';
+import { hasCustomAvatar, resolveAvatarUrls } from '../../../lib/statusAvatar';
 import type { User } from '../../../types';
 
 const compactInputCls = `${inputCls} account-compact-input`;
@@ -33,7 +34,7 @@ function useAccountState() {
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(
-    currentUser.avatar?.startsWith('http') ? currentUser.avatar : null
+    hasCustomAvatar(currentUser.avatar) ? currentUser.avatar : null
   );
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +51,7 @@ function useAccountState() {
     setSettingsPasswordRepeat('');
     setSettingsPasswordError('');
     setUpdateSuccessMessage('');
-    setCustomAvatarUrl(currentUser.avatar?.startsWith('http') ? currentUser.avatar : null);
+    setCustomAvatarUrl(hasCustomAvatar(currentUser.avatar) ? currentUser.avatar : null);
   }, [currentUser.id]);
 
   const validatePassword = (password: string) => {
@@ -253,10 +254,20 @@ function ProfileCard() {
   const frameTier = getFrameTier(currentUser.userLevel, { isPrimaryAdmin: !!currentUser.isPrimaryAdmin, isAdmin: !!currentUser.isAdmin });
   const [previewColor, setPreviewColor] = useState<string | null>(null);
   const [customHex, setCustomHex] = useState(avatarBorderColor.startsWith('#') ? avatarBorderColor : '');
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarUrlIndex, setAvatarUrlIndex] = useState(0);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const customColorInputRef = useRef<HTMLInputElement>(null);
   const activeColor = previewColor ?? avatarBorderColor;
+  const avatarValue = customAvatarUrl ?? currentUser.avatar;
+  const avatarUrls = resolveAvatarUrls(avatarValue);
+  const activeAvatarUrl = avatarUrls[avatarUrlIndex] || '';
 
-  const TIER_LABEL: Record<string, string> = { standard: 'Standart', vip: 'VIP', elite: 'Elit' };
+  React.useEffect(() => {
+    setAvatarUrlIndex(0);
+    setAvatarLoadFailed(false);
+  }, [avatarValue]);
+
   const standardFrameColors = CHANNEL_ICON_COLOR_OPTIONS.map(option => ({ hex: option.value, name: option.label }));
   const standardFrameColorSet = new Set(standardFrameColors.map(option => option.hex.toLowerCase()));
   const hasCustomFrameColor = !!avatarBorderColor && !standardFrameColorSet.has(avatarBorderColor.toLowerCase());
@@ -270,7 +281,7 @@ function ProfileCard() {
         onMouseLeave={() => setPreviewColor(null)}
         title={name}
         aria-label={name}
-        className="h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
+        className="settings-account-frame-dot h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
         style={{
           background: isSel
             ? `linear-gradient(135deg, ${hex}42, rgba(var(--theme-accent-rgb), 0.10)), var(--surface-soft)`
@@ -299,38 +310,91 @@ function ProfileCard() {
       <div className="flex items-center gap-3">
         {/* Avatar — sol */}
         <div className="flex flex-col items-center shrink-0">
-          <div
-            className="relative group cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
+          <button
+            type="button"
+            className="relative group cursor-pointer shrink-0"
+            aria-label="Profil resmi yükle"
+            onClick={() => setAvatarPickerOpen(true)}
           >
             <div
               className={activeColor ? getFrameClassName(frameTier) : ''}
               style={activeColor ? { ...getFrameStyle(activeColor, frameTier), borderRadius: '22%' } : undefined}
             >
-              <div className="avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base" style={{ width: 52, height: 52 }}>
-                {customAvatarUrl ? (
-                  <img src={customAvatarUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <div className="settings-account-avatar avatar-squircle bg-[var(--theme-accent)]/20 overflow-hidden flex items-center justify-center text-[var(--theme-text)] font-bold text-base" style={{ width: 52, height: 52 }}>
+                {hasCustomAvatar(avatarValue) && activeAvatarUrl && !avatarLoadFailed ? (
+                  <img
+                    src={activeAvatarUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      if (avatarUrlIndex + 1 < avatarUrls.length) {
+                        setAvatarUrlIndex(index => index + 1);
+                        return;
+                      }
+                      setAvatarLoadFailed(true);
+                    }}
+                  />
                 ) : (
                   getAvatarText({ firstName: settingsFirstName, lastName: settingsLastName, age: parseInt(settingsAge) || 0 })
                 )}
               </div>
             </div>
-            <div className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="pointer-events-none absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               {avatarUploading
                 ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 : <Camera size={16} className="text-white" />
               }
             </div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
-          </div>
-          <span className="mt-1 text-[7.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-accent)]/60">
-            {TIER_LABEL[frameTier]}
-          </span>
+            <span className="settings-account-avatar-edit-badge pointer-events-none absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-lg border border-[rgba(var(--glass-tint),0.18)] bg-[rgba(var(--theme-bg-rgb),0.82)] text-[var(--theme-accent)] shadow-[0_8px_18px_rgba(0,0,0,0.24)]">
+              <Camera size={12} strokeWidth={2.2} />
+            </span>
+          </button>
+          {avatarPickerOpen && (
+            <div
+              className="fixed inset-0 z-[2200] flex items-center justify-center bg-black/38 px-4 backdrop-blur-[2px]"
+              onClick={() => setAvatarPickerOpen(false)}
+            >
+              <div
+                className="w-full max-w-[260px] rounded-2xl border border-[rgba(var(--glass-tint),0.14)] bg-[rgba(var(--theme-bg-rgb),0.88)] p-3 shadow-[0_22px_60px_rgba(0,0,0,0.38)] backdrop-blur-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[12px] font-bold text-[var(--theme-text)]">Profil fotoğrafı</p>
+                    <p className="mt-0.5 text-[9.5px] text-[var(--theme-secondary-text)]/68">Galeriden yeni bir görsel seç.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarPickerOpen(false)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/70 hover:bg-[rgba(var(--glass-tint),0.08)] hover:text-[var(--theme-text)]"
+                    aria-label="Kapat"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <label className="relative mt-3 inline-flex h-9 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-[rgba(var(--theme-accent-rgb),0.22)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[11px] font-bold text-[var(--theme-text)] active:scale-[0.98]">
+                  <Camera size={14} strokeWidth={2.2} />
+                  Galeriden seç
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                    onChange={e => {
+                      setAvatarPickerOpen(false);
+                      handleAvatarFileChange(e);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Ad + Soyad + Çerçeve — sağ taraf, genişler */}
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="settings-account-profile-fields flex-1 min-w-0 space-y-1.5">
+          <div className="settings-account-name-grid grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className={compactLabelCls}>Ad</label>
               <input type="text" maxLength={NAME_INPUT_MAX_LENGTH} value={settingsFirstName} onChange={e => setSettingsFirstName(normalizeNameInput(e.target.value))} className={compactInputCls} />
@@ -344,7 +408,7 @@ function ProfileCard() {
           {/* Çerçeve rengi — input'ların altında, aynı genişlikte */}
           <div>
             <p className="text-[8.5px] font-bold text-[var(--theme-secondary-text)]/56 uppercase tracking-wider mb-1.5">Çerçeve</p>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="settings-account-frame-row flex items-center gap-2 flex-wrap">
           {/* Yok kutucuğu — çapraz çizgili */}
           <button
             onClick={() => { setAvatarBorderColor(''); setPreviewColor(null); setCustomHex(''); }}
@@ -352,7 +416,7 @@ function ProfileCard() {
             onMouseLeave={() => setPreviewColor(null)}
             title="Yok"
             aria-label="Çerçeve yok"
-            className="h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
+            className="settings-account-frame-dot h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
             style={{
               background: !avatarBorderColor ? 'rgba(var(--glass-tint),0.055)' : 'var(--surface-soft)',
               borderColor: !avatarBorderColor ? 'rgba(var(--theme-accent-rgb),0.35)' : 'rgba(var(--glass-tint),0.12)',
@@ -375,7 +439,7 @@ function ProfileCard() {
             onClick={() => customColorInputRef.current?.click()}
             onMouseEnter={() => setPreviewColor(customHex || avatarBorderColor || '#6B7280')}
             onMouseLeave={() => setPreviewColor(null)}
-            className="relative h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
+            className="settings-account-frame-dot relative h-7 w-7 rounded-lg border transition-all duration-150 active:scale-95 hover:scale-105"
             style={{
               background: hasCustomFrameColor
                 ? `linear-gradient(135deg, ${avatarBorderColor}40, rgba(var(--theme-accent-rgb), 0.10)), var(--surface-soft)`
@@ -410,14 +474,14 @@ function AccountInfoCard() {
   const {
     settingsUsername, setSettingsUsername, settingsDisplayName, setSettingsDisplayName,
     settingsPublicDisplayName, setSettingsPublicDisplayName,
-    settingsAge, setSettingsAge, currentAppVersion,
+    settingsAge, setSettingsAge,
     updateSuccessMessage, settingsPasswordError, handleUpdateProfile, pressingProfile, hasProfileChanges,
   } = ctx;
 
   return (
-    <CardSection icon={<ClipboardList size={12} />} title="" subtitle={currentAppVersion ? `v${currentAppVersion}` : undefined} className="settings-account-card settings-account-compact-card xl:h-full xl:flex xl:flex-col">
-      <div className="space-y-1.5">
-        <div className="space-y-1">
+    <CardSection icon={<ClipboardList size={12} />} title="" className="settings-account-card settings-account-compact-card xl:h-full xl:flex xl:flex-col">
+      <div className="settings-account-info-grid grid grid-cols-1 gap-1.5">
+        <div className="settings-account-field settings-account-field-nick space-y-1">
           <label className={compactLabelCls}>Takma Ad</label>
           <input
             type="text"
@@ -430,22 +494,22 @@ function AccountInfoCard() {
             Diğer kullanıcılar seni bu isimle görür.
           </p>
         </div>
-        <div className="space-y-1">
+        <div className="settings-account-field settings-account-field-username space-y-1">
           <label className={compactLabelCls}>Kullanıcı Adı</label>
           <input type="text" value={settingsDisplayName} onChange={e => setSettingsDisplayName(e.target.value)} className={compactInputCls} />
         </div>
-        <div className="space-y-1">
+        <div className="settings-account-field settings-account-field-email space-y-1">
           <label className={compactLabelCls}>E-Posta</label>
           <input type="text" value={settingsUsername} onChange={e => setSettingsUsername(e.target.value)} className={compactInputCls} />
         </div>
-        <div className="space-y-1">
+        <div className="settings-account-field settings-account-field-age space-y-1">
           <label className={compactLabelCls}>Yaş</label>
           <input type="number" value={settingsAge} onChange={e => setSettingsAge(e.target.value)} className={`${compactInputCls} w-24`} />
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-3 mt-3 pt-2.5 border-t border-[var(--theme-border)]">
+      <div className="settings-account-update-row flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-3 mt-3 pt-2.5 border-t border-[var(--theme-border)]">
         <p className={`text-[10px] md:text-[11px] flex-1 leading-relaxed min-w-0 ${
           updateSuccessMessage ? 'text-emerald-500 font-semibold' : settingsPasswordError ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/50'
         }`}>
@@ -473,8 +537,8 @@ function SecurityCard() {
 
   return (
     <CardSection icon={<Shield size={12} />} title="" className="settings-account-card settings-account-compact-card">
-      <div className="space-y-1.5">
-        <div className="space-y-1">
+      <div className="settings-account-security-grid grid grid-cols-1 gap-1.5">
+        <div className="settings-account-field space-y-1">
           <label className={compactLabelCls}>Yeni Şifre</label>
           <div className="relative">
             <input
@@ -495,7 +559,7 @@ function SecurityCard() {
             </button>
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="settings-account-field space-y-1">
           <label className={compactLabelCls}>Şifre Tekrar</label>
           <input
             type={showSettingsPassword ? 'text' : 'password'}
@@ -507,10 +571,10 @@ function SecurityCard() {
           />
         </div>
       </div>
-      <p className={`text-[9.5px] mt-2.5 font-medium leading-snug ${!isPasswordValid ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/68'}`}>
+      <p className={`settings-account-password-hint text-[9.5px] mt-2.5 font-medium leading-snug ${!isPasswordValid ? 'text-red-400' : 'text-[var(--theme-secondary-text)]/68'}`}>
         En az 6 karakter, büyük+küçük harf ve rakam
       </p>
-      <div className="flex justify-end mt-2.5">
+      <div className="settings-account-security-action flex justify-end mt-2.5">
         <button
           onClick={triggerSaveProfile}
           disabled={settingsPassword.length === 0}
@@ -526,7 +590,7 @@ function SecurityCard() {
 function LastSeenCard() {
   const { showLastSeen, setShowLastSeen } = useSettings();
   return (
-    <CardSection icon={<Eye size={12} />} title="" className="settings-account-card settings-account-compact-card">
+    <CardSection icon={<Eye size={12} />} title="" className="settings-account-card settings-account-compact-card settings-account-privacy-card">
       <div className="flex items-center gap-3">
         <div className="w-7 h-7 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
           <Eye size={13} className="text-[var(--theme-accent)]/80" />
@@ -556,14 +620,14 @@ export default function AccountSection() {
           onCancel={() => state.setCropSrc(null)}
         />
       )}
-      <div className="flex flex-col gap-3">
+      <div className="settings-account-content flex flex-col gap-3">
         <ProfileCard />
 
         {/* Hesap Bilgileri ve Güvenlik — XL'de yan yana, grid stretch ile aynı yükseklik.
             Daha küçük ekranlarda alt alta tek sütun. */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        <div className="settings-account-main-grid grid grid-cols-1 xl:grid-cols-2 gap-3">
           <section className="flex flex-col h-full">
-            <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="settings-account-section-title flex items-center gap-2 mb-2 px-1">
               <span className="text-[var(--theme-accent)]/70"><ClipboardList size={11} strokeWidth={2.2} /></span>
               <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Hesap Bilgileri</h3>
             </div>
@@ -573,14 +637,14 @@ export default function AccountSection() {
           </section>
 
           <section className="flex flex-col h-full">
-            <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="settings-account-section-title flex items-center gap-2 mb-2 px-1">
               <span className="text-[var(--theme-accent)]/70"><Shield size={11} strokeWidth={2.2} /></span>
               <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Güvenlik</h3>
             </div>
-            <div className="flex-1 grid grid-rows-[auto_1fr] gap-3">
+            <div className="settings-account-security-stack flex-1 grid grid-rows-[auto_1fr] gap-3">
               <SecurityCard />
               <div data-command-target="privacy" className="flex flex-col justify-end min-h-0">
-                <div className="flex items-center gap-2 mb-2 px-1">
+                <div className="settings-account-section-title flex items-center gap-2 mb-2 px-1">
                   <span className="text-[var(--theme-accent)]/70"><Eye size={11} strokeWidth={2.2} /></span>
                   <h3 className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-text)]/85">Gizlilik</h3>
                 </div>

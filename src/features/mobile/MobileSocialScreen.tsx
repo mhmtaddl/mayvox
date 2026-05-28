@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Ban, Bell, Check, Flag, Info, Inbox, Layers, MessageCircle, Plus, Search, Send, ShieldOff, SlidersHorizontal, UserPlus, UsersRound, Volume2, X } from 'lucide-react';
 import MobileUserListItem, { type MobileUserStatus } from './MobileUserListItem';
 import type { VisualRole } from '../../components/RoleBadge';
 
 type MobileSocialTab = 'dm' | 'friends' | 'serverMembers' | 'requests' | 'online' | 'blocked' | 'messageSettings';
 type MobileSocialMode = 'full' | 'friends';
+const MOBILE_LIST_WINDOW = 72;
 
 interface MobileDmItem {
   id: string;
@@ -36,6 +37,17 @@ interface MobileRequestItem {
   subtitle?: string;
 }
 
+const MESSAGE_SETTINGS_ROWS = [
+  { id: 'dm-privacy', title: 'DM gizliligi', subtitle: 'Kimler direkt mesaj gonderebilir', icon: <ShieldOff size={15} /> },
+  { id: 'read-receipts', title: 'Okundu bilgisi', subtitle: 'Mesaj okundu durumunu goster', icon: <Info size={15} /> },
+  { id: 'message-tone', title: 'Mesaj sesi secimi', subtitle: '3 ses arasindan secim', icon: <Volume2 size={15} /> },
+  { id: 'message-volume', title: 'Ses seviyesi', subtitle: 'DM ses seviyesi', icon: <SlidersHorizontal size={15} /> },
+  { id: 'room-message-sound', title: 'Sohbet odasinda mesaj sesi', subtitle: 'Oda mesajlari icin ses', icon: <Volume2 size={15} /> },
+  { id: 'send-sound', title: 'Mesaj gonderim sesi', subtitle: 'Gonderince ses cal', icon: <Send size={15} /> },
+  { id: 'desktop-notifications', title: 'Masaustu bildirimi', subtitle: 'DM icin sistem bildirimi', icon: <Bell size={15} /> },
+  { id: 'group-messages', title: 'Ardisik mesajlari grupla', subtitle: 'Ayni kisiden gelenleri birlestir', icon: <Layers size={15} /> },
+] as const;
+
 interface MobileSocialScreenProps {
   mode?: MobileSocialMode;
   dmCount?: number;
@@ -44,6 +56,7 @@ interface MobileSocialScreenProps {
   requestCount?: number;
   serverName?: string;
   serverMemberCount?: number;
+  serverOnlineCount?: number;
   activeTab?: MobileSocialTab;
   dmItems?: MobileDmItem[];
   friendItems?: MobileFriendItem[];
@@ -54,23 +67,8 @@ interface MobileSocialScreenProps {
   onOpenRequests?: () => void;
   onAcceptRequest?: (id: string) => void;
   onDeclineRequest?: (id: string) => void;
+  onTabChange?: (tab: MobileSocialTab) => void;
 }
-
-const PREVIEW_DMS: MobileDmItem[] = [
-  { id: 'preview-dm-1', name: 'MAYVox Bot', subtitle: 'Mobil DM akisi burada gorunecek', unreadCount: 2, online: true },
-  { id: 'preview-dm-2', name: 'Echo', subtitle: 'Son mesaj ve saat bilgisi preview', online: true },
-  { id: 'preview-dm-3', name: 'Nova', subtitle: 'Gercek DMPanel bu patchte baglanmadi' },
-];
-
-const PREVIEW_FRIENDS: MobileFriendItem[] = [
-  { id: 'preview-friend-1', name: 'Atlas', status: 'online', subtitle: 'Ses odasinda' },
-  { id: 'preview-friend-2', name: 'Luna', status: 'idle', subtitle: 'Oyunda' },
-  { id: 'preview-friend-3', name: 'Mira', status: 'offline', subtitle: 'Cevrimdisi' },
-];
-
-const PREVIEW_REQUESTS: MobileRequestItem[] = [
-  { id: 'preview-request-1', name: 'Kaan', subtitle: 'Arkadaslik istegi preview' },
-];
 
 export default function MobileSocialScreen({
   mode = 'full',
@@ -80,6 +78,7 @@ export default function MobileSocialScreen({
   requestCount,
   serverName,
   serverMemberCount,
+  serverOnlineCount,
   activeTab,
   dmItems = [],
   friendItems = [],
@@ -89,24 +88,30 @@ export default function MobileSocialScreen({
   onOpenRequests,
   onAcceptRequest,
   onDeclineRequest,
+  onTabChange,
 }: MobileSocialScreenProps) {
   const [localTab, setLocalTab] = useState<MobileSocialTab>(activeTab ?? (mode === 'friends' ? 'friends' : 'dm'));
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [activeConversation, setActiveConversation] = useState<MobileDmItem | null>(null);
   const selectedTab = activeTab ?? localTab;
   const compactFriendsMode = mode === 'friends';
-  const hasRealDm = dmItems.length > 0;
-  const hasRealFriends = friendItems.length > 0;
   const hasRealServerMembers = serverMemberItems.length > 0;
-  const hasRealRequests = requestItems.length > 0;
-  const visibleDmItems = hasRealDm ? dmItems : PREVIEW_DMS;
-  const visibleFriendItems = hasRealFriends ? friendItems : PREVIEW_FRIENDS;
-  const visibleServerMemberItems = hasRealServerMembers ? serverMemberItems : [];
-  const visibleRequestItems = hasRealRequests ? requestItems : PREVIEW_REQUESTS;
-  const onlineItems = useMemo(() => visibleFriendItems.filter(item => item.status === 'online'), [visibleFriendItems]);
-  const friendOnlineCount = onlineCount ?? visibleFriendItems.filter(isVisibleOnline).length;
+  const deferredDmItems = useDeferredValue(dmItems);
+  const deferredFriendItems = useDeferredValue(friendItems);
+  const deferredServerMemberItems = useDeferredValue(serverMemberItems);
+  const deferredRequestItems = useDeferredValue(requestItems);
+  const visibleDmItems = deferredDmItems;
+  const visibleFriendItems = deferredFriendItems;
+  const visibleServerMemberItems = hasRealServerMembers ? deferredServerMemberItems : [];
+  const visibleRequestItems = deferredRequestItems;
+  const friendPresence = useMemo(() => splitPresenceItems(visibleFriendItems), [visibleFriendItems]);
+  const serverPresence = useMemo(() => splitPresenceItems(visibleServerMemberItems), [visibleServerMemberItems]);
+  const onlineItems = friendPresence.online;
+  const visibleFriendOnlineCount = friendPresence.online.length;
+  const visibleServerOnlineCount = serverPresence.online.length;
+  const friendOnlineCount = onlineCount ?? visibleFriendOnlineCount;
   const friendTotalCount = friendCount ?? friendItems.length;
-  const serverOnlineCount = visibleServerMemberItems.filter(isVisibleOnline).length;
+  const serverVisibleOnlineCount = serverOnlineCount ?? visibleServerOnlineCount;
   const serverTotalCount = serverMemberCount ?? serverMemberItems.length;
   const selectedItemsTitle =
     selectedTab === 'dm' ? 'Gelen mesajlar' :
@@ -133,13 +138,47 @@ export default function MobileSocialScreen({
     const nextIndex = deltaX < 0
       ? Math.min(tabOrder.length - 1, currentIndex + 1)
       : Math.max(0, currentIndex - 1);
-    setLocalTab(tabOrder[nextIndex]);
+    const nextTab = tabOrder[nextIndex];
+    setLocalTab(nextTab);
+    onTabChange?.(nextTab);
   };
 
-  const handleTabChange = (tab: MobileSocialTab) => {
+  const handleTabChange = useCallback((tab: MobileSocialTab) => {
     setActiveConversation(null);
     setLocalTab(tab);
-  };
+    onTabChange?.(tab);
+  }, [onTabChange]);
+  const handleRequestsTab = useCallback(() => {
+    handleTabChange('requests');
+    onOpenRequests?.();
+  }, [handleTabChange, onOpenRequests]);
+  const handleOpenDm = useCallback((item: MobileDmItem) => setActiveConversation(item), []);
+  useEffect(() => {
+    if (selectedTab === 'serverMembers') onTabChange?.('serverMembers');
+  }, [onTabChange, selectedTab]);
+  const activeList = useMemo(() => renderActiveList({
+    selectedTab,
+    dmItems: visibleDmItems,
+    friendItems: visibleFriendItems,
+    serverMemberItems: visibleServerMemberItems,
+    requestItems: visibleRequestItems,
+    onlineItems,
+    onOpenDm: handleOpenDm,
+    onOpenProfile,
+    onAcceptRequest,
+    onDeclineRequest,
+  }), [
+    selectedTab,
+    visibleDmItems,
+    visibleFriendItems,
+    visibleServerMemberItems,
+    visibleRequestItems,
+    onlineItems,
+    handleOpenDm,
+    onOpenProfile,
+    onAcceptRequest,
+    onDeclineRequest,
+  ]);
 
   if (!compactFriendsMode && activeConversation) {
     return (
@@ -157,30 +196,29 @@ export default function MobileSocialScreen({
         <style>{`
           .mobile-social-panel-scrollbar {
             scrollbar-width: thin;
-            scrollbar-color: rgba(var(--theme-accent-rgb), 0.42) transparent;
+            scrollbar-color: rgba(var(--glass-tint), 0.18) transparent;
             scrollbar-gutter: stable;
           }
           .mobile-social-panel-scrollbar::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
+            width: 2px;
+            height: 2px;
           }
           .mobile-social-panel-scrollbar::-webkit-scrollbar-track,
           .mobile-social-panel-scrollbar::-webkit-scrollbar-track-piece {
             background: transparent;
           }
           .mobile-social-panel-scrollbar::-webkit-scrollbar-thumb {
-            min-height: 18px;
+            min-height: 12px;
             border-radius: 999px;
-            border: 28px solid transparent;
-            border-left-width: 1.5px;
-            border-right-width: 1.5px;
+            border: 0;
             background:
               linear-gradient(
                 180deg,
                 transparent 0%,
-                rgba(var(--theme-accent-rgb), 0.2) 14%,
-                rgba(var(--theme-accent-rgb), 0.62) 50%,
-                rgba(var(--theme-accent-rgb), 0.2) 86%,
+                rgba(var(--glass-tint), 0.04) 12%,
+                rgba(var(--glass-tint), 0.20) 38%,
+                rgba(var(--glass-tint), 0.20) 62%,
+                rgba(var(--glass-tint), 0.04) 88%,
                 transparent 100%
               );
             background-clip: padding-box;
@@ -191,9 +229,10 @@ export default function MobileSocialScreen({
               linear-gradient(
                 180deg,
                 transparent 0%,
-                rgba(var(--theme-accent-rgb), 0.28) 14%,
-                rgba(var(--theme-accent-rgb), 0.74) 50%,
-                rgba(var(--theme-accent-rgb), 0.28) 86%,
+                rgba(var(--glass-tint), 0.06) 12%,
+                rgba(var(--glass-tint), 0.28) 38%,
+                rgba(var(--glass-tint), 0.28) 62%,
+                rgba(var(--glass-tint), 0.06) 88%,
                 transparent 100%
               );
             background-clip: padding-box;
@@ -237,17 +276,17 @@ export default function MobileSocialScreen({
 
         {!compactFriendsMode && <div className="mb-1.5 overflow-x-auto custom-scrollbar">
           <div className="flex min-w-max gap-3 border-b border-[rgba(var(--glass-tint),0.055)] sm:w-full sm:min-w-0">
-            <TabButton active={selectedTab === 'dm'} label="Gelen" count={dmCount ?? dmItems.length} onClick={() => handleTabChange('dm')} />
-            <TabButton active={selectedTab === 'requests'} label="Istekler" count={requestCount ?? requestItems.length} onClick={() => { handleTabChange('requests'); onOpenRequests?.(); }} />
-            <TabButton active={selectedTab === 'blocked'} label="Engellenenler" onClick={() => handleTabChange('blocked')} />
-            <TabButton active={selectedTab === 'messageSettings'} label="Ayarlar" onClick={() => handleTabChange('messageSettings')} />
+            <TabButton active={selectedTab === 'dm'} tab="dm" label="Gelen" count={dmCount ?? dmItems.length} onSelect={handleTabChange} />
+            <TabButton active={selectedTab === 'requests'} label="Istekler" count={requestCount ?? requestItems.length} onClick={handleRequestsTab} />
+            <TabButton active={selectedTab === 'blocked'} tab="blocked" label="Engellenenler" onSelect={handleTabChange} />
+            <TabButton active={selectedTab === 'messageSettings'} tab="messageSettings" label="Ayarlar" onSelect={handleTabChange} />
           </div>
         </div>}
 
         {compactFriendsMode && (
           <div className="mb-1.5 flex gap-3 border-b border-[rgba(var(--glass-tint),0.055)]">
-            <TabButton active={selectedTab === 'friends'} label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} fillRatio={ratio(friendOnlineCount, friendTotalCount)} onClick={() => handleTabChange('friends')} />
-            <TabButton active={selectedTab === 'serverMembers'} label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverOnlineCount} total={serverTotalCount} />} fillRatio={ratio(serverOnlineCount, serverTotalCount)} onClick={() => handleTabChange('serverMembers')} />
+            <TabButton active={selectedTab === 'friends'} tab="friends" label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} fillRatio={ratio(friendOnlineCount, friendTotalCount)} onSelect={handleTabChange} />
+            <TabButton active={selectedTab === 'serverMembers'} tab="serverMembers" label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverVisibleOnlineCount} total={serverTotalCount} />} fillRatio={ratio(serverVisibleOnlineCount, serverTotalCount)} onSelect={handleTabChange} />
           </div>
         )}
 
@@ -257,23 +296,12 @@ export default function MobileSocialScreen({
               <div className="min-w-0">
                 <h3 className="truncate text-[12.5px] font-black text-[var(--theme-text)]/90">{selectedItemsTitle}</h3>
                 <p className="truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/52">
-                  {hasRealDm || hasRealFriends || hasRealRequests ? 'Mevcut veriden preview' : 'Skeleton preview verisi'}
+                  {selectedTab === 'dm' ? 'Direkt mesajlar' : selectedTab === 'requests' ? 'Bekleyen istekler' : 'Kisi listesi'}
                 </p>
               </div>
               <MetricPill label={compactFriendsMode ? 'Aktif' : 'Mesaj'} value={getActiveCount(selectedTab, visibleDmItems, visibleFriendItems, visibleRequestItems, onlineItems)} />
             </div>}
-            {renderActiveList({
-              selectedTab,
-              dmItems: visibleDmItems,
-              friendItems: visibleFriendItems,
-              serverMemberItems: visibleServerMemberItems,
-              requestItems: visibleRequestItems,
-              onlineItems,
-              onOpenDm: item => setActiveConversation(item),
-              onOpenProfile: hasRealFriends || hasRealRequests ? onOpenProfile : undefined,
-              onAcceptRequest: hasRealRequests ? onAcceptRequest : undefined,
-              onDeclineRequest: hasRealRequests ? onDeclineRequest : undefined,
-            })}
+            {activeList}
           </section>
 
           {!compactFriendsMode && <aside className="space-y-1.5">
@@ -287,7 +315,7 @@ export default function MobileSocialScreen({
             <section className="rounded-[12px] px-3 py-2" style={{ background: 'rgba(var(--glass-tint),0.012)' }}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/58">Hizli aksiyonlar</h3>
-                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/45">Preview</span>
+                <span className="text-[10px] font-semibold text-[var(--theme-secondary-text)]/45">Kisa yol</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <QuickAction icon={<MessageCircle size={15} />} title="Yeni mesaj" />
@@ -305,8 +333,8 @@ export default function MobileSocialScreen({
                   <CompactRequestRow
                     key={item.id}
                     item={item}
-                    onAcceptRequest={hasRealRequests ? onAcceptRequest : undefined}
-                    onDeclineRequest={hasRealRequests ? onDeclineRequest : undefined}
+                    onAcceptRequest={onAcceptRequest}
+                    onDeclineRequest={onDeclineRequest}
                   />
                 ))}
               </div>
@@ -342,29 +370,32 @@ function renderActiveList({
   onAcceptRequest?: (id: string) => void;
   onDeclineRequest?: (id: string) => void;
 }) {
+  const dmWindow = windowItems(dmItems);
+  const friendWindow = windowItems(friendItems);
+  const serverMemberWindow = windowItems(serverMemberItems);
+  const requestWindow = windowItems(requestItems);
+  const onlineWindow = windowItems(onlineItems);
+
   if (selectedTab === 'dm') {
     return (
-      <ListSection emptyIcon={<Inbox size={20} />} emptyTitle="DM listesi bos" emptyText="Mobil DM listesi sonraki fazda baglanacak.">
-        {dmItems.map(item => (
-          <MobileUserListItem
+      <ListSection emptyIcon={<Inbox size={20} />} emptyTitle="DM listesi bos" emptyText="Henuz aktif bir mesajlasma yok.">
+        {dmWindow.items.map(item => (
+          <MobileDmRow
             key={item.id}
-            id={item.id}
-            name={item.name}
-            avatarUrl={item.avatarUrl}
-            subtitle={item.subtitle || 'Son mesaj burada gorunecek'}
-            status={item.online ? 'online' : 'offline'}
-            unreadCount={item.unreadCount}
-            onClick={() => onOpenDm?.(item)}
+            item={item}
+            onOpenDm={onOpenDm}
           />
         ))}
+        {dmWindow.hiddenCount > 0 && <ListMoreHint hiddenCount={dmWindow.hiddenCount} />}
       </ListSection>
     );
   }
 
   if (selectedTab === 'friends') {
     return (
-      <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Arkadas listesi bos" emptyText="Arkadaslar sonraki fazda bu listeye baglanacak.">
-        {renderUserItemsWithDivider(friendItems, onOpenProfile, 'friend')}
+      <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Arkadas listesi bos" emptyText="Arkadas eklediginde burada gorunecek.">
+        {renderUserItemsWithDivider(friendWindow.items, onOpenProfile, 'friend')}
+        {friendWindow.hiddenCount > 0 && <ListMoreHint hiddenCount={friendWindow.hiddenCount} />}
       </ListSection>
     );
   }
@@ -372,7 +403,8 @@ function renderActiveList({
   if (selectedTab === 'serverMembers') {
     return (
       <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Sunucu uyesi bulunamadi" emptyText="Bu sunucudaki uyeler burada gorunecek.">
-        {renderUserItemsWithDivider(serverMemberItems, onOpenProfile, 'server')}
+        {renderUserItemsWithDivider(serverMemberWindow.items, onOpenProfile, 'server')}
+        {serverMemberWindow.hiddenCount > 0 && <ListMoreHint hiddenCount={serverMemberWindow.hiddenCount} />}
       </ListSection>
     );
   }
@@ -380,7 +412,7 @@ function renderActiveList({
   if (selectedTab === 'requests') {
     return (
       <ListSection emptyIcon={<UserPlus size={20} />} emptyTitle="Mesaj istegi yok" emptyText="Bilinmeyen kisilerden gelen mesaj istekleri burada listelenecek.">
-        {requestItems.map(item => (
+        {requestWindow.items.map(item => (
           <MobileUserListItem
             key={item.id}
             id={item.id}
@@ -391,6 +423,7 @@ function renderActiveList({
             onClick={onOpenProfile}
           />
         ))}
+        {requestWindow.hiddenCount > 0 && <ListMoreHint hiddenCount={requestWindow.hiddenCount} />}
       </ListSection>
     );
   }
@@ -409,7 +442,7 @@ function renderActiveList({
 
   return (
     <ListSection emptyIcon={<UsersRound size={20} />} emptyTitle="Cevrimici arkadas yok" emptyText="Online kisiler burada gorunecek.">
-      {onlineItems.map(item => (
+      {onlineWindow.items.map(item => (
         <MobileUserListItem
           key={item.id}
           id={item.id}
@@ -426,8 +459,14 @@ function renderActiveList({
           onClick={onOpenProfile}
         />
       ))}
+      {onlineWindow.hiddenCount > 0 && <ListMoreHint hiddenCount={onlineWindow.hiddenCount} />}
     </ListSection>
   );
+}
+
+function windowItems<T>(items: T[], limit = MOBILE_LIST_WINDOW) {
+  if (items.length <= limit) return { items, hiddenCount: 0 };
+  return { items: items.slice(0, limit), hiddenCount: items.length - limit };
 }
 
 function MetricPill({ label, value }: { label: string; value: number }) {
@@ -459,12 +498,37 @@ function OnlineFraction({ online, total }: { online: number; total: number }) {
   );
 }
 
-function TabButton({ active, label, count, countNode, fillRatio, onClick }: { active: boolean; label: string; count?: number; countNode?: React.ReactNode; fillRatio?: number; onClick: () => void }) {
+function TabButton({
+  active,
+  tab,
+  label,
+  count,
+  countNode,
+  fillRatio,
+  onClick,
+  onSelect,
+}: {
+  active: boolean;
+  tab?: MobileSocialTab;
+  label: string;
+  count?: number;
+  countNode?: React.ReactNode;
+  fillRatio?: number;
+  onClick?: () => void;
+  onSelect?: (tab: MobileSocialTab) => void;
+}) {
   const fillPercent = `${Math.round((fillRatio ?? 1) * 100)}%`;
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+      return;
+    }
+    if (tab) onSelect?.(tab);
+  };
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       className={`relative h-9 min-w-11 px-0 text-[11.5px] font-bold active:scale-[0.98] sm:flex-1 ${active ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/66'}`}
       aria-pressed={active}
     >
@@ -490,9 +554,18 @@ function TabButton({ active, label, count, countNode, fillRatio, onClick }: { ac
   );
 }
 
+function splitPresenceItems(items: MobileFriendItem[]) {
+  const online: MobileFriendItem[] = [];
+  const offline: MobileFriendItem[] = [];
+  for (const item of items) {
+    if (isVisibleOnline(item)) online.push(item);
+    else offline.push(item);
+  }
+  return { online, offline };
+}
+
 function renderUserItemsWithDivider(items: MobileFriendItem[], onOpenProfile?: (id: string, x: number, y: number) => void, presenceLayout: 'friend' | 'server' = 'server') {
-  const onlineItems = items.filter(isVisibleOnline);
-  const offlineItems = items.filter(item => !isVisibleOnline(item));
+  const { online: onlineItems, offline: offlineItems } = splitPresenceItems(items);
   const rows: React.ReactNode[] = [];
 
   onlineItems.forEach(item => rows.push(renderUserItem(item, onOpenProfile, presenceLayout)));
@@ -541,21 +614,29 @@ function ListSection({
   emptyTitle: string;
   emptyText: string;
 }) {
-  const hasChildren = React.Children.count(children) > 0;
+  const hasChildren = React.Children.toArray(children).length > 0;
 
   if (!hasChildren) {
     return (
-      <section className="rounded-[16px] px-4 py-4 text-center" style={{ background: 'rgba(var(--glass-tint),0.018)' }}>
-        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+      <section className="px-3 py-3 text-center">
+        <div className="mx-auto mb-1.5 flex h-7 w-7 items-center justify-center text-[var(--theme-secondary-text)]/42 [&_svg]:h-4 [&_svg]:w-4">
           {emptyIcon}
         </div>
-        <h3 className="text-[13px] font-bold text-[var(--theme-text)]/88">{emptyTitle}</h3>
-        <p className="mx-auto mt-1 max-w-[240px] text-[11px] leading-5 text-[var(--theme-secondary-text)]/56">{emptyText}</p>
+        <h3 className="text-[11.5px] font-semibold text-[var(--theme-text)]/72">{emptyTitle}</h3>
+        <p className="mx-auto mt-0.5 max-w-[220px] text-[10px] leading-4 text-[var(--theme-secondary-text)]/46">{emptyText}</p>
       </section>
     );
   }
 
   return <section className="space-y-1">{children}</section>;
+}
+
+function ListMoreHint({ hiddenCount }: { hiddenCount: number }) {
+  return (
+    <div className="rounded-[10px] px-2.5 py-2 text-center text-[10px] font-bold text-[var(--theme-secondary-text)]/44" style={{ background: 'rgba(var(--glass-tint),0.016)' }}>
+      +{hiddenCount} kişi daha
+    </div>
+  );
 }
 
 function SidePanel({
@@ -601,7 +682,31 @@ function SidePanel({
   );
 }
 
-function RequestActions({
+const MobileDmRow = React.memo(function MobileDmRow({
+  item,
+  onOpenDm,
+}: {
+  item: MobileDmItem;
+  onOpenDm?: (item: MobileDmItem) => void;
+}) {
+  const handleOpen = useCallback(() => {
+    onOpenDm?.(item);
+  }, [item, onOpenDm]);
+
+  return (
+    <MobileUserListItem
+      id={item.id}
+      name={item.name}
+      avatarUrl={item.avatarUrl}
+      subtitle={item.subtitle || 'Son mesaj burada gorunecek'}
+      status={item.online ? 'online' : 'offline'}
+      unreadCount={item.unreadCount}
+      onClick={handleOpen}
+    />
+  );
+});
+
+const RequestActions = React.memo(function RequestActions({
   id,
   onAcceptRequest,
   onDeclineRequest,
@@ -620,9 +725,9 @@ function RequestActions({
       </button>
     </span>
   );
-}
+});
 
-function CompactRequestRow({
+const CompactRequestRow = React.memo(function CompactRequestRow({
   item,
   onAcceptRequest,
   onDeclineRequest,
@@ -644,9 +749,9 @@ function CompactRequestRow({
       <RequestActions id={item.id} onAcceptRequest={onAcceptRequest} onDeclineRequest={onDeclineRequest} />
     </div>
   );
-}
+});
 
-function QuickAction({ icon, title }: { icon: React.ReactNode; title: string }) {
+const QuickAction = React.memo(function QuickAction({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <button
       type="button"
@@ -658,7 +763,7 @@ function QuickAction({ icon, title }: { icon: React.ReactNode; title: string }) 
       <Plus size={13} className="ml-auto shrink-0 text-[var(--theme-secondary-text)]/38" aria-hidden="true" />
     </button>
   );
-}
+});
 
 function getActiveCount(
   selectedTab: MobileSocialTab,
@@ -700,7 +805,7 @@ function MobileConversationPreview({
           <div className="min-w-0 flex-1">
             <p className="text-[9.5px] font-black uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/48">Sohbet</p>
             <h2 className="truncate text-[17px] font-black text-[var(--theme-text)]">{item.name}</h2>
-            <p className="truncate text-[10.5px] font-medium text-[var(--theme-secondary-text)]/54">{item.subtitle || 'Son mesaj preview'}</p>
+            <p className="truncate text-[10.5px] font-medium text-[var(--theme-secondary-text)]/54">{item.subtitle || 'Son mesaj'}</p>
           </div>
         </div>
 
@@ -713,15 +818,13 @@ function MobileConversationPreview({
       </section>
 
       <section className="space-y-2">
-        <MessageBubble author={item.name} text="Selam, mobil DM ekraninin yeni akisi burada gorunecek." />
-        <MessageBubble own text="Tamam, sohbet detaylari ve guvenlik aksiyonlari ustte." />
-        <MessageBubble author={item.name} text="Gercek DM entegrasyonu sonraki fazda baglanabilir." />
+        <MessageBubble author={item.name} text={item.subtitle || 'Henuz mesaj yok.'} />
       </section>
     </div>
   );
 }
 
-function ConversationAction({ icon, label, tone }: { icon: React.ReactNode; label: string; tone?: 'danger' }) {
+const ConversationAction = React.memo(function ConversationAction({ icon, label, tone }: { icon: React.ReactNode; label: string; tone?: 'danger' }) {
   return (
     <button
       type="button"
@@ -734,9 +837,9 @@ function ConversationAction({ icon, label, tone }: { icon: React.ReactNode; labe
       <span className="truncate">{label}</span>
     </button>
   );
-}
+});
 
-function MessageBubble({ author, text, own }: { author?: string; text: string; own?: boolean }) {
+const MessageBubble = React.memo(function MessageBubble({ author, text, own }: { author?: string; text: string; own?: boolean }) {
   return (
     <div className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -751,23 +854,12 @@ function MessageBubble({ author, text, own }: { author?: string; text: string; o
       </div>
     </div>
   );
-}
+});
 
 function MessageSettingsList() {
-  const rows = [
-    { id: 'dm-privacy', title: 'DM gizliligi', subtitle: 'Kimler direkt mesaj gonderebilir', icon: <ShieldOff size={15} /> },
-    { id: 'read-receipts', title: 'Okundu bilgisi', subtitle: 'Mesaj okundu durumunu goster', icon: <Info size={15} /> },
-    { id: 'message-tone', title: 'Mesaj sesi secimi', subtitle: '3 ses arasindan secim', icon: <Volume2 size={15} /> },
-    { id: 'message-volume', title: 'Ses seviyesi', subtitle: 'DM ses seviyesi', icon: <SlidersHorizontal size={15} /> },
-    { id: 'room-message-sound', title: 'Sohbet odasinda mesaj sesi', subtitle: 'Oda mesajlari icin ses', icon: <Volume2 size={15} /> },
-    { id: 'send-sound', title: 'Mesaj gonderim sesi', subtitle: 'Gonderince ses cal', icon: <Send size={15} /> },
-    { id: 'desktop-notifications', title: 'Masaustu bildirimi', subtitle: 'DM icin sistem bildirimi', icon: <Bell size={15} /> },
-    { id: 'group-messages', title: 'Ardisik mesajlari grupla', subtitle: 'Ayni kisiden gelenleri birlestir', icon: <Layers size={15} /> },
-  ];
-
   return (
     <section className="space-y-1">
-      {rows.map(row => (
+      {MESSAGE_SETTINGS_ROWS.map(row => (
         <button
           key={row.id}
           type="button"

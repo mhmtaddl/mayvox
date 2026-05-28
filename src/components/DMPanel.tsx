@@ -1,12 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquare, ArrowLeft, Send, Trash2, PencilLine, X, ChevronDown, Smile, Settings2, Check, CheckCheck, Inbox, UserX, UserPlus, Flag, Search, Clock3, Info, Pin } from 'lucide-react';
-import {
-  isToastEnabled, setToastEnabled,
-  isGroupingEnabled, setGroupingEnabled,
-  isRoomMessageSoundEnabled, setRoomMessageSoundEnabled,
-} from '../features/notifications/notificationSound';
-import { SoundManager, stopAllSamples, type MessageVariant } from '../lib/audio/SoundManager';
 import { motion, AnimatePresence } from 'motion/react';
 import { getPublicDisplayName, safePublicName } from '../lib/formatName';
 import AvatarContent from './AvatarContent';
@@ -22,13 +16,15 @@ import { MV_PRESS } from '../lib/signature';
 import { replaceEmojiShortcuts } from '../lib/emojiShortcuts';
 import { playMessageSend } from '../lib/audio/SoundManager';
 import MessageText from './chat/MessageText';
-import { rangeVisualStyle } from '../lib/rangeStyle';
-import { updateProfileFields } from '../lib/backendClient';
-import { sendRealtimeBroadcast } from '../lib/chatService';
-import type { DmPrivacyMode } from '../types';
 import EmptyState from './EmptyState';
-import DMDetailsPanel from './dm/DMDetailsPanel';
-// SoundManager re-exported above ile birlikte; ayrı import gerekmiyor.
+
+const DMDetailsPanel = React.lazy(() => import('./dm/DMDetailsPanel'));
+const MessageSettingsPanel = React.lazy(() => import('./dm/MessageSettingsPanel'));
+const BlockedUsersPanel = React.lazy(() => import('./dm/BlockedUsersPanel'));
+const MESSAGE_REACTION_OPTIONS = ['👍', '❤️', '😂', '🔥'];
+const DM_CONVERSATION_WINDOW = 80;
+const DM_MESSAGE_WINDOW = 220;
+const DM_MESSAGE_WINDOW_STEP = 180;
 
 // ── Lightweight emoji picker ─────────────────────────────────────────────
 // Dependency yok; manuel curated set. 8 kolon × 5 satır = 40 emoji.
@@ -79,371 +75,28 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
   );
 }
 
-// ── Mesaj Ayarları Panel ────────────────────────────────────────────────
-// Compact inline dropdown — DMPanel header'ından anchor'lı, modal değil.
-// Mesaj sesi seçimi BURADA yönetilir; ana Settings > Sesler'de "Mesaj" YOK.
-function MessageSettingsPanel({
-  onClose,
-  currentUser,
-  allUsers,
-  setCurrentUser,
-  setAllUsers,
-  setToastMsg,
-}: {
-  onClose: () => void;
-  currentUser: any;
-  allUsers: any[];
-  setCurrentUser: React.Dispatch<React.SetStateAction<any>>;
-  setAllUsers: React.Dispatch<React.SetStateAction<any[]>>;
-  setToastMsg: (message: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [soundOn, setSoundOn] = useState(() => SoundManager.isMessageEnabled());
-  const [sendOn, setSendOn] = useState(() => SoundManager.isMessageSendEnabled());
-  const [variant, setVariant] = useState<MessageVariant>(() => SoundManager.getMessageVariant());
-  const [vol, setVol] = useState<number>(() => SoundManager.getMessageVolume());
-  const [toastOn, setToastOn] = useState(() => isToastEnabled());
-  const [groupOn, setGroupOn] = useState(() => isGroupingEnabled());
-  const [roomSoundOn, setRoomSoundOn] = useState(() => isRoomMessageSoundEnabled());
-  const dmMode: DmPrivacyMode = currentUser.dmPrivacyMode || (currentUser.allowNonFriendDms === false ? 'friends_only' : 'everyone');
-  const readReceiptsOn = currentUser.showDmReadReceipts !== false;
-  const dmModeOptions: Array<{ value: DmPrivacyMode; label: string }> = [
-    { value: 'everyone', label: 'Herkes' },
-    { value: 'mutual_servers', label: 'Ortak' },
-    { value: 'friends_only', label: 'Arkadaş' },
-    { value: 'closed', label: 'Kapalı' },
-  ];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="flex items-center justify-between gap-3 py-[7px] min-h-[28px]">
-      <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">{label}</span>
-      {children}
-    </div>
-  );
-
-  const Toggle = ({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) => (
-    <button
-      onClick={() => onChange(!on)}
-      className="relative w-8 h-[18px] rounded-full transition-colors duration-150"
-      style={{ background: on ? 'var(--theme-accent)' : 'rgba(var(--glass-tint),0.18)' }}
-    >
-      <span
-        className="absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform duration-150"
-        style={{ transform: on ? 'translateX(14px)' : 'translateX(0)' }}
-      />
-    </button>
-  );
-
-  // Classic iOS-style radio — accent-rengi bağımsız görünür.
-  // Seçili değil: nötr glass-tint outline (tema-adaptif; accent'ten bağımsız).
-  // Seçili: accent dolgu + İÇ BEYAZ NOKTA (her accent renginde kontrast) + dış soft glow.
-  const RadioDot = ({ active }: { active: boolean }) => (
-    <span
-      className="relative block w-[15px] h-[15px] rounded-full transition-all duration-150"
-      style={{
-        background: active ? 'var(--theme-accent)' : 'transparent',
-        boxShadow: active
-          ? 'inset 0 0 0 1.5px var(--theme-accent), 0 0 0 3px rgba(var(--theme-accent-rgb),0.22), 0 1px 2px rgba(0,0,0,0.12)'
-          : 'inset 0 0 0 1.5px rgba(var(--glass-tint),0.55), inset 0 0 0 2.5px rgba(var(--glass-tint),0.04)',
-      }}
-    >
-      {active && (
-        <span
-          className="absolute rounded-full"
-          style={{
-            top: 4, left: 4, right: 4, bottom: 4,
-            background: 'rgba(255,255,255,0.96)',
-            boxShadow: '0 0 2px rgba(0,0,0,0.15)',
-          }}
-        />
-      )}
-    </span>
-  );
-
-  const variantOptions: ReadonlyArray<MessageVariant> = ['1', '2', '3'];
-
-  const setDmModeLocal = (value: DmPrivacyMode) => {
-    const allowNonFriendDms = value === 'everyone' || value === 'mutual_servers';
-    setCurrentUser((prev: any) => ({ ...prev, dmPrivacyMode: value, allowNonFriendDms }));
-    setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, dmPrivacyMode: value, allowNonFriendDms } : u));
-  };
-
-  const updateDmMode = async (next: DmPrivacyMode) => {
-    if (next === dmMode) return;
-    setDmModeLocal(next);
-    try {
-      const allowNonFriendDms = next === 'everyone' || next === 'mutual_servers';
-      await updateProfileFields({ dm_privacy_mode: next, allow_non_friend_dms: allowNonFriendDms });
-      sendRealtimeBroadcast('moderation-event', {
-        userId: currentUser.id,
-        userIds: allUsers.map(u => u.id),
-        updates: { dmPrivacyMode: next, allowNonFriendDms },
-      });
-      setToastMsg('DM gizlilik ayarı güncellendi');
-    } catch {
-      setDmModeLocal(dmMode);
-      setToastMsg('Mesajlaşma ayarı güncellenemedi');
-    }
-  };
-
-  const updateReadReceipts = async (next: boolean) => {
-    setCurrentUser((prev: any) => ({ ...prev, showDmReadReceipts: next }));
-    setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, showDmReadReceipts: next } : u));
-    try {
-      await updateProfileFields({ show_dm_read_receipts: next });
-      sendRealtimeBroadcast('moderation-event', {
-        userId: currentUser.id,
-        userIds: allUsers.map(u => u.id),
-        updates: { showDmReadReceipts: next },
-      });
-      setToastMsg(next ? 'Okundu bilgisi açıldı' : 'Okundu bilgisi gizlendi');
-    } catch {
-      setCurrentUser((prev: any) => ({ ...prev, showDmReadReceipts: readReceiptsOn }));
-      setAllUsers((prev: any[]) => prev.map(u => u.id === currentUser.id ? { ...u, showDmReadReceipts: readReceiptsOn } : u));
-      setToastMsg('Okundu bilgisi güncellenemedi');
-    }
-  };
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, x: 18 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 18 }}
-      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
-      onClick={e => e.stopPropagation()}
-      className="absolute inset-y-0 right-0 z-30 flex w-[286px] max-w-[86%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
-      style={{
-        background:
-          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
-        boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
-        backdropFilter: 'blur(16px) saturate(125%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
-      }}
-    >
-      <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
-        <div className="min-w-0">
-          <div className="mv-font-title truncate text-[13px] font-bold text-[var(--theme-text)]">Mesaj ayarları</div>
-          <div className="mv-font-caption truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">Gizlilik ve bildirimler</div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-text)]"
-          title="Ayarları kapat"
-          aria-label="Ayarları kapat"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      <div className="custom-scrollbar flex-1 overflow-y-auto px-3.5 py-1 divide-y divide-[rgba(var(--glass-tint),0.05)]">
-        <div className="py-[7px]">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">DM gizliliği</span>
-            <span className="text-[10px] text-[var(--theme-secondary-text)]/50">{dmModeOptions.find(o => o.value === dmMode)?.label}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-1">
-            {dmModeOptions.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => updateDmMode(opt.value)}
-                className={`h-6 rounded-[7px] px-1 text-[9.5px] font-semibold transition-colors ${
-                  dmMode === opt.value
-                    ? 'bg-[rgba(var(--theme-accent-rgb),0.16)] text-[var(--theme-accent)]'
-                    : 'bg-[rgba(var(--glass-tint),0.045)] text-[var(--theme-secondary-text)]/65 hover:text-[var(--theme-text)]'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <Row label="Okundu bilgisini göster">
-          <Toggle on={readReceiptsOn} onChange={updateReadReceipts} />
-        </Row>
-        <div className="py-[8px]">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-[var(--theme-text)]/85 tracking-[-0.005em]">Mesaj sesi</span>
-            <Toggle on={soundOn} onChange={v => { setSoundOn(v); SoundManager.setMessageEnabled(v); }} />
-          </div>
-          <div
-            className={`rounded-[10px] bg-[rgba(var(--glass-tint),0.035)] px-2.5 py-2 shadow-[inset_0_0_0_1px_rgba(var(--glass-tint),0.045)] transition-opacity ${
-              soundOn ? 'opacity-100' : 'opacity-40'
-            }`}
-          >
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-[10.5px] text-[var(--theme-secondary-text)]/65">Ton</span>
-              <div className="flex items-center gap-0.5 -mr-1">
-                {variantOptions.map(opt => {
-                  const active = variant === opt;
-                  return (
-                    <button
-                      key={opt}
-                      disabled={!soundOn}
-                      onClick={() => {
-                        stopAllSamples();
-                        setVariant(opt);
-                        SoundManager.setMessageVariant(opt);
-                        SoundManager.preview.message(opt);
-                      }}
-                      className="p-1 rounded-full transition-transform active:scale-90 disabled:cursor-not-allowed disabled:active:scale-100"
-                      aria-label={`Ses ${opt}`}
-                    >
-                      <RadioDot active={active} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-[10.5px] text-[var(--theme-secondary-text)]/65">Ses seviyesi</span>
-                <span className="w-9 text-right text-[10px] tabular-nums text-[var(--theme-secondary-text)]/70">{Math.round(vol * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={vol}
-                disabled={!soundOn}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setVol(v);
-                  SoundManager.setMessageVolume(v);
-                }}
-                className="premium-range w-full disabled:cursor-not-allowed"
-                style={rangeVisualStyle(vol, 0, 1)}
-              />
-            </div>
-          </div>
-        </div>
-        <Row label="Sohbet odasında mesaj sesi">
-          <Toggle on={roomSoundOn} onChange={v => { setRoomSoundOn(v); setRoomMessageSoundEnabled(v); }} />
-        </Row>
-        <Row label="Mesaj gönderim sesi">
-          <Toggle on={sendOn} onChange={v => {
-            setSendOn(v);
-            SoundManager.setMessageSendEnabled(v);
-            if (v) { stopAllSamples(); SoundManager.preview.messageSend(); }
-          }} />
-        </Row>
-        <Row label="Masaüstü bildirimi">
-          <Toggle on={toastOn} onChange={v => { setToastOn(v); setToastEnabled(v); }} />
-        </Row>
-        <Row label="Ardışık mesajları grupla">
-          <Toggle on={groupOn} onChange={v => { setGroupOn(v); setGroupingEnabled(v); }} />
-        </Row>
-      </div>
-    </motion.div>
-  );
-}
-
-function BlockedUsersPanel({
-  onClose,
-  blockedUsers,
-  onUnblockUser,
-}: {
-  onClose: () => void;
-  blockedUsers: Array<{ id: string; name: string }>;
-  onUnblockUser: (userId: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, x: 18 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 18 }}
-      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
-      onClick={e => e.stopPropagation()}
-      className="absolute inset-y-0 right-0 z-30 flex w-[272px] max-w-[86%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
-      style={{
-        background:
-          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
-        boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
-        backdropFilter: 'blur(16px) saturate(125%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
-      }}
-    >
-      <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
-        <div className="min-w-0">
-          <div className="mv-font-title truncate text-[13px] font-bold text-[var(--theme-text)]">Engellenenler</div>
-          <div className="mv-font-caption truncate text-[10px] font-medium text-[var(--theme-secondary-text)]/55">{blockedUsers.length} kullanıcı</div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--theme-secondary-text)]/60 transition-colors hover:text-[var(--theme-text)]"
-          title="Engellenenleri kapat"
-          aria-label="Engellenenleri kapat"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      <div className="custom-scrollbar flex-1 overflow-y-auto p-2">
-        {blockedUsers.length === 0 ? (
-          <div className="flex items-center gap-2 rounded-[10px] px-2 py-2 text-[11px] text-[var(--theme-secondary-text)]/45">
-            <UserX size={13} />
-            <span>Engellenen kullanıcı yok.</span>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {blockedUsers.map(user => (
-              <div key={user.id} className="flex items-center justify-between gap-2 rounded-[10px] bg-[rgba(var(--glass-tint),0.04)] px-2 py-1.5">
-                <span className="min-w-0 truncate text-[11px] font-medium text-[var(--theme-text)]/82">{user.name}</span>
-                <button
-                  type="button"
-                  onClick={() => onUnblockUser(user.id)}
-                  className="shrink-0 rounded-[8px] px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
-                >
-                  Kaldır
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
 function DmRequestsPanel({
   onClose,
   requests,
   allUsers,
+  userById,
   currentUserId,
   requestActionKeys,
   onOpen,
   onAccept,
   onReject,
+  solidSurface = false,
 }: {
   onClose: () => void;
   requests: DmConversation[];
   allUsers: any[];
+  userById?: Map<string, any>;
   currentUserId: string;
   requestActionKeys: Set<string>;
   onOpen: (recipientId: string) => void;
   onAccept: (convo: DmConversation) => void;
   onReject: (convo: DmConversation, name: string) => void;
+  solidSurface?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -463,13 +116,13 @@ function DmRequestsPanel({
       exit={{ opacity: 0, x: 18 }}
       transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
       onClick={e => e.stopPropagation()}
-      className="absolute inset-y-0 right-0 z-30 flex w-[300px] max-w-[88%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
+      className={`absolute inset-y-0 right-0 z-30 flex w-[300px] max-w-[88%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)] ${solidSurface ? 'dm-mobile-solid-panel dm-mobile-side-panel' : ''}`}
       style={{
         background:
-          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+          'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.024)), rgba(var(--theme-bg-rgb),0.995)',
         boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
-        backdropFilter: 'blur(16px) saturate(125%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(125%)',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
       }}
     >
       <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
@@ -496,13 +149,14 @@ function DmRequestsPanel({
         ) : (
           <div className="space-y-1">
             {requests.map(convo => {
-              const u = allUsers.find((x: any) => x.id === convo.recipientId);
+              const u = userById?.get(convo.recipientId) ?? allUsers.find((x: any) => x.id === convo.recipientId);
               const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
               return (
                 <div key={convo.conversationKey}>
                   <ConversationItem
                     convo={convo}
                     allUsers={allUsers}
+                    userById={userById}
                     currentUserId={currentUserId}
                     isRequest
                     requestActionPending={requestActionKeys.has(convo.conversationKey)}
@@ -527,10 +181,11 @@ function DmRequestsPanel({
 // ── Conversation Item ───────────────────────────────────────────────────
 
 function ConversationItem({
-  convo, allUsers, onClick, onDelete, isRequest = false, requestActionPending = false, onAccept, onReject,
+  convo, allUsers, userById, onClick, onDelete, isRequest = false, requestActionPending = false, onAccept, onReject,
 }: {
   convo: DmConversation;
   allUsers: any[];
+  userById?: Map<string, any>;
   currentUserId: string;
   onClick: () => void;
   onDelete: () => void;
@@ -539,7 +194,7 @@ function ConversationItem({
   onAccept?: () => void;
   onReject?: () => void;
 }) {
-  const user = allUsers.find((u: any) => u.id === convo.recipientId);
+  const user = userById?.get(convo.recipientId) ?? allUsers.find((u: any) => u.id === convo.recipientId);
   const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
   const avatar = user?.avatar || convo.recipientAvatar || '';
   const hasUnread = convo.unreadCount > 0;
@@ -662,7 +317,6 @@ function MessageBubble({
   onReact: (emoji: string) => void;
 }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const reactionOptions = ['👍', '❤️', '😂', '🔥'];
   const [actionsSuppressed, setActionsSuppressed] = useState(false);
   const suppressActionsBriefly = useCallback(() => {
     setActionsSuppressed(true);
@@ -810,7 +464,7 @@ function MessageBubble({
           >
             <Pin size={12} strokeWidth={2.1} />
           </button>
-          {reactionOptions.map(emoji => (
+          {MESSAGE_REACTION_OPTIONS.map(emoji => (
             <button
               key={emoji}
               type="button"
@@ -903,16 +557,17 @@ function MessageTick({ msg }: { msg: DmMessage }) {
 // ── Chat Area ───────────────────────────────────────────────────────────
 
 function ChatArea({
-  messages, currentUserId, recipientId, allUsers, loadingHistory, typingFrom,
+  messages, currentUserId, recipientId, recipientUser, loadingHistory, typingFrom,
   onSend, onEditMessage, onDeleteMessage, onPinMessage, onReactMessage, onTyping, onBack, onNearBottomChange,
   lastError, isRequest = false, isBlocked = false, onAcceptRequest, onRejectRequest, onBlockUser, onUnblockUser,
   friendRelation = null, requestActionPending = false, onSendFriendRequest, onReportUser, detailsOpen = false, onToggleDetails, onCloseDetails,
   suppressInitialFocus = false,
+  messageWindowed = false,
 }: {
   messages: DmMessage[];
   currentUserId: string;
   recipientId: string;
-  allUsers: any[];
+  recipientUser?: any | null;
   loadingHistory: boolean;
   typingFrom: string | null;
   onSend: (text: string) => void;
@@ -938,6 +593,7 @@ function ChatArea({
   onToggleDetails?: () => void;
   onCloseDetails?: () => void;
   suppressInitialFocus?: boolean;
+  messageWindowed?: boolean;
 }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -947,13 +603,14 @@ function ChatArea({
   const [showJump, setShowJump] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [messageWindowSize, setMessageWindowSize] = useState(DM_MESSAGE_WINDOW);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMsgLenRef = useRef(0);
   const prevRecipientRef = useRef(recipientId);
   const lastOwnMsgIdRef = useRef<string | null>(null);
 
-  const recipient = allUsers.find((u: any) => u.id === recipientId);
+  const recipient = recipientUser;
   const recipientName = recipient ? getPublicDisplayName(recipient) : 'Kullanıcı';
   const recipientAvatar = recipient?.avatar || '';
 
@@ -975,6 +632,7 @@ function ChatArea({
     setNearBottomState(true);
     setEditingMsgId(null);
     setEditingText('');
+    setMessageWindowSize(DM_MESSAGE_WINDOW);
     prevRecipientRef.current = recipientId;
   }, [recipientId]);
 
@@ -1047,15 +705,27 @@ function ChatArea({
     const onJump = (event: Event) => {
       const messageId = (event as CustomEvent<{ messageId?: string }>).detail?.messageId;
       if (!messageId) return;
-      const el = scrollRef.current?.querySelector<HTMLElement>(`[data-dm-message-id="${CSS.escape(messageId)}"]`);
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedMessageId(messageId);
-      window.setTimeout(() => setHighlightedMessageId(current => current === messageId ? null : current), 1800);
+      const revealAndScroll = () => {
+        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-dm-message-id="${CSS.escape(messageId)}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+        window.setTimeout(() => setHighlightedMessageId(current => current === messageId ? null : current), 1800);
+      };
+      if (messageWindowed) {
+        const index = messages.findIndex(msg => msg.id === messageId);
+        const hiddenBoundary = Math.max(0, messages.length - messageWindowSize);
+        if (index >= 0 && index < hiddenBoundary) {
+          setMessageWindowSize(messages.length - index);
+          window.setTimeout(revealAndScroll, 0);
+          return;
+        }
+      }
+      revealAndScroll();
     };
     window.addEventListener('mayvox:dm-jump-message', onJump);
     return () => window.removeEventListener('mayvox:dm-jump-message', onJump);
-  }, []);
+  }, [messageWindowed, messageWindowSize, messages]);
 
   // Safety: sending 4s'den uzun sürerse düşür (echo gelmedi bile)
   useEffect(() => {
@@ -1136,20 +806,31 @@ function ChatArea({
     if (converted.length > 0) onTyping();
   };
 
+  const displayedMessages = useMemo(() => {
+    if (!messageWindowed || messages.length <= messageWindowSize) return messages;
+    return messages.slice(-messageWindowSize);
+  }, [messageWindowSize, messageWindowed, messages]);
+  const hiddenMessageCount = messageWindowed ? Math.max(0, messages.length - displayedMessages.length) : 0;
+
   const grouped = useMemo(() => {
     const g: { date: string; msgs: DmMessage[] }[] = [];
     let last = '';
-    for (const msg of messages) {
-      const d = new Date(msg.createdAt); const now = new Date();
-      const y = new Date(now); y.setDate(now.getDate() - 1);
-      const ds = d.toDateString() === now.toDateString() ? 'Bugün'
-        : d.toDateString() === y.toDateString() ? 'Dün'
+    const now = new Date();
+    const today = now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayKey = yesterday.toDateString();
+    for (const msg of displayedMessages) {
+      const d = new Date(msg.createdAt);
+      const dateKey = d.toDateString();
+      const ds = dateKey === today ? 'Bugün'
+        : dateKey === yesterdayKey ? 'Dün'
         : `${d.getDate()} ${d.toLocaleString('tr-TR', { month: 'long' })} ${d.getFullYear()}`;
       if (ds !== last) { g.push({ date: ds, msgs: [] }); last = ds; }
       g[g.length - 1].msgs.push(msg);
     }
     return g;
-  }, [messages]);
+  }, [displayedMessages]);
 
   const typingActive = typingFrom === recipientId;
   const composerLocked = isRequest || isBlocked;
@@ -1304,7 +985,18 @@ function ChatArea({
             description="Bir mesaj göndererek konuşmayı başlat."
             className="h-full"
           />
-        ) : grouped.map(group => (
+        ) : (
+          <>
+          {hiddenMessageCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setMessageWindowSize(size => Math.min(messages.length, size + DM_MESSAGE_WINDOW_STEP))}
+              className="mx-auto mb-3 flex rounded-full px-3 py-1.5 text-[10px] font-bold text-[var(--theme-secondary-text)]/56 transition-colors hover:bg-[rgba(var(--glass-tint),0.045)] hover:text-[var(--theme-text)]/76"
+            >
+              {hiddenMessageCount} eski mesaj daha
+            </button>
+          )}
+          {grouped.map(group => (
           <div key={group.date}>
             <div className="mv-density-date-separator flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-[var(--theme-border)] opacity-30" />
@@ -1344,7 +1036,9 @@ function ChatArea({
               );
             })}
           </div>
-        ))}
+          ))}
+          </>
+        )}
       </div>
 
       {/* Jump-to-bottom affordance */}
@@ -1408,9 +1102,9 @@ function ChatArea({
 
       {/* Input */}
       {!composerLocked && (
-      <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
+      <div className="shrink-0 px-4 py-2.5" style={{ borderTop: '1px solid rgba(var(--glass-tint), 0.06)' }}>
         <div
-          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-colors duration-150 focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
+          className="flex min-h-[38px] items-center gap-1.5 rounded-[11px] px-3 py-1.5 border transition-colors duration-150 focus-within:border-[rgba(var(--theme-accent-rgb),0.30)]"
           style={{
             background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.08), rgba(var(--glass-tint),0.04)), var(--surface-base)',
             borderColor: 'rgba(var(--glass-tint),0.10)',
@@ -1436,27 +1130,27 @@ function ChatArea({
             }}
             placeholder="Mesaj yaz..."
             maxLength={2000}
-            className="mv-chat-composer-field flex-1 bg-transparent text-[13px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
+            className="mv-chat-composer-field flex-1 bg-transparent text-[12.5px] leading-5 text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/30 outline-none"
             style={{ background: 'transparent', border: 0, boxShadow: 'none' }}
           />
           <button
             onClick={() => setEmojiOpen(o => !o)}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors"
+            className="w-6.5 h-6.5 rounded-lg flex items-center justify-center text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors"
             title="Emoji"
             aria-label="Emoji seç"
           >
-            <Smile size={15} />
+            <Smile size={14} />
           </button>
           <motion.button
             {...(canSend ? MV_PRESS : {})}
             onClick={handleSend}
             disabled={!canSend}
             aria-busy={sending}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors duration-150 disabled:opacity-15"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 transition-colors duration-150 disabled:opacity-15"
           >
             {sending
               ? <div className="w-3.5 h-3.5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin" />
-              : <Send size={15} />
+              : <Send size={14} />
             }
           </motion.button>
         </div>
@@ -1501,7 +1195,9 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [requestActionKeys, setRequestActionKeys] = useState<Set<string>>(new Set());
   const [listQuery, setListQuery] = useState('');
+  const deferredListQuery = useDeferredValue(listQuery);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const userById = useMemo(() => new Map(allUsers.map((user: any) => [String(user.id), user])), [allUsers]);
 
   useEffect(() => { onUnreadChange?.(dm.totalUnread); }, [dm.totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onRequestCountChange?.(dm.requests.length); }, [dm.requests.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1552,24 +1248,39 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
     : undefined;
   const activeBlocked = dm.activeRecipientId ? dm.blockedIds.has(dm.activeRecipientId) : false;
   const activeRecipient = dm.activeRecipientId
-    ? allUsers.find((u: any) => u.id === dm.activeRecipientId)
+    ? userById.get(String(dm.activeRecipientId)) ?? null
     : null;
   const activeRecipientName = activeRecipient ? getPublicDisplayName(activeRecipient) : 'Kullanıcı';
   const activeFriendRelation = dm.activeRecipientId ? friends.getRelationship(dm.activeRecipientId) : null;
-  const blockedUsers = useMemo(() => Array.from(dm.blockedIds).map(id => {
-    const user = allUsers.find((u: any) => u.id === id);
+  const blockedUsers = useMemo(() => {
+    if (!blockedOpen) return [];
+    return Array.from(dm.blockedIds).map(id => {
+    const user = userById.get(String(id));
     return { id, name: user ? getPublicDisplayName(user) : 'Kullanıcı' };
-  }), [allUsers, dm.blockedIds]);
+    });
+  }, [blockedOpen, dm.blockedIds, userById]);
   const filterConversations = useCallback((list: DmConversation[]) => {
-    const q = listQuery.trim().toLowerCase();
+    const q = deferredListQuery.trim().toLowerCase();
     if (!q) return list;
     return list.filter(convo => {
-      const user = allUsers.find((u: any) => u.id === convo.recipientId);
+      const user = userById.get(String(convo.recipientId));
       const name = user ? getPublicDisplayName(user) : (safePublicName(convo.recipientName) || 'Kullanıcı');
       return name.toLowerCase().includes(q) || String(convo.lastMessage || '').toLowerCase().includes(q);
     });
-  }, [allUsers, listQuery]);
-  const visibleConversations = useMemo(() => filterConversations(dm.conversations), [dm.conversations, filterConversations]);
+  }, [deferredListQuery, userById]);
+  const visibleConversations = useMemo(() => {
+    if (dm.activeRecipientId) return [];
+    return filterConversations(dm.conversations);
+  }, [dm.activeRecipientId, dm.conversations, filterConversations]);
+  const visibleConversationWindow = useMemo(() => {
+    if (visibleConversations.length <= DM_CONVERSATION_WINDOW) {
+      return { items: visibleConversations, hiddenCount: 0 };
+    }
+    return {
+      items: visibleConversations.slice(0, DM_CONVERSATION_WINDOW),
+      hiddenCount: visibleConversations.length - DM_CONVERSATION_WINDOW,
+    };
+  }, [visibleConversations]);
 
   const handleSendFriendRequest = useCallback(async () => {
     if (!dm.activeRecipientId) return;
@@ -1614,39 +1325,43 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-          transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
+          transition={{ duration: mobileDenseSurface ? 0.10 : 0.18, ease: [0.25, 1, 0.5, 1] }}
           // Surface: `.surface-card` class'ı Messages panel referanslı unified
           // materyali sağlar; Görünüm/Sesler/Performans vs aynı class üzerinden
           // BIREBIR aynı recipe'i kullanıyor. Tema değişince token'lar adapte
           // olur — ocean/emerald/crimson her biri kendi kimliğinde matched.
-          className={`surface-card dm-glass-panel fixed bottom-[60px] right-3 z-[110] max-w-[calc(100vw-24px)] max-h-[calc(100vh-84px)] rounded-2xl overflow-hidden flex flex-col transition-[width,height] duration-200 ease-out ${
+          className={`surface-card dm-glass-panel ${mobileDenseSurface ? 'dm-mobile-solid-panel' : ''} fixed bottom-[60px] right-3 z-[110] max-w-[calc(100vw-24px)] max-h-[calc(100vh-84px)] rounded-2xl overflow-hidden flex flex-col ${mobileDenseSurface ? 'transition-opacity duration-100' : 'transition-[width,height] duration-200 ease-out'} ${
             dm.activeRecipientId
-              ? detailsOpen
-                ? 'w-[640px] h-[580px]'
-                : 'w-[360px] h-[500px]'
+              ? mobileDenseSurface
+                ? detailsOpen
+                  ? 'w-[640px] h-[500px]'
+                  : 'w-[360px] h-[500px]'
+                : detailsOpen
+                  ? 'w-[640px] h-[500px]'
+                  : 'w-[360px] h-[500px]'
               : listSidePanelOpen
                 ? 'w-[640px] h-[500px]'
               : 'w-[360px] h-[500px]'
           }`}
           style={{
             background: mobileDenseSurface
-              ? 'linear-gradient(180deg, rgba(var(--glass-tint),0.05), rgba(var(--glass-tint),0.018)), rgba(var(--theme-bg-rgb),0.97)'
+              ? 'linear-gradient(180deg, rgba(var(--glass-tint),0.080), rgba(var(--glass-tint),0.034)), rgba(var(--theme-bg-rgb),0.58)'
               : undefined,
-            backdropFilter: mobileDenseSurface ? 'blur(10px) saturate(112%)' : undefined,
-            WebkitBackdropFilter: mobileDenseSurface ? 'blur(10px) saturate(112%)' : undefined,
+            backdropFilter: mobileDenseSurface ? 'blur(20px) saturate(130%)' : undefined,
+            WebkitBackdropFilter: mobileDenseSurface ? 'blur(20px) saturate(130%)' : undefined,
             boxShadow: mobileDenseSurface
-              ? '0 22px 56px rgba(0,0,0,0.42), inset 0 1px 0 rgba(var(--glass-tint),0.075)'
+              ? '0 18px 42px rgba(0,0,0,0.34), inset 0 1px 0 rgba(var(--glass-tint),0.10)'
               : 'none',
-            border: '1px solid rgba(var(--glass-tint), 0.055)',
+            border: mobileDenseSurface ? '1px solid rgba(var(--glass-tint),0.14)' : '1px solid rgba(var(--glass-tint), 0.055)',
           }}
         >
           {dm.activeRecipientId ? (
-            <div className={`flex h-full min-h-0 flex-col transition-[padding-right] duration-200 ease-out ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}>
+            <div className={`flex h-full min-h-0 flex-col ${mobileDenseSurface ? '' : 'transition-[padding-right] duration-200 ease-out'} ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}>
               <ChatArea
                 messages={dm.messages}
                 currentUserId={currentUser.id}
                 recipientId={dm.activeRecipientId}
-                allUsers={allUsers}
+                recipientUser={activeRecipient}
                 loadingHistory={dm.loadingHistory}
                 typingFrom={dm.typingFrom}
                 onSend={dm.sendMessage}
@@ -1667,6 +1382,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                 onToggleDetails={() => setDetailsOpen(open => !open)}
                 onCloseDetails={() => setDetailsOpen(false)}
                 suppressInitialFocus={mobileDenseSurface}
+                messageWindowed={mobileDenseSurface}
                 onReportUser={() => dm.activeRecipientId && openConfirm({
                   title: 'Kullanıcıyı bildir',
                   description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
@@ -1814,14 +1530,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                   />
                 ) : (
                   <div className="p-2">
-                    {visibleConversations.map(convo => {
-                      const u = allUsers.find((x: any) => x.id === convo.recipientId);
+                    {visibleConversationWindow.items.map(convo => {
+                      const u = userById.get(String(convo.recipientId));
                       const n = u ? getPublicDisplayName(u) : (safePublicName(convo.recipientName) || 'Kullanıcı');
                       return (
                         <div key={convo.conversationKey}>
                           <ConversationItem
                             convo={convo}
                             allUsers={allUsers}
+                            userById={userById}
                             currentUserId={currentUser.id}
                             onClick={() => dm.openConversation(convo.recipientId)}
                             onDelete={() => openConfirm({
@@ -1836,6 +1553,11 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                         </div>
                       );
                     })}
+                    {visibleConversationWindow.hiddenCount > 0 && (
+                      <div className="mt-1 rounded-[10px] px-2.5 py-2 text-center text-[10px] font-semibold text-[var(--theme-secondary-text)]/42" style={{ background: 'rgba(var(--glass-tint),0.018)' }}>
+                        +{visibleConversationWindow.hiddenCount} sohbet daha
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1845,6 +1567,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                     onClose={() => setRequestsOpen(false)}
                     requests={dm.requests}
                     allUsers={allUsers}
+                    userById={userById}
                     currentUserId={currentUser.id}
                     requestActionKeys={requestActionKeys}
                     onOpen={dm.openConversation}
@@ -1857,65 +1580,75 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
                       danger: true,
                       onConfirm: () => handleRejectRequest(convo.conversationKey),
                     })}
+                    solidSurface={mobileDenseSurface}
                   />
                 )}
                 {blockedOpen && (
-                  <BlockedUsersPanel
-                    onClose={() => setBlockedOpen(false)}
-                    blockedUsers={blockedUsers}
-                    onUnblockUser={(userId) => {
-                      dm.unblockUser(userId);
-                      setToastMsg('Engel kaldırıldı');
-                    }}
-                  />
+                  <React.Suspense fallback={null}>
+                    <BlockedUsersPanel
+                      onClose={() => setBlockedOpen(false)}
+                      blockedUsers={blockedUsers}
+                      onUnblockUser={(userId) => {
+                        dm.unblockUser(userId);
+                        setToastMsg('Engel kaldırıldı');
+                      }}
+                      solidSurface={mobileDenseSurface}
+                    />
+                  </React.Suspense>
                 )}
                 {settingsOpen && (
-                  <MessageSettingsPanel
-                    onClose={() => setSettingsOpen(false)}
-                    currentUser={currentUser}
-                    allUsers={allUsers}
-                    setCurrentUser={setCurrentUser}
-                    setAllUsers={setAllUsers}
-                    setToastMsg={setToastMsg}
-                  />
+                  <React.Suspense fallback={null}>
+                    <MessageSettingsPanel
+                      onClose={() => setSettingsOpen(false)}
+                      currentUser={currentUser}
+                      allUsers={allUsers}
+                      setCurrentUser={setCurrentUser}
+                      setAllUsers={setAllUsers}
+                      setToastMsg={setToastMsg}
+                      solidSurface={mobileDenseSurface}
+                    />
+                  </React.Suspense>
                 )}
               </AnimatePresence>
             </div>
           )}
-          {dm.activeRecipientId && activeRecipient && (
-            <DMDetailsPanel
-              open={detailsOpen}
-              recipient={activeRecipient}
-              relationship={activeFriendRelation}
-              isBlocked={activeBlocked}
-              isRequest={!!activeRequest}
-              requestStatus={activeRequest?.requestStatus}
-              messages={dm.messages}
-              onClose={() => setDetailsOpen(false)}
-              onReportUser={() => dm.activeRecipientId && openConfirm({
-                title: 'Kullanıcıyı bildir',
-                description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
-                confirmText: 'Bildir',
-                cancelText: 'İptal',
-                danger: true,
-                onConfirm: () => {
-                  dm.reportUser(dm.activeRecipientId!);
-                  setToastMsg('Bildirim gönderildi');
-                },
-              })}
-              onJumpToMessage={(messageId) => {
-                window.dispatchEvent(new CustomEvent('mayvox:dm-jump-message', { detail: { messageId } }));
-              }}
-              onBlockUser={() => dm.activeRecipientId && openConfirm({
-                title: 'Kullanıcıyı engelle',
-                description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
-                confirmText: 'Engelle',
-                cancelText: 'İptal',
-                danger: true,
-                onConfirm: () => dm.blockUser(dm.activeRecipientId!),
-              })}
-              onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
-            />
+          {detailsOpen && dm.activeRecipientId && activeRecipient && (
+            <React.Suspense fallback={null}>
+              <DMDetailsPanel
+                open={detailsOpen}
+                recipient={activeRecipient}
+                relationship={activeFriendRelation}
+                isBlocked={activeBlocked}
+                isRequest={!!activeRequest}
+                requestStatus={activeRequest?.requestStatus}
+                messages={dm.messages}
+                solidSurface={mobileDenseSurface}
+                onClose={() => setDetailsOpen(false)}
+                onReportUser={() => dm.activeRecipientId && openConfirm({
+                  title: 'Kullanıcıyı bildir',
+                  description: `${activeRecipientName} için DM kötüye kullanım bildirimi gönderilsin mi? Mesaj içeriği gönderilmez.`,
+                  confirmText: 'Bildir',
+                  cancelText: 'İptal',
+                  danger: true,
+                  onConfirm: () => {
+                    dm.reportUser(dm.activeRecipientId!);
+                    setToastMsg('Bildirim gönderildi');
+                  },
+                })}
+                onJumpToMessage={(messageId) => {
+                  window.dispatchEvent(new CustomEvent('mayvox:dm-jump-message', { detail: { messageId } }));
+                }}
+                onBlockUser={() => dm.activeRecipientId && openConfirm({
+                  title: 'Kullanıcıyı engelle',
+                  description: `${activeRecipientName} sana DM gönderemesin mi? Bu sohbet listenden gizlenir.`,
+                  confirmText: 'Engelle',
+                  cancelText: 'İptal',
+                  danger: true,
+                  onConfirm: () => dm.blockUser(dm.activeRecipientId!),
+                })}
+                onUnblockUser={() => dm.activeRecipientId && dm.unblockUser(dm.activeRecipientId)}
+              />
+            </React.Suspense>
           )}
           </motion.div>
         )}

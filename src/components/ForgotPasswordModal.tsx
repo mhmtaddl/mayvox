@@ -6,7 +6,9 @@ interface Props {
   onClose: () => void;
 }
 
-const SERVER_URL = import.meta.env.VITE_SERVER_API_URL;
+const PASSWORD_RESET_API_URL = String(
+  import.meta.env.VITE_TOKEN_SERVER_URL || import.meta.env.VITE_SERVER_API_URL || '',
+).replace(/\/$/, '');
 
 export default function ForgotPasswordModal({ onClose }: Props) {
   const [identifier, setIdentifier] = useState('');
@@ -24,24 +26,31 @@ export default function ForgotPasswordModal({ onClose }: Props) {
     setNotFound(false);
     setError(null);
 
-    if (!identifier.trim()) return;
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier) return;
 
     debounceRef.current = setTimeout(async () => {
       setChecking(true);
       try {
-        const res = await fetch(`${SERVER_URL}/api/check-user`, {
+        const res = await fetch(`${PASSWORD_RESET_API_URL}/api/check-user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: identifier.trim() }),
+          body: JSON.stringify({ identifier: normalizedIdentifier }),
         });
+        if (!res.ok) {
+          setError('Şifre sıfırlama servisine ulaşılamadı.');
+          return;
+        }
         const data = await res.json();
         if (data.exists) {
           setFoundUser({ userId: data.userId, name: data.name });
+          setNotFound(false);
         } else {
+          setFoundUser(null);
           setNotFound(true);
         }
       } catch {
-        // sessizce geç
+        setError('Sunucuya ulaşılamadı, lütfen tekrar deneyin.');
       } finally {
         setChecking(false);
       }
@@ -59,7 +68,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
     if (!foundUser) return;
     setError(null);
     try {
-      const res = await fetch(`${SERVER_URL}/api/request-password-reset`, {
+      const res = await fetch(`${PASSWORD_RESET_API_URL}/api/request-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: foundUser.userId }),
@@ -113,12 +122,6 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <p className="max-w-[320px] text-[12px] leading-relaxed text-[var(--theme-secondary-text)]">
                   E-posta adresinize yeni parola gönderildi. Spam klasörünü de kontrol etmeyi unutmayınız.
                 </p>
-                <button
-                  onClick={onClose}
-                  className="mt-2 h-10 px-6 rounded-xl bg-[var(--theme-accent)] text-sm font-bold text-[var(--theme-btn-primary-text)] transition-all hover:opacity-90"
-                >
-                  Kapat
-                </button>
               </motion.div>
             ) : (
               <motion.div key="form" className="space-y-4">
@@ -128,7 +131,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-[var(--theme-secondary-text)] uppercase tracking-wider">
-                    Kullanıcı Adı veya E-posta
+                    Kullanıcı adı/e-posta
                   </label>
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-secondary-text)]" size={16} />
@@ -137,7 +140,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                       value={identifier}
                       onChange={e => setIdentifier(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && triggerSubmit()}
-                      placeholder="kullaniciadi veya mail@ornek.com"
+                      placeholder="Kullanıcı adı/e-posta"
                       className="h-11 w-full rounded-xl border border-[rgba(var(--glass-tint),0.08)] bg-[rgb(var(--theme-bg-rgb))] py-3 pl-9 pr-4 text-sm text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/55 focus:border-[rgba(var(--theme-accent-rgb),0.52)] focus:ring-2 focus:ring-[rgba(var(--theme-accent-rgb),0.16)]"
                     />
                   </div>
@@ -167,7 +170,7 @@ export default function ForgotPasswordModal({ onClose }: Props) {
                 <button
                   onClick={handleSubmit}
                   disabled={!foundUser}
-                  className={`h-11 w-full rounded-xl bg-[var(--theme-accent)] px-5 text-sm font-semibold text-[var(--theme-btn-primary-text)] shadow-[0_10px_24px_rgba(var(--theme-accent-rgb),0.18)] transition-all disabled:cursor-default disabled:bg-[rgba(var(--theme-accent-rgb),0.28)] disabled:text-[var(--theme-btn-primary-text)]/55 disabled:shadow-none active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : 'hover:opacity-95'}`}
+                  className={`h-9 w-full rounded-lg border border-[rgba(var(--theme-accent-rgb),0.28)] bg-[rgba(var(--theme-accent-rgb),0.18)] px-4 text-[12px] font-semibold text-[var(--theme-text)] shadow-[0_8px_20px_rgba(0,0,0,0.18)] transition-all hover:border-[rgba(var(--theme-accent-rgb),0.42)] hover:bg-[rgba(var(--theme-accent-rgb),0.24)] disabled:cursor-default disabled:border-[rgba(var(--glass-tint),0.08)] disabled:bg-[rgba(var(--glass-tint),0.05)] disabled:text-[var(--theme-secondary-text)]/55 disabled:shadow-none active:scale-[0.98] ${pressing ? 'opacity-90 scale-[0.98]' : ''}`}
                 >
                   Şifremi Sıfırla
                 </button>

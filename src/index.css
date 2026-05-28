@@ -26,6 +26,17 @@ html.lowperf [style*="brand-shimmer"] {
   animation: none !important;
 }
 
+html.lowperf .mobile-floating-ptt {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24) !important;
+  transition-property: transform, background, border-color, opacity !important;
+}
+
+html.lowperf .mobile-floating-ptt *,
+html.lowperf .mobile-floating-ptt *::before,
+html.lowperf .mobile-floating-ptt *::after {
+  filter: none !important;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   /* Theme Pack tokens — Tailwind utility'leri ile kullanılabilir (bg-bg, text-text-primary, vs.) */
@@ -682,6 +693,39 @@ html.mv-window-edge-fit .mv-app-shell {
   outline: none;
   isolation: isolate;
 }
+
+html.mv-capacitor .mv-app-shell.mv-auth-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+html.mv-capacitor .auth-screen {
+  min-height: 100dvh;
+  height: 100dvh;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: calc(var(--mv-keyboard-height, 0px) + 28px);
+}
+
+html.mv-capacitor.mv-keyboard-open .auth-screen {
+  justify-content: flex-start !important;
+  padding-top: max(10px, env(safe-area-inset-top));
+  padding-bottom: calc(var(--mv-keyboard-height, 0px) + 18px);
+}
+
+html.mv-capacitor.mv-keyboard-open .auth-card {
+  margin-top: 0;
+  margin-bottom: calc(var(--mv-keyboard-height, 0px) + 18px);
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html.mv-capacitor.mv-keyboard-open input,
+html.mv-capacitor.mv-keyboard-open textarea {
+  scroll-margin-bottom: calc(var(--mv-keyboard-height, 0px) + 42px);
+  scroll-margin-top: 18px;
+}
 html.mv-auth-window #root::before,
 html.mv-auth-window #root::after,
 html.mv-auth-window .auth-ambient {
@@ -1151,13 +1195,40 @@ button, a, input, [role="button"] {
   background: var(--scrollbar-track, transparent);
 }
 ::-webkit-scrollbar-thumb {
-  min-height: 24px;
-  background: var(--scrollbar-thumb, rgba(var(--glass-tint), 0.22));
-  border: 0;
+  min-height: 10px;
+  background-color: transparent !important;
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 34%,
+      rgba(var(--glass-tint), 0.06) 41%,
+      rgba(var(--glass-tint), 0.30) 48%,
+      rgba(var(--glass-tint), 0.30) 52%,
+      rgba(var(--glass-tint), 0.06) 59%,
+      transparent 66%,
+      transparent 100%
+    );
+  border-left: 1px solid transparent;
+  border-right: 1px solid transparent;
+  background-clip: padding-box;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover, rgba(var(--glass-tint), 0.36));
+  background-color: transparent !important;
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 32%,
+      rgba(var(--glass-tint), 0.09) 40%,
+      rgba(var(--glass-tint), 0.42) 48%,
+      rgba(var(--glass-tint), 0.42) 52%,
+      rgba(var(--glass-tint), 0.09) 60%,
+      transparent 68%,
+      transparent 100%
+    );
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -1356,6 +1427,37 @@ html {
   -webkit-backdrop-filter: blur(16px) saturate(125%);
 }
 
+.dm-mobile-solid-panel {
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.080), rgba(var(--glass-tint), 0.034)),
+    rgba(var(--theme-bg-rgb), 0.72) !important;
+  backdrop-filter: blur(20px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+}
+
+.dm-mobile-side-panel {
+  background:
+    linear-gradient(180deg, rgba(var(--glass-tint), 0.050), rgba(var(--glass-tint), 0.018)),
+    rgba(var(--theme-bg-rgb), 0.92) !important;
+  box-shadow:
+    -18px 0 34px -24px rgba(var(--shadow-base), 0.78),
+    inset 1px 0 0 rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(18px) saturate(118%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(118%) !important;
+}
+
+.dm-glass-panel .custom-scrollbar,
+.dm-glass-panel .custom-scrollbar * {
+  scrollbar-width: none !important;
+}
+
+.dm-glass-panel .custom-scrollbar::-webkit-scrollbar,
+.dm-glass-panel .custom-scrollbar *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
 .dm-conversation-item {
   background: transparent;
   box-shadow: inset 0 0 0 1px transparent;
@@ -1461,14 +1563,78 @@ html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-corner {
   background: transparent !important;
 }
 
+.desktop-server-home-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--glass-tint), 0.22) transparent;
+}
+
+.desktop-server-home-scrollbar::-webkit-scrollbar {
+  width: 3px !important;
+  height: 3px !important;
+}
+
+.desktop-server-home-scrollbar::-webkit-scrollbar-track,
+.desktop-server-home-scrollbar::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+}
+
+.desktop-server-home-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 10px !important;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(var(--glass-tint), 0.05) 12%,
+      rgba(var(--glass-tint), 0.24) 38%,
+      rgba(var(--glass-tint), 0.24) 62%,
+      rgba(var(--glass-tint), 0.05) 88%,
+      transparent 100%
+    ) !important;
+  border-left: 1px solid transparent !important;
+  border-right: 1px solid transparent !important;
+  background-clip: padding-box !important;
+  border-radius: 999px !important;
+}
+
+.desktop-server-home-scrollbar:hover::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(var(--glass-tint), 0.08) 12%,
+      rgba(var(--glass-tint), 0.34) 38%,
+      rgba(var(--glass-tint), 0.34) 62%,
+      rgba(var(--glass-tint), 0.08) 88%,
+      transparent 100%
+    ) !important;
+}
+
+.desktop-server-home-scrollbar::-webkit-scrollbar-button,
+.desktop-server-home-scrollbar::-webkit-scrollbar-button:single-button,
+.desktop-server-home-scrollbar::-webkit-scrollbar-button:vertical:start:decrement,
+.desktop-server-home-scrollbar::-webkit-scrollbar-button:vertical:end:increment,
+.desktop-server-home-scrollbar::-webkit-scrollbar-button:horizontal:start:decrement,
+.desktop-server-home-scrollbar::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  -webkit-appearance: none !important;
+}
+
+.desktop-server-home-scrollbar::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
 .mobile-server-home-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(var(--glass-tint), 0.24) transparent;
+  scrollbar-color: rgba(var(--glass-tint), 0.22) transparent;
 }
 
 .mobile-server-home-scrollbar::-webkit-scrollbar {
-  width: 4px !important;
-  height: 4px !important;
+  width: 3px !important;
+  height: 3px !important;
 }
 
 .mobile-server-home-scrollbar::-webkit-scrollbar-track,
@@ -1521,6 +1687,78 @@ html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-corner {
   -webkit-appearance: none !important;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  * {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(var(--glass-tint), 0.22) transparent !important;
+  }
+
+  *::-webkit-scrollbar {
+    width: 3px !important;
+    height: 3px !important;
+  }
+
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-track-piece {
+    background: transparent !important;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-height: 10px !important;
+    background:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(var(--glass-tint), 0.05) 12%,
+        rgba(var(--glass-tint), 0.24) 38%,
+        rgba(var(--glass-tint), 0.24) 62%,
+        rgba(var(--glass-tint), 0.05) 88%,
+        transparent 100%
+      ) !important;
+    border-left: 1px solid transparent !important;
+    border-right: 1px solid transparent !important;
+    background-clip: padding-box !important;
+    border-radius: 999px !important;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(var(--glass-tint), 0.08) 12%,
+        rgba(var(--glass-tint), 0.34) 38%,
+        rgba(var(--glass-tint), 0.34) 62%,
+        rgba(var(--glass-tint), 0.08) 88%,
+        transparent 100%
+      ) !important;
+    background-clip: padding-box !important;
+  }
+
+  *::-webkit-scrollbar-button,
+  *::-webkit-scrollbar-button:single-button,
+  *::-webkit-scrollbar-button:vertical:start:decrement,
+  *::-webkit-scrollbar-button:vertical:end:increment,
+  *::-webkit-scrollbar-button:horizontal:start:decrement,
+  *::-webkit-scrollbar-button:horizontal:end:increment {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    -webkit-appearance: none !important;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent !important;
+  }
+
+  .desktop-server-home-scrollbar {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(var(--glass-tint), 0.22) transparent !important;
+  }
+}
+
 /* ─── Input surface — tema accent-tinted (mic/hoparlör butonlarıyla aynı aile) ─── */
 .surface-input {
   background: var(--theme-input-bg);
@@ -1545,6 +1783,96 @@ html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-corner {
 .surface-input:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Unified scrollbar recipe — based on Android tablet Settings page. */
+.custom-scrollbar,
+.settings-content-scrollbar,
+.desktop-server-home-scrollbar,
+.mobile-server-home-scrollbar,
+.mobile-social-panel-scrollbar,
+.modal-scroll,
+.phmScroll {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(var(--glass-tint), 0.22) transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+.settings-content-scrollbar::-webkit-scrollbar,
+.desktop-server-home-scrollbar::-webkit-scrollbar,
+.mobile-server-home-scrollbar::-webkit-scrollbar,
+.mobile-social-panel-scrollbar::-webkit-scrollbar,
+.modal-scroll::-webkit-scrollbar,
+.phmScroll::-webkit-scrollbar {
+  width: 3px !important;
+  height: 3px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track-piece,
+.settings-content-scrollbar::-webkit-scrollbar-track,
+.settings-content-scrollbar::-webkit-scrollbar-track-piece,
+.desktop-server-home-scrollbar::-webkit-scrollbar-track,
+.desktop-server-home-scrollbar::-webkit-scrollbar-track-piece,
+.mobile-server-home-scrollbar::-webkit-scrollbar-track,
+.mobile-server-home-scrollbar::-webkit-scrollbar-track-piece,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-track,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-track-piece,
+.modal-scroll::-webkit-scrollbar-track,
+.modal-scroll::-webkit-scrollbar-track-piece,
+.phmScroll::-webkit-scrollbar-track,
+.phmScroll::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.settings-content-scrollbar::-webkit-scrollbar-thumb,
+.desktop-server-home-scrollbar::-webkit-scrollbar-thumb,
+.mobile-server-home-scrollbar::-webkit-scrollbar-thumb,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-thumb,
+.modal-scroll::-webkit-scrollbar-thumb,
+.phmScroll::-webkit-scrollbar-thumb {
+  min-height: 10px !important;
+  background-color: transparent !important;
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 34%,
+      rgba(var(--glass-tint), 0.06) 41%,
+      rgba(var(--glass-tint), 0.30) 48%,
+      rgba(var(--glass-tint), 0.30) 52%,
+      rgba(var(--glass-tint), 0.06) 59%,
+      transparent 66%,
+      transparent 100%
+    ) !important;
+  border-left: 1px solid transparent !important;
+  border-right: 1px solid transparent !important;
+  background-clip: padding-box !important;
+  border-radius: 999px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.settings-content-scrollbar::-webkit-scrollbar-thumb:hover,
+.desktop-server-home-scrollbar::-webkit-scrollbar-thumb:hover,
+.mobile-server-home-scrollbar::-webkit-scrollbar-thumb:hover,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-thumb:hover,
+.modal-scroll::-webkit-scrollbar-thumb:hover,
+.phmScroll::-webkit-scrollbar-thumb:hover {
+  background-color: transparent !important;
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 32%,
+      rgba(var(--glass-tint), 0.09) 40%,
+      rgba(var(--glass-tint), 0.42) 48%,
+      rgba(var(--glass-tint), 0.42) 52%,
+      rgba(var(--glass-tint), 0.09) 60%,
+      transparent 68%,
+      transparent 100%
+    ) !important;
+  background-clip: padding-box !important;
 }
 
 .search-input-shell {
@@ -2484,6 +2812,18 @@ html .mv-app-shell:not(.mv-auth-shell) {
   overflow: hidden !important;
 }
 
+html.mv-capacitor .mv-app-shell,
+html.mv-capacitor .mv-app-shell.mv-auth-shell,
+html.mv-capacitor .mv-app-shell:not(.mv-auth-shell) {
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 html {
   --sidebar-tint: var(--sidebar-tint-bg);
   --app-surface: var(--app-neutral-surface);
@@ -2793,6 +3133,7 @@ html .settings-flat-light .settings-tabs {
   background: color-mix(in srgb, var(--app-surface-raised) 92%, white 3%) !important;
   border: 1px solid var(--settings-border) !important;
   box-shadow: none !important;
+  container: settings-tabs / inline-size;
 }
 
 html .settings-flat-light .settings-tab.active {
@@ -2955,6 +3296,226 @@ html[data-theme-pack] .settings-flat-light .settings-shortcuts-card {
   animation: none !important;
 }
 
+.settings-tabs-list {
+  gap: 0.125rem;
+}
+
+.settings-tabs .settings-tab {
+  min-width: 0;
+}
+
+.settings-tabs-search {
+  flex: 0 1 180px;
+  min-width: 104px;
+}
+
+.settings-appearance-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-appearance-control-card {
+  min-height: 4.35rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 72%, rgba(var(--glass-tint), 0.055)), color-mix(in srgb, var(--surface-soft) 90%, transparent)) !important;
+  border-color: color-mix(in srgb, var(--theme-border) 48%, transparent) !important;
+  box-shadow: inset 0 1px 0 rgba(var(--glass-tint), 0.04);
+}
+
+.settings-appearance-control-copy {
+  display: grid;
+  grid-template-columns: 1.15rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.45rem;
+}
+
+.settings-appearance-control-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  color: var(--theme-accent);
+  background: rgba(var(--theme-accent-rgb), 0.10);
+  box-shadow: inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.13);
+}
+
+.settings-appearance-control-copy p:not(:first-of-type) {
+  grid-column: 2;
+}
+
+.settings-appearance-segment,
+.settings-appearance-stepper {
+  background: rgba(var(--glass-tint), 0.03) !important;
+  border-color: color-mix(in srgb, var(--theme-border) 56%, transparent) !important;
+}
+
+.settings-premium-theme-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.settings-overlay-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.settings-overlay-toggle-grid > label {
+  min-height: 3.25rem;
+  border-radius: 0.75rem;
+  background: rgba(var(--glass-tint), 0.024);
+  box-shadow: inset 0 0 0 1px rgba(var(--glass-tint), 0.045);
+}
+
+@container (max-width: 420px) {
+  .settings-overlay-toggle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card {
+  min-height: 5.25rem;
+  padding: 0.72rem !important;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card > .flex {
+  height: 100%;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: space-between !important;
+  gap: 0.65rem !important;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-copy {
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-copy p:first-of-type {
+  font-size: 10.6px !important;
+  line-height: 1.15 !important;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-copy p:not(:first-of-type) {
+  margin-top: 0.16rem !important;
+  max-width: 15rem;
+  font-size: 9.2px !important;
+  line-height: 1.25 !important;
+  opacity: 0.72;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card .settings-appearance-segment,
+html:not(.mv-capacitor) .settings-appearance-control-card .settings-appearance-stepper {
+  align-self: flex-start;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card .settings-appearance-segment button {
+  height: 1.65rem !important;
+  padding-inline: 0.65rem !important;
+  font-size: 9.6px !important;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card .settings-appearance-stepper button {
+  height: 1.65rem !important;
+  width: 1.8rem !important;
+  font-size: 10px !important;
+}
+
+html:not(.mv-capacitor) .settings-appearance-control-card .settings-appearance-stepper span {
+  min-width: 2.45rem !important;
+  padding-inline: 0.35rem !important;
+  font-size: 9.6px !important;
+}
+
+@media (max-width: 1180px) and (pointer: fine) {
+  .settings-tabs {
+    gap: 0.35rem !important;
+  }
+
+  .settings-tabs-list {
+    gap: 0.0625rem;
+  }
+
+  .settings-tabs .settings-tab {
+    padding-left: 0.55rem !important;
+    padding-right: 0.55rem !important;
+    gap: 0.25rem !important;
+    font-size: 10.5px !important;
+  }
+
+  .settings-tabs .settings-tab svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .settings-tabs-search {
+    flex-basis: 130px;
+    min-width: 88px;
+  }
+
+  .settings-tabs-search input {
+    padding-left: 1.85rem !important;
+    padding-right: 1.55rem !important;
+    font-size: 10.5px !important;
+  }
+}
+
+@container settings-tabs (max-width: 760px) {
+  .settings-tabs .settings-tab {
+    flex: 0 0 2.15rem !important;
+    width: 2.15rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    gap: 0 !important;
+  }
+
+  .settings-tabs .settings-tab-label {
+    display: none !important;
+  }
+
+  .settings-tabs .settings-tab svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .settings-tabs-search {
+    flex-basis: 138px;
+    min-width: 84px;
+  }
+}
+
+@container settings-tabs (min-width: 761px) {
+  .settings-tabs .settings-tab {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    padding-left: 0.55rem !important;
+    padding-right: 0.55rem !important;
+    gap: 0.25rem !important;
+  }
+
+  .settings-tabs .settings-tab-label {
+    display: inline !important;
+  }
+}
+
+@media (max-width: 980px) and (pointer: fine) {
+  .settings-tabs-search {
+    flex-basis: 118px;
+    min-width: 82px;
+  }
+
+  .settings-tabs-search input::placeholder {
+    color: transparent !important;
+  }
+}
+
 html .settings-flat-light .settings-static-row-card,
 html[data-theme-pack] .settings-flat-light .settings-static-row-card,
 html .settings-flat-light .settings-static-row-card:hover,
@@ -2997,6 +3558,648 @@ html .settings-flat-light .settings-account-page .account-compact-input {
 html .settings-flat-light .settings-account-page .account-compact-label {
   font-size: 9px !important;
   letter-spacing: 0.11em !important;
+}
+
+@media (max-width: 1180px) and (pointer: coarse) {
+  html .settings-flat-light .settings-account-page {
+    gap: 0.55rem !important;
+  }
+
+  html .settings-flat-light .settings-account-page > .settings-section-card,
+  html .settings-flat-light .settings-account-page > [class*="settings-section"] {
+    padding: 0.55rem !important;
+  }
+
+  html .settings-flat-light .settings-account-content,
+  html .settings-flat-light .settings-account-main-grid,
+  html .settings-flat-light .settings-account-security-stack {
+    gap: 0.55rem !important;
+  }
+
+  html .settings-flat-light .settings-account-page .settings-account-compact-card > div:last-child {
+    padding: 0.55rem !important;
+  }
+
+  html .settings-flat-light .settings-account-avatar {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 0.82rem !important;
+  }
+
+  html .settings-flat-light .settings-account-profile-fields {
+    row-gap: 0.35rem !important;
+  }
+
+  html .settings-flat-light .settings-account-name-grid,
+  html .settings-flat-light .settings-account-info-grid,
+  html .settings-flat-light .settings-account-security-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.45rem 0.5rem !important;
+  }
+
+  html .settings-flat-light .settings-account-field-email {
+    grid-column: span 2;
+  }
+
+  html .settings-flat-light .settings-account-field-age .account-compact-input {
+    width: 5.5rem !important;
+  }
+
+  html .settings-flat-light .settings-account-frame-row {
+    gap: 0.3rem !important;
+  }
+
+  html .settings-flat-light .settings-account-frame-dot {
+    width: 1.42rem !important;
+    height: 1.42rem !important;
+    border-radius: 0.45rem !important;
+  }
+
+  html .settings-flat-light .settings-account-frame-dot > span {
+    width: 0.55rem !important;
+    height: 0.55rem !important;
+  }
+
+  html .settings-flat-light .settings-account-page .account-compact-input {
+    min-height: 30px;
+    padding-block: 5px !important;
+    padding-inline: 9px !important;
+    border-radius: 9px !important;
+    font-size: 11px !important;
+  }
+
+  html .settings-flat-light .settings-account-page .account-compact-label {
+    font-size: 8px !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  html .settings-flat-light .settings-account-page .settings-account-section-title {
+    margin-bottom: 0.35rem !important;
+    gap: 0.35rem !important;
+  }
+
+  html .settings-flat-light .settings-account-page .settings-account-section-title h3 {
+    font-size: 9.5px !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  html .settings-flat-light .settings-account-update-row {
+    margin-top: 0.45rem !important;
+    padding-top: 0.45rem !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+
+  html .settings-flat-light .settings-account-update-row p {
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+  }
+
+  html .settings-flat-light .settings-account-update-row button,
+  html .settings-flat-light .settings-account-security-action button {
+    min-height: 28px !important;
+    width: auto !important;
+    min-width: 5.75rem !important;
+    padding: 0.32rem 0.7rem !important;
+    border-radius: 0.55rem !important;
+    font-size: 10.5px !important;
+  }
+
+  html .settings-flat-light .settings-account-password-hint {
+    margin-top: 0.45rem !important;
+    font-size: 8.8px !important;
+  }
+
+  html .settings-flat-light .settings-account-security-action {
+    margin-top: 0.45rem !important;
+  }
+
+  html .settings-flat-light .settings-account-privacy-card .w-7 {
+    width: 1.55rem !important;
+    height: 1.55rem !important;
+    border-radius: 0.5rem !important;
+  }
+
+  html .settings-flat-light .settings-account-privacy-card p:first-child {
+    font-size: 11px !important;
+  }
+
+  html .settings-flat-light .settings-account-privacy-card p:last-child {
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+  }
+}
+
+@media (max-width: 760px) and (pointer: coarse) {
+  html .settings-flat-light .settings-account-name-grid,
+  html .settings-flat-light .settings-account-info-grid,
+  html .settings-flat-light .settings-account-security-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html .settings-flat-light .settings-account-field-email {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 1280px) {
+  html.mv-capacitor .settings-account-page {
+    gap: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-account-content,
+  html.mv-capacitor .settings-account-main-grid,
+  html.mv-capacitor .settings-account-security-stack {
+    gap: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-account-page .settings-account-compact-card > div:last-child {
+    padding: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-account-page .account-compact-input {
+    min-height: 29px !important;
+    padding: 4px 8px !important;
+    border-radius: 8px !important;
+    font-size: 10.5px !important;
+  }
+
+  html.mv-capacitor .settings-account-page .account-compact-label {
+    font-size: 7.8px !important;
+    letter-spacing: 0.09em !important;
+  }
+
+  html.mv-capacitor .settings-account-avatar {
+    width: 58px !important;
+    height: 58px !important;
+    font-size: 0.92rem !important;
+  }
+
+  html.mv-capacitor .settings-account-avatar-edit-badge {
+    width: 1.55rem !important;
+    height: 1.55rem !important;
+    border-radius: 0.55rem !important;
+  }
+
+  html.mv-capacitor .settings-account-name-grid,
+  html.mv-capacitor .settings-account-info-grid,
+  html.mv-capacitor .settings-account-security-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.4rem 0.45rem !important;
+  }
+
+  html.mv-capacitor .settings-account-field-email {
+    grid-column: auto !important;
+  }
+
+  html.mv-capacitor .settings-account-field-age .account-compact-input {
+    width: 100% !important;
+  }
+
+  html.mv-capacitor .settings-account-frame-row {
+    gap: 0.25rem !important;
+  }
+
+  html.mv-capacitor .settings-account-frame-dot {
+    width: 1.32rem !important;
+    height: 1.32rem !important;
+    border-radius: 0.42rem !important;
+  }
+
+  html.mv-capacitor .settings-account-frame-dot > span {
+    width: 0.5rem !important;
+    height: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-account-section-title {
+    margin-bottom: 0.28rem !important;
+  }
+
+  html.mv-capacitor .settings-account-section-title h3 {
+    font-size: 9px !important;
+    letter-spacing: 0.09em !important;
+  }
+
+  html.mv-capacitor .settings-account-update-row {
+    margin-top: 0.38rem !important;
+    padding-top: 0.38rem !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+
+  html.mv-capacitor .settings-account-update-row button,
+  html.mv-capacitor .settings-account-security-action button {
+    width: auto !important;
+    min-height: 27px !important;
+    min-width: 5.3rem !important;
+    padding: 0.28rem 0.62rem !important;
+    font-size: 10px !important;
+    border-radius: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-app-performance-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-app-performance-grid,
+  html.mv-capacitor .settings-app-performance-grid > * {
+    border: 0 !important;
+  }
+
+  html.mv-capacitor .settings-app-perf-item {
+    min-height: 3.1rem;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent) !important;
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--surface-soft) 55%, transparent);
+    padding: 0.55rem !important;
+  }
+
+  html.mv-capacitor .settings-app-perf-idle {
+    grid-column: 1 / -1;
+  }
+
+  html.mv-capacitor .settings-app-perf-item p:first-child {
+    font-size: 10.5px !important;
+  }
+
+  html.mv-capacitor .settings-app-perf-item p:not(:first-child),
+  html.mv-capacitor .settings-app-perf-item span {
+    font-size: 8.6px !important;
+    line-height: 1.25 !important;
+  }
+
+  html.mv-capacitor .settings-app-sounds-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-app-sounds-group {
+    border-radius: 0.85rem !important;
+    padding-inline: 0.5rem !important;
+  }
+
+  html.mv-capacitor .settings-app-sound-row {
+    min-height: 2.55rem;
+    padding-block: 0.45rem !important;
+    gap: 0.35rem !important;
+  }
+
+  html.mv-capacitor .settings-app-sound-row p {
+    font-size: 10.2px !important;
+  }
+
+  html.mv-capacitor .settings-app-sound-row .relative.block {
+    width: 0.78rem !important;
+    height: 0.78rem !important;
+  }
+
+  html.mv-capacitor .settings-app-sound-row button {
+    padding: 0.15rem !important;
+  }
+
+  html.mv-capacitor .settings-app-master-volume {
+    grid-column: 1 / -1 !important;
+  }
+
+  html.mv-capacitor .settings-appearance-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card {
+    min-height: 4rem;
+    padding: 0.5rem !important;
+    border-radius: 0.78rem !important;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 70%, rgba(var(--glass-tint), 0.05)), color-mix(in srgb, var(--surface-soft) 88%, transparent)) !important;
+    border-color: color-mix(in srgb, var(--theme-border) 45%, transparent) !important;
+    box-shadow: inset 0 1px 0 rgba(var(--glass-tint), 0.035);
+  }
+
+  html.mv-capacitor .settings-appearance-control-card > .flex {
+    height: 100%;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: space-between !important;
+    gap: 0.45rem !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-copy {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    align-items: start;
+    column-gap: 0.35rem;
+  }
+
+  html.mv-capacitor .settings-appearance-control-icon {
+    grid-row: 1 / span 2;
+    display: inline-flex;
+    width: 1rem;
+    height: 1rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.38rem;
+    color: var(--theme-accent);
+    background: rgba(var(--theme-accent-rgb), 0.10);
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-accent-rgb), 0.12);
+  }
+
+  html.mv-capacitor .settings-appearance-control-card p:first-child {
+    font-size: 10.2px !important;
+    line-height: 1.1 !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card p:not(:first-child) {
+    grid-column: 2;
+    margin-top: 0.1rem !important;
+    font-size: 8.4px !important;
+    line-height: 1.18 !important;
+    opacity: 0.7;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-segment,
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-stepper {
+    align-self: flex-start;
+    border-radius: 0.55rem !important;
+    background: rgba(var(--glass-tint), 0.028) !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-segment button,
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-stepper button {
+    height: 1.45rem !important;
+    border-radius: 0.42rem !important;
+    font-size: 9px !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-segment button {
+    padding-inline: 0.48rem !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-stepper button {
+    width: 1.55rem !important;
+  }
+
+  html.mv-capacitor .settings-appearance-control-card .settings-appearance-stepper span {
+    min-width: 2.15rem !important;
+    padding-inline: 0.3rem !important;
+    font-size: 9px !important;
+  }
+
+  html.mv-capacitor .settings-theme-pack-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+
+  html.mv-capacitor .settings-theme-pack-card {
+    gap: 0.35rem !important;
+    padding: 0.45rem !important;
+    border-radius: 0.75rem !important;
+  }
+
+  html.mv-capacitor .settings-theme-pack-card > .relative {
+    height: 1.7rem !important;
+    border-radius: 0.55rem !important;
+  }
+
+  html.mv-capacitor .settings-theme-pack-card span {
+    font-size: 8.8px !important;
+  }
+
+  html.mv-capacitor .settings-premium-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+}
+
+html.mv-capacitor[data-ui-density="compact"] {
+  --density-chat-area-px: 0.375rem;
+  --density-chat-area-py: 0.25rem;
+  --density-list-item-px: 0.25rem;
+  --density-list-item-py: 0.125rem;
+  --density-channel-row-px: 0.45rem;
+  --density-channel-row-py: 0.25rem;
+  --density-sidebar-content-py: 0.375rem;
+  --density-dock-gap: 0.125rem;
+  --density-dock-py: 0.08rem;
+}
+
+html.mv-capacitor[data-ui-density="compact"] .settings-section-card,
+html.mv-capacitor[data-ui-density="compact"] .settings-content-card {
+  padding: 0.5rem !important;
+}
+
+html.mv-capacitor[data-ui-density="compact"] .settings-account-content,
+html.mv-capacitor[data-ui-density="compact"] .settings-app-performance-grid,
+html.mv-capacitor[data-ui-density="compact"] .settings-app-sounds-grid,
+html.mv-capacitor[data-ui-density="compact"] .settings-appearance-controls {
+  gap: 0.38rem !important;
+}
+
+@media (min-width: 900px) and (pointer: fine) {
+  html:not(.mv-capacitor) .settings-tabs {
+    container: settings-tabs / inline-size !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    align-items: center !important;
+    gap: clamp(0.12rem, 0.55cqw, 0.35rem) !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs-list {
+    display: contents !important;
+    gap: 0 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs .settings-tab {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 2rem !important;
+    padding-left: clamp(0.18rem, 0.78cqw, 0.75rem) !important;
+    padding-right: clamp(0.18rem, 0.78cqw, 0.75rem) !important;
+    gap: clamp(0.12rem, 0.42cqw, 0.375rem) !important;
+    font-size: clamp(8.4px, 1.04cqw, 11.5px) !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs .settings-tab-label {
+    display: inline !important;
+    min-width: 0 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs-search {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs-search input {
+    height: 2rem !important;
+    padding-left: clamp(1.45rem, 1.95cqw, 2.25rem) !important;
+    padding-right: clamp(1.2rem, 1.65cqw, 2rem) !important;
+    font-size: clamp(8.2px, 0.95cqw, 11.5px) !important;
+  }
+
+  html:not(.mv-capacitor) .settings-tabs-search svg {
+    left: clamp(0.45rem, 0.85cqw, 0.75rem) !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-controls {
+    display: block !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-card {
+    min-height: 0 !important;
+    margin-bottom: 1rem !important;
+    padding: 0.75rem !important;
+    background: var(--surface-soft) !important;
+    border-color: rgba(var(--glass-tint), 0.10) !important;
+    box-shadow: none !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-card > .flex {
+    height: auto !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 0.75rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-copy {
+    display: block !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-icon {
+    display: none !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-copy p:first-of-type {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-appearance-control-copy p:not(:first-of-type) {
+    max-width: none !important;
+    margin-top: 0.25rem !important;
+    font-size: 10.5px !important;
+    line-height: 1.38 !important;
+    opacity: 0.72;
+  }
+
+  html:not(.mv-capacitor) .settings-premium-theme-grid,
+  html:not(.mv-capacitor) .settings-overlay-toggle-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-performance-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-performance-grid,
+  html:not(.mv-capacitor) .settings-app-performance-grid > * {
+    border: 0 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-perf-item {
+    min-height: 3.35rem !important;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent) !important;
+    border-radius: 0.9rem !important;
+    background: color-mix(in srgb, var(--surface-soft) 58%, transparent) !important;
+    padding: 0.7rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-perf-low-data,
+  html:not(.mv-capacitor) .settings-app-perf-noise,
+  html:not(.mv-capacitor) .settings-app-perf-noise-strength,
+  html:not(.mv-capacitor) .settings-app-perf-ptt-delay {
+    grid-column: auto !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-perf-idle {
+    grid-column: 1 / -1 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-desktop-main,
+  html:not(.mv-capacitor) .settings-app-utility-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-desktop-main {
+    gap: 1.25rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-utility-grid {
+    gap: 1rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-mobile-stack {
+    display: none !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-sounds-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.7rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-sounds-group {
+    display: block !important;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent) !important;
+    border-radius: 0.9rem !important;
+    background: color-mix(in srgb, var(--surface-soft) 58%, transparent) !important;
+    padding-inline: 0.7rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-sound-row {
+    min-height: 3rem !important;
+    align-items: center !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(var(--glass-tint), 0.08) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0.62rem 0 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-sounds-group .settings-app-sound-row:last-child {
+    border-bottom: 0 !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-master-volume {
+    grid-column: 1 / -1 !important;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent) !important;
+    border-radius: 0.9rem !important;
+    background: color-mix(in srgb, var(--surface-soft) 58%, transparent) !important;
+    padding: 0.72rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-utility-grid > .settings-section-card {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  html:not(.mv-capacitor) .settings-app-utility-grid > .settings-section-card > .rounded-xl {
+    flex: 1 1 auto !important;
+  }
+
+  html:not(.mv-capacitor) .settings-account-info-grid,
+  html:not(.mv-capacitor) .settings-account-security-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.75rem 0.85rem !important;
+  }
+
+  html:not(.mv-capacitor) .settings-account-field-email,
+  html:not(.mv-capacitor) .settings-account-field-age {
+    grid-column: auto !important;
+  }
+
+  html:not(.mv-capacitor) .settings-account-field-age .account-compact-input {
+    width: 100% !important;
+  }
 }
 
 .settings-shortcut-group-card,
@@ -3264,4 +4467,390 @@ html.mv-electron-window.mv-window-maximized .mv-error-fallback {
   min-height: 100vh !important;
   border-radius: 0 !important;
   clip-path: none !important;
+}
+
+/* Final app-wide scrollbar recipe.
+   Keep this last: Electron/component style blocks above can otherwise bring
+   back the thick native-looking desktop scrollbar. */
+html,
+body,
+#root,
+#root * {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(var(--glass-tint), 0.18) transparent !important;
+}
+
+*::-webkit-scrollbar,
+html *::-webkit-scrollbar,
+body *::-webkit-scrollbar,
+#root *::-webkit-scrollbar,
+html.mv-electron-window *::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.settings-content-scrollbar::-webkit-scrollbar,
+.desktop-server-home-scrollbar::-webkit-scrollbar,
+.mobile-server-home-scrollbar::-webkit-scrollbar,
+.mobile-social-panel-scrollbar::-webkit-scrollbar,
+.modal-scroll::-webkit-scrollbar,
+.phmScroll::-webkit-scrollbar {
+  width: 2px !important;
+  height: 2px !important;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+html *::-webkit-scrollbar-track,
+html *::-webkit-scrollbar-track-piece,
+body *::-webkit-scrollbar-track,
+body *::-webkit-scrollbar-track-piece,
+#root *::-webkit-scrollbar-track,
+#root *::-webkit-scrollbar-track-piece,
+html.mv-electron-window *::-webkit-scrollbar-track,
+html.mv-electron-window *::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+*::-webkit-scrollbar-thumb,
+html *::-webkit-scrollbar-thumb,
+body *::-webkit-scrollbar-thumb,
+#root *::-webkit-scrollbar-thumb,
+html.mv-electron-window *::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.settings-content-scrollbar::-webkit-scrollbar-thumb,
+.desktop-server-home-scrollbar::-webkit-scrollbar-thumb,
+.mobile-server-home-scrollbar::-webkit-scrollbar-thumb,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-thumb,
+.modal-scroll::-webkit-scrollbar-thumb,
+.phmScroll::-webkit-scrollbar-thumb {
+  min-height: 12px !important;
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(var(--glass-tint), 0.04) 12%,
+    rgba(var(--glass-tint), 0.20) 38%,
+    rgba(var(--glass-tint), 0.20) 62%,
+    rgba(var(--glass-tint), 0.04) 88%,
+    transparent 100%
+  ) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+html *::-webkit-scrollbar-thumb:hover,
+body *::-webkit-scrollbar-thumb:hover,
+#root *::-webkit-scrollbar-thumb:hover,
+html.mv-electron-window *::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.settings-content-scrollbar::-webkit-scrollbar-thumb:hover,
+.desktop-server-home-scrollbar::-webkit-scrollbar-thumb:hover,
+.mobile-server-home-scrollbar::-webkit-scrollbar-thumb:hover,
+.mobile-social-panel-scrollbar::-webkit-scrollbar-thumb:hover,
+.modal-scroll::-webkit-scrollbar-thumb:hover,
+.phmScroll::-webkit-scrollbar-thumb:hover {
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(var(--glass-tint), 0.06) 12%,
+    rgba(var(--glass-tint), 0.28) 38%,
+    rgba(var(--glass-tint), 0.28) 62%,
+    rgba(var(--glass-tint), 0.06) 88%,
+    transparent 100%
+  ) !important;
+}
+
+*::-webkit-scrollbar-corner,
+html *::-webkit-scrollbar-corner,
+body *::-webkit-scrollbar-corner,
+#root *::-webkit-scrollbar-corner,
+html.mv-electron-window *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:horizontal:start:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment,
+html *::-webkit-scrollbar-button,
+body *::-webkit-scrollbar-button,
+#root *::-webkit-scrollbar-button,
+html.mv-electron-window *::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+}
+
+/* Settings keeps the Android-tablet scrollbar language: no arrows, very thin,
+   and visually shorter with feathered ends. Keep after the global recipe. */
+html .settings-shell .settings-content-scrollbar,
+html.mv-electron-window .settings-shell .settings-content-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(var(--glass-tint), 0.16) transparent !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar {
+  width: 2px !important;
+  height: 2px !important;
+  background: transparent !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track-piece,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-track-piece {
+  margin-block: 14px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-thumb,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 14px !important;
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 30%,
+    rgba(var(--glass-tint), 0.05) 38%,
+    rgba(var(--glass-tint), 0.20) 48%,
+    rgba(var(--glass-tint), 0.20) 52%,
+    rgba(var(--glass-tint), 0.05) 62%,
+    transparent 70%,
+    transparent 100%
+  ) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+html .settings-shell .settings-content-scrollbar:hover::-webkit-scrollbar-thumb,
+html.mv-electron-window .settings-shell .settings-content-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 28%,
+    rgba(var(--glass-tint), 0.08) 38%,
+    rgba(var(--glass-tint), 0.30) 48%,
+    rgba(var(--glass-tint), 0.30) 52%,
+    rgba(var(--glass-tint), 0.08) 62%,
+    transparent 72%,
+    transparent 100%
+  ) !important;
+}
+
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:single-button,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:start:decrement,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:end:increment,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:start:decrement,
+html .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:end:increment,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:single-button,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:start:decrement,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:vertical:end:increment,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:start:decrement,
+html.mv-electron-window .settings-shell .settings-content-scrollbar::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+}
+
+/* Absolute final desktop scrollbar lock. Electron on Windows can expose
+   legacy scrollbar button pseudo-parts unless every variant is nulled. */
+html.mv-electron-window,
+html.mv-electron-window body,
+html.mv-electron-window #root,
+html.mv-electron-window #root * {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(var(--glass-tint), 0.16) transparent !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar,
+html.mv-electron-window body::-webkit-scrollbar,
+html.mv-electron-window #root::-webkit-scrollbar,
+html.mv-electron-window #root *::-webkit-scrollbar {
+  width: 2px !important;
+  height: 2px !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar-track,
+html.mv-electron-window *::-webkit-scrollbar-track-piece,
+html.mv-electron-window body::-webkit-scrollbar-track,
+html.mv-electron-window body::-webkit-scrollbar-track-piece,
+html.mv-electron-window #root::-webkit-scrollbar-track,
+html.mv-electron-window #root::-webkit-scrollbar-track-piece,
+html.mv-electron-window #root *::-webkit-scrollbar-track,
+html.mv-electron-window #root *::-webkit-scrollbar-track-piece {
+  margin-block: 14px !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar-thumb,
+html.mv-electron-window body::-webkit-scrollbar-thumb,
+html.mv-electron-window #root::-webkit-scrollbar-thumb,
+html.mv-electron-window #root *::-webkit-scrollbar-thumb {
+  min-height: 12px !important;
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 30%,
+    rgba(var(--glass-tint), 0.05) 38%,
+    rgba(var(--glass-tint), 0.22) 48%,
+    rgba(var(--glass-tint), 0.22) 52%,
+    rgba(var(--glass-tint), 0.05) 62%,
+    transparent 70%,
+    transparent 100%
+  ) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar-thumb:hover,
+html.mv-electron-window body::-webkit-scrollbar-thumb:hover,
+html.mv-electron-window #root::-webkit-scrollbar-thumb:hover,
+html.mv-electron-window #root *::-webkit-scrollbar-thumb:hover {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 28%,
+    rgba(var(--glass-tint), 0.08) 38%,
+    rgba(var(--glass-tint), 0.32) 48%,
+    rgba(var(--glass-tint), 0.32) 52%,
+    rgba(var(--glass-tint), 0.08) 62%,
+    transparent 72%,
+    transparent 100%
+  ) !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar-corner,
+html.mv-electron-window body::-webkit-scrollbar-corner,
+html.mv-electron-window #root::-webkit-scrollbar-corner,
+html.mv-electron-window #root *::-webkit-scrollbar-corner {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html.mv-electron-window *::-webkit-scrollbar-button,
+html.mv-electron-window *::-webkit-scrollbar-button:single-button,
+html.mv-electron-window *::-webkit-scrollbar-button:double-button,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:start,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:end,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:decrement,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:increment,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:start:decrement,
+html.mv-electron-window *::-webkit-scrollbar-button:vertical:end:increment,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:start,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:end,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:decrement,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:increment,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:start:decrement,
+html.mv-electron-window *::-webkit-scrollbar-button:horizontal:end:increment,
+html.mv-electron-window body::-webkit-scrollbar-button,
+html.mv-electron-window #root::-webkit-scrollbar-button,
+html.mv-electron-window #root *::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+}
+
+html.mv-premium-scrollbars,
+html.mv-premium-scrollbars body,
+html.mv-premium-scrollbars #root,
+html.mv-premium-scrollbars #root * {
+  scrollbar-width: none !important;
+}
+
+html.mv-premium-scrollbars::-webkit-scrollbar,
+html.mv-premium-scrollbars body::-webkit-scrollbar,
+html.mv-premium-scrollbars #root::-webkit-scrollbar,
+html.mv-premium-scrollbars #root *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+
+.mv-premium-scrollbar-thumb {
+  position: fixed;
+  z-index: 2147483000;
+  top: var(--mv-premium-scrollbar-top, -999px);
+  right: var(--mv-premium-scrollbar-right, 3px);
+  width: 2px;
+  height: var(--mv-premium-scrollbar-height, 28px);
+  border-radius: 999px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateZ(0);
+  transition: opacity 120ms ease;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(var(--glass-tint), 0.06) 12%,
+      rgba(var(--glass-tint), 0.30) 38%,
+      rgba(var(--glass-tint), 0.30) 62%,
+      rgba(var(--glass-tint), 0.06) 88%,
+      transparent 100%
+    );
+  box-shadow: 0 0 8px rgba(var(--shadow-base), 0.12);
+}
+
+.mv-premium-scrollbar-thumb.is-visible,
+.mv-premium-scrollbar-thumb.is-dragging {
+  opacity: 1;
+}
+
+.mv-premium-scrollbar-thumb.is-dragging {
+  width: 3px;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(var(--glass-tint), 0.08) 12%,
+      rgba(var(--glass-tint), 0.42) 38%,
+      rgba(var(--glass-tint), 0.42) 62%,
+      rgba(var(--glass-tint), 0.08) 88%,
+      transparent 100%
+    );
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, X, Crown, Shield, ShieldCheck, ShieldPlus, ShieldAlert,
   User as UserIcon, UserCheck,
@@ -28,6 +28,7 @@ import PunishmentHistoryModal from './PunishmentHistoryModal';
 import ConfirmModal, { type ConfirmVariant } from './ConfirmModal';
 import BannedUsersSection from './BannedUsersSection';
 import { sendRealtimeBroadcast } from '../../../lib/chatService';
+import { isCapacitor } from '../../../lib/platform';
 
 interface Props {
   serverId: string;
@@ -45,6 +46,28 @@ const ROLE_FILTERS: readonly { value: string; label: string }[] = [
   { value: 'super_member',  label: 'Süper Üye' },
   { value: 'member',        label: 'Üye' },
 ];
+
+const MEMBER_RENDER_WINDOW = 96;
+
+function runAfterMemberIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1600 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
+}
 
 const ROLE_CHIP: Record<ServerRole, { icon: React.ReactNode; bg: string; color: string; border: string }> = {
   owner:        { icon: <Crown size={11} strokeWidth={1.9} />,       bg: 'rgba(245,158,11,0.10)',  color: '#a16207', border: 'rgba(245,158,11,0.24)' },
@@ -107,6 +130,9 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredRoleFilter = useDeferredValue(roleFilter);
+  const [showSecondarySections, setShowSecondarySections] = useState(false);
 
   const { allUsers, currentUser } = useUser();
   const resolveStatus = useCallback((userId: string): string => {
@@ -140,8 +166,15 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   useEffect(() => {
     // Server değişince initial flag sıfırla ki yeni sunucuda spinner görünsün.
     initialLoadDoneRef.current = false;
+    setShowSecondarySections(false);
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    const cancelIdle = runAfterMemberIdle(() => setShowSecondarySections(true), 700);
+    return cancelIdle;
+  }, [loading, serverId]);
 
   // Window focus / visibility change → silent reload (loading göstermiyor).
   // Moderator başka pencerede mute/timeout kaldırırsa stale state'i düzelt.
@@ -339,18 +372,22 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
   };
 
   // ─── Filtre + sıralama ───
-  const q = searchQuery.toLowerCase().trim();
-  const filtered = members.filter(m => {
-    if (roleFilter !== 'all' && m.role !== roleFilter) return false;
-    if (!q) return true;
-    return memberDisplayName(m).toLowerCase().includes(q)
-      || (m.username?.toLowerCase().includes(q) ?? false);
-  });
-  const sorted = [...filtered].sort((a, b) => {
-    const ra = isKnownRole(a.role) ? ROLE_PRIORITY[a.role] : 0;
-    const rb = isKnownRole(b.role) ? ROLE_PRIORITY[b.role] : 0;
-    return rb - ra;
-  });
+  const q = deferredSearchQuery.toLocaleLowerCase('tr-TR').trim();
+  const sorted = useMemo(() => {
+    const filtered = members.filter(m => {
+      if (deferredRoleFilter !== 'all' && m.role !== deferredRoleFilter) return false;
+      if (!q) return true;
+      return memberDisplayName(m).toLocaleLowerCase('tr-TR').includes(q)
+        || (m.username?.toLocaleLowerCase('tr-TR').includes(q) ?? false);
+    });
+    return [...filtered].sort((a, b) => {
+      const ra = isKnownRole(a.role) ? ROLE_PRIORITY[a.role] : 0;
+      const rb = isKnownRole(b.role) ? ROLE_PRIORITY[b.role] : 0;
+      return rb - ra;
+    });
+  }, [members, deferredRoleFilter, q]);
+  const visibleMembers = useMemo(() => sorted.slice(0, MEMBER_RENDER_WINDOW), [sorted]);
+  const hiddenMemberCount = Math.max(0, sorted.length - visibleMembers.length);
 
   if (loading) return <Loader />;
 
@@ -439,7 +476,7 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
           }}
         >
           <div className="divide-y divide-[rgba(var(--glass-tint),0.06)]">
-            {sorted.map(m => {
+            {visibleMembers.map(m => {
               const targetRole = m.role as ServerRole;
               const isSelf = currentUser?.id === m.userId;
               const canModerate = !isSelf && canActOn(myRoleTyped, targetRole) && ROLE_PRIORITY[myRoleTyped] >= ROLE_PRIORITY.mod;
@@ -458,12 +495,17 @@ export default function MembersTab({ serverId, myRole, showToast }: Props) {
                 />
               );
             })}
+            {hiddenMemberCount > 0 && (
+              <div className="px-3 py-2 text-center text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/50">
+                +{hiddenMemberCount} üye daha
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* ── C) Secondary — Banned users ── */}
-      <BannedUsersSection serverId={serverId} showToast={showToast} />
+      {showSecondarySections && <BannedUsersSection serverId={serverId} showToast={showToast} />}
 
       {/* ── Popovers (tekil) ── */}
       {popover?.kind === 'action' && (

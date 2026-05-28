@@ -25,6 +25,7 @@ interface Props {
   onAcceptServerInvite?: (inviteId: string) => void | Promise<unknown>;
   /** Popover'da inline Sunucu Daveti Reddet. */
   onDeclineServerInvite?: (inviteId: string) => void | Promise<unknown>;
+  onOpenChange?: (open: boolean) => void;
 }
 
 // ── Kind → ikon eşlemesi ──
@@ -93,7 +94,7 @@ function getNotificationCategory(item: NotifItem): NotificationCategory {
   return 'system';
 }
 
-export default function NotificationBell({ summary, quietButton = false, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite }: Props) {
+export default function NotificationBell({ summary, quietButton = false, onOpenFriendRequests, onOpenDM, onOpenUpdate, onOpenInvites, onOpenAdminInviteRequests, onOpenJoinRequest, onOpenServer, onAcceptFriendRequest, onRejectFriendRequest, onAcceptServerInvite, onDeclineServerInvite, onOpenChange }: Props) {
   const [open, setOpen] = useState(false);
   const [btnRect, setBtnRect] = useState<DOMRect | null>(null);
   const [activeCategory, setActiveCategory] = useState<NotificationCategory>('all');
@@ -153,27 +154,44 @@ export default function NotificationBell({ summary, quietButton = false, onOpenF
       if (panelRef.current?.contains(e.target as Node)) return;
       if (btnRef.current?.contains(e.target as Node)) return;
       setOpen(false);
+      onOpenChange?.(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
+    const closeNotifications = () => {
+      setOpen(false);
+      onOpenChange?.(false);
+    };
+    window.addEventListener('mayvox:close-notifications', closeNotifications);
+    return () => window.removeEventListener('mayvox:close-notifications', closeNotifications);
+  }, [onOpenChange]);
+
+  const toggleOpen = useCallback(() => {
+    setOpen(prev => {
+      const next = !prev;
+      onOpenChange?.(next);
+      return next;
+    });
+  }, [onOpenChange]);
 
   const { bellCount, items } = summary;
-  const categoryCounts = useMemo(() => {
+  const notificationBuckets = useMemo(() => {
     const counts: Record<NotificationCategory, number> = { all: items.length, requests: 0, dm: 0, invites: 0, system: 0 };
+    const byCategory: Record<NotificationCategory, NotifItem[]> = { all: items, requests: [], dm: [], invites: [], system: [] };
     for (const item of items) {
       const category = getNotificationCategory(item);
       counts[category] += 1;
+      byCategory[category].push(item);
       if (item.key === 'dm-requests') counts.dm += 1;
+      if (item.key === 'dm-requests') byCategory.dm.push(item);
     }
-    return counts;
+    return { counts, byCategory };
   }, [items]);
-  const filteredItems = useMemo(
-    () => activeCategory === 'all'
-      ? items
-      : items.filter(item => getNotificationCategory(item) === activeCategory || (activeCategory === 'dm' && item.key === 'dm-requests')),
-    [activeCategory, items],
-  );
+  const categoryCounts = notificationBuckets.counts;
+  const filteredItems = notificationBuckets.byCategory[activeCategory];
 
   // Pagination state — items veya page değişince clamp et (liste küçüldüyse son sayfa boşalmış olabilir).
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
@@ -277,10 +295,12 @@ export default function NotificationBell({ summary, quietButton = false, onOpenF
       {/* ── Çan butonu ── */}
       <button
         ref={btnRef}
-        onClick={() => setOpen(prev => !prev)}
-        className={`mv-icon-action mv-icon-bell-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 group/bell focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${
+        onClick={toggleOpen}
+        className={`mv-icon-action mv-icon-bell-hover relative w-8 h-8 flex items-center justify-center rounded-[10px] transition-colors duration-150 group/bell focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${
           quietButton
-            ? 'text-[var(--theme-secondary-text)]/66'
+            ? open
+              ? 'bg-[rgba(var(--theme-accent-rgb),0.075)] text-[var(--theme-accent)]'
+              : 'text-[var(--theme-secondary-text)]/66'
             : hasBellNotifications
             ? 'mv-notification-bell-has'
             : 'mv-notification-bell-idle'
@@ -342,14 +362,11 @@ export default function NotificationBell({ summary, quietButton = false, onOpenF
                     }
                   : { top: 80, right: 20 }),
                 background:
-                  'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
-                border: '1px solid var(--theme-popover-border, var(--theme-border))',
-                boxShadow:
-                  '0 24px 56px -16px rgba(var(--shadow-base),0.50),' +
-                  ' 0 6px 16px -4px rgba(var(--shadow-base),0.20),' +
-                  ' inset 0 1px 0 rgba(255,255,255,0.045)',
-                backdropFilter: 'blur(16px) saturate(125%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(125%)',
+                  'linear-gradient(180deg, rgba(var(--glass-tint),0.080), rgba(var(--glass-tint),0.034)), rgba(var(--theme-bg-rgb),0.58)',
+                border: '1px solid rgba(var(--glass-tint),0.14)',
+                boxShadow: '0 18px 42px rgba(0,0,0,0.34), inset 0 1px 0 rgba(var(--glass-tint),0.10)',
+                backdropFilter: 'blur(20px) saturate(130%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(130%)',
               }}
             >
             {/* Başlık — title + counter + Temizle butonu */}
@@ -473,14 +490,15 @@ export default function NotificationBell({ summary, quietButton = false, onOpenF
                   return (
                     <motion.button
                       key={item.key}
-                      layout
-                      transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: compact ? 0.78 : 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                       onClick={onClick}
                       disabled={!onClick}
                       className={`w-full flex items-center gap-3 text-left group/row transition-colors duration-150 ${
                         compact ? 'px-4 py-1.5' : 'px-4 py-2.5'
                       } ${onClick ? 'hover:bg-[var(--theme-panel-hover)] cursor-pointer' : 'cursor-default'}`}
-                      style={{ opacity: compact ? 0.78 : 1 }}
                     >
                       {/* Sol priority çizgisi */}
                       <div className={`w-[2px] self-stretch rounded-full shrink-0 ${PRIORITY_ACCENT[item.priority]} transition-opacity duration-300`} />

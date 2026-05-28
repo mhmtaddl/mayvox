@@ -3,6 +3,7 @@ import { CalendarDays, Check, CheckCircle2, Circle, Clock3, Crown, Gem, Globe2, 
 import { searchServers, joinServer, createJoinRequest, type DiscoverServer } from '../../lib/serverService';
 import { subscribeServerEvents, type ServerEvent } from '../../lib/chatService';
 import { getPlanVisual } from '../../lib/planStyles';
+import { resolveAvatarUrls } from '../../lib/statusAvatar';
 
 const DISCOVER_PLAN_TONE: Record<string, { rgb: string; bgA: number; bgB: number; borderA: number; shadowA: number }> = {
   free: { rgb: '75, 85, 99', bgA: 0.08, bgB: 0.035, borderA: 0.18, shadowA: 0.06 },
@@ -23,6 +24,50 @@ function parseServerRules(value?: string | null): string[] {
     .split(/\r?\n/)
     .map(line => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
     .filter(Boolean);
+}
+
+function DiscoverServerAvatar({
+  avatarUrl,
+  shortName,
+  sizeClassName,
+  textClassName,
+}: {
+  avatarUrl?: string | null;
+  shortName: string;
+  sizeClassName: string;
+  textClassName: string;
+}) {
+  const avatarUrls = React.useMemo(() => resolveAvatarUrls(avatarUrl), [avatarUrl]);
+  const [avatarIndex, setAvatarIndex] = useState(0);
+
+  useEffect(() => {
+    setAvatarIndex(0);
+  }, [avatarUrl]);
+
+  const activeAvatarUrl = avatarUrls[avatarIndex] || '';
+
+  if (!activeAvatarUrl) {
+    return <span className={textClassName}>{shortName}</span>;
+  }
+
+  return (
+    <>
+      <img
+        src={activeAvatarUrl}
+        alt=""
+        className={`${sizeClassName} object-cover`}
+        onError={() => {
+          if (avatarIndex + 1 < avatarUrls.length) {
+            setAvatarIndex(index => index + 1);
+          } else {
+            setAvatarIndex(avatarUrls.length);
+          }
+        }}
+        referrerPolicy="no-referrer"
+      />
+      {avatarIndex >= avatarUrls.length && <span className={textClassName}>{shortName}</span>}
+    </>
+  );
 }
 
 interface Props {
@@ -237,8 +282,12 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                         border: '1px solid rgba(var(--glass-tint),0.08)',
                         boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.08)',
                       }}>
-                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="h-9 w-9 rounded-[10px] object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} /> : null}
-                      <span className={`text-[10px] font-black tracking-[0.08em] text-[var(--theme-accent)]/80 ${s.avatarUrl ? 'hidden' : ''}`}>{s.shortName}</span>
+                      <DiscoverServerAvatar
+                        avatarUrl={s.avatarUrl}
+                        shortName={s.shortName}
+                        sizeClassName="h-9 w-9 rounded-[10px]"
+                        textClassName="text-[10px] font-black tracking-[0.08em] text-[var(--theme-accent)]/80"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex min-w-0 items-start justify-between gap-1.5">
@@ -382,18 +431,12 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                     border: '1px solid rgba(var(--glass-tint),0.08)',
                   }}
                 >
-                  {server.avatarUrl ? (
-                    <img
-                      src={server.avatarUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      onError={event => {
-                        (event.currentTarget as HTMLImageElement).style.display = 'none';
-                        (event.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove('hidden');
-                      }}
-                    />
-                  ) : null}
-                  <span className={`text-[12px] font-black tracking-[0.08em] text-[var(--theme-accent)]/82 ${server.avatarUrl ? 'hidden' : ''}`}>{server.shortName}</span>
+                  <DiscoverServerAvatar
+                    avatarUrl={server.avatarUrl}
+                    shortName={server.shortName}
+                    sizeClassName="h-full w-full"
+                    textClassName="text-[12px] font-black tracking-[0.08em] text-[var(--theme-accent)]/82"
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-[14px] font-bold text-[var(--theme-text)]">{server.name}</h3>

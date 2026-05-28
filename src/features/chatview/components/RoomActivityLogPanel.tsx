@@ -14,7 +14,7 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import type { RoomActivityItem, RoomActivityType } from '../hooks/useRoomActivityLog';
 
 interface Props {
@@ -100,9 +100,13 @@ function PencilLineIcon() {
   );
 }
 
+const ACTIVITY_RENDER_WINDOW = 50;
+
 export default function RoomActivityLogPanel({ activities, onCollapse, onSelectActivity, onClear, canClear = false, clearing = false }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const latestActivityId = activities[activities.length - 1]?.id;
+  const visibleActivities = useMemo(() => activities.slice(-ACTIVITY_RENDER_WINDOW), [activities]);
+  const hiddenActivityCount = Math.max(0, activities.length - visibleActivities.length);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -124,54 +128,30 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
           </div>
         ) : (
           <div className="space-y-1.5">
-            {activities.map(item => {
-              const tone = activityTone(item.type);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectActivity?.(item)}
-                  disabled={!item.messageId}
-                  className={`flex w-full min-w-0 items-center gap-2 rounded-lg border-l px-2.5 py-1.5 text-left transition-[background,opacity] duration-150 ${item.messageId ? 'hover:bg-[rgba(var(--glass-tint),0.045)]' : 'cursor-default'}`}
-                  style={{
-                    background: item.type === 'message_report' ? 'rgba(251,191,36,0.055)' : 'rgba(var(--glass-tint),0.032)',
-                    borderLeftColor: item.type === 'message_report' ? 'rgba(251,191,36,0.48)' : tone.border,
-                  }}
-                >
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center ${item.type === 'message_report' ? 'mv-report-flag-attention' : ''}`}
-                    style={{ color: tone.color }}
-                  >
-                    <ActivityIcon type={item.type} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] font-semibold text-[var(--theme-text)]/96">{item.label}</span>
-                    <span className="block text-[9px] font-medium text-[var(--theme-secondary-text)]/72">{formatActivityTimestamp(item.createdAt)}</span>
-                  </span>
-                  {item.type === 'message_report' && (item.reportCount ?? 1) > 1 && (
-                    <span className="shrink-0 rounded-full bg-amber-300/18 px-1.5 py-0.5 text-[9px] font-bold text-amber-200 ring-1 ring-amber-300/25">
-                      x{item.reportCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {hiddenActivityCount > 0 && (
+              <div className="px-2 pb-1 text-center text-[9.5px] font-semibold text-[var(--theme-secondary-text)]/45">
+                +{hiddenActivityCount} eski olay
+              </div>
+            )}
+            {visibleActivities.map(item => (
+              <ActivityRow key={item.id} item={item} onSelectActivity={onSelectActivity} />
+            ))}
           </div>
         )}
       </div>
       <div
-        className="flex h-[53px] shrink-0 items-center gap-2 px-3 py-2"
+        className="mv-room-activity-footer flex h-[53px] shrink-0 items-center gap-2 px-3 py-2 transition-[background,border-color] duration-150"
         style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.075)', boxShadow: 'none', backgroundImage: 'none' }}
       >
         <button
           type="button"
           onClick={onCollapse}
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-accent)] opacity-82 transition-[color,opacity,transform] duration-150 hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+          className="mv-room-activity-footer-button flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-accent)] opacity-82 transition-[color,opacity,transform] duration-150 hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
           aria-label="Son olayları kapat"
         >
           <History size={13} strokeWidth={2.1} />
         </button>
-        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-text)]/92">
+        <span className="mv-room-activity-footer-title min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-text)]/92">
           SON OLAYLAR
         </span>
         {canClear && (
@@ -179,7 +159,7 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
             type="button"
             onClick={onClear}
             disabled={clearing || activities.length === 0}
-            className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-text)]/68 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-32 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+            className="mv-room-activity-footer-button flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-text)]/68 opacity-82 transition-[color,opacity,transform] duration-150 hover:text-[rgb(251,113,133)] hover:opacity-100 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-32 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
             aria-label="Son olayları temizle"
             title="Son olayları temizle"
           >
@@ -190,3 +170,41 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
     </aside>
   );
 }
+
+const ActivityRow = memo(function ActivityRow({
+  item,
+  onSelectActivity,
+}: {
+  item: RoomActivityItem;
+  onSelectActivity?: (item: RoomActivityItem) => void;
+}) {
+  const tone = activityTone(item.type);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectActivity?.(item)}
+      disabled={!item.messageId}
+      className={`flex w-full min-w-0 items-center gap-2 rounded-lg border-l px-2.5 py-1.5 text-left transition-[background,opacity] duration-150 ${item.messageId ? 'hover:bg-[rgba(var(--glass-tint),0.045)]' : 'cursor-default'}`}
+      style={{
+        background: item.type === 'message_report' ? 'rgba(251,191,36,0.055)' : 'rgba(var(--glass-tint),0.032)',
+        borderLeftColor: item.type === 'message_report' ? 'rgba(251,191,36,0.48)' : tone.border,
+      }}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center ${item.type === 'message_report' ? 'mv-report-flag-attention' : ''}`}
+        style={{ color: tone.color }}
+      >
+        <ActivityIcon type={item.type} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[11px] font-semibold text-[var(--theme-text)]/96">{item.label}</span>
+        <span className="block text-[9px] font-medium text-[var(--theme-secondary-text)]/72">{formatActivityTimestamp(item.createdAt)}</span>
+      </span>
+      {item.type === 'message_report' && (item.reportCount ?? 1) > 1 && (
+        <span className="shrink-0 rounded-full bg-amber-300/18 px-1.5 py-0.5 text-[9px] font-bold text-amber-200 ring-1 ring-amber-300/25">
+          x{item.reportCount}
+        </span>
+      )}
+    </button>
+  );
+});

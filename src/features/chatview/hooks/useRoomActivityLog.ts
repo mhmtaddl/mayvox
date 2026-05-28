@@ -3,6 +3,7 @@ import { subscribeRealtimeEvents } from '../../../lib/chatService';
 import { playNotification } from '../../../lib/audio/SoundManager';
 import { getPublicNickname } from '../../../lib/formatName';
 import { listRoomActivityEvents, type RoomActivityEvent } from '../../../lib/serverService';
+import { isCapacitor } from '../../../lib/platform';
 import type { User } from '../../../types';
 
 export type RoomActivityType =
@@ -113,9 +114,38 @@ function makeId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function userLabel(userId: string | undefined, allUsers: User[]): string {
+function buildUserLookup(users: User[]): Map<string, User> {
+  const map = new Map<string, User>();
+  for (const user of users) {
+    if (user.id) map.set(user.id, user);
+    if (user.name) map.set(user.name, user);
+  }
+  return map;
+}
+
+function runAfterRoomActivityIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1400 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
+}
+
+function userLabel(userId: string | undefined, allUsersById: Map<string, User>): string {
   if (!userId) return 'Kullanıcı';
-  const user = allUsers.find(u => u.id === userId || u.name === userId);
+  const user = allUsersById.get(userId);
   return user ? getPublicNickname(user) : 'Kullanıcı';
 }
 
@@ -206,7 +236,7 @@ export function useRoomActivityLog({
   const prevRoomRef = useRef<string | null>(null);
   const prevMembersRef = useRef<Set<string>>(new Set());
   const dedupeRef = useRef<Map<string, number>>(new Map());
-  const allUsersRef = useRef(allUsers);
+  const allUsersRef = useRef(buildUserLookup(allUsers));
   const activeChannelRef = useRef(activeChannel);
   const activeServerIdRef = useRef(activeServerId);
   const memberIdsRef = useRef<Set<string>>(new Set());
@@ -219,7 +249,7 @@ export function useRoomActivityLog({
   const handledMessageReportEventRef = useRef(0);
   const lastReportSoundAtRef = useRef(0);
 
-  useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
+  useEffect(() => { allUsersRef.current = buildUserLookup(allUsers); }, [allUsers]);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
   useEffect(() => { activeServerIdRef.current = activeServerId; }, [activeServerId]);
 
@@ -230,23 +260,26 @@ export function useRoomActivityLog({
     const roomId = activeChannel;
     const serverId = activeServerId;
 
-    listRoomActivityEvents(serverId, roomId, MAX_ITEMS)
-      .then(events => {
-        if (cancelled || activeChannelRef.current !== roomId || activeServerIdRef.current !== serverId) return;
-        const mapped = events.map(mapRemoteActivity).filter((item): item is RoomActivityItem => Boolean(item));
-        setActivities(mapped.slice(-MAX_ITEMS));
+    const cancelIdle = runAfterRoomActivityIdle(() => {
+      listRoomActivityEvents(serverId, roomId, MAX_ITEMS)
+        .then(events => {
+          if (cancelled || activeChannelRef.current !== roomId || activeServerIdRef.current !== serverId) return;
+          const mapped = events.map(mapRemoteActivity).filter((item): item is RoomActivityItem => Boolean(item));
+          setActivities(mapped.slice(-MAX_ITEMS));
 
-        const now = Date.now();
-        mapped.forEach(item => dedupeRef.current.set(item.dedupeKey, now));
-      })
-      .catch(err => {
-        if (!cancelled) {
-          console.warn('[room-activity] geçmiş yüklenemedi:', err instanceof Error ? err.message : err);
-        }
-      });
+          const now = Date.now();
+          mapped.forEach(item => dedupeRef.current.set(item.dedupeKey, now));
+        })
+        .catch(err => {
+          if (!cancelled) {
+            console.warn('[room-activity] geçmiş yüklenemedi:', err instanceof Error ? err.message : err);
+          }
+        });
+    }, 650);
 
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [activeChannel, activeServerId, enabled]);
 

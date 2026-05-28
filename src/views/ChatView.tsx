@@ -11,6 +11,7 @@ import {
   Radio,
   Compass,
   Timer,
+  Users,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getPublicDisplayName, getPublicNickname } from '../lib/formatName';
@@ -22,11 +23,7 @@ import { useUser } from '../contexts/UserContext';
 import { useChannel } from '../contexts/ChannelContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsCtx';
-import SettingsView from './SettingsView';
-import UserProfilePopup from '../components/UserProfilePopup';
-import AnnouncementsPanel from '../components/AnnouncementsPanel';
-import SocialSearchHub, { type SearchResult } from '../components/SocialSearchHub';
-import FriendsSidebarContent from '../components/FriendsSidebarContent';
+import type { SearchResult } from '../components/SocialSearchHub';
 import { startInviteRingtone, stopInviteRingtone, INVITE_RING_DURATION_MS } from '../lib/sounds';
 import { playReject } from '../lib/audio/SoundManager';
 import { setSoundChatRoomActive } from '../lib/soundRoomPreference';
@@ -36,7 +33,6 @@ import { pushInformational } from '../features/notifications/informationalStore'
 import { type CardStyle, loadCardStyle, saveCardStyle } from '../components/chat/cardStyles';
 import DeviceBadge from '../components/chat/DeviceBadge';
 import { useConfirm } from '../contexts/ConfirmContext';
-import DMPanel from '../components/DMPanel';
 import ToastContainer from '../features/notifications/ToastContainer';
 import { useNotificationContextSync } from '../features/notifications/useNotificationContextSync';
 import { registerHandlers as registerNotifHandlers } from '../features/notifications/notificationService';
@@ -47,35 +43,21 @@ import { applyLocalChannelOrder } from '../lib/channelOrder';
 import { applyLocalChannelIconColors, getChannelIconColor, getDefaultChannelIconColor } from '../lib/channelIconColor';
 import { applyLocalChannelIcons, getChannelIconName, getDefaultChannelIconName } from '../lib/channelIcon';
 import MobileHeader from '../components/MobileHeader';
-import VoiceParticipants from '../components/VoiceParticipants';
-import RoomMemberContextMenu, { type RoomMemberMenuCtx } from '../features/chatview/components/RoomMemberContextMenu';
+import type { RoomMemberMenuCtx } from '../features/chatview/components/RoomMemberContextMenu';
 import { ROLE_HIERARCHY, type ServerRole } from '../lib/permissionBundles';
-import { NotificationBadge, NotificationBell } from '../components/notifications';
+import { NotificationBadge } from '../components/notifications';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
 import { useIncomingInvites } from '../hooks/useIncomingInvites';
 import { useJoinRequestNotifications } from '../hooks/useJoinRequestNotifications';
 import { useMyPendingJoinRequests } from '../hooks/useMyPendingJoinRequests';
-import IncomingInvitesModal from '../components/server/IncomingInvitesModal';
-import ChannelAccessModal from '../components/server/ChannelAccessModal';
-import RestrictedServerScreen from '../components/RestrictedServerScreen';
 
 // Feature imports
 import { useChatMessages } from '../features/chatview/hooks/useChatMessages';
 import { useRoomActivityLog } from '../features/chatview/hooks/useRoomActivityLog';
 import { useDominantSpeaker } from '../features/chatview/hooks/useDominantSpeaker';
 import { useRoomMusic } from '../features/chatview/hooks/useRoomMusic';
-import InvitationModal from '../features/chatview/components/InvitationModal';
-import ChatViewContextMenu from '../features/chatview/components/ChatViewContextMenu';
-import ChatViewUserActionMenu from '../features/chatview/components/ChatViewUserActionMenu';
-import ChatViewRoomModal from '../features/chatview/components/ChatViewRoomModal';
-import ChatViewPasswordModal from '../features/chatview/components/ChatViewPasswordModal';
-import DesktopDock from '../features/chatview/components/DesktopDock';
-import MobileFooter from '../features/chatview/components/MobileFooter';
-import LeftSidebar from '../features/chatview/components/LeftSidebar';
 import RoomStatusBadges from '../features/chatview/components/RoomStatusBadges';
-import RoomActivityLogPanel from '../features/chatview/components/RoomActivityLogPanel';
-import { MobileAppShell, MobileChannelSheet, MobileDiscoverScreen, MobileNotificationsScreen, MobileProfileScreen, MobileRoomScreen, MobileSocialScreen, MobileSocialSheet, type MobileShellView } from '../features/mobile';
-import { RoomMusicPanel } from '../components/room-music';
+import type { MobileShellView } from '../features/mobile/MobileAppShell';
 import { channelIconComponents, roomModeIcons, FORCE_MOBILE } from '../features/chatview/constants';
 import { Coffee } from 'lucide-react';
 import InactivityCountdownBanner from '../features/chatview/components/InactivityCountdownBanner';
@@ -83,8 +65,6 @@ import { registerE2eeDeviceKey } from '../lib/e2ee';
 import AvatarContent from '../components/AvatarContent';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../lib/avatarFrame';
 import { hasCustomAvatar } from '../lib/statusAvatar';
-import { ConnectionQualityIndicator } from '../components/chat';
-import UpdateVersionHub from '../features/update/components/UpdateVersionHub';
 import appLogo from '../assets/dock-logo-mv_tr.png';
 
 import type { User, VoiceChannel } from '../types';
@@ -93,13 +73,133 @@ import { getUserRoomLimit, roomLimitMessage } from '../lib/planConfig';
 import { canCreateServer as canUserCreateServer } from '../lib/serverCreationPermission';
 import { getPlanVisual } from '../lib/planStyles';
 import { PLAN_LIMITS, PLAN_TAGLINE, planFeatureList, calcPersistentRoomsRemaining, type PlanKey } from '../lib/planLimits';
-import ServerSettings from '../components/server/ServerSettings';
-import JoinServerModal from '../components/server/JoinServerModal';
-import DiscoverPanel from '../components/server/DiscoverPanel';
 import { getUserRoleBadge } from '../components/RoleBadge';
 
 // Android/tablet production UI. Do not gate this behind preview env flags.
 const ENABLE_MOBILE_SHELL_V1 = FORCE_MOBILE;
+const loadSettingsView = () => import('./SettingsView');
+const loadDMPanel = () => import('../components/DMPanel');
+const loadServerSettings = () => import('../components/server/ServerSettings');
+const loadChatViewRoomModal = () => import('../features/chatview/components/ChatViewRoomModal');
+const loadChatViewPasswordModal = () => import('../features/chatview/components/ChatViewPasswordModal');
+const loadUserProfilePopup = () => import('../components/UserProfilePopup');
+const loadSocialSearchHub = () => import('../components/SocialSearchHub');
+const loadFriendsSidebarContent = () => import('../components/FriendsSidebarContent');
+const loadRoomActivityLogPanel = () => import('../features/chatview/components/RoomActivityLogPanel');
+const loadRoomMusicPanel = () => import('../components/room-music/RoomMusicPanel');
+const loadAnnouncementsPanel = () => import('../components/AnnouncementsPanel');
+const loadVoiceParticipants = () => import('../components/VoiceParticipants');
+const loadNotificationBell = () => import('../components/notifications/NotificationBell');
+const loadDesktopDock = () => import('../features/chatview/components/DesktopDock');
+const loadChatViewContextMenu = () => import('../features/chatview/components/ChatViewContextMenu');
+const loadChatViewUserActionMenu = () => import('../features/chatview/components/ChatViewUserActionMenu');
+const loadRoomMemberContextMenu = () => import('../features/chatview/components/RoomMemberContextMenu');
+const loadConnectionQualityIndicator = () => import('../components/chat/ConnectionQualityIndicator');
+const loadMobileFooter = () => import('../features/chatview/components/MobileFooter');
+const loadLeftSidebar = () => import('../features/chatview/components/LeftSidebar');
+const loadMobileAppShell = () => import('../features/mobile/MobileAppShell');
+const loadMobileChannelSheet = () => import('../features/mobile/MobileChannelSheet');
+const loadMobileSocialSheet = () => import('../features/mobile/MobileSocialSheet');
+const loadMobileDiscoverScreen = () => import('../features/mobile/MobileDiscoverScreen');
+const loadMobileNotificationsScreen = () => import('../features/mobile/MobileNotificationsScreen');
+const loadMobileProfileScreen = () => import('../features/mobile/MobileProfileScreen');
+const loadMobileSocialScreen = () => import('../features/mobile/MobileSocialScreen');
+const SettingsView = React.lazy(loadSettingsView);
+const DMPanel = React.lazy(loadDMPanel);
+const ServerSettings = React.lazy(loadServerSettings);
+const UserProfilePopup = React.lazy(loadUserProfilePopup);
+const SocialSearchHub = React.lazy(loadSocialSearchHub);
+const FriendsSidebarContent = React.lazy(loadFriendsSidebarContent);
+const RoomActivityLogPanel = React.lazy(loadRoomActivityLogPanel);
+const RoomMusicPanel = React.lazy(loadRoomMusicPanel);
+const AnnouncementsPanel = React.lazy(loadAnnouncementsPanel);
+const VoiceParticipants = React.lazy(loadVoiceParticipants);
+const NotificationBell = React.lazy(loadNotificationBell);
+const DesktopDock = React.lazy(loadDesktopDock);
+const ChatViewContextMenu = React.lazy(loadChatViewContextMenu);
+const ChatViewUserActionMenu = React.lazy(loadChatViewUserActionMenu);
+const RoomMemberContextMenu = React.lazy(loadRoomMemberContextMenu);
+const ConnectionQualityIndicator = React.lazy(loadConnectionQualityIndicator);
+const MobileFooter = React.lazy(loadMobileFooter);
+const LeftSidebar = React.lazy(loadLeftSidebar);
+const MobileAppShell = React.lazy(loadMobileAppShell);
+const MobileChannelSheet = React.lazy(loadMobileChannelSheet);
+const MobileSocialSheet = React.lazy(loadMobileSocialSheet);
+const MobileDiscoverScreen = React.lazy(loadMobileDiscoverScreen);
+const MobileNotificationsScreen = React.lazy(loadMobileNotificationsScreen);
+const MobileProfileScreen = React.lazy(loadMobileProfileScreen);
+const MobileSocialScreen = React.lazy(loadMobileSocialScreen);
+const DiscoverPanel = React.lazy(() => import('../components/server/DiscoverPanel'));
+const JoinServerModal = React.lazy(() => import('../components/server/JoinServerModal'));
+const ChannelAccessModal = React.lazy(() => import('../components/server/ChannelAccessModal'));
+const IncomingInvitesModal = React.lazy(() => import('../components/server/IncomingInvitesModal'));
+const RestrictedServerScreen = React.lazy(() => import('../components/RestrictedServerScreen'));
+const InvitationModal = React.lazy(() => import('../features/chatview/components/InvitationModal'));
+const ChatViewRoomModal = React.lazy(loadChatViewRoomModal);
+const ChatViewPasswordModal = React.lazy(loadChatViewPasswordModal);
+const UpdateVersionHub = React.lazy(() => import('../features/update/components/UpdateVersionHub'));
+
+export function preloadMobileHomeChunks() {
+  if (!FORCE_MOBILE) return;
+  void loadMobileAppShell();
+  void loadMobileChannelSheet();
+  void loadMobileSocialSheet();
+  void loadMobileSocialScreen();
+  void loadConnectionQualityIndicator();
+}
+
+function scheduleLazyPanelPreload() {
+  if (typeof window === 'undefined') return () => undefined;
+  const timers: number[] = [];
+  const idleCallbacks: number[] = [];
+  const schedule = (task: () => void, delay: number) => {
+    const id = window.setTimeout(() => {
+      if ('requestIdleCallback' in window) {
+        const idleId = window.requestIdleCallback(task, { timeout: FORCE_MOBILE ? 2600 : 1500 });
+        idleCallbacks.push(idleId);
+      } else {
+        task();
+      }
+    }, delay);
+    timers.push(id);
+  };
+  if (FORCE_MOBILE) {
+    preloadMobileHomeChunks();
+    schedule(() => { void loadConnectionQualityIndicator(); }, 2400);
+    schedule(() => { void loadMobileProfileScreen(); }, 8000);
+    return () => {
+      timers.forEach(id => window.clearTimeout(id));
+      if ('cancelIdleCallback' in window) idleCallbacks.forEach(id => window.cancelIdleCallback(id));
+    };
+  }
+  schedule(() => { void loadLeftSidebar(); }, 250);
+  schedule(() => { void loadMobileFooter(); }, 300);
+  schedule(() => { void loadDesktopDock(); }, 400);
+  schedule(() => { void loadConnectionQualityIndicator(); }, 650);
+  schedule(() => { void loadDMPanel(); }, 900);
+  schedule(() => { void loadSettingsView(); }, 1300);
+  schedule(() => { void loadChatViewRoomModal(); }, 1700);
+  schedule(() => { void loadChatViewPasswordModal(); }, 1900);
+  schedule(() => { void loadChatViewContextMenu(); }, 2050);
+  schedule(() => { void loadChatViewUserActionMenu(); }, 2125);
+  schedule(() => { void loadRoomMemberContextMenu(); }, 2200);
+  schedule(() => { void loadServerSettings(); }, 2200);
+  schedule(() => { void loadNotificationBell(); }, 2400);
+  schedule(() => { void loadAnnouncementsPanel(); }, 2600);
+  schedule(() => { void loadVoiceParticipants(); }, 3200);
+  return () => {
+    timers.forEach(id => window.clearTimeout(id));
+    if ('cancelIdleCallback' in window) idleCallbacks.forEach(id => window.cancelIdleCallback(id));
+  };
+}
+
+function LazyPanelFallback({ label = 'Yükleniyor' }: { label?: string }) {
+  return (
+    <div className="flex h-full min-h-[180px] items-center justify-center rounded-2xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/55">
+      {label}...
+    </div>
+  );
+}
 
 export default function ChatView() {
   const { currentUser, setCurrentUser, allUsers, setAllUsers, getEffectiveStatus, friendIds, acceptRequest, rejectRequest } = useUser();
@@ -128,6 +228,8 @@ export default function ChatView() {
   const [showDiscover, setShowDiscover] = useState(false);
   const [roomMembersHidden, setRoomMembersHidden] = useState(false);
   const lastChannelIdRef = useRef<string | null>(null);
+
+  useEffect(() => scheduleLazyPanelPreload(), []);
 
   useEffect(() => {
     setSoundChatRoomActive(Boolean(activeChannel));
@@ -298,10 +400,12 @@ export default function ChatView() {
     clearAllMessagesBase();
   }, [clearAllMessagesBase, currentUser]);
 
+  const shouldPrepareRoomView = !!activeChannel;
+
   // ── Dominant speaker hook ──
   const sortedChannelMembers = useMemo(
-    () => [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)),
-    [channelMembers]
+    () => shouldPrepareRoomView ? [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)) : [],
+    [channelMembers, shouldPrepareRoomView]
   );
   const dominantSpeakerId = useDominantSpeaker({
     members: sortedChannelMembers, currentUserId: currentUser.id,
@@ -326,6 +430,8 @@ export default function ChatView() {
   } | null>(null);
   const [dmTargetUserId, setDmTargetUserId] = useState<string | null>(null);
   const [dmPanelOpen, setDmPanelOpen] = useState(false);
+  const [dmPanelHasMounted, setDmPanelHasMounted] = useState(!FORCE_MOBILE);
+  const [dmSettingsOpenNonce, setDmSettingsOpenNonce] = useState(0);
   // Oda içi sağ-tık role-aware context menu. Hedef sunucudan ayrılırsa (target
   // member artık listede yok) ctx'i temizleyerek menüyü otomatik kapatırız.
   const [roomMemberMenu, setRoomMemberMenu] = useState<RoomMemberMenuCtx | null>(null);
@@ -405,15 +511,27 @@ export default function ChatView() {
       setShowDiscover(false);
       setMobileRightOpen(false);
       setDmPanelOpen(true);
-      if (settings) {
-        window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('mayvox:open-message-settings'));
-        }, 80);
-      }
+      if (settings) setDmSettingsOpenNonce(nonce => nonce + 1);
     };
     window.addEventListener('mayvox:open-messages', onOpenMessages);
     return () => window.removeEventListener('mayvox:open-messages', onOpenMessages);
   }, [setSettingsTarget, setView]);
+
+  useEffect(() => {
+    if (!dmPanelOpen && !dmTargetUserId) return;
+    setDmPanelHasMounted(true);
+  }, [dmPanelOpen, dmTargetUserId]);
+
+  const shouldRenderDmPanel = !FORCE_MOBILE || dmPanelHasMounted || dmPanelOpen || !!dmTargetUserId;
+
+  useEffect(() => {
+    if (!dmSettingsOpenNonce || !shouldRenderDmPanel || typeof window === 'undefined') return;
+    const delays = [120, 360, 760, 1280];
+    const timers = delays.map(delay => window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('mayvox:open-message-settings'));
+    }, delay));
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, [dmSettingsOpenNonce, shouldRenderDmPanel]);
 
   // ── Notification system v3 context sync ──
   const isAppFocused = useWindowActivity();
@@ -680,11 +798,14 @@ export default function ChatView() {
   useEffect(() => { refreshServers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Periyodik sunucu listesi yenileme — restriction state transition tespiti için.
-  // 45 sn aralık: idle pencerede çok pahalı değil, kısıtlama olunca <1 dk içinde toast.
+  // Tablet tarafında daha seyrek tutulur; focus event'i anlık tazelemeyi korur.
   useEffect(() => {
     const onFocus = () => { void refreshServers(); };
     window.addEventListener('focus', onFocus);
-    const id = window.setInterval(() => { void refreshServers(); }, 45_000);
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void refreshServers();
+    }, FORCE_MOBILE ? 120_000 : 45_000);
     return () => {
       window.removeEventListener('focus', onFocus);
       window.clearInterval(id);
@@ -801,7 +922,7 @@ export default function ChatView() {
     automodEvent: automodActivityEvent,
     messageDeleteEvent: messageDeleteActivityEvent,
     messageReportEvent: messageReportActivityEvent,
-    enabled: canViewRoomActivityLog,
+    enabled: canViewRoomActivityLog && shouldPrepareRoomView,
   });
   const beginRoomActivityResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!roomActivitySplitRef.current) return;
@@ -972,12 +1093,12 @@ export default function ChatView() {
     return saved ? Math.max(1, Math.min(3, parseInt(saved))) : 2;
   });
   const [cardStyle, setCardStyleState] = useState<CardStyle>(loadCardStyle);
-  const cycleCardStyle = () => {
+  const cycleCardStyle = useCallback(() => {
     const order: CardStyle[] = ['current', 'revolt', 'linear'];
     const next = order[(order.indexOf(cardStyle) + 1) % order.length];
     saveCardStyle(next);
     setCardStyleState(next);
-  };
+  }, [cardStyle]);
 
   // ── Middle panel view override ──
   // Kullanıcı bir kanaldayken "sunucu ana sayfasına göz at" butonuyla placeholder
@@ -1201,13 +1322,23 @@ export default function ChatView() {
     () => channels.filter(c => !c.isHidden || c.ownerId === currentUser.id || currentUser.isAdmin || activeChannel === c.id),
     [channels, currentUser.id, currentUser.isAdmin, activeChannel]
   );
+  const userById = useMemo(() => new Map(allUsers.map(user => [user.id, user])), [allUsers]);
+  const userByName = useMemo(() => new Map(allUsers.map(user => [user.name, user])), [allUsers]);
+  const serverNameById = useMemo(() => new Map(serverList.map(server => [server.id, server.name])), [serverList]);
   const friendUsers = useMemo(() => allUsers.filter(u => friendIds.has(u.id)), [allUsers, friendIds]);
-  const mobileIsFriendOnline = useCallback((user: User) => {
-    const isVoicePresent = channels.some(channel =>
-      channel.members?.includes(user.id) || channel.members?.includes(user.name)
-    );
-    return isVoicePresent || (user.status === 'online' && user.statusText !== 'Cevrimdisi' && user.statusText !== 'Çevrimdışı');
+  const voicePresentUserKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const channel of channels) {
+      for (const memberKey of channel.members || []) {
+        if (memberKey) keys.add(memberKey);
+      }
+    }
+    return keys;
   }, [channels]);
+  const mobileIsFriendOnline = useCallback((user: User) => {
+    const isVoicePresent = voicePresentUserKeys.has(user.id) || voicePresentUserKeys.has(user.name);
+    return isVoicePresent || (user.status === 'online' && user.statusText !== 'Cevrimdisi' && user.statusText !== 'Çevrimdışı');
+  }, [voicePresentUserKeys]);
   const mobileFormatLastSeen = useCallback((user: User) => {
     if (user.showLastSeen === false || !user.lastSeenAt) return 'Cevrimdisi';
     const seenAt = new Date(user.lastSeenAt);
@@ -1221,24 +1352,31 @@ export default function ChatView() {
     const date = seenAt.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
     return `Son gorulme: ${date} ${time}`;
   }, []);
-  const mobileFriendItems = useMemo(() => {
-    return [...friendUsers]
+  const mobileFriendPresence = useMemo(() => {
+    let onlineCount = 0;
+    const prepared = friendUsers.map(user => {
+      const isOnline = mobileIsFriendOnline(user);
+      if (isOnline) onlineCount += 1;
+      const lastSeenText = isOnline ? undefined : mobileFormatLastSeen(user);
+      return {
+        user,
+        isOnline,
+        lastSeenText,
+        lastSeenTime: user.lastSeenAt ? new Date(user.lastSeenAt).getTime() : 0,
+      };
+    });
+    const items = prepared
       .sort((a, b) => {
-        const aOnline = mobileIsFriendOnline(a);
-        const bOnline = mobileIsFriendOnline(b);
-        if (aOnline !== bOnline) return aOnline ? -1 : 1;
-        if (!aOnline && !bOnline) {
-          const aSeen = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
-          const bSeen = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
-          if (aSeen !== bSeen) return bSeen - aSeen;
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        if (!a.isOnline && !b.isOnline) {
+          if (a.lastSeenTime !== b.lastSeenTime) return b.lastSeenTime - a.lastSeenTime;
         }
-        return getPublicDisplayName(a).localeCompare(getPublicDisplayName(b), 'tr');
+        return getPublicDisplayName(a.user).localeCompare(getPublicDisplayName(b.user), 'tr');
       })
       .slice(0, 8)
-      .map(user => {
-        const isOnline = mobileIsFriendOnline(user);
+      .map(({ user, isOnline, lastSeenText }) => {
         const serverName = isOnline && user.serverId
-          ? serverList.find(server => server.id === user.serverId)?.name ?? null
+          ? serverNameById.get(user.serverId) ?? null
           : null;
         const status: 'online' | 'offline' | 'idle' | 'dnd' = isOnline
           ? user.status === 'away'
@@ -1258,21 +1396,23 @@ export default function ChatView() {
               : status === 'dnd'
                 ? 'Rahatsız Etmeyin'
                 : 'Online'
-            : mobileFormatLastSeen(user),
+            : lastSeenText,
           statusText: user.statusText,
           serverName,
           gameActivity: isOnline ? user.gameActivity : undefined,
-          lastSeenText: isOnline ? undefined : mobileFormatLastSeen(user),
+          lastSeenText,
           platform: user.platform,
           role: getUserRoleBadge(user),
         };
       });
-  }, [friendUsers, mobileFormatLastSeen, mobileIsFriendOnline, serverList]);
-  const mobileOnlineFriendCount = useMemo(
-    () => friendUsers.filter(user => mobileIsFriendOnline(user)).length,
-    [friendUsers, mobileIsFriendOnline]
+    return { items, onlineCount };
+  }, [friendUsers, mobileFormatLastSeen, mobileIsFriendOnline, serverNameById]);
+  const mobileFriendItems = mobileFriendPresence.items;
+  const mobileOnlineFriendCount = mobileFriendPresence.onlineCount;
+  const sidebarServers = useMemo(
+    () => (FORCE_MOBILE && ENABLE_MOBILE_SHELL_V1 ? [] : serverList.map(s => ({ id: s.id, name: s.name }))),
+    [serverList],
   );
-  const sidebarServers = useMemo(() => serverList.map(s => ({ id: s.id, name: s.name })), [serverList]);
   const handleFriendProfileClick = useCallback((userId: string, x: number, y: number, fallbackUser?: User) => {
     setProfilePopup({ userId, x, y, fallbackUser });
   }, []);
@@ -1417,10 +1557,12 @@ export default function ChatView() {
     showDiscover,
   ]);
   const handleRequestRoomMemberMenu = useCallback((user: typeof sortedChannelMembers[0], x: number, y: number) => {
+    void loadRoomMemberContextMenu();
     setRoomMemberMenu({ user, x, y });
   }, []);
 
   const handleMessageContextMenu = useCallback((msg: { senderId: string; sender: string; avatar?: string }, x: number, y: number) => {
+    void loadRoomMemberContextMenu();
     const user =
       sortedChannelMembers.find(member => member.id === msg.senderId) ||
       allUsers.find(candidate => candidate.id === msg.senderId) ||
@@ -1444,14 +1586,14 @@ export default function ChatView() {
 
   // ── Logout ──
   const { openConfirm } = useConfirm();
-  const confirmLogout = () => {
+  const confirmLogout = useCallback(() => {
     openConfirm({
       title: 'Çıkış yapmak istiyor musun?',
       description: 'Hesabından çıkış yapacaksın. Tekrar giriş yapman gerekecek.',
       confirmText: 'Çıkış Yap', cancelText: 'İptal', danger: true,
       onConfirm: () => { try { navigator.vibrate?.(300); } catch {} handleLogout(); },
     });
-  };
+  }, [handleLogout, openConfirm]);
 
   const handleClearRoomActivityLog = useCallback(() => {
     if (!activeServerId || !activeChannel || !canClearRoomActivityLog || roomActivityClearing) return;
@@ -1538,71 +1680,222 @@ export default function ChatView() {
 
   // ── Context menu callbacks ──
   const handleEditRoom = useCallback((channel: { id: string; name: string; maxUsers?: number; isInviteOnly?: boolean; isHidden?: boolean; mode?: string; iconColor?: string; iconName?: string }) => {
+    void loadChatViewRoomModal();
     setRoomModal({ isOpen: true, type: 'edit', channelId: channel.id, name: channel.name, maxUsers: channel.maxUsers || 0, isInviteOnly: channel.isInviteOnly || false, isHidden: channel.isHidden || false, mode: channel.mode || 'social', iconColor: channel.iconColor ?? getChannelIconColor(channel.id, channel.mode), iconName: channel.iconName ?? getChannelIconName(channel.id, channel.mode) });
   }, [setRoomModal]);
 
   const handleSetPasswordModal = useCallback((channelId: string) => {
+    void loadChatViewPasswordModal();
     setPasswordModal({ type: 'set', channelId }); setContextMenu(null);
   }, [setPasswordModal, setContextMenu]);
 
   const mobileDefaultShellView: MobileShellView = currentChannel && !isServerHomeView ? 'room' : 'home';
+  const mobileInitialPhoneLayout = FORCE_MOBILE && typeof window !== 'undefined' && window.innerWidth < 640;
+  const [mobilePhoneLayout, setMobilePhoneLayout] = useState(mobileInitialPhoneLayout);
   const [mobileShellViewState, setMobileShellViewState] = useState<MobileShellView>(mobileDefaultShellView);
   const [mobilePreviousShellView, setMobilePreviousShellView] = useState<MobileShellView>('home');
-  const [mobileChannelSheetOpen, setMobileChannelSheetOpen] = useState(true);
-  const [mobileSocialSheetOpen, setMobileSocialSheetOpen] = useState(true);
+  const [mobileChannelSheetOpen, setMobileChannelSheetOpen] = useState(() => !mobileInitialPhoneLayout);
+  const [mobileSocialSheetOpen, setMobileSocialSheetOpen] = useState(() => !mobileInitialPhoneLayout);
   const mobileChannelSheetPinned = true;
   const mobileSocialSheetPinned = true;
   const [mobileServerMembers, setMobileServerMembers] = useState<ServerMember[]>([]);
+  const [mobileServerMembersRequested, setMobileServerMembersRequested] = useState(!FORCE_MOBILE);
   const [mobileServerHomeDetailOpen, setMobileServerHomeDetailOpen] = useState(false);
+
+  useEffect(() => {
+    if (!FORCE_MOBILE || typeof window === 'undefined') return;
+    const syncPhoneLayout = () => {
+      const nextPhoneLayout = window.innerWidth < 640;
+      setMobilePhoneLayout(prev => {
+        if (prev === nextPhoneLayout) return prev;
+        if (nextPhoneLayout) {
+          setMobileChannelSheetOpen(false);
+          setMobileSocialSheetOpen(false);
+        } else {
+          setMobileChannelSheetOpen(true);
+          setMobileSocialSheetOpen(true);
+        }
+        return nextPhoneLayout;
+      });
+    };
+    syncPhoneLayout();
+    window.addEventListener('resize', syncPhoneLayout);
+    window.addEventListener('orientationchange', syncPhoneLayout);
+    return () => {
+      window.removeEventListener('resize', syncPhoneLayout);
+      window.removeEventListener('orientationchange', syncPhoneLayout);
+    };
+  }, []);
+  const mobileUserRoomCount = useMemo(
+    () => channels.filter(channel => channel.ownerId === currentUser.id).length,
+    [channels, currentUser.id]
+  );
+  const mobileServerMemberRoleById = useMemo(
+    () => new Map(mobileServerMembers.map(member => [member.userId, member.role])),
+    [mobileServerMembers]
+  );
+  const mobileServerMemberItems = useMemo(() => {
+    return [...mobileServerMembers]
+      .map(member => {
+        const user = userById.get(member.userId);
+        const isOnline = user ? mobileIsFriendOnline(user) : false;
+        const lastSeenText = !isOnline && user ? mobileFormatLastSeen(user) : undefined;
+        const status: 'online' | 'offline' | 'idle' | 'dnd' = isOnline
+          ? user?.status === 'away'
+            ? 'idle'
+            : user?.status === 'busy'
+              ? 'dnd'
+              : 'online'
+          : 'offline';
+        return {
+          id: member.userId,
+          name: user ? getPublicDisplayName(user) : (member.displayName || member.username || 'Uye'),
+          avatarUrl: user?.avatar || member.avatar || undefined,
+          status,
+          subtitle: isOnline
+            ? status === 'idle'
+              ? 'AFK'
+              : status === 'dnd'
+                ? 'Rahatsız Etmeyin'
+                : 'Online'
+            : user
+              ? lastSeenText
+              : 'Cevrimdisi',
+          statusText: user?.statusText,
+          serverName: null,
+          gameActivity: isOnline ? user?.gameActivity : undefined,
+          lastSeenText,
+          platform: member.userId === currentUser.id ? (currentUser.platform ?? 'mobile') : user?.platform,
+          role: getUserRoleBadge({ role: member.role }),
+        };
+      })
+      .sort((a, b) => {
+        const aOnline = a.status !== 'offline';
+        const bOnline = b.status !== 'offline';
+        if (aOnline !== bOnline) return aOnline ? -1 : 1;
+        return a.name.localeCompare(b.name, 'tr');
+      });
+  }, [currentUser.id, currentUser.platform, mobileFormatLastSeen, mobileIsFriendOnline, mobileServerMembers, userById]);
+  const mobileServerOnlineCount = useMemo(
+    () => mobileServerMemberItems.filter(member => member.status !== 'offline').length,
+    [mobileServerMemberItems]
+  );
+  const mobileKnownServerOnlineCount = useMemo(() => {
+    if (!activeServerId) return 0;
+    const onlineIds = new Set<string>();
+    for (const user of allUsers) {
+      if (user.serverId === activeServerId && mobileIsFriendOnline(user)) onlineIds.add(user.id);
+    }
+    if (mobileIsFriendOnline(currentUser)) onlineIds.add(currentUser.id);
+    return onlineIds.size;
+  }, [activeServerId, allUsers, currentUser, mobileIsFriendOnline]);
+  const handleMobileSocialTabChange = useCallback((tab: 'dm' | 'friends' | 'serverMembers' | 'requests' | 'online' | 'blocked' | 'messageSettings') => {
+    if (tab === 'serverMembers') setMobileServerMembersRequested(true);
+  }, []);
+  const mobileChannelSheetItems = useMemo(() => {
+    return visibleChannels.map(channel => ({
+      id: channel.id,
+      name: channel.name,
+      type: channel.mode || 'social',
+      iconName: channel.iconName ?? getDefaultChannelIconName(channel.mode || 'social'),
+      iconColor: channel.iconColor ?? getDefaultChannelIconColor(channel.mode || 'social'),
+      active: activeChannel === channel.id,
+      memberCount: channel.userCount ?? channel.members?.length,
+      members: (channel.members || []).slice(0, 5)
+        .map(memberKey => {
+          const user = userById.get(memberKey) ?? userByName.get(memberKey);
+          if (!user) return null;
+          const serverRole = mobileServerMemberRoleById.get(user.id);
+          return serverRole ? { ...user, role: serverRole } : user;
+        })
+        .filter((user): user is User => Boolean(user)),
+    }));
+  }, [activeChannel, mobileServerMemberRoleById, userById, userByName, visibleChannels]);
+  const mobileActivePlan = activeServerData?.plan;
+  const mobileRoomLimit = getUserRoomLimit(mobileActivePlan);
+  const mobileAtRoomLimit = mobileUserRoomCount >= mobileRoomLimit;
   const setMobileShellView = useCallback((nextView: MobileShellView) => {
-    setMobileShellViewState(prev => {
-      if (prev === nextView) return prev;
-      setMobilePreviousShellView(prev);
-      return nextView;
+    React.startTransition(() => {
+      setMobileShellViewState(prev => {
+        if (prev === nextView) return prev;
+        setMobilePreviousShellView(prev);
+        return nextView;
+      });
     });
   }, []);
 
+  const closeMobileSettingsToPrevious = useCallback(() => {
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
+    setSettingsTarget(null);
+    if (view === 'settings') setView('chat');
+    const returnView = mobilePreviousShellView === 'settings' || mobilePreviousShellView === 'profile'
+      ? mobileDefaultShellView
+      : mobilePreviousShellView;
+    setMobileShellView(returnView);
+  }, [mobileDefaultShellView, mobilePreviousShellView, setMobileShellView, setSettingsTarget, setView, view]);
+
   const handleMobileGoHome = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
     setMobileServerHomeDetailOpen(false);
     setMobileShellView('home');
     window.dispatchEvent(new CustomEvent('mayvox:mobile-server-home-reset'));
-  }, [setMobileShellView]);
+  }, [mobilePhoneLayout, setMobileShellView]);
 
   const handleMobileOpenRoom = useCallback(() => {
     if (currentChannel && !isServerHomeView) {
-      setMobileChannelSheetOpen(true);
-      setMobileSocialSheetOpen(true);
+      setMobileChannelSheetOpen(!mobilePhoneLayout);
+      setMobileSocialSheetOpen(!mobilePhoneLayout);
       setMobileShellView('room');
       return;
     }
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
-  }, [currentChannel, isServerHomeView, setMobileShellView]);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+  }, [currentChannel, isServerHomeView, mobilePhoneLayout, setMobileShellView]);
 
   const handleMobileOpenChannels = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
-  }, []);
+    setMobileChannelSheetOpen(open => mobilePhoneLayout ? !open : true);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+  }, [mobilePhoneLayout]);
 
   const handleMobileOpenFriends = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(open => mobilePhoneLayout ? !open : true);
+  }, [mobilePhoneLayout]);
+
+  const handleMobileOpenChannelsPanel = useCallback(() => {
+    setMobileChannelSheetOpen(open => !open);
+    setMobileSocialSheetOpen(false);
+  }, []);
+
+  const handleMobileOpenSocialPanel = useCallback(() => {
+    setMobileSocialSheetOpen(open => !open);
+    setMobileChannelSheetOpen(false);
   }, []);
 
   const handleMobileOpenSettings = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    void loadSettingsView();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    if ((mobileShellViewState === 'settings' || view === 'settings') && !settingsServerId) {
+      closeMobileSettingsToPrevious();
+      return;
+    }
     setSettingsServerId(null);
     setSettingsInitialTab(undefined);
     setSettingsTarget('app');
     setMobileShellView('settings');
-  }, [setMobileShellView, setSettingsTarget]);
+  }, [closeMobileSettingsToPrevious, mobilePhoneLayout, mobileShellViewState, setMobileShellView, setSettingsTarget, settingsServerId, view]);
 
   const handleMobileOpenServerSettings = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    void loadServerSettings();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    if ((mobileShellViewState === 'settings' || view === 'settings') && settingsServerId) {
+      closeMobileSettingsToPrevious();
+      return;
+    }
     setSettingsTarget(null);
     setSettingsInitialTab(undefined);
     if (activeServerId && activeServerCanOpenSettings) {
@@ -1612,22 +1905,99 @@ export default function ChatView() {
       setSettingsTarget('app');
     }
     setMobileShellView('settings');
-  }, [activeServerCanOpenSettings, activeServerId, setMobileShellView, setSettingsTarget]);
+  }, [activeServerCanOpenSettings, activeServerId, closeMobileSettingsToPrevious, mobilePhoneLayout, mobileShellViewState, setMobileShellView, setSettingsTarget, settingsServerId, view]);
 
   const handleMobileOpenAccountSettings = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    void loadSettingsView();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
     setSettingsServerId(null);
     setSettingsInitialTab(undefined);
     setSettingsTarget('account');
     setMobileShellView('settings');
-  }, [setMobileShellView, setSettingsTarget]);
+  }, [mobilePhoneLayout, setMobileShellView, setSettingsTarget]);
 
   const handleMobileOpenProfile = useCallback(() => {
-    setMobileChannelSheetOpen(true);
-    setMobileSocialSheetOpen(true);
+    void loadMobileProfileScreen();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
     setMobileShellView('profile');
+  }, [mobilePhoneLayout, setMobileShellView]);
+
+  const handleMobileOpenDiscover = useCallback(() => {
+    void loadMobileDiscoverScreen();
+    setMobileShellView('discover');
   }, [setMobileShellView]);
+
+  const handleMobileOpenSocial = useCallback(() => {
+    void loadDMPanel();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    setMobileShellView('social');
+  }, [mobilePhoneLayout, setMobileShellView]);
+
+  const handleMobileOpenNotifications = useCallback(() => {
+    void loadMobileNotificationsScreen();
+    void loadNotificationBell();
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    setMobileShellView('notifications');
+  }, [mobilePhoneLayout, setMobileShellView]);
+
+  const handleMobileLeaveRoom = useCallback(() => {
+    setActiveChannel(null);
+    setMobileShellView('home');
+    void disconnectFromLiveKit();
+  }, [disconnectFromLiveKit, setActiveChannel, setMobileShellView]);
+
+  const handleMobileToggleMute = useCallback(() => {
+    if (isMuted && isDeafened) setIsDeafened(false);
+    setIsMuted(!isMuted);
+  }, [isDeafened, isMuted, setIsDeafened, setIsMuted]);
+
+  const handleMobileToggleDeafen = useCallback(() => {
+    setIsDeafened(!isDeafened);
+  }, [isDeafened, setIsDeafened]);
+
+  const handleMobileToggleNoiseSuppression = useCallback(() => {
+    setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled);
+  }, [isNoiseSuppressionEnabled, setIsNoiseSuppressionEnabled]);
+
+  const handleMobileChannelSheetClose = useCallback(() => {
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+  }, [mobilePhoneLayout]);
+
+  const handleMobileSelectChannel = useCallback((channelId: string) => {
+    handleSidebarChannelClick(channelId);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    setMobileShellView('room');
+  }, [handleSidebarChannelClick, mobilePhoneLayout, setMobileShellView]);
+
+  const handleMobileOpenChannelMenu = useCallback((channelId: string, position: { x: number; y: number }) => {
+    void loadChatViewContextMenu();
+    setContextMenu({ x: position.x, y: position.y, channelId } as any);
+  }, [setContextMenu]);
+
+  const handleMobileCreateChannel = useCallback(() => {
+    if (mobileAtRoomLimit) {
+      setToastMsg(roomLimitMessage(mobileActivePlan));
+      return;
+    }
+    void loadChatViewRoomModal();
+    setRoomModal({
+      isOpen: true,
+      type: 'create',
+      name: '',
+      maxUsers: 0,
+      isInviteOnly: false,
+      isHidden: false,
+      mode: 'social',
+      iconColor: getDefaultChannelIconColor('social'),
+      iconName: getDefaultChannelIconName('social'),
+    });
+    setMobileChannelSheetOpen(true);
+  }, [mobileActivePlan, mobileAtRoomLimit, setRoomModal, setToastMsg]);
 
   const handleMobileStatusChange = useCallback((nextStatus: string) => {
     if (!currentUser.id) return;
@@ -1643,11 +2013,8 @@ export default function ChatView() {
   }, [activeChannel, broadcastModeration, currentUser, setAllUsers, setCurrentUser, setToastMsg]);
 
   const handleMobileSettingsBack = useCallback(() => {
-    setSettingsServerId(null);
-    setSettingsInitialTab(undefined);
-    setSettingsTarget(null);
-    setMobileShellView(mobilePreviousShellView === 'settings' || mobilePreviousShellView === 'profile' ? 'home' : mobilePreviousShellView);
-  }, [mobilePreviousShellView, setMobileShellView, setSettingsTarget]);
+    closeMobileSettingsToPrevious();
+  }, [closeMobileSettingsToPrevious]);
 
   useEffect(() => {
     if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1) return;
@@ -1664,6 +2031,13 @@ export default function ChatView() {
     window.addEventListener('mayvox:mobile-server-home-detail', handleServerHomeDetail);
     return () => window.removeEventListener('mayvox:mobile-server-home-detail', handleServerHomeDetail);
   }, []);
+
+  useEffect(() => {
+    if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1) return;
+    if (mobileShellViewState !== 'home') {
+      setMobileServerHomeDetailOpen(false);
+    }
+  }, [mobileShellViewState]);
 
   useEffect(() => {
     if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1 || typeof window === 'undefined') return;
@@ -1731,7 +2105,7 @@ export default function ChatView() {
 
   useEffect(() => {
     if (!activeServerId) return;
-    const shouldLoadMobilePreview = FORCE_MOBILE && ENABLE_MOBILE_SHELL_V1 && mobileSocialSheetOpen;
+    const shouldLoadMobilePreview = FORCE_MOBILE && ENABLE_MOBILE_SHELL_V1 && mobileServerMembersRequested;
     const shouldLoadDesktop = !FORCE_MOBILE;
     if (!shouldLoadMobilePreview && !shouldLoadDesktop) return;
     let cancelled = false;
@@ -1745,59 +2119,20 @@ export default function ChatView() {
     return () => {
       cancelled = true;
     };
-  }, [activeServerId, mobileSocialSheetOpen]);
+  }, [activeServerId, mobileServerMembersRequested]);
 
   if (FORCE_MOBILE && ENABLE_MOBILE_SHELL_V1) {
     const mobileShellView: MobileShellView = view === 'settings' ? 'settings' : mobileShellViewState;
-    const mobileActivePlan = serverList.find(s => s.id === activeServerId)?.plan;
-    const mobileRoomLimit = getUserRoomLimit(mobileActivePlan);
-    const mobileUserRoomCount = channels.filter(channel => channel.ownerId === currentUser.id).length;
-    const mobileAtRoomLimit = mobileUserRoomCount >= mobileRoomLimit;
-    const mobileServerMemberItems = [...mobileServerMembers]
-      .map(member => {
-        const user = allUsers.find(u => u.id === member.userId);
-        const isOnline = user ? mobileIsFriendOnline(user) : false;
-        const status: 'online' | 'offline' | 'idle' | 'dnd' = isOnline
-          ? user?.status === 'away'
-            ? 'idle'
-            : user?.status === 'busy'
-              ? 'dnd'
-              : 'online'
-          : 'offline';
-        return {
-          id: member.userId,
-          name: user ? getPublicDisplayName(user) : (member.displayName || member.username || 'Uye'),
-          avatarUrl: user?.avatar || member.avatar || undefined,
-          status,
-          subtitle: isOnline
-            ? status === 'idle'
-              ? 'AFK'
-              : status === 'dnd'
-                ? 'Rahatsız Etmeyin'
-                : 'Online'
-            : user
-              ? mobileFormatLastSeen(user)
-              : 'Cevrimdisi',
-          statusText: user?.statusText,
-          serverName: null,
-          gameActivity: isOnline ? user?.gameActivity : undefined,
-          lastSeenText: !isOnline && user ? mobileFormatLastSeen(user) : undefined,
-          platform: user?.platform,
-          role: getUserRoleBadge({ role: member.role }),
-        };
-      })
-      .sort((a, b) => {
-        const aOnline = a.status !== 'offline';
-        const bOnline = b.status !== 'offline';
-        if (aOnline !== bOnline) return aOnline ? -1 : 1;
-        return a.name.localeCompare(b.name, 'tr');
-      });
-    const mobileServerOnlineCount = mobileServerMemberItems.filter(member => member.status !== 'offline').length;
-    const mobileServerMemberCount = mobileServerMembers.length || activeServerData?.memberCount || mobileServerMemberItems.length;
+    const mobileServerMemberCount = activeServerData?.memberCount ?? mobileServerMembers.length ?? mobileServerMemberItems.length;
+    const mobileServerVisibleOnlineCount = mobileServerMembers.length
+      ? mobileServerOnlineCount
+      : Math.max(mobileKnownServerOnlineCount, activeServerData?.activeCount ?? 0, mobileServerOnlineCount);
 
     return (
       <>
+      <React.Suspense fallback={<LazyPanelFallback label="Tablet arayüzü yükleniyor" />}>
       <MobileAppShell
+        phoneLayout={mobilePhoneLayout}
         activeServerName={activeServerData?.name}
         activeServerAvatarUrl={activeServerData?.avatarUrl}
         activeServerShortName={activeServerData?.shortName}
@@ -1817,17 +2152,9 @@ export default function ChatView() {
         activeTabKey={undefined}
         onOpenChannels={handleMobileOpenChannels}
         onOpenRoom={handleMobileOpenRoom}
-        onOpenDiscover={() => setMobileShellView('discover')}
-        onOpenSocial={() => {
-          setMobileChannelSheetOpen(true);
-          setMobileSocialSheetOpen(true);
-          setMobileShellView('social');
-        }}
-        onOpenNotifications={() => {
-          setMobileChannelSheetOpen(true);
-          setMobileSocialSheetOpen(true);
-          setMobileShellView('notifications');
-        }}
+        onOpenDiscover={handleMobileOpenDiscover}
+        onOpenSocial={handleMobileOpenSocial}
+        onOpenNotifications={handleMobileOpenNotifications}
         onOpenFriends={handleMobileOpenFriends}
         onOpenSettings={handleMobileOpenSettings}
         onOpenServerSettings={handleMobileOpenServerSettings}
@@ -1839,11 +2166,7 @@ export default function ChatView() {
         onOpenQuickActions={handleMobileOpenProfile}
         onGoHome={handleMobileGoHome}
         onReturnToRoom={handleMobileOpenRoom}
-        onLeaveRoom={async () => {
-          await disconnectFromLiveKit();
-          setActiveChannel(null);
-          setMobileShellView('home');
-        }}
+        onLeaveRoom={handleMobileLeaveRoom}
         onTabChange={undefined}
         onLogout={confirmLogout}
         disableContentSwipe={mobileChannelSheetOpen || mobileSocialSheetOpen}
@@ -1851,220 +2174,234 @@ export default function ChatView() {
         isDeafened={isDeafened}
         isPttPressed={isPttPressed}
         isNoiseSuppressionEnabled={isNoiseSuppressionEnabled}
-        onToggleMute={() => {
-          if (isMuted && isDeafened) setIsDeafened(false);
-          setIsMuted(!isMuted);
-        }}
-        onToggleDeafen={() => setIsDeafened(!isDeafened)}
+        onToggleMute={handleMobileToggleMute}
+        onToggleDeafen={handleMobileToggleDeafen}
         onPttChange={setIsPttPressed}
-        onToggleNoiseSuppression={() => setIsNoiseSuppressionEnabled(!isNoiseSuppressionEnabled)}
+        onToggleNoiseSuppression={handleMobileToggleNoiseSuppression}
         onCycleCardStyle={cycleCardStyle}
       >
-        <div className="flex h-full min-h-0 w-full overflow-hidden">
-          <MobileChannelSheet
-            variant="inline"
-            open={mobileChannelSheetOpen}
-            channels={visibleChannels.map(channel => ({
-              id: channel.id,
-              name: channel.name,
-              type: channel.mode || 'social',
-              iconName: channel.iconName ?? getDefaultChannelIconName(channel.mode || 'social'),
-              iconColor: channel.iconColor ?? getDefaultChannelIconColor(channel.mode || 'social'),
-              active: activeChannel === channel.id,
-              memberCount: channel.userCount ?? channel.members?.length,
-              members: (channel.members || [])
-                .map(memberKey => {
-                  const user = allUsers.find(candidate => candidate.id === memberKey || candidate.name === memberKey);
-                  if (!user) return null;
-                  const serverMember = mobileServerMembers.find(member => member.userId === user.id);
-                  return serverMember?.role ? { ...user, role: serverMember.role } : user;
-                })
-                .filter((user): user is typeof allUsers[number] => Boolean(user)),
-            }))}
-            onClose={() => setMobileChannelSheetOpen(true)}
-            onSelectChannel={(channelId) => {
-              handleSidebarChannelClick(channelId);
-              setMobileChannelSheetOpen(true);
-              setMobileSocialSheetOpen(true);
-              setMobileShellView('room');
-            }}
-            pinned={mobileChannelSheetPinned}
-            createTitle={mobileAtRoomLimit ? roomLimitMessage(mobileActivePlan) : undefined}
-            createDisabled={mobileAtRoomLimit}
-            onOpenDiscover={() => setMobileShellView('discover')}
-            onCreateChannel={() => {
-              if (mobileAtRoomLimit) {
-                setToastMsg(roomLimitMessage(mobileActivePlan));
-                return;
-              }
-              setRoomModal({
-                isOpen: true,
-                type: 'create',
-                name: '',
-                maxUsers: 0,
-                isInviteOnly: false,
-                isHidden: false,
-                mode: 'social',
-                iconColor: getDefaultChannelIconColor('social'),
-                iconName: getDefaultChannelIconName('social'),
-              });
-              setMobileChannelSheetOpen(true);
-            }}
-          />
+        <div className="relative flex h-full min-h-0 w-full overflow-hidden">
+          {!mobilePhoneLayout && (
+            <MobileChannelSheet
+              variant="inline"
+              open={mobileChannelSheetOpen}
+              connectionLevel={connectionLevel}
+              connectionLatencyMs={connectionLatencyMs}
+              connectionJitterMs={connectionJitterMs}
+              isConnecting={isConnecting}
+              isActiveChannel={!!activeChannel}
+              channels={mobileChannelSheetItems}
+              onClose={handleMobileChannelSheetClose}
+              onSelectChannel={handleMobileSelectChannel}
+              onOpenChannelMenu={currentUser.isAdmin ? handleMobileOpenChannelMenu : undefined}
+              pinned={mobileChannelSheetPinned}
+              createTitle={mobileAtRoomLimit ? roomLimitMessage(mobileActivePlan) : undefined}
+              createDisabled={mobileAtRoomLimit}
+              onOpenDiscover={handleMobileOpenDiscover}
+              onCreateChannel={handleMobileCreateChannel}
+            />
+          )}
 
           <div
-            className="min-w-0 flex-1 overflow-hidden px-3 pb-16 sm:px-4"
+            className={`min-w-0 flex-1 overflow-hidden ${mobilePhoneLayout ? 'px-1 pb-[76px]' : 'px-3 pb-16 sm:px-4'}`}
             onClick={() => {
               if (mobileShellView === 'discover' || mobileShellView === 'settings' || mobileShellView === 'profile' || mobileShellView === 'notifications') return;
+              if (mobilePhoneLayout) return;
               setMobileChannelSheetOpen(true);
               setMobileSocialSheetOpen(true);
             }}
           >
             {mobileShellView === 'settings' ? (
               <div className="flex h-full min-h-0 flex-col overflow-hidden">
-                {settingsServerId ? (
-                  <ServerSettings
-                    serverId={settingsServerId}
-                    onClose={handleMobileSettingsBack}
-                    onServerUpdated={() => refreshServers({ force: true })}
-                    onServerDeleted={() => {
-                      setSettingsServerId(null);
-                      setSettingsInitialTab(undefined);
-                      setActiveServerId('');
-                      refreshServers({ force: true });
-                      setMobileShellView('home');
-                    }}
-                    initialTab={settingsInitialTab}
-                  />
-                ) : (
-                  <SettingsView />
-                )}
+                <React.Suspense fallback={<LazyPanelFallback label="Ayarlar yükleniyor" />}>
+                  {settingsServerId ? (
+                    <ServerSettings
+                      serverId={settingsServerId}
+                      onClose={handleMobileSettingsBack}
+                      onServerUpdated={() => refreshServers({ force: true })}
+                      onServerDeleted={() => {
+                        setSettingsServerId(null);
+                        setSettingsInitialTab(undefined);
+                        setActiveServerId('');
+                        refreshServers({ force: true });
+                        setMobileShellView('home');
+                      }}
+                      initialTab={settingsInitialTab}
+                    />
+                  ) : (
+                    <SettingsView />
+                  )}
+                </React.Suspense>
               </div>
             ) : mobileShellView === 'discover' ? (
-              <MobileDiscoverScreen
-                activeServerId={activeServerId}
-                canCreate={canCreateServer}
-                onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
-                onJoinModal={() => setShowJoinModal(true)}
-                onJoinSuccess={(serverId) => {
-                  refreshServers({ force: true });
-                  setActiveServerId(serverId);
-                  setMobileShellView('home');
-                }}
-              />
-            ) : mobileShellView === 'profile' ? (
-              <MobileProfileScreen
-                displayName={getPublicDisplayName(currentUser)}
-                username={currentUser.email || currentUser.name}
-                avatarUrl={hasCustomAvatar(currentUser.avatar) ? currentUser.avatar : undefined}
-                status={currentUser.status === 'online' ? 'online' : 'offline'}
-                subtitle={currentUser.statusText || undefined}
-                serverName={activeServerData?.name}
-                channelName={currentChannel?.name}
-                onOpenDm={() => setDmPanelOpen(true)}
-                onOpenSettings={handleMobileOpenSettings}
-                onEditProfile={handleMobileOpenSettings}
-                onLogout={confirmLogout}
-              />
-            ) : mobileShellView === 'social' ? (
-              <MobileSocialScreen
-                dmCount={dmUnreadCount}
-              friendCount={friendUsers.length}
-              onlineCount={mobileOnlineFriendCount}
-              requestCount={notifications.friendRequestCount}
-              serverName={activeServerData?.name}
-              serverMemberCount={mobileServerMembers.length}
-              friendItems={mobileFriendItems}
-              serverMemberItems={mobileServerMemberItems}
-              onOpenDm={(id) => { setDmTargetUserId(id); setDmPanelOpen(true); }}
-              onOpenProfile={handleFriendProfileClick}
-              onOpenRequests={() => {}}
-              />
-            ) : mobileShellView === 'notifications' ? (
-              <MobileNotificationsScreen
-                unreadCount={dmUnreadCount + notifications.friendRequestCount}
-                dmCount={dmUnreadCount}
-                requestCount={notifications.friendRequestCount}
-                serverCount={0}
-                systemCount={0}
-              />
-            ) : mobileShellView === 'room' ? (
-              <MobileRoomScreen
-                serverName={activeServerData?.name}
-                channelName={currentChannel?.name}
-                channelType={currentChannel?.mode}
-                connected={!!currentChannel}
-                participantCount={sortedChannelMembers.length}
-                participants={sortedChannelMembers.slice(0, 8).map(user => {
-                  const isMe = user.id === currentUser.id;
-                  const muted = isMe ? isMuted : (!!user.selfMuted || !!user.isMuted);
-                  const remoteSpeakingLevel = Math.max(
-                    speakingLevels[user.name] ?? 0,
-                    speakingLevels[user.id] ?? 0,
-                  );
-                  const speaking = isMe
-                    ? isPttPressed && !isMuted && !currentUser.isVoiceBanned
-                    : (!!user.isSpeaking || remoteSpeakingLevel > 0.02) && !muted;
-
-                  return {
-                    id: user.id,
-                    name: getPublicDisplayName(user),
-                    avatarUrl: hasCustomAvatar(user.avatar) ? user.avatar : undefined,
-                    speaking,
-                    muted,
-                    deafened: !!user.selfDeafened,
-                  };
-                })}
-                messages={chatMessages.slice(-6).map(message => ({
-                  id: message.id,
-                  sender: message.sender,
-                  text: message.text,
-                  time: new Date(message.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-                }))}
-                activities={roomActivities.slice(0, 6).map(activity => ({
-                  id: activity.id,
-                  label: activity.label,
-                  time: new Date(activity.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-                }))}
-                chatLocked={chatMuted}
-                canModerateChat={canViewRoomActivityLog}
-                canViewActivity={canViewRoomActivityLog}
-                canClearActivity={canClearRoomActivityLog}
-                onClearMessages={clearAllMessages}
-                onToggleChatLocked={handleToggleChatMuted}
-                onClearActivity={handleClearRoomActivityLog}
-                onOpenChannels={handleMobileOpenChannels}
-                onOpenMembers={() => setMobileRightOpen(true)}
-                onOpenPinned={() => {}}
-                onOpenMedia={() => {}}
-                onOpenRoomSettings={() => {}}
-              />
-            ) : (
-              <div className="h-full min-h-0 overflow-hidden">
-                <AnnouncementsPanel
-                  currentUser={currentUser}
-                  serverId={activeServerId}
-                  serverName={activeServerData?.name}
-                  serverDescription={activeServerData?.description}
-                  serverRules={activeServerData?.serverRules}
-                  channels={visibleChannels}
-                  serverMembers={mobileServerMembers}
-                  canCreateAnnouncements={activeServerCanModerateCommunityContent}
-                  canCreateRecommendations={activeServerCanCreateRecommendation}
-                  canModerateCommunityContent={activeServerCanModerateCommunityContent}
-                  canViewRoomActivity={canViewRoomActivityLog}
-                  canViewInviteApplications={activeServerCanManage}
-                  mobileTabletLayout
-                  onOpenInviteApplications={() => {
-                    if (!activeServerId) return;
-                    setSettingsInitialTab('requests');
-                    setSettingsServerId(activeServerId);
+              <React.Suspense fallback={<LazyPanelFallback label="Keşfet yükleniyor" />}>
+                <MobileDiscoverScreen
+                  activeServerId={activeServerId}
+                  canCreate={canCreateServer}
+                  onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
+                  onJoinModal={() => setShowJoinModal(true)}
+                  onJoinSuccess={(serverId) => {
+                    refreshServers({ force: true });
+                    setActiveServerId(serverId);
+                    setMobileShellView('home');
                   }}
                 />
+              </React.Suspense>
+            ) : mobileShellView === 'profile' ? (
+              <React.Suspense fallback={<LazyPanelFallback label="Profil yükleniyor" />}>
+                <MobileProfileScreen
+                  displayName={getPublicDisplayName(currentUser)}
+                  username={currentUser.email || currentUser.name}
+                  avatarUrl={hasCustomAvatar(currentUser.avatar) ? currentUser.avatar : undefined}
+                  status={currentUser.status === 'online' ? 'online' : 'offline'}
+                  subtitle={currentUser.statusText || undefined}
+                  serverName={activeServerData?.name}
+                  channelName={currentChannel?.name}
+                  onOpenDm={() => setDmPanelOpen(true)}
+                  onOpenSettings={handleMobileOpenSettings}
+                  onEditProfile={handleMobileOpenSettings}
+                  onLogout={confirmLogout}
+                />
+              </React.Suspense>
+            ) : mobileShellView === 'social' ? (
+              <React.Suspense fallback={<LazyPanelFallback label="Arkadaşlar yükleniyor" />}>
+                <MobileSocialScreen
+                  dmCount={dmUnreadCount}
+                  friendCount={friendUsers.length}
+                  onlineCount={mobileOnlineFriendCount}
+                  requestCount={notifications.friendRequestCount}
+                  serverName={activeServerData?.name}
+                  serverMemberCount={mobileServerMemberCount}
+                  serverOnlineCount={mobileServerVisibleOnlineCount}
+                  friendItems={mobileFriendItems}
+                  serverMemberItems={mobileServerMemberItems}
+                  onOpenDm={(id) => { setDmTargetUserId(id); setDmPanelOpen(true); }}
+                  onOpenProfile={handleFriendProfileClick}
+                  onOpenRequests={() => {}}
+                  onTabChange={handleMobileSocialTabChange}
+                />
+              </React.Suspense>
+            ) : mobileShellView === 'notifications' ? (
+              <React.Suspense fallback={<LazyPanelFallback label="Bildirimler yükleniyor" />}>
+                <MobileNotificationsScreen
+                  unreadCount={dmUnreadCount + notifications.friendRequestCount}
+                  dmCount={dmUnreadCount}
+                  requestCount={notifications.friendRequestCount}
+                  serverCount={0}
+                  systemCount={0}
+                />
+              </React.Suspense>
+            ) : mobileShellView === 'room' ? (
+              <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+                <div className="mv-room-ambient absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+                  <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.4) 0%, transparent 65%)` }} />
+                  <div className="absolute bottom-[10%] right-[15%] w-[300px] h-[300px] rounded-full opacity-[0.012]" style={{ background: `radial-gradient(circle, rgba(var(--theme-accent-rgb), 0.3) 0%, transparent 70%)` }} />
+                </div>
+                <div ref={roomActivitySplitRef} className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <React.Suspense fallback={<LazyPanelFallback label="Oda yükleniyor" />}>
+                    <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
+                      isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
+                      volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
+                      currentChannel={currentChannel} getIntensity={getIntensity} getEffectiveStatus={getEffectiveStatus}
+                      cardScale={cardScale} cardStyle={cardStyle} onProfileClick={handleVoiceParticipantProfileClick}
+                      onKickUser={handleKickUser} isAdmin={currentUser.isAdmin || false} isPrimaryAdmin={currentUser.isPrimaryAdmin || false} isModerator={currentUser.isModerator || false}
+                      onRequestMemberMenu={handleRequestRoomMemberMenu}
+                      activeChannel={activeChannel} channels={channels} chatMessages={chatMessages} chatMuted={chatMuted} chatMuteRank={chatMuteRank}
+                      onToggleChatMuted={handleToggleChatMuted} editingMsgId={editingMsgId} editingText={editingText}
+                      onEditingTextChange={setEditingText} onStartEdit={startEditMessage} onSaveEdit={saveEditMessage} onCancelEdit={cancelEdit}
+                      onDeleteMessage={deleteChatMessage} onClearAll={clearAllMessages} onSendMessage={sendChatMessage}
+                      onReportMessage={handleReportRoomMessage}
+                      onMessageContextMenu={handleMessageContextMenu}
+                      reportedMessageIds={reportedRoomMessageIds}
+                      chatInput={chatInput} onChatInputChange={setChatInput} chatScrollRef={chatScrollRef} onChatScroll={handleChatScroll}
+                      isAtBottom={isAtBottom} newMsgCount={newMsgCount} onScrollToBottom={scrollToBottom}
+                      isFloodCooling={isFloodCooling}
+                      canModerateMessages={canViewRoomActivityLog}
+                      highlightedMessageId={highlightedRoomMessageId}
+                      musicAccessory={showRoomMusicPanel && roomMusic.shouldRender && roomMusicPanelOpen ? (
+                        <React.Suspense fallback={null}>
+                          <RoomMusicPanel
+                            serverPlan={activeServerData?.plan}
+                            userLevel={currentUser.userLevel}
+                            serverRole={activeServerRole}
+                            session={roomMusic.session}
+                            source={roomMusic.activeSource}
+                            sources={roomMusic.sources}
+                            permissions={roomMusic.permissions}
+                            loading={roomMusic.loading}
+                            actionLoading={roomMusic.actionLoading}
+                            error={roomMusic.error}
+                            actionError={roomMusic.actionError}
+                            errorCode={roomMusic.errorCode}
+                            controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
+                            onPlayPause={roomMusic.togglePlayPause}
+                            onStop={roomMusic.stop}
+                            onPreviousSource={roomMusic.selectPreviousSource}
+                            onNextSource={roomMusic.selectNextSource}
+                            onVolumeChange={roomMusic.setVolume}
+                            compact
+                            variant="card"
+                          />
+                        </React.Suspense>
+                      ) : null}
+                      musicPanelAvailable={showRoomMusicPanel && roomMusic.shouldRender}
+                      musicPanelOpen={roomMusicPanelOpen}
+                      onToggleMusicPanel={showRoomMusicPanel && roomMusic.shouldRender ? () => setRoomMusicPanelOpen(prev => !prev) : undefined}
+                      activityPanel={canViewRoomActivityLog ? (
+                        <React.Suspense fallback={null}>
+                          <RoomActivityLogPanel
+                            activities={roomActivities}
+                            onCollapse={() => setRoomActivityPanelOpen(false)}
+                            onSelectActivity={handleSelectRoomActivity}
+                            onClear={handleClearRoomActivityLog}
+                            canClear={canClearRoomActivityLog}
+                            clearing={roomActivityClearing}
+                          />
+                        </React.Suspense>
+                      ) : undefined}
+                      activityPanelRatio={roomActivityPanelRatio}
+                      activityPanelOpen={roomActivityPanelOpen}
+                      onActivityResizeStart={roomActivityPanelOpen ? beginRoomActivityResize : undefined}
+                      onToggleActivityPanel={canViewRoomActivityLog ? () => setRoomActivityPanelOpen(prev => !prev) : undefined}
+                    />
+                  </React.Suspense>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full min-h-0 overflow-hidden">
+                <React.Suspense fallback={<LazyPanelFallback label="Sunucu ana sayfası yükleniyor" />}>
+                  <AnnouncementsPanel
+                    currentUser={currentUser}
+                    serverId={activeServerId}
+                    serverName={activeServerData?.name}
+                    serverDescription={activeServerData?.description}
+                    serverRules={activeServerData?.serverRules}
+                    channels={visibleChannels}
+                    serverMembers={mobileServerMembers}
+                    canCreateAnnouncements={activeServerCanModerateCommunityContent}
+                    canCreateRecommendations={activeServerCanCreateRecommendation}
+                    canModerateCommunityContent={activeServerCanModerateCommunityContent}
+                    canViewRoomActivity={canViewRoomActivityLog}
+                    canViewInviteApplications={activeServerCanManage}
+                    mobileTabletLayout
+                    mobilePhoneLayout={mobilePhoneLayout}
+                    onOpenInviteApplications={() => {
+                      if (!activeServerId) return;
+                      void loadServerSettings();
+                      setMobileChannelSheetOpen(!mobilePhoneLayout);
+                      setMobileSocialSheetOpen(!mobilePhoneLayout);
+                      setSettingsTarget(null);
+                      setSettingsInitialTab('requests');
+                      setSettingsServerId(activeServerId);
+                      setMobileShellView('settings');
+                    }}
+                  />
+                </React.Suspense>
               </div>
             )}
           </div>
 
+          {!mobilePhoneLayout && (
           <MobileSocialSheet
             variant="inline"
             open={mobileSocialSheetOpen}
@@ -2072,107 +2409,223 @@ export default function ChatView() {
             pinned={mobileSocialSheetPinned}
             friendCount={friendUsers.length}
             serverName={activeServerData?.name}
-            serverMemberCount={mobileServerMembers.length}
+            serverMemberCount={mobileServerMemberCount}
             currentView={mobileShellView}
             dmOpen={dmPanelOpen}
             onOpenSocial={() => {
+              void loadDMPanel();
               setDmTargetUserId(null);
-              setDmPanelOpen(true);
+              setDmPanelOpen(prev => {
+                const next = !prev;
+                if (next) window.dispatchEvent(new CustomEvent('mayvox:close-notifications'));
+                return next;
+              });
             }}
             notificationSlot={
-              <NotificationBell
-                summary={notifications}
-                quietButton
-                onOpenFriendRequests={() => {}}
-                onOpenDM={() => {
-                  setDmTargetUserId(null);
-                  setDmPanelOpen(true);
-                }}
-                onOpenInvites={() => setInvitesModalOpen(true)}
-                onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
-                onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
-                onOpenServer={(sid) => setActiveServerId(sid)}
-                onAcceptFriendRequest={async (senderId) => {
-                  const sender = allUsers.find(u => u.id === senderId);
-                  const name = getPublicDisplayName(sender);
-                  await acceptRequest(senderId);
-                  pushInformational({
-                    key: `friend-accepted:${senderId}`,
-                    kind: 'generic',
-                    label: name,
-                    detail: 'Artık arkadaşsınız',
-                    createdAt: Date.now(),
-                  });
-                }}
-                onRejectFriendRequest={async (senderId) => {
-                  const sender = allUsers.find(u => u.id === senderId);
-                  const name = getPublicDisplayName(sender);
-                  await rejectRequest(senderId);
-                  pushInformational({
-                    key: `friend-rejected:${senderId}`,
-                    kind: 'generic',
-                    label: name,
-                    detail: 'Arkadaşlık isteğini reddettin',
-                    createdAt: Date.now(),
-                  });
-                }}
-                onAcceptServerInvite={async (invId) => {
-                  const inv = incomingInvites.invites.find(i => i.id === invId);
-                  const serverName = inv?.serverName ?? 'Sunucu';
-                  await incomingInvites.acceptInvite(invId);
-                  refreshServers({ force: true });
-                  setToastMsg(`${serverName} sunucusuna katıldın`);
-                  pushInformational({
-                    key: `inv-accepted:${invId}`,
-                    kind: 'generic',
-                    label: serverName,
-                    detail: 'Sunucuya katıldın',
-                    serverId: inv?.serverId,
-                    serverAvatar: inv?.serverAvatar ?? null,
-                    createdAt: Date.now(),
-                  });
-                }}
-                onDeclineServerInvite={async (invId) => {
-                  const inv = incomingInvites.invites.find(i => i.id === invId);
-                  await incomingInvites.declineInvite(invId);
-                  setToastMsg('Davet reddedildi');
-                  pushInformational({
-                    key: `inv-declined:${invId}`,
-                    kind: 'generic',
-                    label: inv?.serverName ?? 'Sunucu',
-                    detail: 'Daveti reddettin',
-                    serverId: inv?.serverId,
-                    serverAvatar: inv?.serverAvatar ?? null,
-                    createdAt: Date.now(),
-                  });
-                }}
-              />
+              <React.Suspense fallback={null}>
+                <NotificationBell
+                  summary={notifications}
+                  quietButton
+                  onOpenChange={(open) => {
+                    if (open) setDmPanelOpen(false);
+                  }}
+                  onOpenFriendRequests={() => {}}
+                  onOpenDM={() => {
+                    void loadDMPanel();
+                    setDmTargetUserId(null);
+                    setDmPanelOpen(true);
+                  }}
+                  onOpenInvites={() => setInvitesModalOpen(true)}
+                  onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
+                  onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
+                  onOpenServer={(sid) => setActiveServerId(sid)}
+                  onAcceptFriendRequest={async (senderId) => {
+                    const sender = allUsers.find(u => u.id === senderId);
+                    const name = getPublicDisplayName(sender);
+                    await acceptRequest(senderId);
+                    pushInformational({
+                      key: `friend-accepted:${senderId}`,
+                      kind: 'generic',
+                      label: name,
+                      detail: 'Artık arkadaşsınız',
+                      createdAt: Date.now(),
+                    });
+                  }}
+                  onRejectFriendRequest={async (senderId) => {
+                    const sender = allUsers.find(u => u.id === senderId);
+                    const name = getPublicDisplayName(sender);
+                    await rejectRequest(senderId);
+                    pushInformational({
+                      key: `friend-rejected:${senderId}`,
+                      kind: 'generic',
+                      label: name,
+                      detail: 'Arkadaşlık isteğini reddettin',
+                      createdAt: Date.now(),
+                    });
+                  }}
+                  onAcceptServerInvite={async (invId) => {
+                    const inv = incomingInvites.invites.find(i => i.id === invId);
+                    const serverName = inv?.serverName ?? 'Sunucu';
+                    await incomingInvites.acceptInvite(invId);
+                    refreshServers({ force: true });
+                    setToastMsg(`${serverName} sunucusuna katıldın`);
+                    pushInformational({
+                      key: `inv-accepted:${invId}`,
+                      kind: 'generic',
+                      label: serverName,
+                      detail: 'Sunucuya katıldın',
+                      serverId: inv?.serverId,
+                      serverAvatar: inv?.serverAvatar ?? null,
+                      createdAt: Date.now(),
+                    });
+                  }}
+                  onDeclineServerInvite={async (invId) => {
+                    const inv = incomingInvites.invites.find(i => i.id === invId);
+                    await incomingInvites.declineInvite(invId);
+                    setToastMsg('Davet reddedildi');
+                    pushInformational({
+                      key: `inv-declined:${invId}`,
+                      kind: 'generic',
+                      label: inv?.serverName ?? 'Sunucu',
+                      detail: 'Daveti reddettin',
+                      serverId: inv?.serverId,
+                      serverAvatar: inv?.serverAvatar ?? null,
+                      createdAt: Date.now(),
+                    });
+                  }}
+                />
+              </React.Suspense>
             }
             onOpenSettings={handleMobileOpenSettings}
             onLogout={confirmLogout}
           >
-            <MobileSocialScreen
-              mode="friends"
-              dmCount={dmUnreadCount}
-              friendCount={friendUsers.length}
-              onlineCount={mobileOnlineFriendCount}
-              requestCount={notifications.friendRequestCount}
-              serverName={activeServerData?.name}
-              serverMemberCount={mobileServerMembers.length}
-              friendItems={mobileFriendItems}
-              serverMemberItems={mobileServerMemberItems}
-              onOpenDm={(id) => {
-                setMobileChannelSheetOpen(true);
-                setMobileSocialSheetOpen(true);
-                setDmTargetUserId(id);
-                setDmPanelOpen(true);
-              }}
-              onOpenProfile={handleFriendProfileClick}
-              onOpenRequests={() => {}}
-            />
+            <React.Suspense fallback={<LazyPanelFallback label="Arkadaşlar yükleniyor" />}>
+              <MobileSocialScreen
+                mode="friends"
+                dmCount={dmUnreadCount}
+                friendCount={friendUsers.length}
+                onlineCount={mobileOnlineFriendCount}
+                requestCount={notifications.friendRequestCount}
+                serverName={activeServerData?.name}
+                serverMemberCount={mobileServerMemberCount}
+                serverOnlineCount={mobileServerVisibleOnlineCount}
+                friendItems={mobileFriendItems}
+                serverMemberItems={mobileServerMemberItems}
+                onOpenDm={(id) => {
+                  void loadDMPanel();
+                  setMobileChannelSheetOpen(!mobilePhoneLayout);
+                  setMobileSocialSheetOpen(!mobilePhoneLayout);
+                  setDmTargetUserId(id);
+                  setDmPanelOpen(true);
+                }}
+                onOpenProfile={handleFriendProfileClick}
+                onOpenRequests={() => {}}
+                onTabChange={handleMobileSocialTabChange}
+              />
+            </React.Suspense>
           </MobileSocialSheet>
+          )}
+
+          {mobilePhoneLayout && (
+            <>
+              <MobileChannelSheet
+                variant="overlay"
+                phoneLayout
+                open={mobileChannelSheetOpen}
+                connectionLevel={connectionLevel}
+                connectionLatencyMs={connectionLatencyMs}
+                connectionJitterMs={connectionJitterMs}
+                isConnecting={isConnecting}
+                isActiveChannel={!!activeChannel}
+                channels={mobileChannelSheetItems}
+                onClose={() => setMobileChannelSheetOpen(false)}
+                onSelectChannel={handleMobileSelectChannel}
+                onOpenChannelMenu={currentUser.isAdmin ? handleMobileOpenChannelMenu : undefined}
+                pinned={false}
+                createTitle={mobileAtRoomLimit ? roomLimitMessage(mobileActivePlan) : undefined}
+                createDisabled={mobileAtRoomLimit}
+                onOpenDiscover={handleMobileOpenDiscover}
+                onCreateChannel={handleMobileCreateChannel}
+              />
+              <MobileSocialSheet
+                variant="overlay"
+                phoneLayout
+                open={mobileSocialSheetOpen}
+                onClose={() => setMobileSocialSheetOpen(false)}
+                currentView={mobileShellView}
+                dmOpen={dmPanelOpen}
+                onOpenSocial={() => {
+                  void loadDMPanel();
+                  setDmTargetUserId(null);
+                  setDmPanelOpen(prev => {
+                    const next = !prev;
+                    if (next) window.dispatchEvent(new CustomEvent('mayvox:close-notifications'));
+                    return next;
+                  });
+                }}
+                onOpenSettings={handleMobileOpenSettings}
+                onLogout={confirmLogout}
+              >
+                <React.Suspense fallback={<LazyPanelFallback label="Arkadaşlar yükleniyor" />}>
+                  <MobileSocialScreen
+                    mode="friends"
+                    dmCount={dmUnreadCount}
+                    friendCount={friendUsers.length}
+                    onlineCount={mobileOnlineFriendCount}
+                    requestCount={notifications.friendRequestCount}
+                    serverName={activeServerData?.name}
+                    serverMemberCount={mobileServerMemberCount}
+                    serverOnlineCount={mobileServerVisibleOnlineCount}
+                    friendItems={mobileFriendItems}
+                    serverMemberItems={mobileServerMemberItems}
+                    onOpenDm={(id) => {
+                      void loadDMPanel();
+                      setMobileSocialSheetOpen(false);
+                      setDmTargetUserId(id);
+                      setDmPanelOpen(true);
+                    }}
+                    onOpenProfile={handleFriendProfileClick}
+                    onOpenRequests={() => {}}
+                    onTabChange={handleMobileSocialTabChange}
+                  />
+                </React.Suspense>
+              </MobileSocialSheet>
+            </>
+          )}
+
+          {mobilePhoneLayout && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+66px)] z-30 flex items-end justify-between px-1.5">
+              <button
+                type="button"
+                onClick={handleMobileOpenChannelsPanel}
+                className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-[14px] border text-[var(--theme-secondary-text)] shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-[14px] transition-colors active:scale-[0.97] ${
+                  mobileChannelSheetOpen
+                    ? 'border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+                    : 'border-[rgba(var(--glass-tint),0.10)] bg-[rgba(var(--theme-bg-rgb),0.58)]'
+                }`}
+                aria-label="Sohbet odalarını aç"
+                title="Sohbet odaları"
+              >
+                <Volume2 size={17} />
+              </button>
+              <button
+                type="button"
+                onClick={handleMobileOpenSocialPanel}
+                className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-[14px] border text-[var(--theme-secondary-text)] shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-[14px] transition-colors active:scale-[0.97] ${
+                  mobileSocialSheetOpen
+                    ? 'border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+                    : 'border-[rgba(var(--glass-tint),0.10)] bg-[rgba(var(--theme-bg-rgb),0.58)]'
+                }`}
+                aria-label="Arkadaş panelini aç"
+                title="Arkadaşlar"
+              >
+                <Users size={17} />
+              </button>
+            </div>
+          )}
         </div>
       </MobileAppShell>
+      </React.Suspense>
       <AnimatePresence>
         {profilePopup && (() => {
           const popupUser = allUsers.find(u => u.id === profilePopup.userId) ?? profilePopup.fallbackUser;
@@ -2183,41 +2636,90 @@ export default function ChatView() {
           const canInvite = !isMe && !!activeChannel && !alreadyInChannel && popupUser.status === 'online';
           const popupServerName = popupUser.serverId ? serverList.find(s => s.id === popupUser.serverId)?.name ?? null : null;
           return (
-            <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
-              onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
-              onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setProfilePopup(null); }}
-              canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
-              onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
-              cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
-              isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} source={profilePopup.source} />
+            <React.Suspense fallback={null}>
+              <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
+                onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
+                onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setProfilePopup(null); }}
+                canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
+                onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
+                cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
+                isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} source={profilePopup.source} />
+            </React.Suspense>
           );
         })()}
       </AnimatePresence>
-      <DMPanel
-        isOpen={dmPanelOpen}
-        onClose={() => setDmPanelOpen(false)}
-        openUserId={dmTargetUserId}
-        onOpenHandled={() => setDmTargetUserId(null)}
-        onUnreadChange={setDmUnreadCount}
-        onRequestCountChange={setDmRequestCount}
-        onActiveConvKeyChange={setActiveDmConvKey}
-        onNearBottomChange={setDmAtBottom}
-        mobileDenseSurface
-      />
-      {showJoinModal && <JoinServerModal
-        onClose={() => setShowJoinModal(false)}
-        onSuccess={refreshServers}
-      />}
+      {shouldRenderDmPanel && (
+        <React.Suspense fallback={null}>
+          <DMPanel
+            isOpen={dmPanelOpen}
+            onClose={() => setDmPanelOpen(false)}
+            openUserId={dmTargetUserId}
+            onOpenHandled={() => setDmTargetUserId(null)}
+            onUnreadChange={setDmUnreadCount}
+            onRequestCountChange={setDmRequestCount}
+            onActiveConvKeyChange={setActiveDmConvKey}
+            onNearBottomChange={setDmAtBottom}
+            mobileDenseSurface
+          />
+        </React.Suspense>
+      )}
+      {showJoinModal && (
+        <React.Suspense fallback={null}>
+          <JoinServerModal
+            onClose={() => setShowJoinModal(false)}
+            onSuccess={refreshServers}
+          />
+        </React.Suspense>
+      )}
       {roomModal.isOpen && (
-        <ChatViewRoomModal
-          roomModal={roomModal}
-          onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
-          onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))}
-          onSave={handleSaveRoom}
-          persistentInfo={roomModal.type === 'create'
-            ? calcPersistentRoomsRemaining(activeServerData?.plan, channels)
-            : undefined}
-        />
+        <React.Suspense fallback={null}>
+          <ChatViewRoomModal
+            roomModal={roomModal}
+            onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
+            onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))}
+            onSave={handleSaveRoom}
+            persistentInfo={roomModal.type === 'create'
+              ? calcPersistentRoomsRemaining(activeServerData?.plan, channels)
+              : undefined}
+          />
+        </React.Suspense>
+      )}
+      <AnimatePresence>
+        {contextMenu && currentUser.isAdmin && (
+          <React.Suspense fallback={null}>
+            <ChatViewContextMenu contextMenu={contextMenu} channels={channels} onEditRoom={handleEditRoom}
+              onSetPassword={handleSetPasswordModal} onRemovePassword={handleRemovePassword}
+              onDeleteRoom={handleDeleteRoom}
+              onManageAccess={(channelId) => {
+                setAccessModalChannelId(channelId);
+                setContextMenu(null);
+              }}
+              onClose={() => setContextMenu(null)} />
+          </React.Suspense>
+        )}
+      </AnimatePresence>
+      {accessModalChannelId && activeServerId && (() => {
+        const ch = channels.find(c => c.id === accessModalChannelId);
+        if (!ch) return null;
+        return (
+          <React.Suspense fallback={null}>
+            <ChannelAccessModal
+              open={true}
+              onClose={() => setAccessModalChannelId(null)}
+              serverId={activeServerId}
+              channelId={accessModalChannelId}
+              channelName={ch.name}
+            />
+          </React.Suspense>
+        );
+      })()}
+      {passwordModal && (
+        <React.Suspense fallback={null}>
+          <ChatViewPasswordModal passwordModal={passwordModal} passwordInput={passwordInput} setPasswordInput={setPasswordInput}
+            passwordRepeatInput={passwordRepeatInput} setPasswordRepeatInput={setPasswordRepeatInput}
+            passwordError={passwordError} setPasswordError={setPasswordError}
+            onSetPassword={handleSetPassword} onVerifyPassword={handleVerifyPassword} onClose={() => setPasswordModal(null)} />
+        </React.Suspense>
       )}
       </>
     );
@@ -2230,13 +2732,15 @@ export default function ChatView() {
       onDrop={currentUser.isAdmin ? handleDropToRemove : undefined}
     >
       {invitationModal && (
-        <InvitationModal
-          data={invitationModal}
-          onAccept={handleInvitationAccept}
-          onDecline={handleInvitationDecline}
-          onMute={handleInvitationMute}
-          isMuted={invitationMuted}
-        />
+        <React.Suspense fallback={null}>
+          <InvitationModal
+            data={invitationModal}
+            onAccept={handleInvitationAccept}
+            onDecline={handleInvitationDecline}
+            onMute={handleInvitationMute}
+            isMuted={invitationMuted}
+          />
+        </React.Suspense>
       )}
       <MobileHeader
         forceMobile={FORCE_MOBILE}
@@ -2491,14 +2995,18 @@ export default function ChatView() {
                   </button>
                   <div className="flex items-center justify-center gap-3 px-1 py-1.5 rounded-xl" style={{ background: 'rgba(var(--glass-tint), 0.02)' }}>
                     {appVersion && (
-                      <UpdateVersionHub
-                        currentVersion={appVersion}
-                        isAdmin={!!currentUser.isAdmin}
-                        autoShowNotes={showReleaseNotes}
-                        onNotesShown={() => setShowReleaseNotes(false)}
-                      />
+                      <React.Suspense fallback={null}>
+                        <UpdateVersionHub
+                          currentVersion={appVersion}
+                          isAdmin={!!currentUser.isAdmin}
+                          autoShowNotes={showReleaseNotes}
+                          onNotesShown={() => setShowReleaseNotes(false)}
+                        />
+                      </React.Suspense>
                     )}
-                    <ConnectionQualityIndicator connectionLevel={connectionLevel} latencyMs={connectionLatencyMs} jitterMs={connectionJitterMs} isConnecting={isConnecting} isActive={!!activeChannel} />
+                    <React.Suspense fallback={<span className="inline-block h-4 w-4" />}>
+                      <ConnectionQualityIndicator connectionLevel={connectionLevel} latencyMs={connectionLatencyMs} jitterMs={connectionJitterMs} isConnecting={isConnecting} isActive={!!activeChannel} />
+                    </React.Suspense>
                   </div>
                 </div>
               </motion.aside>
@@ -2520,16 +3028,18 @@ export default function ChatView() {
                 onTouchStart={(e) => { handleSwipeRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY }; }}
                 onTouchEnd={(e) => { if (!handleSwipeRef.current) return; const dx = e.changedTouches[0].clientX - handleSwipeRef.current.startX; const dy = Math.abs(e.changedTouches[0].clientY - handleSwipeRef.current.startY); handleSwipeRef.current = null; if (dy < 60 && dx > 40) setMobileRightOpen(false); }}
               >
-                <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
-                <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
-                  onDM={handleMobileFriendDm}
-                  channels={channels} activeChannel={activeChannel}
-                  inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite}
-                  isMuted={isMuted} isDeafened={isDeafened}
-                  servers={sidebarServers}
-                  activeServerName={activeServerData?.name}
-                  activeServerMemberCount={mobileServerMembers.length}
-                  serverMembers={mobileServerMembers} />
+                <React.Suspense fallback={null}>
+                  <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
+                  <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
+                    onDM={handleMobileFriendDm}
+                    channels={channels} activeChannel={activeChannel}
+                    inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite}
+                    isMuted={isMuted} isDeafened={isDeafened}
+                    servers={sidebarServers}
+                    activeServerName={activeServerData?.name}
+                    activeServerMemberCount={mobileServerMembers.length}
+                    serverMembers={mobileServerMembers} />
+                </React.Suspense>
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
                   <button ref={dmToggleRef} onClick={() => { setDmPanelOpen(prev => !prev); setMobileRightOpen(false); }}
                     className={`mv-icon-action mv-icon-action-accent mv-icon-message-hover relative w-9 h-9 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${dmPanelOpen ? 'text-[var(--theme-accent)]' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)]' : 'text-[var(--theme-secondary-text)]'}`} title="Mesajlar">
@@ -2552,70 +3062,72 @@ export default function ChatView() {
                     <Settings size={16} />
                     {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
                   </button>
-                  <NotificationBell
-                    summary={notifications}
-                    onOpenFriendRequests={() => {}}
-                    onOpenDM={() => { setDmPanelOpen(true); setMobileRightOpen(false); }}
-                    onOpenInvites={() => { setInvitesModalOpen(true); setMobileRightOpen(false); }}
-                    onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); setMobileRightOpen(false); }}
-                    onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); setMobileRightOpen(false); }}
-                    onOpenServer={(sid) => { setActiveServerId(sid); setMobileRightOpen(false); }}
-                    onAcceptFriendRequest={async (senderId) => {
-                      const sender = allUsers.find(u => u.id === senderId);
-                      const name = getPublicDisplayName(sender);
-                      await acceptRequest(senderId);
-                      pushInformational({
-                        key: `friend-accepted:${senderId}`,
-                        kind: 'generic',
-                        label: name,
-                        detail: 'Artık arkadaşsınız',
-                        createdAt: Date.now(),
-                      });
-                    }}
-                    onRejectFriendRequest={async (senderId) => {
-                      const sender = allUsers.find(u => u.id === senderId);
-                      const name = getPublicDisplayName(sender);
-                      await rejectRequest(senderId);
-                      pushInformational({
-                        key: `friend-rejected:${senderId}`,
-                        kind: 'generic',
-                        label: name,
-                        detail: 'Arkadaşlık isteğini reddettin',
-                        createdAt: Date.now(),
-                      });
-                    }}
-                    onAcceptServerInvite={async (invId) => {
-                      const inv = incomingInvites.invites.find(i => i.id === invId);
-                      const serverName = inv?.serverName ?? 'Sunucu';
-                      await incomingInvites.acceptInvite(invId);
-                      refreshServers({ force: true });
-                      setToastMsg(`${serverName} sunucusuna katıldın`);
-                      pushInformational({
-                        key: `inv-accepted:${invId}`,
-                        kind: 'generic',
-                        label: serverName,
-                        detail: 'Sunucuya katıldın',
-                        serverId: inv?.serverId,
-                        serverAvatar: inv?.serverAvatar ?? null,
-                        createdAt: Date.now(),
-                      });
-                    }}
-                    onDeclineServerInvite={async (invId) => {
-                      const inv = incomingInvites.invites.find(i => i.id === invId);
-                      const serverName = inv?.serverName ?? 'Sunucu';
-                      await incomingInvites.declineInvite(invId);
-                      setToastMsg('Davet reddedildi');
-                      pushInformational({
-                        key: `inv-declined:${invId}`,
-                        kind: 'generic',
-                        label: serverName,
-                        detail: 'Daveti reddettin',
-                        serverId: inv?.serverId,
-                        serverAvatar: inv?.serverAvatar ?? null,
-                        createdAt: Date.now(),
-                      });
-                    }}
-                  />
+                  <React.Suspense fallback={null}>
+                    <NotificationBell
+                      summary={notifications}
+                      onOpenFriendRequests={() => {}}
+                      onOpenDM={() => { setDmPanelOpen(true); setMobileRightOpen(false); }}
+                      onOpenInvites={() => { setInvitesModalOpen(true); setMobileRightOpen(false); }}
+                      onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); setMobileRightOpen(false); }}
+                      onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); setMobileRightOpen(false); }}
+                      onOpenServer={(sid) => { setActiveServerId(sid); setMobileRightOpen(false); }}
+                      onAcceptFriendRequest={async (senderId) => {
+                        const sender = allUsers.find(u => u.id === senderId);
+                        const name = getPublicDisplayName(sender);
+                        await acceptRequest(senderId);
+                        pushInformational({
+                          key: `friend-accepted:${senderId}`,
+                          kind: 'generic',
+                          label: name,
+                          detail: 'Artık arkadaşsınız',
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onRejectFriendRequest={async (senderId) => {
+                        const sender = allUsers.find(u => u.id === senderId);
+                        const name = getPublicDisplayName(sender);
+                        await rejectRequest(senderId);
+                        pushInformational({
+                          key: `friend-rejected:${senderId}`,
+                          kind: 'generic',
+                          label: name,
+                          detail: 'Arkadaşlık isteğini reddettin',
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onAcceptServerInvite={async (invId) => {
+                        const inv = incomingInvites.invites.find(i => i.id === invId);
+                        const serverName = inv?.serverName ?? 'Sunucu';
+                        await incomingInvites.acceptInvite(invId);
+                        refreshServers({ force: true });
+                        setToastMsg(`${serverName} sunucusuna katıldın`);
+                        pushInformational({
+                          key: `inv-accepted:${invId}`,
+                          kind: 'generic',
+                          label: serverName,
+                          detail: 'Sunucuya katıldın',
+                          serverId: inv?.serverId,
+                          serverAvatar: inv?.serverAvatar ?? null,
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onDeclineServerInvite={async (invId) => {
+                        const inv = incomingInvites.invites.find(i => i.id === invId);
+                        const serverName = inv?.serverName ?? 'Sunucu';
+                        await incomingInvites.declineInvite(invId);
+                        setToastMsg('Davet reddedildi');
+                        pushInformational({
+                          key: `inv-declined:${invId}`,
+                          kind: 'generic',
+                          label: serverName,
+                          detail: 'Daveti reddettin',
+                          serverId: inv?.serverId,
+                          serverAvatar: inv?.serverAvatar ?? null,
+                          createdAt: Date.now(),
+                        });
+                      }}
+                    />
+                  </React.Suspense>
                   <button onClick={() => { setMobileRightOpen(false); confirmLogout(); }} className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-9 h-9 flex items-center justify-center transition-colors duration-150 text-red-400/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25" title="Çıkış"><Power size={16} /></button>
                 </div>
               </motion.aside>
@@ -2624,6 +3136,7 @@ export default function ChatView() {
         </AnimatePresence>
 
         {/* ── Left Sidebar (masaüstü) ── */}
+        <React.Suspense fallback={<div className="w-[260px] shrink-0 border-r border-[rgba(var(--glass-tint),0.06)] bg-[var(--theme-sidebar)]/70" />}>
         <LeftSidebar handleDragOver={handleDragOver} handleDrop={handleDrop} handleDragStart={handleDragStart} onUserClick={(userId, x, y) => {
             // Sol panelde (kanal üyesi) tıklama → ses seviyesi barı (action menu).
             // Kendine tıklama → hiçbir şey açılmaz (self row non-interactive).
@@ -2638,44 +3151,53 @@ export default function ChatView() {
           activeServerName={activeServerData?.name} activeServerShortName={activeServerData?.shortName} activeServerAvatarUrl={activeServerData?.avatarUrl} activeServerMotto={activeServerData?.motto}
           activeServerRole={activeServerData?.role} activeServerPublic={activeServerData?.isPublic} activeServerPlan={activeServerData?.plan} onShowSettings={() => activeServerData && toggleServerSettingsPanel(activeServerData.id)}
           onShowDiscover={() => { setView('chat'); setShowDiscover(true); }} onLeaveServer={handleLeaveServer} />
+        </React.Suspense>
 
         {/* ── Popover / Modal layers ── */}
         <AnimatePresence>
           {userActionMenu && (
-            <ChatViewUserActionMenu menu={userActionMenu} currentUserId={currentUser.id} userVolumes={userVolumes}
-              onUpdateVolume={handleUpdateUserVolume} activeChannel={activeChannel} channels={channels} allUsers={allUsers}
-              onToggleSpeaker={handleToggleSpeaker} inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns}
-              onInvite={handleInviteUser} onClose={() => setUserActionMenu(null)} />
+            <React.Suspense fallback={null}>
+              <ChatViewUserActionMenu menu={userActionMenu} currentUserId={currentUser.id} userVolumes={userVolumes}
+                onUpdateVolume={handleUpdateUserVolume} activeChannel={activeChannel} channels={channels} allUsers={allUsers}
+                onToggleSpeaker={handleToggleSpeaker} inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns}
+                onInvite={handleInviteUser} onClose={() => setUserActionMenu(null)} />
+            </React.Suspense>
           )}
         </AnimatePresence>
         <AnimatePresence>
           {contextMenu && (
-            <ChatViewContextMenu contextMenu={contextMenu} channels={channels} onEditRoom={handleEditRoom}
-              onSetPassword={handleSetPasswordModal} onRemovePassword={handleRemovePassword}
-              onDeleteRoom={handleDeleteRoom}
-              onManageAccess={(id) => setAccessModalChannelId(id)}
-              onClose={() => setContextMenu(null)} />
+            <React.Suspense fallback={null}>
+              <ChatViewContextMenu contextMenu={contextMenu} channels={channels} onEditRoom={handleEditRoom}
+                onSetPassword={handleSetPasswordModal} onRemovePassword={handleRemovePassword}
+                onDeleteRoom={handleDeleteRoom}
+                onManageAccess={(id) => setAccessModalChannelId(id)}
+                onClose={() => setContextMenu(null)} />
+            </React.Suspense>
           )}
         </AnimatePresence>
         <AnimatePresence>
           {roomModal.isOpen && (
-            <ChatViewRoomModal
-              roomModal={roomModal}
-              onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
-              onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))}
-              onSave={handleSaveRoom}
-              persistentInfo={roomModal.type === 'create'
-                ? calcPersistentRoomsRemaining(activeServerData?.plan, channels)
-                : undefined}
-            />
+            <React.Suspense fallback={null}>
+              <ChatViewRoomModal
+                roomModal={roomModal}
+                onUpdate={(updates) => setRoomModal(prev => ({ ...prev, ...updates }))}
+                onClose={() => setRoomModal(prev => ({ ...prev, isOpen: false }))}
+                onSave={handleSaveRoom}
+                persistentInfo={roomModal.type === 'create'
+                  ? calcPersistentRoomsRemaining(activeServerData?.plan, channels)
+                  : undefined}
+              />
+            </React.Suspense>
           )}
         </AnimatePresence>
         <AnimatePresence>
           {passwordModal && (
-            <ChatViewPasswordModal passwordModal={passwordModal} passwordInput={passwordInput} setPasswordInput={setPasswordInput}
-              passwordRepeatInput={passwordRepeatInput} setPasswordRepeatInput={setPasswordRepeatInput}
-              passwordError={passwordError} setPasswordError={setPasswordError}
-              onSetPassword={handleSetPassword} onVerifyPassword={handleVerifyPassword} onClose={() => setPasswordModal(null)} />
+            <React.Suspense fallback={null}>
+              <ChatViewPasswordModal passwordModal={passwordModal} passwordInput={passwordInput} setPasswordInput={setPasswordInput}
+                passwordRepeatInput={passwordRepeatInput} setPasswordRepeatInput={setPasswordRepeatInput}
+                passwordError={passwordError} setPasswordError={setPasswordError}
+                onSetPassword={handleSetPassword} onVerifyPassword={handleVerifyPassword} onClose={() => setPasswordModal(null)} />
+            </React.Suspense>
           )}
         </AnimatePresence>
 
@@ -2688,10 +3210,12 @@ export default function ChatView() {
             if (activeSrv?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) {
               return (
                 <div className="flex-1 flex flex-col min-h-0">
-                  <RestrictedServerScreen
-                    serverName={activeSrv.name}
-                    isOwner={activeSrv.role === 'owner'}
-                  />
+                  <React.Suspense fallback={<LazyPanelFallback label="Erişim bilgisi yükleniyor" />}>
+                    <RestrictedServerScreen
+                      serverName={activeSrv.name}
+                      isOwner={activeSrv.role === 'owner'}
+                    />
+                  </React.Suspense>
                 </div>
               );
             }
@@ -2700,15 +3224,23 @@ export default function ChatView() {
           <div
             className={`flex-1 min-w-0 flex flex-col min-h-0 ${FORCE_MOBILE ? `overflow-y-auto custom-scrollbar ${settingsServerId ? '' : 'px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'}` : `pb-3 lg:pb-0 lg:mb-[var(--mv-content-bottom-reserve)] ${settingsServerId ? 'overflow-hidden' : currentChannel && view !== 'settings' ? 'px-3 pt-3 sm:px-6 sm:pt-4' : 'overflow-y-auto custom-scrollbar p-3 sm:px-8 sm:pt-8 sm:pb-[calc(var(--mv-content-bottom-reserve)+1rem)]'}`} ${(serverList.find(s => s.id === activeServerId)?.isBanned && view !== 'settings' && !showDiscover && !settingsServerId) ? 'hidden' : ''}`}>
           {settingsServerId ? (
-            <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={() => refreshServers({ force: true })}
-              onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers({ force: true }); }}
-              initialTab={settingsInitialTab} />
-          ) : view === 'settings' ? <SettingsView /> : showDiscover ? (
-            <DiscoverPanel activeServerId={activeServerId}
-              canCreate={canCreateServer}
-              onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
-              onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
-              onJoinModal={() => setShowJoinModal(true)} />
+            <React.Suspense fallback={<LazyPanelFallback label="Sunucu ayarları yükleniyor" />}>
+              <ServerSettings serverId={settingsServerId} onClose={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); }} onServerUpdated={() => refreshServers({ force: true })}
+                onServerDeleted={() => { setSettingsServerId(null); setSettingsInitialTab(undefined); setActiveServerId(''); refreshServers({ force: true }); }}
+                initialTab={settingsInitialTab} />
+            </React.Suspense>
+          ) : view === 'settings' ? (
+            <React.Suspense fallback={<LazyPanelFallback label="Ayarlar yükleniyor" />}>
+              <SettingsView />
+            </React.Suspense>
+          ) : showDiscover ? (
+            <React.Suspense fallback={<LazyPanelFallback label="Keşfet yükleniyor" />}>
+              <DiscoverPanel activeServerId={activeServerId}
+                canCreate={canCreateServer}
+                onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
+                onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
+                onJoinModal={() => setShowJoinModal(true)} />
+            </React.Suspense>
           ) : currentChannel && !isServerHomeView ? (
             <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className="mv-room-ambient absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
@@ -2731,6 +3263,7 @@ export default function ChatView() {
                 </div>
               </div>
               <div ref={roomActivitySplitRef} className="relative z-[1] flex flex-col flex-1 min-h-0 overflow-hidden">
+                <React.Suspense fallback={<LazyPanelFallback label="Oda yükleniyor" />}>
                 <VoiceParticipants forceMobile={FORCE_MOBILE} members={roomMembersHidden ? [] : sortedChannelMembers} currentUser={currentUser}
                   isPttPressed={isPttPressed} isMuted={isMuted} isDeafened={isDeafened} isVoiceBanned={!!currentUser.isVoiceBanned}
                   volumeLevel={volumeLevel} speakingLevels={speakingLevels} dominantSpeakerId={dominantSpeakerId}
@@ -2751,47 +3284,52 @@ export default function ChatView() {
                   canModerateMessages={canViewRoomActivityLog}
                   highlightedMessageId={highlightedRoomMessageId}
                   musicAccessory={showRoomMusicPanel && roomMusic.shouldRender && roomMusicPanelOpen ? (
-                    <RoomMusicPanel
-                      serverPlan={activeServerData?.plan}
-                      userLevel={currentUser.userLevel}
-                      serverRole={activeServerRole}
-                      session={roomMusic.session}
-                      source={roomMusic.activeSource}
-                      sources={roomMusic.sources}
-                      permissions={roomMusic.permissions}
-                      loading={roomMusic.loading}
-                      actionLoading={roomMusic.actionLoading}
-                      error={roomMusic.error}
-                      actionError={roomMusic.actionError}
-                      errorCode={roomMusic.errorCode}
-                      controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
-                      onPlayPause={roomMusic.togglePlayPause}
-                      onStop={roomMusic.stop}
-                      onPreviousSource={roomMusic.selectPreviousSource}
-                      onNextSource={roomMusic.selectNextSource}
-                      onVolumeChange={roomMusic.setVolume}
-                      compact
-                      variant="card"
-                    />
+                    <React.Suspense fallback={null}>
+                      <RoomMusicPanel
+                        serverPlan={activeServerData?.plan}
+                        userLevel={currentUser.userLevel}
+                        serverRole={activeServerRole}
+                        session={roomMusic.session}
+                        source={roomMusic.activeSource}
+                        sources={roomMusic.sources}
+                        permissions={roomMusic.permissions}
+                        loading={roomMusic.loading}
+                        actionLoading={roomMusic.actionLoading}
+                        error={roomMusic.error}
+                        actionError={roomMusic.actionError}
+                        errorCode={roomMusic.errorCode}
+                        controlsDisabled={roomMusic.actionLoading || !roomMusic.permissions.canControl}
+                        onPlayPause={roomMusic.togglePlayPause}
+                        onStop={roomMusic.stop}
+                        onPreviousSource={roomMusic.selectPreviousSource}
+                        onNextSource={roomMusic.selectNextSource}
+                        onVolumeChange={roomMusic.setVolume}
+                        compact
+                        variant="card"
+                      />
+                    </React.Suspense>
                   ) : null}
                   musicPanelAvailable={showRoomMusicPanel && roomMusic.shouldRender}
                   musicPanelOpen={roomMusicPanelOpen}
                   onToggleMusicPanel={showRoomMusicPanel && roomMusic.shouldRender ? () => setRoomMusicPanelOpen(prev => !prev) : undefined}
                   activityPanel={canViewRoomActivityLog ? (
-                    <RoomActivityLogPanel
-                      activities={roomActivities}
-                      onCollapse={() => setRoomActivityPanelOpen(false)}
-                      onSelectActivity={handleSelectRoomActivity}
-                      onClear={handleClearRoomActivityLog}
-                      canClear={canClearRoomActivityLog}
-                      clearing={roomActivityClearing}
-                    />
+                    <React.Suspense fallback={null}>
+                      <RoomActivityLogPanel
+                        activities={roomActivities}
+                        onCollapse={() => setRoomActivityPanelOpen(false)}
+                        onSelectActivity={handleSelectRoomActivity}
+                        onClear={handleClearRoomActivityLog}
+                        canClear={canClearRoomActivityLog}
+                        clearing={roomActivityClearing}
+                      />
+                    </React.Suspense>
                   ) : undefined}
                   activityPanelRatio={roomActivityPanelRatio}
                   activityPanelOpen={roomActivityPanelOpen}
                   onActivityResizeStart={roomActivityPanelOpen ? beginRoomActivityResize : undefined}
                   onToggleActivityPanel={canViewRoomActivityLog ? () => setRoomActivityPanelOpen(prev => !prev) : undefined}
                 />
+                </React.Suspense>
               </div>
             </div>
           ) : serverLoading ? (
@@ -2801,33 +3339,37 @@ export default function ChatView() {
             </div>
           ) : !hasServer ? (
             /* ── Sunucu Keşfet paneli ── */
-            <DiscoverPanel activeServerId={activeServerId}
-              canCreate={canCreateServer}
-              onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
-              onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
-              onJoinModal={() => setShowJoinModal(true)}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col overflow-y-auto">
-              <AnnouncementsPanel
-                currentUser={currentUser}
-                serverId={activeServerId}
-                serverName={activeServerData?.name}
-                serverDescription={activeServerData?.description}
-                serverRules={activeServerData?.serverRules}
-                channels={visibleChannels}
-                serverMembers={mobileServerMembers}
-                canCreateAnnouncements={activeServerCanModerateCommunityContent}
-                canCreateRecommendations={activeServerCanCreateRecommendation}
-                canModerateCommunityContent={activeServerCanModerateCommunityContent}
-                canViewRoomActivity={canViewRoomActivityLog}
-                canViewInviteApplications={activeServerCanManage}
-                onOpenInviteApplications={() => {
-                  if (!activeServerId) return;
-                  setSettingsInitialTab('requests');
-                  setSettingsServerId(activeServerId);
-                }}
+            <React.Suspense fallback={<LazyPanelFallback label="Keşfet yükleniyor" />}>
+              <DiscoverPanel activeServerId={activeServerId}
+                canCreate={canCreateServer}
+                onJoinSuccess={(serverId) => { refreshServers({ force: true }); setActiveServerId(serverId); setShowDiscover(false); }}
+                onCreateServer={() => { if (canCreateServer) setShowCreateModal(true); }}
+                onJoinModal={() => setShowJoinModal(true)}
               />
+            </React.Suspense>
+          ) : (
+            <div className="desktop-server-home-scrollbar flex-1 flex flex-col overflow-y-auto">
+              <React.Suspense fallback={<LazyPanelFallback label="Sunucu ana sayfası yükleniyor" />}>
+                <AnnouncementsPanel
+                  currentUser={currentUser}
+                  serverId={activeServerId}
+                  serverName={activeServerData?.name}
+                  serverDescription={activeServerData?.description}
+                  serverRules={activeServerData?.serverRules}
+                  channels={visibleChannels}
+                  serverMembers={mobileServerMembers}
+                  canCreateAnnouncements={activeServerCanModerateCommunityContent}
+                  canCreateRecommendations={activeServerCanCreateRecommendation}
+                  canModerateCommunityContent={activeServerCanModerateCommunityContent}
+                  canViewRoomActivity={canViewRoomActivityLog}
+                  canViewInviteApplications={activeServerCanManage}
+                  onOpenInviteApplications={() => {
+                    if (!activeServerId) return;
+                    setSettingsInitialTab('requests');
+                    setSettingsServerId(activeServerId);
+                  }}
+                />
+              </React.Suspense>
             </div>
           )}
           </div>
@@ -2835,14 +3377,16 @@ export default function ChatView() {
 
         {/* ── Right Sidebar ── */}
         <aside className={`mv-shell-panel mv-shell-right-panel w-56 2xl:w-60 shrink-0 flex-col ${FORCE_MOBILE ? 'hidden' : 'hidden lg:flex'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--app-content-surface, var(--app-neutral-surface)) 96%, white 4%)', boxShadow: 'none', border: 0 }}>
-          <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
-          <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
-            onDM={handleFriendDm} channels={channels} activeChannel={activeChannel}
-            inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
-            servers={sidebarServers}
-            activeServerName={activeServerData?.name}
-            activeServerMemberCount={mobileServerMembers.length}
-            serverMembers={mobileServerMembers} />
+          <React.Suspense fallback={null}>
+            <div className="pt-3 pb-1"><SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} /></div>
+            <FriendsSidebarContent variant="desktop" onUserClick={handleFriendProfileClick}
+              onDM={handleFriendDm} channels={channels} activeChannel={activeChannel}
+              inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
+              servers={sidebarServers}
+              activeServerName={activeServerData?.name}
+              activeServerMemberCount={mobileServerMembers.length}
+              serverMembers={mobileServerMembers} />
+          </React.Suspense>
           <div className="shrink-0 px-3 py-2.5 flex items-center justify-evenly">
             <button ref={dmToggleRef} onClick={() => setDmPanelOpen(prev => !prev)}
               className={`mv-icon-action mv-icon-action-accent mv-icon-message-hover relative w-8 h-8 flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)] ${dmPanelOpen ? 'text-[var(--theme-accent)]' : dmUnreadCount > 0 ? 'text-[var(--notif-unread)]' : 'text-[var(--theme-secondary-text)]'}`} title="Mesajlar">
@@ -2856,6 +3400,72 @@ export default function ChatView() {
                 <NotificationBadge count={dmUnreadCount} variant="accent" className={`absolute -top-0.5 ${dmRequestCount > 0 ? '-left-0.5' : '-right-0.5'}`} />
               )}
             </button>
+            <React.Suspense fallback={null}>
+              <NotificationBell
+                summary={notifications}
+                onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
+                onOpenDM={() => setDmPanelOpen(true)}
+                onOpenInvites={() => setInvitesModalOpen(true)}
+                onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
+                onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
+                onOpenServer={(sid) => setActiveServerId(sid)}
+                onAcceptFriendRequest={async (senderId) => {
+                  const sender = allUsers.find(u => u.id === senderId);
+                  const name = getPublicDisplayName(sender);
+                  await acceptRequest(senderId);
+                  pushInformational({
+                    key: `friend-accepted:${senderId}`,
+                    kind: 'generic',
+                    label: name,
+                    detail: 'Artık arkadaşsınız',
+                    createdAt: Date.now(),
+                  });
+                }}
+                onRejectFriendRequest={async (senderId) => {
+                  const sender = allUsers.find(u => u.id === senderId);
+                  const name = getPublicDisplayName(sender);
+                  await rejectRequest(senderId);
+                  pushInformational({
+                    key: `friend-rejected:${senderId}`,
+                    kind: 'generic',
+                    label: name,
+                    detail: 'Arkadaşlık isteğini reddettin',
+                    createdAt: Date.now(),
+                  });
+                }}
+                onAcceptServerInvite={async (invId) => {
+                  const inv = incomingInvites.invites.find(i => i.id === invId);
+                  const serverName = inv?.serverName ?? 'Sunucu';
+                  await incomingInvites.acceptInvite(invId);
+                  refreshServers({ force: true });
+                  setToastMsg(`${serverName} sunucusuna katıldın`);
+                  pushInformational({
+                    key: `inv-accepted:${invId}`,
+                    kind: 'generic',
+                    label: serverName,
+                    detail: 'Sunucuya katıldın',
+                    serverId: inv?.serverId,
+                    serverAvatar: inv?.serverAvatar ?? null,
+                    createdAt: Date.now(),
+                  });
+                }}
+                onDeclineServerInvite={async (invId) => {
+                  const inv = incomingInvites.invites.find(i => i.id === invId);
+                  const serverName = inv?.serverName ?? 'Sunucu';
+                  await incomingInvites.declineInvite(invId);
+                  setToastMsg('Davet reddedildi');
+                  pushInformational({
+                    key: `inv-declined:${invId}`,
+                    kind: 'generic',
+                    label: serverName,
+                    detail: 'Daveti reddettin',
+                    serverId: inv?.serverId,
+                    serverAvatar: inv?.serverAvatar ?? null,
+                    createdAt: Date.now(),
+                  });
+                }}
+              />
+            </React.Suspense>
             <button onClick={() => {
                 if (view === 'settings') { setView('chat'); }
                 else { setSettingsTarget('app'); setView('settings'); }
@@ -2864,115 +3474,63 @@ export default function ChatView() {
               <Settings size={14} />
               {notifications.settingsCount > 0 && <NotificationBadge count={notifications.settingsCount} variant="amber" className="absolute -top-0.5 -right-0.5" />}
             </button>
-            <NotificationBell
-              summary={notifications}
-              onOpenFriendRequests={() => {/* Arkadaşlar sidebar'ı zaten görünür */}}
-              onOpenDM={() => setDmPanelOpen(true)}
-              onOpenInvites={() => setInvitesModalOpen(true)}
-              onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
-              onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
-              onOpenServer={(sid) => setActiveServerId(sid)}
-              onAcceptFriendRequest={async (senderId) => {
-                const sender = allUsers.find(u => u.id === senderId);
-                const name = getPublicDisplayName(sender);
-                await acceptRequest(senderId);
-                pushInformational({
-                  key: `friend-accepted:${senderId}`,
-                  kind: 'generic',
-                  label: name,
-                  detail: 'Artık arkadaşsınız',
-                  createdAt: Date.now(),
-                });
-              }}
-              onRejectFriendRequest={async (senderId) => {
-                const sender = allUsers.find(u => u.id === senderId);
-                const name = getPublicDisplayName(sender);
-                await rejectRequest(senderId);
-                pushInformational({
-                  key: `friend-rejected:${senderId}`,
-                  kind: 'generic',
-                  label: name,
-                  detail: 'Arkadaşlık isteğini reddettin',
-                  createdAt: Date.now(),
-                });
-              }}
-              onAcceptServerInvite={async (invId) => {
-                const inv = incomingInvites.invites.find(i => i.id === invId);
-                const serverName = inv?.serverName ?? 'Sunucu';
-                await incomingInvites.acceptInvite(invId);
-                refreshServers({ force: true });
-                setToastMsg(`${serverName} sunucusuna katıldın`);
-                pushInformational({
-                  key: `inv-accepted:${invId}`,
-                  kind: 'generic',
-                  label: serverName,
-                  detail: 'Sunucuya katıldın',
-                  serverId: inv?.serverId,
-                  serverAvatar: inv?.serverAvatar ?? null,
-                  createdAt: Date.now(),
-                });
-              }}
-              onDeclineServerInvite={async (invId) => {
-                const inv = incomingInvites.invites.find(i => i.id === invId);
-                const serverName = inv?.serverName ?? 'Sunucu';
-                await incomingInvites.declineInvite(invId);
-                setToastMsg('Davet reddedildi');
-                pushInformational({
-                  key: `inv-declined:${invId}`,
-                  kind: 'generic',
-                  label: serverName,
-                  detail: 'Daveti reddettin',
-                  serverId: inv?.serverId,
-                  serverAvatar: inv?.serverAvatar ?? null,
-                  createdAt: Date.now(),
-                });
-              }}
-            />
             <button onClick={confirmLogout} className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-8 h-8 flex items-center justify-center transition-colors duration-150 text-red-400/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25" title="Çıkış"><Power size={14} /></button>
           </div>
         </aside>
       </div>
 
       {/* ── Desktop Dock — context-consuming, minimal props ── */}
-      <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
-        serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
-        onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
-        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer}
-        currentView={currentView} onGoHome={handleGoHome} onReturnToRoom={handleReturnToRoom} />
+      <React.Suspense fallback={null}>
+        <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
+          serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
+          onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
+          onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer}
+          currentView={currentView} onGoHome={handleGoHome} onReturnToRoom={handleReturnToRoom} />
+      </React.Suspense>
 
       {/* ── Sunucuya Katıl Modal (global) ── */}
-      {showJoinModal && <JoinServerModal
-        onClose={() => setShowJoinModal(false)}
-        onSuccess={refreshServers}
-      />}
+      {showJoinModal && (
+        <React.Suspense fallback={null}>
+          <JoinServerModal
+            onClose={() => setShowJoinModal(false)}
+            onSuccess={refreshServers}
+          />
+        </React.Suspense>
+      )}
 
       {/* ── Kanal Erişim Modal ── */}
       {accessModalChannelId && activeServerId && (() => {
         const ch = channels.find(c => c.id === accessModalChannelId);
         if (!ch) return null;
         return (
-          <ChannelAccessModal
-            open={true}
-            onClose={() => setAccessModalChannelId(null)}
-            serverId={activeServerId}
-            channelId={accessModalChannelId}
-            channelName={ch.name}
-          />
+          <React.Suspense fallback={null}>
+            <ChannelAccessModal
+              open={true}
+              onClose={() => setAccessModalChannelId(null)}
+              serverId={activeServerId}
+              channelId={accessModalChannelId}
+              channelName={ch.name}
+            />
+          </React.Suspense>
         );
       })()}
 
       {/* ── Gelen Sunucu Davetleri Modal ── */}
-      <IncomingInvitesModal
-        open={invitesModalOpen}
-        onClose={() => setInvitesModalOpen(false)}
-        invites={incomingInvites.invites}
-        loading={incomingInvites.loading}
-        error={incomingInvites.error}
-        onAccept={incomingInvites.acceptInvite}
-        onDecline={incomingInvites.declineInvite}
-        onAccepted={(inv) => { refreshServers({ force: true }); setToastMsg(`${inv.serverName} sunucusuna katıldın`); }}
-        onDeclined={() => setToastMsg('Davet reddedildi')}
-      />
+      {invitesModalOpen && (
+        <React.Suspense fallback={null}>
+          <IncomingInvitesModal
+            open={invitesModalOpen}
+            onClose={() => setInvitesModalOpen(false)}
+            invites={incomingInvites.invites}
+            loading={incomingInvites.loading}
+            error={incomingInvites.error}
+            onAccept={incomingInvites.acceptInvite}
+            onDecline={incomingInvites.declineInvite}
+            onAccepted={(inv) => { refreshServers({ force: true }); setToastMsg(`${inv.serverName} sunucusuna katıldın`); }}
+            onDeclined={() => setToastMsg('Davet reddedildi')}
+          />
+        </React.Suspense>
+      )}
 
       {/* ── Sunucu Oluştur Modal (global) ── */}
       {showCreateModal && (
@@ -3137,53 +3695,63 @@ export default function ChatView() {
           const canInvite = !isMe && !!activeChannel && !alreadyInChannel && popupUser.status === 'online';
           const popupServerName = popupUser.serverId ? serverList.find(s => s.id === popupUser.serverId)?.name ?? null : null;
           return (
-            <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
-              onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
-              onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setProfilePopup(null); }}
-              canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
-              onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
-              cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
-              isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} source={profilePopup.source} />
+            <React.Suspense fallback={null}>
+              <UserProfilePopup user={popupUser} position={profilePopup} onClose={() => setProfilePopup(null)}
+                onInvite={() => { handleInviteUser(popupUser.id); setProfilePopup(null); }}
+                onDM={(userId) => { setDmTargetUserId(userId); setDmPanelOpen(true); setProfilePopup(null); }}
+                canInvite={!!canInvite} inviteStatus={inviteStatuses[popupUser.id]}
+                onCooldown={!!(inviteCooldowns[popupUser.id] && Date.now() < inviteCooldowns[popupUser.id])}
+                cooldownRemaining={inviteCooldowns[popupUser.id] ? Math.ceil((inviteCooldowns[popupUser.id] - Date.now()) / 1000) : 0}
+                isMe={isMe} currentAppVersion={appVersion} serverName={popupServerName} source={profilePopup.source} />
+            </React.Suspense>
           );
         })()}
       </AnimatePresence>
 
       {/* ── Mobile Footer — desktop dock'u inline render eder, PTT/VAD butonu + update hub üstte ── */}
-      <MobileFooter
-        listenerToastRef={listenerToastRef}
-        dockToastHoveredRef={dockToastHoveredRef}
-        cardStyle={cardStyle}
-        cycleCardStyle={cycleCardStyle}
-        serverList={serverList}
-        activeServerId={activeServerId}
-        onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
-        onJoinServer={handleJoinServer}
-        onLeaveServer={handleLeaveServer}
-        onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }}
-        canCreateServer={canCreateServer}
-        currentView={currentView}
-        onGoHome={handleGoHome}
-        onReturnToRoom={handleReturnToRoom}
-      />
+      <React.Suspense fallback={<div className="mx-2 mb-2 h-[76px] shrink-0 rounded-2xl" />}>
+        <MobileFooter
+          listenerToastRef={listenerToastRef}
+          dockToastHoveredRef={dockToastHoveredRef}
+          cardStyle={cardStyle}
+          cycleCardStyle={cycleCardStyle}
+          serverList={serverList}
+          activeServerId={activeServerId}
+          onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
+          onJoinServer={handleJoinServer}
+          onLeaveServer={handleLeaveServer}
+          onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }}
+          canCreateServer={canCreateServer}
+          currentView={currentView}
+          onGoHome={handleGoHome}
+          onReturnToRoom={handleReturnToRoom}
+        />
+      </React.Suspense>
 
       {/* ── DM Panel ── */}
-      <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}
-        onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount}
-        onRequestCountChange={setDmRequestCount}
-        onActiveConvKeyChange={setActiveDmConvKey} onNearBottomChange={setDmAtBottom} toggleRef={dmToggleRef} />
+      <React.Suspense fallback={null}>
+        <DMPanel isOpen={dmPanelOpen} onClose={() => setDmPanelOpen(false)} openUserId={dmTargetUserId}
+          onOpenHandled={() => setDmTargetUserId(null)} onUnreadChange={setDmUnreadCount}
+          onRequestCountChange={setDmRequestCount}
+          onActiveConvKeyChange={setActiveDmConvKey} onNearBottomChange={setDmAtBottom} toggleRef={dmToggleRef} />
+      </React.Suspense>
 
       {/* ── Oda içi üye moderation context menu (sağ-tık, role-aware) ──
           Tetikleme noktaları: (1) VoiceParticipants katılımcı kartı, (2) LeftSidebar üye satırı.
           İkisi de aynı state'i (`roomMemberMenu`) set eder, tek menü render edilir. */}
-      <RoomMemberContextMenu
-        ctx={roomMemberMenu}
-        onClose={() => setRoomMemberMenu(null)}
-        serverId={activeServerId}
-        myRole={(ROLE_HIERARCHY[activeServerData?.role as ServerRole] != null ? (activeServerData!.role as ServerRole) : 'member')}
-        ownerUserId={null}
-        currentUserId={currentUser.id}
-        showToast={setToastMsg}
-      />
+      {roomMemberMenu && (
+        <React.Suspense fallback={null}>
+          <RoomMemberContextMenu
+            ctx={roomMemberMenu}
+            onClose={() => setRoomMemberMenu(null)}
+            serverId={activeServerId}
+            myRole={(ROLE_HIERARCHY[activeServerData?.role as ServerRole] != null ? (activeServerData!.role as ServerRole) : 'member')}
+            ownerUserId={null}
+            currentUserId={currentUser.id}
+            showToast={setToastMsg}
+          />
+        </React.Suspense>
+      )}
 
       {/* ── Notification toast stack (top-right portal) ── */}
       <ToastContainer />

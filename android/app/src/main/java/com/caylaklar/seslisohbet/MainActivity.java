@@ -4,9 +4,9 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
 public class MainActivity extends BridgeActivity {
 
@@ -19,7 +19,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         // WebView'ın mikrofon erişim isteklerini otomatik onayla
-        getBridge().getWebView().setWebChromeClient(new WebChromeClient() {
+        getBridge().getWebView().setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> request.grant(request.getResources()));

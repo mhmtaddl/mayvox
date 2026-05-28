@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Bell, CheckCircle2, Inbox, MessageCircle, Server, ShieldAlert } from 'lucide-react';
 
 type NotificationTab = 'all' | 'dm' | 'server' | 'requests' | 'system';
@@ -19,6 +19,12 @@ const TABS: Array<{ key: NotificationTab; label: string }> = [
   { key: 'system', label: 'Sistem' },
 ];
 
+const ROW_BUTTON_STYLE = { background: 'rgba(var(--glass-tint),0.032)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.028)' };
+const ROW_ICON_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.08)' };
+const SUMMARY_CARD_STYLE = { background: 'rgba(var(--glass-tint),0.018)' };
+const EMPTY_ICON_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.09)' };
+const METRIC_PILL_STYLE = { background: 'rgba(var(--glass-tint),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.035)' };
+
 export default function MobileNotificationsScreen({
   unreadCount = 0,
   dmCount = 0,
@@ -29,7 +35,11 @@ export default function MobileNotificationsScreen({
   const [activeTab, setActiveTab] = useState<NotificationTab>('all');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
-  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    setTouchStartX(event.touches[0]?.clientX ?? null);
+  }, []);
+
+  const handleTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     if (touchStartX === null) return;
     const deltaX = event.changedTouches[0]?.clientX - touchStartX;
     setTouchStartX(null);
@@ -39,16 +49,22 @@ export default function MobileNotificationsScreen({
       ? Math.min(TABS.length - 1, currentIndex + 1)
       : Math.max(0, currentIndex - 1);
     setActiveTab(TABS[nextIndex].key);
-  };
+  }, [activeTab, touchStartX]);
 
-  const rows = getRows(activeTab, { dmCount, requestCount, serverCount, systemCount });
+  const handleTouchCancel = useCallback(() => setTouchStartX(null), []);
+  const handleTabClick = useCallback((tab: NotificationTab) => setActiveTab(tab), []);
+
+  const rows = useMemo(
+    () => getRows(activeTab, { dmCount, requestCount, serverCount, systemCount }),
+    [activeTab, dmCount, requestCount, serverCount, systemCount],
+  );
 
   return (
     <div
       className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar"
-      onTouchStart={event => setTouchStartX(event.touches[0]?.clientX ?? null)}
+      onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={() => setTouchStartX(null)}
+      onTouchCancel={handleTouchCancel}
     >
       <section className="mb-2 flex flex-col gap-2 border-b border-[rgba(var(--glass-tint),0.045)] px-1 pb-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -68,7 +84,7 @@ export default function MobileNotificationsScreen({
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabClick(tab.key)}
               className={`relative h-10 min-w-11 px-0 text-[12px] font-bold active:scale-[0.98] sm:flex-1 ${
                 activeTab === tab.key ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/66'
               }`}
@@ -109,14 +125,14 @@ function getRows(activeTab: NotificationTab, counts: { dmCount: number; requestC
   return activeTab === 'all' ? rows : rows.filter(row => row.type === activeTab);
 }
 
-function NotificationRow({ icon, title, text }: { key?: unknown; icon: React.ReactNode; title: string; text: string }) {
+const NotificationRow = React.memo(function NotificationRow({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
     <button
       type="button"
       className="flex min-h-12 w-full items-center gap-2.5 rounded-[13px] px-3 py-1.5 text-left active:scale-[0.995]"
-      style={{ background: 'rgba(var(--glass-tint),0.032)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.028)' }}
+      style={ROW_BUTTON_STYLE}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.08)' }}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[var(--theme-accent)]" style={ROW_ICON_STYLE}>
         {icon}
       </span>
       <span className="min-w-0 flex-1">
@@ -125,11 +141,11 @@ function NotificationRow({ icon, title, text }: { key?: unknown; icon: React.Rea
       </span>
     </button>
   );
-}
+});
 
-function SummaryCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+const SummaryCard = React.memo(function SummaryCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
-    <section className="rounded-[14px] px-3 py-2.5" style={{ background: 'rgba(var(--glass-tint),0.018)' }}>
+    <section className="rounded-[14px] px-3 py-2.5" style={SUMMARY_CARD_STYLE}>
       <div className="mb-1.5 flex items-center gap-2 text-[var(--theme-accent)]">
         {icon}
         <h3 className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/62">{title}</h3>
@@ -137,25 +153,25 @@ function SummaryCard({ icon, title, text }: { icon: React.ReactNode; title: stri
       <p className="text-[11px] leading-5 text-[var(--theme-secondary-text)]/56">{text}</p>
     </section>
   );
-}
+});
 
-function EmptyState() {
+const EmptyState = React.memo(function EmptyState() {
   return (
-    <section className="rounded-[16px] px-4 py-5 text-center" style={{ background: 'rgba(var(--glass-tint),0.018)' }}>
-      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+    <section className="rounded-[16px] px-4 py-5 text-center" style={SUMMARY_CARD_STYLE}>
+      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-[var(--theme-accent)]" style={EMPTY_ICON_STYLE}>
         <Bell size={19} />
       </div>
       <h3 className="text-[13px] font-bold text-[var(--theme-text)]/88">Bildirim yok</h3>
       <p className="mx-auto mt-1 max-w-[240px] text-[11px] leading-5 text-[var(--theme-secondary-text)]/56">Bu filtrede gosterilecek bildirim bulunmuyor.</p>
     </section>
   );
-}
+});
 
-function MetricPill({ label, value }: { label: string; value: number }) {
+const MetricPill = React.memo(function MetricPill({ label, value }: { label: string; value: number }) {
   return (
-    <span className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold text-[var(--theme-secondary-text)]/72" style={{ background: 'rgba(var(--glass-tint),0.055)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.035)' }}>
+    <span className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[10px] font-bold text-[var(--theme-secondary-text)]/72" style={METRIC_PILL_STYLE}>
       <span className="text-[var(--theme-text)]/90">{value}</span>
       {label}
     </span>
   );
-}
+});

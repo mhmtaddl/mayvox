@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Mic, ArrowLeftRight } from 'lucide-react';
-import DesktopDock from './DesktopDock';
 import { useAudio } from '../../../contexts/AudioContext';
 import { useSettings } from '../../../contexts/SettingsCtx';
 import { useAppState } from '../../../contexts/AppStateContext';
@@ -13,6 +12,8 @@ import { type CardStyle } from '../../../components/chat/cardStyles';
 import { type Server } from '../../../lib/serverService';
 import { formatRemainingFromIso } from '../../../lib/formatTimeout';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
+
+const DesktopDock = React.lazy(() => import('./DesktopDock'));
 
 interface Props {
   listenerToastRef: React.MutableRefObject<number>;
@@ -137,14 +138,44 @@ export default function MobileFooter({
   const [vadSliderOpen, setVadSliderOpen] = useState(false);
 
   return (
-    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} mv-mobile-footer shrink-0 pb-[calc(env(safe-area-inset-bottom)+4px)] mx-2 mb-2 rounded-2xl`}
-      style={{ background: 'var(--dock-bg, var(--surface-elevated))', border: '1px solid var(--dock-border, var(--border-subtle))', boxShadow: 'var(--dock-shadow, 0 4px 20px rgba(0,0,0,0.2))', backdropFilter: 'var(--dock-blur, blur(12px))', WebkitBackdropFilter: 'var(--dock-blur, blur(12px))' }}>
+    <footer className={`${FORCE_MOBILE ? '' : 'lg:hidden'} mv-mobile-footer mv-density-dock shrink-0 mx-2 mb-2 rounded-2xl`}
+      style={{ background: 'var(--dock-bg, var(--surface-elevated))', border: '1px solid var(--dock-border, var(--border-subtle))', boxShadow: 'var(--dock-shadow, 0 4px 20px rgba(0,0,0,0.2))', backdropFilter: 'var(--dock-blur, blur(12px))', WebkitBackdropFilter: 'var(--dock-blur, blur(12px))', paddingTop: 'var(--mv-dock-padding-y)', paddingBottom: 'calc(env(safe-area-inset-bottom) + var(--mv-dock-padding-y))' }}>
       <style>{`
+        .mv-mobile-footer {
+          --mv-mobile-voice-height: calc(58px * var(--mv-dock-scale, 1));
+          --mv-mobile-voice-radius: calc(16px * var(--mv-dock-scale, 1));
+          --mv-mobile-voice-pad-x: calc(18px * var(--mv-dock-scale, 1));
+          --mv-mobile-voice-pad-y: calc(12px * var(--mv-dock-scale, 1));
+          --mv-mobile-voice-icon: calc(19px * var(--mv-dock-scale, 1));
+          --mv-mobile-voice-label: calc(12px * var(--mv-dock-scale, 1) * var(--mv-font-scale, 1));
+        }
+        .mv-mobile-footer .mv-mobile-voice-strip {
+          padding-top: calc(8px * var(--mv-dock-scale, 1));
+          padding-bottom: calc(3px * var(--mv-dock-scale, 1));
+          padding-left: calc(14px * var(--mv-dock-scale, 1));
+          padding-right: calc(14px * var(--mv-dock-scale, 1));
+          gap: calc(8px * var(--mv-dock-scale, 1));
+        }
+        .mv-mobile-footer .mv-mobile-vad-button,
+        .mv-mobile-footer .mv-mobile-ptt-button {
+          min-height: var(--mv-mobile-voice-height);
+          border-radius: var(--mv-mobile-voice-radius);
+        }
+        .mv-mobile-footer .mv-mobile-voice-content {
+          padding: var(--mv-mobile-voice-pad-y) var(--mv-mobile-voice-pad-x);
+        }
+        .mv-mobile-footer .mv-mobile-voice-icon {
+          width: var(--mv-mobile-voice-icon);
+          height: var(--mv-mobile-voice-icon);
+        }
+        .mv-mobile-footer .mv-mobile-voice-label {
+          font-size: var(--mv-mobile-voice-label);
+        }
         .mv-mobile-footer .mv-dock-square-btn,
         .mv-mobile-footer .mv-dock-small-square-btn,
         .mv-mobile-footer .mv-server-dock-button {
-          min-width: 40px;
-          min-height: 40px;
+          min-width: var(--mv-dock-button-size, 40px);
+          min-height: var(--mv-dock-button-size, 40px);
         }
         .mv-mobile-footer .group\\/mic > .absolute.-top-1.-right-1,
         .mv-mobile-footer .group\\/hp > .absolute.-top-1.-right-1,
@@ -177,13 +208,13 @@ export default function MobileFooter({
 
         if (isVad) {
           return (
-            <div className="flex flex-col items-center pt-3 pb-1 px-4 gap-2">
+            <div className="mv-mobile-voice-strip flex flex-col items-center gap-2">
               <div className="flex items-center gap-2 w-full max-w-[260px]">
               <div
                 onClick={() => { if (!pttDisabled) setVadSliderOpen(p => !p); }}
-                className={`relative flex-1 min-h-[56px] rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
+                className={`mv-mobile-vad-button relative flex-1 overflow-hidden transition-all duration-150 cursor-pointer ${pttDisabled ? 'opacity-50' : ''}`}
               >
-                <div className={`absolute inset-0 rounded-2xl transition-all duration-200 ${
+                <div className={`absolute inset-0 transition-all duration-200 ${
                   pttDisabled
                     ? 'bg-[var(--theme-border)]/20 border border-[var(--theme-border)]/30'
                     : isPttPressed
@@ -191,14 +222,14 @@ export default function MobileFooter({
                       : 'bg-emerald-500/10 border border-emerald-500/25'
                 }`} />
                 {isPttPressed && !pttDisabled && (
-                  <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/50 ring-offset-2 ring-offset-transparent" />
+                  <div className="absolute inset-0 ring-2 ring-[var(--theme-accent)]/50 ring-offset-2 ring-offset-transparent" />
                 )}
-                <div className="relative z-10 py-4 px-6">
+                <div className="mv-mobile-voice-content relative z-10">
                   <div className="flex items-center justify-center gap-3">
-                    <Mic size={20} strokeWidth={2.5} className={`transition-all ${
+                    <Mic size={20} strokeWidth={2.5} className={`mv-mobile-voice-icon transition-all ${
                       pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-emerald-400'
                     }`} />
-                    <span className={`font-bold text-[13px] tracking-wide transition-all ${
+                    <span className={`mv-mobile-voice-label font-bold tracking-wide transition-all ${
                       pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-emerald-400'
                     }`}>
                       {pttLabel}
@@ -255,7 +286,7 @@ export default function MobileFooter({
 
         // PTT modu
         return (
-          <div className="flex items-center justify-center pt-3 pb-1 px-4 gap-2">
+          <div className="mv-mobile-voice-strip flex items-center justify-center gap-2">
             <button
               onPointerDown={(e) => {
                 if (pttDisabled) return;
@@ -270,11 +301,11 @@ export default function MobileFooter({
               }}
               onPointerCancel={() => { if (!pttDisabled) setIsPttPressed(false); }}
               onContextMenu={(e) => e.preventDefault()}
-              className={`relative w-full max-w-[220px] min-h-[64px] select-none touch-none transition-all duration-150 rounded-2xl overflow-hidden ${
+              className={`mv-mobile-ptt-button relative w-full max-w-[220px] select-none touch-none transition-all duration-150 overflow-hidden ${
                 pttDisabled ? 'opacity-50' : isPttPressed ? 'scale-[0.97]' : 'scale-100'
               }`}
             >
-              <div className={`absolute inset-0 transition-all duration-150 rounded-2xl ${
+              <div className={`absolute inset-0 transition-all duration-150 ${
                 pttDisabled
                   ? 'bg-[var(--theme-border)]/20 border border-[var(--theme-border)]/30'
                   : isPttPressed
@@ -282,14 +313,14 @@ export default function MobileFooter({
                     : 'bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/25'
               }`} />
               {isPttPressed && !pttDisabled && (
-                <div className="absolute inset-0 rounded-2xl ring-2 ring-[var(--theme-accent)]/60 ring-offset-2 ring-offset-transparent" />
+                <div className="absolute inset-0 ring-2 ring-[var(--theme-accent)]/60 ring-offset-2 ring-offset-transparent" />
               )}
-              <div className="relative z-10 py-5 px-6">
+              <div className="mv-mobile-voice-content relative z-10">
                 <div className="flex items-center justify-center gap-3">
-                  <Mic size={22} strokeWidth={2.5} className={`transition-all duration-150 ${
+                  <Mic size={22} strokeWidth={2.5} className={`mv-mobile-voice-icon transition-all duration-150 ${
                     pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-[var(--theme-accent)]'
                   }`} />
-                  <span className={`font-bold text-[14px] tracking-wide transition-all duration-150 ${
+                  <span className={`mv-mobile-voice-label font-bold tracking-wide transition-all duration-150 ${
                     pttDisabled ? 'text-[var(--theme-secondary-text)]/50' : isPttPressed ? 'text-white' : 'text-[var(--theme-accent)]'
                   }`}>
                     {pttLabel}
@@ -325,28 +356,30 @@ export default function MobileFooter({
 
       {/* Desktop dock ile aynı — user card + server + mic + hp + audio lines + voice mode + room controls */}
       <div className="overflow-x-auto custom-scrollbar" style={{ borderTop: '1px solid var(--dock-divider, var(--dock-item-border, rgba(var(--glass-tint), 0.08)))' }}>
-        <DesktopDock
-          layout="inline"
-          dockToastHoveredRef={dockToastHoveredRef}
-          listenerToastRef={listenerToastRef}
-          cardStyle={cardStyle}
-          cycleCardStyle={cycleCardStyle}
-          serverList={serverList}
-          activeServerId={activeServerId}
-          onSelectServer={onSelectServer}
-          onJoinServer={onJoinServer}
-          onLeaveServer={onLeaveServer}
-          onShowCreateModal={onShowCreateModal}
-          canCreateServer={canCreateServer}
-          currentView={currentView}
-          onGoHome={onGoHome}
-          onReturnToRoom={onReturnToRoom}
-          invitationData={invitationData}
-          onInvitationAccept={onInvitationAccept}
-          onInvitationDecline={onInvitationDecline}
-          onInvitationMute={onInvitationMute}
-          invitationMuted={invitationMuted}
-        />
+        <React.Suspense fallback={<div className="h-[54px]" />}>
+          <DesktopDock
+            layout="inline"
+            dockToastHoveredRef={dockToastHoveredRef}
+            listenerToastRef={listenerToastRef}
+            cardStyle={cardStyle}
+            cycleCardStyle={cycleCardStyle}
+            serverList={serverList}
+            activeServerId={activeServerId}
+            onSelectServer={onSelectServer}
+            onJoinServer={onJoinServer}
+            onLeaveServer={onLeaveServer}
+            onShowCreateModal={onShowCreateModal}
+            canCreateServer={canCreateServer}
+            currentView={currentView}
+            onGoHome={onGoHome}
+            onReturnToRoom={onReturnToRoom}
+            invitationData={invitationData}
+            onInvitationAccept={onInvitationAccept}
+            onInvitationDecline={onInvitationDecline}
+            onInvitationMute={onInvitationMute}
+            invitationMuted={invitationMuted}
+          />
+        </React.Suspense>
       </div>
     </footer>
   );

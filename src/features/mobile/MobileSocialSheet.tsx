@@ -5,6 +5,7 @@ import type { MobileShellView } from './MobileAppShell';
 interface MobileSocialSheetProps {
   open?: boolean;
   variant?: 'overlay' | 'inline';
+  phoneLayout?: boolean;
   onClose?: () => void;
   pinned?: boolean;
   onTogglePinned?: () => void;
@@ -21,7 +22,20 @@ interface MobileSocialSheetProps {
   children?: React.ReactNode;
 }
 
-export default function MobileSocialSheet({ open = false, variant = 'overlay', onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, notificationSlot, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
+const INLINE_PANEL_STYLE = {
+  background: 'transparent',
+  boxShadow: 'inset 1px 0 0 rgba(var(--glass-tint),0.045)',
+};
+
+const OVERLAY_PANEL_STYLE = {
+  background: 'rgba(var(--theme-bg-rgb),0.06)',
+  boxShadow: 'inset 1px 0 0 rgba(var(--glass-tint),0.045)',
+};
+
+const UTILITY_ACTIVE_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.075)' };
+const UTILITY_INACTIVE_STYLE = { background: 'transparent' };
+
+export default function MobileSocialSheet({ open = false, variant = 'overlay', phoneLayout = false, onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, notificationSlot, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
   const header = onTogglePinned ? (
     <div className="mb-1.5 flex min-h-9 items-center justify-end border-b border-[rgba(var(--glass-tint),0.045)] pb-1.5">
       <button
@@ -44,10 +58,7 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
         onTouchStart={event => event.stopPropagation()}
         onTouchMove={event => event.stopPropagation()}
         onTouchEnd={event => event.stopPropagation()}
-        style={{
-          background: 'transparent',
-          boxShadow: 'inset 1px 0 0 rgba(var(--glass-tint),0.045)',
-        }}
+        style={INLINE_PANEL_STYLE}
       >
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {header}
@@ -76,17 +87,14 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
     >
       <button
         type="button"
-        className={`absolute inset-0 bg-[rgba(var(--theme-bg-rgb),0.12)] backdrop-blur-[1.5px] transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-[rgba(var(--theme-bg-rgb),0.10)] transition-opacity duration-150 ${open ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
         aria-label="Arkadas panelini kapat"
         tabIndex={open ? 0 : -1}
       />
       <aside
-        className={`absolute inset-y-0 right-0 h-full w-[clamp(168px,15vw,190px)] overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-220 ease-out ${open ? 'translate-x-0 opacity-100' : 'translate-x-[104%] opacity-80'}`}
-        style={{
-          background: 'rgba(var(--theme-bg-rgb),0.06)',
-          boxShadow: 'inset 1px 0 0 rgba(var(--glass-tint),0.045)',
-        }}
+        className={`absolute inset-y-0 right-0 h-full overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-150 ease-out ${phoneLayout ? 'w-[min(88vw,340px)]' : 'w-[clamp(168px,15vw,190px)]'} ${open ? 'translate-x-0 opacity-100' : 'translate-x-[104%] opacity-80'}`}
+        style={OVERLAY_PANEL_STYLE}
         aria-hidden={!open}
       >
         <div className="h-[calc(100vh-92px-env(safe-area-inset-top))] min-h-0 overflow-hidden">
@@ -98,7 +106,7 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', o
   );
 }
 
-function UtilityButton({
+const UtilityButton = React.memo(function UtilityButton({
   icon,
   label,
   active,
@@ -114,6 +122,8 @@ function UtilityButton({
   return (
     <button
       type="button"
+      onMouseDown={event => event.stopPropagation()}
+      onPointerDown={event => event.stopPropagation()}
       onClick={onClick}
       className={`flex h-9 w-9 items-center justify-center rounded-[10px] transition-colors active:scale-[0.98] ${
         tone === 'danger'
@@ -122,11 +132,11 @@ function UtilityButton({
             ? 'text-[var(--theme-accent)]'
             : 'text-[var(--theme-secondary-text)]/66'
       }`}
-      style={{ background: active ? 'rgba(var(--theme-accent-rgb),0.075)' : 'transparent' }}
+      style={active ? UTILITY_ACTIVE_STYLE : UTILITY_INACTIVE_STYLE}
       aria-label={label}
       title={label}
     >
       {icon}
     </button>
   );
-}
+});

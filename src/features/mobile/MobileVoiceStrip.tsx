@@ -1,4 +1,5 @@
 import { MicOff, Volume2 } from 'lucide-react';
+import React, { useMemo } from 'react';
 import AvatarContent from '../../components/AvatarContent';
 
 export interface MobileVoiceParticipant {
@@ -14,8 +15,12 @@ interface MobileVoiceStripProps {
   participants?: MobileVoiceParticipant[];
 }
 
-export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStripProps) {
-  const visible = participants.slice(0, 6);
+const EMPTY_VOICE_STYLE = { background: 'rgba(var(--glass-tint),0.025)' };
+const OVERFLOW_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.09)' };
+const AVATAR_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.08)' };
+
+function MobileVoiceStrip({ participants = [] }: MobileVoiceStripProps) {
+  const visible = useMemo(() => participants.slice(0, 6), [participants]);
   const overflowCount = Math.max(0, participants.length - visible.length);
 
   return (
@@ -29,7 +34,7 @@ export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStrip
         {visible.length > 0 ? visible.map(participant => (
           <VoiceParticipantCard key={participant.id} participant={participant} />
         )) : (
-          <div className="w-full rounded-xl px-3 py-3 text-[11px] font-medium text-[var(--theme-secondary-text)]/50" style={{ background: 'rgba(var(--glass-tint),0.025)' }}>
+          <div className="w-full rounded-xl px-3 py-3 text-[11px] font-medium text-[var(--theme-secondary-text)]/50" style={EMPTY_VOICE_STYLE}>
             Ses odasinda kimse yok
           </div>
         )}
@@ -37,7 +42,7 @@ export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStrip
         {overflowCount > 0 && (
           <div
             className="flex min-w-[58px] items-center justify-center rounded-xl px-3 text-[12px] font-black text-[var(--theme-accent)]"
-            style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}
+            style={OVERFLOW_STYLE}
           >
             +{overflowCount}
           </div>
@@ -47,7 +52,9 @@ export default function MobileVoiceStrip({ participants = [] }: MobileVoiceStrip
   );
 }
 
-function VoiceParticipantCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
+export default React.memo(MobileVoiceStrip);
+
+const VoiceParticipantCard = React.memo(function VoiceParticipantCard({ participant }: { key?: unknown; participant: MobileVoiceParticipant }) {
   return (
     <div
             className="flex min-w-[76px] max-w-[92px] flex-col items-center gap-1.5 rounded-[13px] px-2 py-1.5 md:min-w-0 md:max-w-none md:flex-row md:text-left"
@@ -61,7 +68,7 @@ function VoiceParticipantCard({ participant }: { key?: unknown; participant: Mob
       <div className="relative shrink-0">
         <span
           className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px] text-[12px] font-black text-[var(--theme-text)]"
-          style={{ background: 'rgba(var(--theme-accent-rgb),0.08)' }}
+          style={AVATAR_STYLE}
         >
           <AvatarContent
             avatar={participant.avatarUrl || ''}
@@ -87,4 +94,4 @@ function VoiceParticipantCard({ participant }: { key?: unknown; participant: Mob
       </span>
     </div>
   );
-}
+});

@@ -9,9 +9,9 @@ import {
   getModerationEvents, getActiveAutoPunishments, getServerDetails,
 } from '../../../lib/serverService';
 import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
-import { buildModEventsXlsx, countModEventsInRange } from '../../../lib/buildModEventsXlsx';
 import { useUser } from '../../../contexts/UserContext';
 import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
+import { isCapacitor } from '../../../lib/platform';
 import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 import { timeAgo } from './shared';
 import AuditLogPanel from './AuditLogPanel';
@@ -30,6 +30,26 @@ const RANGE_MS: Record<Range, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
 };
 const RANGE_BUCKETS: Record<Range, number> = { '24h': 24, '7d': 7, '30d': 30 };
+
+function runAfterAuditIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1800 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
+}
 
 type Kind = 'flood' | 'profanity' | 'spam' | 'auto_punish';
 const KIND_META: Record<Kind, { label: string; color: string; rgb: string; icon: React.ReactNode }> = {
@@ -159,7 +179,10 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
-    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    const cancelIdle = runAfterAuditIdle(() => {
+      getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    }, 900);
+    return cancelIdle;
   }, [serverId]);
 
   const fetchData = useCallback(async () => {
@@ -181,7 +204,10 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    fetchData();
+    const cancelIdle = runAfterAuditIdle(() => {
+      void fetchData();
+    }, 700);
+    return cancelIdle;
   }, [fetchData]);
 
   // "now" referansı 60s'de bir güncellensin — bucket sınırları kaymasın
@@ -329,9 +355,12 @@ export default function DenetimTab({ serverId, onOpenAutomod }: Props) {
         <ExportDialog
           title="Dışa aktar"
           totalCount={events.length}
-          countInRange={(r: DateRange) => countModEventsInRange(events, r)}
+          countInRange={(r: DateRange) => countModEventsInRangeLocal(events, r)}
           onClose={() => setExportOpen(false)}
-          onDownload={(mode: ExportMode, r: DateRange) => buildModEventsXlsx({ mode, range: r, events, serverName })}
+          onDownload={async (mode: ExportMode, r: DateRange) => {
+            const { buildModEventsXlsx } = await import('../../../lib/buildModEventsXlsx');
+            await buildModEventsXlsx({ mode, range: r, events, serverName });
+          }}
           allHint="Maksimum 1000 kayıt — daha fazlası için takvimden aralık seçebilirsin."
         />
       )}
@@ -1138,6 +1167,20 @@ function RecentEventsCard({ events }: { events: ModerationEvent[] }) {
 // ═══════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════
+function countModEventsInRangeLocal(events: ModerationEvent[], range: DateRange): number {
+  const start = Date.parse(`${range[0]}T00:00:00`);
+  const end = Date.parse(`${range[1]}T23:59:59`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  const lo = Math.min(start, end);
+  const hi = Math.max(start, end);
+  let count = 0;
+  for (const event of events) {
+    const time = Date.parse(event.createdAt);
+    if (time >= lo && time <= hi) count += 1;
+  }
+  return count;
+}
+
 function EmptyState({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-12 px-6">

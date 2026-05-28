@@ -46,6 +46,16 @@ const AVATAR_STATUS: Record<MobileUserStatus, string> = {
   offline: 'Çevrimdışı',
 };
 
+const PROFILE_CARD_STYLE = { background: 'rgba(var(--glass-tint),0.026)' };
+const PROFILE_AVATAR_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.08)' };
+const PROFILE_SUMMARY_STYLE = { background: 'rgba(var(--glass-tint),0.022)' };
+const ACTION_BUTTON_STYLE = {
+  background: 'rgba(var(--glass-tint),0.024)',
+  boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.024)',
+};
+const BADGE_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.10)' };
+const META_ROW_STYLE = { background: 'rgba(var(--glass-tint),0.018)' };
+
 export default function MobileProfileScreen({
   displayName,
   username,
@@ -67,8 +77,8 @@ export default function MobileProfileScreen({
   return (
     <div className="h-full min-h-0 overflow-y-auto pb-3 pt-0.5 custom-scrollbar">
       <div className="mx-auto w-full max-w-[860px]">
-      <section className="mb-1.5 rounded-[16px] px-4 py-2.5 text-center" style={{ background: 'rgba(var(--glass-tint),0.026)' }}>
-        <div className="mx-auto mb-1.5 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[15px] text-[20px] font-black text-[var(--theme-text)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.08)' }}>
+      <section className="mb-1.5 rounded-[16px] px-4 py-2.5 text-center" style={PROFILE_CARD_STYLE}>
+        <div className="mx-auto mb-1.5 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[15px] text-[20px] font-black text-[var(--theme-text)]" style={PROFILE_AVATAR_STYLE}>
           <AvatarContent
             avatar={avatarUrl || ''}
             statusText={AVATAR_STATUS[status]}
@@ -94,7 +104,7 @@ export default function MobileProfileScreen({
         <ActionButton label="Ayar" icon={<Settings size={16} />} onClick={onOpenSettings} />
       </section>
 
-      <section className="mb-1.5 rounded-[16px] px-3.5 py-2.5" style={{ background: 'rgba(var(--glass-tint),0.022)' }}>
+      <section className="mb-1.5 rounded-[16px] px-3.5 py-2.5" style={PROFILE_SUMMARY_STYLE}>
         <h3 className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/58">Profil ozeti</h3>
         <div className="space-y-1">
           <MetaRow label="Sunucu" value={serverName || 'Bagli sunucu yok'} />
@@ -104,7 +114,7 @@ export default function MobileProfileScreen({
         {badges.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {badges.map(badge => (
-              <span key={badge.id} className="rounded-full px-2.5 py-1 text-[10px] font-bold text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.10)' }}>
+              <span key={badge.id} className="rounded-full px-2.5 py-1 text-[10px] font-bold text-[var(--theme-accent)]" style={BADGE_STYLE}>
                 {badge.label}
               </span>
             ))}
@@ -122,25 +132,25 @@ export default function MobileProfileScreen({
   );
 }
 
-function ActionButton({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick?: () => void }) {
+const ActionButton = React.memo(function ActionButton({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick?: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-[13px] text-[var(--theme-secondary-text)]/72 active:scale-[0.98]"
-      style={{ background: 'rgba(var(--glass-tint),0.024)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.024)' }}
+      style={ACTION_BUTTON_STYLE}
     >
       <span className="text-[var(--theme-accent)]">{icon}</span>
       <span className="text-[9.5px] font-bold">{label}</span>
     </button>
   );
-}
+});
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+const MetaRow = React.memo(function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-11 items-center justify-between gap-3 rounded-[13px] px-3 py-1.5" style={{ background: 'rgba(var(--glass-tint),0.018)' }}>
+    <div className="flex min-h-11 items-center justify-between gap-3 rounded-[13px] px-3 py-1.5" style={META_ROW_STYLE}>
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--theme-secondary-text)]/52">{label}</span>
       <span className="min-w-0 truncate text-right text-[11px] font-bold text-[var(--theme-text)]/82">{value}</span>
     </div>
   );
-}
+});

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Coffee, Compass, Crown, Pin, Shield, ShieldCheck, Sparkles, Volume2, Wifi } from 'lucide-react';
+import React, { useDeferredValue, useMemo } from 'react';
+import { Coffee, Compass, Crown, MoreVertical, Pin, Shield, ShieldCheck, Sparkles, Volume2 } from 'lucide-react';
 import AvatarContent from '../../components/AvatarContent';
 import DeviceBadge from '../../components/chat/DeviceBadge';
 import { getUserRoleBadge } from '../../components/RoleBadge';
@@ -8,6 +8,9 @@ import { getPublicDisplayName } from '../../lib/formatName';
 import { hasCustomAvatar } from '../../lib/statusAvatar';
 import type { User } from '../../types';
 import { channelIconComponents, roomModeIcons } from '../chatview/constants';
+
+const MOBILE_CHANNEL_WINDOW = 28;
+const ConnectionQualityIndicator = React.lazy(() => import('../../components/chat/ConnectionQualityIndicator'));
 
 function MobileRoleIcon({ role }: { role: VisualRole }) {
   if (role === 'member') return null;
@@ -43,18 +46,47 @@ export interface MobileChannelSheetItem {
 interface MobileChannelSheetProps {
   open?: boolean;
   variant?: 'overlay' | 'inline';
+  phoneLayout?: boolean;
   channels?: MobileChannelSheetItem[];
   onClose?: () => void;
   onSelectChannel?: (id: string) => void;
+  onOpenChannelMenu?: (id: string, position: { x: number; y: number }) => void;
   onCreateChannel?: () => void;
   createDisabled?: boolean;
   createTitle?: string;
   pinned?: boolean;
   onTogglePinned?: () => void;
   onOpenDiscover?: () => void;
+  connectionLevel?: number;
+  connectionLatencyMs?: number;
+  connectionJitterMs?: number;
+  isConnecting?: boolean;
+  isActiveChannel?: boolean;
 }
 
-export default function MobileChannelSheet({ open = false, variant = 'overlay', channels = [], onClose, onSelectChannel, onCreateChannel, createDisabled = false, createTitle, pinned = false, onTogglePinned, onOpenDiscover }: MobileChannelSheetProps) {
+export default function MobileChannelSheet({
+  open = false,
+  variant = 'overlay',
+  phoneLayout = false,
+  channels = [],
+  onClose,
+  onSelectChannel,
+  onOpenChannelMenu,
+  onCreateChannel,
+  createDisabled = false,
+  createTitle,
+  pinned = false,
+  onTogglePinned,
+  onOpenDiscover,
+  connectionLevel = 4,
+  connectionLatencyMs,
+  connectionJitterMs,
+  isConnecting = false,
+  isActiveChannel = false,
+}: MobileChannelSheetProps) {
+  const deferredChannels = useDeferredValue(channels);
+  const visibleChannels = useMemo(() => deferredChannels.slice(0, MOBILE_CHANNEL_WINDOW), [deferredChannels]);
+  const hiddenChannelCount = Math.max(0, deferredChannels.length - visibleChannels.length);
   const panelContent = (
     <>
       <div className="mb-1.5 flex min-h-9 items-center justify-between border-b border-[rgba(var(--glass-tint),0.045)] pb-1.5">
@@ -78,54 +110,23 @@ export default function MobileChannelSheet({ open = false, variant = 'overlay', 
 
       <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
         <div className="space-y-0.5">
-          {channels.length > 0 ? channels.map(channel => {
-            const mode = channel.type || 'social';
-            const Icon = channelIconComponents[channel.iconName || ''] || roomModeIcons[mode] || Coffee;
-            const iconColor = channel.iconColor || 'var(--theme-accent)';
-            return (
-              <div
-                key={channel.id}
-                className="group relative overflow-hidden rounded-[9px] active:scale-[0.998]"
-                style={{
-                  background: channel.active ? 'rgba(var(--theme-accent-rgb),0.055)' : 'transparent',
-                }}
-              >
-                {channel.active && <span className="absolute inset-y-2 left-0 w-px rounded-r-full bg-[var(--theme-accent)]/70" aria-hidden="true" />}
-                <button
-                  type="button"
-                  onClick={() => onSelectChannel?.(channel.id)}
-                  className="flex min-h-8 w-full items-center gap-1.5 px-2 py-0.5 text-left"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                    <Icon size={15} className="opacity-90" style={{ color: iconColor }} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-[var(--theme-text)]/86">{channel.name}</span>
-                  {typeof channel.memberCount === 'number' && (
-                    <span className="text-[9.5px] font-bold text-[var(--theme-secondary-text)]/42">{channel.memberCount}</span>
-                  )}
-                </button>
-                {channel.members && channel.members.length > 0 && (
-                  <div className="space-y-0.5 pb-1 pl-8 pr-1.5">
-                    {channel.members.slice(0, 5).map(member => (
-                      <button
-                        key={`${channel.id}-${member.id}`}
-                        type="button"
-                        onClick={() => onSelectChannel?.(channel.id)}
-                        className="flex h-7 w-full items-center gap-1.5 rounded-md px-1 text-left text-[10.5px] font-medium text-[var(--theme-secondary-text)]/68"
-                      >
-                        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden avatar-squircle" style={{ background: hasCustomAvatar(member.avatar) ? 'rgba(0,0,0,0.14)' : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)' }}>
-                          <AvatarContent avatar={member.avatar} statusText={member.statusText} firstName={member.displayName || member.firstName} name={getPublicDisplayName(member)} letterClassName="text-[8px] font-bold text-[var(--theme-accent)]" />
-                          <DeviceBadge platform={member.platform} size={9} className="absolute -bottom-0.5 -right-0.5" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{getPublicDisplayName(member)}</span>
-                        <MobileRoleIcon role={getUserRoleBadge(member)} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          }) : (
+          {visibleChannels.length > 0 ? (
+            <>
+              {visibleChannels.map(channel => (
+                <MobileChannelRow
+                  key={channel.id}
+                  channel={channel}
+                  onSelectChannel={onSelectChannel}
+                  onOpenChannelMenu={onOpenChannelMenu}
+                />
+              ))}
+              {hiddenChannelCount > 0 && (
+                <div className="px-2 py-1.5 text-center text-[9.5px] font-bold text-[var(--theme-secondary-text)]/42">
+                  +{hiddenChannelCount} oda daha
+                </div>
+              )}
+            </>
+          ) : (
             <div className="rounded-xl px-3 py-3 text-[11px] font-medium text-[var(--theme-secondary-text)]/62" style={{ background: 'rgba(var(--glass-tint),0.04)', boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.04)' }}>
               Kanal bulunamadi
             </div>
@@ -167,9 +168,16 @@ export default function MobileChannelSheet({ open = false, variant = 'overlay', 
         </button>
         <div className="mt-1 flex items-center justify-center gap-3 px-2 text-[9.5px] font-bold text-[var(--theme-secondary-text)]/46">
           <span>v2.2.9</span>
-          <span className="flex items-center gap-1">
-            <Wifi size={10} className="text-[var(--theme-accent)]/62" />
-            <span>Sinyal iyi</span>
+          <span className="flex items-center gap-1.5">
+            <React.Suspense fallback={<span className="inline-block h-4 w-4" />}>
+              <ConnectionQualityIndicator
+                connectionLevel={connectionLevel}
+                latencyMs={connectionLatencyMs}
+                jitterMs={connectionJitterMs}
+                isConnecting={isConnecting}
+                isActive={isActiveChannel}
+              />
+            </React.Suspense>
           </span>
         </div>
       </div>
@@ -204,13 +212,13 @@ export default function MobileChannelSheet({ open = false, variant = 'overlay', 
     >
       <button
         type="button"
-        className={`absolute inset-0 bg-[rgba(var(--theme-bg-rgb),0.12)] backdrop-blur-[1.5px] transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-[rgba(var(--theme-bg-rgb),0.10)] transition-opacity duration-150 ${open ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
         aria-label="Kanal panelini kapat"
         tabIndex={open ? 0 : -1}
       />
       <aside
-        className={`absolute inset-y-0 left-0 h-full w-[clamp(168px,15vw,190px)] overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-220 ease-out ${open ? 'translate-x-0 opacity-100' : '-translate-x-[104%] opacity-80'}`}
+        className={`absolute inset-y-0 left-0 h-full overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-150 ease-out ${phoneLayout ? 'w-[min(84vw,320px)]' : 'w-[clamp(168px,15vw,190px)]'} ${open ? 'translate-x-0 opacity-100' : '-translate-x-[104%] opacity-80'}`}
         style={{
           background: 'rgba(var(--theme-bg-rgb),0.06)',
           boxShadow: 'inset -1px 0 0 rgba(var(--glass-tint),0.045)',
@@ -222,3 +230,94 @@ export default function MobileChannelSheet({ open = false, variant = 'overlay', 
     </div>
   );
 }
+
+const MobileChannelRow = React.memo(function MobileChannelRow({
+  channel,
+  onSelectChannel,
+  onOpenChannelMenu,
+}: {
+  channel: MobileChannelSheetItem;
+  onSelectChannel?: (id: string) => void;
+  onOpenChannelMenu?: (id: string, position: { x: number; y: number }) => void;
+}) {
+  const mode = channel.type || 'social';
+  const Icon = channelIconComponents[channel.iconName || ''] || roomModeIcons[mode] || Coffee;
+  const iconColor = channel.iconColor || 'var(--theme-accent)';
+  return (
+    <div
+      className="group relative overflow-hidden rounded-[9px] active:scale-[0.998]"
+      style={{
+        background: channel.active ? 'rgba(var(--theme-accent-rgb),0.055)' : 'transparent',
+      }}
+    >
+      {channel.active && <span className="absolute inset-y-2 left-0 w-px rounded-r-full bg-[var(--theme-accent)]/70" aria-hidden="true" />}
+      <button
+        type="button"
+        onClick={() => onSelectChannel?.(channel.id)}
+        className="flex min-h-8 w-full items-center gap-1.5 px-2 py-0.5 text-left"
+      >
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+          <Icon size={15} className="opacity-90" style={{ color: iconColor }} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-[var(--theme-text)]/86">{channel.name}</span>
+        {typeof channel.memberCount === 'number' && channel.memberCount > 0 && (
+          <span className="text-[9.5px] font-bold text-[var(--theme-secondary-text)]/42">{channel.memberCount}</span>
+        )}
+      </button>
+      {onOpenChannelMenu && (
+        <button
+          type="button"
+          className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-[8px] text-[var(--theme-secondary-text)]/46 transition-colors hover:bg-[rgba(var(--glass-tint),0.06)] hover:text-[var(--theme-text)]/76 active:scale-[0.96]"
+          aria-label={`${channel.name} oda seçenekleri`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenChannelMenu(channel.id, { x: rect.right + 6, y: rect.top });
+          }}
+        >
+          <MoreVertical size={13} />
+        </button>
+      )}
+      {channel.members && channel.members.length > 0 && (
+        <div className="space-y-0.5 pb-1 pl-8 pr-1.5">
+          {channel.members.slice(0, 5).map(member => (
+            <ChannelMemberPreview
+              key={`${channel.id}-${member.id}`}
+              channelId={channel.id}
+              member={member}
+              onSelectChannel={onSelectChannel}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+const ChannelMemberPreview = React.memo(function ChannelMemberPreview({
+  channelId,
+  member,
+  onSelectChannel,
+}: {
+  channelId: string;
+  member: User;
+  onSelectChannel?: (id: string) => void;
+}) {
+  const displayName = getPublicDisplayName(member);
+  const role = getUserRoleBadge(member);
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectChannel?.(channelId)}
+      className="flex h-7 w-full items-center gap-1.5 rounded-md px-1 text-left text-[10.5px] font-medium text-[var(--theme-secondary-text)]/68"
+    >
+      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden avatar-squircle" style={{ background: hasCustomAvatar(member.avatar) ? 'rgba(0,0,0,0.14)' : 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22) 0%, rgba(var(--theme-accent-rgb),0.08) 100%)' }}>
+        <AvatarContent avatar={member.avatar} statusText={member.statusText} firstName={member.displayName || member.firstName} name={displayName} letterClassName="text-[8px] font-bold text-[var(--theme-accent)]" />
+        <DeviceBadge platform={member.platform} size={9} className="absolute -bottom-0.5 -right-0.5" />
+      </span>
+      <span className="min-w-0 flex-1 truncate">{displayName}</span>
+      <MobileRoleIcon role={role} />
+    </button>
+  );
+});

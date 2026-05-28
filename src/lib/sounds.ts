@@ -9,6 +9,7 @@ type SoundType = 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen' | 
 let audioCtx: AudioContext | null = null;
 const MASTER_VOLUME_KEY = 'mv:sm:master-volume';
 const MUTED_KEY = 'mv:sm:muted';
+let lastPttOnPlayedAt = 0;
 
 function getMasterSoundGain(): number {
   try {
@@ -102,6 +103,21 @@ function playPtt(ctx: AudioContext, isOn: boolean, variant: SoundVariant) {
     const f = isOn ? 1320 : 1100;
     tone(ctx, f, t, 0.02, 0.35); tone(ctx, f, t + 0.04, 0.02, 0.30);
   }
+}
+
+function playPttOrdered(ctx: AudioContext, isOn: boolean, variant: SoundVariant) {
+  if (isOn) {
+    lastPttOnPlayedAt = performance.now();
+    playPtt(ctx, true, variant);
+    return;
+  }
+  const elapsed = performance.now() - lastPttOnPlayedAt;
+  const delayMs = lastPttOnPlayedAt > 0 ? Math.max(0, 90 - elapsed) : 0;
+  if (delayMs <= 0) {
+    playPtt(ctx, false, variant);
+    return;
+  }
+  window.setTimeout(() => playPtt(ctx, false, variant), delayMs);
 }
 
 // ── Invite Ringtone ───────────────────────────────────────────────────────────
@@ -241,6 +257,18 @@ function getVariant(cat: SoundCategory): SoundVariant {
   return (parseInt(localStorage.getItem(`sound${cat}Variant`) || '1') || 1) as SoundVariant;
 }
 
+function playWhenContextReady(ctx: AudioContext, play: () => void): void {
+  if (ctx.state !== 'suspended') {
+    play();
+    return;
+  }
+  void ctx.resume()
+    .then(play)
+    .catch(() => {
+      try { play(); } catch { /* no-op */ }
+    });
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export function playSound(type: SoundType): void {
   try {
@@ -250,27 +278,28 @@ export function playSound(type: SoundType): void {
     if (type === 'moderation') {
       if (localStorage.getItem('soundMuteDeafen') === 'false') return;
       const ctx = getCtx();
-      if (ctx.state === 'suspended') ctx.resume();
-      playModerationChime(ctx);
+      playWhenContextReady(ctx, () => playModerationChime(ctx));
       return;
     }
     const cat = getCategory(type);
     if (localStorage.getItem(`sound${cat}`) === 'false') return;
     const ctx = getCtx();
-    if (ctx.state === 'suspended') ctx.resume();
     const v = getVariant(cat);
-    if (cat === 'JoinLeave') playJoinLeave(ctx, type === 'join', v);
-    else if (cat === 'MuteDeafen') playMuteDeafen(ctx, type === 'mute' || type === 'deafen', v);
-    else playPtt(ctx, type === 'ptt-on', v);
+    playWhenContextReady(ctx, () => {
+      if (cat === 'JoinLeave') playJoinLeave(ctx, type === 'join', v);
+      else if (cat === 'MuteDeafen') playMuteDeafen(ctx, type === 'mute' || type === 'deafen', v);
+      else playPttOrdered(ctx, type === 'ptt-on', v);
+    });
   } catch { /* sessizce geç */ }
 }
 
 export function previewSound(category: SoundCategory, variant: SoundVariant): void {
   try {
     const ctx = getCtx();
-    if (ctx.state === 'suspended') ctx.resume();
-    if (category === 'JoinLeave') playJoinLeave(ctx, true, variant);
-    else if (category === 'MuteDeafen') playMuteDeafen(ctx, false, variant);
-    else playPtt(ctx, true, variant);
+    playWhenContextReady(ctx, () => {
+      if (category === 'JoinLeave') playJoinLeave(ctx, true, variant);
+      else if (category === 'MuteDeafen') playMuteDeafen(ctx, false, variant);
+      else playPtt(ctx, true, variant);
+    });
   } catch { /* sessizce geç */ }
 }

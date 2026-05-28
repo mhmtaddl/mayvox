@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ShieldCheck, Zap, MessageSquareWarning, ListFilter, Filter, BookLock, Search, X, ChevronLeft, ChevronRight, ScrollText, Download, Gavel, Plus } from 'lucide-react';
 import {
@@ -11,12 +11,12 @@ import {
   getActiveAutoPunishments, getServerDetails,
 } from '../../../lib/serverService';
 import ExportDialog, { type ExportMode, type DateRange } from './ExportDialog';
-import { buildModEventsXlsx } from '../../../lib/buildModEventsXlsx';
 import AutoPunishmentCard from './AutoPunishmentCard';
 import { Loader } from './shared';
 import { useUser } from '../../../contexts/UserContext';
 import { getStatusAvatar, hasCustomAvatar } from '../../../lib/statusAvatar';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
+import { isCapacitor } from '../../../lib/platform';
 import cevrimdisiPng from '../../../assets/profil/cevrimdisi.png';
 // Sistem kara listesi — tek gerçek kaynak (chat-server ile aynı dosya).
 // Vite JSON import native; build-time inline olur, runtime fetch yok.
@@ -63,6 +63,26 @@ const WORDS_PER_PAGE = 60;
 const RANGE_LABELS: Record<ModStatRange, string> = { '5m': '5 dk', '1h': '1 saat', '24h': '24 saat' };
 const STATS_REFRESH_MS = 30_000;
 const EMPTY_STATS: ModerationStats = { floodBlocked: 0, profanityBlocked: 0, spamBlocked: 0 };
+
+function runAfterAutoModIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1700 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
+}
 
 export interface AutoModActions {
   onSave: () => void;
@@ -293,10 +313,12 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   const [eventsDenied, setEventsDenied] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventSearch, setEventSearch] = useState('');
+  const deferredEventSearch = useDeferredValue(eventSearch);
   const [eventKindFilter, setEventKindFilter] = useState<'all' | 'flood' | 'profanity' | 'spam' | 'auto_punish'>('all');
   const [eventPage, setEventPage] = useState(1);
   useEffect(() => {
     let cancelled = false;
+    let intervalId: number | null = null;
     const fetchEvents = async () => {
       try {
         const list = await getModerationEvents(serverId, { limit: 1000 });
@@ -309,24 +331,30 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
         if (!cancelled) setEventsLoading(false);
       }
     };
-    fetchEvents();
-    const t = setInterval(fetchEvents, STATS_REFRESH_MS);
-    return () => { cancelled = true; clearInterval(t); };
+    const cancelIdle = runAfterAutoModIdle(() => {
+      void fetchEvents();
+      intervalId = window.setInterval(fetchEvents, STATS_REFRESH_MS);
+    }, 850);
+    return () => {
+      cancelled = true;
+      cancelIdle();
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
   }, [serverId]);
 
   // Filter/search uygulanır → pagination (15/sayfa)
   const filteredEvents = useMemo(() => {
     if (!events) return [];
-    const q = eventSearch.trim().toLowerCase();
+    const q = deferredEventSearch.trim().toLocaleLowerCase('tr-TR');
     return events.filter(ev => {
       if (eventKindFilter !== 'all' && ev.kind !== eventKindFilter) return false;
       if (q) {
-        const hay = [ev.userName || '', ev.channelName || ''].join(' ').toLowerCase();
+        const hay = [ev.userName || '', ev.channelName || ''].join(' ').toLocaleLowerCase('tr-TR');
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [events, eventSearch, eventKindFilter]);
+  }, [events, deferredEventSearch, eventKindFilter]);
   const EVENTS_PER_PAGE = 10;
   const eventTotalPages = Math.max(1, Math.ceil(filteredEvents.length / EVENTS_PER_PAGE));
   const eventCurrentPage = Math.min(eventPage, eventTotalPages);
@@ -339,6 +367,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
   useEffect(() => {
     if (eventsDenied) return;
     let cancelled = false;
+    let intervalId: number | null = null;
     const fetchActive = async () => {
       try {
         const list = await getActiveAutoPunishments(serverId);
@@ -347,16 +376,25 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
         // 403 eventsDenied ile zaten yakalanıyor; diğer hataları sessiz yut
       }
     };
-    fetchActive();
-    const t = setInterval(fetchActive, STATS_REFRESH_MS);
-    return () => { cancelled = true; clearInterval(t); };
+    const cancelIdle = runAfterAutoModIdle(() => {
+      void fetchActive();
+      intervalId = window.setInterval(fetchActive, STATS_REFRESH_MS);
+    }, 1100);
+    return () => {
+      cancelled = true;
+      cancelIdle();
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
   }, [serverId, eventsDenied]);
 
   // XLSX export — ExportDialog (tek takvim + Tüm log kaydı)
   const [exportOpen, setExportOpen] = useState(false);
   const [serverName, setServerName] = useState('Sunucu');
   useEffect(() => {
-    getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    const cancelIdle = runAfterAutoModIdle(() => {
+      getServerDetails(serverId).then(s => setServerName(s.name)).catch(() => {});
+    }, 1200);
+    return cancelIdle;
   }, [serverId]);
 
   // Kara liste modal (dil-tab + sayfalama)
@@ -688,6 +726,7 @@ export default function AutoModerationTab({ serverId, showToast, onStateChange, 
           onClose={() => setExportOpen(false)}
           onDownload={async (mode: ExportMode, range: DateRange) => {
             const kindLabel = eventKindFilter === 'all' ? undefined : `Tür: ${eventKindFilter}`;
+            const { buildModEventsXlsx } = await import('../../../lib/buildModEventsXlsx');
             await buildModEventsXlsx({
               mode, range,
               events: eventKindFilter === 'all' ? events : events.filter(e => e.kind === eventKindFilter),

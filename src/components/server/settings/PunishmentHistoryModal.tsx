@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, Shield, Search, History,
@@ -224,6 +224,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [page, setPage] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [fetchNonce, setFetchNonce] = useState(0);
@@ -293,7 +294,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   const filtered = useMemo(() => {
     if (!events) return [];
     const chip = FILTERS.find(f => f.key === filter) ?? FILTERS[0];
-    const q = search.trim().toLocaleLowerCase('tr-TR');
+    const q = deferredSearch.trim().toLocaleLowerCase('tr-TR');
     return events.filter(ev => {
       if (!chip.match(ev.kind)) return false;
       if (!q) return true;
@@ -306,7 +307,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
       ].join(' ').toLocaleLowerCase('tr-TR');
       return hay.includes(q);
     });
-  }, [events, filter, search]);
+  }, [events, filter, deferredSearch]);
 
   // Pagination
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -314,7 +315,7 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
   const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // Filter/search değişince sayfa 0'a dön
-  useEffect(() => { setPage(0); }, [filter, search]);
+  useEffect(() => { setPage(0); }, [filter, deferredSearch]);
 
   const displayName = memberDisplayName(member);
   // Avatar fallback için: kullanıcının anlık durum PNG'sini UserContext.allUsers'tan çöz.
@@ -647,19 +648,41 @@ export default function PunishmentHistoryModal({ serverId, member, onClose, onTo
           background: rgba(255,255,255,0.035) !important;
         }
 
-        /* Scrollbar — thin, muted */
-        .phmScroll::-webkit-scrollbar { width: 7px; height: 7px; }
+        /* Scrollbar — app-wide premium recipe */
+        .phmScroll::-webkit-scrollbar { width: 2px; height: 2px; }
         .phmScroll::-webkit-scrollbar-track { background: var(--scrollbar-track, transparent); }
         .phmScroll::-webkit-scrollbar-thumb {
-          background: var(--scrollbar-thumb, rgba(255,255,255,0.20));
+          min-height: 12px;
+          background:
+            linear-gradient(
+              to bottom,
+              transparent 0%,
+              rgba(var(--glass-tint), 0.04) 12%,
+              rgba(var(--glass-tint), 0.20) 38%,
+              rgba(var(--glass-tint), 0.20) 62%,
+              rgba(var(--glass-tint), 0.04) 88%,
+              transparent 100%
+            );
+          border: 0;
+          background-clip: padding-box;
           border-radius: 999px;
         }
         .phmScroll::-webkit-scrollbar-thumb:hover {
-          background: var(--scrollbar-thumb-hover, rgba(255,255,255,0.32));
+          background:
+            linear-gradient(
+              to bottom,
+              transparent 0%,
+              rgba(var(--glass-tint), 0.06) 12%,
+              rgba(var(--glass-tint), 0.28) 38%,
+              rgba(var(--glass-tint), 0.28) 62%,
+              rgba(var(--glass-tint), 0.06) 88%,
+              transparent 100%
+            );
+          background-clip: padding-box;
         }
         .phmScroll {
           scrollbar-width: thin;
-          scrollbar-color: var(--scrollbar-thumb, rgba(255,255,255,0.20)) var(--scrollbar-track, transparent);
+          scrollbar-color: rgba(var(--glass-tint),0.18) transparent;
         }
       `}</style>
     </div>

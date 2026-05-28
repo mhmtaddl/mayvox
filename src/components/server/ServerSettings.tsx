@@ -8,18 +8,20 @@ import {
   countPendingJoinRequests, getServerOverview,
 } from '../../lib/serverService';
 import { useChannel } from '../../contexts/ChannelContext';
-import OverviewTab from './settings/OverviewTab';
-import RolesTab from './settings/RolesTab';
-import DenetimTab from './settings/DenetimTab';
-import GeneralTab from './settings/GeneralTab';
-import MembersTab from './settings/MembersTab';
-import InvitesTab, { type InvitesSubTab } from './settings/InvitesTab';
-import AutoModerationTab from './settings/AutoModerationTab';
-import InsightsTab from './settings/InsightsTab';
-import StreamsTab from './settings/StreamsTab';
+import type { InvitesSubTab } from './settings/InvitesTab';
 import { displaySlug } from './settings/shared';
 import { isCapacitor } from '../../lib/platform';
 import { resolveAvatarUrls } from '../../lib/statusAvatar';
+
+const OverviewTab = React.lazy(() => import('./settings/OverviewTab'));
+const RolesTab = React.lazy(() => import('./settings/RolesTab'));
+const DenetimTab = React.lazy(() => import('./settings/DenetimTab'));
+const GeneralTab = React.lazy(() => import('./settings/GeneralTab'));
+const MembersTab = React.lazy(() => import('./settings/MembersTab'));
+const InvitesTab = React.lazy(() => import('./settings/InvitesTab'));
+const AutoModerationTab = React.lazy(() => import('./settings/AutoModerationTab'));
+const InsightsTab = React.lazy(() => import('./settings/InsightsTab'));
+const StreamsTab = React.lazy(() => import('./settings/StreamsTab'));
 
 type Tab = 'general' | 'overview' | 'members' | 'roles' | 'invites' | 'automod' | 'streams' | 'audit' | 'insights';
 // Legacy initialTab input:
@@ -42,17 +44,47 @@ function resolveInitial(t: TabInput | undefined): ResolvedInitial {
 }
 
 // Identity strip'te plan/limit göstergesi — sadece bu dosyada kullanılıyor
-function HeaderPill({ icon, value, limit, label }: { icon: React.ReactNode; value: number; limit: number; label: string }) {
+function HeaderPill({ icon, value, limit, label, compact = false }: { icon: React.ReactNode; value: number; limit: number; label: string; compact?: boolean }) {
   const p = limit > 0 ? Math.min(100, (value / limit) * 100) : 0;
   const tone = p >= 90 ? 'text-red-400 bg-red-500/10 border-red-500/25'
     : p >= 75 ? 'text-amber-400 bg-amber-500/10 border-amber-500/25'
     : 'text-[var(--theme-text)]/85 bg-[rgba(var(--glass-tint),0.06)] border-[rgba(var(--glass-tint),0.10)]';
   return (
-    <span title={label} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-bold tabular-nums border ${tone}`}>
+    <span title={label} className={`inline-flex items-center gap-1 rounded-md font-bold tabular-nums border ${compact ? 'h-6 px-1.5 text-[9px]' : 'px-2 py-1 text-[10.5px]'} ${tone}`}>
       <span className="opacity-70">{icon}</span>
       {value.toLocaleString('tr-TR')}<span className="opacity-50">/{limit.toLocaleString('tr-TR')}</span>
     </span>
   );
+}
+
+function TabFallback() {
+  return (
+    <div className="flex min-h-[260px] items-center justify-center rounded-2xl text-[11px] font-semibold text-[var(--theme-secondary-text)]/55">
+      Bölüm yükleniyor...
+    </div>
+  );
+}
+
+function runAfterTabletIdle(task: () => void, tabletDelay = 0) {
+  if (typeof window === 'undefined') {
+    return () => undefined;
+  }
+
+  let idleId: number | null = null;
+  const timerId = window.setTimeout(() => {
+    if (isCapacitor() && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: tabletDelay + 1600 });
+      return;
+    }
+    task();
+  }, isCapacitor() ? tabletDelay : 0);
+
+  return () => {
+    window.clearTimeout(timerId);
+    if (idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(idleId);
+    }
+  };
 }
 
 // ══════════════════════════════════════
@@ -81,6 +113,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const sameServerCtx = accessContext && accessContext.serverId === serverId ? accessContext : null;
 
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); }, []);
+  const selectTab = useCallback((next: Tab) => {
+    React.startTransition(() => setTab(next));
+  }, []);
 
   // AutoMod tab — dirty/saving state + action handler'ları: butonları tab bar sağında göster.
   const [automodState, setAutomodState] = useState<{ dirty: boolean; saving: boolean }>({ dirty: false, saving: false });
@@ -135,13 +170,18 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
   const [overview, setOverview] = useState<ServerOverview | null>(null);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const ov = await getServerOverview(serverId);
-        if (!cancelled) setOverview(ov);
-      } catch { /* sessizce geç — header stats sadece dolmaz */ }
-    })();
-    return () => { cancelled = true; };
+    const cancelIdle = runAfterTabletIdle(() => {
+      void (async () => {
+        try {
+          const ov = await getServerOverview(serverId);
+          if (!cancelled) setOverview(ov);
+        } catch { /* sessizce geç — header stats sadece dolmaz */ }
+      })();
+    }, 650);
+    return () => {
+      cancelled = true;
+      cancelIdle();
+    };
   }, [serverId]);
 
   // Capability (server yüklenmeden geçici false — hook sırası sabit kalsın diye koşulsuz tanımlı)
@@ -150,8 +190,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
 
   // Tab guard: 'overview' yetkisi yoksa 'general'a düş.
   useEffect(() => {
-    if (!loading && tab === 'overview' && !canManageServerEarly) setTab('general');
-  }, [loading, tab, canManageServerEarly]);
+    if (!loading && tab === 'overview' && !canManageServerEarly) selectTab('general');
+  }, [loading, tab, canManageServerEarly, selectTab]);
 
   // Pending join requests count — rozet için (erken return'ten ÖNCE, hook sırası stabil)
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
@@ -163,7 +203,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
         .then(c => { if (!cancelled) setPendingRequestCount(c); })
         .catch(() => {});
     };
-    tick();
+    const cancelInitialTick = runAfterTabletIdle(tick, 900);
     const interval = setInterval(tick, 30_000);
     // JoinRequestsTab accept/reject sonrası local event fırlatıyor — 30s polling beklemeden
     // "1" rozeti anında güncellenir.
@@ -171,6 +211,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     window.addEventListener('pigevox:join-request:local-update', onLocalUpdate);
     return () => {
       cancelled = true;
+      cancelInitialTick();
       clearInterval(interval);
       window.removeEventListener('pigevox:join-request:local-update', onLocalUpdate);
     };
@@ -220,14 +261,14 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
     return (
       <button
         key={t.id}
-        onClick={() => setTab(t.id)}
-        className={`relative ${tabletMode ? 'h-10 min-w-[92px] flex-1 snap-start rounded-[13px] px-2 text-[10px]' : 'flex-1 min-w-0 rounded-lg px-1.5 py-2 text-[10px] sm:px-3.5 sm:text-[12px]'} flex items-center justify-center gap-1 font-semibold transition-all ${
+        onClick={() => selectTab(t.id)}
+        className={`relative ${tabletMode ? 'h-8 min-w-0 rounded-[10px] px-1 text-[9px]' : 'flex-1 min-w-0 rounded-lg px-1.5 py-2 text-[10px] sm:px-3.5 sm:text-[12px]'} flex items-center justify-center gap-1 font-semibold transition-all ${
           active
             ? tabletMode
-              ? 'border border-[rgba(var(--theme-accent-rgb),0.30)] bg-[rgba(var(--theme-accent-rgb),0.072)] text-[var(--theme-accent)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.055)]'
+              ? 'border border-[rgba(var(--theme-accent-rgb),0.28)] bg-[rgba(var(--theme-accent-rgb),0.055)] text-[var(--theme-accent)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.045)]'
               : 'text-[var(--theme-text)]'
             : tabletMode
-              ? 'border border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] text-[var(--theme-secondary-text)]/70 hover:border-[rgba(var(--theme-accent-rgb),0.20)] hover:bg-[rgba(var(--theme-accent-rgb),0.035)]'
+              ? 'border border-[rgba(var(--glass-tint),0.040)] bg-[rgba(var(--glass-tint),0.012)] text-[var(--theme-secondary-text)]/70 hover:border-[rgba(var(--theme-accent-rgb),0.18)] hover:bg-[rgba(var(--theme-accent-rgb),0.030)]'
               : 'text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)]'
         }`}
       >
@@ -259,9 +300,9 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           }
           style={compactTabletLayout ? { background: 'transparent' } : { background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.04), transparent 80%)' }}
         >
-          <div className={compactTabletLayout ? 'flex min-h-[42px] items-center gap-2.5' : 'flex items-center gap-3 md:gap-4'}>
+          <div className={compactTabletLayout ? 'flex min-h-[38px] items-center gap-2.5' : 'flex items-center gap-3 md:gap-4'}>
             {/* Avatar */}
-            <div className={`${compactTabletLayout ? 'h-10 w-10 rounded-[13px]' : 'w-11 h-11 rounded-xl'} flex items-center justify-center shrink-0 overflow-hidden`}
+            <div className={`${compactTabletLayout ? 'h-9 w-9 rounded-[12px]' : 'w-11 h-11 rounded-xl'} flex items-center justify-center shrink-0 overflow-hidden`}
               style={{ background: showServerAvatar ? 'transparent' : 'rgba(var(--theme-accent-rgb), 0.10)', border: '1px solid rgba(var(--glass-tint), 0.10)' }}>
               {showServerAvatar ? (
                 <img
@@ -283,16 +324,10 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
             </div>
 
             {/* Name + slug */}
-            <div className={compactTabletLayout ? 'min-w-[128px] max-w-[172px] shrink-0' : 'flex-1 min-w-0'}>
+            <div className={compactTabletLayout ? 'min-w-0 flex-1' : 'flex-1 min-w-0'}>
               <h2 className={`${compactTabletLayout ? 'text-[13px]' : 'text-[15px] md:text-[16px]'} font-bold text-[var(--theme-text)] truncate tracking-tight leading-none`}>{server.name}</h2>
               <span className={`${compactTabletLayout ? 'text-[9px]' : 'text-[11px]'} font-mono text-[var(--theme-secondary-text)]/55 tracking-wide block mt-1 truncate`}>{displaySlug(server.slug)}</span>
             </div>
-
-            {compactTabletLayout && !server.isBanned && (
-              <div className="flex min-w-0 flex-1 touch-pan-y snap-x gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                {tabs.map(t => renderTabButton(t, true))}
-              </div>
-            )}
 
             {/* Inline pill stats */}
             <div className={`${compactTabletLayout ? 'flex' : 'hidden md:flex'} items-center gap-1.5 shrink-0`}>
@@ -304,15 +339,15 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
                   ? 'bg-violet-500/15 text-violet-400 border-violet-500/30'
                   : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
                 return (
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.10em] border ${cls}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-[0.10em] border ${compactTabletLayout ? 'h-6 px-1.5 text-[9px]' : 'px-2 py-1 text-[10px]'} ${cls}`}>
                     <Crown size={10} /> {p}
                   </span>
                 );
               })()}
               {overview && (
                 <>
-                  <HeaderPill icon={<Users size={10} />} value={overview.counts.members} limit={overview.limits.maxMembers} label="Üyeler" />
-                  <HeaderPill icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxTotalRooms} label="Odalar" />
+                  <HeaderPill compact={compactTabletLayout} icon={<Users size={10} />} value={overview.counts.members} limit={overview.limits.maxMembers} label="Üyeler" />
+                  <HeaderPill compact={compactTabletLayout} icon={<Settings size={10} />} value={overview.counts.channels} limit={overview.limits.maxTotalRooms} label="Odalar" />
                 </>
               )}
             </div>
@@ -322,6 +357,15 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               aria-label="Kapat"
             ><X size={compactTabletLayout ? 15 : 17} /></button>
           </div>
+
+          {compactTabletLayout && !server.isBanned && (
+            <div
+              className="mt-1.5 grid w-full gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+            >
+              {tabs.map(t => renderTabButton(t, true))}
+            </div>
+          )}
 
           {/* Mobile pills (under header) */}
           {!compactTabletLayout && overview && (
@@ -369,43 +413,45 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           {server.isBanned ? (
             <RestrictedSettingsPanel server={server} />
           ) : (<>
-          {tab === 'general' && <GeneralTab server={server} canEdit={canEdit} isOwner={isOwner}
-            onSave={async u => { try { await updateServer(serverId, u); await loadServer(); onServerUpdated(); showToast('Kaydedildi'); } catch (e: any) { showToast(e.message); } }}
-            onDelete={async () => { try { await deleteServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
-            onLeave={async () => { try { await leaveServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
-            showToast={showToast}
-            onStateChange={setGeneralState}
-            actionsRef={generalActionsRef} />}
-          {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={(t) => setTab(t)} compactTabletLayout={compactTabletLayout} />}
-          {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
-          {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
-          {tab === 'invites' && (canCreateInvite || canRevokeInvite) && (
-            <InvitesTab
-              serverId={serverId}
+          <React.Suspense fallback={<TabFallback />}>
+            {tab === 'general' && <GeneralTab server={server} canEdit={canEdit} isOwner={isOwner}
+              onSave={async u => { try { await updateServer(serverId, u); await loadServer(); onServerUpdated(); showToast('Kaydedildi'); } catch (e: any) { showToast(e.message); } }}
+              onDelete={async () => { try { await deleteServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
+              onLeave={async () => { try { await leaveServer(serverId); onClose(); onServerDeleted?.(); } catch (e: any) { showToast(e.message); } }}
               showToast={showToast}
-              canManageServer={canManageServer}
-              pendingRequestCount={pendingRequestCount}
-              mode={invitesMode}
-              onModeChange={setInvitesMode}
-            />
-          )}
-          {tab === 'automod' && canKickMembers && (
-            <AutoModerationTab
-              serverId={serverId}
-              showToast={showToast}
-              onStateChange={setAutomodState}
-              actionsRef={automodActionsRef}
-            />
-          )}
-          {tab === 'streams' && canKickMembers && (
-            <StreamsTab serverId={serverId} showToast={showToast} />
-          )}
-          {tab === 'audit' && canManageServer && (
-            <DenetimTab serverId={serverId} onOpenAutomod={() => setTab('automod')} />
-          )}
-          {tab === 'insights' && canViewInsights && (
-            <InsightsTab serverId={serverId} />
-          )}
+              onStateChange={setGeneralState}
+              actionsRef={generalActionsRef} />}
+            {tab === 'overview' && canManageServer && <OverviewTab serverId={serverId} server={server} isOwner={isOwner} initialOverview={overview} onSwitchTab={selectTab} compactTabletLayout={compactTabletLayout} />}
+            {tab === 'members' && canKickMembers && <MembersTab serverId={serverId} myRole={server.role ?? 'member'} showToast={showToast} />}
+            {tab === 'roles' && canManageServer && <RolesTab serverId={serverId} />}
+            {tab === 'invites' && (canCreateInvite || canRevokeInvite) && (
+              <InvitesTab
+                serverId={serverId}
+                showToast={showToast}
+                canManageServer={canManageServer}
+                pendingRequestCount={pendingRequestCount}
+                mode={invitesMode}
+                onModeChange={setInvitesMode}
+              />
+            )}
+            {tab === 'automod' && canKickMembers && (
+              <AutoModerationTab
+                serverId={serverId}
+                showToast={showToast}
+                onStateChange={setAutomodState}
+                actionsRef={automodActionsRef}
+              />
+            )}
+            {tab === 'streams' && canKickMembers && (
+              <StreamsTab serverId={serverId} showToast={showToast} />
+            )}
+            {tab === 'audit' && canManageServer && (
+              <DenetimTab serverId={serverId} onOpenAutomod={() => selectTab('automod')} />
+            )}
+            {tab === 'insights' && canViewInsights && (
+              <InsightsTab serverId={serverId} />
+            )}
+          </React.Suspense>
           </>)}
         </div>
         {tab === 'automod' && canKickMembers && (

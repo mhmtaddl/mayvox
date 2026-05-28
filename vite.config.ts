@@ -46,6 +46,18 @@ export default defineConfig(() => {
           main: path.resolve(__dirname, 'index.html'),
           overlay: path.resolve(__dirname, 'overlay.html'),
         },
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+            if (/[\\/]node_modules[\\/](motion|framer-motion)[\\/]/.test(id)) return 'vendor-motion';
+            if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return 'vendor-icons';
+            if (/[\\/]node_modules[\\/](@livekit|livekit-client)[\\/]/.test(id)) return 'vendor-livekit';
+            if (/[\\/]node_modules[\\/]@capacitor[\\/]/.test(id)) return 'vendor-capacitor';
+            if (/[\\/]node_modules[\\/]exceljs[\\/]/.test(id)) return 'vendor-exceljs';
+            return 'vendor';
+          },
+        },
       },
     },
   };

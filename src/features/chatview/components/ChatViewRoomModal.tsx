@@ -7,6 +7,7 @@ import { ROOM_PRESETS, type RoomPreset } from '../../../lib/roomPresets';
 import { channelIconComponents, roomModeIcons } from '../constants';
 import { CHANNEL_ICON_COLOR_OPTIONS, normalizeChannelIconColor } from '../../../lib/channelIconColor';
 import { CHANNEL_ICON_POOL_OPTIONS, getDefaultChannelIconName, QUICK_CHANNEL_ICON_OPTIONS } from '../../../lib/channelIcon';
+import { isCapacitor } from '../../../lib/platform';
 
 interface RoomModalState {
   isOpen: boolean;
@@ -65,6 +66,14 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [primaryHover, setPrimaryHover] = useState(false);
   const [selectedRoomPresetId, setSelectedRoomPresetId] = useState<RoomPreset['id'] | null>(null);
+  const isTabletRuntime = isCapacitor();
+  const shouldAutoFocusRoomName = !isTabletRuntime;
+  const overlayMotion = isTabletRuntime
+    ? { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 1 }, transition: { duration: 0.01 } }
+    : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.14 } };
+  const panelMotion = isTabletRuntime
+    ? { initial: false as const, animate: { opacity: 1, scale: 1 }, exit: { opacity: 1, scale: 1 }, transition: { duration: 0.01 } }
+    : { initial: { scale: 0.97, opacity: 0 }, animate: { scale: 1, opacity: 1 }, exit: { scale: 0.97, opacity: 0 }, transition: { duration: 0.16, ease: [0.2, 0, 0, 1] as const } };
   // Create modunda kota bilgisi olması beklenir; edit'te gösterilmez.
   const showPersistentRow = roomModal.type === 'create' && persistentInfo !== undefined;
   const quotaReached = showPersistentRow && persistentInfo!.remaining <= 0;
@@ -108,19 +117,13 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
   // local required-name validation so the modal does not look actionable too early.
   return createPortal(
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.14 }}
+      {...overlayMotion}
       className="fixed inset-0 z-[400] flex items-center justify-center p-4"
       style={{ background: 'rgba(0, 0, 0, 0.72)' }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.97, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.97, opacity: 0 }}
-        transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+        {...panelMotion}
         className="w-full max-w-[560px] max-h-[calc(100vh-48px)] rounded-2xl overflow-hidden flex flex-col"
         style={{
           background: 'linear-gradient(180deg, rgba(var(--glass-tint), 0.035), rgba(var(--glass-tint), 0.015)), rgb(var(--theme-bg-rgb, 6, 10, 20))',
@@ -376,7 +379,7 @@ export default function ChatViewRoomModal({ roomModal, onUpdate, onClose, onSave
             <div>
               <label className="block text-[10px] font-bold text-[var(--theme-secondary-text)]/80 uppercase tracking-[0.1em] mb-1">Oda İsmi</label>
               <input
-                autoFocus
+                autoFocus={shouldAutoFocusRoomName}
                 type="text"
                 placeholder="ör: Genel Sohbet"
                 className="h-10 w-full rounded-lg px-3 text-[13px] font-semibold text-[var(--theme-text)] outline-none transition-all placeholder:text-[var(--theme-secondary-text)]/40 placeholder:font-medium"

@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 interface MobileSettingsRowProps {
+  settingId?: string;
   title: string;
   subtitle?: string;
   icon?: React.ReactNode;
   badge?: string | number;
   rightSlot?: React.ReactNode;
-  onClick?: () => void;
+  onClick?: (settingId?: string) => void;
 }
 
-export default function MobileSettingsRow({
+function MobileSettingsRow({
+  settingId,
   title,
   subtitle,
   icon,
@@ -18,10 +20,14 @@ export default function MobileSettingsRow({
   rightSlot,
   onClick,
 }: MobileSettingsRowProps) {
+  const handleClick = useCallback(() => {
+    onClick?.(settingId);
+  }, [onClick, settingId]);
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={onClick ? handleClick : undefined}
       className="flex min-h-11 w-full items-center gap-2.5 rounded-[13px] px-3 py-1.5 text-left active:scale-[0.995]"
       style={{
         background: 'rgba(var(--glass-tint),0.024)',
@@ -61,12 +67,14 @@ export default function MobileSettingsRow({
   );
 }
 
+export default React.memo(MobileSettingsRow);
+
 interface MobileSettingsGroupProps {
   title: string;
   children: React.ReactNode;
 }
 
-export function MobileSettingsGroup({ title, children }: MobileSettingsGroupProps) {
+function MobileSettingsGroup({ title, children }: MobileSettingsGroupProps) {
   return (
     <section className="mb-2">
       <h3 className="mb-1 px-1 text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-secondary-text)]/64">
@@ -76,3 +84,6 @@ export function MobileSettingsGroup({ title, children }: MobileSettingsGroupProp
     </section>
   );
 }
+
+const MemoMobileSettingsGroup = React.memo(MobileSettingsGroup);
+export { MemoMobileSettingsGroup as MobileSettingsGroup };

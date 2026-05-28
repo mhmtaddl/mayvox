@@ -55,10 +55,6 @@ function communityRatingClass(score: number | null): string {
   return externalRatingClass(score);
 }
 
-function avatarInitial(name: string | null | undefined): string {
-  return (name || 'U').trim().charAt(0).toLocaleUpperCase('tr-TR') || 'U';
-}
-
 function formatScore(score: number | null): string {
   if (score === null) return '—';
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
@@ -378,11 +374,16 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                   {CATEGORY_LABELS[item.category]}
                 </span>
                 <button type="button" onClick={event => onOpenCreatorProfile(item.createdBy, { x: event.clientX, y: event.clientY })} className="group inline-flex min-w-0 items-center gap-1.5 rounded-lg px-1 py-0.5 text-[10px] text-[var(--theme-secondary-text)]/58 transition-colors hover:bg-[rgba(var(--theme-accent-rgb),0.06)] hover:text-[var(--theme-accent)]">
-                  {item.createdByAvatar ? (
-                    <img src={item.createdByAvatar} alt="" className="h-4 w-4 shrink-0 rounded-[5px] object-cover ring-1 ring-[rgba(var(--theme-accent-rgb),0.16)]" />
-                  ) : (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] bg-[rgba(var(--glass-tint),0.06)] text-[8px] font-semibold ring-1 ring-[rgba(var(--theme-accent-rgb),0.12)]">{avatarInitial(authorDisplayName)}</span>
-                  )}
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-[rgba(var(--glass-tint),0.06)] ring-1 ring-[rgba(var(--theme-accent-rgb),0.12)]">
+                    <AvatarContent
+                      avatar={item.createdByAvatar}
+                      statusText="Çevrimdışı"
+                      firstName={authorDisplayName}
+                      name={authorDisplayName}
+                      imgClassName="h-full w-full object-cover"
+                      letterClassName="text-[8px] font-semibold text-[var(--theme-text)]/70"
+                    />
+                  </span>
                   <span className="max-w-[120px] truncate font-medium underline-offset-2 group-hover:underline">{authorDisplayName}</span>
                   <span className="shrink-0 text-[var(--theme-secondary-text)]/38">{formatRecommendationDate(item.createdAt)}</span>
                 </button>

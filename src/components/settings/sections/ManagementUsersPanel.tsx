@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import AvatarContent from '../../AvatarContent';
 import { createPortal } from 'react-dom';
 import {
@@ -847,15 +847,14 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
 // parent tarafta mutual-exclusion'ı zaten uygular).
 function InlineRolePicker({ user, onChange }: { user: AdminUserRow; onChange: (c: RowConfirm) => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
   const current: 'admin' | 'mod' | 'none' = user.is_admin ? 'admin' : user.is_moderator ? 'mod' : 'none';
@@ -866,6 +865,7 @@ function InlineRolePicker({ user, onChange }: { user: AdminUserRow; onChange: (c
     : 'bg-white/5 text-[var(--theme-secondary-text)]/80 hover:bg-white/10';
   const icon = current === 'admin' ? <Shield size={8} /> : current === 'mod' ? <ShieldCheck size={8} /> : <UserIconPlaceholder />;
   const label = current === 'admin' ? 'ADMIN' : current === 'mod' ? 'MOD' : 'ÜYE';
+  const displayName = adminUserDisplayName(user);
 
   const select = (next: 'admin' | 'mod' | 'none') => {
     setOpen(false);
@@ -877,30 +877,80 @@ function InlineRolePicker({ user, onChange }: { user: AdminUserRow; onChange: (c
   };
 
   return (
-    <div ref={ref} className="relative inline-flex">
+    <>
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(v => !v);
+        }}
         className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide transition-colors ${pillCls}`}
         title="Rolü değiştir"
       >
         {icon} {label}
         <ChevronDown size={8} className={`ml-0.5 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div
-          className="absolute top-full left-0 mt-1 z-30 min-w-[140px] rounded-lg py-1 shadow-lg"
-          style={{
-            background: 'var(--theme-bg)',
-            border: '1px solid var(--theme-border)',
-            boxShadow: '0 8px 24px rgba(var(--shadow-base), 0.35)',
-          }}
-        >
-          <RoleOption active={current === 'admin'} icon={<Shield size={11} />} label="Admin" tone="rose" onClick={() => select('admin')} />
-          <RoleOption active={current === 'mod'} icon={<ShieldCheck size={11} />} label="Moderatör" tone="blue" onClick={() => select('mod')} />
-          <RoleOption active={current === 'none'} icon={<ShieldOff size={11} />} label="Üye (rol yok)" tone="muted" onClick={() => select('none')} />
-        </div>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="fixed inset-0 z-[120] flex items-center justify-center px-5 py-6"
+              style={{ background: 'rgba(0, 0, 0, 0.46)', backdropFilter: 'blur(10px)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(false);
+              }}
+            >
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${displayName} rolünü değiştir`}
+                className="w-full max-w-[360px] overflow-hidden rounded-2xl"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.105), rgba(var(--glass-tint),0.045)), var(--theme-bg)',
+                  border: '1px solid rgba(var(--glass-tint),0.14)',
+                  boxShadow: '0 26px 72px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.045)',
+                }}
+                initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-3 border-b border-[var(--theme-border)]/55 px-4 py-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--theme-accent)]/12 text-[var(--theme-accent)]">
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-bold text-[var(--theme-text)]">Rol Değiştir</div>
+                    <div className="truncate text-[11px] font-medium text-[var(--theme-secondary-text)]/78">{displayName}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="ml-auto grid h-8 w-8 place-items-center rounded-xl text-[var(--theme-secondary-text)] transition-colors hover:bg-[var(--theme-panel-hover)] hover:text-[var(--theme-text)]"
+                    aria-label="Kapat"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                <div className="p-2">
+                  <RoleOption active={current === 'admin'} icon={<Shield size={13} />} label="Admin" tone="rose" onClick={() => select('admin')} />
+                  <RoleOption active={current === 'mod'} icon={<ShieldCheck size={13} />} label="Moderatör" tone="blue" onClick={() => select('mod')} />
+                  <RoleOption active={current === 'none'} icon={<ShieldOff size={13} />} label="Üye (rol yok)" tone="muted" onClick={() => select('none')} />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 

@@ -309,10 +309,19 @@ app.post('/api/check-user', checkUserLimiter, async (req, res) => {
   if (!identifier || typeof identifier !== 'string') {
     return res.status(400).json({ error: 'identifier gerekli' });
   }
-  const isEmail = identifier.includes('@');
-  const data = isEmail
-    ? await queryOne('SELECT id, name FROM profiles WHERE lower(email) = lower($1)', [identifier])
-    : await queryOne('SELECT id, name FROM profiles WHERE name = $1', [identifier]);
+  const value = identifier.trim().toLowerCase();
+  const data = await queryOne(
+    `SELECT p.id,
+            COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), NULLIF(au.username, ''), NULLIF(au.email, ''), p.id::text) AS name
+       FROM profiles p
+       LEFT JOIN app_users au ON au.profile_id = p.id
+      WHERE lower(COALESCE(p.email, '')) = $1
+         OR lower(COALESCE(p.name, '')) = $1
+         OR lower(COALESCE(au.email, '')) = $1
+         OR lower(COALESCE(au.username, '')) = $1
+      LIMIT 1`,
+    [value],
+  );
   if (!data) return res.json({ exists: false });
   res.json({ exists: true, userId: data.id, name: data.name });
 });
@@ -323,7 +332,15 @@ app.post('/api/request-password-reset', resetLimiter, async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId gerekli' });
   if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış' });
 
-  const target = await queryOne('SELECT name, email FROM profiles WHERE id = $1', [userId]);
+  const target = await queryOne(
+    `SELECT COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), NULLIF(au.username, ''), NULLIF(au.email, ''), p.id::text) AS name,
+            COALESCE(NULLIF(p.email, ''), NULLIF(au.email, '')) AS email
+       FROM profiles p
+       LEFT JOIN app_users au ON au.profile_id = p.id
+      WHERE p.id = $1
+      LIMIT 1`,
+    [userId],
+  );
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();
@@ -368,7 +385,15 @@ app.post('/api/admin-reset-password', async (req, res) => {
   const { targetUserId } = req.body;
   if (!targetUserId) return res.status(400).json({ error: 'targetUserId gerekli' });
 
-  const target = await queryOne('SELECT name, email FROM profiles WHERE id = $1', [targetUserId]);
+  const target = await queryOne(
+    `SELECT COALESCE(NULLIF(p.display_name, ''), NULLIF(p.name, ''), NULLIF(au.username, ''), NULLIF(au.email, ''), p.id::text) AS name,
+            COALESCE(NULLIF(p.email, ''), NULLIF(au.email, '')) AS email
+       FROM profiles p
+       LEFT JOIN app_users au ON au.profile_id = p.id
+      WHERE p.id = $1
+      LIMIT 1`,
+    [targetUserId],
+  );
   if (!target?.email) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const tempPassword = generateTempPassword();

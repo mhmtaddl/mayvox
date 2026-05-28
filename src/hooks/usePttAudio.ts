@@ -153,14 +153,20 @@ export function usePttAudio(params: UsePttAudioParams) {
   // PTT tuş dinleyicileri (sadece PTT modunda)
   useEffect(() => {
     if (isListeningForKey || voiceMode === 'vad' || !pttKey) return;
+    const suppressPttInput = () => {
+      const state = window as typeof window & { __mayvoxFloatingPttOnly?: boolean; __mayvoxSuppressPttUntil?: number };
+      return state.__mayvoxFloatingPttOnly === true || (state.__mayvoxSuppressPttUntil ?? 0) > Date.now();
+    };
     if (window.electronPtt) {
       window.electronPtt.onDown(() => {
+        if (suppressPttInput()) return;
         // Voice pipeline guard — server susturma/kick/timeout/ban varken PTT başlatma.
         if (!isVoiceConnectedRef.current || isMutedRef.current || isServerMutedRef.current) return;
         if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; }
         setIsPttPressed(true);
       });
       window.electronPtt.onUp(() => {
+        if (suppressPttInput()) return;
         releaseTimerRef.current = setTimeout(() => { setIsPttPressed(false); releaseTimerRef.current = null; }, pttReleaseDelayRef.current);
       });
       return () => { window.electronPtt!.offDown(); window.electronPtt!.offUp(); };
@@ -168,21 +174,25 @@ export function usePttAudio(params: UsePttAudioParams) {
     const cancelRelease = () => { if (releaseTimerRef.current) { clearTimeout(releaseTimerRef.current); releaseTimerRef.current = null; } };
     const scheduleRelease = () => { cancelRelease(); releaseTimerRef.current = setTimeout(() => { setIsPttPressed(false); releaseTimerRef.current = null; }, pttReleaseDelayRef.current); };
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (suppressPttInput()) return;
       if (e.repeat) return;
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
       // Voice pipeline guard — server bloğu varken keydown hiçbir şey yapmasın.
       if (k === pttKey && isVoiceConnectedRef.current && !isMutedRef.current && !isServerMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (suppressPttInput()) return;
       const k = e.code === 'Space' ? 'SPACE' : e.code.startsWith('Control') ? 'CTRL' : e.key.toUpperCase();
       if (k === pttKey) scheduleRelease();
     };
     const handleMouseDown = (e: MouseEvent) => {
+      if (suppressPttInput()) return;
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
       // Voice pipeline guard — server bloğu varken mouse PTT başlatma.
       if (btn === pttKey && isVoiceConnectedRef.current && !isMutedRef.current && !isServerMutedRef.current) { cancelRelease(); setIsPttPressed(true); }
     };
     const handleMouseUp = (e: MouseEvent) => {
+      if (suppressPttInput()) return;
       const btn = e.button === 0 ? 'MOUSE 0' : e.button === 1 ? 'MOUSE 1' : `MOUSE ${e.button}`;
       if (btn === pttKey) scheduleRelease();
     };
@@ -280,7 +290,9 @@ export function usePttAudio(params: UsePttAudioParams) {
           for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
           const average = sum / bufferLength;
 
-          const threshold = isNoiseSupRef.current ? noiseThresholdRef.current : 2;
+          const threshold = voiceMode === 'vad'
+            ? Math.min(isNoiseSupRef.current ? noiseThresholdRef.current : 2, 10)
+            : isNoiseSupRef.current ? noiseThresholdRef.current : 2;
           const nextVolume = average < threshold ? 0 : Math.min(100, (average - threshold) * 1.5);
           const volumeDelta = Math.abs(nextVolume - lastVolumeValue);
           const shouldEmitVolume =

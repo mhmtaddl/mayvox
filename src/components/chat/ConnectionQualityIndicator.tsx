@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChartNoAxesColumnIncreasing, Clock3, Waves, X } from 'lucide-react';
 
 interface ConnectionQualityIndicatorProps {
@@ -34,6 +35,9 @@ function getQualityLabel(isConnecting: boolean, connectionLevel: number) {
 }
 
 function ConnectionQualityIndicatorInner({ connectionLevel, isConnecting, isActive, latencyMs, jitterMs }: ConnectionQualityIndicatorProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const level = Math.max(0, Math.min(4, Math.round(Number.isFinite(connectionLevel) ? connectionLevel : 0)));
   const statusLabel = getStatusLabel(isActive, isConnecting, level);
   const roundedLatency = typeof latencyMs === 'number' && Number.isFinite(latencyMs)
@@ -69,49 +73,118 @@ function ConnectionQualityIndicatorInner({ connectionLevel, isConnecting, isActi
     { key: 'latency', label: 'Ping', value: `${displayLatency == null ? '--' : displayLatency} ms`, icon: Clock3 },
     { key: 'jitter', label: 'Dalgalanma', value: `${displayJitter == null ? '--' : displayJitter} ms`, icon: Waves },
   ];
+  const updateTooltipPosition = () => {
+    if (typeof window === 'undefined') return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltipPosition({
+      left: Math.min(Math.max(rect.left + rect.width / 2, 96), window.innerWidth - 96),
+      top: Math.max(rect.top - 8, 12),
+    });
+  };
+
+  useEffect(() => {
+    if (!detailsOpen || typeof window === 'undefined') return;
+    updateTooltipPosition();
+    const close = () => setDetailsOpen(false);
+    const reposition = () => updateTooltipPosition();
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('mayvox:android-back', close);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('mayvox:android-back', close);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [detailsOpen]);
+
+  const tooltipContent = level === 0 ? (
+    <div>{tooltipLines[0]}</div>
+  ) : (
+    <div className="space-y-1">
+      {metricRows.map(({ key, label, value, icon: Icon }) => (
+        <div key={key} className="grid grid-cols-[14px_68px_minmax(54px,1fr)] items-center gap-1.5">
+          <Icon size={13} className="text-[var(--theme-accent)]/75" aria-hidden="true" />
+          <span className="text-[var(--theme-secondary-text)]/72">{label}</span>
+          <span className="text-right font-semibold text-[var(--theme-text)] tabular-nums">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   const tooltip = (
     <div
-      className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 min-w-[132px] -translate-x-1/2 translate-y-1 scale-[0.98] whitespace-nowrap rounded-[10px] border border-[rgba(var(--glass-tint),0.085)] bg-[var(--theme-panel)] px-2 py-1.5 text-[11px] leading-4 text-[var(--theme-text)] opacity-0 transition-[opacity,transform] duration-[120ms] ease-out group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100"
+      className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 min-w-[132px] -translate-x-1/2 whitespace-nowrap rounded-[10px] border border-[rgba(var(--glass-tint),0.085)] bg-[var(--theme-panel)] px-2 py-1.5 text-[11px] leading-4 text-[var(--theme-text)] transition-[opacity,transform] duration-[120ms] ease-out group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100 ${
+        detailsOpen ? 'opacity-0' : 'translate-y-1 scale-[0.98] opacity-0'
+      }`}
       style={{
         background:
           'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.022), rgba(var(--glass-tint),0.010)), var(--theme-panel)',
       }}
       role="tooltip"
     >
-      {level === 0 ? (
-        <div>{tooltipLines[0]}</div>
-      ) : (
-        <div className="space-y-1">
-          {metricRows.map(({ key, label, value, icon: Icon }) => (
-            <div key={key} className="grid grid-cols-[14px_68px_minmax(54px,1fr)] items-center gap-1.5">
-              <Icon size={13} className="text-[var(--theme-accent)]/75" aria-hidden="true" />
-              <span className="text-[var(--theme-secondary-text)]/72">{label}</span>
-              <span className="text-right font-semibold text-[var(--theme-text)] tabular-nums">{value}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {tooltipContent}
     </div>
   );
+  const portalTooltip = detailsOpen && tooltipPosition && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        className="pointer-events-none fixed z-[5000] min-w-[132px] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[10px] border border-[rgba(var(--glass-tint),0.085)] bg-[var(--theme-panel)] px-2 py-1.5 text-[11px] leading-4 text-[var(--theme-text)] shadow-[0_14px_34px_rgba(0,0,0,0.32)]"
+        style={{
+          left: tooltipPosition.left,
+          top: tooltipPosition.top,
+          background:
+            'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.022), rgba(var(--glass-tint),0.010)), var(--theme-panel)',
+        }}
+        role="tooltip"
+      >
+        {tooltipContent}
+      </div>,
+      document.body,
+    )
+    : null;
 
   if (level === 0 && !isConnecting) {
     return (
-      <div className="group relative flex flex-col items-center gap-0.5" aria-label={ariaLabel}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="group relative flex flex-col items-center gap-0.5 outline-none"
+        aria-label={ariaLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          updateTooltipPosition();
+          setDetailsOpen(open => !open);
+        }}
+      >
         {tooltip}
+        {portalTooltip}
         <div className="flex flex-col items-center gap-0.5">
           <X size={14} className="text-red-500" />
           {statusLabel && (
             <span className={`text-[8px] font-bold ${statusLabel.color}`}>{statusLabel.text}</span>
           )}
         </div>
-      </div>
+      </button>
     );
   }
 
   return (
-    <div className="group relative flex flex-col items-center gap-0.5" aria-label={ariaLabel}>
+    <button
+      ref={buttonRef}
+      type="button"
+      className="group relative flex flex-col items-center gap-0.5 outline-none"
+      aria-label={ariaLabel}
+      onClick={(event) => {
+        event.stopPropagation();
+        updateTooltipPosition();
+        setDetailsOpen(open => !open);
+      }}
+    >
       {tooltip}
+      {portalTooltip}
       <div className="flex flex-col items-center gap-0.5 opacity-75">
         <div className="flex items-end gap-[2px] h-3">
           {[1, 2, 3, 4].map((i) => (
@@ -126,7 +199,7 @@ function ConnectionQualityIndicatorInner({ connectionLevel, isConnecting, isActi
           <span className={`text-[8px] font-bold leading-none ${statusLabel.color}`}>{statusLabel.text}</span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 

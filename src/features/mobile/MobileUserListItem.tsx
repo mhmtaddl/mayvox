@@ -61,7 +61,7 @@ interface MobileUserListItemProps {
   onClick?: (id: string, x: number, y: number) => void;
 }
 
-export default function MobileUserListItem({
+function MobileUserListItem({
   id,
   name,
   avatarUrl,
@@ -111,19 +111,16 @@ export default function MobileUserListItem({
           <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[9.5px] font-medium leading-none text-[var(--theme-secondary-text)]/56">
             {isFriendPresence ? (
               <>
-                <DeviceBadge platform={platform} size={11} className="relative shrink-0" />
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass(status, statusText)}`} aria-hidden="true" />
                 <span className="truncate">{serverName || fallbackSubtitle}</span>
               </>
             ) : gameActivity ? (
               <>
-                <DeviceBadge platform={platform} size={11} className="relative shrink-0" />
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass(status, statusText)}`} aria-hidden="true" />
                 <span className="truncate">{gameActivity}</span>
               </>
             ) : (
               <>
-                <DeviceBadge platform={platform} size={11} className="relative shrink-0" />
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass(status, statusText)}`} aria-hidden="true" />
                 <span className="truncate">{fallbackSubtitle}</span>
               </>
@@ -154,3 +151,5 @@ export default function MobileUserListItem({
     </button>
   );
 }
+
+export default React.memo(MobileUserListItem);

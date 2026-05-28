@@ -4,6 +4,9 @@ import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
 import { makeEnterToNext } from '../lib/mobileFormNav';
 
+const REMEMBER_LOGIN_KEY = 'mayvox-login-remember';
+const REMEMBER_IDENTIFIER_KEY = 'mayvox-login-identifier';
+
 interface LoginPasswordViewProps {
   handleLogin: (nick: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
@@ -11,7 +14,12 @@ interface LoginPasswordViewProps {
 }
 
 export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoToRegister }: LoginPasswordViewProps) {
-  const [nick, setNick] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(REMEMBER_LOGIN_KEY) === 'true');
+  const [nick, setNick] = useState(() => (
+    localStorage.getItem(REMEMBER_LOGIN_KEY) === 'true'
+      ? localStorage.getItem(REMEMBER_IDENTIFIER_KEY) || ''
+      : ''
+  ));
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +36,13 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
     setError(null);
     try {
       await handleLogin(nick, password);
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_LOGIN_KEY, 'true');
+        localStorage.setItem(REMEMBER_IDENTIFIER_KEY, nick.trim());
+      } else {
+        localStorage.removeItem(REMEMBER_LOGIN_KEY);
+        localStorage.removeItem(REMEMBER_IDENTIFIER_KEY);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Giriş yapılamadı.');
       setSubmitting(false);
@@ -133,6 +148,16 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
               </div>
             </div>
 
+            <label className="-mt-1 flex w-fit cursor-pointer select-none items-center gap-2 rounded-md px-1 py-0.5">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-3 w-3 shrink-0 accent-[var(--theme-accent)]"
+              />
+              <span className="text-[10.5px] font-medium leading-none text-[var(--theme-secondary-text)]/68">Beni hatırla</span>
+            </label>
+
             {/* Giriş butonu */}
             <button
               ref={submitBtnRef}
@@ -148,7 +173,7 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
               <button
                 type="button"
                 onClick={onForgotPassword}
-                className="auth-muted-link text-[12px] text-white/40 hover:text-white/70 transition-colors"
+                className="auth-muted-link rounded-md px-1.5 py-0.5 text-[11px] font-medium text-white/35 transition-colors hover:bg-white/[0.03] hover:text-white/65"
               >
                 Şifremi Unuttum
               </button>

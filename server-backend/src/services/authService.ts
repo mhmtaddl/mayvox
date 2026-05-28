@@ -207,7 +207,7 @@ export async function login(identifierRaw: string, password: string) {
     token,
     user: toPublicUser({
       ...row,
-      must_change_password: tempOk,
+      must_change_password: !!row.must_change_password || tempOk,
     }),
   };
 }

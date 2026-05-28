@@ -18,10 +18,6 @@ const { createPresenceService, loadStore } = require('./presence');
 const { createFloodControl } = require('./flood-control.cjs');
 const spamGuard = require('./spam-guard.cjs');
 
-const DEBUG_CHAT_LOGS = process.env.DEBUG_CHAT_LOGS === '1';
-function debugLog(...args) { if (DEBUG_CHAT_LOGS) console.log(...args); }
-function debugWarn(...args) { if (DEBUG_CHAT_LOGS) console.warn(...args); }
-
 if (!process.env.ELECTRON_IS_PACKAGED) {
   try { require('dotenv').config(); } catch {}
 }
@@ -367,6 +363,9 @@ function makeDmKey(a, b) {
 }
 
 function previewDmText(text) {
+  // E2EE envelopes must stay intact. Truncating the stored conversation
+  // preview corrupts the payload and makes the client show a decrypt error.
+  if (typeof text === 'string' && text.startsWith('mayvox:e2ee:v1:')) return text;
   return text.length > 100 ? text.slice(0, 100) + '…' : text;
 }
 
@@ -381,6 +380,27 @@ function recomputeDmLastMessage(convKey) {
   const fallbackAt = conv?.created_at || Date.now();
   dmStmt.updateLastMessage.run('', fallbackAt, convKey);
   return { lastMessage: '', lastMessageAt: fallbackAt };
+}
+
+function repairDmConversationPreview(row) {
+  const lastMessage = String(row?.last_message || '');
+  if (!lastMessage.startsWith('mayvox:e2ee:v1:')) return row;
+  try {
+    // Valid envelopes are base64url encoded JSON. Old rows may contain a
+    // 100-char truncated envelope; refresh those from dm_messages.
+    const encoded = lastMessage.slice('mayvox:e2ee:v1:'.length);
+    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    return row;
+  } catch {
+    const meta = recomputeDmLastMessage(row.conversation_key);
+    return {
+      ...row,
+      last_message: meta.lastMessage,
+      last_message_at: meta.lastMessageAt,
+    };
+  }
 }
 
 function generateId() {
@@ -588,7 +608,7 @@ function broadcastClientEvent(event, payload, senderWs) {
 
   targets.delete(senderWs);
   const delivered = sendToSockets(targets, message);
-  debugLog('[client-broadcast]', {
+  console.log('[client-broadcast]', {
     event,
     from: senderWs?.userId || null,
     targetUserId,
@@ -644,7 +664,10 @@ function normalizePresenceState(userId, patch = {}) {
 }
 
 function sendPresenceSnapshot(ws) {
-  debugLog('[presence] snapshot sent', { count: userPresenceByUserId.size });
+  console.log('[presence] SNAPSHOT SEND', {
+    to: ws.userId,
+    users: userPresenceByUserId.size,
+  });
   send(ws, {
     type: 'presence:snapshot',
     users: Array.from(userPresenceByUserId.values()),
@@ -658,7 +681,18 @@ function broadcastPresenceUpdate(user) {
     updatedAt: user.updatedAt || new Date().toISOString(),
   };
   userPresenceByUserId.set(state.userId, state);
-  debugLog('[presence] update broadcast', { online: state.online, sockets: Array.from(userConnections.values()).reduce((n, set) => n + set.size, 0) });
+  console.log('[presence] BROADCAST UPDATE', {
+    userId: state.userId,
+    online: state.online,
+    currentRoom: state.currentRoom,
+    serverId: state.serverId,
+    selfMuted: state.selfMuted,
+    selfDeafened: state.selfDeafened,
+    statusText: state.statusText,
+    autoStatus: state.autoStatus,
+    gameActivity: state.gameActivity,
+    sockets: Array.from(userConnections.values()).reduce((n, set) => n + set.size, 0),
+  });
   broadcastToAllAuthed({
     type: 'presence:update',
     user: state,
@@ -1096,7 +1130,6 @@ async function getRoomChatRank(roomId, profileId) {
   }
 }
 
-
 async function assertRoomChatAccess(roomId, profileId) {
   const room = String(roomId || '').trim();
   const user = String(profileId || '').trim();
@@ -1129,6 +1162,7 @@ async function assertRoomChatAccess(roomId, profileId) {
     return { allowed: false, reason: 'lookup_failed' };
   }
 }
+
 // ── Internal notify secret (server-backend ↔ chat-server) ────────────────
 const INTERNAL_NOTIFY_SECRET = process.env.INTERNAL_NOTIFY_SECRET || '';
 const SERVER_BACKEND_URL = process.env.SERVER_BACKEND_URL || 'http://127.0.0.1:10002';
@@ -1152,10 +1186,6 @@ function safePublicName(value) {
 function profileDisplayName(profile) {
   const displayName = safePublicName(profile?.display_name);
   if (displayName) return displayName;
-  const firstName = safePublicName(profile?.first_name);
-  const lastName = safePublicName(profile?.last_name);
-  const fullName = `${firstName} ${lastName}`.trim();
-  if (fullName) return fullName;
   return safePublicName(profile?.name);
 }
 
@@ -1433,6 +1463,92 @@ async function reportModStat(serverId, kind, meta = {}) {
   }
 }
 
+function automodActivityLabel(kind, name) {
+  const user = name || 'Kullanıcı';
+  if (kind === 'flood') return `Sistem, ${user} mesajını flood nedeniyle engelledi`;
+  if (kind === 'profanity') return `Sistem, ${user} mesajını küfür filtresiyle engelledi`;
+  if (kind === 'spam') return `Sistem, ${user} mesajını spam nedeniyle engelledi`;
+  return `Sistem, ${user} mesajını otomatik moderasyonla engelledi`;
+}
+
+async function reportRoomAutomodActivity(serverId, channelId, kind, targetUserId, targetName, extra = {}) {
+  if (!INTERNAL_NOTIFY_SECRET || !serverId || !channelId || !targetUserId) return;
+  const label = automodActivityLabel(kind, targetName);
+  const payload = {
+    serverId,
+    channelId,
+    type: 'automod',
+    actorId: null,
+    targetUserId,
+    label,
+    metadata: {
+      kind,
+      code: extra.code,
+      reason: extra.reason,
+    },
+  };
+  try {
+    await fetch(`${SERVER_BACKEND_URL}/internal/room-activity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFY_SECRET,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(700),
+    });
+  } catch {
+    // Best-effort: moderasyon kararı zaten verildi, chat akışı bloklanmasın.
+  }
+
+  broadcastInternalEvent('moderation-event', {
+    serverId,
+    channelId,
+    roomId: channelId,
+    action: 'automod',
+    kind,
+    code: extra.code,
+    reason: extra.reason,
+    userId: targetUserId,
+    userName: targetName,
+    label,
+  });
+}
+
+async function reportRoomMessageActivity(serverId, channelId, type, actorId, actorName, targetUserId, targetName, messageId, reportCount) {
+  if (!INTERNAL_NOTIFY_SECRET || !serverId || !channelId || !type || !actorId || !targetUserId) return;
+  const actor = actorName || 'Bir yetkili';
+  const target = targetName || 'Kullanıcı';
+  const label =
+    type === 'message_report'
+      ? `${actor}, ${target} kullanıcısının mesajını bildirdi`
+      : `${actor}, ${target} kullanıcısının mesajında işlem yaptı`;
+  try {
+    await fetch(`${SERVER_BACKEND_URL}/internal/room-activity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFY_SECRET,
+      },
+      body: JSON.stringify({
+        serverId,
+        channelId,
+        type,
+        actorId,
+        targetUserId,
+        label,
+        metadata: {
+          messageId,
+          reportCount,
+        },
+      }),
+      signal: AbortSignal.timeout(700),
+    });
+  } catch {
+    // Best-effort: raporlama realtime akışı ve chat server bloke olmasın.
+  }
+}
+
 // ── Auto-punishment bridge (fire-and-forget) ──
 // Flood threshold aşıldığında server-backend /internal/auto-punish çağrısı.
 // Timeout 1.5s; hata sessiz yutulur, moderation kararı zaten yapılmış.
@@ -1449,7 +1565,7 @@ async function reportAutoPunish(serverId, userId, action, durationMinutes) {
       signal: AbortSignal.timeout(1500),
     });
     if (!resp.ok) {
-      console.warn('[auto-punish] HTTP non-ok', { status: resp.status });
+      console.warn(`[auto-punish] HTTP ${resp.status} serverId=${serverId} userId=${userId}`);
     }
   } catch (err) {
     // Timeout / network — sessiz swallow, sadece warn. Flow bozulmasın.
@@ -1504,7 +1620,7 @@ function maybeTriggerAutoPunish(cfg, userId) {
   // (5dk) geçmiş olmalı.
   arr.length = 0;
 
-  debugLog('[auto-punish] trigger', { action: ap.action, durationMinutes: ap.durationMinutes });
+  console.log(`[auto-punish] trigger serverId=${cfg.serverId} userId=${userId} action=${ap.action} duration=${ap.durationMinutes}dk`);
   void reportAutoPunish(cfg.serverId, userId, ap.action, ap.durationMinutes);
 }
 
@@ -1715,6 +1831,7 @@ function formatMsg(row) {
     avatar: row.sender_avatar || '',
     text: row.text,
     time: new Date(row.created_at).getTime(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : undefined,
   };
 }
 
@@ -1814,7 +1931,7 @@ wss.on('connection', (ws) => {
         const authUser = verifyAppJwt(token);
 
         const profile = await queryOne(
-          'SELECT first_name, last_name, name, avatar FROM profiles WHERE id = $1',
+          'SELECT display_name, name, avatar FROM profiles WHERE id = $1',
           [authUser.profileId],
         );
 
@@ -1937,8 +2054,9 @@ wss.on('connection', (ws) => {
     // ── PRESENCE: detailed patch ─────────────────────────────────────────
     if (msg.type === 'presence:patch') {
       if (!ws.presenceUserId || !ws.presenceSessionKey) return;
-      debugLog('[presence] patch received', {
-        keys: Object.keys(msg.payload || {}).length,
+      console.log('[presence] PATCH RECEIVED', {
+        userId: ws.presenceUserId,
+        payload: msg.payload || {},
         wsOpen: ws.readyState === WebSocket.OPEN,
       });
       ws.presenceState = markPresenceOnline(ws.presenceUserId, msg.payload || {});
@@ -2046,7 +2164,7 @@ wss.on('connection', (ws) => {
         send(ws, { type: 'history', roomId, messages: [] });
       }
 
-      debugLog('[chat] joined room');
+      console.log(`[chat] ${userName} odaya girdi: ${roomId}`);
       return;
     }
 
@@ -2074,7 +2192,7 @@ wss.on('connection', (ws) => {
       if (!text || text.length > 2000) return;
 
       // Flood control + profanity filter: sunucu config'inden alınan override + kelime listesi.
-      // Reddedilen mesaj: DB'ye yazılmaz, broadcast edilmez, kullanıcıya hata döner.
+      // Reddedilen mesaj DB'ye yazılmaz; yetkililer için metadata-only oda olayı kaydedilir.
       {
         const cfg = await getChannelFloodConfig(currentRoom);
         const bucketKey = `${cfg?.serverId || 'unknown'}:${userId}`;
@@ -2086,9 +2204,10 @@ wss.on('connection', (ws) => {
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {
-            debugLog('[chat-moderation] blocked', { kind: 'flood', offense: flood.offenseCount, retryMs: flood.retryAfterMs });
+            console.log(`[flood] room_chat block userId=${userId} server=${cfg?.serverId || '-'} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
             // Stat event sadece yeni offense'ta (cooldown içi red'ler sayaç şişirmesin).
             if (cfg?.serverId) void reportModStat(cfg.serverId, 'flood', { userId, channelId: currentRoom });
+            if (cfg?.serverId) void reportRoomAutomodActivity(cfg.serverId, currentRoom, 'flood', userId, userName, { code: 'flood_control' });
             // Auto-punishment: yeni offense'ta sayaç push; eşik + cooldown uygunsa punish.
             maybeTriggerAutoPunish(cfg, userId);
           }
@@ -2099,10 +2218,11 @@ wss.on('connection', (ws) => {
             message: `Çok hızlı mesaj gönderiyorsun. Lütfen ${waitSec} saniye bekle.`,
           });
         }
-        // Profanity: flood geçti, içerik kontrolü. Eşleşirse sessizce reddet (logla ama DB/broadcast yapma).
+        // Profanity: flood geçti, içerik kontrolü. Eşleşirse içerik saklamadan yetkili oda olayına yaz.
         if (messageHasProfanity(text, cfg?.profanity)) {
-          debugLog('[chat-moderation] blocked', { kind: 'profanity', len: text.length });
+          console.log(`[profanity] block userId=${userId} server=${cfg?.serverId || '-'} len=${text.length}`);
           if (cfg?.serverId) void reportModStat(cfg.serverId, 'profanity', { userId, channelId: currentRoom });
+          if (cfg?.serverId) void reportRoomAutomodActivity(cfg.serverId, currentRoom, 'profanity', userId, userName, { code: 'profanity_blocked' });
           return send(ws, {
             type: 'error',
             code: 'profanity_blocked',
@@ -2113,8 +2233,9 @@ wss.on('connection', (ws) => {
         if (cfg?.spam?.enabled) {
           const spamRes = spamGuard.checkSpam(userId, text);
           if (spamRes.spam) {
-            debugLog('[chat-moderation] blocked', { kind: 'spam', reason: spamRes.reason, len: text.length });
+            console.log(`[spam] block userId=${userId} server=${cfg?.serverId || '-'} reason=${spamRes.reason} len=${text.length}`);
             if (cfg?.serverId) void reportModStat(cfg.serverId, 'spam', { userId, channelId: currentRoom });
+            if (cfg?.serverId) void reportRoomAutomodActivity(cfg.serverId, currentRoom, 'spam', userId, userName, { code: 'spam_blocked', reason: spamRes.reason });
             return send(ws, {
               type: 'error',
               code: 'spam_blocked',
@@ -2169,6 +2290,8 @@ wss.on('connection', (ws) => {
         roomId: currentRoom,
         muted,
         chatMuteRank: muted ? actorRank : 0,
+        actorId: userId,
+        actorName: userName,
       });
       return;
     }
@@ -2179,7 +2302,10 @@ wss.on('connection', (ws) => {
 
       try {
         const message = await queryOne(
-          'SELECT id, channel_id, sender_id FROM room_messages WHERE id = $1',
+          `SELECT m.id, m.channel_id, m.sender_id, m.sender_name, p.display_name, p.name
+             FROM room_messages m
+             LEFT JOIN profiles p ON p.id::text = m.sender_id::text
+            WHERE m.id = $1`,
           [msg.messageId],
         );
         if (!message || String(message.channel_id) !== String(currentRoom)) {
@@ -2207,8 +2333,62 @@ wss.on('connection', (ws) => {
         broadcastToRoom(currentRoom, {
           type: 'delete',
           messageId: msg.messageId,
+          actorId: userId,
+          actorName: userName,
+          targetUserId: String(message.sender_id),
+          targetName: profileDisplayName(message) || 'Kullanıcı',
+          moderated: !isSender,
         });
-      } catch (err) { console.error('[chat] delete error:', err?.message || err); }
+      } catch (err) { console.error('[chat] delete error:', err); }
+      return;
+    }
+
+    // ── REPORT MESSAGE ───────────────────────────────────────────────────
+    if (msg.type === 'report_message') {
+      if (!currentRoom || !msg.messageId) return;
+
+      try {
+        const message = await queryOne(
+          `SELECT m.id, m.channel_id, m.sender_id, m.sender_name, c.server_id, p.display_name, p.name
+             FROM room_messages m
+             JOIN channels c ON c.id = m.channel_id
+             LEFT JOIN profiles p ON p.id::text = m.sender_id::text
+            WHERE m.id = $1`,
+          [msg.messageId],
+        );
+        if (!message || String(message.channel_id) !== String(currentRoom)) {
+          return send(ws, { type: 'error', message: 'Bu mesaj bildirilemedi' });
+        }
+
+        const access = await assertRoomChatAccess(message.channel_id, userId);
+        if (!access.allowed) {
+          return send(ws, { type: 'error', message: 'Bu odaya erişim yetkin yok.' });
+        }
+
+        const reportCount = 1;
+        const targetName = profileDisplayName(message) || 'Kullanıcı';
+        broadcastToRoom(currentRoom, {
+          type: 'message_report',
+          messageId: msg.messageId,
+          actorId: userId,
+          actorName: userName,
+          targetUserId: String(message.sender_id),
+          targetName,
+          reportCount,
+        });
+
+        void reportRoomMessageActivity(
+          String(message.server_id),
+          String(message.channel_id),
+          'message_report',
+          userId,
+          userName,
+          String(message.sender_id),
+          targetName,
+          msg.messageId,
+          reportCount,
+        );
+      } catch (err) { console.error('[chat] report_message error:', err); }
       return;
     }
 
@@ -2226,7 +2406,7 @@ wss.on('connection', (ws) => {
         }
 
         const result = await pgPool.query(
-          'UPDATE room_messages SET text = $1 WHERE id = $2 AND sender_id = $3 AND channel_id = $4',
+          'UPDATE room_messages SET text = $1, updated_at = now() WHERE id = $2 AND sender_id = $3 AND channel_id = $4 RETURNING updated_at',
           [text, msg.messageId, userId, currentRoom],
         );
         if (result.rowCount === 0) {
@@ -2237,8 +2417,9 @@ wss.on('connection', (ws) => {
           type: 'edit',
           messageId: msg.messageId,
           text,
+          updatedAt: result.rows?.[0]?.updated_at ? new Date(result.rows[0].updated_at).getTime() : Date.now(),
         });
-      } catch (err) { console.error('[chat] edit error:', err?.message || err); }
+      } catch (err) { console.error('[chat] edit error:', err); }
       return;
     }
 
@@ -2262,8 +2443,8 @@ wss.on('connection', (ws) => {
           roomId: currentRoom,
         });
 
-        console.log('[chat] room messages cleared');
-      } catch (err) { console.error('[chat] clear error:', err?.message || err); }
+        console.log(`[chat] ${userName} tüm mesajları sildi: ${currentRoom}`);
+      } catch (err) { console.error('[chat] clear error:', err); }
       return;
     }
 
@@ -2304,18 +2485,19 @@ wss.on('connection', (ws) => {
         const requests = [];
         const otherIds = [];
         for (const row of rows) {
-          const otherId = row.user_a_id === userId ? row.user_b_id : row.user_a_id;
+          const repairedRow = repairDmConversationPreview(row);
+          const otherId = repairedRow.user_a_id === userId ? repairedRow.user_b_id : repairedRow.user_a_id;
           if (blockedIds.has(otherId)) continue;
-          const status = row.request_status || 'accepted';
+          const status = repairedRow.request_status || 'accepted';
           if (status === 'reset' && !friendIds.has(otherId)) continue;
           if (status === 'rejected' && !friendIds.has(otherId)) continue;
-          if (status === 'pending' && row.request_receiver_id === userId && !friendIds.has(otherId)) {
-            requests.push({ row, otherId });
+          if (status === 'pending' && repairedRow.request_receiver_id === userId && !friendIds.has(otherId)) {
+            requests.push({ row: repairedRow, otherId });
             otherIds.push(otherId);
             continue;
           }
           if (!friendIds.has(otherId) && !mutualNonFriendDmIds.has(otherId) && status !== 'pending') continue;
-          filtered.push({ row, otherId });
+          filtered.push({ row: repairedRow, otherId });
           otherIds.push(otherId);
         }
         // Server-side enrichment: name/avatar — frontend ayrıca resolve etmesin.
@@ -2435,7 +2617,7 @@ wss.on('connection', (ws) => {
         if (!flood.allowed) {
           const waitSec = Math.max(1, Math.ceil(flood.retryAfterMs / 1000));
           if (flood.reason === 'flood_window') {
-            debugLog('[dm-moderation] blocked', { kind: 'flood', offense: flood.offenseCount, retryMs: flood.retryAfterMs });
+            console.log(`[flood] dm block userId=${userId} offense=${flood.offenseCount} retryMs=${flood.retryAfterMs}`);
           }
           return send(ws, {
             type: 'dm:error',

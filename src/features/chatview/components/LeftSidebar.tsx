@@ -18,11 +18,9 @@ import { useSettings } from '../../../contexts/SettingsCtx';
 import { getFrameTier, getFrameStyle, getFrameClassName } from '../../../lib/avatarFrame';
 import { hasCustomAvatar } from '../../../lib/statusAvatar';
 import { getUserRoomLimit, roomLimitMessage } from '../../../lib/planConfig';
-import { ConnectionQualityIndicator } from '../../../components/chat';
 import appLogo from '../../../assets/dock-logo-mv_tr.png';
 import DeviceBadge from '../../../components/chat/DeviceBadge';
 import RoleBadge, { getUserRoleBadge } from '../../../components/RoleBadge';
-import UpdateVersionHub from '../../update/components/UpdateVersionHub';
 import { useChannel } from '../../../contexts/ChannelContext';
 import { useUser } from '../../../contexts/UserContext';
 import { rangeVisualStyle } from '../../../lib/rangeStyle';
@@ -35,6 +33,9 @@ import { Coffee } from 'lucide-react';
 import { getDefaultChannelIconColor } from '../../../lib/channelIconColor';
 import { getDefaultChannelIconName } from '../../../lib/channelIcon';
 import RoomStatusBadges from './RoomStatusBadges';
+
+const UpdateVersionHub = React.lazy(() => import('../../update/components/UpdateVersionHub'));
+const ConnectionQualityIndicator = React.lazy(() => import('../../../components/chat/ConnectionQualityIndicator'));
 
 interface Props {
   handleDragOver: (e: React.DragEvent) => void;
@@ -589,14 +590,18 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         {/* Sistem durumu */}
         <div className="mt-1.5 flex items-center justify-center gap-2 text-[var(--theme-secondary-text)]/38">
           {appVersion && (
-            <UpdateVersionHub
-              currentVersion={appVersion}
-              isAdmin={!!currentUser.isAdmin}
-              autoShowNotes={showReleaseNotes}
-              onNotesShown={() => setShowReleaseNotes(false)}
-            />
+            <React.Suspense fallback={null}>
+              <UpdateVersionHub
+                currentVersion={appVersion}
+                isAdmin={!!currentUser.isAdmin}
+                autoShowNotes={showReleaseNotes}
+                onNotesShown={() => setShowReleaseNotes(false)}
+              />
+            </React.Suspense>
           )}
-          <ConnectionQualityIndicator connectionLevel={connectionLevel} latencyMs={connectionLatencyMs} jitterMs={connectionJitterMs} isConnecting={isConnecting} isActive={!!activeChannel} />
+          <React.Suspense fallback={<span className="inline-block h-4 w-4" />}>
+            <ConnectionQualityIndicator connectionLevel={connectionLevel} latencyMs={connectionLatencyMs} jitterMs={connectionJitterMs} isConnecting={isConnecting} isActive={!!activeChannel} />
+          </React.Suspense>
         </div>
       </div>
 

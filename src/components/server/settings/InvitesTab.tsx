@@ -5,8 +5,9 @@ import {
 } from 'lucide-react';
 import AvatarContent from '../../AvatarContent';
 import {
-  type ServerInvite, type SentInvite,
+  type ServerInvite, type SentInvite, type InviteLinkResponse,
   getInvites, createInvite, deleteInvite,
+  listInviteLinks, createInviteLink, revokeInviteLink,
   getMembers, sendServerInvite, getSentInvites, cancelSentInvite,
 } from '../../../lib/serverService';
 import { getAllProfiles } from '../../../lib/backendClient';
@@ -144,8 +145,29 @@ function SubNav({
 // 1) Davet Linkleri (kod ile)
 // ══════════════════════════════════════════════════════════
 
+type InviteDisplay = Pick<ServerInvite, 'id' | 'code' | 'createdBy' | 'maxUses' | 'usedCount' | 'expiresAt' | 'createdAt'> & {
+  code?: string | null;
+};
+
+function mapLegacyInvite(invite: ServerInvite): InviteDisplay {
+  return invite;
+}
+
+function mapInviteLink(invite: InviteLinkResponse, token?: string): InviteDisplay {
+  return {
+    id: invite.id,
+    code: token ?? null,
+    createdBy: invite.createdBy,
+    maxUses: invite.maxUses,
+    usedCount: invite.usedCount,
+    expiresAt: invite.expiresAt,
+    createdAt: invite.createdAt,
+  };
+}
+
 function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m: string) => void }) {
-  const [invites, setInvites] = useState<ServerInvite[]>([]);
+  const [invites, setInvites] = useState<InviteDisplay[]>([]);
+  const [apiMode, setApiMode] = useState<'legacy' | 'links'>('legacy');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createHover, setCreateHover] = useState(false);
@@ -154,9 +176,22 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try { setLoading(true); setInvites(await getInvites(serverId)); }
-    catch { showToast('Davetler yüklenemedi'); }
-    finally { setLoading(false); }
+    try {
+      setLoading(true);
+      const legacy = await getInvites(serverId);
+      setApiMode('legacy');
+      setInvites(legacy.map(mapLegacyInvite));
+    } catch {
+      try {
+        const links = await listInviteLinks(serverId);
+        setApiMode('links');
+        setInvites(links.map(link => mapInviteLink(link)));
+      } catch {
+        showToast('Davetler yüklenemedi');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [serverId, showToast]);
 
   useEffect(() => { void load(); }, [load]);
@@ -165,13 +200,32 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
     if (creating) return;
     setCreating(true);
     try {
-      await createInvite(
-        serverId,
-        maxUses ? parseInt(maxUses, 10) : null,
-        expHrs ? parseInt(expHrs, 10) : null,
-      );
+      if (apiMode === 'links') {
+        const created = await createInviteLink(serverId, {
+          scope: 'server',
+          maxUses: maxUses ? parseInt(maxUses, 10) : null,
+          expiresInHours: expHrs ? parseInt(expHrs, 10) : null,
+        });
+        setInvites(prev => [mapInviteLink(created, created.token), ...prev]);
+      } else {
+        try {
+          await createInvite(
+            serverId,
+            maxUses ? parseInt(maxUses, 10) : null,
+            expHrs ? parseInt(expHrs, 10) : null,
+          );
+          await load();
+        } catch {
+          const created = await createInviteLink(serverId, {
+            scope: 'server',
+            maxUses: maxUses ? parseInt(maxUses, 10) : null,
+            expiresInHours: expHrs ? parseInt(expHrs, 10) : null,
+          });
+          setApiMode('links');
+          setInvites(prev => [mapInviteLink(created, created.token), ...prev]);
+        }
+      }
       setMaxUses(''); setExpHrs('');
-      await load();
       showToast('Davet kodu oluşturuldu');
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Oluşturulamadı');
@@ -183,7 +237,8 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await deleteInvite(serverId, id);
+      if (apiMode === 'links') await revokeInviteLink(serverId, id);
+      else await deleteInvite(serverId, id);
       await load();
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Silinemedi');
@@ -192,8 +247,12 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
     }
   };
 
-  const handleCopy = (code: string) => {
-    navigator.clipboard.writeText(code);
+  const handleCopy = (code?: string | null) => {
+    if (!code) {
+      showToast('Bu linkin kodu yalnızca oluşturulduğu anda gösterilir');
+      return;
+    }
+    void navigator.clipboard.writeText(code);
     showToast('Kopyalandı');
   };
 
@@ -203,24 +262,24 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
     <div className="space-y-3">
       {/* Create form */}
       <div
-        className="rounded-2xl p-4"
+        className="rounded-[14px] px-3 py-2.5"
         style={{
-          background: 'linear-gradient(180deg, rgba(var(--theme-accent-rgb),0.06), rgba(var(--theme-accent-rgb),0.02))',
-          border: '1px solid rgba(var(--theme-accent-rgb),0.18)',
-          boxShadow: 'inset 0 1px 0 rgba(var(--theme-accent-rgb),0.08)',
+          background: 'rgba(var(--glass-tint),0.018)',
+          border: '1px solid rgba(var(--glass-tint),0.055)',
+          boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.035)',
         }}
       >
-        <div className="flex items-center gap-2 mb-3">
+        <div className="mb-2 flex items-center gap-2">
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-            style={{ background: 'rgba(var(--theme-accent-rgb),0.14)', border: '1px solid rgba(var(--theme-accent-rgb),0.22)' }}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: 'rgba(var(--theme-accent-rgb),0.075)', border: '1px solid rgba(var(--theme-accent-rgb),0.13)' }}
           >
-            <Plus size={13} className="text-[var(--theme-accent)]" strokeWidth={2} />
+            <Plus size={12} className="text-[var(--theme-accent)]" strokeWidth={2} />
           </div>
-          <span className="text-[11.5px] font-bold text-[var(--theme-text)] tracking-tight">Yeni Davet Kodu</span>
-          <span className="ml-auto text-[10px] text-[var(--theme-secondary-text)]/75">Boş bırakılanlar sınırsız</span>
+          <span className="text-[11px] font-bold tracking-tight text-[var(--theme-text)]/90">Yeni davet kodu</span>
+          <span className="ml-auto text-[9.5px] font-medium text-[var(--theme-secondary-text)]/48">Boş alanlar sınırsız</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-1.5">
           <InviteField
             label="Maks. kullanım"
             value={maxUses}
@@ -241,25 +300,25 @@ function CodeInvites({ serverId, showToast }: { serverId: string; showToast: (m:
             onMouseLeave={() => setCreateHover(false)}
             onFocus={() => setCreateHover(true)}
             onBlur={() => setCreateHover(false)}
-            className="h-10 px-5 rounded-xl text-[12px] font-semibold inline-flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-default self-end"
+            className="inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-[10px] px-2.5 text-[10.5px] font-bold transition-all duration-200 active:scale-[0.97] disabled:cursor-default disabled:opacity-50"
             style={{
               background: createHover
-                ? 'rgba(var(--theme-accent-rgb), 0.28)'
-                : 'rgba(var(--theme-accent-rgb), 0.18)',
+                ? 'rgba(var(--theme-accent-rgb), 0.18)'
+                : 'rgba(var(--theme-accent-rgb), 0.105)',
               color: 'var(--theme-text)',
               border: createHover
-                ? '1px solid rgba(var(--theme-accent-rgb), 0.36)'
-                : '1px solid rgba(var(--theme-accent-rgb), 0.28)',
+                ? '1px solid rgba(var(--theme-accent-rgb), 0.28)'
+                : '1px solid rgba(var(--theme-accent-rgb), 0.16)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.06), ' +
-                '0 1px 2px rgba(0,0,0,0.10)' +
-                (createHover ? ', 0 4px 12px rgba(var(--theme-accent-rgb),0.10)' : ''),
+                'inset 0 1px 0 rgba(var(--glass-tint),0.055), ' +
+                '0 1px 2px rgba(0,0,0,0.08)',
             }}
+            aria-label="Davet kodu oluştur"
           >
             {creating
               ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
               : <Plus size={13} strokeWidth={2.2} />}
-            Oluştur
+            <span className="hidden sm:inline">Oluştur</span>
           </button>
         </div>
       </div>
@@ -289,14 +348,15 @@ function InviteField({
 }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <div>
-      <label className="block text-[9.5px] font-semibold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/75 mb-1.5">
+      <label className="mb-1 block text-[8.5px] font-bold uppercase tracking-[0.10em] text-[var(--theme-secondary-text)]/50">
         {label}
       </label>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-10 bg-[rgba(var(--glass-tint),0.035)] border border-[rgba(var(--glass-tint),0.08)] rounded-xl px-3.5 text-[12.5px] text-[var(--theme-text)] placeholder:text-[var(--theme-secondary-text)]/45 outline-none transition-all duration-200 ease-out hover:border-[rgba(var(--glass-tint),0.14)] focus:border-[var(--theme-accent)]/45 focus:bg-[rgba(var(--glass-tint),0.055)] focus:shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.10)]"
+        inputMode="numeric"
+        className="h-8 w-full rounded-[10px] border border-[rgba(var(--glass-tint),0.055)] bg-[rgba(var(--theme-bg-rgb),0.22)] px-2.5 text-[11px] font-semibold text-[var(--theme-text)] outline-none transition-all duration-200 ease-out placeholder:text-[var(--theme-secondary-text)]/35 hover:border-[rgba(var(--glass-tint),0.10)] focus:border-[rgba(var(--theme-accent-rgb),0.28)] focus:bg-[rgba(var(--glass-tint),0.035)]"
       />
     </div>
   );
@@ -304,7 +364,7 @@ function InviteField({
 
 function CodeInviteRow({
   invite, onCopy, onDelete, busy,
-}: { invite: ServerInvite; onCopy: () => void; onDelete: () => void; busy: boolean; key?: React.Key }) {
+}: { invite: InviteDisplay; onCopy: () => void; onDelete: () => void; busy: boolean; key?: React.Key }) {
   const usage = invite.maxUses
     ? `${invite.usedCount}/${invite.maxUses}`
     : `${invite.usedCount}`;
@@ -331,15 +391,15 @@ function CodeInviteRow({
         <div className="flex items-center gap-2">
           <span
             className="text-[12.5px] font-mono font-bold text-[var(--theme-text)] tracking-wider select-all"
-            title={invite.code}
+            title={invite.code || 'Kod gizli'}
           >
-            {invite.code}
+            {invite.code || 'Oluşturuldu'}
           </span>
           <button
             type="button"
             onClick={onCopy}
-            className="text-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)] transition-colors shrink-0 active:scale-[0.92]"
-            aria-label="Kodu kopyala"
+            className={`transition-colors shrink-0 active:scale-[0.92] ${invite.code ? 'text-[var(--theme-accent)]/60 hover:text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/35'}`}
+            aria-label={invite.code ? 'Kodu kopyala' : 'Kod gizli'}
           >
             <Copy size={11} />
           </button>

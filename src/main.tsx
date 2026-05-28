@@ -4,16 +4,20 @@ import './index.css';
 import './lib/signature/signature.css';
 import { logger } from './lib/logger';
 import { isCapacitor, isElectron } from './lib/platform';
+import { installMobileKeyboardGuard } from './lib/mobileKeyboardGuard';
+import { installPremiumScrollbars } from './lib/premiumScrollbars';
 
 // Low-perf mode — Capacitor (Android 9+ cihazlarda WebView rendering yavaş).
 // <html> üzerindeki 'lowperf' class'ı CSS'te backdrop-filter ve ağır animasyonları
 // devre dışı bırakır (bkz. index.css).
 if (isCapacitor()) {
   document.documentElement.classList.add('lowperf');
+  installMobileKeyboardGuard();
 }
 
 if (isElectron()) {
   document.documentElement.classList.add('mv-electron-window');
+  installPremiumScrollbars();
 }
 
 // ── Global error handlers ─────────────────────────────────────────────────────

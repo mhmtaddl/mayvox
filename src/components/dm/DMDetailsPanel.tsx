@@ -1,15 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ExternalLink, Flag, Gamepad2, Globe2, Image as ImageIcon, Link2, Lock, Monitor, Pin, Shield, Smartphone, UserRound, UserX, X } from 'lucide-react';
-import AvatarContent from '../AvatarContent';
+import { ExternalLink, Flag, Globe2, Image as ImageIcon, Link2, Lock, Pin, Shield, UserRound, UserX, X } from 'lucide-react';
 import EmptyState from '../EmptyState';
-import { getPublicDisplayName } from '../../lib/formatName';
 import { openExternalUrl } from '../../lib/openExternalUrl';
 import type { DmConversation, DmMessage } from '../../lib/dmService';
 import type { User } from '../../types';
 import { extractLinksFromMessages, extractMediaFromMessages } from './dmDetailsUtils';
 
 type Relationship = 'friend' | 'incoming' | 'outgoing' | null;
+const SHARED_SCAN_LIMIT = 320;
 
 interface Props {
   open: boolean;
@@ -24,6 +23,7 @@ interface Props {
   onUnblockUser: () => void;
   onReportUser: () => void;
   onJumpToMessage?: (messageId: string) => void;
+  solidSurface?: boolean;
 }
 
 export default function DMDetailsPanel({
@@ -39,19 +39,29 @@ export default function DMDetailsPanel({
   onUnblockUser,
   onReportUser,
   onJumpToMessage,
+  solidSurface = false,
 }: Props) {
   const [tab, setTab] = useState<'pins' | 'links' | 'media'>('pins');
-  const links = useMemo(() => extractLinksFromMessages(messages), [messages]);
-  const media = useMemo(() => extractMediaFromMessages(messages), [messages]);
-  const pinnedMessages = useMemo(() => (
-    messages
-      .filter(message => !!message.pinnedAt)
-      .slice()
-      .sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0))
-  ), [messages]);
-  const name = getPublicDisplayName(recipient);
-  const statusText = getStatusText(recipient);
-  const statusTone = getStatusTone(statusText, recipient.status);
+  const [sharedReady, setSharedReady] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setSharedReady(false);
+      setTab('pins');
+      return;
+    }
+    const timer = window.setTimeout(() => setSharedReady(true), 120);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+  const links = useMemo(() => (sharedReady ? extractLinksFromMessages(messages, undefined, SHARED_SCAN_LIMIT) : []), [messages, sharedReady]);
+  const media = useMemo(() => (sharedReady ? extractMediaFromMessages(messages, undefined, SHARED_SCAN_LIMIT) : []), [messages, sharedReady]);
+  const pinnedMessages = useMemo(() => {
+    if (!sharedReady) return [];
+    const pinned: DmMessage[] = [];
+    for (let i = messages.length - 1; i >= 0 && pinned.length < 12; i -= 1) {
+      if (messages[i].pinnedAt) pinned.push(messages[i]);
+    }
+    return pinned.sort((a, b) => Number(b.pinnedAt || 0) - Number(a.pinnedAt || 0));
+  }, [messages, sharedReady]);
   const relationshipLabel = getRelationshipLabel(relationship);
   const showRequestChip = isRequest || requestStatus === 'pending';
 
@@ -65,13 +75,13 @@ export default function DMDetailsPanel({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 18 }}
           transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
-          className="absolute inset-y-0 right-0 z-30 flex w-[272px] max-w-[82%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)]"
+          className={`absolute inset-y-0 right-0 z-30 flex w-[272px] max-w-[86%] flex-col overflow-hidden border-l border-[rgba(var(--glass-tint),0.10)] ${solidSurface ? 'dm-mobile-solid-panel dm-mobile-side-panel' : ''}`}
           style={{
             background:
-              'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.025)), var(--surface-floating-bg, var(--surface-elevated, var(--theme-popover-bg)))',
+              'linear-gradient(180deg, rgba(var(--glass-tint),0.055), rgba(var(--glass-tint),0.024)), rgba(var(--theme-bg-rgb),0.995)',
             boxShadow: '-18px 0 34px -24px rgba(var(--shadow-base),0.72), inset 1px 0 0 rgba(255,255,255,0.035)',
-            backdropFilter: 'blur(16px) saturate(125%)',
-            WebkitBackdropFilter: 'blur(16px) saturate(125%)',
+            backdropFilter: 'none',
+            WebkitBackdropFilter: 'none',
           }}
         >
           <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 px-3.5" style={{ borderBottom: '1px solid rgba(var(--glass-tint),0.08)' }}>
@@ -91,42 +101,7 @@ export default function DMDetailsPanel({
           </div>
 
           <div className="custom-scrollbar flex-1 overflow-y-auto px-3.5 py-3">
-            <section className="flex flex-col items-center text-center">
-              <div
-                className="mb-2 flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-2xl"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(var(--theme-accent-rgb),0.22), rgba(var(--theme-accent-rgb),0.07))',
-                  boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.10)',
-                }}
-              >
-                <AvatarContent
-                  avatar={recipient.avatar}
-                  statusText={recipient.statusText}
-                  firstName={recipient.displayName || recipient.firstName}
-                  name={name}
-                  letterClassName="text-[20px] font-bold text-[var(--theme-accent)]/85"
-                />
-              </div>
-              <div className="mv-font-title max-w-full truncate text-[14.5px] font-bold text-[var(--theme-text)]">{name}</div>
-              <div className={`mv-font-meta mt-1 rounded-full px-2 py-[3px] text-[10.5px] font-semibold ${statusTone}`}>
-                {statusText}
-              </div>
-              {(recipient.gameActivity || recipient.platform) && (
-                <div className="mt-2 flex max-w-full flex-wrap justify-center gap-1.5">
-                  {recipient.gameActivity && (
-                    <InfoChip icon={<Gamepad2 size={11} />} label={recipient.gameActivity} />
-                  )}
-                  {recipient.platform && (
-                    <InfoChip
-                      icon={recipient.platform === 'mobile' ? <Smartphone size={11} /> : <Monitor size={11} />}
-                      label={recipient.platform === 'mobile' ? 'Mobil' : 'Masaüstü'}
-                    />
-                  )}
-                </div>
-              )}
-            </section>
-
-            <section className="mt-3.5 space-y-2">
+            <section className="space-y-2">
               <SectionTitle>Durum</SectionTitle>
               <div className="flex flex-wrap gap-1.5">
                 {relationshipLabel && <StatusChip icon={<UserRound size={11} />} label={relationshipLabel} />}
@@ -136,7 +111,7 @@ export default function DMDetailsPanel({
               </div>
             </section>
 
-            <section className="mt-3.5 space-y-2">
+            <section className="mt-3 space-y-2">
               <SectionTitle>Paylaşımlar</SectionTitle>
               <div className="grid grid-cols-3 gap-1 rounded-xl border border-[rgba(var(--glass-tint),0.065)] bg-[rgba(var(--glass-tint),0.025)] p-1">
                 <ShareTab active={tab === 'pins'} icon={<Pin size={11} />} label="Sabit" count={pinnedMessages.length} onClick={() => setTab('pins')} />
@@ -145,7 +120,9 @@ export default function DMDetailsPanel({
               </div>
 
               {tab === 'pins' && (
-                pinnedMessages.length > 0 ? (
+                !sharedReady ? (
+                  <DetailsMiniLoading icon={<Pin size={15} />} title="Sabitler hazırlanıyor" />
+                ) : pinnedMessages.length > 0 ? (
                   <div className="space-y-1.5">
                     {pinnedMessages.map(message => (
                       <button
@@ -178,7 +155,9 @@ export default function DMDetailsPanel({
               )}
 
               {tab === 'links' && (
-                links.length > 0 ? (
+                !sharedReady ? (
+                  <DetailsMiniLoading icon={<Globe2 size={15} />} title="Linkler hazırlanıyor" />
+                ) : links.length > 0 ? (
                   <div className="space-y-1.5">
                     {links.map(link => (
                       <button
@@ -210,7 +189,9 @@ export default function DMDetailsPanel({
               )}
 
               {tab === 'media' && (
-                media.length > 0 ? (
+                !sharedReady ? (
+                  <DetailsMiniLoading icon={<ImageIcon size={15} />} title="Medya hazırlanıyor" />
+                ) : media.length > 0 ? (
                   <div className="grid grid-cols-2 gap-1.5">
                     {media.map(item => (
                       <button
@@ -241,26 +222,28 @@ export default function DMDetailsPanel({
 
             <section className="mt-3.5 space-y-2">
               <SectionTitle>Güvenlik</SectionTitle>
-              <button
-                type="button"
-                onClick={onReportUser}
-                className="flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-[11px] font-semibold text-amber-300/88 transition-colors hover:bg-amber-500/10"
-              >
-                <Flag size={13} />
-                Kullanıcıyı rapor et
-              </button>
-              <button
-                type="button"
-                onClick={isBlocked ? onUnblockUser : onBlockUser}
-                className={`flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-[11px] font-semibold transition-colors ${
-                  isBlocked
-                    ? 'text-emerald-300/88 hover:bg-emerald-500/10'
-                    : 'text-red-300/88 hover:bg-red-500/10'
-                }`}
-              >
-                <UserX size={13} />
-                {isBlocked ? 'Engeli kaldır' : 'Engelle'}
-              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={onReportUser}
+                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-semibold text-amber-300/88 transition-colors hover:bg-amber-500/10"
+                >
+                  <Flag size={13} className="shrink-0" />
+                  <span className="truncate">Rapor et</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={isBlocked ? onUnblockUser : onBlockUser}
+                  className={`flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-semibold transition-colors ${
+                    isBlocked
+                      ? 'text-emerald-300/88 hover:bg-emerald-500/10'
+                      : 'text-red-300/88 hover:bg-red-500/10'
+                  }`}
+                >
+                  <UserX size={13} className="shrink-0" />
+                  <span className="truncate">{isBlocked ? 'Engeli kaldır' : 'Engelle'}</span>
+                </button>
+              </div>
             </section>
           </div>
         </motion.aside>
@@ -269,12 +252,12 @@ export default function DMDetailsPanel({
   );
 }
 
-function InfoChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+function DetailsMiniLoading({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <span className="mv-font-caption inline-flex max-w-full items-center gap-1 rounded-full bg-[rgba(var(--glass-tint),0.055)] px-2 py-[3px] text-[10px] font-semibold text-[var(--theme-secondary-text)]/80">
-      <span className="shrink-0 text-[var(--theme-accent)]/65">{icon}</span>
-      <span className="truncate">{label}</span>
-    </span>
+    <div className="flex min-h-[92px] items-center justify-center gap-2 rounded-xl border border-[rgba(var(--glass-tint),0.06)] bg-[rgba(var(--glass-tint),0.025)] px-3 text-[11px] font-semibold text-[var(--theme-secondary-text)]/55">
+      <span className="text-[var(--theme-accent)]/65">{icon}</span>
+      {title}
+    </div>
   );
 }
 
@@ -335,19 +318,4 @@ function getRelationshipLabel(relationship: Relationship): string | null {
   if (relationship === 'incoming') return 'İstek geldi';
   if (relationship === 'outgoing') return 'İstek gönderildi';
   return null;
-}
-
-function getStatusText(user: User): string {
-  if (user.status !== 'online') return 'Çevrimdışı';
-  const raw = user.statusText || 'Online';
-  return raw === 'Aktif' ? 'Online' : raw;
-}
-
-function getStatusTone(statusText: string, status: User['status']): string {
-  if (status !== 'online' || statusText === 'Çevrimdışı') return 'bg-[rgba(var(--glass-tint),0.055)] text-[var(--theme-secondary-text)]/70';
-  if (statusText === 'Online') return 'bg-emerald-500/10 text-emerald-300';
-  if (statusText === 'Pasif') return 'bg-yellow-500/10 text-yellow-300';
-  if (statusText === 'AFK') return 'bg-violet-500/10 text-violet-300';
-  if (statusText === 'Duymuyor' || statusText === 'Rahatsız Etmeyin') return 'bg-red-500/10 text-red-300';
-  return 'bg-orange-500/10 text-orange-300';
 }
