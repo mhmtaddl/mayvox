@@ -9,6 +9,12 @@ const { autoUpdater } = require("electron-updater");
 // duymuyor (kendi mic'i gönderilmeye devam ediyor). Bu flag onu kaldırır.
 // Mutlaka app.whenReady ÖNCESİ set edilmeli.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Global PTT ve oyun içi overlay, oyun penceresi odaktayken de renderer'a hızlı
+// sinyal gönderebilmeli. Bazı Chromium arka plan kısıtları tam ekran oyunlarda
+// PTT down/up tepkisini geciktirebiliyor.
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 const path = require("path");
 const fs = require("fs");
 const {

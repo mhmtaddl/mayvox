@@ -1105,8 +1105,8 @@ export default function App() {
       pushInformational({
         key: `voice-session-claim:${deviceId}:${Number(payload.createdAt) || Date.now()}`,
         kind: 'generic',
-        label: 'Oda oturumu taşındı',
-        detail: 'Bu cihaz odadan çıkarıldı.',
+        label: 'Oda başka cihazda açıldı',
+        detail: 'Başka cihazda odaya girildi, buradan çıkarıldın.',
         serverId: activeServerIdRef.current || undefined,
         createdAt: Date.now(),
       });
