@@ -3323,7 +3323,7 @@ export default function ChatView() {
                     isMuted={isMuted} isDeafened={isDeafened}
                     servers={sidebarServers}
                     activeServerName={activeServerData?.name}
-                    activeServerMemberCount={mobileServerMembers.length}
+                    activeServerMemberCount={activeServerData?.memberCount ?? mobileServerMembers.length}
                     serverMembers={mobileServerMembers} />
                 </React.Suspense>
                 <div className="shrink-0 px-2 py-2.5 flex items-center justify-evenly">
@@ -3670,7 +3670,7 @@ export default function ChatView() {
               inviteStatuses={inviteStatuses} inviteCooldowns={inviteCooldowns} handleInviteUser={handleInviteUserWithContext} handleCancelInvite={handleCancelInvite} isMuted={isMuted} isDeafened={isDeafened}
               servers={sidebarServers}
               activeServerName={activeServerData?.name}
-              activeServerMemberCount={mobileServerMembers.length}
+              activeServerMemberCount={activeServerData?.memberCount ?? mobileServerMembers.length}
               serverMembers={mobileServerMembers} />
           </React.Suspense>
           <div className="shrink-0 px-3 py-2.5 flex items-center justify-evenly">
