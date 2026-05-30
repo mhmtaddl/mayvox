@@ -23,7 +23,7 @@ export default function PermissionSection() {
     <AccordionSection icon={<Smartphone size={12} />} title="İzinler ve Cihaz Ayarları">
       <div className="space-y-2">
         {/* Mikrofon */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20">
+        <div className="settings-permission-row flex items-center gap-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20">
           <div className="w-8 h-8 rounded-lg bg-[var(--theme-accent)]/10 flex items-center justify-center shrink-0">
             <Mic size={16} className="text-[var(--theme-accent)]" />
           </div>
@@ -38,7 +38,7 @@ export default function PermissionSection() {
         </div>
 
         {/* Bildirimler */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20">
+        <div className="settings-permission-row flex items-center gap-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20">
           <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
             <Bell size={16} className="text-amber-400" />
           </div>
@@ -63,14 +63,14 @@ export default function PermissionSection() {
 
       {/* Butonlar */}
       <div className="flex gap-2 mt-4">
-        <button onClick={refresh} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-[var(--theme-secondary-text)] bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20 hover:bg-[var(--theme-sidebar)] transition-all">
+        <button onClick={refresh} className="settings-permission-action flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-[var(--theme-secondary-text)] bg-[var(--theme-sidebar)]/50 border border-[var(--theme-border)]/20 hover:bg-[var(--theme-sidebar)] transition-all">
           <RefreshCw size={12} /> Tekrar Kontrol Et
         </button>
-        <button onClick={openAppSettings} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-[var(--theme-accent)] bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)] hover:text-white transition-all">
+        <button onClick={openAppSettings} className="settings-permission-action flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-[var(--theme-accent)] bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/20 hover:bg-[var(--theme-accent)] hover:text-white transition-all">
           <ExternalLink size={12} /> Uygulama Ayarları
         </button>
         {!notifInfo.ok && (
-          <button onClick={openNotificationSettings} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500 hover:text-white transition-all">
+          <button onClick={openNotificationSettings} className="settings-permission-action flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500 hover:text-white transition-all">
             <Bell size={12} /> Bildirim Ayarları
           </button>
         )}
@@ -84,7 +84,7 @@ export default function PermissionSection() {
       )}
 
       {/* OEM notu */}
-      <div className="mt-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/30 border border-[var(--theme-border)]/15">
+      <div className="settings-permission-note mt-3 p-3 rounded-xl bg-[var(--theme-sidebar)]/30 border border-[var(--theme-border)]/15">
         <div className="flex items-start gap-2">
           <Info size={12} className="text-[var(--theme-secondary-text)]/40 shrink-0 mt-0.5" />
           <div>

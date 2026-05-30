@@ -262,7 +262,7 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
       <button
         key={t.id}
         onClick={() => selectTab(t.id)}
-        className={`relative ${tabletMode ? 'h-8 min-w-0 rounded-[10px] px-1 text-[9px]' : 'flex-1 min-w-0 rounded-lg px-1.5 py-2 text-[10px] sm:px-3.5 sm:text-[12px]'} flex items-center justify-center gap-1 font-semibold transition-all ${
+        className={`server-settings-tab-button relative ${tabletMode ? 'h-8 min-w-0 rounded-[10px] px-1 text-[9px]' : 'flex-1 min-w-0 rounded-lg px-1.5 py-2 text-[10px] sm:px-3.5 sm:text-[12px]'} flex items-center justify-center gap-1 font-semibold transition-all ${
           active
             ? tabletMode
               ? 'border border-[rgba(var(--theme-accent-rgb),0.28)] bg-[rgba(var(--theme-accent-rgb),0.055)] text-[var(--theme-accent)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.045)]'
@@ -272,8 +272,8 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
               : 'text-[var(--theme-secondary-text)]/55 hover:text-[var(--theme-text)] hover:bg-[rgba(var(--glass-tint),0.05)]'
         }`}
       >
-        <span className={`shrink-0 transition-colors ${active ? 'text-[var(--theme-accent)]' : ''}`}>{t.icon}</span>
-        <span className="truncate">{t.label}</span>
+          <span className={`shrink-0 transition-colors ${active ? 'text-[var(--theme-accent)]' : ''}`}>{t.icon}</span>
+        <span className="server-settings-tab-label truncate">{t.label}</span>
         {!!t.badge && t.badge > 0 && (
           <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-[var(--theme-accent)] text-[var(--theme-text-on-accent,#000)] shadow-[0_0_6px_rgba(var(--theme-accent-rgb),0.45)]">
             {t.badge > 99 ? '99+' : t.badge}
@@ -454,23 +454,25 @@ export default function ServerSettings({ serverId, onClose, onServerUpdated, onS
           </React.Suspense>
           </>)}
         </div>
-        {tab === 'automod' && canKickMembers && (
-          <div className="min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end">
+        {tab === 'automod' && canKickMembers && (automodState.dirty || automodState.saving) && (
+          <div className={compactTabletLayout ? 'pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end' : 'min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end'}>
             <TabActionPills
               dirty={automodState.dirty}
               saving={automodState.saving}
               onReset={() => automodActionsRef.current?.onReset()}
               onSave={() => automodActionsRef.current?.onSave()}
+              className={compactTabletLayout ? 'server-settings-floating-actions pointer-events-auto flex' : 'flex'}
             />
           </div>
         )}
-        {tab === 'general' && canEdit && (
-          <div className="min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end">
+        {tab === 'general' && canEdit && (generalState.dirty || generalState.saving) && (
+          <div className={compactTabletLayout ? 'pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end' : 'min-[900px]:hidden shrink-0 border-t border-[rgba(var(--glass-tint),0.06)] px-3 py-2 flex justify-end'}>
             <TabActionPills
               dirty={generalState.dirty}
               saving={generalState.saving}
               onReset={() => generalActionsRef.current?.onReset()}
               onSave={() => generalActionsRef.current?.onSave()}
+              className={compactTabletLayout ? 'server-settings-floating-actions pointer-events-auto flex' : 'flex'}
             />
           </div>
         )}

@@ -9,6 +9,7 @@
  */
 
 import { createManagedAudioContext } from '../../lib/audio/audioOutputRegistry';
+import IncomingCall from '../../lib/incomingCall';
 
 const SOUND_PREF_KEY = 'notify:sound';
 const SOUND_VARIANT_KEY = 'notify:sound-variant';
@@ -151,6 +152,17 @@ function playPartial(
 
 /** Gerçek oynatma — scheduler'dan çağrılır; envelope marker güncellenir. */
 function actuallyPlay() {
+  if (IncomingCall) {
+    void IncomingCall.playNotificationSound().catch(() => {
+      playWebNotificationTone();
+    });
+    lastPlayEnd = nowMs() + ENVELOPE_MS;
+    return;
+  }
+  playWebNotificationTone();
+}
+
+function playWebNotificationTone() {
   const c = ensureCtx();
   if (!c) return;
   try {

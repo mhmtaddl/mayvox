@@ -11,7 +11,7 @@ export default function ToastContainer() {
 
   const node = (
     <div
-      className="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none"
+      className="fixed right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[1000] flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2 pointer-events-none sm:right-4 sm:top-4"
       aria-live="polite"
       aria-atomic="false"
     >

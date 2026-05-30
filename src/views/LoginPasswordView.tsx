@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
+import { User as UserIcon, Lock, Eye, EyeOff, Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import appLogo from '../assets/app-logo.png';
 import { makeEnterToNext } from '../lib/mobileFormNav';
@@ -52,6 +52,17 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
 
   const triggerSubmit = () => {
     onSubmit();
+  };
+
+  const handleRememberChange = (checked: boolean) => {
+    setRememberMe(checked);
+    if (!checked) {
+      localStorage.removeItem(REMEMBER_LOGIN_KEY);
+      localStorage.removeItem(REMEMBER_IDENTIFIER_KEY);
+      return;
+    }
+    localStorage.setItem(REMEMBER_LOGIN_KEY, 'true');
+    if (nick.trim()) localStorage.setItem(REMEMBER_IDENTIFIER_KEY, nick.trim());
   };
 
   const onEnterNext = makeEnterToNext([nickInputRef, pwdInputRef], triggerSubmit);
@@ -148,14 +159,24 @@ export default function LoginPasswordView({ handleLogin, onForgotPassword, onGoT
               </div>
             </div>
 
-            <label className="-mt-1 flex w-fit cursor-pointer select-none items-center gap-2 rounded-md px-1 py-0.5">
+            <label className="-mt-1 flex w-fit cursor-pointer select-none items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-[rgba(var(--glass-tint),0.035)]">
               <input
                 type="checkbox"
                 checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-3 w-3 shrink-0 accent-[var(--theme-accent)]"
+                onChange={(e) => handleRememberChange(e.target.checked)}
+                className="sr-only"
               />
-              <span className="text-[10.5px] font-medium leading-none text-[var(--theme-secondary-text)]/68">Beni hatırla</span>
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors ${
+                  rememberMe
+                    ? 'border-[rgba(var(--theme-accent-rgb),0.58)] bg-[rgba(var(--theme-accent-rgb),0.18)] text-[var(--theme-accent)]'
+                    : 'border-[rgba(var(--glass-tint),0.18)] bg-[rgba(var(--glass-tint),0.035)] text-transparent'
+                }`}
+                aria-hidden="true"
+              >
+                <Check size={11} strokeWidth={2.4} />
+              </span>
+              <span className="text-[11px] font-semibold leading-none text-[var(--theme-secondary-text)]/72">Beni hatırla</span>
             </label>
 
             {/* Giriş butonu */}

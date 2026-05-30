@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Bell, MessageCircle, Pin, Power, Settings } from 'lucide-react';
 import type { MobileShellView } from './MobileAppShell';
 
@@ -14,11 +14,13 @@ interface MobileSocialSheetProps {
   serverMemberCount?: number;
   currentView?: MobileShellView;
   dmOpen?: boolean;
+  dmCount?: number;
   onOpenSocial?: () => void;
   onOpenNotifications?: () => void;
   notificationSlot?: React.ReactNode;
   onOpenSettings?: () => void;
   onLogout?: () => void;
+  topSlot?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -34,10 +36,61 @@ const OVERLAY_PANEL_STYLE = {
 
 const UTILITY_ACTIVE_STYLE = { background: 'rgba(var(--theme-accent-rgb),0.075)' };
 const UTILITY_INACTIVE_STYLE = { background: 'transparent' };
+const PHONE_SOCIAL_WIDTH_KEY = 'mayvox.mobilePhone.socialPanelWidth';
 
-export default function MobileSocialSheet({ open = false, variant = 'overlay', phoneLayout = false, onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, onOpenSocial, onOpenNotifications, notificationSlot, onOpenSettings, onLogout, children }: MobileSocialSheetProps) {
+function getDefaultPhonePanelWidth() {
+  if (typeof window === 'undefined') return 190;
+  return Math.round(Math.min(window.innerWidth * 0.51, 190));
+}
+
+function clampPhonePanelWidth(width: number) {
+  if (typeof window === 'undefined') return width;
+  const min = getDefaultPhonePanelWidth();
+  const max = Math.round(Math.min(window.innerWidth * 0.78, 320));
+  return Math.min(max, Math.max(min, width));
+}
+
+export default function MobileSocialSheet({ open = false, variant = 'overlay', phoneLayout = false, onClose, pinned = false, onTogglePinned, currentView, dmOpen = false, dmCount = 0, onOpenSocial, onOpenNotifications, notificationSlot, onOpenSettings, onLogout, topSlot, children }: MobileSocialSheetProps) {
+  const [phonePanelWidth, setPhonePanelWidth] = useState(() => {
+    if (typeof window === 'undefined') return 190;
+    const saved = Number(window.localStorage.getItem(PHONE_SOCIAL_WIDTH_KEY));
+    return clampPhonePanelWidth(Number.isFinite(saved) && saved > 0 ? saved : getDefaultPhonePanelWidth());
+  });
+
+  useEffect(() => {
+    if (!phoneLayout || typeof window === 'undefined') return;
+    setPhonePanelWidth(prev => clampPhonePanelWidth(prev));
+  }, [phoneLayout]);
+
+  const handlePhoneResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!phoneLayout || typeof window === 'undefined') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = phonePanelWidth;
+    let finalWidth = startWidth;
+    document.body.style.userSelect = 'none';
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const next = clampPhonePanelWidth(startWidth + (startX - moveEvent.clientX));
+      finalWidth = next;
+      setPhonePanelWidth(next);
+    };
+    const onUp = () => {
+      document.body.style.userSelect = '';
+      window.localStorage.setItem(PHONE_SOCIAL_WIDTH_KEY, String(Math.round(clampPhonePanelWidth(finalWidth))));
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }, [phoneLayout, phonePanelWidth]);
+
   const header = onTogglePinned ? (
-    <div className="mb-1.5 flex min-h-9 items-center justify-end border-b border-[rgba(var(--glass-tint),0.045)] pb-1.5">
+    <div className="mb-1.5 flex min-h-9 items-center justify-end pb-1.5">
       <button
         type="button"
         onClick={onTogglePinned}
@@ -65,9 +118,9 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', p
           <div className="min-h-0 flex-1 overflow-hidden">
             {children}
           </div>
-          <div className="mt-2 shrink-0 border-t border-[rgba(var(--glass-tint),0.055)] pt-2">
+          <div className="mt-2 shrink-0 pt-2">
             <div className="flex items-center justify-between gap-1">
-              <UtilityButton label="DM" active={dmOpen} onClick={onOpenSocial} icon={<MessageCircle size={15} />} />
+              <UtilityButton label="DM" active={dmOpen} count={dmCount} onClick={onOpenSocial} icon={<MessageCircle size={15} />} />
               {notificationSlot ?? <UtilityButton label="Bildirim" active={currentView === 'notifications'} onClick={onOpenNotifications} icon={<Bell size={15} />} />}
               <UtilityButton label="Ayarlar" active={currentView === 'settings'} onClick={onOpenSettings} icon={<Settings size={15} />} />
               <UtilityButton label="Kapat" tone="danger" onClick={onLogout} icon={<Power size={15} />} />
@@ -78,28 +131,52 @@ export default function MobileSocialSheet({ open = false, variant = 'overlay', p
     );
   }
 
+  const overlayRootClass = phoneLayout
+    ? `fixed inset-0 z-40 transition-[visibility] duration-200 ${open ? 'visible' : 'invisible'}`
+    : `absolute inset-0 z-40 transition-[visibility] duration-200 ${open ? 'visible' : 'invisible'}`;
+
   return (
     <div
-      className={`absolute inset-0 z-40 transition-[visibility] duration-200 ${open ? 'visible' : 'invisible'}`}
+      className={overlayRootClass}
       onTouchStart={event => event.stopPropagation()}
       onTouchMove={event => event.stopPropagation()}
       onTouchEnd={event => event.stopPropagation()}
     >
       <button
         type="button"
-        className={`absolute inset-0 bg-[rgba(var(--theme-bg-rgb),0.10)] transition-opacity duration-150 ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 transition-opacity duration-150 ${phoneLayout ? 'bg-[rgba(var(--theme-bg-rgb),0.34)]' : 'bg-[rgba(var(--theme-bg-rgb),0.10)]'} ${open ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
         aria-label="Arkadas panelini kapat"
         tabIndex={open ? 0 : -1}
       />
       <aside
-        className={`absolute inset-y-0 right-0 h-full overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-150 ease-out ${phoneLayout ? 'w-[min(88vw,340px)]' : 'w-[clamp(168px,15vw,190px)]'} ${open ? 'translate-x-0 opacity-100' : 'translate-x-[104%] opacity-80'}`}
-        style={OVERLAY_PANEL_STYLE}
+        className={`absolute bottom-0 right-0 overflow-hidden px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+12px)] transition-[transform,opacity] duration-150 ease-out ${phoneLayout ? 'inset-y-0 h-full dm-glass-panel dm-mobile-solid-panel rounded-none border-y-0 border-r-0' : 'inset-y-0 h-full w-[clamp(168px,15vw,190px)]'} ${open ? 'translate-x-0 opacity-100' : 'translate-x-[104%] opacity-80'}`}
+        style={phoneLayout ? { width: phonePanelWidth } : OVERLAY_PANEL_STYLE}
         aria-hidden={!open}
       >
-        <div className="h-[calc(100vh-92px-env(safe-area-inset-top))] min-h-0 overflow-hidden">
+        {phoneLayout && (
+          <div
+            className="absolute inset-y-0 left-0 z-10 w-3 cursor-ew-resize touch-none"
+            onPointerDown={handlePhoneResizeStart}
+            aria-hidden="true"
+          >
+            <span className="absolute left-0 top-1/2 h-14 w-px -translate-y-1/2 rounded-full bg-[rgba(var(--glass-tint),0.18)]" />
+          </div>
+        )}
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {header}
-          {children}
+          {topSlot && <div className="mb-2 shrink-0">{topSlot}</div>}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {children}
+          </div>
+          <div className="mt-2 shrink-0 pt-2">
+            <div className="flex items-center justify-between gap-1">
+              <UtilityButton label="DM" active={dmOpen} count={dmCount} onClick={onOpenSocial} icon={<MessageCircle size={15} />} />
+              {notificationSlot ?? <UtilityButton label="Bildirim" active={currentView === 'notifications'} onClick={onOpenNotifications} icon={<Bell size={15} />} />}
+              <UtilityButton label="Ayarlar" active={currentView === 'settings'} onClick={onOpenSettings} icon={<Settings size={15} />} />
+              <UtilityButton label="Kapat" tone="danger" onClick={onLogout} icon={<Power size={15} />} />
+            </div>
+          </div>
         </div>
       </aside>
     </div>
@@ -110,22 +187,25 @@ const UtilityButton = React.memo(function UtilityButton({
   icon,
   label,
   active,
+  count,
   tone,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  count?: number;
   tone?: 'danger';
   onClick?: () => void;
 }) {
+  const showCount = typeof count === 'number' && count > 0 && !active;
   return (
     <button
       type="button"
       onMouseDown={event => event.stopPropagation()}
       onPointerDown={event => event.stopPropagation()}
       onClick={onClick}
-      className={`flex h-9 w-9 items-center justify-center rounded-[10px] transition-colors active:scale-[0.98] ${
+      className={`relative flex h-9 w-9 items-center justify-center rounded-[10px] transition-colors active:scale-[0.98] ${
         tone === 'danger'
           ? 'text-red-300/78'
           : active
@@ -137,6 +217,11 @@ const UtilityButton = React.memo(function UtilityButton({
       title={label}
     >
       {icon}
+      {showCount && (
+        <span className="absolute -right-1 -top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--theme-accent)] px-[4px] text-[8px] font-black leading-none text-white shadow-[0_2px_8px_rgba(var(--theme-accent-rgb),0.38)]">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
     </button>
   );
 });

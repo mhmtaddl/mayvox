@@ -46,7 +46,7 @@ function PremiumColorControl({
   };
 
   return (
-    <div className={`flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] px-2.5 py-2 ${disabled ? 'opacity-45' : ''}`}>
+    <div className={`settings-premium-color-row flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] px-2.5 py-2 ${disabled ? 'opacity-45' : ''}`}>
       <span className="min-w-0 text-[10.5px] font-semibold text-[var(--theme-secondary-text)] truncate">{label}</span>
       <span className="relative h-6 w-8 shrink-0 overflow-hidden rounded-md border border-[var(--theme-border)]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" style={{ background: draftColor }}>
         <input
@@ -93,7 +93,7 @@ function PremiumCustomizationCard({
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border border-[var(--theme-border)]/65 bg-[var(--surface-base)] p-3 shadow-[var(--surface-card-shadow)] ${locked ? 'opacity-75' : ''}`}
+      className={`settings-premium-customization-card relative overflow-hidden rounded-xl border border-[var(--theme-border)]/65 bg-[var(--surface-base)] p-3 shadow-[var(--surface-card-shadow)] ${locked ? 'opacity-75' : ''}`}
       aria-disabled={locked}
     >
       <button
@@ -138,7 +138,7 @@ function PremiumCustomizationCard({
       )}
 
       {locked && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--surface-base)]/55 backdrop-blur-[1px]">
+        <div className="settings-premium-lock-overlay absolute inset-0 flex items-center justify-center bg-[var(--surface-base)]/55 backdrop-blur-[1px]">
           <div className="flex items-center gap-2 rounded-full border border-[var(--theme-border)]/70 bg-[var(--surface-elevated)] px-3 py-1.5 text-[10px] font-bold text-[var(--theme-secondary-text)] shadow-[var(--shadow-soft)]">
             <Lock size={12} />
             {tier === 'pro' ? 'Pro ve üstü üyeler' : 'Elit üyeler'}
@@ -795,9 +795,6 @@ export function PerformanceSection() {
             className="premium-range w-full"
             style={rangeVisualStyle(noiseSuppressionStrength, 0, 100)}
           />
-          <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
-            <span>Hafif</span><span>Agresif</span>
-          </div>
         </div>
 
         {/* PTT Bırakma Gecikmesi */}
@@ -818,9 +815,6 @@ export function PerformanceSection() {
             className="premium-range w-full"
             style={rangeVisualStyle(pttReleaseDelay, 0, 500)}
           />
-          <div className="flex justify-between text-[9px] md:text-[10px] text-[var(--theme-secondary-text)] mt-0.5">
-            <span>Kapalı</span><span>500 ms</span>
-          </div>
         </div>
 
       </div>
@@ -840,7 +834,7 @@ export function VoiceModeSection() {
 
   return (
     <CardSection icon={<Mic size={12} />} title="Mikrofon Modu">
-      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-[rgba(var(--glass-tint),0.075)] bg-[rgba(var(--glass-tint),0.022)] p-1">
+      <div className="settings-voice-mode-frame grid grid-cols-2 gap-1.5 rounded-xl border border-[rgba(var(--glass-tint),0.075)] bg-[rgba(var(--glass-tint),0.022)] p-1">
         {modes.map(m => (
           <button
             key={m.id}

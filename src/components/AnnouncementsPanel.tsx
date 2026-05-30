@@ -1280,6 +1280,7 @@ export default function AnnouncementsPanel({
       icon: Megaphone,
       accentRgb: '34, 197, 94',
       action: canManage ? 'Duyuru ekle' : '',
+      actionLabel: 'Ekle',
       actionIcon: PlusCircle,
       onAction: () => { setEditTarget(null); setModalType('announcement'); setModalOpen(true); },
     },
@@ -1290,6 +1291,7 @@ export default function AnnouncementsPanel({
       icon: Calendar,
       accentRgb: '167, 139, 250',
       action: canManage ? 'Etkinlik oluştur' : '',
+      actionLabel: 'Oluştur',
       actionIcon: Calendar,
       onAction: () => { setEditTarget(null); setModalType('event'); setModalOpen(true); },
     },
@@ -1300,6 +1302,7 @@ export default function AnnouncementsPanel({
       icon: Compass,
       accentRgb: '245, 158, 11',
       action: canCreateRecommendations ? 'Keşif ekle' : '',
+      actionLabel: 'Ekle',
       actionIcon: PlusCircle,
       onAction: () => { setActiveTab('recommendations'); setRecommendationCreateSignal(prev => prev + 1); },
     }] : []),
@@ -1310,6 +1313,7 @@ export default function AnnouncementsPanel({
       icon: Radio,
       accentRgb: '248, 113, 113',
       action: canModerateCommunityContent ? (streamModalChecking ? 'Kontrol ediliyor' : 'Yayın ekle') : '',
+      actionLabel: streamModalChecking ? 'Kontrol' : 'Ekle',
       actionIcon: PlusCircle,
       onAction: openStreamAdd,
     }] : []),
@@ -1320,6 +1324,7 @@ export default function AnnouncementsPanel({
       icon: UserCheck,
       accentRgb: '56, 189, 248',
       action: mobileTabletLayout ? 'Davetleri Yönet' : 'Başvurular',
+      actionLabel: 'Başvurular',
       actionIcon: Users,
       onAction: onOpenInviteApplications ?? (() => setActiveTab('invites')),
     }] : []),
@@ -1352,12 +1357,12 @@ export default function AnnouncementsPanel({
   return (
     <div
       ref={panelRef}
-      className={mobileTabletLayout ? 'flex h-full min-h-0 w-full touch-pan-y flex-col overflow-hidden px-3 pt-0.5' : 'w-full max-w-5xl mx-auto mt-4 mb-[calc(var(--mv-content-bottom-reserve)+0.75rem)] px-4 sm:px-5 pb-8'}
+      className={mobileTabletLayout ? 'flex h-full min-h-0 w-full touch-pan-y flex-col overflow-hidden px-3 pt-0' : 'w-full max-w-5xl mx-auto mt-4 mb-[calc(var(--mv-content-bottom-reserve)+0.75rem)] px-4 sm:px-5 pb-8'}
       onTouchStart={mobileTabletLayout ? event => setMobileTouchStart({ x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 }) : undefined}
       onTouchEnd={mobileTabletLayout ? handleMobileSummaryTouchEnd : undefined}
       onTouchCancel={mobileTabletLayout ? () => setMobileTouchStart(null) : undefined}
     >
-      <section className={mobileTabletLayout ? 'z-10 mb-2 shrink-0 px-0 py-0.5' : 'mb-3 overflow-hidden rounded-[18px] border border-[rgba(var(--glass-tint),0.052)] bg-[rgba(var(--glass-tint),0.022)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.035)] sm:p-3.5'}>
+      <section className={mobileTabletLayout ? 'z-10 mb-2 shrink-0 px-0 pb-0.5 pt-0' : 'mb-3 overflow-hidden rounded-[18px] border border-[rgba(var(--glass-tint),0.052)] bg-[rgba(var(--glass-tint),0.022)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.035)] sm:p-3.5'}>
         <div className={mobileTabletLayout ? 'flex min-w-0 flex-col items-center gap-1.5' : 'flex min-w-0 items-start gap-2'}>
           <div className={mobileTabletLayout ? 'hidden' : `min-w-0 shrink-0 self-center p-1 text-left ${useCompactServerHome ? 'w-[132px]' : 'w-[156px]'}`}>
             <span className="block text-[13px] font-semibold leading-tight text-[var(--theme-text)]">
@@ -1368,20 +1373,21 @@ export default function AnnouncementsPanel({
             </span>
           </div>
           <div
-            className={mobileTabletLayout ? `flex w-full min-w-0 touch-pan-y snap-x overflow-x-auto pb-1 custom-scrollbar ${mobilePhoneLayout ? 'gap-1.5 px-0.5' : 'gap-2'}` : 'grid min-w-0 flex-1 gap-2'}
+            className={mobileTabletLayout ? `mx-auto flex w-full min-w-0 touch-pan-y snap-x justify-center overflow-x-auto pb-1 custom-scrollbar ${mobilePhoneLayout ? 'gap-1 px-0.5' : 'gap-1.5'}` : 'grid min-w-0 flex-1 gap-2'}
             style={mobileTabletLayout ? undefined : { gridTemplateColumns: summaryGridTemplate }}
           >
               {summaryMetrics.map(metric => {
                 const Icon = metric.icon;
                 const ActionIcon = metric.actionIcon;
                 const isActive = metric.tab ? activeTab === metric.tab : false;
+                const mobileActionLabel = metric.actionLabel;
                 return (
                   <div
                     key={metric.label}
                     style={{
                       '--section-accent': metric.accentRgb,
                     } as React.CSSProperties}
-                    className={`group min-w-0 border transition-all duration-200 ${mobileTabletLayout ? `flex h-10 ${mobilePhoneLayout ? 'min-w-[88px] px-1.5' : 'min-w-[108px] flex-1 px-2'} snap-start items-center rounded-[13px] py-0.5` : useCompactServerHome ? 'rounded-[12px] px-1.5 py-1.5' : 'rounded-[14px] px-2 py-2'} ${
+                    className={`group min-w-0 border transition-all duration-200 ${mobileTabletLayout ? `flex ${mobilePhoneLayout ? 'h-[62px] min-w-[62px] flex-1 basis-0 px-1' : 'h-[60px] min-w-0 flex-1 basis-0 px-1.5'} snap-start items-stretch rounded-[12px] py-1` : useCompactServerHome ? 'rounded-[12px] px-1.5 py-1.5' : 'rounded-[14px] px-2 py-2'} ${
                       isActive
                         ? 'border-[rgba(var(--section-accent),0.30)] bg-[rgba(var(--section-accent),0.072)] shadow-[inset_0_1px_0_rgba(var(--glass-tint),0.055)]'
                         : 'border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] hover:border-[rgba(var(--section-accent),0.24)] hover:bg-[rgba(var(--section-accent),0.042)]'
@@ -1395,26 +1401,40 @@ export default function AnnouncementsPanel({
                           else toggleSection(metric.tab);
                         }
                       }}
-                      className={`flex w-full text-left ${mobileTabletLayout ? 'h-full items-center justify-between gap-1.5' : 'items-start justify-between gap-2'} ${metric.tab ? '' : 'cursor-default'}`}
+                      className={`flex w-full text-left ${mobileTabletLayout ? 'h-full flex-col items-stretch justify-between gap-0.5' : 'items-start justify-between gap-2'} ${metric.tab ? '' : 'cursor-default'}`}
                     >
-                      <span className="min-w-0 flex-1">
-                        <span className={`block font-semibold leading-none transition-colors ${mobilePhoneLayout ? 'text-[13px]' : useCompactServerHome ? 'text-[14px]' : 'text-[16px]'} ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>{metric.value}</span>
-                        <span className={`mt-0.5 flex min-w-0 items-center gap-1 truncate font-medium transition-colors ${mobilePhoneLayout ? 'text-[8.5px]' : useCompactServerHome ? 'text-[8.5px]' : 'text-[9.5px]'} ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>
-                          {mobileTabletLayout && <Icon size={mobilePhoneLayout ? 8.5 : 9.5} className="shrink-0 text-[rgb(var(--section-accent))]/78" />}
-                          <span className="truncate">{metric.label}</span>
-                        </span>
-                      </span>
-                      {mobileTabletLayout && metric.action && (
-                        <span
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            metric.onAction();
-                          }}
-                          className={`inline-flex shrink-0 items-center justify-center rounded-[9px] border border-[rgba(var(--section-accent),0.16)] bg-[rgba(var(--section-accent),0.045)] text-[rgb(var(--section-accent))] ${mobilePhoneLayout ? 'h-5 w-5' : 'h-6 w-6'}`}
-                          aria-label={metric.action}
-                          title={metric.action}
-                        >
-                          <PlusCircle size={mobilePhoneLayout ? 9 : 11} strokeWidth={2.35} className="shrink-0 opacity-82" />
+                      {mobileTabletLayout ? (
+                        <>
+                          <span className={`flex w-full min-w-0 items-center justify-center gap-0.5 truncate text-center font-black leading-none transition-colors ${mobilePhoneLayout ? 'text-[8px]' : 'text-[9px]'} ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>
+                            <Icon size={mobilePhoneLayout ? 8.5 : 9.5} className="shrink-0 text-[rgb(var(--section-accent))]/82" />
+                            <span className="min-w-0 truncate">{metric.label}</span>
+                          </span>
+                          <span className={`w-full text-center font-black leading-none tabular-nums text-[rgb(var(--section-accent))] ${mobilePhoneLayout ? 'text-[11px]' : 'text-[12px]'}`}>
+                            {metric.value}
+                          </span>
+                          {metric.action ? (
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                metric.onAction();
+                              }}
+                              className={`mx-auto inline-flex max-w-full shrink-0 items-center justify-center gap-0.5 rounded-[7px] border border-[rgba(var(--section-accent),0.16)] bg-[rgba(var(--section-accent),0.045)] px-1 font-black leading-none text-[rgb(var(--section-accent))] ${mobilePhoneLayout ? 'h-4 text-[7px]' : 'h-5 text-[8px]'}`}
+                              aria-label={metric.action}
+                              title={metric.action}
+                            >
+                              <PlusCircle size={mobilePhoneLayout ? 7.5 : 8.5} strokeWidth={2.5} className="shrink-0 opacity-82" />
+                              <span className="truncate">{mobileActionLabel}</span>
+                            </span>
+                          ) : (
+                            <span className="h-5" aria-hidden="true" />
+                          )}
+                        </>
+                      ) : (
+                        <span className={`min-w-0 ${mobilePhoneLayout ? 'flex-none' : 'flex-1'}`}>
+                          <span className={`block font-semibold leading-none transition-colors ${mobilePhoneLayout ? 'text-[11px]' : useCompactServerHome ? 'text-[14px]' : 'text-[16px]'} ${isActive ? 'text-[rgb(var(--section-accent))]' : 'text-[var(--theme-text)] group-hover:text-[rgb(var(--section-accent))]'}`}>{metric.value}</span>
+                          <span className={`mt-0.5 flex min-w-0 items-center gap-1 truncate font-medium transition-colors ${mobilePhoneLayout ? 'justify-center text-[7.5px]' : useCompactServerHome ? 'text-[8.5px]' : 'text-[9.5px]'} ${isActive ? 'text-[rgb(var(--section-accent))]/80' : 'text-[var(--theme-secondary-text)]/55 group-hover:text-[rgb(var(--section-accent))]/72'}`}>
+                            <span className="truncate">{metric.label}</span>
+                          </span>
                         </span>
                       )}
                     </button>
@@ -1443,7 +1463,9 @@ export default function AnnouncementsPanel({
       {!mobileTabletLayout && <section
         className="mb-3 grid gap-3"
         style={{
-          gridTemplateColumns: useCompactServerHome
+          gridTemplateColumns: mobilePhoneLayout
+            ? '1fr'
+            : useCompactServerHome
             ? 'repeat(3, minmax(0, 1fr))'
             : 'repeat(auto-fit, minmax(220px, 1fr))',
         }}
@@ -1585,7 +1607,9 @@ export default function AnnouncementsPanel({
       {(!mobileTabletLayout || !activeTab) && <section
         className="mb-4 grid gap-3"
         style={{
-          gridTemplateColumns: useCompactServerHome
+          gridTemplateColumns: mobilePhoneLayout
+            ? '1fr'
+            : useCompactServerHome
             ? 'repeat(3, minmax(0, 1fr))'
             : 'repeat(auto-fit, minmax(220px, 1fr))',
         }}

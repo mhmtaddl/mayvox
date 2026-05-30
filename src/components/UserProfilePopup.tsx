@@ -30,7 +30,7 @@ interface Props {
   source?: 'default' | 'search';
 }
 
-const POPUP_W = 240;
+const POPUP_W = 216;
 const POPUP_H = 340;
 
 const formatOnlineDuration = (onlineSince: number) => {
@@ -76,8 +76,10 @@ export default function UserProfilePopup({
   const hasImage = hasCustomAvatar(user.avatar);
   const nonFriendFallbackAvatar = !canViewPresence && !hasImage ? getStatusAvatar('Çevrimdışı') : null;
   const isSearchMinimal = source === 'search' && !isMe && rel !== 'friend';
+  const isPhonePopup = window.matchMedia('(max-width: 640px), (hover: none) and (pointer: coarse)').matches;
+  const popupWidth = isPhonePopup ? 204 : POPUP_W;
   const popupHeight = isSearchMinimal ? 268 : POPUP_H;
-  const x = Math.min(position.x + 8, window.innerWidth - POPUP_W - 16);
+  const x = Math.min(Math.max(12, position.x + 8), window.innerWidth - popupWidth - 12);
   const y = Math.min(position.y - 40, window.innerHeight - popupHeight - 16);
 
   useEscapeKey(onClose);
@@ -307,7 +309,7 @@ export default function UserProfilePopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: -4 }}
           transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: POPUP_W }}
+          style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: popupWidth }}
           className="rounded-[18px] overflow-hidden group/card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-[2px]"
           onClick={(e) => e.stopPropagation()}
         >
@@ -323,7 +325,7 @@ export default function UserProfilePopup({
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/[0.10]" />
             <div className="pointer-events-none absolute inset-0 rounded-[18px] ring-1 ring-inset ring-transparent group-hover/card:ring-[rgba(var(--theme-accent-rgb),0.22)] transition-[box-shadow] duration-200" />
 
-            <div className="flex flex-col items-center px-5 pt-6 pb-5">
+            <div className="flex flex-col items-center px-3.5 pt-6 pb-5">
               <div
                 className="mb-4 overflow-hidden flex items-center justify-center avatar-squircle"
                 style={{
@@ -375,14 +377,14 @@ export default function UserProfilePopup({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: -4 }}
         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-        style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: POPUP_W }}
-        className="rounded-[18px] overflow-hidden group/card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-[2px]"
+        style={{ position: 'fixed', top: Math.max(12, y), left: x, zIndex: 151, width: popupWidth }}
+        className={`${isPhonePopup ? 'rounded-[24px]' : 'rounded-[18px]'} overflow-hidden group/card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-[2px]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div
           className="relative surface-floating"
           style={{
-            borderRadius: 18,
+            borderRadius: isPhonePopup ? 24 : 18,
             backdropFilter: 'blur(14px) saturate(125%)',
             WebkitBackdropFilter: 'blur(14px) saturate(125%)',
           }}
@@ -395,9 +397,9 @@ export default function UserProfilePopup({
           <div className="pointer-events-none absolute inset-0 rounded-[18px] ring-1 ring-inset ring-transparent group-hover/card:ring-[rgba(var(--theme-accent-rgb),0.22)] transition-[box-shadow] duration-200" />
 
           {/* Profile area */}
-          <div className="flex flex-col items-center pt-6 pb-3 px-5">
+          <div className={`flex flex-col items-center ${isPhonePopup ? 'px-3 pt-3 pb-3.5' : 'px-3.5 pt-5 pb-3'}`}>
             {/* Avatar */}
-            <div className="relative mb-3.5">
+            <div className={`relative flex w-full justify-center ${isPhonePopup ? 'mb-3' : 'mb-3.5'}`}>
               {(() => {
                 const isSelf = user.id === currentUser.id;
                 const uColor = isSelf ? avatarBorderColor : (user.avatarBorderColor || '');
@@ -410,14 +412,14 @@ export default function UserProfilePopup({
                 const hasFrame = !!uColor;
                 return (
               <div
-                className={`relative ${hasFrame ? getFrameClassName(ft) : ''}`}
-                style={hasFrame ? { ...getFrameStyle(uColor, ft), borderRadius: '22%' } : undefined}
+                className={`relative mx-auto block shrink-0 ${hasFrame ? getFrameClassName(ft) : ''}`}
+                style={hasFrame ? { ...getFrameStyle(uColor, ft), borderRadius: isPhonePopup ? '18%' : '22%' } : undefined}
               >
               <div
-                className="overflow-hidden flex items-center justify-center avatar-squircle relative"
+                className="relative mx-auto flex items-center justify-center overflow-hidden avatar-squircle"
                 style={{
-                  width: 72,
-                  height: 72,
+                  width: 125,
+                  height: 125,
                   background: 'rgba(var(--theme-accent-rgb), 0.06)',
                   ...(!hasFrame ? {
                     boxShadow: isOnline
@@ -439,10 +441,10 @@ export default function UserProfilePopup({
                     statusText={canViewPresence ? statusText : undefined}
                     firstName={user.displayName || user.firstName}
                     name={userName}
-                    letterClassName="text-[26px] font-semibold tracking-tight"
+                    letterClassName="text-[38px] font-semibold tracking-tight"
                   />
                 ) : (
-                  <UserIcon size={32} className="text-[var(--theme-secondary-text)] opacity-30" strokeWidth={1.5} />
+                  <UserIcon size={44} className="text-[var(--theme-secondary-text)] opacity-30" strokeWidth={1.5} />
                 )}
               </div>
               </div>
@@ -462,19 +464,19 @@ export default function UserProfilePopup({
             </div>
 
             {/* Name + role */}
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div className={`flex max-w-full items-center justify-center gap-1.5 ${isPhonePopup ? 'mb-1' : 'mb-0.5'}`}>
               <span
-                className="font-semibold text-[15px] leading-tight tracking-[-0.01em]"
+                className={`${isPhonePopup ? 'text-[17px]' : 'text-[15px]'} min-w-0 truncate font-semibold leading-tight tracking-[-0.01em]`}
                 style={{ color: 'var(--theme-text)' }}
               >
                 {userName}
               </span>
-              <RoleBadge role={getUserRoleBadge(user)} size="sm" showLabel />
+              <RoleBadge role={getUserRoleBadge(user)} size="sm" showLabel={!isPhonePopup} />
             </div>
 
             {/* Status text — secondary tier */}
             {canViewPresence && (
-              <div className={`text-[11px] font-medium tracking-wide ${statusColor} mb-2.5`}>
+              <div className={`${isPhonePopup ? 'text-[11.5px]' : 'text-[11px]'} text-center font-medium tracking-wide ${statusColor} mb-2.5`}>
                 {statusText}
               </div>
             )}
@@ -497,7 +499,7 @@ export default function UserProfilePopup({
             )}
 
             {/* Meta chips — hairline, borderless */}
-            <div className="flex flex-wrap items-center justify-center gap-1 mb-2.5">
+            <div className={`flex flex-wrap items-center justify-center ${isPhonePopup ? 'gap-1.5 mb-3' : 'gap-1 mb-2.5'}`}>
               {canViewPresence && user.platform && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-[3px] rounded-full text-[var(--theme-secondary-text)]/80" style={{ background: 'rgba(var(--glass-tint), 0.05)' }}>
                   {user.platform === 'mobile' ? <Smartphone size={10} strokeWidth={2} /> : <Monitor size={10} strokeWidth={2} />}
@@ -520,12 +522,12 @@ export default function UserProfilePopup({
 
             {/* Hairline separator — action satırı'ndan önce */}
             {!isMe && (
-              <div className="w-full h-px mb-2.5" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.12), transparent)' }} />
+              <div className={`w-full h-px ${isPhonePopup ? 'mb-2.5' : 'mb-2.5'}`} style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--glass-tint),0.12), transparent)' }} />
             )}
 
             {/* Quick actions — ikon satırı */}
             {!isMe && (
-              <div className="flex items-center justify-center gap-0.5">
+              <div className={`flex items-center justify-center ${isPhonePopup ? 'gap-1.5' : 'gap-0.5'}`}>
                 {!rel && (
                   <button
                     onClick={() => triggerConfirm('send')}

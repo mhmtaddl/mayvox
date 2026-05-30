@@ -4,6 +4,7 @@ import {
   AlertCircle, AtSign, Bell, CheckCircle2, Download, Info,
   MessageCircle, ShieldAlert, UserPlus, WifiOff, X,
 } from 'lucide-react';
+import AvatarContent from '../../components/AvatarContent';
 import {
   dismiss, handleClick, recordDisplayed,
   type ToastItem as Toast,
@@ -84,7 +85,7 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
 
   const { color: accent, icon: Icon } = resolveAccent(toast.kind);
   const avatar = toast.avatar;
-  const hasAvatar = typeof avatar === 'string' && avatar.startsWith('http');
+  const shouldRenderAvatar = toast.kind === 'dm' || !!avatar;
   const isSubtle = toast.visualMode === 'toast-subtle';
   const count = toast.groupCount ?? 1;
   const showBadge = count > 1;
@@ -110,7 +111,7 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => handleClick(toast)}
-      className="group relative flex items-stretch w-[320px] cursor-pointer rounded-2xl overflow-hidden"
+      className="group relative flex w-[min(320px,calc(100vw-1.5rem))] cursor-pointer items-stretch overflow-hidden rounded-2xl"
       style={{
         background: 'rgba(255,255,255,0.035)',
         border: '1px solid rgba(255,255,255,0.07)',
@@ -142,16 +143,23 @@ export default function ToastItemView({ toast, ttlMs = 5000 }: Props) {
           <div
             className="w-9 h-9 rounded-[10px] overflow-hidden flex items-center justify-center"
             style={{
-              background: hasAvatar
+              background: avatar
                 ? 'transparent'
                 : `linear-gradient(135deg, ${accent}1a, ${accent}08)`,
-              border: hasAvatar ? '1px solid rgba(255,255,255,0.05)' : `1px solid ${accent}1f`,
+              border: avatar ? '1px solid rgba(255,255,255,0.05)' : `1px solid ${accent}1f`,
             }}
           >
-            {hasAvatar
-              ? <img src={avatar!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <Icon size={16} style={{ color: accent }} />
-            }
+            {shouldRenderAvatar ? (
+              <AvatarContent
+                avatar={avatar}
+                statusText="Çevrimdışı"
+                name={toast.title}
+                imgClassName="h-full w-full object-cover"
+                letterClassName="text-[11px] font-black text-[var(--theme-accent)]"
+              />
+            ) : (
+              <Icon size={16} style={{ color: accent }} />
+            )}
           </div>
 
           {/* Faz 3: grouped count badge — groupCount > 1 ise görünür, 99+ cap */}

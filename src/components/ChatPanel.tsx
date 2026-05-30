@@ -58,6 +58,7 @@ interface Props {
   activityPanelOpen?: boolean;
   onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onToggleActivityPanel?: () => void;
+  phoneLayout?: boolean;
   musicPanelAvailable?: boolean;
   musicPanelOpen?: boolean;
   onToggleMusicPanel?: () => void;
@@ -111,6 +112,7 @@ export default function ChatPanel({
   activityPanelOpen = false,
   onActivityResizeStart,
   onToggleActivityPanel,
+  phoneLayout = false,
   musicPanelAvailable = false,
   musicPanelOpen = false,
   onToggleMusicPanel,
@@ -175,7 +177,7 @@ export default function ChatPanel({
   const showMusicToggleButton = musicPanelAvailable && !!onToggleMusicPanel;
 
   return (
-    <div className="mv-chat-panel absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden" style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
+    <div className={`mv-chat-panel absolute left-3 right-3 bottom-[var(--mv-room-chat-bottom-gap)] flex rounded-2xl overflow-hidden ${phoneLayout ? 'flex-col-reverse' : ''}`} style={{ top: cardsHeight || '50%', border: '1px solid rgba(var(--glass-tint), 0.05)', boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint), 0.03)', background: 'rgba(0,0,0,0.10)' }}>
       <style>{`
         @media (max-width: 1023px), (hover: none) and (pointer: coarse) {
           .mv-chat-panel {
@@ -206,8 +208,9 @@ export default function ChatPanel({
             min-height: 36px !important;
             height: 36px !important;
             min-width: 0;
-            padding-top: 7px;
-            padding-bottom: 7px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            line-height: 18px;
             border-radius: 11px;
             background: rgba(var(--glass-tint), 0.026) !important;
             border: 1px solid rgba(var(--glass-tint), 0.050) !important;
@@ -494,11 +497,14 @@ export default function ChatPanel({
 
       {hasActivityPanel && (
         <div
-          className="relative hidden shrink-0 overflow-hidden transition-[width,opacity] duration-200 ease-out lg:block"
+          className={`mv-chat-activity-panel relative shrink-0 overflow-hidden transition-[width,height,opacity] duration-200 ease-out ${phoneLayout ? 'block' : 'hidden lg:block'}`}
           style={{
-            width: isActivityPanelVisible ? `${activityPanelRatio}%` : 0,
-            minWidth: isActivityPanelVisible ? 220 : 0,
-            maxWidth: isActivityPanelVisible ? '50%' : 0,
+            width: phoneLayout ? '100%' : (isActivityPanelVisible ? `${activityPanelRatio}%` : 0),
+            height: phoneLayout ? (isActivityPanelVisible ? `${activityPanelRatio}%` : 0) : undefined,
+            minHeight: phoneLayout && isActivityPanelVisible ? 196 : 0,
+            maxHeight: phoneLayout && isActivityPanelVisible ? '68%' : undefined,
+            minWidth: !phoneLayout && isActivityPanelVisible ? 220 : 0,
+            maxWidth: !phoneLayout && isActivityPanelVisible ? '50%' : undefined,
             opacity: isActivityPanelVisible ? 1 : 0,
             pointerEvents: isActivityPanelVisible ? 'auto' : 'none',
           }}
@@ -506,12 +512,12 @@ export default function ChatPanel({
           {isActivityPanelVisible && (
             <div
               role="separator"
-              aria-orientation="vertical"
+              aria-orientation={phoneLayout ? 'horizontal' : 'vertical'}
               onPointerDown={onActivityResizeStart}
-              className="absolute left-0 top-0 bottom-[53px] z-10 w-2 cursor-col-resize"
-              aria-label="Panel genişliğini değiştir"
+              className={phoneLayout ? 'absolute inset-x-0 bottom-0 z-10 flex h-4 cursor-row-resize items-end touch-none' : 'absolute left-0 top-0 bottom-[53px] z-10 w-2 cursor-col-resize'}
+              aria-label={phoneLayout ? 'Panel yüksekliğini değiştir' : 'Panel genişliğini değiştir'}
             >
-              <span className="block h-full w-px bg-[rgba(var(--glass-tint),0.055)]" />
+              <span className={phoneLayout ? 'mx-auto mb-1 block h-[2px] w-16 rounded-full bg-[rgba(var(--glass-tint),0.12)]' : 'block h-full w-px bg-[rgba(var(--glass-tint),0.055)]'} />
             </div>
           )}
           {activityPanel}

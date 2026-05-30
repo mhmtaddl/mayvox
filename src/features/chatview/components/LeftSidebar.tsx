@@ -246,21 +246,31 @@ export default function LeftSidebar({ handleDragOver, handleDrop, handleDragStar
         {activeServerId && (() => {
           // SUNUCU ROLÜ tek belirleyici — app-level admin (canManageServer flag) kasten
           // dikkate alınmaz; bu buton sunucu-içi yetki içindir.
-          //   owner / admin / mod   → Ayarlar ikonu
+          //   owner                 → Ayarlar ikonu
+          //   admin / mod           → Ayrıl + Ayarlar ikonları
           //   member (veya tanımsız) → Ayrıl (Power) ikonu
           const hasServerStaffRole = activeServerRole === 'owner' || activeServerRole === 'admin' || activeServerRole === 'mod';
+          const canLeaveAsStaff = activeServerRole !== 'owner' && hasServerStaffRole && !!onLeaveServer;
           if (hasServerStaffRole && onShowSettings) {
             return (
-              <button onClick={onShowSettings} title="Sunucu Ayarları"
-                className="mv-icon-action mv-icon-action-accent mv-icon-gear-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]">
-                <Settings size={13} />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                {canLeaveAsStaff && (
+                  <button onClick={() => setLeaveConfirmOpen(true)} title="Sunucudan Ayrıl"
+                    className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25">
+                    <Power size={13} />
+                  </button>
+                )}
+                <button onClick={onShowSettings} title="Sunucu Ayarları"
+                  className="mv-icon-action mv-icon-action-accent mv-icon-gear-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.28)]">
+                  <Settings size={13} />
+                </button>
+              </div>
             );
           }
           if (onLeaveServer) {
             return (
               <button onClick={() => setLeaveConfirmOpen(true)} title="Sunucudan Ayrıl"
-                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150">
+                className="mv-icon-action mv-icon-action-danger mv-icon-power-hover w-7 h-7 flex items-center justify-center shrink-0 text-[var(--theme-secondary-text)]/25 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/25">
                 <Power size={13} />
               </button>
             );

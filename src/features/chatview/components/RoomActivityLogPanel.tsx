@@ -143,14 +143,6 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
         className="mv-room-activity-footer flex h-[53px] shrink-0 items-center gap-2 px-3 py-2 transition-[background,border-color] duration-150"
         style={{ background: 'rgba(var(--glass-tint), 0.04)', borderTop: '1px solid rgba(var(--glass-tint), 0.075)', boxShadow: 'none', backgroundImage: 'none' }}
       >
-        <button
-          type="button"
-          onClick={onCollapse}
-          className="mv-room-activity-footer-button flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-accent)] opacity-82 transition-[color,opacity,transform] duration-150 hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
-          aria-label="Son olayları kapat"
-        >
-          <History size={13} strokeWidth={2.1} />
-        </button>
         <span className="mv-room-activity-footer-title min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--theme-text)]/92">
           SON OLAYLAR
         </span>
@@ -166,6 +158,14 @@ export default function RoomActivityLogPanel({ activities, onCollapse, onSelectA
             <Trash2 size={13} strokeWidth={2.1} />
           </button>
         )}
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="mv-room-activity-footer-button flex h-8 w-8 shrink-0 items-center justify-center text-[var(--theme-accent)] opacity-82 transition-[color,opacity,transform] duration-150 hover:opacity-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(var(--theme-accent-rgb),0.22)]"
+          aria-label="Son olayları kapat"
+        >
+          <History size={13} strokeWidth={2.1} />
+        </button>
       </div>
     </aside>
   );

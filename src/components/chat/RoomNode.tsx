@@ -241,7 +241,7 @@ function RoomNode({ node, isCenter, cardStyle = 'current' }: Props) {
 
   const renderPill = () => {
     const pillAvatar = 34;
-    const pillW = 120;
+    const pillW = 104;
     return (
       <div
         className="relative flex items-center gap-2"

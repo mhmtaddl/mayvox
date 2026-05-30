@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AudioLines, Bell, Check, Gamepad2, HeadphoneOff, Headphones, Home, MessageCircle, Mic, MicOff, PhoneOff, Settings, UserRound } from 'lucide-react';
+import { AudioLines, Check, Crown, Gamepad2, HeadphoneOff, Headphones, Home, Mic, MicOff, PhoneOff, Settings, Shield, ShieldCheck, UserRound } from 'lucide-react';
 import type { MobileShellView } from './MobileAppShell';
 import AvatarContent from '../../components/AvatarContent';
+import pandikIcon from '../../assets/pandik_1.png';
 import { resolveAvatarUrls } from '../../lib/statusAvatar';
 import { useSettings } from '../../contexts/SettingsCtx';
 import { useAppState } from '../../contexts/AppStateContext';
@@ -13,12 +14,15 @@ import { getDefaultChannelIconColor } from '../../lib/channelIconColor';
 import { getDefaultChannelIconName } from '../../lib/channelIcon';
 import { channelIconComponents, roomModeIcons } from '../chatview/constants';
 import { shouldShowAppHelp } from '../../lib/appHelpPreferences';
+import type { Server } from '../../lib/serverService';
 
 interface MobileBottomBarProps {
   phoneLayout?: boolean;
   activeServerName?: string;
   activeServerAvatarUrl?: string | null;
   activeServerShortName?: string;
+  serverList?: Server[];
+  activeServerId?: string;
   activeChannelName?: string;
   hasActiveChannel?: boolean;
   activeChannelMode?: string;
@@ -31,6 +35,7 @@ interface MobileBottomBarProps {
   userStatusText?: string;
   currentView?: MobileShellView;
   onGoHome?: () => void;
+  onSelectServer?: (id: string) => void;
   onOpenChannels?: () => void;
   onOpenRoom?: () => void;
   onReturnToRoom?: () => void;
@@ -80,6 +85,8 @@ export default function MobileBottomBar({
   activeServerName,
   activeServerAvatarUrl,
   activeServerShortName,
+  serverList = [],
+  activeServerId,
   activeChannelName,
   hasActiveChannel,
   activeChannelMode,
@@ -92,6 +99,7 @@ export default function MobileBottomBar({
   userStatusText,
   currentView,
   onGoHome,
+  onSelectServer,
   onOpenRoom,
   onReturnToRoom,
   onOpenSocial,
@@ -117,6 +125,7 @@ export default function MobileBottomBar({
   const { setToastMsg } = useUI();
   const { currentUser } = useUser();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [serverAvatarFailed, setServerAvatarFailed] = useState(false);
   const [serverAvatarIndex, setServerAvatarIndex] = useState(0);
   const serverLabel = activeServerName || 'MAYVox';
@@ -128,8 +137,13 @@ export default function MobileBottomBar({
   const activeServerAvatarSrc = serverAvatarUrls[serverAvatarIndex] || '';
   const canShowServerAvatar = !!activeServerAvatarSrc && !serverAvatarFailed;
   const roomConnected = !!hasActiveChannel;
+  const activeServer = serverList.find(server => server.id === activeServerId) ?? serverList[0] ?? null;
+  const serverSwitcherServers = serverList.filter(server => server.id !== activeServer?.id);
+  const canOpenServerSwitcher = serverSwitcherServers.length > 0 && !!onSelectServer;
   const showHomeButton = currentView !== 'home' || forceShowHomeButton;
   const showReturnButton = roomConnected && currentView !== 'room';
+  const hideIdentityDockItems = phoneLayout && currentView === 'room';
+  const showPhoneHomeStatus = phoneLayout && (currentView === 'home' || currentView === 'settings');
   const roomMode = getRoomModeConfig(activeChannelMode).id;
   const RoomIcon = channelIconComponents[activeChannelIconName ?? getDefaultChannelIconName(roomMode)] || roomModeIcons[roomMode] || Gamepad2;
   const roomIconColor = activeChannelIconColor ?? getDefaultChannelIconColor(roomMode);
@@ -184,6 +198,20 @@ export default function MobileBottomBar({
   }, [profileMenuOpen]);
 
   useEffect(() => {
+    if (!serverMenuOpen || typeof window === 'undefined') return;
+    const closeServerMenu = () => setServerMenuOpen(false);
+    window.addEventListener('mayvox:android-back', closeServerMenu);
+    return () => window.removeEventListener('mayvox:android-back', closeServerMenu);
+  }, [serverMenuOpen]);
+
+  useEffect(() => {
+    if (hideIdentityDockItems) {
+      setProfileMenuOpen(false);
+      setServerMenuOpen(false);
+    }
+  }, [hideIdentityDockItems]);
+
+  useEffect(() => {
     onPttFloatingEnabledChange?.(showFloatingPtt);
     return () => onPttFloatingEnabledChange?.(false);
   }, [onPttFloatingEnabledChange, showFloatingPtt]);
@@ -223,10 +251,27 @@ export default function MobileBottomBar({
   }, [canSwitchVoiceMode, roomConnected]);
 
   const handleProfileButtonClick = useCallback(() => {
+    setServerMenuOpen(false);
     setProfileMenuOpen(open => !open);
   }, []);
 
   const closeProfileMenu = useCallback(() => setProfileMenuOpen(false), []);
+
+  const handleServerButtonClick = useCallback(() => {
+    if (canOpenServerSwitcher) {
+      setProfileMenuOpen(false);
+      setServerMenuOpen(open => !open);
+      return;
+    }
+    onGoHome?.();
+  }, [canOpenServerSwitcher, onGoHome]);
+
+  const closeServerMenu = useCallback(() => setServerMenuOpen(false), []);
+
+  const handleSelectServer = useCallback((id: string) => {
+    setServerMenuOpen(false);
+    onSelectServer?.(id);
+  }, [onSelectServer]);
 
   const handleMicClick = useCallback(() => {
     if (isVoiceBlocked) {
@@ -269,7 +314,7 @@ export default function MobileBottomBar({
             onClick={closeProfileMenu}
           />
           <div
-            className="pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+74px)] left-1/2 z-30 w-[238px] -translate-x-1/2 overflow-hidden rounded-[18px]"
+            className="mobile-dock-popover pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+74px)] left-1/2 z-30 w-[238px] -translate-x-1/2 overflow-hidden rounded-[18px]"
             style={PROFILE_MENU_STYLE}
             onClick={event => event.stopPropagation()}
           >
@@ -319,76 +364,140 @@ export default function MobileBottomBar({
         </>
       )}
 
+      {serverMenuOpen && canOpenServerSwitcher && (
+        <>
+          <button
+            type="button"
+            className="pointer-events-auto fixed inset-0 z-20 cursor-default bg-transparent"
+            aria-label="Sunucu listesini kapat"
+            onClick={closeServerMenu}
+          />
+          <div
+            className="mobile-dock-popover pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+74px)] left-1/2 z-30 w-[226px] -translate-x-1/2 overflow-hidden rounded-[18px]"
+            style={PROFILE_MENU_STYLE}
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="px-2 pb-1 pt-2">
+              <span className="mb-1 block px-2 text-[9px] font-black uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/58">
+                Sunucular
+              </span>
+              <div className="custom-scrollbar flex max-h-[196px] flex-col gap-0.5 overflow-y-auto pr-0.5">
+                {activeServer && (
+                  <div className="flex min-h-[38px] items-center gap-2 rounded-[11px] bg-[var(--theme-accent)]/9 px-2 text-left">
+                    <ServerSwitcherAvatar server={activeServer} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[11.5px] font-black text-[var(--theme-accent)]">{activeServer.name}</div>
+                      <div className="truncate text-[9px] font-bold text-[var(--theme-secondary-text)]/56">Aktif sunucu</div>
+                    </div>
+                    <Check size={12} className="shrink-0 text-[var(--theme-accent)]" />
+                  </div>
+                )}
+                {serverSwitcherServers.map(server => (
+                  <button
+                    key={server.id}
+                    type="button"
+                    onClick={() => handleSelectServer(server.id)}
+                    className="flex min-h-[38px] w-full items-center gap-2 rounded-[11px] px-2 text-left text-[var(--theme-text)]/84 transition-colors hover:bg-[var(--glass-tint)]/6 active:scale-[0.99]"
+                  >
+                    <ServerSwitcherAvatar server={server} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[11.5px] font-bold">{server.name}</div>
+                      <ServerRoleLine role={server.role} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       <div
-        className={`pointer-events-auto mx-auto flex items-center justify-center gap-0.5 overflow-hidden rounded-[14px] px-1 py-0 ${phoneLayout ? 'min-h-[48px] w-full max-w-none' : 'min-h-[44px] w-fit max-w-[min(760px,calc(100vw-360px))]'}`}
+        className={`mobile-bottom-dock pointer-events-auto mx-auto flex items-center justify-center overflow-hidden rounded-[14px] px-1 py-0 ${phoneLayout ? 'min-h-[48px] w-fit max-w-[calc(100vw-16px)] gap-1' : 'min-h-[44px] w-fit max-w-[min(760px,calc(100vw-360px))] gap-0.5'}`}
         style={DOCK_SHELL_STYLE}
       >
-        <div className={`custom-scrollbar flex min-w-0 max-w-full items-center overflow-x-auto overflow-y-hidden pb-0.5 ${phoneLayout ? 'w-full justify-start gap-1.5' : 'justify-start gap-1'}`}>
-          <button
-            type="button"
-            onClick={handleProfileButtonClick}
-            className={`relative flex h-9 shrink-0 items-center gap-1.5 rounded-[12px] px-1 text-left transition-colors duration-200 active:scale-[0.98] ${phoneLayout ? 'min-w-9 max-w-9 justify-center' : 'min-w-[108px] max-w-[138px]'} ${
-              profileMenuOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/74'
-            }`}
-            style={PROFILE_BUTTON_STYLE}
-            aria-pressed={profileMenuOpen}
-            aria-label="Durum"
-            title="Durum"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden avatar-squircle">
-              {userAvatarUrl || userLabel ? (
-                <AvatarContent
-                  avatar={userAvatarUrl || ''}
-                  statusText={displayedStatus}
-                  firstName={displayedUserLabel}
-                  name={displayedUserLabel}
-                  imgClassName="h-full w-full object-cover"
-                  letterClassName="text-[10px] font-black text-[var(--theme-accent)]"
-                />
-              ) : (
-                <UserRound size={16} />
-              )}
-            </span>
-            <span className={`min-w-0 flex-1 items-center gap-1 ${phoneLayout ? 'hidden' : 'flex'}`}>
-              <span className={`min-w-0 flex-none max-w-[76px] truncate text-[11px] font-black leading-tight ${profileMenuOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/90'}`}>{displayedUserLabel}</span>
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass}`} aria-hidden="true" title={displayedStatus} />
-            </span>
-          </button>
+        <div className={`mobile-dock-scroll custom-scrollbar flex min-w-0 max-w-full items-center overflow-x-auto overflow-y-hidden pb-0.5 ${phoneLayout ? 'justify-center gap-1' : 'justify-start gap-1'}`}>
+          {!hideIdentityDockItems && (
+            <>
+              <button
+                type="button"
+                onClick={handleProfileButtonClick}
+                className={`mobile-dock-profile-button relative flex h-9 shrink-0 items-center gap-1.5 rounded-[12px] px-1 text-left transition-colors duration-200 active:scale-[0.98] ${
+                  showPhoneHomeStatus ? 'w-auto min-w-0 max-w-[104px] justify-start pr-0.5' : phoneLayout ? 'min-w-[46px] max-w-[48px] justify-center' : 'min-w-[108px] max-w-[138px]'
+                } ${
+                  profileMenuOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/74'
+                }`}
+                style={PROFILE_BUTTON_STYLE}
+                aria-pressed={profileMenuOpen}
+                aria-label="Durum"
+                title="Durum"
+              >
+                <span className="mobile-dock-avatar flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden avatar-squircle">
+                  {userAvatarUrl || userLabel ? (
+                    <AvatarContent
+                      avatar={userAvatarUrl || ''}
+                      statusText={displayedStatus}
+                      firstName={displayedUserLabel}
+                      name={displayedUserLabel}
+                      imgClassName="h-full w-full object-cover"
+                      letterClassName="text-[10px] font-black text-[var(--theme-accent)]"
+                    />
+                  ) : (
+                    <UserRound size={16} />
+                  )}
+                </span>
+                <span className={`min-w-0 items-center gap-1 ${showPhoneHomeStatus ? 'flex w-auto flex-none' : phoneLayout ? 'flex w-2 flex-none' : 'flex flex-1'}`}>
+                  <span className={`min-w-0 flex-none max-w-[76px] truncate text-[11px] font-black leading-tight ${phoneLayout ? 'sr-only' : ''} ${profileMenuOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)]/90'}`}>{displayedUserLabel}</span>
+                  {(showPhoneHomeStatus || !phoneLayout) && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotClass}`} aria-hidden="true" title={displayedStatus} />}
+                  {showPhoneHomeStatus && (
+                    <span className="w-auto min-w-0 max-w-[58px] flex-none truncate text-[10px] font-black leading-none text-[var(--theme-text)]/84">
+                      {displayedStatus}
+                    </span>
+                  )}
+                </span>
+              </button>
 
-          <button
-            type="button"
-            onClick={onGoHome}
-            className={`relative flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-0.5 text-[11px] font-black transition-colors duration-200 active:scale-[0.98] ${
-              serverActive ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/74'
-            }`}
-            style={PROFILE_BUTTON_STYLE}
-            aria-pressed={serverActive}
-            aria-label={serverLabel}
-            title={serverLabel}
-          >
-            <span className="flex h-7 w-7 items-center justify-center overflow-hidden avatar-squircle">
-              {canShowServerAvatar ? (
-                <img
-                  src={activeServerAvatarSrc}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                  onError={() => {
-                    if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
-                      setServerAvatarIndex(index => index + 1);
-                      return;
-                    }
-                    setServerAvatarFailed(true);
-                  }}
-                  draggable={false}
-                />
-              ) : (
-                <span className={`${serverActive ? 'text-[12px]' : 'text-[11px]'} leading-none`}>{serverInitial}</span>
-              )}
-            </span>
-          </button>
+              <button
+                type="button"
+                onClick={handleServerButtonClick}
+                className={`mobile-dock-server-button relative flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-0.5 text-[11px] font-black transition-colors duration-200 active:scale-[0.98] ${
+                  serverActive || serverMenuOpen ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/74'
+                }`}
+                style={PROFILE_BUTTON_STYLE}
+                aria-pressed={serverActive || serverMenuOpen}
+                aria-label={serverLabel}
+                title={serverLabel}
+              >
+                <span className="mobile-dock-avatar flex h-7 w-7 items-center justify-center overflow-hidden avatar-squircle">
+                  {canShowServerAvatar ? (
+                    <img
+                      src={activeServerAvatarSrc}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                      onError={() => {
+                        if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
+                          setServerAvatarIndex(index => index + 1);
+                          return;
+                        }
+                        setServerAvatarFailed(true);
+                      }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className={`${serverActive ? 'text-[12px]' : 'text-[11px]'} leading-none`}>{serverInitial}</span>
+                  )}
+                </span>
+                {canOpenServerSwitcher && !serverMenuOpen && (
+                  <span className="mobile-server-count-badge absolute right-0 top-0 z-[2] flex h-[13px] min-w-[16px] items-center justify-center rounded-[6px] px-[4px] text-[7px] font-black leading-none tracking-[-0.01em]">
+                    {Math.min(serverSwitcherServers.length + 1, 9)}
+                  </span>
+                )}
+              </button>
 
-          <span className="mx-0.5 h-6 w-px shrink-0 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
+              <span className="mx-0.5 h-6 w-px shrink-0 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
+            </>
+          )}
 
           <DockButton
             icon={(isMuted || isAdminMuted || isVoiceBlocked) ? <MicOff size={15} /> : <Mic size={15} />}
@@ -407,11 +516,14 @@ export default function MobileBottomBar({
                 active={false}
                 onClick={onToggleNoiseSuppression}
               />
-              {effectiveVoiceMode === 'vad' && (
-                <DockButton icon={<Mic size={15} />} label="Ses Etkinliği" active underline={false} onClick={toggleVoiceMode} />
-              )}
               {canSwitchVoiceMode && (
-                <DockButton icon={<span className="text-[12px] font-black leading-none">⇄</span>} label={effectiveVoiceMode === 'vad' ? 'Bas-Konuşa geç' : 'Ses Etkinliğine geç'} onClick={toggleVoiceMode} helpAnchor="voice-mode" />
+                <DockButton
+                  icon={effectiveVoiceMode === 'vad' ? <Mic size={15} /> : <PttPressIcon />}
+                  label={effectiveVoiceMode === 'vad' ? 'Ses Etkinliği' : 'Bas-Konuş'}
+                  onClick={toggleVoiceMode}
+                  underline={false}
+                  helpAnchor="voice-mode"
+                />
               )}
               {currentView === 'room' && onCycleCardStyle && (
                 <DockButton icon={<CardStyleIcon cardStyle={cardStyle} />} label="Oda kart görünümü" onClick={onCycleCardStyle} />
@@ -438,17 +550,53 @@ export default function MobileBottomBar({
             </>
           )}
 
-          {phoneLayout && (
-            <>
-              <span className="mx-0.5 h-6 w-px shrink-0 bg-[rgba(var(--glass-tint),0.10)]" aria-hidden="true" />
-              <DockButton icon={<MessageCircle size={15} />} label="Mesajlar" active={currentView === 'social'} onClick={onOpenSocial} />
-              <DockButton icon={<Bell size={15} />} label="Bildirimler" active={currentView === 'notifications'} onClick={onOpenNotifications} />
-              <DockButton icon={<Settings size={15} />} label="Ayarlar" active={currentView === 'settings'} onClick={onOpenSettings} />
-            </>
-          )}
         </div>
       </div>
     </footer>
+  );
+}
+
+function ServerSwitcherAvatar({ server }: { server: Server }) {
+  const [failed, setFailed] = useState(false);
+  const initial = (server.shortName || server.name || 'S').trim().charAt(0).toLocaleUpperCase('tr-TR') || 'S';
+  return (
+    <span
+      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden avatar-squircle text-[9.5px] font-black text-[var(--theme-accent)]"
+      style={{ background: server.avatarUrl && !failed ? 'transparent' : 'rgba(var(--glass-tint),0.07)' }}
+    >
+      {server.avatarUrl && !failed ? (
+        <img
+          src={server.avatarUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          draggable={false}
+        />
+      ) : (
+        initial
+      )}
+    </span>
+  );
+}
+
+function ServerRoleLine({ role }: { role?: string }) {
+  const normalizedRole = (role || 'member').toLocaleLowerCase('tr-TR');
+  const meta =
+    normalizedRole === 'owner' || normalizedRole === 'sahip'
+      ? { label: 'Sahip', Icon: Crown, className: 'text-amber-300/82' }
+      : normalizedRole === 'admin' || normalizedRole === 'yönetici' || normalizedRole === 'yonetici'
+        ? { label: 'Yönetici', Icon: ShieldCheck, className: 'text-cyan-300/82' }
+        : normalizedRole.includes('mod') || normalizedRole.includes('moderatör') || normalizedRole.includes('moderator')
+          ? { label: 'Moderatör', Icon: Shield, className: 'text-violet-300/82' }
+          : { label: 'Üye', Icon: UserRound, className: 'text-[var(--theme-secondary-text)]/54' };
+  const { Icon } = meta;
+
+  return (
+    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[9px] font-bold text-[var(--theme-secondary-text)]/52">
+      <Icon size={10} strokeWidth={2.25} className={`${meta.className} shrink-0`} />
+      <span className="truncate">{meta.label}</span>
+    </div>
   );
 }
 
@@ -462,7 +610,7 @@ const DockButton = React.memo(function DockButton({
   onPointerDown,
   onPointerUp,
   onPointerCancel,
-  underline = true,
+  underline = false,
   helpAnchor,
 }: {
   icon: React.ReactNode;
@@ -497,7 +645,7 @@ const DockButton = React.memo(function DockButton({
       }}
       onContextMenu={onPointerDown ? event => event.preventDefault() : undefined}
       disabled={disabled}
-      className={`relative flex shrink-0 items-center justify-center transition-[transform,color,background,border-color,box-shadow,opacity] duration-200 ease-out active:scale-[0.96] disabled:opacity-35 ${
+      className={`mobile-dock-button relative flex shrink-0 items-center justify-center transition-[transform,color,background,border-color,box-shadow,opacity] duration-200 ease-out active:scale-[0.96] disabled:opacity-35 ${
         tone === 'danger'
           ? 'text-red-300/76'
           : active
@@ -522,7 +670,6 @@ const DockButton = React.memo(function DockButton({
       title={label}
     >
       <span className="leading-none">{icon}</span>
-      {underline && active && tone !== 'danger' && <span className="absolute bottom-0 left-1/2 h-0.5 w-7 -translate-x-1/2 rounded-full bg-[var(--theme-accent)]" aria-hidden="true" />}
     </button>
   );
 });
@@ -533,6 +680,17 @@ function NoiseIcon({ active }: { active: boolean }) {
       <AudioLines size={15} />
       {!active && <span className="absolute h-[1.5px] w-[20px] rotate-45 rounded-full bg-current opacity-55" aria-hidden="true" />}
     </span>
+  );
+}
+
+function PttPressIcon() {
+  return (
+    <img
+      src={pandikIcon}
+      alt=""
+      className="h-[22px] w-[22px] translate-y-[1px] object-contain opacity-95"
+      draggable={false}
+    />
   );
 }
 

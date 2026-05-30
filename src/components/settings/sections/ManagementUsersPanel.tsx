@@ -44,10 +44,10 @@ const PAGE_SIZE_OPTIONS = [10, 30, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 30;
 
 const SORT_OPTIONS: Array<{ v: UserSort; l: string }> = [
-  { v: 'name-asc', l: 'Ad (A → Z)' },
-  { v: 'name-desc', l: 'Ad (Z → A)' },
-  { v: 'created-desc', l: 'Kayıt: Yeni → Eski' },
-  { v: 'created-asc', l: 'Kayıt: Eski → Yeni' },
+  { v: 'name-asc', l: 'Ad A-Z' },
+  { v: 'name-desc', l: 'Ad Z-A' },
+  { v: 'created-desc', l: 'Yeni' },
+  { v: 'created-asc', l: 'Eski' },
 ];
 const PLAN_LABEL: Record<PlanKey | 'none', string> = { none: 'Plan yok', free: 'Free', pro: 'Pro', ultra: 'Ultra' };
 const STATUS_LABEL: Record<PlanStatus, string> = {
@@ -313,7 +313,7 @@ export default function ManagementUsersPanel() {
       >
         {/* Tabs — iOS segmented control: sliding indicator via layoutId */}
         <div
-          className="relative grid grid-cols-5 p-1 mb-3 rounded-xl"
+          className="management-users-role-tabs relative grid grid-cols-5 p-1 mb-3 rounded-xl"
           style={{
             background: 'var(--theme-surface-card)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 0 0 1px rgba(var(--glass-tint),0.06)',
@@ -358,7 +358,7 @@ export default function ManagementUsersPanel() {
         </div>
 
         {/* Search + filter toggle */}
-        <div className="flex gap-2 mb-3">
+        <div className="management-users-toolbar flex gap-2 mb-3">
           <div className="relative flex-1 group/search">
             <Search
               size={13}
@@ -382,14 +382,14 @@ export default function ManagementUsersPanel() {
           </div>
           <button
             onClick={() => setShowFilters(v => !v)}
-            className={`shrink-0 px-3 rounded-xl border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-all ${
+            className={`management-users-filter-button shrink-0 px-3 rounded-xl border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-all ${
               showFilters || activeFilterCount > 0
                 ? 'bg-[rgba(var(--theme-accent-rgb),0.12)] border-[rgba(var(--theme-accent-rgb),0.3)] text-[var(--theme-accent)]'
                 : 'bg-[var(--theme-input-bg)] border-[var(--theme-input-border)] text-[var(--theme-secondary-text)] hover:text-[var(--theme-text)]'
             }`}
           >
             <Filter size={12} />
-            Filtrele
+            <span className="management-users-filter-label">Filtrele</span>
             {activeFilterCount > 0 && (
               <span
                 className="ml-0.5 rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold"
@@ -407,19 +407,21 @@ export default function ManagementUsersPanel() {
             onChange={(v) => setSort(v as UserSort)}
             options={SORT_OPTIONS.map(o => ({ value: o.v, label: o.l }))}
             title="Sıralama"
+            className="management-users-sort-select"
           />
           <ThemedSelect
             value={String(pageSize)}
             onChange={(v) => setPageSize(parseInt(v, 10))}
-            options={PAGE_SIZE_OPTIONS.map(n => ({ value: String(n), label: `${n}/sayfa` }))}
+            options={PAGE_SIZE_OPTIONS.map(n => ({ value: String(n), label: `${n}` }))}
             title="Sayfa başına"
             minWidth={92}
+            className="management-users-page-select"
           />
         </div>
 
         {/* Filters drawer */}
         {showFilters && (
-          <div className="mb-3 p-3 rounded-xl bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 space-y-2.5">
+          <div className="management-users-filter-drawer mb-3 p-3 rounded-xl bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 space-y-2.5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <FilterSelect label="Plan" value={fPlan} onChange={v => { setFPlan(v as PlanKey | ''); setOffset(0); }}
                 options={[{ v: '', l: 'Hepsi' }, { v: 'free', l: 'Free' }, { v: 'pro', l: 'Pro' }, { v: 'ultra', l: 'Ultra' }]} />
@@ -453,7 +455,7 @@ export default function ManagementUsersPanel() {
         )}
 
         {/* List */}
-        <div className={`${cardCls}`}>
+        <div className={`management-users-list-panel ${cardCls}`}>
           {loading && !items ? (
             <div className="flex items-center justify-center py-10">
               <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin" />
@@ -568,13 +570,14 @@ function FilterSelect({ label, value, onChange, options }: {
 }
 
 // ── ThemedSelect — premium custom dropdown (native <select> yerine) ──
-function ThemedSelect({ value, onChange, options, title, minWidth, size }: {
+function ThemedSelect({ value, onChange, options, title, minWidth, size, className }: {
   value: string;
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
   title?: string;
   minWidth?: number;
   size?: 'sm' | 'md';
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -618,7 +621,7 @@ function ThemedSelect({ value, onChange, options, title, minWidth, size }: {
   const isMd = size === 'md';
 
   return (
-    <div ref={wrapperRef} className="relative shrink-0">
+    <div ref={wrapperRef} className={`themed-select relative shrink-0 ${className ?? ''}`}>
       <button
         ref={buttonRef}
         type="button"
@@ -737,32 +740,34 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
         el.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
       }}
     >
-      <div className="flex items-center gap-3 px-3 py-2.5">
+      <div className="management-user-row flex items-start gap-3 px-3 py-2.5">
         {/* Avatar */}
-        <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden ring-1 ring-[rgba(var(--glass-tint),0.06)]">
+        <div className="management-user-avatar shrink-0 w-9 h-9 rounded-lg bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[11px] flex items-center justify-center overflow-hidden ring-1 ring-[rgba(var(--glass-tint),0.06)]">
           <AvatarContent avatar={user.avatar} statusText={resolvedStatusText} firstName={user.display_name || user.first_name} name={displayName} letterClassName="text-[11px] font-bold text-[var(--theme-accent)]" />
         </div>
 
         {/* Meta — 3-tier typography hierarchy */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="management-user-meta flex-1 min-w-0">
+          <div className="management-user-main-line flex items-center gap-2">
             <span className="text-[13px] font-semibold text-[var(--theme-text)] truncate tracking-[-0.01em]">{displayName}</span>
-            {user.is_primary_admin ? (
-              <RoleBadge type="primary" />
-            ) : canEditRole ? (
-              <InlineRolePicker user={user} onChange={onQuickAction} />
-            ) : (
-              <>
-                {user.is_admin && <RoleBadge type="admin" />}
-                {!user.is_admin && user.is_moderator && <RoleBadge type="mod" />}
-              </>
-            )}
-            <LevelBadge level={user.user_level} />
-            <PlanBadge plan={user.plan} />
-            <StatusBadge status={user.plan_status} />
-            {user.plan_source === 'paid' && <PaidBadge />}
+            <div className="management-user-badges ml-auto flex min-w-0 shrink-0 items-center gap-1 overflow-hidden">
+              {user.is_primary_admin ? (
+                <RoleBadge type="primary" />
+              ) : canEditRole ? (
+                <InlineRolePicker user={user} onChange={onQuickAction} />
+              ) : (
+                <>
+                  {user.is_admin && <RoleBadge type="admin" />}
+                  {!user.is_admin && user.is_moderator && <RoleBadge type="mod" />}
+                </>
+              )}
+              <LevelBadge level={user.user_level} />
+              <PlanBadge plan={user.plan} />
+              <StatusBadge status={user.plan_status} />
+              {user.plan_source === 'paid' && <PaidBadge />}
+            </div>
           </div>
-          <div className="flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/82 truncate">
+          <div className="management-user-subline flex items-center gap-3 mt-0.5 text-[10.5px] text-[var(--theme-secondary-text)]/82 truncate">
             {user.username && <span className="truncate">@{user.username}</span>}
             {user.email && <span className="truncate">{user.email}</span>}
             {user.owned_server_count > 0 && (
@@ -771,68 +776,65 @@ const UserRow: React.FC<UserRowProps> = ({ user, expanded, canExpand, isSelf, ca
               </span>
             )}
           </div>
-        </div>
 
-        {/* Actions — hover ile emphasis artar, layout sabit */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Moderation göstergeleri — sadece aktif durumda görünür, pasif (chip).
-              Mute/ban işlemi Detay panelinden yapılır; burada sadece "bu kullanıcı
-              susturulmuş/yasaklanmış" bilgisi. */}
-          {isMuted && (
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-orange-500/15 text-orange-400 text-[9px] font-bold uppercase tracking-wide"
-              title="Susturulmuş (Detay panelinden yönet)"
-            >
-              <VolumeX size={10} /> muted
-            </span>
-          )}
-          {isVoiceBanned && (
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[9px] font-bold uppercase tracking-wide"
-              title="Ses yasaklı (Detay panelinden yönet)"
-            >
-              <Ban size={10} /> sesban
-            </span>
-          )}
+          {/* Actions — profil resminin sağında, meta bloğun en altında */}
+          <div className="management-user-actions mt-2 flex items-center gap-1">
+            {isMuted && (
+              <span
+                className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-orange-500/15 text-orange-400 text-[9px] font-bold uppercase tracking-wide"
+                title="Susturulmuş (Detay panelinden yönet)"
+              >
+                <VolumeX size={10} /> muted
+              </span>
+            )}
+            {isVoiceBanned && (
+              <span
+                className="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[9px] font-bold uppercase tracking-wide"
+                title="Ses yasaklı (Detay panelinden yönet)"
+              >
+                <Ban size={10} /> sesban
+              </span>
+            )}
 
-          {canAssignRole && !isSelf && (
+            {canAssignRole && !isSelf && (
+              <button
+                onClick={onManageRole}
+                className="management-user-action-button px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+                title="Kullanıcı seviyesini değiştir"
+              >
+                <ShieldCheck size={11} />
+                Seviye
+              </button>
+            )}
+
             <button
-              onClick={onManageRole}
-              className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-              title="Kullanıcı seviyesini değiştir"
+              onClick={onManagePlan}
+              className="management-user-action-button px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+              title={user.plan_source === 'paid' ? 'Ücretli plan — sadece görüntüleme' : 'Plan yönet'}
             >
-              <ShieldCheck size={11} />
-              Seviye
+              {user.plan_source === 'paid' ? <Lock size={11} /> : <Crown size={11} />}
+              Plan
             </button>
-          )}
 
-          <button
-            onClick={onManagePlan}
-            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/18 inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-            title={user.plan_source === 'paid' ? 'Ücretli plan — sadece görüntüleme' : 'Plan yönet'}
-          >
-            {user.plan_source === 'paid' ? <Lock size={11} /> : <Crown size={11} />}
-            Plan
-          </button>
-
-          <button
-            onClick={onOpenDetail}
-            className="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[var(--theme-text)] hover:bg-[var(--theme-panel-hover)] inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-            title="Detaylı kullanıcı yönetimi"
-          >
-            <MoreVertical size={11} />
-            Detay
-          </button>
-
-          {canExpand && (
             <button
-              onClick={onToggle}
-              className="p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)]"
-              title={expanded ? 'Kapat' : 'Sunucuları göster'}
+              onClick={onOpenDetail}
+              className="management-user-action-button px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-[var(--theme-surface-card)] border border-[var(--theme-border)]/50 text-[var(--theme-text)] hover:bg-[var(--theme-panel-hover)] inline-flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+              title="Detaylı kullanıcı yönetimi"
             >
-              <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              <MoreVertical size={11} />
+              Detay
             </button>
-          )}
+
+            {canExpand && (
+              <button
+                onClick={onToggle}
+                className="management-user-expand-button p-1.5 rounded-lg hover:bg-[var(--theme-panel-hover)] text-[var(--theme-secondary-text)]"
+                title={expanded ? 'Kapat' : 'Sunucuları göster'}
+              >
+                <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -909,7 +911,7 @@ function InlineRolePicker({ user, onChange }: { user: AdminUserRow; onChange: (c
                 role="dialog"
                 aria-modal="true"
                 aria-label={`${displayName} rolünü değiştir`}
-                className="w-full max-w-[360px] overflow-hidden rounded-2xl"
+                className="settings-floating-dialog w-full max-w-[360px] overflow-hidden rounded-2xl"
                 style={{
                   background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.105), rgba(var(--glass-tint),0.045)), var(--theme-bg)',
                   border: '1px solid rgba(var(--glass-tint),0.14)',
@@ -1194,7 +1196,7 @@ function UserDetailModal({ user, canDelete, onClose, onAction, onOpenPlan }: {
   const BAN_PRESETS = [1, 3, 7, 30];
 
   return (
-    <Modal open={true} onClose={onClose} width="md" padded={false}>
+    <Modal open={true} onClose={onClose} width="md" padded={false} className="settings-floating-dialog">
       {/* Header */}
       <div className="p-5 border-b border-[var(--theme-border)]">
         <div className="flex items-start gap-3">
@@ -1631,7 +1633,7 @@ function PlanManageModal({ user, onClose, onSuccess, onError }: {
   };
 
   return (
-    <Modal open={true} onClose={onClose} width="md" padded={false}>
+    <Modal open={true} onClose={onClose} width="md" padded={false} className="settings-floating-dialog">
       <EntitlementHeader
         title="Plan Yönetimi"
         user={user}
@@ -1837,7 +1839,7 @@ function UserLevelModal({ user, onClose, onSuccess, onError }: {
   };
 
   return (
-    <Modal open={true} onClose={onClose} width="md" padded={false}>
+    <Modal open={true} onClose={onClose} width="md" padded={false} className="settings-floating-dialog">
       <EntitlementHeader
         title="Seviye Yönetimi"
         user={user}

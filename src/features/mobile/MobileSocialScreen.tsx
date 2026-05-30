@@ -284,9 +284,9 @@ export default function MobileSocialScreen({
         </div>}
 
         {compactFriendsMode && (
-          <div className="mb-1.5 flex gap-3 border-b border-[rgba(var(--glass-tint),0.055)]">
-            <TabButton active={selectedTab === 'friends'} tab="friends" label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} fillRatio={ratio(friendOnlineCount, friendTotalCount)} onSelect={handleTabChange} />
-            <TabButton active={selectedTab === 'serverMembers'} tab="serverMembers" label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverVisibleOnlineCount} total={serverTotalCount} />} fillRatio={ratio(serverVisibleOnlineCount, serverTotalCount)} onSelect={handleTabChange} />
+          <div className="mb-1.5 grid grid-cols-2 gap-2 border-b border-[rgba(var(--glass-tint),0.055)]">
+            <TabButton active={selectedTab === 'friends'} tab="friends" label="Arkadaslar" countNode={<OnlineFraction online={friendOnlineCount} total={friendTotalCount} />} fillRatio={ratio(friendOnlineCount, friendTotalCount)} onSelect={handleTabChange} stretch />
+            <TabButton active={selectedTab === 'serverMembers'} tab="serverMembers" label={serverName || 'Sunucu'} countNode={<OnlineFraction online={serverVisibleOnlineCount} total={serverTotalCount} />} fillRatio={ratio(serverVisibleOnlineCount, serverTotalCount)} onSelect={handleTabChange} stretch />
           </div>
         )}
 
@@ -505,6 +505,7 @@ function TabButton({
   count,
   countNode,
   fillRatio,
+  stretch = false,
   onClick,
   onSelect,
 }: {
@@ -514,6 +515,7 @@ function TabButton({
   count?: number;
   countNode?: React.ReactNode;
   fillRatio?: number;
+  stretch?: boolean;
   onClick?: () => void;
   onSelect?: (tab: MobileSocialTab) => void;
 }) {
@@ -529,7 +531,7 @@ function TabButton({
     <button
       type="button"
       onClick={handleClick}
-      className={`relative h-9 min-w-11 px-0 text-[11.5px] font-bold active:scale-[0.98] sm:flex-1 ${active ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/66'}`}
+      className={`relative inline-flex h-9 items-center justify-center px-0 text-center text-[11.5px] font-bold active:scale-[0.98] ${stretch ? 'w-full min-w-0' : 'min-w-11 sm:flex-1'} ${active ? 'text-[var(--theme-text)]' : 'text-[var(--theme-secondary-text)]/66'}`}
       aria-pressed={active}
     >
       {label}

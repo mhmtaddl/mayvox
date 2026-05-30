@@ -315,9 +315,9 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
       className="w-full rounded-2xl border border-[var(--theme-border)]/22 bg-[var(--theme-surface)]/50 p-3.5 text-left transition-all hover:border-[rgba(var(--theme-accent-rgb),0.18)] hover:bg-[var(--theme-surface)]/72"
       style={{ boxShadow: 'inset 0 1px 0 rgba(var(--glass-tint),0.055), 0 14px 34px rgba(0,0,0,0.08)' }}
     >
-      <div className="flex flex-col gap-3 md:flex-row">
-        <div className={`${isPoster ? 'w-[86px]' : 'w-[126px]'} shrink-0`}>
-          <div className={`${isPoster ? 'h-[118px] w-[86px]' : 'h-[98px] w-[126px]'} overflow-hidden rounded-xl border border-[var(--theme-border)]/20 bg-[rgba(var(--glass-tint),0.045)] flex items-center justify-center`}>
+      <div className="flex flex-row gap-2.5 md:gap-3">
+        <div className={`${isPoster ? 'w-[82px] md:w-[86px]' : 'w-[112px] md:w-[126px]'} shrink-0`}>
+          <div className={`${isPoster ? 'h-[112px] w-[82px] md:h-[118px] md:w-[86px]' : 'h-[86px] w-[112px] md:h-[98px] md:w-[126px]'} overflow-hidden rounded-xl border border-[var(--theme-border)]/20 bg-[rgba(var(--glass-tint),0.045)] flex items-center justify-center`}>
             {showCover ? (
               <img
                 src={coverSrc}
@@ -367,9 +367,9 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 md:gap-2">
                 <span className="rounded-md bg-[rgba(var(--theme-accent-rgb),0.11)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[var(--theme-accent)]">
                   {CATEGORY_LABELS[item.category]}
                 </span>
@@ -384,7 +384,7 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                       letterClassName="text-[8px] font-semibold text-[var(--theme-text)]/70"
                     />
                   </span>
-                  <span className="max-w-[120px] truncate font-medium underline-offset-2 group-hover:underline">{authorDisplayName}</span>
+                  <span className="max-w-[72px] truncate font-medium underline-offset-2 group-hover:underline md:max-w-[120px]">{authorDisplayName}</span>
                   <span className="shrink-0 text-[var(--theme-secondary-text)]/38">{formatRecommendationDate(item.createdAt)}</span>
                 </button>
                 {item.status !== 'active' && (
@@ -394,18 +394,19 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                   </span>
                 )}
               </div>
-              <h3 className="text-[15px] font-semibold leading-5 text-[var(--theme-text)] line-clamp-2">{item.title}</h3>
+              <h3 className="text-[13px] font-semibold leading-4 text-[var(--theme-text)] line-clamp-2 md:text-[15px] md:leading-5">{item.title}</h3>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 flex-wrap items-center gap-1 md:gap-1.5">
               <button
                 type="button"
                 onClick={() => void toggleWatchlist()}
                 disabled={stateBusy}
                 title={item.myWatchlisted ? 'İzleme listemden çıkar' : 'İzleme listeme ekle'}
                 aria-label={item.myWatchlisted ? 'İzleme listemden çıkar' : 'İzleme listeme ekle'}
-                className={`inline-flex h-8 w-7 items-center justify-center transition-colors disabled:opacity-35 ${item.myWatchlisted ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-accent)]'}`}
+                className={`inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-[9px] font-semibold transition-colors disabled:opacity-35 md:h-8 md:w-7 md:px-0 ${item.myWatchlisted ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-secondary-text)]/58 hover:text-[var(--theme-accent)]'}`}
               >
-                <BookmarkPlus size={14} />
+                <BookmarkPlus size={13} />
+                <span className="md:hidden">Liste</span>
               </button>
               <button
                 type="button"
@@ -413,49 +414,50 @@ export default function RecommendationCard({ serverId, item, currentUser, canDel
                 disabled={stateBusy}
                 title={item.myWatched ? 'İzledim işaretini kaldır' : 'Bu diziyi/filmi izledim'}
                 aria-label={item.myWatched ? 'İzledim işaretini kaldır' : 'Bu diziyi/filmi izledim'}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-[10px] font-semibold transition-colors disabled:opacity-40 ${item.myWatched ? 'text-emerald-200' : 'text-[var(--theme-secondary-text)]/58 hover:text-emerald-200'}`}
+                className={`inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-[9px] font-semibold transition-colors disabled:opacity-40 md:h-8 md:gap-1.5 md:rounded-xl md:px-2 md:text-[10px] ${item.myWatched ? 'text-emerald-200' : 'text-[var(--theme-secondary-text)]/58 hover:text-emerald-200'}`}
               >
-                <CheckCircle2 size={14} className="shrink-0" />
+                <CheckCircle2 size={13} className="shrink-0" />
+                <span className="md:hidden">İzledim</span>
                 <span>{item.watchedCount}</span>
               </button>
-              <div className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold ${communityRatingClass(averageScore)}`}>
-                <Star size={12} className="shrink-0" />
+              <div className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border px-1.5 text-[9.5px] font-semibold md:h-8 md:gap-1.5 md:rounded-xl md:px-2.5 md:text-[11px] ${communityRatingClass(averageScore)}`}>
+                <Star size={11} className="shrink-0 md:size-3" />
                 <span>{formatScore(averageScore)}</span>
-                <span className="text-[9px] font-medium opacity-65">{item.ratingCount} oy</span>
+                <span className="text-[8px] font-medium opacity-65 md:text-[9px]">{item.ratingCount} oy</span>
               </div>
             </div>
           </div>
-
-          <p className="mt-1.5 line-clamp-2 text-[12px] leading-5 text-[var(--theme-secondary-text)]/72">{description}</p>
-          {item.tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {item.tags.slice(0, 4).map(tag => <span key={tag} className="rounded-md bg-[rgba(var(--glass-tint),0.045)] px-1.5 py-0.5 text-[9px] text-[var(--theme-secondary-text)]/62">#{tag}</span>)}
-            </div>
-          )}
-          {(summaryRows.length > 0 || item.links.length > 0) && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {summaryRows.map(row => (
-                <span key={row.key} className={`inline-flex max-w-full items-center gap-1 rounded-lg border border-[var(--theme-border)]/12 bg-[rgba(var(--glass-tint),0.032)] px-2 py-1 text-[11px] leading-4 text-[var(--theme-secondary-text)]/76 ${row.tone || ''}`}>
-                  <span className="font-medium text-[var(--theme-secondary-text)]/50">{row.label}</span>
-                  <span className="truncate font-semibold text-[var(--theme-text)]/88">{row.value}</span>
-                </span>
-              ))}
-              {item.links.map((link, index) => (
-                <button
-                  type="button"
-                  key={`${link.url}-${index}`}
-                  onClick={() => openExternalUrl(link.url)}
-                  title={link.label || 'Bağlantıyı aç'}
-                  aria-label={link.label || 'Bağlantıyı aç'}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--theme-secondary-text)]/58 transition-colors hover:text-[var(--theme-accent)]"
-                >
-                  <ExternalLink size={13} />
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
+
+      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-[var(--theme-secondary-text)]/72 md:mt-1.5 md:text-[12px] md:leading-5">{description}</p>
+      {item.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {item.tags.slice(0, 4).map(tag => <span key={tag} className="rounded-md bg-[rgba(var(--glass-tint),0.045)] px-1.5 py-0.5 text-[9px] text-[var(--theme-secondary-text)]/62">#{tag}</span>)}
+        </div>
+      )}
+      {(summaryRows.length > 0 || item.links.length > 0) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {summaryRows.map(row => (
+            <span key={row.key} className={`inline-flex max-w-full items-center gap-1 rounded-lg border border-[var(--theme-border)]/12 bg-[rgba(var(--glass-tint),0.032)] px-2 py-1 text-[11px] leading-4 text-[var(--theme-secondary-text)]/76 ${row.tone || ''}`}>
+              <span className="font-medium text-[var(--theme-secondary-text)]/50">{row.label}</span>
+              <span className="truncate font-semibold text-[var(--theme-text)]/88">{row.value}</span>
+            </span>
+          ))}
+          {item.links.map((link, index) => (
+            <button
+              type="button"
+              key={`${link.url}-${index}`}
+              onClick={() => openExternalUrl(link.url)}
+              title={link.label || 'Bağlantıyı aç'}
+              aria-label={link.label || 'Bağlantıyı aç'}
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--theme-secondary-text)]/58 transition-colors hover:text-[var(--theme-accent)]"
+            >
+              <ExternalLink size={13} />
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[rgba(var(--glass-tint),0.055)] pt-2.5">
         <button type="button" onClick={toggleComments} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg px-1 text-[10px] font-medium text-[var(--theme-secondary-text)]/66 transition-colors hover:text-[var(--theme-text)]">

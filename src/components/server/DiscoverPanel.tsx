@@ -91,9 +91,9 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
   const seqRef = useRef(0);
 
   // Responsive breakpoints:
-  //  - 'xs' (< 380px, eski 5" telefonlar)  → 1 sütun
-  //  - 'narrow' (380–560px, 5.5" telefon)  → 2 sütun
-  //  - 'wide' (>= 560px, tablet+)          → 3 sütun
+  //  - 'xs' (< 300px, çok dar panel)        → 1 sütun
+  //  - 'narrow' (300–620px, telefon)        → 2 sütun
+  //  - 'wide' (>= 620px, tablet+)           → 3 sütun
   type Breakpoint = 'xs' | 'narrow' | 'wide';
   const [bp, setBp] = useState<Breakpoint>('wide');
   const roRef = useRef<ResizeObserver | null>(null);
@@ -102,7 +102,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
     if (!node || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width ?? 0;
-      setBp(w < 380 ? 'xs' : w < 560 ? 'narrow' : 'wide');
+      setBp(w < 300 ? 'xs' : w < 620 ? 'narrow' : 'wide');
     });
     ro.observe(node);
     roRef.current = ro;
@@ -246,7 +246,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
             <div className="text-[11px] text-[var(--theme-secondary-text)] opacity-30">Eşleşen sunucu bulunamadı</div>
           </div>
         ) : (
-          <div ref={gridRefCb} className={`grid gap-3 ${gridCols}`}>
+          <div ref={gridRefCb} className={`grid ${bp === 'wide' ? 'gap-3' : 'gap-2'} ${gridCols}`}>
             {servers.map(s => {
               const member = isMember(s);
               const active = isActive(s);
@@ -258,10 +258,11 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
               const clickable = member || active;
               const since = formatSince(s.createdAt);
               const PlanIcon = plan === 'ultra' ? Gem : plan === 'pro' ? Crown : Circle;
+              const compactCard = bp !== 'wide';
               return (
                 <div key={s.id}
                   onClick={clickable ? () => handleCardClick(s) : undefined}
-                  className={`group/c relative min-h-[150px] overflow-hidden rounded-xl p-3 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-[1px] ${active ? 'ring-1 ring-[var(--theme-accent)]/16' : ''} ${clickable ? 'cursor-pointer' : ''}`}
+                  className={`group/c relative overflow-hidden rounded-xl transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-[1px] ${compactCard ? 'min-h-[128px] p-2' : 'min-h-[150px] p-3'} ${active ? 'ring-1 ring-[var(--theme-accent)]/16' : ''} ${clickable ? 'cursor-pointer' : ''}`}
                   style={{
                     background: active
                       ? 'rgba(var(--theme-accent-rgb),0.070)'
@@ -275,8 +276,8 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                   <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover/c:opacity-100" style={{ background: `rgba(${tone.rgb},0.035)` }} />
 
                   {/* 1. Logo + İsim + Badge */}
-                  <div className="relative mb-2 flex items-start gap-2.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px]"
+                  <div className={`relative flex items-start ${compactCard ? 'mb-1.5 gap-1.5' : 'mb-2 gap-2.5'}`}>
+                    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] ${compactCard ? 'h-8 w-8' : 'h-9 w-9'}`}
                       style={{
                         background: s.avatarUrl ? 'rgba(var(--glass-tint),0.035)' : `linear-gradient(135deg, rgba(${tone.rgb},0.18), rgba(var(--glass-tint),0.045))`,
                         border: '1px solid rgba(var(--glass-tint),0.08)',
@@ -285,48 +286,48 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                       <DiscoverServerAvatar
                         avatarUrl={s.avatarUrl}
                         shortName={s.shortName}
-                        sizeClassName="h-9 w-9 rounded-[10px]"
-                        textClassName="text-[10px] font-black tracking-[0.08em] text-[var(--theme-accent)]/80"
+                        sizeClassName={`${compactCard ? 'h-8 w-8' : 'h-9 w-9'} rounded-[10px]`}
+                        textClassName={`${compactCard ? 'text-[9px]' : 'text-[10px]'} font-black tracking-[0.08em] text-[var(--theme-accent)]/80`}
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex min-w-0 items-start justify-between gap-1.5">
-                        <span className="min-w-0 truncate text-[12.5px] font-bold leading-5 text-[var(--theme-text)]">{s.name}</span>
+                        <span className={`min-w-0 truncate font-bold text-[var(--theme-text)] ${compactCard ? 'text-[11.5px] leading-4' : 'text-[12.5px] leading-5'}`}>{s.name}</span>
                         <span
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                          className={`inline-flex shrink-0 items-center justify-center rounded-full ${compactCard ? 'h-4 w-4' : 'h-5 w-5'}`}
                           style={{ background: 'rgba(var(--glass-tint),0.040)', color: pv.badgeText, border: '1px solid rgba(var(--glass-tint),0.065)' }}
                           title={`Plan: ${plan}`}
                         >
-                          <PlanIcon size={10.5} strokeWidth={2.3} />
+                          <PlanIcon size={compactCard ? 8.5 : 10.5} strokeWidth={2.3} />
                         </span>
                       </div>
-                      {s.motto && <div className="mt-0.5 truncate text-[9.5px] font-medium text-[var(--theme-secondary-text)]/58">{s.motto}</div>}
+                      {s.motto && <div className={`mt-0.5 truncate font-medium text-[var(--theme-secondary-text)]/58 ${compactCard ? 'text-[8.5px]' : 'text-[9.5px]'}`}>{s.motto}</div>}
                     </div>
                   </div>
 
                   {/* 2. Açıklama */}
-                  <div className="relative mb-2 min-h-[30px] text-[10.5px] leading-[1.45] text-[var(--theme-secondary-text)]/62 line-clamp-2">
+                  <div className={`relative text-[var(--theme-secondary-text)]/62 ${compactCard ? 'mb-1.5 min-h-[16px] text-[9px] leading-[1.35] line-clamp-1' : 'mb-2 min-h-[30px] text-[10.5px] leading-[1.45] line-clamp-2'}`}>
                     {s.description || 'Henüz açıklama yok.'}
                   </div>
 
                   {/* 3. Meta + Aksiyon */}
-                  <div className="relative flex items-end justify-between gap-2">
+                  <div className={`relative flex items-end justify-between ${compactCard ? 'gap-1' : 'gap-2'}`}>
                     <div className="flex min-w-0 flex-wrap items-center gap-1">
-                      <span className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[9px] font-bold text-[var(--theme-secondary-text)]/66"
+                      <span className={`inline-flex items-center gap-1 rounded-full font-bold text-[var(--theme-secondary-text)]/66 ${compactCard ? 'h-4 px-1 text-[8px]' : 'h-5 px-1.5 text-[9px]'}`}
                         style={{ background: 'rgba(var(--glass-tint),0.045)', border: '1px solid rgba(var(--glass-tint),0.065)' }}>
-                        <Users size={9.5} />
+                        <Users size={compactCard ? 8 : 9.5} />
                         <span className="tabular-nums">{s.memberCount}</span>
                       </span>
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full"
+                      <span className={`inline-flex items-center justify-center rounded-full ${compactCard ? 'h-4 w-4' : 'h-5 w-5'}`}
                         style={{
                           background: isFrictionless(s) ? 'rgba(16,185,129,0.075)' : 'rgba(var(--theme-accent-rgb),0.075)',
                           border: isFrictionless(s) ? '1px solid rgba(16,185,129,0.13)' : '1px solid rgba(var(--theme-accent-rgb),0.13)',
                           color: isFrictionless(s) ? 'rgba(110,231,183,0.88)' : 'var(--theme-accent)',
                         }}
                         title={isFrictionless(s) ? 'Açık katılım' : 'Davetli sunucu'}>
-                        {isFrictionless(s) ? <Globe2 size={9.5} /> : <LockKeyhole size={9.5} />}
+                        {isFrictionless(s) ? <Globe2 size={compactCard ? 8 : 9.5} /> : <LockKeyhole size={compactCard ? 8 : 9.5} />}
                       </span>
-                      {since && (
+                      {since && !compactCard && (
                         <span className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[8.5px] font-bold text-[var(--theme-secondary-text)]/48">
                           <CalendarDays size={9} />
                           {since}
@@ -354,7 +355,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                           handleJoinIntent(s, 'join');
                         }}
                         disabled={isJoining}
-                        className="join-btn flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                        className={`join-btn flex shrink-0 items-center rounded-full font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40 ${compactCard ? 'h-5 px-2 text-[8.5px]' : 'h-6 px-2.5 text-[9.5px]'}`}
                         style={{ background: 'rgba(var(--theme-accent-rgb),0.10)', border: '1px solid rgba(var(--theme-accent-rgb),0.18)', color: 'var(--theme-accent)' }}>
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}
                         {isJoining ? '...' : 'Katıl'}
@@ -366,7 +367,7 @@ export default function DiscoverPanel({ onJoinSuccess, onCreateServer, onJoinMod
                           handleJoinIntent(s, 'request');
                         }}
                         disabled={isJoining}
-                        className="flex h-6 shrink-0 items-center rounded-full px-2.5 text-[9.5px] font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                        className={`flex shrink-0 items-center rounded-full font-bold transition-[border-color,background-color,color,filter] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40 ${compactCard ? 'h-5 px-2 text-[8.5px]' : 'h-6 px-2.5 text-[9.5px]'}`}
                         style={{ background: 'rgba(var(--glass-tint),0.045)', border: '1px solid rgba(var(--glass-tint),0.08)', color: 'var(--theme-text)' }}
                         title="Bu sunucuya başvuru gönder — yönetici onayı gerekir">
                         {isJoining ? <div className="w-2.5 h-2.5 border-[1.5px] border-current/30 border-t-current rounded-full animate-spin mr-1" /> : null}

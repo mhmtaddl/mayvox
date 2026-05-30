@@ -19,6 +19,7 @@ import {
   type PlanKey,
   AdminApiError,
 } from '../../../lib/systemAdminApi';
+import { resolveAvatarUrls } from '../../../lib/statusAvatar';
 
 type ConfirmAction =
   | { type: 'delete'; server: AdminServerRow }
@@ -200,7 +201,7 @@ export default function SystemServersPanel() {
           </div>
         )}
 
-        <div className={`${cardCls}`}>
+        <div className={`system-servers-list-panel ${cardCls}`}>
           {loading && !items ? (
             <div className="flex items-center justify-center py-10">
               <div className="w-5 h-5 border-2 border-[var(--theme-accent)]/30 border-t-[var(--theme-accent)] rounded-full animate-spin" />
@@ -332,14 +333,36 @@ interface RowProps {
 const ServerRow: React.FC<RowProps> = ({ srv, canDelete, onDelete, onBanToggle, onOpenPlanPicker, onForceLeave }) => {
   const ownerName = srv.owner_display_name || srv.owner_full_name || '—';
   const ownerEmail = srv.owner_email || '—';
-  const avatarHttp = srv.avatar_url && srv.avatar_url.startsWith('http') ? srv.avatar_url : null;
+  const avatarUrls = resolveAvatarUrls(srv.avatar_url);
+  const [avatarIndex, setAvatarIndex] = useState(0);
   const avatarFallback = (srv.short_name || srv.name || 'S').slice(0, 2).toUpperCase();
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const activeAvatarUrl = avatarUrls[avatarIndex] || '';
+
+  useEffect(() => {
+    setAvatarIndex(0);
+    setAvatarFailed(false);
+  }, [srv.avatar_url]);
 
   return (
-    <div className={`flex items-start gap-3 px-3 py-3 hover:bg-[var(--theme-panel-hover)] transition-colors ${srv.is_banned ? 'bg-red-500/[0.04]' : ''}`}>
+    <div className={`system-server-row flex items-start gap-3 px-3 py-3 hover:bg-[var(--theme-panel-hover)] transition-colors ${srv.is_banned ? 'bg-red-500/[0.04]' : ''}`}>
       {/* Server avatar */}
       <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--theme-accent)]/12 text-[var(--theme-accent)] font-bold text-[12px] flex items-center justify-center overflow-hidden">
-        {avatarHttp ? <img src={avatarHttp} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : avatarFallback}
+        {activeAvatarUrl && !avatarFailed ? (
+          <img
+            src={activeAvatarUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={() => {
+              if (avatarIndex + 1 < avatarUrls.length) {
+                setAvatarIndex(index => index + 1);
+                return;
+              }
+              setAvatarFailed(true);
+            }}
+          />
+        ) : avatarFallback}
       </div>
       {/* Meta */}
       <div className="flex-1 min-w-0">

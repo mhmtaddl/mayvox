@@ -198,7 +198,7 @@ function SegmentedTabs({ tabs, value, onChange, rightSlot, tabletLayout = false 
       ? 'flex w-full min-w-0 flex-col gap-1'
       : 'settings-tabs surface-card flex w-full flex-col gap-2 p-1 rounded-xl md:flex-row md:items-center md:justify-between'
     }>
-      <div className={tabletLayout ? 'flex min-w-0 gap-1.5 overflow-x-auto pb-1 custom-scrollbar' : 'settings-tabs-list flex min-w-0 flex-1 flex-nowrap'}>
+      <div className={tabletLayout ? 'flex min-w-0 gap-0.5 overflow-hidden pb-1' : 'settings-tabs-list flex min-w-0 flex-1 flex-nowrap'}>
         {tabs.map(tab => {
           const active = value === tab.key;
           return (
@@ -208,7 +208,7 @@ function SegmentedTabs({ tabs, value, onChange, rightSlot, tabletLayout = false 
               title={tab.label}
               aria-label={tab.label}
               className={tabletLayout
-                ? `relative flex h-8 min-w-[92px] flex-1 items-center justify-center gap-1 rounded-[11px] border px-1.5 text-[10px] font-semibold tracking-[-0.005em] transition-colors duration-150 ${
+                ? `relative flex h-8 min-w-0 flex-1 basis-0 items-center justify-center gap-0.5 rounded-[10px] border px-0.5 text-[9px] font-semibold tracking-[-0.005em] transition-colors duration-150 ${
                     active
                       ? 'border-[rgba(var(--theme-accent-rgb),0.30)] bg-[rgba(var(--theme-accent-rgb),0.072)] text-[var(--theme-accent)]'
                       : 'border-[rgba(var(--glass-tint),0.045)] bg-[rgba(var(--glass-tint),0.018)] text-[var(--theme-secondary-text)]/70'
@@ -282,7 +282,7 @@ function AppHelpCard() {
   return (
     <SettingsSectionCard>
       <DomainTitle icon={<Settings size={11} strokeWidth={2.2} />} title="Yardım" />
-      <div className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] px-3 py-3">
+      <div className="settings-app-help-row flex items-center gap-3 rounded-xl border border-[var(--theme-border)]/55 bg-[var(--surface-soft)] px-3 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-[11.5px] font-bold text-[var(--theme-text)]">Uygulama ipuçları</p>
           <p className="mt-0.5 text-[9.5px] font-medium leading-4 text-[var(--theme-secondary-text)]/68">

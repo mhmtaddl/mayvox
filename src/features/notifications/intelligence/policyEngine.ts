@@ -56,11 +56,6 @@ function sameDmActivelyViewing(ctx: PolicyContext, convKey?: string): boolean {
          ctx.activeDmConvKey === convKey && ctx.dmAtBottom;
 }
 
-/** DM paneli açıksa kullanıcı zaten DM bağlamında — toast + ses gereksiz. */
-function dmPanelFocused(ctx: PolicyContext): boolean {
-  return ctx.isAppFocused && ctx.dmPanelOpen;
-}
-
 /**
  * Adaptive gate için minimum sample boyutu — tek bir auto-dismiss (timeout)
  * ignoredRate'i 1.0'a çıkarıp sonraki TÜM DM'leri sessizleştirmesin.
@@ -101,17 +96,9 @@ export function decide(event: NotificationEvent, ctx: PolicyContext, stats: Rece
   const reasons: string[] = [];
   let tier: AttentionTier = meta.base;
 
-  // 1) Hard context suppression — kullanıcı zaten bakıyor.
-  // DM paneli açıkken (herhangi bir thread / liste görünümü) hiçbir DM toast'ı
-  // yukarıdan inmesin; kullanıcı DM bağlamında, unread badge + liste yeterli.
-  if (event.intent === 'direct_dm' && dmPanelFocused(ctx)) {
-    return {
-      shouldNotify: false, attentionTier: 'NONE', visualMode: 'none',
-      sound: 'none', flash: false,
-      effectivePriority: meta.priority,
-      reason: 'suppress:dm-panel-open',
-    };
-  }
+  // 1) Hard context suppression — kullanıcı yalnızca aynı DM thread'ini
+  // tabanda okuyorsa bastır. DM listesi veya farklı thread açıkken gelen
+  // mesaj toast'a düşmeli; mobilde kullanıcı mesajı aksi halde fark etmiyor.
   if (event.intent === 'direct_dm' && sameDmActivelyViewing(ctx, event.subjectId)) {
     return {
       shouldNotify: false, attentionTier: 'NONE', visualMode: 'none',

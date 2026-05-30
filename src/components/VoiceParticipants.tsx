@@ -69,6 +69,7 @@ interface Props {
   activityPanelOpen?: boolean;
   onActivityResizeStart?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onToggleActivityPanel?: () => void;
+  mobilePhoneLayout?: boolean;
   musicPanelAvailable?: boolean;
   musicPanelOpen?: boolean;
   onToggleMusicPanel?: () => void;
@@ -130,12 +131,15 @@ function VoiceParticipants({
   activityPanelOpen,
   onActivityResizeStart,
   onToggleActivityPanel,
+  mobilePhoneLayout = false,
   musicPanelAvailable,
   musicPanelOpen,
   onToggleMusicPanel,
 }: Props) {
   const cardsRef = useRef<HTMLDivElement>(null);
+  const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
   const [cardsHeight, setCardsHeight] = useState(0);
+  const [speakingScores, setSpeakingScores] = useState<Record<string, number>>({});
   useEffect(() => {
     const el = cardsRef.current;
     if (!el) return;
@@ -174,6 +178,27 @@ function VoiceParticipants({
     const sp = currentChannel.speakerIds || [];
     return sp.length > 0 ? sp.includes(userId) : currentChannel.ownerId === userId;
   }, [currentChannel?.mode, currentChannel?.speakerIds, currentChannel?.ownerId]);
+
+  useEffect(() => {
+    const activeNow = new Set<string>();
+    const scoreIncrements: Record<string, number> = {};
+    members.forEach(user => {
+      if (!isSpeakingForUser(user)) return;
+      activeNow.add(user.id);
+      if (!activeSpeakerIdsRef.current.has(user.id)) {
+        scoreIncrements[user.id] = 1;
+      }
+    });
+    activeSpeakerIdsRef.current = activeNow;
+    if (Object.keys(scoreIncrements).length === 0) return;
+    setSpeakingScores(prev => {
+      const next = { ...prev };
+      Object.keys(scoreIncrements).forEach(userId => {
+        next[userId] = (next[userId] || 0) + scoreIncrements[userId];
+      });
+      return next;
+    });
+  }, [members, isSpeakingForUser]);
 
   const renderCardProps = useCallback((user: User) => {
     const isMe = user.id === currentUser.id;
@@ -224,7 +249,7 @@ function VoiceParticipants({
     isSpeakingForUser,
   ]);
 
-  const networkParticipants = useMemo(() => members.map(user => {
+  const networkParticipants = useMemo(() => members.map((user, index) => {
     const isMe = user.id === currentUser.id;
     const speaking = isSpeakingForUser(user);
     return {
@@ -243,6 +268,8 @@ function VoiceParticipants({
       isAdmin: user.isAdmin,
       isModerator: user.isModerator,
       appVersion: user.appVersion,
+      speakingScore: speakingScores[user.id] || 0,
+      orderIndex: index,
       onClick: makeClickHandler(user.id),
       onDoubleClick: () => { if (!isMe && isAdmin) onKickUser(user.id); },
       onContextMenu: (e: React.MouseEvent) => {
@@ -262,6 +289,7 @@ function VoiceParticipants({
     isAdmin,
     onKickUser,
     onRequestMemberMenu,
+    speakingScores,
   ]);
 
   const chatEnabled = useMemo(
@@ -281,6 +309,7 @@ function VoiceParticipants({
             cardStyle={cardStyle}
             participants={networkParticipants}
             leadingAccessory={musicAccessory}
+            mobilePhoneLayout={mobilePhoneLayout}
           />
         </div>
 
@@ -324,6 +353,7 @@ function VoiceParticipants({
             activityPanelOpen={activityPanelOpen}
             onActivityResizeStart={onActivityResizeStart}
             onToggleActivityPanel={onToggleActivityPanel}
+            phoneLayout={mobilePhoneLayout}
             musicPanelAvailable={musicPanelAvailable}
             musicPanelOpen={musicPanelOpen}
             onToggleMusicPanel={onToggleMusicPanel}

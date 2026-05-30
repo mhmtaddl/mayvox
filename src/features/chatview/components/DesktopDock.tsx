@@ -14,6 +14,10 @@ import {
   AlertCircle,
   Info,
   Gamepad2,
+  Crown,
+  Shield,
+  ShieldCheck,
+  UserRound,
 } from 'lucide-react';
 import VoiceControlButton from './VoiceControlButton';
 import InactivityCountdownBanner from './InactivityCountdownBanner';
@@ -490,7 +494,7 @@ export default function DesktopDock({
           </button>
           {/* Sunucu sayısı badge */}
           {otherServers.length > 0 && !serverListOpen && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--theme-accent)] text-[7px] font-bold text-[var(--theme-text-on-accent,#000)] flex items-center justify-center">
+            <span className="absolute right-0 top-0 z-[2] h-4 min-w-4 rounded-full bg-[var(--theme-accent)] px-1 text-[7px] font-bold text-[var(--theme-text-on-accent,#000)] flex items-center justify-center">
               {otherServers.length}
             </span>
           )}
@@ -500,18 +504,27 @@ export default function DesktopDock({
               <motion.div ref={serverListRef}
                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
                 transition={{ duration: 0.12 }}
-                className="mv-server-popover absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[200px] max-h-[280px] overflow-y-auto rounded-xl z-[100]"
-                style={{ background: 'rgba(var(--theme-bg-rgb, 6,10,20), 0.95)', backdropFilter: 'blur(18px)', border: '1px solid rgba(var(--glass-tint), 0.08)', boxShadow: '0 10px 28px rgba(0,0,0,0.32)' }}>
-                <div className="px-3 py-2 text-[8px] font-semibold text-[var(--theme-secondary-text)]/30 uppercase tracking-wider">Sunucular</div>
+                className="mv-server-popover custom-scrollbar absolute bottom-full left-1/2 z-[100] mb-2 max-h-[280px] w-[226px] -translate-x-1/2 overflow-y-auto rounded-2xl"
+                style={{
+                  background: [
+                    'linear-gradient(180deg, rgba(var(--glass-tint),0.070), rgba(var(--glass-tint),0.030))',
+                    'rgba(var(--theme-bg-rgb),0.985)',
+                  ].join(', '),
+                  backdropFilter: 'blur(14px) saturate(118%)',
+                  WebkitBackdropFilter: 'blur(14px) saturate(118%)',
+                  border: '1px solid rgba(var(--glass-tint),0.14)',
+                  boxShadow: '0 18px 42px rgba(0,0,0,0.34), inset 0 1px 0 rgba(var(--glass-tint),0.10)',
+                }}>
+                <div className="px-3 py-2 text-[8px] font-black uppercase tracking-[0.14em] text-[var(--theme-secondary-text)]/58">Sunucular</div>
                 {otherServers.map(s => (
                   <button key={s.id} onClick={() => handleSelectServer(s.id)}
-                    className="mv-server-row mv-density-server-row w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-[rgba(var(--glass-tint),0.04)] last:border-b-0">
+                    className="mv-server-row mv-density-server-row flex min-h-[40px] w-full items-center gap-2.5 border-b border-[rgba(var(--glass-tint),0.055)] px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-[rgba(var(--glass-tint),0.055)]">
                     <div className="w-7 h-7 rounded-[8px] overflow-hidden flex items-center justify-center shrink-0" style={{ background: s.avatarUrl ? 'none' : 'rgba(var(--glass-tint), 0.08)' }}>
                       {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-7 h-7 rounded-[8px] object-cover" /> : <span className="text-[9px] font-bold text-[var(--theme-accent)]">{s.shortName}</span>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold text-[var(--theme-text)] truncate">{s.name}</div>
-                      <div className="text-[8px] text-[var(--theme-secondary-text)]/40">{s.memberCount} üye</div>
+                      <div className="truncate text-[10.5px] font-bold text-[var(--theme-text)]">{s.name}</div>
+                      <DesktopServerRoleLine role={s.role} />
                     </div>
                   </button>
                 ))}
@@ -810,6 +823,26 @@ function getStatusDotClass(statusText: string): string {
   if (statusText === 'Duymuyor' || statusText === 'Rahatsız Etmeyin') return 'bg-red-400';
   if (statusText === 'Çevrimdışı') return 'bg-[var(--theme-secondary-text)]/60';
   return 'bg-blue-500';
+}
+
+function DesktopServerRoleLine({ role }: { role?: string }) {
+  const normalizedRole = (role || 'member').toLocaleLowerCase('tr-TR');
+  const meta =
+    normalizedRole === 'owner' || normalizedRole === 'sahip'
+      ? { label: 'Sahip', Icon: Crown, className: 'text-amber-300/86' }
+      : normalizedRole === 'admin' || normalizedRole === 'yönetici' || normalizedRole === 'yonetici'
+        ? { label: 'Yönetici', Icon: ShieldCheck, className: 'text-cyan-300/86' }
+        : normalizedRole.includes('mod') || normalizedRole.includes('moderatör') || normalizedRole.includes('moderator')
+          ? { label: 'Moderatör', Icon: Shield, className: 'text-violet-300/86' }
+          : { label: 'Üye', Icon: UserRound, className: 'text-[var(--theme-secondary-text)]/62' };
+  const { Icon } = meta;
+
+  return (
+    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[8.5px] font-bold text-[var(--theme-secondary-text)]/58">
+      <Icon size={10} strokeWidth={2.25} className={`${meta.className} shrink-0`} />
+      <span className="truncate">{meta.label}</span>
+    </div>
+  );
 }
 
 // ── Self Control Panel ──────────────────────────────────────────────────

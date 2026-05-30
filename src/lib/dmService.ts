@@ -133,7 +133,7 @@ export function handleDmMessage(msg: any): boolean {
   }
 }
 
-const MAX_DM_LENGTH = 2000;
+const MAX_DM_LENGTH = 20000;
 
 // ── API ──────────────────────────────────────────────────────────────────
 

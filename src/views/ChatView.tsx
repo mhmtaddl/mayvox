@@ -11,7 +11,6 @@ import {
   Radio,
   Compass,
   Timer,
-  Users,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getPublicDisplayName, getPublicNickname } from '../lib/formatName';
@@ -129,6 +128,7 @@ const MobileDiscoverScreen = React.lazy(loadMobileDiscoverScreen);
 const MobileNotificationsScreen = React.lazy(loadMobileNotificationsScreen);
 const MobileProfileScreen = React.lazy(loadMobileProfileScreen);
 const MobileSocialScreen = React.lazy(loadMobileSocialScreen);
+
 const DiscoverPanel = React.lazy(() => import('../components/server/DiscoverPanel'));
 const JoinServerModal = React.lazy(() => import('../components/server/JoinServerModal'));
 const ChannelAccessModal = React.lazy(() => import('../components/server/ChannelAccessModal'));
@@ -404,7 +404,10 @@ export default function ChatView() {
 
   // ── Dominant speaker hook ──
   const sortedChannelMembers = useMemo(
-    () => shouldPrepareRoomView ? [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)) : [],
+    () => {
+      if (!shouldPrepareRoomView) return [];
+      return [...channelMembers].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+    },
     [channelMembers, shouldPrepareRoomView]
   );
   const dominantSpeakerId = useDominantSpeaker({
@@ -420,6 +423,7 @@ export default function ChatView() {
   const [roomActivityClearing, setRoomActivityClearing] = useState(false);
   const [roomMusicPanelOpen, setRoomMusicPanelOpen] = useState(false);
   const roomActivitySplitRef = useRef<HTMLDivElement>(null);
+  const roomActivityPhoneDefaultAppliedRef = useRef(false);
   const [draggedUser, setDraggedUser] = useState<string | null>(null);
   const [profilePopup, setProfilePopup] = useState<{
     userId: string;
@@ -503,13 +507,15 @@ export default function ChatView() {
 
   useEffect(() => {
     const onOpenMessages = (event: Event) => {
-      const settings = !!(event as CustomEvent<{ settings?: boolean }>).detail?.settings;
+      const detail = (event as CustomEvent<{ settings?: boolean; recipientId?: string }>).detail;
+      const settings = !!detail?.settings;
       setView('chat');
       setSettingsTarget(null);
       setSettingsServerId(null);
       setSettingsInitialTab(undefined);
       setShowDiscover(false);
       setMobileRightOpen(false);
+      if (detail?.recipientId) setDmTargetUserId(detail.recipientId);
       setDmPanelOpen(true);
       if (settings) setDmSettingsOpenNonce(nonce => nonce + 1);
     };
@@ -521,6 +527,12 @@ export default function ChatView() {
     if (!dmPanelOpen && !dmTargetUserId) return;
     setDmPanelHasMounted(true);
   }, [dmPanelOpen, dmTargetUserId]);
+
+  useEffect(() => {
+    if (!FORCE_MOBILE || dmPanelHasMounted) return;
+    const timer = window.setTimeout(() => setDmPanelHasMounted(true), 800);
+    return () => window.clearTimeout(timer);
+  }, [dmPanelHasMounted]);
 
   const shouldRenderDmPanel = !FORCE_MOBILE || dmPanelHasMounted || dmPanelOpen || !!dmTargetUserId;
 
@@ -929,23 +941,46 @@ export default function ChatView() {
     event.preventDefault();
     const rect = roomActivitySplitRef.current.getBoundingClientRect();
     const startX = event.clientX;
+    const startY = event.clientY;
     const startRatio = roomActivityPanelRatio;
     const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    const isPhoneActivityResize = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px), (hover: none) and (pointer: coarse)').matches;
+    let frameId = 0;
+    let lastRatio = startRatio;
     document.body.style.userSelect = 'none';
+    document.body.classList.add('mv-room-activity-resizing');
 
     const onMove = (moveEvent: PointerEvent) => {
-      const delta = startX - moveEvent.clientX;
+      const delta = isPhoneActivityResize ? moveEvent.clientY - startY : startX - moveEvent.clientX;
       if (Math.abs(delta) < 5) return;
-      const next = Math.min(50, Math.max(20, startRatio + (delta / width) * 100));
-      setRoomActivityPanelRatio(next);
+      const next = isPhoneActivityResize
+        ? Math.min(68, Math.max(28, startRatio + (delta / height) * 100))
+        : Math.min(50, Math.max(20, startRatio + (delta / width) * 100));
+      const rounded = Math.round(next * 10) / 10;
+      if (Math.abs(rounded - lastRatio) < 0.2) return;
+      lastRatio = rounded;
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0;
+        setRoomActivityPanelRatio(lastRatio);
+      });
     };
     const onUp = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+        frameId = 0;
+      }
+      setRoomActivityPanelRatio(lastRatio);
       document.body.style.userSelect = '';
+      document.body.classList.remove('mv-room-activity-resizing');
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp, { once: true });
+    window.addEventListener('pointercancel', onUp, { once: true });
   }, [roomActivityPanelRatio]);
   // App-level rol + 0 sahip sunucu → sunucu oluşturma butonları görünür.
   const canCreateServer = canUserCreateServer(currentUser, serverList);
@@ -972,6 +1007,24 @@ export default function ChatView() {
 
   // ── Sunucu kanalları — instant cache + background refresh ──
   const channelCacheRef = useRef(new Map<string, VoiceChannel[]>());
+  const removeCurrentUserFromChannel = useCallback((channelId: string | null) => {
+    if (!channelId) return;
+    const myKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
+    const removeFromList = (list: VoiceChannel[]) => list.map(channel => {
+      if (channel.id !== channelId) return channel;
+      const nextMembers = (channel.members || []).filter(memberKey => !myKeys.has(memberKey));
+      return {
+        ...channel,
+        members: nextMembers,
+        userCount: nextMembers.length,
+      };
+    });
+    setChannels(prev => removeFromList(prev));
+    if (activeServerId) {
+      const cached = channelCacheRef.current.get(activeServerId);
+      if (cached) channelCacheRef.current.set(activeServerId, removeFromList(cached));
+    }
+  }, [activeServerId, currentUser.id, currentUser.name, setChannels]);
 
   // Sunucu değişirken kanalları cache'e kaydet (member temiz)
   useEffect(() => {
@@ -1471,6 +1524,7 @@ export default function ChatView() {
 
       if (action === 'toggle-room') {
         if (activeChannel) {
+          removeCurrentUserFromChannel(activeChannel);
           void disconnectFromLiveKit();
           setActiveChannel(null);
           setIsServerHomeView(false);
@@ -1549,6 +1603,7 @@ export default function ChatView() {
     handleGoHome,
     handleJoinChannel,
     handleToggleChatMuted,
+    removeCurrentUserFromChannel,
     serverList,
     setActiveChannel,
     setActiveServerId,
@@ -1674,7 +1729,10 @@ export default function ChatView() {
         inviteeId: currentUser.id,
       });
     }
-    if (invitationModal) handleJoinChannel(invitationModal.roomId, true);
+    if (invitationModal) {
+      handleJoinChannel(invitationModal.roomId, true);
+      window.dispatchEvent(new CustomEvent('mayvox:mobile-invite-accepted'));
+    }
     setInvitationModal(null);
   }, [invitationModal, currentUser.id, handleJoinChannel, setInvitationModal]);
 
@@ -1696,11 +1754,25 @@ export default function ChatView() {
   const [mobilePreviousShellView, setMobilePreviousShellView] = useState<MobileShellView>('home');
   const [mobileChannelSheetOpen, setMobileChannelSheetOpen] = useState(() => !mobileInitialPhoneLayout);
   const [mobileSocialSheetOpen, setMobileSocialSheetOpen] = useState(() => !mobileInitialPhoneLayout);
+  const [mobileServerActionsOpen, setMobileServerActionsOpen] = useState(false);
+  const mobileLastPhonePanelRef = useRef<'channels' | 'social' | null>(null);
   const mobileChannelSheetPinned = true;
   const mobileSocialSheetPinned = true;
+  const mobileServerSwitcherList = serverList;
+  const mobileDisplayedActiveServerData = activeServerData;
   const [mobileServerMembers, setMobileServerMembers] = useState<ServerMember[]>([]);
   const [mobileServerMembersRequested, setMobileServerMembersRequested] = useState(!FORCE_MOBILE);
   const [mobileServerHomeDetailOpen, setMobileServerHomeDetailOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobilePhoneLayout) {
+      roomActivityPhoneDefaultAppliedRef.current = false;
+      return;
+    }
+    if (!roomActivityPanelOpen || roomActivityPhoneDefaultAppliedRef.current) return;
+    roomActivityPhoneDefaultAppliedRef.current = true;
+    setRoomActivityPanelRatio(prev => (prev < 44 ? 44 : Math.min(prev, 48)));
+  }, [mobilePhoneLayout, roomActivityPanelOpen]);
 
   useEffect(() => {
     if (!FORCE_MOBILE || typeof window === 'undefined') return;
@@ -1726,6 +1798,15 @@ export default function ChatView() {
       window.removeEventListener('orientationchange', syncPhoneLayout);
     };
   }, []);
+
+  useEffect(() => {
+    if (!mobilePhoneLayout || !mobileChannelSheetOpen || !mobileSocialSheetOpen) return;
+    if (mobileLastPhonePanelRef.current === 'social') {
+      setMobileChannelSheetOpen(false);
+    } else {
+      setMobileSocialSheetOpen(false);
+    }
+  }, [mobileChannelSheetOpen, mobilePhoneLayout, mobileSocialSheetOpen]);
   const mobileUserRoomCount = useMemo(
     () => channels.filter(channel => channel.ownerId === currentUser.id).length,
     [channels, currentUser.id]
@@ -1735,7 +1816,21 @@ export default function ChatView() {
     [mobileServerMembers]
   );
   const mobileServerMemberItems = useMemo(() => {
-    return [...mobileServerMembers]
+    const memberById = new Map<string, ServerMember>();
+    for (const member of mobileServerMembers) memberById.set(member.userId, member);
+    if (activeServerId) {
+      for (const user of allUsers) {
+        if (user.serverId !== activeServerId || memberById.has(user.id)) continue;
+        memberById.set(user.id, {
+          userId: user.id,
+          username: user.name,
+          displayName: getPublicDisplayName(user),
+          avatar: user.avatar,
+          role: 'member',
+        } as ServerMember);
+      }
+    }
+    return [...memberById.values()]
       .map(member => {
         const user = userById.get(member.userId);
         const isOnline = user ? mobileIsFriendOnline(user) : false;
@@ -1775,7 +1870,7 @@ export default function ChatView() {
         if (aOnline !== bOnline) return aOnline ? -1 : 1;
         return a.name.localeCompare(b.name, 'tr');
       });
-  }, [currentUser.id, currentUser.platform, mobileFormatLastSeen, mobileIsFriendOnline, mobileServerMembers, userById]);
+  }, [activeServerId, allUsers, currentUser.id, currentUser.platform, mobileFormatLastSeen, mobileIsFriendOnline, mobileServerMembers, userById]);
   const mobileServerOnlineCount = useMemo(
     () => mobileServerMemberItems.filter(member => member.status !== 'offline').length,
     [mobileServerMemberItems]
@@ -1792,24 +1887,31 @@ export default function ChatView() {
   const handleMobileSocialTabChange = useCallback((tab: 'dm' | 'friends' | 'serverMembers' | 'requests' | 'online' | 'blocked' | 'messageSettings') => {
     if (tab === 'serverMembers') setMobileServerMembersRequested(true);
   }, []);
+  useEffect(() => {
+    if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1) return;
+    if (mobileSocialSheetOpen || mobileShellViewState === 'social') setMobileServerMembersRequested(true);
+  }, [mobileShellViewState, mobileSocialSheetOpen]);
   const mobileChannelSheetItems = useMemo(() => {
-    return visibleChannels.map(channel => ({
-      id: channel.id,
-      name: channel.name,
-      type: channel.mode || 'social',
-      iconName: channel.iconName ?? getDefaultChannelIconName(channel.mode || 'social'),
-      iconColor: channel.iconColor ?? getDefaultChannelIconColor(channel.mode || 'social'),
-      active: activeChannel === channel.id,
-      memberCount: channel.userCount ?? channel.members?.length,
-      members: (channel.members || []).slice(0, 5)
+    return visibleChannels.map(channel => {
+      const baseMembers = (channel.members || [])
         .map(memberKey => {
           const user = userById.get(memberKey) ?? userByName.get(memberKey);
           if (!user) return null;
           const serverRole = mobileServerMemberRoleById.get(user.id);
           return serverRole ? { ...user, role: serverRole } : user;
         })
-        .filter((user): user is User => Boolean(user)),
-    }));
+        .filter((user): user is User => Boolean(user));
+      return {
+        id: channel.id,
+        name: channel.name,
+        type: channel.mode || 'social',
+        iconName: channel.iconName ?? getDefaultChannelIconName(channel.mode || 'social'),
+        iconColor: channel.iconColor ?? getDefaultChannelIconColor(channel.mode || 'social'),
+        active: activeChannel === channel.id,
+        memberCount: channel.userCount ?? channel.members?.length,
+        members: baseMembers.slice(0, 5),
+      };
+    });
   }, [activeChannel, mobileServerMemberRoleById, userById, userByName, visibleChannels]);
   const mobileActivePlan = activeServerData?.plan;
   const mobileRoomLimit = getUserRoomLimit(mobileActivePlan);
@@ -1843,6 +1945,16 @@ export default function ChatView() {
     window.dispatchEvent(new CustomEvent('mayvox:mobile-server-home-reset'));
   }, [mobilePhoneLayout, setMobileShellView]);
 
+  const handleMobileSelectServer = useCallback((serverId: string) => {
+    setMobileServerActionsOpen(false);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
+    setActiveServerId(serverId);
+    setShowDiscover(false);
+    setMobileServerHomeDetailOpen(false);
+    setMobileShellView('home');
+  }, [mobilePhoneLayout, setActiveServerId, setMobileShellView]);
+
   const handleMobileOpenRoom = useCallback(() => {
     if (currentChannel && !isServerHomeView) {
       setMobileChannelSheetOpen(!mobilePhoneLayout);
@@ -1853,6 +1965,24 @@ export default function ChatView() {
     setMobileChannelSheetOpen(!mobilePhoneLayout);
     setMobileSocialSheetOpen(!mobilePhoneLayout);
   }, [currentChannel, isServerHomeView, mobilePhoneLayout, setMobileShellView]);
+
+  useEffect(() => {
+    if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1 || typeof window === 'undefined') return;
+    const handleAcceptedInvite = () => {
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+      setShowDiscover(false);
+      setIsServerHomeView(false);
+      setMobileServerActionsOpen(false);
+      setMobileChannelSheetOpen(!mobilePhoneLayout);
+      setMobileSocialSheetOpen(!mobilePhoneLayout);
+      setMobileShellView('room');
+    };
+    window.addEventListener('mayvox:mobile-invite-accepted', handleAcceptedInvite);
+    return () => window.removeEventListener('mayvox:mobile-invite-accepted', handleAcceptedInvite);
+  }, [mobilePhoneLayout, setMobileShellView, setSettingsTarget, setView]);
 
   const handleMobileOpenChannels = useCallback(() => {
     setMobileChannelSheetOpen(open => mobilePhoneLayout ? !open : true);
@@ -1865,14 +1995,51 @@ export default function ChatView() {
   }, [mobilePhoneLayout]);
 
   const handleMobileOpenChannelsPanel = useCallback(() => {
+    setMobileServerActionsOpen(false);
+    mobileLastPhonePanelRef.current = 'channels';
     setMobileChannelSheetOpen(open => !open);
     setMobileSocialSheetOpen(false);
   }, []);
 
   const handleMobileOpenSocialPanel = useCallback(() => {
+    setMobileServerActionsOpen(false);
+    mobileLastPhonePanelRef.current = 'social';
     setMobileSocialSheetOpen(open => !open);
     setMobileChannelSheetOpen(false);
   }, []);
+
+  const handleMobileRevealChannelsPanel = useCallback(() => {
+    setMobileServerActionsOpen(false);
+    mobileLastPhonePanelRef.current = 'channels';
+    setMobileChannelSheetOpen(true);
+    setMobileSocialSheetOpen(false);
+  }, []);
+
+  const handleMobileRevealSocialPanel = useCallback(() => {
+    setMobileServerActionsOpen(false);
+    mobileLastPhonePanelRef.current = 'social';
+    setMobileSocialSheetOpen(true);
+    setMobileChannelSheetOpen(false);
+  }, []);
+
+  const handleMobileOpenServerActions = useCallback(() => {
+    setMobileChannelSheetOpen(false);
+    setMobileSocialSheetOpen(false);
+    setMobileServerActionsOpen(open => !open);
+  }, []);
+
+  const handleMobileConfirmLeaveServer = useCallback(() => {
+    if (!activeServerId) return;
+    setMobileServerActionsOpen(false);
+    openConfirm({
+      title: 'Sunucudan ayrıl',
+      description: `${activeServerData?.name || 'Bu sunucu'} sunucusundan ayrılmak istiyor musun?`,
+      confirmText: 'Ayrıl',
+      cancelText: 'Vazgeç',
+      danger: true,
+      onConfirm: () => handleLeaveServer(activeServerId),
+    });
+  }, [activeServerData?.name, activeServerId, handleLeaveServer, openConfirm]);
 
   const handleMobileOpenSettings = useCallback(() => {
     void loadSettingsView();
@@ -1906,6 +2073,11 @@ export default function ChatView() {
     }
     setMobileShellView('settings');
   }, [activeServerCanOpenSettings, activeServerId, closeMobileSettingsToPrevious, mobilePhoneLayout, mobileShellViewState, setMobileShellView, setSettingsTarget, settingsServerId, view]);
+
+  const handleMobileServerActionsSettings = useCallback(() => {
+    setMobileServerActionsOpen(false);
+    handleMobileOpenServerSettings();
+  }, [handleMobileOpenServerSettings]);
 
   const handleMobileOpenAccountSettings = useCallback(() => {
     void loadSettingsView();
@@ -1945,10 +2117,11 @@ export default function ChatView() {
   }, [mobilePhoneLayout, setMobileShellView]);
 
   const handleMobileLeaveRoom = useCallback(() => {
+    removeCurrentUserFromChannel(activeChannel);
     setActiveChannel(null);
     setMobileShellView('home');
     void disconnectFromLiveKit();
-  }, [disconnectFromLiveKit, setActiveChannel, setMobileShellView]);
+  }, [activeChannel, disconnectFromLiveKit, removeCurrentUserFromChannel, setActiveChannel, setMobileShellView]);
 
   const handleMobileToggleMute = useCallback(() => {
     if (isMuted && isDeafened) setIsDeafened(false);
@@ -2133,10 +2306,12 @@ export default function ChatView() {
       <React.Suspense fallback={<LazyPanelFallback label="Tablet arayüzü yükleniyor" />}>
       <MobileAppShell
         phoneLayout={mobilePhoneLayout}
-        activeServerName={activeServerData?.name}
-        activeServerAvatarUrl={activeServerData?.avatarUrl}
-        activeServerShortName={activeServerData?.shortName}
-        activeServerMotto={activeServerData?.motto}
+        activeServerName={mobileDisplayedActiveServerData?.name}
+        activeServerAvatarUrl={mobileDisplayedActiveServerData?.avatarUrl}
+        activeServerShortName={mobileDisplayedActiveServerData?.shortName}
+        activeServerMotto={mobileDisplayedActiveServerData?.motto}
+        serverList={mobileServerSwitcherList}
+        activeServerId={activeServerId}
         activeChannelName={currentChannel?.name}
         hasActiveChannel={!!activeChannel}
         activeChannelMode={currentChannel?.mode}
@@ -2151,6 +2326,14 @@ export default function ChatView() {
         tabs={undefined}
         activeTabKey={undefined}
         onOpenChannels={handleMobileOpenChannels}
+        phoneChannelPanelOpen={mobileChannelSheetOpen}
+        phoneSocialPanelOpen={mobileSocialSheetOpen}
+        onOpenPhoneChannelsPanel={handleMobileOpenChannelsPanel}
+        onOpenPhoneSocialPanel={handleMobileOpenSocialPanel}
+        onRevealPhoneChannelsPanel={handleMobileRevealChannelsPanel}
+        onRevealPhoneSocialPanel={handleMobileRevealSocialPanel}
+        onOpenServerActions={handleMobileOpenServerActions}
+        onLeaveServer={!mobilePhoneLayout ? handleMobileConfirmLeaveServer : undefined}
         onOpenRoom={handleMobileOpenRoom}
         onOpenDiscover={handleMobileOpenDiscover}
         onOpenSocial={handleMobileOpenSocial}
@@ -2165,6 +2348,7 @@ export default function ChatView() {
         onChangeStatus={handleMobileStatusChange}
         onOpenQuickActions={handleMobileOpenProfile}
         onGoHome={handleMobileGoHome}
+        onSelectServer={handleMobileSelectServer}
         onReturnToRoom={handleMobileOpenRoom}
         onLeaveRoom={handleMobileLeaveRoom}
         onTabChange={undefined}
@@ -2181,6 +2365,43 @@ export default function ChatView() {
         onCycleCardStyle={cycleCardStyle}
       >
         <div className="relative flex h-full min-h-0 w-full overflow-hidden">
+          {mobilePhoneLayout && mobileServerActionsOpen && (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-[85] cursor-default bg-transparent"
+                aria-label="Sunucu seçeneklerini kapat"
+                onClick={() => setMobileServerActionsOpen(false)}
+              />
+              <div
+                className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+54px)] z-[90] w-[210px] -translate-x-1/2 overflow-hidden rounded-[16px] border border-[rgba(var(--glass-tint),0.13)] p-1.5"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(var(--glass-tint),0.070), rgba(var(--glass-tint),0.026)), rgba(var(--theme-bg-rgb),0.96)',
+                  boxShadow: '0 18px 42px rgba(0,0,0,0.34), inset 0 1px 0 rgba(var(--glass-tint),0.08)',
+                  backdropFilter: 'blur(18px) saturate(122%)',
+                  WebkitBackdropFilter: 'blur(18px) saturate(122%)',
+                }}
+                onClick={event => event.stopPropagation()}
+              >
+                {activeServerCanOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={handleMobileServerActionsSettings}
+                    className="flex h-9 w-full items-center rounded-[11px] px-3 text-left text-[12px] font-bold text-[var(--theme-text)]/86 transition-colors hover:bg-[rgba(var(--glass-tint),0.06)]"
+                  >
+                    Sunucu ayarları
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleMobileConfirmLeaveServer}
+                  className="flex h-9 w-full items-center rounded-[11px] px-3 text-left text-[12px] font-bold text-red-300/88 transition-colors hover:bg-red-500/10"
+                >
+                  Sunucudan ayrıl
+                </button>
+              </div>
+            </>
+          )}
           {!mobilePhoneLayout && (
             <MobileChannelSheet
               variant="inline"
@@ -2318,6 +2539,7 @@ export default function ChatView() {
                       isFloodCooling={isFloodCooling}
                       canModerateMessages={canViewRoomActivityLog}
                       highlightedMessageId={highlightedRoomMessageId}
+                      mobilePhoneLayout={mobilePhoneLayout}
                       musicAccessory={showRoomMusicPanel && roomMusic.shouldRender && roomMusicPanelOpen ? (
                         <React.Suspense fallback={null}>
                           <RoomMusicPanel
@@ -2373,9 +2595,9 @@ export default function ChatView() {
                   <AnnouncementsPanel
                     currentUser={currentUser}
                     serverId={activeServerId}
-                    serverName={activeServerData?.name}
-                    serverDescription={activeServerData?.description}
-                    serverRules={activeServerData?.serverRules}
+                    serverName={mobileDisplayedActiveServerData?.name}
+                    serverDescription={mobileDisplayedActiveServerData?.description}
+                    serverRules={mobileDisplayedActiveServerData?.serverRules}
                     channels={visibleChannels}
                     serverMembers={mobileServerMembers}
                     canCreateAnnouncements={activeServerCanModerateCommunityContent}
@@ -2412,6 +2634,7 @@ export default function ChatView() {
             serverMemberCount={mobileServerMemberCount}
             currentView={mobileShellView}
             dmOpen={dmPanelOpen}
+            dmCount={dmUnreadCount}
             onOpenSocial={() => {
               void loadDMPanel();
               setDmTargetUserId(null);
@@ -2554,6 +2777,12 @@ export default function ChatView() {
                 onClose={() => setMobileSocialSheetOpen(false)}
                 currentView={mobileShellView}
                 dmOpen={dmPanelOpen}
+                dmCount={dmUnreadCount}
+                topSlot={
+                  <React.Suspense fallback={null}>
+                    <SocialSearchHub currentUserId={currentUser.id} variant="sidebar" onUserClick={handleSearchUserProfileClick} />
+                  </React.Suspense>
+                }
                 onOpenSocial={() => {
                   void loadDMPanel();
                   setDmTargetUserId(null);
@@ -2563,6 +2792,81 @@ export default function ChatView() {
                     return next;
                   });
                 }}
+                notificationSlot={
+                  <React.Suspense fallback={null}>
+                    <NotificationBell
+                      summary={notifications}
+                      quietButton
+                      onOpenChange={(open) => {
+                        if (open) setDmPanelOpen(false);
+                      }}
+                      onOpenFriendRequests={() => {}}
+                      onOpenDM={() => {
+                        void loadDMPanel();
+                        setDmTargetUserId(null);
+                        setDmPanelOpen(true);
+                      }}
+                      onOpenInvites={() => setInvitesModalOpen(true)}
+                      onOpenAdminInviteRequests={() => { setSettingsTarget('invite_requests'); setView('settings'); }}
+                      onOpenJoinRequest={(sid) => { setSettingsInitialTab('requests'); setSettingsServerId(sid); }}
+                      onOpenServer={(sid) => setActiveServerId(sid)}
+                      onAcceptFriendRequest={async (senderId) => {
+                        const sender = allUsers.find(u => u.id === senderId);
+                        const name = getPublicDisplayName(sender);
+                        await acceptRequest(senderId);
+                        pushInformational({
+                          key: `friend-accepted:${senderId}`,
+                          kind: 'generic',
+                          label: name,
+                          detail: 'Artık arkadaşsınız',
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onRejectFriendRequest={async (senderId) => {
+                        const sender = allUsers.find(u => u.id === senderId);
+                        const name = getPublicDisplayName(sender);
+                        await rejectRequest(senderId);
+                        pushInformational({
+                          key: `friend-rejected:${senderId}`,
+                          kind: 'generic',
+                          label: name,
+                          detail: 'Arkadaşlık isteğini reddettin',
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onAcceptServerInvite={async (invId) => {
+                        const inv = incomingInvites.invites.find(i => i.id === invId);
+                        const serverName = inv?.serverName ?? 'Sunucu';
+                        await incomingInvites.acceptInvite(invId);
+                        refreshServers({ force: true });
+                        setToastMsg(`${serverName} sunucusuna katıldın`);
+                        pushInformational({
+                          key: `inv-accepted:${invId}`,
+                          kind: 'generic',
+                          label: serverName,
+                          detail: 'Sunucuya katıldın',
+                          serverId: inv?.serverId,
+                          serverAvatar: inv?.serverAvatar ?? null,
+                          createdAt: Date.now(),
+                        });
+                      }}
+                      onDeclineServerInvite={async (invId) => {
+                        const inv = incomingInvites.invites.find(i => i.id === invId);
+                        await incomingInvites.declineInvite(invId);
+                        setToastMsg('Davet reddedildi');
+                        pushInformational({
+                          key: `inv-declined:${invId}`,
+                          kind: 'generic',
+                          label: inv?.serverName ?? 'Sunucu',
+                          detail: 'Daveti reddettin',
+                          serverId: inv?.serverId,
+                          serverAvatar: inv?.serverAvatar ?? null,
+                          createdAt: Date.now(),
+                        });
+                      }}
+                    />
+                  </React.Suspense>
+                }
                 onOpenSettings={handleMobileOpenSettings}
                 onLogout={confirmLogout}
               >
@@ -2593,36 +2897,6 @@ export default function ChatView() {
             </>
           )}
 
-          {mobilePhoneLayout && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+66px)] z-30 flex items-end justify-between px-1.5">
-              <button
-                type="button"
-                onClick={handleMobileOpenChannelsPanel}
-                className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-[14px] border text-[var(--theme-secondary-text)] shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-[14px] transition-colors active:scale-[0.97] ${
-                  mobileChannelSheetOpen
-                    ? 'border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
-                    : 'border-[rgba(var(--glass-tint),0.10)] bg-[rgba(var(--theme-bg-rgb),0.58)]'
-                }`}
-                aria-label="Sohbet odalarını aç"
-                title="Sohbet odaları"
-              >
-                <Volume2 size={17} />
-              </button>
-              <button
-                type="button"
-                onClick={handleMobileOpenSocialPanel}
-                className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-[14px] border text-[var(--theme-secondary-text)] shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-[14px] transition-colors active:scale-[0.97] ${
-                  mobileSocialSheetOpen
-                    ? 'border-[rgba(var(--theme-accent-rgb),0.24)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
-                    : 'border-[rgba(var(--glass-tint),0.10)] bg-[rgba(var(--theme-bg-rgb),0.58)]'
-                }`}
-                aria-label="Arkadaş panelini aç"
-                title="Arkadaşlar"
-              >
-                <Users size={17} />
-              </button>
-            </div>
-          )}
         </div>
       </MobileAppShell>
       </React.Suspense>
@@ -2721,6 +2995,18 @@ export default function ChatView() {
             onSetPassword={handleSetPassword} onVerifyPassword={handleVerifyPassword} onClose={() => setPasswordModal(null)} />
         </React.Suspense>
       )}
+      {invitationModal && (
+        <React.Suspense fallback={null}>
+          <InvitationModal
+            data={invitationModal}
+            onAccept={handleInvitationAccept}
+            onDecline={handleInvitationDecline}
+            onMute={handleInvitationMute}
+            isMuted={invitationMuted}
+          />
+        </React.Suspense>
+      )}
+      <ToastContainer />
       </>
     );
   }
@@ -3259,7 +3545,7 @@ export default function ChatView() {
                       {cardScale === 1 ? (<><rect x="0" y="0" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.7" /><rect x="0" y="5.25" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.5" /><rect x="0" y="10.5" width="16" height="3.5" rx="1" fill="currentColor" opacity="0.3" /></>) : cardScale === 2 ? (<><rect x="0" y="0.5" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.7" /><rect x="0" y="8" width="16" height="5.5" rx="1.5" fill="currentColor" opacity="0.45" /></>) : (<rect x="0" y="0" width="16" height="14" rx="2" fill="currentColor" opacity="0.6" />)}
                     </svg>
                   </button>
-                  <button onClick={async () => { await disconnectFromLiveKit(); setActiveChannel(null); }} className="p-2.5 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all" title="Odadan Ayrıl"><PhoneOff size={18} /></button>
+                  <button onClick={async () => { removeCurrentUserFromChannel(activeChannel); await disconnectFromLiveKit(); setActiveChannel(null); }} className="p-2.5 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all" title="Odadan Ayrıl"><PhoneOff size={18} /></button>
                 </div>
               </div>
               <div ref={roomActivitySplitRef} className="relative z-[1] flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -3482,7 +3768,10 @@ export default function ChatView() {
       {/* ── Desktop Dock — context-consuming, minimal props ── */}
       <React.Suspense fallback={null}>
         <DesktopDock dockToastHoveredRef={dockToastHoveredRef} listenerToastRef={listenerToastRef} cardStyle={cardStyle} cycleCardStyle={cycleCardStyle}
-          serverList={serverList} activeServerId={activeServerId} onSelectServer={id => { setActiveServerId(id); setShowDiscover(false); }}
+          serverList={serverList} activeServerId={activeServerId} onSelectServer={id => {
+            setActiveServerId(id);
+            setShowDiscover(false);
+          }}
           onJoinServer={handleJoinServer} onLeaveServer={handleLeaveServer}
           onShowCreateModal={() => { if (canCreateServer) setShowCreateModal(true); }} canCreateServer={canCreateServer}
           currentView={currentView} onGoHome={handleGoHome} onReturnToRoom={handleReturnToRoom} />

@@ -2607,7 +2607,7 @@ wss.on('connection', (ws) => {
       if (!recipientId || recipientId === userId) {
         return send(ws, { type: 'dm:error', message: 'Geçersiz alıcı' });
       }
-      if (!text || text.length > 2000) {
+      if (!text || text.length > 20000) {
         return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
       }
 
@@ -2812,7 +2812,7 @@ wss.on('connection', (ws) => {
       if (!messageId) {
         return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
       }
-      if (!text || text.length > 2000) {
+      if (!text || text.length > 20000) {
         return send(ws, { type: 'dm:error', message: 'Geçersiz mesaj' });
       }
 

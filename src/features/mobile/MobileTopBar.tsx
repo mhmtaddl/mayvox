@@ -1,5 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Search, Settings, X } from 'lucide-react';
+import { Power, Search, Settings, Users, Volume2, X } from 'lucide-react';
 import type { MobileShellView } from './MobileAppShell';
 import { resolveAvatarUrls } from '../../lib/statusAvatar';
 import { getAllProfiles } from '../../lib/backendClient';
@@ -16,7 +16,13 @@ interface MobileTopBarProps {
   activeChannelName?: string;
   currentView?: MobileShellView;
   onOpenChannels?: () => void;
+  phoneChannelPanelOpen?: boolean;
+  phoneSocialPanelOpen?: boolean;
+  onOpenPhoneChannelsPanel?: () => void;
+  onOpenPhoneSocialPanel?: () => void;
   onOpenSettings?: () => void;
+  onOpenServerActions?: () => void;
+  onLeaveServer?: () => void;
   currentUserId?: string;
   onSearchUserClick?: (user: SearchResult, position: { x: number; y: number }) => void;
 }
@@ -97,7 +103,13 @@ export default function MobileTopBar({
   activeChannelName,
   currentView = 'home',
   onOpenChannels,
+  phoneChannelPanelOpen,
+  phoneSocialPanelOpen,
+  onOpenPhoneChannelsPanel,
+  onOpenPhoneSocialPanel,
   onOpenSettings,
+  onOpenServerActions,
+  onLeaveServer,
   currentUserId,
   onSearchUserClick,
 }: MobileTopBarProps) {
@@ -250,56 +262,136 @@ export default function MobileTopBar({
     window.dispatchEvent(new CustomEvent(MOBILE_SEARCH_EVENT, { detail: { view: currentView, query: '' } }));
   };
 
+  if (phoneLayout) {
+    return (
+      <header className="shrink-0 px-2 pt-[calc(env(safe-area-inset-top)+5px)] pb-1">
+        <div className="mx-auto grid min-h-11 w-full max-w-[1180px] grid-cols-[42px_minmax(0,1fr)_42px] items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenPhoneChannelsPanel ?? onOpenChannels}
+            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border transition-colors active:scale-[0.97] ${
+              phoneChannelPanelOpen
+                ? 'border-[rgba(var(--theme-accent-rgb),0.26)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+                : 'border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.035)] text-[var(--theme-secondary-text)]/72'
+            }`}
+            aria-label="Sohbet odalarını aç"
+            title="Sohbet odaları"
+          >
+            <Volume2 size={16} />
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenServerActions ?? onOpenChannels}
+            className="mx-auto flex h-11 max-w-full min-w-0 items-center justify-center gap-1.5 rounded-[13px] px-1.5 text-center transition-colors active:scale-[0.99]"
+            aria-label="Sunucu"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[12px] font-black text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+              {showServerAvatar ? (
+                <img
+                  src={activeServerAvatarSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
+                      setServerAvatarIndex(index => index + 1);
+                      return;
+                    }
+                    setServerAvatarFailed(true);
+                  }}
+                />
+              ) : (
+                serverInitial
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[12.5px] font-black text-[var(--theme-text)]/90">{activeServerName || 'MAYVox'}</span>
+              <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/42">{activeChannelName || activeServerMotto || 'voice & chat'}</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenPhoneSocialPanel}
+            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border transition-colors active:scale-[0.97] ${
+              phoneSocialPanelOpen
+                ? 'border-[rgba(var(--theme-accent-rgb),0.26)] bg-[rgba(var(--theme-accent-rgb),0.12)] text-[var(--theme-accent)]'
+                : 'border-[rgba(var(--glass-tint),0.08)] bg-[rgba(var(--glass-tint),0.035)] text-[var(--theme-secondary-text)]/72'
+            }`}
+            aria-label="Arkadaş panelini aç"
+            title="Arkadaşlar"
+          >
+            <Users size={16} />
+          </button>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className={`shrink-0 ${phoneLayout ? 'px-2 pt-[calc(env(safe-area-inset-top)+5px)] pb-1' : 'px-3 pt-[calc(env(safe-area-inset-top)+6px)] pb-1'}`}>
-      <div className={`mx-auto grid min-h-11 w-full max-w-[1180px] items-center ${phoneLayout ? 'grid-cols-[minmax(0,1fr)_minmax(128px,0.78fr)] gap-2' : 'grid-cols-[clamp(168px,15vw,190px)_minmax(0,1fr)_clamp(168px,15vw,190px)] gap-3 sm:px-2'}`}>
-        <button
-          type="button"
-          onClick={onOpenChannels}
-          className={`flex h-11 min-w-0 items-center gap-1.5 rounded-[13px] px-0 text-left transition-colors active:scale-[0.99] ${phoneLayout ? 'pr-1' : ''}`}
-          aria-label="Kanal panelini aç"
-        >
-          <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-[10px] font-black text-[var(--theme-accent)] ${phoneLayout ? 'h-9 w-9 text-[12px]' : 'h-8 w-8 text-[11px]'}`} style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
-            {showServerAvatar ? (
-              <img
-                src={activeServerAvatarSrc}
-                alt=""
-                className="h-full w-full object-cover"
-                draggable={false}
-                referrerPolicy="no-referrer"
-                onError={() => {
-                  if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
-                    setServerAvatarIndex(index => index + 1);
-                    return;
-                  }
-                  setServerAvatarFailed(true);
-                }}
-              />
-            ) : (
-              serverInitial
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className={`block truncate font-black text-[var(--theme-text)]/90 ${phoneLayout ? 'text-[12.5px]' : 'text-[12px]'}`}>{activeServerName || 'MAYVox'}</span>
-            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/42">{activeChannelName || activeServerMotto || 'voice & chat'}</span>
-          </span>
-        </button>
-        {!phoneLayout && (
+      <div className={`mx-auto grid min-h-11 w-full max-w-[1180px] items-center ${phoneLayout ? 'grid-cols-1 gap-2' : 'grid-cols-[clamp(168px,15vw,190px)_minmax(0,1fr)_clamp(168px,15vw,190px)] gap-3 sm:px-2'}`}>
+        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+          <button
+            type="button"
+            onClick={onOpenChannels}
+            className="flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-[13px] px-0 text-left transition-colors active:scale-[0.99]"
+            aria-label="Kanal panelini aç"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[11px] font-black text-[var(--theme-accent)]" style={{ background: 'rgba(var(--theme-accent-rgb),0.09)' }}>
+              {showServerAvatar ? (
+                <img
+                  src={activeServerAvatarSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (serverAvatarIndex + 1 < serverAvatarUrls.length) {
+                      setServerAvatarIndex(index => index + 1);
+                      return;
+                    }
+                    setServerAvatarFailed(true);
+                  }}
+                />
+              ) : (
+                serverInitial
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-black text-[var(--theme-text)]/90">{activeServerName || 'MAYVox'}</span>
+              <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--theme-secondary-text)]/42">{activeChannelName || activeServerMotto || 'voice & chat'}</span>
+            </span>
+          </button>
+          {onLeaveServer && (
+            <button
+              type="button"
+              onClick={onLeaveServer}
+              className="flex h-8 w-6 shrink-0 items-center justify-center text-red-400/64 transition-colors hover:text-red-400 active:scale-[0.98]"
+              aria-label="Sunucudan ayrıl"
+              title="Sunucudan ayrıl"
+            >
+              <Power size={13} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenSettings}
-            className="flex h-8 w-7 shrink-0 items-center justify-center text-[var(--theme-secondary-text)]/58 transition-colors hover:text-[var(--theme-accent)] active:scale-[0.98]"
+            className="flex h-8 w-6 shrink-0 items-center justify-center text-[var(--theme-secondary-text)]/58 transition-colors hover:text-[var(--theme-accent)] active:scale-[0.98]"
             aria-label="Sunucu ayarlari"
+            title="Sunucu ayarları"
           >
             <Settings size={14} />
           </button>
-        )}
+        </div>
 
         {!phoneLayout && <div aria-hidden="true" />}
 
-        <div
+        {!phoneLayout && <div
           ref={searchWrapRef}
-          className={`relative flex w-full min-w-0 items-center gap-1.5 rounded-[10px] text-left active:scale-[0.995] ${phoneLayout ? 'h-9 px-2' : 'h-8 px-2.5'}`}
+          className="relative flex h-8 w-full min-w-0 items-center gap-1.5 rounded-[10px] px-2.5 text-left active:scale-[0.995]"
           style={{
             background: 'rgba(var(--theme-bg-rgb),0.44)',
             boxShadow: 'inset 0 0 0 1px rgba(var(--glass-tint),0.045)',
@@ -388,7 +480,7 @@ export default function MobileTopBar({
             )}
           </div>
         )}
-        </div>
+        </div>}
 
       </div>
     </header>

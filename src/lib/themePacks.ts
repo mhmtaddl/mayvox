@@ -493,7 +493,7 @@ export function applyThemeOverrides(overrides: ThemeCustomizationOverrides | nul
     const sidebarTint = `color-mix(in srgb, ${chromeTint} 42%, var(--bg-shell) 58%)`;
     const topbarStrong = `color-mix(in srgb, ${chromeTint} 24%, var(--bg-app) 76%)`;
     const topbarSoft = `color-mix(in srgb, ${chromeTint} 12%, var(--bg-app) 88%)`;
-    const rootBg = `linear-gradient(90deg, ${sidebarTint} 0%, color-mix(in srgb, ${sidebarTint} 72%, var(--app-neutral-bg) 28%) 22%, var(--app-neutral-bg) 48%, var(--app-neutral-bg) 100%)`;
+    const rootBg = `linear-gradient(90deg, ${sidebarTint} 0%, ${sidebarTint} 40%, color-mix(in srgb, ${sidebarTint} 58%, var(--app-neutral-bg) 42%) 62%, var(--app-neutral-bg) 100%)`;
     const topbarBg = `linear-gradient(90deg, ${sidebarTint} 0, ${sidebarTint} 46vw, ${topbarStrong} 56vw, ${topbarSoft} 66vw, var(--app-neutral-bg) 76vw, var(--app-neutral-bg) 100%)`;
     set('--theme-sidebar-rgb', rgb);
     set('--theme-sidebar', sidebarTint);
@@ -1408,7 +1408,7 @@ export function applyThemePack(pack: ThemePack): void {
   set('--topbar-gradient-mid-strong', zoneMaterial.topbarMidStrong);
   set('--topbar-gradient-mid-soft', zoneMaterial.topbarMidSoft);
   set('--app-divider', zoneMaterial.divider);
-  const rootBg = `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0%, color-mix(in srgb, ${zoneMaterial.sidebarTint} 72%, ${zoneMaterial.neutralBg} 28%) 22%, ${zoneMaterial.neutralBg} 48%, ${zoneMaterial.neutralBg} 100%)`;
+  const rootBg = `linear-gradient(90deg, ${zoneMaterial.sidebarTint} 0%, ${zoneMaterial.sidebarTint} 40%, color-mix(in srgb, ${zoneMaterial.sidebarTint} 58%, ${zoneMaterial.neutralBg} 42%) 62%, ${zoneMaterial.neutralBg} 100%)`;
   set('--app-root-bg', rootBg);
   set('--app-shell-bg', rootBg);
   set('--titlebar-blend-width', '180px');

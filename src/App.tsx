@@ -514,6 +514,18 @@ export default function App() {
     () => channels.find(c => c.id === activeChannel),
     [channels, activeChannel]
   );
+
+  useEffect(() => {
+    if (!currentUser.id || typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(`mayvox:lastActiveServerId:${currentUser.id}`);
+    if (saved) setActiveServerId(saved);
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    if (!currentUser.id || !activeServerId || typeof window === 'undefined') return;
+    window.localStorage.setItem(`mayvox:lastActiveServerId:${currentUser.id}`, activeServerId);
+  }, [activeServerId, currentUser.id]);
+
   const channelMembers = useMemo(
     () => {
       const members = currentChannel?.members ?? [];

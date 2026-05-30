@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Mic } from 'lucide-react';
 import MobileBottomBar from './MobileBottomBar';
 import MobileContextTabs, { type MobileContextTab } from './MobileContextTabs';
 import MobileTopBar from './MobileTopBar';
 import type { SearchResult } from '../../components/SocialSearchHub';
-import { isAppHelpEnabled, setAppHelpEnabled, shouldShowAppHelp } from '../../lib/appHelpPreferences';
+import type { Server } from '../../lib/serverService';
+import pandikIcon from '../../assets/pandik_1.png';
+import { isAppHelpEnabled, markAppHelpSeen, setAppHelpEnabled, shouldShowAppHelp } from '../../lib/appHelpPreferences';
 
 export type MobileShellView = 'home' | 'room' | 'discover' | 'social' | 'notifications' | 'settings' | 'profile';
 type MobileHelpAnchor = 'ptt' | 'voice-mode' | 'ptt-size';
@@ -25,6 +26,8 @@ interface MobileAppShellProps {
   activeServerAvatarUrl?: string | null;
   activeServerShortName?: string;
   activeServerMotto?: string;
+  serverList?: Server[];
+  activeServerId?: string;
   activeChannelName?: string;
   hasActiveChannel?: boolean;
   activeChannelMode?: string;
@@ -39,6 +42,12 @@ interface MobileAppShellProps {
   tabs?: MobileContextTab[];
   activeTabKey?: string;
   onOpenChannels?: () => void;
+  phoneChannelPanelOpen?: boolean;
+  phoneSocialPanelOpen?: boolean;
+  onOpenPhoneChannelsPanel?: () => void;
+  onOpenPhoneSocialPanel?: () => void;
+  onRevealPhoneChannelsPanel?: () => void;
+  onRevealPhoneSocialPanel?: () => void;
   onOpenRoom?: () => void;
   onOpenDiscover?: () => void;
   onOpenSocial?: () => void;
@@ -46,6 +55,8 @@ interface MobileAppShellProps {
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onOpenServerSettings?: () => void;
+  onOpenServerActions?: () => void;
+  onLeaveServer?: () => void;
   onOpenProfile?: () => void;
   onOpenAccountSettings?: () => void;
   currentUserId?: string;
@@ -53,6 +64,7 @@ interface MobileAppShellProps {
   onChangeStatus?: (status: string) => void;
   onOpenQuickActions?: () => void;
   onGoHome?: () => void;
+  onSelectServer?: (id: string) => void;
   onReturnToRoom?: () => void;
   onLeaveRoom?: () => void;
   onTabChange?: (key: string) => void;
@@ -76,6 +88,8 @@ export default function MobileAppShell({
   activeServerAvatarUrl,
   activeServerShortName,
   activeServerMotto,
+  serverList,
+  activeServerId,
   activeChannelName,
   hasActiveChannel,
   activeChannelMode,
@@ -90,6 +104,12 @@ export default function MobileAppShell({
   tabs,
   activeTabKey,
   onOpenChannels,
+  phoneChannelPanelOpen,
+  phoneSocialPanelOpen,
+  onOpenPhoneChannelsPanel,
+  onOpenPhoneSocialPanel,
+  onRevealPhoneChannelsPanel,
+  onRevealPhoneSocialPanel,
   onOpenRoom,
   onOpenDiscover,
   onOpenSocial,
@@ -97,6 +117,8 @@ export default function MobileAppShell({
   onOpenFriends,
   onOpenSettings,
   onOpenServerSettings,
+  onOpenServerActions,
+  onLeaveServer,
   onOpenProfile,
   onOpenAccountSettings,
   currentUserId,
@@ -104,6 +126,7 @@ export default function MobileAppShell({
   onChangeStatus,
   onOpenQuickActions,
   onGoHome,
+  onSelectServer,
   onReturnToRoom,
   onLeaveRoom,
   onTabChange,
@@ -126,20 +149,28 @@ export default function MobileAppShell({
   }, [tabs]);
   const [localActiveTabKey, setLocalActiveTabKey] = useState(shellTabs?.[0]?.key ?? '');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const edgeSwipeRef = useRef<{ side: 'left' | 'right'; startX: number; startY: number } | null>(null);
   const [floatingPttEnabled, setFloatingPttEnabled] = useState(false);
   const [coachmark, setCoachmark] = useState<MobileHelpCoachmark | null>(null);
   const [coachmarkQueue, setCoachmarkQueue] = useState<MobileHelpCoachmark[]>([]);
   const [floatingPttRect, setFloatingPttRect] = useState<FloatingPttRect | null>(null);
   const [floatingPttSizeStep, setFloatingPttSizeStep] = useState(() => {
-    if (typeof window === 'undefined') return 0;
+    if (typeof window === 'undefined') return 1;
     const saved = Number(localStorage.getItem('mobileFloatingPttSizeStep'));
-    return Number.isInteger(saved) && saved >= 0 && saved <= 9 ? saved : 0;
+    return Number.isInteger(saved) && saved >= 0 && saved <= 9 ? saved : 1;
   });
   const selectedTabKey = activeTabKey ?? localActiveTabKey;
   const canShowRoomHelp = currentView === 'room' && !!hasActiveChannel;
 
+  const isHelpAnchorAvailable = (anchor: MobileHelpAnchor) => {
+    if (!canShowRoomHelp) return false;
+    if (anchor === 'ptt') return floatingPttEnabled;
+    if (typeof document === 'undefined') return false;
+    return !!document.querySelector<HTMLElement>(`[data-mobile-help-anchor="${anchor}"]`);
+  };
+
   const showMobileHelp = (next: MobileHelpCoachmark) => {
-    if (!canShowRoomHelp) return;
+    if (!isHelpAnchorAvailable(next.anchor)) return;
     setCoachmark(current => {
       if (current) {
         setCoachmarkQueue(queue => [...queue.filter(item => item.id !== next.id), next]);
@@ -150,9 +181,10 @@ export default function MobileAppShell({
   };
 
   const closeCoachmark = () => {
+    if (coachmark) markAppHelpSeen(coachmark.id);
     setCoachmarkQueue(queue => {
       const [next, ...rest] = queue;
-      setCoachmark(next ?? null);
+      setCoachmark(next && isHelpAnchorAvailable(next.anchor) ? next : null);
       return rest;
     });
   };
@@ -183,6 +215,13 @@ export default function MobileAppShell({
       });
     }
   }, [canShowRoomHelp, floatingPttEnabled]);
+
+  useEffect(() => {
+    if (!coachmark) return;
+    if (isHelpAnchorAvailable(coachmark.anchor)) return;
+    setCoachmark(null);
+    setCoachmarkQueue(queue => queue.filter(item => isHelpAnchorAvailable(item.anchor)));
+  }, [canShowRoomHelp, coachmark, floatingPttEnabled, currentView]);
 
   useEffect(() => {
     const showCoachmark = (event: Event) => {
@@ -240,10 +279,75 @@ export default function MobileAppShell({
     if (nextIndex !== currentIndex) handleTabChange(shellTabs[nextIndex].key);
   };
 
+  const handleEdgeTouchStart = (side: 'left' | 'right') => (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    const edgeLimit = 28;
+    const width = window.innerWidth || document.documentElement.clientWidth || 0;
+    const fromOwnEdge = side === 'left'
+      ? touch.clientX <= edgeLimit
+      : width > 0 && touch.clientX >= width - edgeLimit;
+    if (!fromOwnEdge) {
+      edgeSwipeRef.current = null;
+      return;
+    }
+    event.stopPropagation();
+    edgeSwipeRef.current = { side, startX: touch.clientX, startY: touch.clientY };
+  };
+
+  const handleEdgeTouchEnd = (side: 'left' | 'right') => (event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = edgeSwipeRef.current;
+    const touch = event.changedTouches[0];
+    if (!gesture || gesture.side !== side || !touch) return;
+    event.stopPropagation();
+    edgeSwipeRef.current = null;
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = Math.abs(touch.clientY - gesture.startY);
+    const absX = Math.abs(deltaX);
+    if (deltaY > 42 || absX < 38 || absX < deltaY * 1.25) return;
+    if (side === 'left' && deltaX > 0) (onRevealPhoneChannelsPanel ?? onOpenPhoneChannelsPanel)?.();
+    if (side === 'right' && deltaX < 0) (onRevealPhoneSocialPanel ?? onOpenPhoneSocialPanel)?.();
+  };
+
+  const handleShellTouchStartCapture = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!phoneLayout) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const width = window.innerWidth || document.documentElement.clientWidth || 0;
+    const edgeLimit = 34;
+    const side = touch.clientX <= edgeLimit
+      ? 'left'
+      : width > 0 && touch.clientX >= width - edgeLimit
+        ? 'right'
+        : null;
+    if (!side) return;
+    edgeSwipeRef.current = { side, startX: touch.clientX, startY: touch.clientY };
+    event.stopPropagation();
+  };
+
+  const handleShellTouchEndCapture = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!phoneLayout) return;
+    const gesture = edgeSwipeRef.current;
+    if (!gesture) return;
+    const touch = event.changedTouches[0];
+    edgeSwipeRef.current = null;
+    if (!touch) return;
+    event.stopPropagation();
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = Math.abs(touch.clientY - gesture.startY);
+    const absX = Math.abs(deltaX);
+    if (deltaY > 42 || absX < 38 || absX < deltaY * 1.25) return;
+    if (gesture.side === 'left' && deltaX > 0) (onRevealPhoneChannelsPanel ?? onOpenPhoneChannelsPanel)?.();
+    if (gesture.side === 'right' && deltaX < 0) (onRevealPhoneSocialPanel ?? onOpenPhoneSocialPanel)?.();
+  };
+
   return (
     <div
       className={`relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none bg-[var(--theme-bg)] text-[var(--theme-text)] ${phoneLayout ? 'mobile-phone-shell' : ''}`}
       style={{ borderRadius: 0, margin: 0, boxShadow: 'none' }}
+      onTouchStartCapture={handleShellTouchStartCapture}
+      onTouchEndCapture={handleShellTouchEndCapture}
+      onTouchCancelCapture={() => { edgeSwipeRef.current = null; }}
     >
       <MobileTopBar
         activeServerName={activeServerName}
@@ -253,13 +357,42 @@ export default function MobileAppShell({
         activeChannelName={activeChannelName}
         currentView={currentView}
         onOpenChannels={onOpenChannels}
+        phoneChannelPanelOpen={phoneChannelPanelOpen}
+        phoneSocialPanelOpen={phoneSocialPanelOpen}
+        onOpenPhoneChannelsPanel={onOpenPhoneChannelsPanel}
+        onOpenPhoneSocialPanel={onOpenPhoneSocialPanel}
         onOpenSettings={onOpenServerSettings ?? onOpenSettings}
+        onOpenServerActions={onOpenServerActions}
+        onLeaveServer={onLeaveServer}
         currentUserId={currentUserId}
         onSearchUserClick={onSearchUserClick}
         phoneLayout={phoneLayout}
       />
 
       {showTabs && <MobileContextTabs tabs={shellTabs} activeKey={selectedTabKey} onChange={handleTabChange} />}
+
+      {phoneLayout && (
+        <>
+          <div
+            className="pointer-events-auto absolute left-0 top-1/2 z-[70] h-16 w-4 -translate-y-1/2"
+            onTouchStart={handleEdgeTouchStart('left')}
+            onTouchEnd={handleEdgeTouchEnd('left')}
+            onTouchCancel={() => { edgeSwipeRef.current = null; }}
+            aria-hidden="true"
+          >
+            <span className="absolute left-0 top-1/2 h-12 w-[2px] -translate-y-1/2 rounded-r-full bg-[rgba(var(--glass-tint),0.18)]" />
+          </div>
+          <div
+            className="pointer-events-auto absolute right-0 top-1/2 z-[70] h-16 w-4 -translate-y-1/2"
+            onTouchStart={handleEdgeTouchStart('right')}
+            onTouchEnd={handleEdgeTouchEnd('right')}
+            onTouchCancel={() => { edgeSwipeRef.current = null; }}
+            aria-hidden="true"
+          >
+            <span className="absolute right-0 top-1/2 h-12 w-[2px] -translate-y-1/2 rounded-l-full bg-[rgba(var(--glass-tint),0.18)]" />
+          </div>
+        </>
+      )}
 
       <main className="min-h-0 flex-1 overflow-hidden">
         <div
@@ -302,6 +435,8 @@ export default function MobileAppShell({
         activeServerName={activeServerName}
         activeServerAvatarUrl={activeServerAvatarUrl}
         activeServerShortName={activeServerShortName}
+        serverList={serverList}
+        activeServerId={activeServerId}
         activeChannelName={activeChannelName}
         hasActiveChannel={hasActiveChannel}
         activeChannelMode={activeChannelMode}
@@ -314,6 +449,7 @@ export default function MobileAppShell({
         userStatusText={userStatusText}
         currentView={currentView}
         onGoHome={onGoHome}
+        onSelectServer={onSelectServer}
         onReturnToRoom={onReturnToRoom}
         onOpenChannels={onOpenChannels}
         onOpenRoom={onOpenRoom}
@@ -356,6 +492,7 @@ function MobileHelpCoachmarkView({
     const element = document.querySelector<HTMLElement>(`[data-mobile-help-anchor="${anchor}"]`);
     return element?.getBoundingClientRect() ?? null;
   };
+
   const dockRect = getDockAnchorRect(coachmark.anchor);
   const pttCenterX = floatingPttRect ? floatingPttRect.x + floatingPttRect.size / 2 : window.innerWidth - 78;
   const pttTop = floatingPttRect ? floatingPttRect.y : window.innerHeight - 220;
@@ -434,7 +571,10 @@ function FloatingPttButton({
         // Ignore stale saved positions.
       }
     }
-    return { x: window.innerWidth - buttonSize - 24, y: window.innerHeight - buttonSize - 96 };
+    return {
+      x: Math.min(Math.max(window.innerWidth / 2 + 68, 12), window.innerWidth - buttonSize - 12),
+      y: Math.min(Math.max(window.innerHeight * 0.52 - buttonSize / 2, 62), window.innerHeight - buttonSize - 76),
+    };
   });
   const hasSavedPositionRef = useRef(typeof window !== 'undefined' && !!localStorage.getItem('mobileFloatingPttPosition'));
   const [dragState, setDragState] = useState<{
@@ -483,10 +623,11 @@ function FloatingPttButton({
   useEffect(() => {
     if (hasSavedPositionRef.current || typeof window === 'undefined') return;
     const id = window.requestAnimationFrame(() => {
-      const homeButton = document.querySelector<HTMLElement>('[data-mobile-help-anchor="home"]');
-      if (!homeButton) return;
-      const rect = homeButton.getBoundingClientRect();
-      const next = clampPosition(rect.right + 10, rect.top + rect.height / 2 - buttonSize / 2);
+      const chatArea = document.querySelector<HTMLElement>('.mv-chat-panel [data-mv-chat-area="room"]');
+      const rect = chatArea?.getBoundingClientRect();
+      const next = rect
+        ? clampPosition(rect.left + rect.width / 2 + 68, rect.top + rect.height / 2 - buttonSize / 2)
+        : clampPosition(window.innerWidth / 2 + 68, window.innerHeight * 0.52 - buttonSize / 2);
       positionRef.current = next;
       setPosition(next);
       applyButtonTransform(next);
@@ -770,8 +911,22 @@ function FloatingPttButton({
       }}
       onContextMenu={event => event.preventDefault()}
     >
-      <Mic size={Math.round(buttonSize * 0.32)} strokeWidth={2.35} className="relative z-[1] opacity-95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.26)]" />
+      <FloatingPttPressIcon size={Math.round(buttonSize * 0.54)} />
     </div>
     </>
+  );
+}
+
+function FloatingPttPressIcon({ size }: { size: number }) {
+  const iconSize = Math.round(size * 1.06);
+  return (
+    <img
+      src={pandikIcon}
+      alt=""
+      aria-hidden="true"
+      className="relative z-[1] translate-y-[4%] object-contain opacity-95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.28)]"
+      style={{ width: iconSize, height: iconSize }}
+      draggable={false}
+    />
   );
 }

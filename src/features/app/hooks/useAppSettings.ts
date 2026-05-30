@@ -18,11 +18,14 @@ import {
   type ThemePackId,
 } from '../../../lib/themePacks';
 import { updateProfileFields } from '../../../lib/backendClient';
+import { isCapacitor } from '../../../lib/platform';
 
 const UI_FONT_SCALE_STEPS = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15] as const;
 const DEFAULT_UI_FONT_SCALE = 0.8;
 const UI_DOCK_SCALE_STEPS = [0.8, 0.9, 1, 1.1, 1.2] as const;
 const DEFAULT_UI_DOCK_SCALE = 0.8;
+const DEFAULT_PHONE_UI_DOCK_SCALE = 0.9;
+const PHONE_DOCK_SCALE_DEFAULT_KEY = 'uiDockScale:phoneDefaultApplied';
 const CLOSE_BEHAVIOR_STORAGE_KEY = 'mayvox-close-behavior';
 
 function sanitizeCloseBehavior(value: string | null): CloseBehavior {
@@ -41,6 +44,22 @@ function sanitizeUiDockScale(value: string | number | null): number {
   if (!Number.isFinite(parsed)) return DEFAULT_UI_DOCK_SCALE;
   const rounded = Math.round(parsed * 100) / 100;
   return UI_DOCK_SCALE_STEPS.includes(rounded as typeof UI_DOCK_SCALE_STEPS[number]) ? rounded : DEFAULT_UI_DOCK_SCALE;
+}
+
+function isAndroidPhoneRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  return isCapacitor() && window.innerWidth < 640;
+}
+
+function loadInitialUiDockScale(): number {
+  const saved = localStorage.getItem('uiDockScale');
+  if (!isAndroidPhoneRuntime()) return sanitizeUiDockScale(saved);
+  if (saved === null) return DEFAULT_PHONE_UI_DOCK_SCALE;
+  const defaultAlreadyApplied = localStorage.getItem(PHONE_DOCK_SCALE_DEFAULT_KEY) === '1';
+  if (!defaultAlreadyApplied && sanitizeUiDockScale(saved) === DEFAULT_UI_DOCK_SCALE) {
+    return DEFAULT_PHONE_UI_DOCK_SCALE;
+  }
+  return sanitizeUiDockScale(saved);
 }
 
 export function useAppSettings() {
@@ -75,7 +94,7 @@ export function useAppSettings() {
   }, [uiFontScale]);
 
   const [uiDockScale, setUiDockScaleState] = useState<number>(() => {
-    return sanitizeUiDockScale(localStorage.getItem('uiDockScale'));
+    return loadInitialUiDockScale();
   });
   const setUiDockScale = (v: number) => {
     const next = sanitizeUiDockScale(v);
@@ -85,6 +104,10 @@ export function useAppSettings() {
   useEffect(() => {
     document.documentElement.style.setProperty('--mv-dock-scale', String(uiDockScale));
     document.documentElement.setAttribute('data-ui-dock-scale', String(Math.round(uiDockScale * 100)));
+    if (isAndroidPhoneRuntime() && localStorage.getItem(PHONE_DOCK_SCALE_DEFAULT_KEY) !== '1') {
+      localStorage.setItem(PHONE_DOCK_SCALE_DEFAULT_KEY, '1');
+      localStorage.setItem('uiDockScale', uiDockScale.toFixed(2));
+    }
     return () => {
       document.documentElement.style.removeProperty('--mv-dock-scale');
       document.documentElement.removeAttribute('data-ui-dock-scale');

@@ -18,6 +18,8 @@ export interface RoomNodeData {
   isAdmin?: boolean;
   isModerator?: boolean;
   appVersion?: string;
+  speakingScore?: number;
+  orderIndex?: number;
   onClick?: (e: any) => void;
   onDoubleClick?: () => void;
   onContextMenu?: (e: any) => void;

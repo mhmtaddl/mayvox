@@ -141,7 +141,7 @@ export default function AdminActionBar() {
         {/* Davet Kodu */}
         <button
           onClick={() => setCodesOpen(v => !v)}
-          className="group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-all hover:border-[var(--theme-accent)]/40 hover:bg-[rgba(var(--theme-accent-rgb),0.04)] active:scale-[0.995]"
+          className="admin-invite-action-card group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-all hover:border-[var(--theme-accent)]/40 hover:bg-[rgba(var(--theme-accent-rgb),0.04)] active:scale-[0.995]"
           style={{
             background: 'var(--theme-surface-card)',
             borderColor: activeCount > 0
@@ -172,7 +172,7 @@ export default function AdminActionBar() {
         {/* Davet Talepleri */}
         <button
           onClick={() => setRequestsOpen(v => !v)}
-          className="group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-all hover:border-[var(--theme-accent)]/40 hover:bg-[rgba(var(--theme-accent-rgb),0.04)] active:scale-[0.995]"
+          className="admin-invite-action-card group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-all hover:border-[var(--theme-accent)]/40 hover:bg-[rgba(var(--theme-accent-rgb),0.04)] active:scale-[0.995]"
           style={{
             background: 'var(--theme-surface-card)',
             borderColor: requestCount > 0 ? 'rgba(245,158,11,0.35)' : 'var(--theme-surface-card-border)',
@@ -209,7 +209,7 @@ export default function AdminActionBar() {
             className="overflow-hidden"
           >
             <div
-              className="rounded-xl p-3 space-y-3"
+              className="admin-invite-codes-panel rounded-xl p-3 space-y-3"
               style={{
                 background: 'var(--theme-surface-card)',
                 border: '1px solid var(--theme-surface-card-border)',
@@ -290,7 +290,7 @@ export default function AdminActionBar() {
           >
             {requestCount > 0 ? (
               <div
-                className={`rounded-xl overflow-hidden border transition-all duration-300 ${
+                className={`admin-invite-requests-panel rounded-xl overflow-hidden border transition-all duration-300 ${
                   flashRequests
                     ? 'border-[var(--theme-accent)] ring-2 ring-[var(--theme-accent)]/40 shadow-[0_0_0_4px_rgba(var(--theme-accent-rgb),0.12)]'
                     : 'border-[var(--theme-border)]'

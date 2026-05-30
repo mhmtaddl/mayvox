@@ -16,6 +16,7 @@ import { playNotifyBeep } from './notificationSound';
 import { playMessageReceive, playNotification } from '../../lib/audio/SoundManager';
 import { shouldSuppressSettingsSoundInChatRoom } from '../../lib/soundRoomPreference';
 import { requestElectronFlash } from './electronAttention';
+import { showMobileSystemNotification } from './mobileSystemNotification';
 import { hasSeen, markSeen } from './dedupeChannel';
 import {
   decide as decideNotification,
@@ -174,6 +175,18 @@ let toasts: ToastItem[] = [];
 const listeners = new Set<(t: ToastItem[]) => void>();
 const lastSoundAt: Record<ToastKind, number> = { dm: 0, invite: 0 };
 let nextSeq = 1;
+
+const UNDECRYPTABLE_DM_PREVIEWS = new Set([
+  'Bu şifreli mesaj bu cihazda açılamıyor.',
+  'Bu şifreli mesaj çözülemedi.',
+]);
+
+function dmPreviewText(text: string): string {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return '';
+  if (UNDECRYPTABLE_DM_PREVIEWS.has(trimmed)) return 'Şifreli mesaj';
+  return trimmed.length > 120 ? trimmed.slice(0, 120) + '…' : trimmed;
+}
 
 function emit() {
   const snapshot = [...toasts];
@@ -361,7 +374,7 @@ export function handleDmMessage(msg: DmMessage) {
 
   if (!decision.shouldNotify) return;
 
-  const preview = msg.text.length > 120 ? msg.text.slice(0, 120) + '…' : msg.text;
+  const preview = dmPreviewText(msg.text);
   dispatchDecision({
     id: `dm-${msg.id}`,
     kind: 'dm',
@@ -614,11 +627,12 @@ function dispatchDecision(base: Omit<ToastItem, 'attentionTier' | 'visualMode' |
       if (idx !== -1) toasts[idx] = updated;
       emit();
       applySideEffects(kind, d);
+      maybeDispatchMobileSystemNotification(updated);
       return;
     }
   }
 
-  insertToast({
+  const item: ToastItem = {
     ...base,
     attentionTier: d.attentionTier,
     visualMode: d.visualMode,
@@ -626,9 +640,22 @@ function dispatchDecision(base: Omit<ToastItem, 'attentionTier' | 'visualMode' |
     groupCount: 1,
     revision: 1,
     originalTitle: base.title,
-  });
+  };
+  insertToast(item);
   fatigueRecordNotif();
   applySideEffects(kind, d);
+  maybeDispatchMobileSystemNotification(item);
+}
+
+function maybeDispatchMobileSystemNotification(t: ToastItem) {
+  if (t.kind !== 'dm') return;
+  if (ctx.isAppFocused && ctx.isWindowVisible) return;
+  void showMobileSystemNotification({
+    id: t.id,
+    title: t.title,
+    body: t.body,
+    data: { kind: 'dm', ...t.data },
+  }).catch(() => { /* system notification is best-effort */ });
 }
 
 function applySideEffects(kind: ToastKind, d: NotificationDecision) {

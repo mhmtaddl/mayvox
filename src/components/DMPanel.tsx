@@ -1333,15 +1333,15 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           className={`surface-card dm-glass-panel ${mobileDenseSurface ? 'dm-mobile-solid-panel' : ''} fixed bottom-[60px] right-3 z-[110] max-w-[calc(100vw-24px)] max-h-[calc(100vh-84px)] rounded-2xl overflow-hidden flex flex-col ${mobileDenseSurface ? 'transition-opacity duration-100' : 'transition-[width,height] duration-200 ease-out'} ${
             dm.activeRecipientId
               ? mobileDenseSurface
-                ? detailsOpen
-                  ? 'w-[640px] h-[500px]'
-                  : 'w-[360px] h-[500px]'
+                ? 'w-[360px] h-[500px]'
                 : detailsOpen
                   ? 'w-[640px] h-[500px]'
                   : 'w-[360px] h-[500px]'
-              : listSidePanelOpen
-                ? 'w-[640px] h-[500px]'
-              : 'w-[360px] h-[500px]'
+              : mobileDenseSurface
+                ? 'w-[360px] h-[500px]'
+                : listSidePanelOpen
+                  ? 'w-[640px] h-[500px]'
+                  : 'w-[360px] h-[500px]'
           }`}
           style={{
             background: mobileDenseSurface
@@ -1356,7 +1356,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
           }}
         >
           {dm.activeRecipientId ? (
-            <div className={`flex h-full min-h-0 flex-col ${mobileDenseSurface ? '' : 'transition-[padding-right] duration-200 ease-out'} ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}>
+            <div className={`flex h-full min-h-0 flex-col ${mobileDenseSurface ? 'pr-0' : `transition-[padding-right] duration-200 ease-out ${detailsOpen ? 'pr-[272px]' : 'pr-0'}`}`}>
               <ChatArea
                 messages={dm.messages}
                 currentUserId={currentUser.id}
@@ -1415,7 +1415,7 @@ export default function DMPanel({ isOpen, onClose, openUserId, onOpenHandled, on
               />
             </div>
           ) : (
-            <div className={`relative flex h-full min-h-0 flex-col transition-[padding-right] duration-200 ease-out ${listSidePanelOpen ? 'pr-[300px]' : 'pr-0'}`}>
+            <div className={`relative flex h-full min-h-0 flex-col ${mobileDenseSurface ? 'pr-0' : `transition-[padding-right] duration-200 ease-out ${listSidePanelOpen ? 'pr-[300px]' : 'pr-0'}`}`}>
               {/* Header */}
               <div className="px-4 py-3.5 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(var(--glass-tint), 0.10)' }}>
                 <div className="flex min-w-0 items-center gap-2">
