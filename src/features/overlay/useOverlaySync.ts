@@ -84,7 +84,8 @@ export function useOverlaySync({
   const lastRenderableRef = useRef(false);
   const throttleTimerRef = useRef<number | null>(null);
   const lastFlushAtRef = useRef<number>(0);
-  const MIN_GAP_MS = 40;
+  const lastSelfSpeakingRef = useRef<boolean | null>(null);
+  const MIN_GAP_MS = 20;
 
   useEffect(() => {
     const host = getHost();
@@ -175,8 +176,19 @@ export function useOverlaySync({
       host.update(snap);
     };
 
-    // Leading-edge throttle — state değişince anında flush, sonra MIN_GAP_MS koruma.
+    // PTT/self speaking değişimi oyun içi HUD'da anlık hissedilmeli. Diğer hızlı
+    // seviye dalgalanmaları 20ms gap ile korunur.
     const now = performance.now();
+    const selfSpeakingChanged = lastSelfSpeakingRef.current !== selfSpeaking;
+    lastSelfSpeakingRef.current = selfSpeaking;
+    if (selfSpeakingChanged) {
+      if (throttleTimerRef.current) { window.clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null; }
+      lastFlushAtRef.current = now;
+      flush();
+      return;
+    }
+
+    // Leading-edge throttle — state değişince anında flush, sonra MIN_GAP_MS koruma.
     const elapsed = now - lastFlushAtRef.current;
     if (elapsed >= MIN_GAP_MS) {
       if (throttleTimerRef.current) { window.clearTimeout(throttleTimerRef.current); throttleTimerRef.current = null; }

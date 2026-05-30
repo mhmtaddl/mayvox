@@ -221,6 +221,9 @@ class OverlayWindowManager {
     // Sayfa hazır olunca: ready flag + son snapshot replay (ilk paint için kritik)
     win.webContents.on('did-finish-load', () => {
       this.ready = true;
+      // Oyun üstünde HUD input/focus sahibi olmasın. İlk paint için pencere focusable
+      // yaratılıyor; yükleme biter bitmez pasifleştiriyoruz.
+      try { win.setFocusable(false); } catch {}
       if (this.currentSettings.enabled) this._flushSnapshot();
       this.logger.info?.('[overlay] did-finish-load, snapshot flush');
     });

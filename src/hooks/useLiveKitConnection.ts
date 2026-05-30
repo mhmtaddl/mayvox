@@ -582,16 +582,24 @@ export function useLiveKitConnection({
         if (!participant?.isLocal && !isSystemMusicIdentity(participant.identity)) playSound('leave');
       });
 
-      // ─── Throttled speaker levels (~8fps UI update) ───────────────────
+      // ─── Throttled speaker levels (~20fps UI update) ───────────────────
       let pendingLevels: Record<string, number> = {};
       let speakingThrottleTimer: ReturnType<typeof setTimeout> | null = null;
       let lastSpeakingLevels: Record<string, number> = {};
-      const SPEAKING_THROTTLE_MS = 120;
+      let lastSpeakingFlushAt = 0;
+      const SPEAKING_THROTTLE_MS = 50;
       const levelsChanged = (a: Record<string, number>, b: Record<string, number>) => {
         const ak = Object.keys(a);
         const bk = Object.keys(b);
         if (ak.length !== bk.length) return true;
         return ak.some(k => Math.abs((a[k] ?? 0) - (b[k] ?? 0)) > 0.01);
+      };
+      const flushSpeakingLevels = () => {
+        if (levelsChanged(pendingLevels, lastSpeakingLevels)) {
+          lastSpeakingLevels = pendingLevels;
+          setSpeakingLevels(pendingLevels);
+        }
+        lastSpeakingFlushAt = performance.now();
       };
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
@@ -608,14 +616,18 @@ export function useLiveKitConnection({
         });
         localAudioLevelRef.current = localLevel;
         pendingLevels = levels;
-        if (!speakingThrottleTimer) {
-          speakingThrottleTimer = setTimeout(() => {
-            if (levelsChanged(pendingLevels, lastSpeakingLevels)) {
-              lastSpeakingLevels = pendingLevels;
-              setSpeakingLevels(pendingLevels);
-            }
+        const now = performance.now();
+        if (now - lastSpeakingFlushAt >= SPEAKING_THROTTLE_MS) {
+          if (speakingThrottleTimer) {
+            clearTimeout(speakingThrottleTimer);
             speakingThrottleTimer = null;
-          }, SPEAKING_THROTTLE_MS);
+          }
+          flushSpeakingLevels();
+        } else if (!speakingThrottleTimer) {
+          speakingThrottleTimer = setTimeout(() => {
+            flushSpeakingLevels();
+            speakingThrottleTimer = null;
+          }, SPEAKING_THROTTLE_MS - (now - lastSpeakingFlushAt));
         }
       });
 

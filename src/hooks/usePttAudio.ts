@@ -111,13 +111,13 @@ export function usePttAudio(params: UsePttAudioParams) {
     }
   };
 
-  // Electron PTT init
+  // Electron PTT init. Ayar/rehydration sonrası raw key yeniden gönderilir; oyun
+  // odağındayken global hook'un doğru tuşu dinlediğinden emin oluruz.
   useEffect(() => {
     const rawCode = localStorage.getItem('pttRawCode');
     if (pttKey && rawCode && window.electronPtt?.initRaw) window.electronPtt.initRaw(rawCode);
     else if (pttKey) window.electronPtt?.init(pttKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pttKey]);
 
   // PTT tuşu atama
   useEffect(() => {
