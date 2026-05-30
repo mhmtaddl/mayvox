@@ -31,7 +31,7 @@ import { checkChannelAccess, getServerAccessContext, getMyModerationState, type 
 import { formatRemaining, getRemainingMs } from './lib/formatTimeout';
 import { logger } from './lib/logger';
 import { createVoiceJoinTrace, logVoiceJoinTrace } from './lib/voiceJoinTrace';
-import { connectChat, disconnectChat, sendPresencePatch } from './lib/chatService';
+import { connectChat, disconnectChat, sendPresencePatch, sendRealtimeBroadcast, subscribeRealtimeEvents } from './lib/chatService';
 import { applyVolumeToAudioElement, getAllUserVolumePercents } from './lib/userVolume';
 import { buildAudioCaptureOptions } from './lib/audioConstraints';
 import { readAppShortcuts, shortcutMatchesEvent, type AppShortcuts } from './lib/commandShortcut';
@@ -77,7 +77,7 @@ import type { LegalModalKind } from './components/legal/LegalModal';
 // Settings içindeki ReleaseNotesModal hala ./lib/releaseNotes'ten çağırıyor.
 import { useWindowActivity } from './hooks/useWindowActivity';
 import { isCapacitor } from './lib/platform';
-import { toTitleCaseTr } from './lib/formatName';
+import { getPublicDisplayName, toTitleCaseTr } from './lib/formatName';
 import { logMemberIdentityDebug, resolveUserByMemberKey } from './lib/memberIdentity';
 import { warmUpTokenServer } from './lib/livekit';
 import { getRoomModeConfig } from './lib/roomModeConfig';
@@ -116,6 +116,18 @@ const ChatView = React.lazy(loadChatView);
 const BanScreen = React.lazy(() => import('./components/BanScreen'));
 
 const isUuidUser = (userId: string) => userId.includes('-');
+
+function getVoiceDeviceId(): string {
+  if (typeof window === 'undefined') return 'server-render';
+  const key = 'mayvox:voiceDeviceId';
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const generated = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  window.localStorage.setItem(key, generated);
+  return generated;
+}
 
 function resolveDmPrivacyMode(p: { dm_privacy_mode?: string | null; allow_non_friend_dms?: boolean }): User['dmPrivacyMode'] {
   const raw = p.dm_privacy_mode;
@@ -755,6 +767,7 @@ export default function App() {
   const currentUserRef = useRef(currentUser);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const sessionStartedAtRef = useRef<number>(Date.now());
+  const voiceDeviceIdRef = useRef<string>(getVoiceDeviceId());
   const activeChannelRef = useRef(activeChannel);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
 
@@ -1058,6 +1071,51 @@ export default function App() {
 
   // Keep forward ref current so usePresence always calls the real function
   disconnectLKRef.current = disconnectFromLiveKit;
+
+  useEffect(() => {
+    if (!activeChannel || !currentUser.id) return;
+    sendRealtimeBroadcast('voice-session-claim', {
+      userId: currentUser.id,
+      targetUserId: currentUser.id,
+      deviceId: voiceDeviceIdRef.current,
+      channelId: activeChannel,
+      serverId: activeServerId || activeServerIdRef.current || null,
+      platform: platformRef.current,
+      createdAt: Date.now(),
+    });
+  }, [activeChannel, activeServerId, currentUser.id, platformRef]);
+
+  useEffect(() => {
+    if (!currentUser.id) return;
+    return subscribeRealtimeEvents(event => {
+      if (event.type !== 'voice-session-claim') return;
+      const payload = event.payload || {};
+      const userId = typeof payload.userId === 'string' ? payload.userId : '';
+      const deviceId = typeof payload.deviceId === 'string' ? payload.deviceId : '';
+      if (!userId || userId !== currentUserRef.current.id) return;
+      if (!deviceId || deviceId === voiceDeviceIdRef.current) return;
+      if (!activeChannelRef.current) return;
+
+      activeChannelRef.current = null;
+      setActiveChannel(null);
+      void disconnectFromLiveKit();
+
+      const message = 'Oda başka cihazda açıldı.';
+      setToastMsg(message);
+      pushInformational({
+        key: `voice-session-claim:${deviceId}:${Number(payload.createdAt) || Date.now()}`,
+        kind: 'generic',
+        label: 'Oda oturumu taşındı',
+        detail: 'Bu cihaz odadan çıkarıldı.',
+        serverId: activeServerIdRef.current || undefined,
+        createdAt: Date.now(),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mayvox:voice-session-replaced'));
+      }
+    });
+  }, [currentUser.id, disconnectFromLiveKit, setActiveChannel, setToastMsg]);
 
   // ── Channel actions hook (livekitRoomRef + presenceChannelRef hazır) ──
   const channelActions = useChannelActions({
@@ -1948,7 +2006,13 @@ export default function App() {
   useEffect(() => {
     if (activeChannel !== null) return;
     const user = currentUserRef.current;
-    const selfKeys = new Set([user.id, user.name].filter(Boolean));
+    const selfKeys = new Set([
+      user.id,
+      user.name,
+      user.displayName,
+      user.firstName,
+      getPublicDisplayName(user),
+    ].filter(Boolean));
     if (selfKeys.size === 0) return;
     setCurrentUser(prev => prev.joinedAt === undefined ? prev : { ...prev, joinedAt: undefined });
     setAllUsers(prev => prev.map(u => (

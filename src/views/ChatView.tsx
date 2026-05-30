@@ -1008,11 +1008,19 @@ export default function ChatView() {
   // ── Sunucu kanalları — instant cache + background refresh ──
   const channelCacheRef = useRef(new Map<string, VoiceChannel[]>());
   const removeCurrentUserFromChannel = useCallback((channelId: string | null) => {
-    if (!channelId) return;
-    const myKeys = new Set([currentUser.id, currentUser.name].filter(Boolean));
+    const publicName = getPublicDisplayName(currentUser);
+    const myKeys = new Set([
+      currentUser.id,
+      currentUser.name,
+      currentUser.displayName,
+      currentUser.firstName,
+      publicName,
+    ].filter(Boolean));
+    if (myKeys.size === 0) return;
     const removeFromList = (list: VoiceChannel[]) => list.map(channel => {
-      if (channel.id !== channelId) return channel;
+      if (channelId && channel.id !== channelId) return channel;
       const nextMembers = (channel.members || []).filter(memberKey => !myKeys.has(memberKey));
+      if (nextMembers.length === (channel.members || []).length) return channel;
       return {
         ...channel,
         members: nextMembers,
@@ -1024,7 +1032,7 @@ export default function ChatView() {
       const cached = channelCacheRef.current.get(activeServerId);
       if (cached) channelCacheRef.current.set(activeServerId, removeFromList(cached));
     }
-  }, [activeServerId, currentUser.id, currentUser.name, setChannels]);
+  }, [activeServerId, currentUser, setChannels]);
 
   // Sunucu değişirken kanalları cache'e kaydet (member temiz)
   useEffect(() => {
@@ -1938,12 +1946,17 @@ export default function ChatView() {
   }, [mobileDefaultShellView, mobilePreviousShellView, setMobileShellView, setSettingsTarget, setView, view]);
 
   const handleMobileGoHome = useCallback(() => {
+    setView('chat');
+    setSettingsTarget(null);
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
+    setShowDiscover(false);
     setMobileChannelSheetOpen(!mobilePhoneLayout);
     setMobileSocialSheetOpen(!mobilePhoneLayout);
     setMobileServerHomeDetailOpen(false);
     setMobileShellView('home');
     window.dispatchEvent(new CustomEvent('mayvox:mobile-server-home-reset'));
-  }, [mobilePhoneLayout, setMobileShellView]);
+  }, [mobilePhoneLayout, setMobileShellView, setSettingsTarget, setView]);
 
   const handleMobileSelectServer = useCallback((serverId: string) => {
     setMobileServerActionsOpen(false);
@@ -2098,8 +2111,13 @@ export default function ChatView() {
 
   const handleMobileOpenDiscover = useCallback(() => {
     void loadMobileDiscoverScreen();
+    setView('chat');
+    setSettingsTarget(null);
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
+    setShowDiscover(false);
     setMobileShellView('discover');
-  }, [setMobileShellView]);
+  }, [setMobileShellView, setSettingsTarget, setView]);
 
   const handleMobileOpenSocial = useCallback(() => {
     void loadDMPanel();
@@ -2117,11 +2135,51 @@ export default function ChatView() {
   }, [mobilePhoneLayout, setMobileShellView]);
 
   const handleMobileLeaveRoom = useCallback(() => {
-    removeCurrentUserFromChannel(activeChannel);
-    setActiveChannel(null);
+    const leavingChannelId = activeChannel;
+    removeCurrentUserFromChannel(leavingChannelId);
+    setView('chat');
+    setSettingsTarget(null);
+    setSettingsServerId(null);
+    setSettingsInitialTab(undefined);
+    setShowDiscover(false);
+    setIsServerHomeView(false);
+    setMobileServerActionsOpen(false);
+    setMobileChannelSheetOpen(!mobilePhoneLayout);
+    setMobileSocialSheetOpen(!mobilePhoneLayout);
     setMobileShellView('home');
-    void disconnectFromLiveKit();
-  }, [activeChannel, disconnectFromLiveKit, removeCurrentUserFromChannel, setActiveChannel, setMobileShellView]);
+    setActiveChannel(null);
+    void disconnectFromLiveKit().finally(() => {
+      removeCurrentUserFromChannel(leavingChannelId);
+      removeCurrentUserFromChannel(null);
+      setActiveChannel(null);
+    });
+  }, [activeChannel, disconnectFromLiveKit, mobilePhoneLayout, removeCurrentUserFromChannel, setActiveChannel, setMobileShellView, setSettingsTarget, setView]);
+
+  useEffect(() => {
+    if (!FORCE_MOBILE || !ENABLE_MOBILE_SHELL_V1 || typeof window === 'undefined') return;
+    const handleVoiceSessionReplaced = () => {
+      removeCurrentUserFromChannel(null);
+      setView('chat');
+      setSettingsTarget(null);
+      setSettingsServerId(null);
+      setSettingsInitialTab(undefined);
+      setShowDiscover(false);
+      setIsServerHomeView(false);
+      setMobileServerActionsOpen(false);
+      setMobileServerHomeDetailOpen(false);
+      setMobileChannelSheetOpen(!mobilePhoneLayout);
+      setMobileSocialSheetOpen(!mobilePhoneLayout);
+      setMobileShellView('home');
+    };
+    window.addEventListener('mayvox:voice-session-replaced', handleVoiceSessionReplaced);
+    return () => window.removeEventListener('mayvox:voice-session-replaced', handleVoiceSessionReplaced);
+  }, [
+    mobilePhoneLayout,
+    removeCurrentUserFromChannel,
+    setMobileShellView,
+    setSettingsTarget,
+    setView,
+  ]);
 
   const handleMobileToggleMute = useCallback(() => {
     if (isMuted && isDeafened) setIsDeafened(false);

@@ -434,6 +434,7 @@ const CLIENT_BROADCAST_EVENTS = new Set([
   'invite-accepted',
   'invite-rejected',
   'channel-update',
+  'voice-session-claim',
   'moderation-event',
 ]);
 

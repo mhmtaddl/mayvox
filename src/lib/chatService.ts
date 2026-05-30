@@ -89,6 +89,7 @@ export type ClientRealtimeEvent =
   | 'invite-accepted'
   | 'invite-rejected'
   | 'channel-update'
+  | 'voice-session-claim'
   | 'server-member-role'
   | 'moderation-event';
 
@@ -254,6 +255,7 @@ export type AppRealtimeEventType =
   | 'invite-accepted'
   | 'invite-rejected'
   | 'server-member-role'
+  | 'voice-session-claim'
   | 'moderation-event'
   | 'announcement-update'
   | 'friend-update'
@@ -288,6 +290,7 @@ function isAppRealtimeType(type: unknown): type is AppRealtimeEventType {
     type === 'invite-accepted' ||
     type === 'invite-rejected' ||
     type === 'server-member-role' ||
+    type === 'voice-session-claim' ||
     type === 'moderation-event' ||
     type === 'announcement-update' ||
     type === 'friend-update' ||
